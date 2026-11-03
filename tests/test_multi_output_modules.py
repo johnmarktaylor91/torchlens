@@ -254,7 +254,7 @@ def test_gru_two_outputs_distinct_equivalence_classes() -> None:
     trace = tl.trace(GRUModel(), torch.randn(7, 4, 5))
     outputs = [trace.ops[label] for label in trace.modules["gru"].ops[0].output_ops]
     assert len(outputs) == 2
-    assert len({output.equivalence_class for output in outputs}) == 2
+    assert len({output.graph.equivalence_class for output in outputs}) == 2
     assert [output.multi_output_name for output in outputs] == ["output", "h_n"]
 
 

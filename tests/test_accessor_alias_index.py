@@ -330,7 +330,7 @@ def test_edge_counters_match_unmemoized_reference() -> None:
                 (op.label, ops[child_label].label)
                 for op in rows
                 for child_label in op.children
-                if op.is_buffer or ops[child_label].is_buffer
+                if op.graph.is_buffer or ops[child_label].graph.is_buffer
             }
             assert trace.num_edges == len(direct_edges), name
             assert trace.graph.num_compute_edges == len(direct_compute), name

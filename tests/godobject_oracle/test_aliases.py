@@ -137,22 +137,22 @@ def test_group_fields_return_live_immutable_views() -> None:
     """
 
     trace = _capture_recurrent()
-    grouped = [op for op in trace.ops.values() if op.equivalent_ops]
+    grouped = [op for op in trace.ops.values() if op.graph.equivalent_ops]
     assert grouped, "recurrent capture produced no equivalence groups"
     op = grouped[0]
 
-    first_read = op.equivalent_ops
-    second_read = op.equivalent_ops
+    first_read = op.graph.equivalent_ops
+    second_read = op.graph.equivalent_ops
     assert first_read is second_read, "group view reads must be identity-stable"
     assert isinstance(first_read, frozenset)
     with pytest.raises(AttributeError):
         first_read.add("__aliases_v1_sentinel__")
 
-    recurrent = [op for op in trace.ops.values() if op.recurrent_ops]
+    recurrent = [op for op in trace.ops.values() if op.graph.recurrent_ops]
     assert recurrent, "recurrent capture produced no recurrence groups"
     rec_op = recurrent[0]
-    rec_first = rec_op.recurrent_ops
-    assert rec_first is rec_op.recurrent_ops
+    rec_first = rec_op.graph.recurrent_ops
+    assert rec_first is rec_op.graph.recurrent_ops
     assert isinstance(rec_first, tuple)
     with pytest.raises(AttributeError):
         rec_first.append("__aliases_v1_sentinel__")
@@ -202,13 +202,13 @@ def test_plain_mutable_containers_are_observably_mutable() -> None:
     """
 
     trace = _capture_cnn()
-    op = next(op for op in trace.ops.values() if op.parent_arg_positions)
-    read = op.parent_arg_positions
-    assert read is op.parent_arg_positions
+    op = next(op for op in trace.ops.values() if op.call.parent_arg_positions)
+    read = op.call.parent_arg_positions
+    assert read is op.call.parent_arg_positions
     read["__aliases_v1_domain__"] = {}
-    assert "__aliases_v1_domain__" in op.parent_arg_positions
-    del op.parent_arg_positions["__aliases_v1_domain__"]
-    assert "__aliases_v1_domain__" not in op.parent_arg_positions
+    assert "__aliases_v1_domain__" in op.call.parent_arg_positions
+    del op.call.parent_arg_positions["__aliases_v1_domain__"]
+    assert "__aliases_v1_domain__" not in op.call.parent_arg_positions
 
 
 def test_multi_output_siblings_share_call_facts_not_identity() -> None:
@@ -219,8 +219,8 @@ def test_multi_output_siblings_share_call_facts_not_identity() -> None:
     assert len(split_ops) >= 2, "split did not produce sibling output ops"
     first, second = split_ops[0], split_ops[1]
     assert first is not second
-    assert first.func_call_id == second.func_call_id
-    assert first.args_template == second.args_template
+    assert first.call.call_id == second.call.call_id
+    assert first.call.args_template == second.call.args_template
     assert first.multi_output_index != second.multi_output_index
     assert first.layer_label != second.layer_label
 
@@ -266,12 +266,12 @@ def test_op_copy_selective_depth() -> None:
     # Documented shared-by-reference fields.
     assert clone.func is op.func
     assert clone.out is op.out
-    if op.saved_args is not None:
-        assert clone.saved_args is op.saved_args
+    if op.call.saved_args is not None:
+        assert clone.call.saved_args is op.call.saved_args
     if op.container_spec is not None:
         assert clone.container_spec is op.container_spec
-    if op.parent_params:
-        assert clone.parent_params is op.parent_params
+    if op.graph.parent_params:
+        assert clone.graph.parent_params is op.graph.parent_params
 
     # Relation metadata: equal content; immutable views MAY be shared across
     # records (FORK-1), so no distinct-identity requirement anymore.
@@ -357,25 +357,27 @@ def test_equivalence_group_shared_live_view() -> None:
     """
 
     trace = _capture_recurrent()
-    grouped = [op for op in trace.ops.values() if op.equivalent_ops]
+    grouped = [op for op in trace.ops.values() if op.graph.equivalent_ops]
     by_group: dict[frozenset, list] = {}
     for op in grouped:
-        by_group.setdefault(frozenset(op.equivalent_ops), []).append(op)
+        by_group.setdefault(frozenset(op.graph.equivalent_ops), []).append(op)
     multi = [members for members in by_group.values() if len(members) >= 2]
     assert multi, "no multi-member equivalence group captured"
     first, second = multi[0][0], multi[0][1]
-    assert first.equivalent_ops == second.equivalent_ops
-    assert first.equivalent_ops is second.equivalent_ops, "group members must share ONE cached view"
+    assert first.graph.equivalent_ops == second.graph.equivalent_ops
+    assert first.graph.equivalent_ops is second.graph.equivalent_ops, (
+        "group members must share ONE cached view"
+    )
     with pytest.raises(AttributeError):
-        first.equivalent_ops.add("__aliases_v1_group__")
+        first.graph.equivalent_ops.add("__aliases_v1_group__")
 
     # LIVE through the sanctioned scrub path: filtering the group once is
     # observed by every member on its next read, sharing intact.
     from torchlens._data_classes.cleanup import _scrub_per_op_equivalence_lists
 
-    group_labels = sorted(first.equivalent_ops)
+    group_labels = sorted(first.graph.equivalent_ops)
     removed = group_labels[-1]
     _scrub_per_op_equivalence_lists(multi[0], {removed})
-    assert removed not in first.equivalent_ops
-    assert removed not in second.equivalent_ops
-    assert first.equivalent_ops is second.equivalent_ops
+    assert removed not in first.graph.equivalent_ops
+    assert removed not in second.graph.equivalent_ops
+    assert first.graph.equivalent_ops is second.graph.equivalent_ops

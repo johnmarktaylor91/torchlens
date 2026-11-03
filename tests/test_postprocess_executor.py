@@ -398,10 +398,12 @@ def test_buffer_duplicate_axis_actually_merges(
         survivor = next(op for op in trace._layer_list if op._label_raw == survivor_label)
         survivor_final = survivor.layer_label if survivor.num_passes == 1 else survivor.label
         repointed = [
-            op for op in trace._layer_list if op.is_buffer and op.buffer_source == survivor_final
+            op
+            for op in trace._layer_list
+            if op.graph.is_buffer and op.graph.buffer_source == survivor_final
         ]
         assert repointed, "the scalar buffer_source repoint must have fired"
-        assert all(op.buffer_source not in (removed_label,) for op in trace._layer_list), (
+        assert all(op.graph.buffer_source not in (removed_label,) for op in trace._layer_list), (
             "no surviving op may still reference the merged-away buffer"
         )
     finally:

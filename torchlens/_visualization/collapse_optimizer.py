@@ -30,6 +30,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _boundary_bundle as _bundle
@@ -2475,7 +2476,7 @@ def _expanded_structure(
             own_ops = tuple(
                 label
                 for label in signal.subtree_ops
-                if not getattr(state.trace.ops[label], "is_buffer", False)
+                if not record_member(state.trace.ops[label], "is_buffer", False)
             )
     elif address == "self":
         if state.context.vis_mode == "rolled":
@@ -2489,7 +2490,7 @@ def _expanded_structure(
             own_ops = tuple(
                 op.label
                 for op in state.trace._layer_list
-                if op.label not in child_ops and not getattr(op, "is_buffer", False)
+                if op.label not in child_ops and not record_member(op, "is_buffer", False)
             )
     result = (graph, child_addresses, tuple(own_ops))
     state.expanded_cache[address] = result
@@ -2517,7 +2518,7 @@ def _synthetic_parent_owned_ops(
     return tuple(
         label
         for label in parent_signal.subtree_ops
-        if label not in child_ops and not getattr(state.trace.ops[label], "is_buffer", False)
+        if label not in child_ops and not record_member(state.trace.ops[label], "is_buffer", False)
     )
 
 
@@ -3003,10 +3004,10 @@ def _module_render_box_units(
     for node in _entries_to_plot_for_context(trace, context.vis_mode).values():
         if isinstance(node, BoundaryNode):
             continue
-        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
+        if node.graph.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
         modules = [str(module_call) for module_call in (getattr(node, "modules", ()) or ())]
-        if getattr(node, "is_atomic_module", False) and modules:
+        if record_member(node, "is_atomic_module", False) and modules:
             innermost_address = modules[-1].rsplit(":", 1)[0]
             remaining = modules[:-1]
             if innermost_address not in {call.rsplit(":", 1)[0] for call in remaining}:
@@ -3707,7 +3708,7 @@ def _root_own_unit_count(
     return sum(
         1
         for op in trace._layer_list
-        if op.label not in child_ops and not getattr(op, "is_buffer", False)
+        if op.label not in child_ops and not record_member(op, "is_buffer", False)
     )
 
 
@@ -3844,7 +3845,7 @@ def _rendered_own_unit_map(trace: Trace, context: RenderContext) -> dict[str, tu
             continue
         node = emission.node
         modules = list(getattr(node, "modules", ()) or ()) if node is not None else []
-        if getattr(node, "is_atomic_module", False) and modules:
+        if record_member(node, "is_atomic_module", False) and modules:
             modules = modules[:-1]
         owner = str(modules[-1]).rsplit(":", 1)[0] if modules else "self"
         units.setdefault(owner, []).append(emission.op_label or emission.name)

@@ -313,8 +313,8 @@ class TestFinishedTraceSurface:
         assert type(op.children) is tuple
         op.input_ancestors = MutableSet({"input_1_1"})
         assert type(op.input_ancestors) is frozenset
-        op.equivalent_ops = MutableSet({"relu_1_2"})
-        assert type(op.equivalent_ops) is frozenset
+        op._graph_equivalent_ops = MutableSet({"relu_1_2"})
+        assert type(op.graph.equivalent_ops) is frozenset
 
     def test_finished_assignment_refuses_non_container_values(self) -> None:
         import pytest
@@ -339,8 +339,8 @@ class TestFinishedTraceSurface:
         assert type(layer.modules) is tuple
         escape.append("late_mutation")
         assert "late_mutation" not in layer.modules
-        layer.equivalent_ops = {"relu_1_2"}
-        assert type(layer.equivalent_ops) is frozenset
+        layer._graph_equivalent_ops = {"relu_1_2"}
+        assert type(layer.graph.equivalent_ops) is frozenset
         layer.input_ancestors = {"input_1_1"}
         assert type(layer.input_ancestors) is frozenset
 
@@ -489,22 +489,22 @@ class TestFactBlocks:
         op = trace.ops["relu_1_2"]
         fid = store.layout.fid_by_name["func_config"]
         assert store.cell_get(op._row, fid) is _FACT
-        config = op.func_config
+        config = op.call.config
         assert isinstance(config, dict)
         # Identity-stable after the first read; per-row mutation isolated.
-        assert op.func_config is config
+        assert op.call.config is config
         config["__probe__"] = 1
         sibling = trace.ops["conv2d_1_1"]
-        assert "__probe__" not in sibling.func_config
-        assert isinstance(op.code_context, list)
-        assert isinstance(op.arg_names, tuple)
+        assert "__probe__" not in sibling.call.config
+        assert isinstance(op.source.frames, list)
+        assert isinstance(op.call.arg_names, tuple)
 
     def test_direct_write_overrides_shared_fact(self) -> None:
         trace = _capture()
         op = trace.ops["relu_1_2"]
-        op.func_config = {"replaced": True}
-        assert op.func_config == {"replaced": True}
-        assert trace.ops["conv2d_1_1"].func_config != {"replaced": True}
+        op._call_config = {"replaced": True}
+        assert op.call.config == {"replaced": True}
+        assert trace.ops["conv2d_1_1"].call.config != {"replaced": True}
 
     def test_fact_cell_delete_is_genuinely_absent(self) -> None:
         from torchlens._trace_core.fact_blocks import convert_fact_cells
@@ -519,6 +519,6 @@ class TestFactBlocks:
         trace = _capture()
         clone = pickle.loads(pickle.dumps(trace))
         op = clone.ops["relu_1_2"]
-        assert isinstance(op.func_config, dict)
-        assert isinstance(op.code_context, list)
+        assert isinstance(op.call.config, dict)
+        assert isinstance(op.source.frames, list)
         assert op.func_name == "relu"

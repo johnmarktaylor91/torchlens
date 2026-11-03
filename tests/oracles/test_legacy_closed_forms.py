@@ -251,8 +251,12 @@ def test_input_and_output_hop_distances(graph_trace) -> None:
     assert set(ops) == set(GRAPH_DISTANCES)
     for label, (from_input, to_output) in GRAPH_DISTANCES.items():
         op = ops[label]
-        assert (op.min_distance_from_input, op.max_distance_from_input) == from_input, label
-        assert (op.min_distance_to_output, op.max_distance_to_output) == to_output, label
+        assert (op.graph.min_distance_from_input, op.graph.max_distance_from_input) == from_input, (
+            label
+        )
+        assert (op.graph.min_distance_to_output, op.graph.max_distance_to_output) == to_output, (
+            label
+        )
 
 
 def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
@@ -305,9 +309,9 @@ def test_op_and_layer_argument_counts(graph_trace, outer_case) -> None:
         records = [layers[label]] + [op for op in ops.values() if op.layer_label == label]
         for record in records:
             assert (
-                int(record.num_pos_args),
-                int(record.num_kwargs),
-                int(record.num_args_total),
+                int(record.call.num_pos_args),
+                int(record.call.num_kwargs),
+                int(record.call.num_args_total),
             ) == (positional, keyword, positional + keyword), label
     _, trace, _, _ = outer_case
     ops, layers, _, _ = _by_label(trace)
@@ -315,7 +319,11 @@ def test_op_and_layer_argument_counts(graph_trace, outer_case) -> None:
     # rule rows 26-27 and section 1 (argument values are never evidence): both
     # block calls' ``* scale`` muls are one Layer, so the sum is the 5th Layer.
     for record in (layers["sum_1_5"], ops["sum_1_5:1"]):
-        assert (int(record.num_pos_args), int(record.num_kwargs), int(record.num_args_total)) == (
+        assert (
+            int(record.call.num_pos_args),
+            int(record.call.num_kwargs),
+            int(record.call.num_args_total),
+        ) == (
             1,
             2,
             3,
@@ -400,7 +408,7 @@ def test_activation_parameter_and_input_bytes(two_linear_trace, graph_trace, out
         "input_1:1": 0,  # no parents
     }
     for label, nbytes in expected_input.items():
-        assert int(ops[label].input_memory) == nbytes, label
+        assert int(ops[label].cost.input_memory) == nbytes, label
 
 
 def _param_grad_bytes(model: nn.Module) -> dict[str, int]:
@@ -564,7 +572,7 @@ def test_backward_flops_follow_the_backward_that_runs(backward_ready: bool) -> N
         expected = {"linear_1_1:1": 0, "relu_1_2:1": 0}
         expected["linear_2_3:1"] = 204
         for label, flops in expected.items():
-            assert int(ops[label].flops_backward) == flops, label
+            assert int(ops[label].cost.flops_backward) == flops, label
         assert int(trace.cost.total_flops_backward) == sum(expected.values())
     finally:
         trace.cleanup()
@@ -580,10 +588,10 @@ def test_backward_and_total_flops(grad_once, outer_case) -> None:
     ops, layers, modules, _ = _by_label(trace)
     for label, (forward, backward) in GRAD_FLOPS.items():
         for record in (ops[f"{label}:1"], layers[label]):
-            assert int(record.flops_backward) == backward, label
-            assert int(record.flops_total) == forward + backward, label
-        assert int(layers[label].total_flops_backward) == backward
-        assert int(layers[label].total_flops_total) == forward + backward
+            assert int(record.cost.flops_backward) == backward, label
+            assert int(record.cost.flops_total) == forward + backward, label
+        assert int(layers[label].cost.total_flops_backward) == backward
+        assert int(layers[label].cost.total_flops) == forward + backward
     backward_sum = sum(backward for _, backward in GRAD_FLOPS.values())  # 660
     forward_sum = sum(forward for forward, _ in GRAD_FLOPS.values())  # 342
     for scope in (trace.cost, modules["self"]):
@@ -595,7 +603,7 @@ def test_backward_and_total_flops(grad_once, outer_case) -> None:
     # The block runs twice, so its totals double; fc's Layer has two passes.
     _, trace, _, _ = outer_case
     _, layers, modules, _ = _by_label(trace)
-    assert int(layers["linear_1_1"].total_flops_backward) == 2 * 216
+    assert int(layers["linear_1_1"].cost.total_flops_backward) == 2 * 216
     assert (
         int(modules["block.fc"].total_flops_backward),
         int(modules["block.fc"].total_flops),
@@ -626,7 +634,7 @@ def test_arithmetic_intensity_by_the_read_once_write_once_model(two_linear_trace
         "linear_2_3:1": 102 / (96 + 72 + 24),
     }
     for label, value in expected.items():
-        assert ops[label].arithmetic_intensity == value, label
+        assert ops[label].cost.arithmetic_intensity == value, label
 
 
 def test_summary_counts_unknown_flop_ops() -> None:

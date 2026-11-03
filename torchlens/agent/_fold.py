@@ -20,6 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._utils._record_group_table import record_member
+
 #: Versioned, documented fold key (agent memo 3.4). Recorded in every folded
 #: payload so a consumer can branch on the key generation.
 FOLD_KEY_VERSION = "torchlens.agent_fold_key.v1"
@@ -91,7 +93,8 @@ def _fold_key(op: Any) -> tuple[Any, ...]:
     """
 
     stack = tuple(
-        normalize_module_path(str(entry)) for entry in getattr(op, "module_call_stack", ()) or ()
+        normalize_module_path(str(entry))
+        for entry in record_member(op, "module_call_stack", ()) or ()
     )
     func_name = str(getattr(op, "func_name", "unknown"))
     key: tuple[Any, ...] = (stack, func_name, _op_rank(op), _boundary_role(op))

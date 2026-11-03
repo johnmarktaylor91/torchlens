@@ -50,7 +50,7 @@ class TestInputOpTransformCoverage:
             ),
         )
         input_label = log.input_layers[0]
-        assert log[input_label].transformed_out is not None
+        assert log[input_label].payload.transformed_out is not None
 
 
 class TestMemoryTruth:

@@ -95,13 +95,13 @@ def test_equivalence_symmetry_resolves_registry_key_without_suffix_collision() -
     try:
         relu_1 = _relu_at(trace, "1")
         relu_11 = _relu_at(trace, "11")
-        foreign_group = trace.graph.op_equivalence_classes.get(relu_1.equivalence_class)
+        foreign_group = trace.graph.op_equivalence_classes.get(relu_1.graph.equivalence_class)
         assert foreign_group is not None and relu_11.label in foreign_group, (
             "precondition: the ReLU at module '1' is stamped with the registry key "
             "of the ReLU at module '11'"
         )
         assert relu_1.label not in foreign_group
-        assert relu_1.equivalent_ops == {relu_1.label}
+        assert relu_1.graph.equivalent_ops == {relu_1.label}
         check_metadata_invariants(trace)
     finally:
         trace.cleanup()
@@ -118,7 +118,7 @@ def test_equivalence_symmetry_still_fires_on_scrubbed_registry_group() -> None:
             for key, group in trace.graph.op_equivalence_classes.items()
             if relu_1.label in group
         )
-        assert own_key != relu_1.equivalence_class
+        assert own_key != relu_1.graph.equivalence_class
         trace.graph.op_equivalence_classes[own_key] = set()
         with pytest.raises(MetadataInvariantError, match="equivalence_symmetry"):
             check_metadata_invariants(trace)
@@ -133,7 +133,7 @@ def test_equivalence_symmetry_still_fires_on_one_sided_rebind() -> None:
     try:
         relu_1 = _relu_at(trace, "1")
         relu_11 = _relu_at(trace, "11")
-        relu_1.equivalent_ops = {relu_11.label}
+        relu_1._graph_equivalent_ops = {relu_11.label}
         with pytest.raises(MetadataInvariantError, match="equivalence_symmetry"):
             check_metadata_invariants(trace)
     finally:

@@ -181,7 +181,7 @@ def _check_buffer_static_versions(ml: Trace, buf: object, name: str) -> None:
         )
     for version in versions:
         label = getattr(version, "layer_label", type(version).__name__)
-        if not getattr(version, "is_buffer", False):
+        if not record_member(version, "is_buffer", False):
             raise MetadataInvariantError(
                 name,
                 f"Buffer '{address}' version '{label}' is not a buffer Op",
@@ -372,7 +372,7 @@ def _check_buffer_write_versions(ml: Trace, buf: object, name: str) -> None:
     passes: list[int] = [
         buffer_pass
         for version in versions
-        if isinstance(buffer_pass := getattr(version, "buffer_pass", None), int)
+        if isinstance(buffer_pass := record_member(version, "buffer_pass", None), int)
     ]
     for version in write_versions:
         label = getattr(version, "layer_label", type(version).__name__)
@@ -383,14 +383,14 @@ def _check_buffer_write_versions(ml: Trace, buf: object, name: str) -> None:
                 f"Buffer '{address}' version '{label}' has invalid buffer_write_kind "
                 f"{write_kind!r}",
             )
-        buffer_pass = getattr(version, "buffer_pass", None)
+        buffer_pass = record_member(version, "buffer_pass", None)
         if not isinstance(buffer_pass, int) or buffer_pass < 1:
             raise MetadataInvariantError(
                 name,
                 f"Buffer '{address}' version '{label}' has invalid buffer_pass {buffer_pass!r}",
             )
 
-        source = getattr(version, "buffer_source", None)
+        source = record_member(version, "buffer_source", None)
         if source is not None and _resolve_trace_label(ml, source) is None:
             raise MetadataInvariantError(
                 name,
@@ -476,7 +476,7 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
         if getattr(version, "buffer_replay_validated", None) is not True:
             continue
         label = getattr(version, "layer_label", type(version).__name__)
-        source = getattr(version, "buffer_source", None)
+        source = record_member(version, "buffer_source", None)
         if source is None:
             raise MetadataInvariantError(
                 name,
@@ -495,7 +495,7 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
                 name,
                 f"Buffer '{address}' version '{label}' replay source is not a parent",
             )
-        parent_args = getattr(version, "parent_arg_positions", {}) or {}
+        parent_args = record_member(version, "parent_arg_positions", {}) or {}
         arg_positions = parent_args.get("args", {}) if isinstance(parent_args, Mapping) else {}
         resolved_arg0 = _resolve_trace_label(ml, arg_positions.get(0, ""))
         if resolved_arg0 != resolved_source:
@@ -503,7 +503,7 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
                 name,
                 f"Buffer '{address}' version '{label}' replay source is not args[0]",
             )
-        if not getattr(version, "saved_args", None):
+        if not record_member(version, "saved_args", None):
             raise MetadataInvariantError(
                 name,
                 f"Buffer '{address}' version '{label}' claims replay validation without "
@@ -522,6 +522,7 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
 from ._invariants import (  # noqa: E402
     MetadataInvariantError,
 )

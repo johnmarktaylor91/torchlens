@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..._record_type import record_type
+from ..._utils._record_group_table import record_member
 from ..._utils.display import format_flops, human_readable_size
 
 __tl_layer__ = "L8"
@@ -45,9 +46,9 @@ def node_kind(entry: Any) -> str:
         return "input"
     if getattr(entry, "is_output", False):
         return "output"
-    if getattr(entry, "is_buffer", False):
+    if record_member(entry, "is_buffer", False):
         return "buffer"
-    if getattr(entry, "is_terminal_bool", False):
+    if record_member(entry, "is_terminal_bool", False):
         return "bool"
     if int(getattr(entry, "num_params", 0) or 0) > 0:
         return "parameterized"
@@ -90,10 +91,10 @@ def curated_attrs(entry: Any, context: AttrContext) -> list[dict[str, str]]:
         ("device", _device_string(entry)),
         ("module", _module_call_string(entry)),
         ("pass", _pass_string(entry)),
-        ("act_bytes", _bytes_string(getattr(entry, "activation_memory", None))),
+        ("act_bytes", _bytes_string(record_member(entry, "activation_memory", None))),
         ("params", _params_string(entry)),
-        ("flops", _flops_string(getattr(entry, "flops_forward", None))),
-        ("time", _duration_string(getattr(entry, "func_duration", None))),
+        ("flops", _flops_string(record_member(entry, "flops_forward", None))),
+        ("time", _duration_string(record_member(entry, "func_duration", None))),
         ("saved", _saved_string(entry)),
         ("nonfinite", _nonfinite_string(entry, context)),
         ("torchlens_label", str(getattr(entry, "label", "") or "") or None),
@@ -187,7 +188,7 @@ def _device_string(entry: Any) -> str | None:
 def _module_call_string(entry: Any) -> str | None:
     """Return the canonical (innermost) module call, if inside a module."""
 
-    stack = getattr(entry, "module_call_stack", ()) or ()
+    stack = record_member(entry, "module_call_stack", ()) or ()
     return str(stack[-1]) if stack else None
 
 
@@ -214,7 +215,7 @@ def _params_string(entry: Any) -> str | None:
     num_params = int(getattr(entry, "num_params", 0) or 0)
     if num_params <= 0:
         return None
-    param_memory = getattr(entry, "param_memory", None)
+    param_memory = record_member(entry, "param_memory", None)
     if param_memory is None:
         return str(num_params)
     return f"{num_params} ({human_readable_size(int(param_memory))})"
@@ -271,7 +272,7 @@ def _nonfinite_string(entry: Any, context: AttrContext) -> str | None:
 def _source_string(entry: Any) -> str | None:
     """Return ``basename:line`` of the captured call site (opt-in row)."""
 
-    context_rows = getattr(entry, "code_context", None) or ()
+    context_rows = record_member(entry, "code_context", None) or ()
     for location in context_rows:
         file_name = getattr(location, "file", None)
         line = getattr(location, "line_number", None)
@@ -306,7 +307,7 @@ def _sum_quantity(ops: list[Any], field_name: str) -> float | None:
     total = 0.0
     any_recorded = False
     for op in ops:
-        value = getattr(op, field_name, None)
+        value = record_member(op, field_name, None)
         if value is not None:
             total += float(value)
             any_recorded = True

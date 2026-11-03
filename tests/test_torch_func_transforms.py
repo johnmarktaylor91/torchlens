@@ -11,6 +11,7 @@ from _stale_holders import OpaqueCallable
 
 import torchlens as tl
 from torchlens import Recording, Trace, _state
+from torchlens._utils._record_group_table import record_member
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.errors import TraceCaptureError
 from torchlens.io import load_intervention_spec
@@ -540,12 +541,12 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert len(vmap_ops) == 1
     assert vmap_ops[0].label == "vmap_1_1:1"
     assert vmap_ops[0].parents == ("input_1",)
-    assert vmap_ops[0].is_transform is True
-    assert vmap_ops[0].transform_kind == "vmap"
-    assert vmap_ops[0].transform_chain == ("vmap",)
-    assert vmap_ops[0].transform_config["in_dims"] == 0
-    assert vmap_ops[0].transform_fn_name == "<lambda>"
-    assert vmap_ops[0].transform_fn_source is not None
+    assert vmap_ops[0].call.is_func_transform is True
+    assert vmap_ops[0].call.func_transform_kind == "vmap"
+    assert vmap_ops[0].call.func_transform_chain == ("vmap",)
+    assert vmap_ops[0].call.func_transform_config["in_dims"] == 0
+    assert vmap_ops[0].call.func_transform_fn_name == "<lambda>"
+    assert vmap_ops[0].call.func_transform_fn_source is not None
     assert log.transforms == (vmap_ops[0],)
     assert any(op.type == "maskedfill" and "vmap_1_1" in op.parents for op in log.ops)
 
@@ -570,7 +571,7 @@ def test_transform_boundary_warning_fires_for_each_collapsed_region() -> None:
         and "captured a vmap transform as a boundary op" in str(record.message)
     ]
     assert len(boundary_warnings) == 2
-    assert [op.transform_kind for op in log.transforms] == ["vmap", "vmap"]
+    assert [op.call.func_transform_kind for op in log.transforms] == ["vmap", "vmap"]
 
 
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
@@ -583,10 +584,10 @@ def test_grad_boundary_node_has_clean_parent_edge() -> None:
 
     assert len(grad_ops) == 1
     assert grad_ops[0].parents == ("input_1",)
-    assert grad_ops[0].is_transform is True
-    assert grad_ops[0].transform_kind == "grad"
-    assert grad_ops[0].transform_chain == ("grad",)
-    assert grad_ops[0].transform_config["argnums"] == 0
+    assert grad_ops[0].call.is_func_transform is True
+    assert grad_ops[0].call.func_transform_kind == "grad"
+    assert grad_ops[0].call.func_transform_chain == ("grad",)
+    assert grad_ops[0].call.func_transform_config["argnums"] == 0
     assert any(op.type == "add" and "grad_1_1" in op.parents for op in log.ops)
 
 
@@ -663,8 +664,8 @@ def test_autograd_functional_direct_call_boundary(
 
     assert len(transform_ops) == 1
     assert transform_ops[0].parents == ("input_1",)
-    assert transform_ops[0].is_transform is True
-    assert transform_ops[0].transform_kind == kind
+    assert transform_ops[0].call.is_func_transform is True
+    assert transform_ops[0].call.func_transform_kind == kind
 
 
 def test_functional_call_substituted_params_are_tensor_parents() -> None:
@@ -680,7 +681,7 @@ def test_functional_call_substituted_params_are_tensor_parents() -> None:
     assert linear.module == "inner:1"
     assert len(linear.parents) == 3
     assert linear.parents[0] == "input_1"
-    assert linear.parent_params == ()
+    assert linear.graph.parent_params == ()
 
 
 def test_functional_call_substituted_buffers_are_tensor_parents() -> None:
@@ -709,8 +710,8 @@ def test_transform_metadata_pandas_and_tlspec_round_trip(tmp_path: Path) -> None
 
     assert bool(dataframe.loc[dataframe["type"] == "vmap", "is_transform"].iloc[0])
     assert dataframe.loc[dataframe["type"] == "vmap", "transform_kind"].iloc[0] == "vmap"
-    assert loaded.transforms[0].transform_kind == "vmap"
-    assert loaded.transforms[0].transform_config["in_dims"] == 0
+    assert loaded.transforms[0].call.func_transform_kind == "vmap"
+    assert loaded.transforms[0].call.func_transform_config["in_dims"] == 0
 
 
 def test_transform_selector_intervention_no_crash() -> None:
@@ -723,7 +724,7 @@ def test_transform_selector_intervention_no_crash() -> None:
         intervene=tl.when(tl.func_transform("vmap"), tl.zero_ablate()),
     )
 
-    assert [op.transform_kind for op in log.transforms] == ["vmap"]
+    assert [op.call.func_transform_kind for op in log.transforms] == ["vmap"]
 
 
 def test_transform_selector_sanitized_spelling_matches_live_hooks() -> None:
@@ -778,7 +779,7 @@ def test_provenance_warning_foreign_tensor_contract() -> None:
     assert len(caught) == 1
     assert "arg1" in str(caught[0].message)
     add_op = next(op for op in foreign_log.ops if op.type == "add")
-    assert add_op.unattributed_tensor_args == ("arg1",)
+    assert add_op.call.unattributed_tensor_args == ("arg1",)
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
@@ -789,7 +790,7 @@ def test_provenance_warning_foreign_tensor_contract() -> None:
     ]
     assert provenance_warnings == []
     module_add = next(op for op in module_log.ops if op.type == "add")
-    assert module_add.unattributed_tensor_args == ()
+    assert module_add.call.unattributed_tensor_args == ()
 
 
 def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
@@ -851,8 +852,8 @@ def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
     op = next(op for op in trace.ops if op.type == "polygamma")
     multiply = next(other for other in trace.ops if other.type == "mul")
     assert op.parents == (multiply.layer_label,)
-    assert op.unattributed_tensor_args == ()
-    assert op.dropped_edge_tensor_args == ()
+    assert op.call.unattributed_tensor_args == ()
+    assert op.call.dropped_edge_tensor_args == ()
 
 
 def test_foreign_operand_warns_with_its_arg_position() -> None:
@@ -889,7 +890,7 @@ def test_foreign_operand_warns_with_its_arg_position() -> None:
         trace = tl.trace(_ForeignOperandModel().eval(), torch.rand(4) + 0.5)
 
     add_op = next(op for op in trace.ops if op.type == "add")
-    assert add_op.unattributed_tensor_args == ("arg1",)
+    assert add_op.call.unattributed_tensor_args == ("arg1",)
 
 
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
@@ -903,7 +904,7 @@ def test_prebuilt_transform_wrap_order_and_raw_warning_contract() -> None:
         save="all",
     )
 
-    assert [op.transform_kind for op in decorated_log.transforms] == ["vmap"]
+    assert [op.call.func_transform_kind for op in decorated_log.transforms] == ["vmap"]
     assert decorated_log.transforms[0].parents == ("input_1",)
 
     with pytest.warns(UserWarning, match="functorch"):
@@ -960,7 +961,7 @@ def test_raising_inner_transform_cleans_up_logging_state() -> None:
 
     assert _state._logging_enabled is False
     log = tl.trace(VmapMaskModel().eval(), torch.randn(3, 4))
-    assert [op.transform_kind for op in log.transforms] == ["vmap"]
+    assert [op.call.func_transform_kind for op in log.transforms] == ["vmap"]
 
 
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
@@ -976,7 +977,7 @@ def test_hf_style_runtime_vmap_mask_regression() -> None:
             save="all",
         )
 
-    assert [op.transform_kind for op in log.transforms] == ["vmap"]
+    assert [op.call.func_transform_kind for op in log.transforms] == ["vmap"]
     assert log.transforms[0].parents == ("input_1",)
     assert any("functorch" in str(record.message).lower() for record in records)
     assert not any("no graph/source provenance" in str(record.message) for record in records)
@@ -1007,7 +1008,7 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
     path = tmp_path / "matrix-vmap.tlspec"
     predicate_log.save(path)
     loaded = cast(Trace, tl.load(path))
-    assert loaded.transforms[0].transform_kind == "vmap"
+    assert loaded.transforms[0].call.func_transform_kind == "vmap"
 
     intervened = tl.trace(
         VmapMaskModel().eval(),
@@ -1108,7 +1109,7 @@ def test_variadic_vmap_arity_does_not_leak_stale_arg_spec() -> None:
     arange_ops = [op for op in log._layer_list if getattr(op, "func_name", None) == "arange"]
     # BOTH arange operands must be captured -- neither dropped by a stale spec.
     assert len(arange_ops) == 2
-    vmap_ops = [op for op in log._layer_list if getattr(op, "transform_kind", None) == "vmap"]
+    vmap_ops = [op for op in log._layer_list if record_member(op, "transform_kind", None) == "vmap"]
     assert len(vmap_ops) == 1
     # The outer vmap boundary node must list BOTH arange outputs as parents.
     vmap_parents = set(vmap_ops[0].parents)

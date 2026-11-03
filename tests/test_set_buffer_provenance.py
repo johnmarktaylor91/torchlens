@@ -298,7 +298,7 @@ def test_storage_overload_capture_charges_the_saved_storage_copy() -> None:
         )
     try:
         set_op = next(layer for layer in trace._layer_list if layer.layer_label.startswith("set_"))
-        saved_storage = set_op.saved_args[1]
+        saved_storage = set_op.call.saved_args[1]
         assert isinstance(saved_storage, torch.UntypedStorage)
         identity = ("cpu", saved_storage.data_ptr(), saved_storage.nbytes())
         assert identity in trace._save_budget_accountant.ledgers["cpu"].retained_storage

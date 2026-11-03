@@ -37,6 +37,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from torchlens._utils._record_group_table import record_member
+
 from ._adapters import RosterModel
 from ._c0_protocol_cases import (
     C0_PROTOCOL_CASES as C0_PROTOCOL_CASES,
@@ -278,7 +280,7 @@ def constant_like_ops(trace: Any) -> list[Any]:
     for op in trace._layer_list:
         if _is_input(op) or tuple(getattr(op, "parents", None) or ()):
             continue
-        if getattr(op, "is_buffer", getattr(op, "is_buffer_layer", False)):
+        if record_member(op, "is_buffer", getattr(op, "is_buffer_layer", False)):
             continue
         rows.append(op)
     return rows

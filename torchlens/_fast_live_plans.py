@@ -46,6 +46,7 @@ from ._fast_live_steer import apply_steer_paused, install_steer_hooks, session_i
 from ._runnable import RunnableErrorCode
 from ._runnable.verification import _contract_check
 from ._utils._module_call_dispatch import forward_entered_through_module_call
+from ._utils._record_group_table import record_member
 from ._utils.introspection import get_vars_of_type_from_obj
 from .backends.torch import _session_forwards, _tl as _tl_meta
 from .backends.torch.model_prep import shared_module_addresses
@@ -282,7 +283,7 @@ def build_function_plans(
         str(op.func_name)
         for op in trace._layer_list
         if bool(getattr(op, "has_saved_activation", False))
-        and not bool(getattr(op, "is_atomic_module", False))
+        and not bool(record_member(op, "is_atomic_module", False))
         and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
         and (explicit or op.label not in module_saved_labels)
     }
@@ -315,7 +316,7 @@ def build_function_plans(
                     item.label
                     for item in group
                     if bool(getattr(item, "has_saved_activation", False))
-                    and not bool(getattr(item, "is_atomic_module", False))
+                    and not bool(record_member(item, "is_atomic_module", False))
                     and (explicit or item.label not in module_saved_labels)
                 ),
             )

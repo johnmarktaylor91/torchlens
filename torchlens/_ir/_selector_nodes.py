@@ -20,6 +20,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._selector_universe import (
     _SUBSTRING_LABEL_ATTRS,
     _grad_fn_call_values,
@@ -205,11 +206,11 @@ def _compile_func_transform(selector: BaseSelector, lane: str) -> _Matcher:
 def _match_func_transform(subject: Any, *, wanted: str | None) -> bool:
     """Return whether the subject is a transform boundary of the wanted kind."""
 
-    if not bool(getattr(subject, "is_transform", False)):
+    if not bool(record_member(subject, "is_transform", False)):
         return False
     if wanted is None:
         return True
-    transform_kind = getattr(subject, "transform_kind", None)
+    transform_kind = record_member(subject, "transform_kind", None)
     return transform_kind is not None and sanitize_transform_kind(transform_kind) == wanted
 
 

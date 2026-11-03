@@ -280,7 +280,7 @@ def _assert_parents_match_args_template(layer: Any) -> None:
         Captured operation whose parent edges and template are compared.
     """
 
-    template = layer.args_template
+    template = layer.call.args_template
     assert template is not None
     template_parents = _template_parent_labels((template.args, template.kwargs))
     assert set(layer.parents) == template_parents
@@ -414,7 +414,7 @@ def test_traced_normal_mean_std_kwargs_recorded_as_parents() -> None:
     parents = set(normal_layer.parents)
     assert any("add_1" in p for p in parents), parents
     assert any("add_2" in p or "abs" in p for p in parents), parents
-    assert not normal_layer.is_internal_source
+    assert not normal_layer.graph.is_internal_source
 
 
 def test_traced_zeros_like_source_recorded_as_parent() -> None:
@@ -431,7 +431,7 @@ def test_traced_zeros_like_source_recorded_as_parent() -> None:
     zeros_like_layer = _layer_by_func(log, "zeroslike")
     parents = set(zeros_like_layer.parents)
     assert any("add" in p for p in parents), parents
-    assert not zeros_like_layer.is_internal_source
+    assert not zeros_like_layer.graph.is_internal_source
 
 
 def test_traced_new_zeros_source_recorded_as_parent() -> None:
@@ -448,7 +448,7 @@ def test_traced_new_zeros_source_recorded_as_parent() -> None:
     new_zeros_layer = _layer_by_func(log, "newzeros")
     parents = set(new_zeros_layer.parents)
     assert any("add" in p for p in parents), parents
-    assert not new_zeros_layer.is_internal_source
+    assert not new_zeros_layer.graph.is_internal_source
 
 
 def test_traced_gradient_spacing_tensor_recorded_as_parent() -> None:

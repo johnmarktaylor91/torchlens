@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from .._errors import CaptureGapError
+from .._utils._record_group_table import record_member
 from .registry import BackendUnsupportedError
 
 __tl_layer__ = "L2"
@@ -419,13 +420,13 @@ def is_literal_producer_op(op: Any) -> bool:
 
     if is_closure_constant_op(op):
         return False
-    if getattr(op, "is_input", False) or getattr(op, "is_buffer", False):
+    if getattr(op, "is_input", False) or record_member(op, "is_buffer", False):
         return False
     if tuple(getattr(op, "parents", ()) or ()):
         return False
-    if tuple(getattr(op, "unattributed_tensor_args", ()) or ()):
+    if tuple(record_member(op, "unattributed_tensor_args", ()) or ()):
         return False
-    if tuple(getattr(op, "dropped_edge_tensor_args", ()) or ()):
+    if tuple(record_member(op, "dropped_edge_tensor_args", ()) or ()):
         return False
     return not is_rng_producer_name(getattr(op, "func_name", None))
 
@@ -563,7 +564,7 @@ def _audit_closure_constant(
             backend=backend_name,
             op_label=label_raw,
         )
-    if getattr(op, "is_input", False) or getattr(op, "is_buffer", False):
+    if getattr(op, "is_input", False) or record_member(op, "is_buffer", False):
         raise CaptureGapError(
             f"{backend_name} backend recorded constant {label_raw} as an input or buffer leaf",
             backend=backend_name,

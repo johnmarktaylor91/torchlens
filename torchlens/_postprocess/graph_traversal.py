@@ -18,6 +18,7 @@ from .._data_classes.op import Op, _dtype_or_none, _memory_or_none, _shape_or_no
 from .._ir._output_occurrences import output_container_path_meta
 from .._ir.op_record import amend_late_buffer_output_parent
 from .._quantities import Bytes, Duration
+from .._utils._record_group_table import record_member
 from .._utils.display import identity
 from .._utils.introspection import _get_code_context
 from .._utils.rng import log_current_rng_states
@@ -280,11 +281,11 @@ def _add_output_layers(
         new_output_node.type = "output"
         new_output_node.is_output = True
         new_output_node.is_input = False
-        new_output_node.is_buffer = False
+        new_output_node._graph_is_buffer = False
         new_output_node._internal_set("edits", [])
         new_output_node._internal_set("is_edited", False)
         if i == len(paired_outputs) - 1:
-            new_output_node.is_final_output = True
+            new_output_node._graph_is_final_output = True
         self._raw_graph_ws.layer_counter += 1
         new_output_node._label_raw = f"output_{i + 1}_raw"
         new_output_node._layer_label_raw = new_output_node._label_raw
@@ -292,7 +293,7 @@ def _add_output_layers(
         output_address = "output"
         if output_address_suffix != "":
             output_address += f".{output_address_suffix}"
-        new_output_node.io_role = output_address
+        new_output_node._graph_io_role = output_address
         path_meta = output_container_path_meta(self, output_node._label_raw, output_address_suffix)
         if path_meta is not None:
             new_output_node.container_path, new_output_node.container_spec = path_meta
@@ -305,7 +306,7 @@ def _add_output_layers(
         # claim the view's shape for the full base tensor.
         new_output_node.shape = tuple(output_tensor.shape)
         new_output_node.dtype = output_tensor.dtype
-        new_output_node.activation_memory = Bytes(
+        new_output_node._cost_activation_memory = Bytes(
             get_memory_amount_from_metadata(
                 output_tensor, new_output_node.shape, new_output_node.dtype
             )
@@ -322,68 +323,70 @@ def _add_output_layers(
         # the duplicated row is the tied vocabulary projection). The producing
         # op owns the output tensor and its compute; the alias row displays
         # shape only and carries not-applicable (None) compute.
-        new_output_node.flops_forward = None
-        new_output_node.flops_backward = None
-        new_output_node.code_context = _get_code_context(
+        new_output_node._cost_flops_forward = None
+        new_output_node._cost_flops_backward = None
+        new_output_node._source_frames = _get_code_context(
             self.num_context_lines,
             source_loading_enabled=self._options_save_source_context,
             disable_col_offset=False,
         )
-        new_output_node.var_names = []
-        new_output_node.func_duration = Duration(0)
-        new_output_node.func_rng_states = (
+        new_output_node._source_var_names = []
+        new_output_node._cost_duration = Duration(0)
+        new_output_node._call_rng_states = (
             log_current_rng_states(torch_only=True) if self._options_save_rng else {}
         )
-        new_output_node.arg_names = ()
-        new_output_node.num_args_total = 0
-        new_output_node.num_pos_args = 0
-        new_output_node.num_kwargs = 0
-        new_output_node.non_tensor_pos_args = []
-        new_output_node.non_tensor_kwargs = {}
-        new_output_node.func_non_tensor_args = []
-        new_output_node.grad_fn_class_name = None
-        new_output_node.autograd_memory = None
-        new_output_node.num_autograd_tensors = None
+        new_output_node._call_arg_names = ()
+        new_output_node._call_num_args_total = 0
+        new_output_node._call_num_pos_args = 0
+        new_output_node._call_num_kwargs = 0
+        new_output_node._call_non_tensor_pos_args = []
+        new_output_node._call_non_tensor_kwargs = {}
+        new_output_node._call_non_tensor_args = []
+        new_output_node._autograd_grad_fn_class_name = None
+        new_output_node._cost_autograd_memory = None
+        new_output_node._autograd_num_autograd_tensors = None
         # An output pseudo-node runs no kernel: "not measured" is None, never
         # a fabricated 0 B (observe item 15 zero-site sweep).
-        new_output_node.bytes_delta_at_call = None
-        new_output_node.bytes_peak_at_call = None
+        new_output_node._cost_bytes_delta_at_call = None
+        new_output_node._cost_bytes_peak_at_call = None
         new_output_node._internal_set("saved_args", [output_tensor])
         new_output_node._internal_set("saved_kwargs", {})
 
         # Strip any params:
 
-        new_output_node.parent_params = []
+        new_output_node._graph_parent_params = []
         new_output_node._param_barcodes = []
-        new_output_node.parent_param_ops = {}
+        new_output_node._graph_parent_param_ops = {}
         new_output_node._param_logs = []
         new_output_node.param_shapes = []
         new_output_node.num_params = 0
         new_output_node.num_params_trainable = 0
         new_output_node.num_params_frozen = 0
-        new_output_node.param_memory = Bytes(0)
+        new_output_node._cost_param_memory = Bytes(0)
 
         # Strip module info:
 
         new_output_node.module = None
         new_output_node.modules = []
-        new_output_node.module_call_stack = []
-        new_output_node.input_to_module_calls = []
-        new_output_node.output_of_modules = [mod_pass[0] for mod_pass in output_node.modules]
-        new_output_node.output_of_module_calls = output_node.modules
-        new_output_node.is_module_output = False
-        new_output_node.is_atomic_module = False
-        new_output_node.atomic_module_call = None
+        new_output_node._module_context_call_stack = []
+        new_output_node._module_context_input_to_module_calls = []
+        new_output_node._module_context_output_of_modules = [
+            mod_pass[0] for mod_pass in output_node.modules
+        ]
+        new_output_node._module_context_output_of_module_calls = output_node.modules
+        new_output_node._module_context_is_module_output = False
+        new_output_node._module_context_is_atomic_module = False
+        new_output_node._module_context_atomic_module_call = None
 
         # Fix ancestry information:
 
-        new_output_node.is_internal_source = False
-        new_output_node.has_output_descendant = True
+        new_output_node._graph_is_internal_source = False
+        new_output_node._graph_has_output_descendant = True
         new_output_node.output_descendants = {new_output_node._label_raw}
         new_output_node.children = []
-        new_output_node.has_children = False
+        new_output_node._graph_has_children = False
         new_output_node.parents = [output_node._label_raw]
-        new_output_node.parent_arg_positions = {
+        new_output_node._call_parent_arg_positions = {
             "args": {0: output_node._label_raw},
             "kwargs": {},
         }
@@ -394,8 +397,8 @@ def _add_output_layers(
         # factory-tensor ancestry (i.e. any BatchNorm net): it named labels that are not
         # parents of the output node at all, and omitted the output node's ONE real
         # parent, which does carry that ancestry.
-        new_output_node.internal_source_parents = (
-            [output_node._label_raw] if output_node.has_internal_source_ancestor else []
+        new_output_node._graph_internal_source_parents = (
+            [output_node._label_raw] if output_node.graph.has_internal_source_ancestor else []
         )
         # root_ancestors must be re-derived the same way: the output node is NOT an
         # internal source (set above), so the armed ancestry-closure convention
@@ -404,8 +407,8 @@ def _add_output_layers(
         # which is the empty set when that parent is a parentless factory source
         # (arange/zeros/... returned straight from forward) — the one source-minting
         # convention that leaves root_ancestors empty on the exempt source row.
-        new_output_node.root_ancestors = set(output_node.input_ancestors) | set(
-            output_node.internal_source_ancestors
+        new_output_node._graph_root_ancestors = set(output_node.input_ancestors) | set(
+            output_node.graph.internal_source_ancestors
         )
         new_output_node._edge_uses = []
 
@@ -420,27 +423,27 @@ def _add_output_layers(
         new_output_node.annotations = {}
 
         # Clear func_config on synthetic output nodes:
-        new_output_node.func_config = {}
-        new_output_node.is_transform = False
-        new_output_node.transform_kind = None
-        new_output_node.transform_chain = ()
-        new_output_node.transform_config = {}
-        new_output_node.transform_fn_name = None
-        new_output_node.transform_fn_qualname = None
-        new_output_node.transform_fn_source = None
-        new_output_node.unattributed_tensor_args = ()
-        new_output_node.dropped_edge_tensor_args = ()
+        new_output_node._call_config = {}
+        new_output_node._call_is_func_transform = False
+        new_output_node._call_func_transform_kind = None
+        new_output_node._call_func_transform_chain = ()
+        new_output_node._call_func_transform_config = {}
+        new_output_node._call_func_transform_fn_name = None
+        new_output_node._call_func_transform_fn_qualname = None
+        new_output_node._call_func_transform_fn_source = None
+        new_output_node._call_unattributed_tensor_args = ()
+        new_output_node._call_dropped_edge_tensor_args = ()
 
         # Fix layer equivalence information:
         new_output_node.pass_number = 1
         new_output_node.num_passes = 1
-        new_output_node.equivalent_ops = {new_output_node._label_raw}
-        new_output_node.recurrent_ops = []
+        new_output_node._graph_equivalent_ops = {new_output_node._label_raw}
+        new_output_node._graph_recurrent_ops = []
         equiv_type = (
             f"output_{i + 1}_{'_'.join(tuple(str(s) for s in new_output_node.shape))}_"
             f"{str(new_output_node.dtype)}"
         )
-        new_output_node.equivalence_class = equiv_type
+        new_output_node._graph_equivalence_class = equiv_type
         self._graph_op_equivalence_classes[equiv_type].add(new_output_node._label_raw)
 
         # Track child tensor variations for output nodes.
@@ -453,7 +456,9 @@ def _add_output_layers(
             # traces keep the graph-attached output — it is the very handle
             # backward() differentiates through.
             _parent_payload = (
-                output_node.out if output_node.out is not None else output_node.transformed_out
+                output_node.out
+                if output_node.out is not None
+                else output_node.payload.transformed_out
             )
             _detach_payload = not (
                 torch.is_tensor(_parent_payload) and _parent_payload.grad_fn is not None
@@ -488,13 +493,19 @@ def _add_output_layers(
             raw_retained = output_node.out is not None
             new_output_node._internal_set("out", actual_output_raw if raw_retained else None)
             new_output_node._internal_set("transformed_out", actual_output_transformed)
-            new_output_node.transformed_out_shape = _shape_or_none(actual_output_transformed)
-            new_output_node.transformed_out_dtype = _dtype_or_none(actual_output_transformed)
-            new_output_node.transformed_activation_memory = _memory_or_none(
+            new_output_node._payload_transformed_out_shape = _shape_or_none(
+                actual_output_transformed
+            )
+            new_output_node._payload_transformed_out_dtype = _dtype_or_none(
+                actual_output_transformed
+            )
+            new_output_node._cost_transformed_activation_memory = _memory_or_none(
                 actual_output_transformed
             )
 
-            comparison_output = output_node.out if raw_retained else output_node.transformed_out
+            comparison_output = (
+                output_node.out if raw_retained else output_node.payload.transformed_out
+            )
             actual_comparison = actual_output_raw if raw_retained else actual_output_transformed
             if (
                 comparison_output is not None
@@ -529,8 +540,8 @@ def _find_output_ancestors(self: "Trace") -> None:
         node = self[node_label]
         for child_node_label in node.children:
             child = self[child_node_label]
-            if child.has_output_descendant:
-                node.has_output_descendant = True
+            if child.graph.has_output_descendant:
+                node._graph_has_output_descendant = True
                 node.output_descendants.update(child.output_descendants)
 
 
@@ -637,7 +648,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     _record_pruned_alias_mutation(self, orphan_nodes)
     if self._options_keep_orphans:
         for orphan_label in orphan_nodes:
-            self._raw_graph_ws.raw_layer_dict[orphan_label].is_orphan = True
+            self._raw_graph_ws.raw_layer_dict[orphan_label]._graph_is_orphan = True
         return
 
     # Record the ``func_call_id``s of the ops being INTENTIONALLY orphan-pruned
@@ -652,7 +663,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
         func_call_id
         for label in orphan_nodes
         for func_call_id in (
-            getattr(self._raw_graph_ws.raw_layer_dict[label], "func_call_id", None),
+            record_member(self._raw_graph_ws.raw_layer_dict[label], "func_call_id", None),
         )
         if isinstance(func_call_id, int)
     }
@@ -691,10 +702,10 @@ def _child_edge_totally_overwrites(self: "Trace", walked_label: str, child_label
     op = self._raw_graph_ws.raw_layer_dict.get(child_label)
     if op is None:
         return False
-    func_id = getattr(op, "func_id", None)
+    func_id = record_member(op, "func_id", None)
     namespace = getattr(func_id, "namespace", None)
     qualname = getattr(func_id, "qualname", None)
-    arg_locs = getattr(op, "parent_arg_positions", None)
+    arg_locs = record_member(op, "parent_arg_positions", None)
     args_locs = arg_locs.get("args", {}) if isinstance(arg_locs, dict) else {}
     kwargs_locs = arg_locs.get("kwargs", {}) if isinstance(arg_locs, dict) else {}
     if (
@@ -761,7 +772,7 @@ def _orphan_is_uninit_alloc_source(self: "Trace", op: Any) -> bool:
         qualname_is_uninitialized_alloc,
     )
 
-    func_id = getattr(op, "func_id", None)
+    func_id = record_member(op, "func_id", None)
     namespace = getattr(func_id, "namespace", None)
     qualname = getattr(func_id, "qualname", None)
     is_factory = qualname_is_uninitialized_alloc(namespace, qualname)
@@ -790,7 +801,7 @@ def _orphan_is_uninit_alloc_source(self: "Trace", op: Any) -> bool:
     out_numel = _numel(getattr(op, "shape", None))
     if is_factory:
         return out_numel is None or out_numel > 0
-    arg_locs = getattr(op, "parent_arg_positions", None)
+    arg_locs = record_member(op, "parent_arg_positions", None)
     args_locs = arg_locs.get("args", {}) if isinstance(arg_locs, dict) else {}
     receiver = self._raw_graph_ws.raw_layer_dict.get(args_locs.get(0, ""))
     pre_numel = _numel(getattr(receiver, "shape", None)) if receiver is not None else None
@@ -823,7 +834,7 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
         op = self._raw_graph_ws.raw_layer_dict.get(label)
         if op is None:
             continue
-        func_id = getattr(op, "func_id", None)
+        func_id = record_member(op, "func_id", None)
         if func_id is None:
             continue
         if not aten_qualname_is_seeded_rng(
@@ -856,7 +867,7 @@ def _record_pruned_source_less_witness(self: "Trace", orphan_nodes: set[str]) ->
         if label not in orphan_nodes:
             continue
         op = self._raw_graph_ws.raw_layer_dict[label]
-        positions = tuple(getattr(op, "unattributed_tensor_args", ()) or ())
+        positions = tuple(record_member(op, "unattributed_tensor_args", ()) or ())
         if not positions:
             continue
         if escape_sources is None:
@@ -916,7 +927,9 @@ def _expand_seen_nodes_to_complete_func_call_groups(
 
     func_groups: dict[int, set[str]] = {}
     for raw_label in self._raw_graph_ws.raw_layer_labels_list:
-        func_call_id = getattr(self._raw_graph_ws.raw_layer_dict[raw_label], "func_call_id", None)
+        func_call_id = record_member(
+            self._raw_graph_ws.raw_layer_dict[raw_label], "func_call_id", None
+        )
         if func_call_id is not None:
             func_groups.setdefault(func_call_id, set()).add(raw_label)
 
@@ -951,7 +964,9 @@ def _log_internally_terminated_tensor(
     if tensor_label not in seen_sink_labels:
         seen_sink_labels.add(tensor_label)
         self.internal_sink_ops.append(tensor_label)
-        if layer_entry.is_scalar_bool and (tensor_label not in seen_terminated_bool_labels):
+        if layer_entry.control_flow.is_scalar_bool and (
+            tensor_label not in seen_terminated_bool_labels
+        ):
             seen_terminated_bool_labels.add(tensor_label)
             self.internally_terminated_bool_ops.append(tensor_label)
-            layer_entry.is_terminal_bool = True
+            layer_entry._control_flow_is_terminal_bool = True

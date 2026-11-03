@@ -69,7 +69,7 @@ def _mlp(x: Any, w1: Any, b1: Any, w2: Any, b2: Any) -> Any:
 def _output_op(trace: Any) -> Any:
     """Return the output-parent op of a trace."""
 
-    return next(op for op in trace._layer_list if op.is_output_parent)
+    return next(op for op in trace._layer_list if op.graph.is_output_parent)
 
 
 def _relu_op(trace: Any) -> Any:

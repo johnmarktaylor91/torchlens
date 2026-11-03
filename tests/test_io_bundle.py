@@ -156,7 +156,7 @@ def _build_non_tensor_out_log() -> Trace:
 
     trace = _build_conv_log()
     first_saved_layer = next(layer for layer in trace._layer_list if layer.has_saved_activation)
-    first_saved_layer.transformed_out = 1.0
+    first_saved_layer._payload_transformed_out = 1.0
     trace._options_activation_transform = lambda tensor: float(tensor.mean().item())
     return trace
 

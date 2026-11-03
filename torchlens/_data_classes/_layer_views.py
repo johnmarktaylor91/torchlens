@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._constants import LAYER_LOG_FIELD_ORDER
 from .._quantities import Macs
+from .._utils._record_group_table import read_layer_field
 from ._layer_mirror import _layer_mirror_read, _layer_rep_op
 from ._layer_spec import _LAYER_MIRROR_SPEC
 
@@ -59,7 +60,7 @@ def materialize_layer_mirrors(layer_log: Layer) -> None:
         rep = _layer_rep_op(layer_log)
         if rep is not None:
             try:
-                instance_dict["equivalent_ops"] = rep.equivalent_ops
+                instance_dict["equivalent_ops"] = rep.graph.equivalent_ops
             except AttributeError:
                 pass
 
@@ -87,14 +88,14 @@ def _layer_log_to_row(layer_log: Layer) -> dict[str, Any]:
         if multi_pass and field_name in _MULTI_PASS_PER_CALL_LAYER_FIELDS:
             row[field_name] = None
             continue
-        row[field_name] = getattr(layer_log, field_name)
+        row[field_name] = read_layer_field(layer_log, field_name)
     return row
 
 
 def layer_total_macs_forward(layer: Layer) -> Macs | None:
     """Sum TRUE forward MACs across all Ops in the layer (``None`` on any unknown split)."""
 
-    per_op = [op.macs_forward for op in layer.ops.values()]
+    per_op = [op.cost.macs_forward for op in layer.ops.values()]
     if any(value is None for value in per_op):
         return None
     return Macs(sum(int(value) for value in per_op if value is not None))
@@ -165,7 +166,7 @@ def layer_siblings(layer: Layer) -> list[str]:
     result = []
     seen = {layer.layer_label}
     for pass_log in layer.ops.values():
-        for label in pass_log.siblings:
+        for label in pass_log.graph.siblings:
             no_pass = relation_no_pass_label(layer, label)
             if no_pass is not None and no_pass not in seen:
                 seen.add(no_pass)
@@ -179,7 +180,7 @@ def layer_co_parents(layer: Layer) -> list[str]:
     result = []
     seen = {layer.layer_label}
     for pass_log in layer.ops.values():
-        for label in pass_log.co_parents:
+        for label in pass_log.graph.co_parents:
             no_pass = relation_no_pass_label(layer, label)
             if no_pass is not None and no_pass not in seen:
                 seen.add(no_pass)
@@ -252,8 +253,8 @@ def layer_edges_vary_across_ops(layer: Layer) -> bool:
 
     if layer.num_passes <= 1:
         return False
-    all_pass_lists = list(layer.child_ops_per_layer.values()) + list(
-        layer.parent_ops_per_layer.values()
+    all_pass_lists = list(layer.graph.child_ops_per_layer.values()) + list(
+        layer.graph.parent_ops_per_layer.values()
     )
     return any(len(ops) < layer.num_passes for ops in all_pass_lists)
 
@@ -263,8 +264,8 @@ def layer_leaf_module_ops(layer: Layer) -> set[Any]:
 
     result = set()
     for pass_log in layer.ops.values():
-        if pass_log.is_atomic_module:
-            result.add(pass_log.atomic_module_call)
+        if pass_log.module_context.is_atomic_module:
+            result.add(pass_log.module_context.atomic_module_call)
     return result
 
 
@@ -276,12 +277,12 @@ def layer_parent_arg_positions(layer: Layer) -> dict[str, dict[Any, str]]:
     """
 
     if layer.num_passes == 1:
-        return cast(dict[str, dict[Any, str]], layer.ops[0].parent_arg_positions)
+        return cast(dict[str, dict[Any, str]], layer.ops[0].call.parent_arg_positions)
 
     result: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
     for pass_log in layer.ops.values():
         for arg_type in ["args", "kwargs"]:
-            for arg_key, layer_label in pass_log.parent_arg_positions[arg_type].items():
+            for arg_key, layer_label in pass_log.call.parent_arg_positions[arg_type].items():
                 no_pass = layer.source_trace[layer_label].layer_label
                 if arg_key not in result[arg_type]:
                     result[arg_type][arg_key] = no_pass

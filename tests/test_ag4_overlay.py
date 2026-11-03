@@ -22,6 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
+from torchlens._utils._record_group_table import record_member
 from torchlens.attribution._viz import attribution_color_by
 
 TOL = 1e-12
@@ -71,7 +72,7 @@ def _site_of(node, sites) -> str | None:
         return None
     if node.layer_label in sites:
         return node.layer_label
-    return next((m for m in getattr(node, "output_of_modules", ()) or () if m in sites), None)
+    return next((m for m in record_member(node, "output_of_modules", ()) or () if m in sites), None)
 
 
 def _check_painting(trace, color_by, expected: dict[str, float]) -> int:

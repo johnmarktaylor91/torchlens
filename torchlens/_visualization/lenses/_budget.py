@@ -19,6 +19,7 @@ import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ..._utils._record_group_table import record_member
 from ...errors._base import TorchLensWarning
 
 if TYPE_CHECKING:
@@ -114,7 +115,7 @@ def _call_depth_estimate(trace: Trace, depth: int) -> int:
     visible_ops = 0
     cut_boxes: set[str] = set()
     for op in trace._layer_list:
-        stack = tuple(getattr(op, "module_call_stack", ()) or ())
+        stack = tuple(record_member(op, "module_call_stack", ()) or ())
         if len(stack) <= depth:
             visible_ops += 1
         else:
@@ -294,7 +295,7 @@ def _resolve_above_ceiling(trace: Trace, op_count: int, channel_active: bool) ->
     best_estimate = _call_depth_estimate(trace, 1)
     chosen: tuple[int, int] | None = None
     max_depth = max(
-        (len(tuple(getattr(op, "module_call_stack", ()) or ())) for op in trace._layer_list),
+        (len(tuple(record_member(op, "module_call_stack", ()) or ())) for op in trace._layer_list),
         default=1,
     )
     for depth in range(1, max(max_depth, 1) + 1):

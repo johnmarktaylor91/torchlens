@@ -25,6 +25,7 @@ import weakref
 from typing import TYPE_CHECKING, Any, cast
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.module import Module
@@ -86,7 +87,7 @@ def _module_structural_signature(module: Module) -> StructuralSignature:
     ops_signature = tuple(
         (
             str(getattr(layer, "func_name", None) or record_type(layer, "")),
-            _func_config_digest(getattr(layer, "func_config", None)),
+            _func_config_digest(record_member(layer, "func_config", None)),
             _non_tensor_args_digest(layer),
         )
         for layer in module.layers
@@ -265,8 +266,8 @@ def _non_tensor_args_digest(layer: Any) -> str:
         sources = list(ops.values()) if ops is not None else [layer]
         parts = tuple(
             (
-                getattr(source, "non_tensor_pos_args", None),
-                getattr(source, "non_tensor_kwargs", None),
+                record_member(source, "non_tensor_pos_args", None),
+                record_member(source, "non_tensor_kwargs", None),
             )
             for source in (sources or [layer])
         )
@@ -311,7 +312,7 @@ class MemberFingerprintCache:
         ops_signature = tuple(
             (
                 str(getattr(layer, "func_name", None) or record_type(layer, "")),
-                _func_config_digest(getattr(layer, "func_config", None)),
+                _func_config_digest(record_member(layer, "func_config", None)),
                 _non_tensor_args_digest(layer),
             )
             for layer in module.layers

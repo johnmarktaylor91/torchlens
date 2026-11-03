@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..._data_classes._trace_missing_attrs import is_live_trace
+from ..._utils._record_group_table import record_member
 from ..._utils._torch_compat import get_gradient_edge_support
 from ._errors import ReadError
 
@@ -272,7 +273,7 @@ def _resolve_node(op: Any, rejoin_map: dict[int, Any]) -> tuple[Any, bool] | Non
         producer node.
     """
 
-    handle = getattr(op, "grad_fn_handle", None)
+    handle = record_member(op, "grad_fn_handle", None)
     if handle is not None:
         return handle, False
     object_id = getattr(op, "grad_fn_object_id", None)

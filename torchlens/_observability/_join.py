@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from operator import itemgetter
 from typing import Any
 
+from .._utils._record_group_table import record_member
 from ._errors import ProfilerSessionError
 from ._kineto import NormalizedEvent
 
@@ -394,7 +395,7 @@ def join_events(
         label_by_call_id: dict[str, str] = {}
         if trace is not None:
             for op in trace._layer_list:  # pragma: no branch
-                call_id = getattr(op, "func_call_id", None)
+                call_id = record_member(op, "func_call_id", None)
                 label = getattr(op, "label", None)
                 if call_id is not None and label is not None:
                     label_by_call_id[str(call_id)] = str(label)

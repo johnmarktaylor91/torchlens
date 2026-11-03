@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._errors import InvalidArgumentError
 from .._literals import CollapseLiteral, FoldRepeatsLiteral, VisModeLiteral
+from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensWarning
 
 # Condensed-flow-graph construction: split to _condensed_flow.py under the R43
@@ -294,7 +295,7 @@ def _compute_collapse_graph_revision(trace: Trace) -> tuple[object, ...]:
             tuple(str(module) for module in (op.modules or ())),
             op.func_name,
             tuple(op.shape),
-            op.io_role,
+            op.graph.io_role,
         )
         for op in trace._layer_list
     )
@@ -1993,10 +1994,10 @@ def _rendered_module_hidden_counts(trace: Trace, context: RenderContext) -> dict
     for node in entries_to_plot.values():
         if isinstance(node, BoundaryNode):
             continue
-        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
+        if node.graph.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
         modules = list(getattr(node, "modules", ()) or ())
-        if getattr(node, "is_atomic_module", False) and modules:
+        if record_member(node, "is_atomic_module", False) and modules:
             modules = modules[:-1]
         addresses = tuple(dict.fromkeys(str(module).rsplit(":", 1)[0] for module in modules))
         for address in addresses:

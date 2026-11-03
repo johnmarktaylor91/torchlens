@@ -268,7 +268,12 @@ class TraceLike:
         if ctx is not None:
             return getattr(ctx, "address", None)
         buffer_address = getattr(activation, "address", None)
-        if getattr(activation, "is_buffer", False) and isinstance(buffer_address, str):
+        # Op and Layer keep ``is_buffer`` in their graph group; other activations
+        # carry it flat. Read the group directly so this vocabulary module stays
+        # free of record-table imports.
+        graph = getattr(activation, "graph", None)
+        is_buffer = getattr(graph if graph is not None else activation, "is_buffer", False)
+        if is_buffer and isinstance(buffer_address, str):
             return buffer_address
         module = getattr(activation, "module", None)
         if not isinstance(module, str):

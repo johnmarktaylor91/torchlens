@@ -53,7 +53,7 @@ def test_corruption_arm_param_sharing_key_forgery() -> None:
         donor = first
         for op in (second,):
             op._param_barcodes = _copy.copy(donor._param_barcodes)
-            op.equivalence_class = donor.equivalence_class
+            op._graph_equivalence_class = donor.graph.equivalence_class
         with pytest.raises(MetadataInvariantError, match="Param sharing violation"):
             _check_loop_detection_invariants(log)
     finally:

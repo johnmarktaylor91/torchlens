@@ -56,7 +56,7 @@ def test_quantized_capture_has_value_parity_and_discloses(kind: str) -> None:
         warnings.simplefilter("always")
         trace = tl.trace(model, x)
     assert any("quantized" in str(w.message).lower() for w in caught)
-    final_ops = [op for op in trace.ops.values() if op.is_output_parent]
+    final_ops = [op for op in trace.ops.values() if op.graph.is_output_parent]
     assert final_ops and torch.allclose(final_ops[-1].out, reference, atol=1e-6)
 
 

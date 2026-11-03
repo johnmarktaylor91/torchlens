@@ -13,6 +13,7 @@ from torch import nn
 from .._record_type import record_type
 from .._selection.selectors import facet
 from .._user_funcs import trace
+from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensError, TorchLensWarning
 from ..options import CaptureOptions
 from ._state_guard import _CounterfactualStateGuard, _teardown
@@ -937,7 +938,7 @@ def _model_input_home_role(log: Any, facet_name: str, address: str) -> str | Non
             "never fire at input sites, and whole-input replacement would write outside the "
             "facet."
         )
-    io_role = getattr(home_op, "io_role", None)
+    io_role = record_member(home_op, "io_role", None)
     if not io_role:
         raise ValueError(
             f"Facet {facet_name!r} on module {address!r} homes on model input "

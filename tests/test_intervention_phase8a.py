@@ -68,7 +68,7 @@ def _first_internal_label(log: Any) -> str:
     """
 
     for layer in log._layer_list:
-        if not (layer.is_input or layer.is_output or layer.is_buffer):
+        if not (layer.is_input or layer.is_output or layer.graph.is_buffer):
             return layer.layer_label
     raise AssertionError("expected at least one internal layer")
 

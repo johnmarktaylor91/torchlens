@@ -10,6 +10,7 @@ frozen against.
 from typing import Any
 
 from .._quantities import Bytes, as_bytes, as_flops
+from .._utils._record_group_table import op_attr
 
 
 def _as_total_param_memory(value: Any) -> Bytes:
@@ -115,6 +116,10 @@ _LAYER_MIRROR_SPEC: dict[str, tuple[str, Any]] = {
     "flops_forward": ("flops_forward", as_flops),
     "flops_backward": ("flops_backward", as_flops),
     "total_param_memory": ("param_memory", _as_total_param_memory),
+}
+# Sources name the Op attribute that holds each persisted field.
+_LAYER_MIRROR_SPEC = {
+    name: (op_attr(source), normalize) for name, (source, normalize) in _LAYER_MIRROR_SPEC.items()
 }
 
 #: Complete stored-state name order: the exact ``__dict__`` insertion order of

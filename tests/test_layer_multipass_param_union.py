@@ -57,7 +57,9 @@ def test_layer_params_are_the_union_over_passes_with_per_pass_disclosure() -> No
     assert layer.num_params == 3 * 16
     assert layer.num_params_trainable == 3 * 16
     assert layer.num_params_frozen == 0
-    assert int(layer.total_param_memory) == sum(p.numel() * p.element_size() for p in model.weights)
+    assert int(layer.cost.total_param_memory) == sum(
+        p.numel() * p.element_size() for p in model.weights
+    )
 
     # Each pass keeps exactly its own weight.
     per_pass = [[param.address for param in (op._param_logs or ())] for op in layer.ops]

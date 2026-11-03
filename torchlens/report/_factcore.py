@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from ._compute_truth import ComputeAggregation, compute_aggregation
 
 if TYPE_CHECKING:
@@ -278,7 +279,7 @@ def _counts(trace: Any) -> CountsRecord:
         for op in ops
         if getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
-        or getattr(op, "is_buffer", False)
+        or record_member(op, "is_buffer", False)
     )
     compute_ops = len(ops) - alias_rows
     site_keys = {site for op in ops if (site := getattr(op, "site_key", None)) is not None}
@@ -351,7 +352,7 @@ def _param_bytes(trace: Any) -> int | None:
         return None if getattr(trace, "num_params", None) is None else 0
     total = 0
     for param in params:
-        memory = getattr(param, "param_memory", None)
+        memory = record_member(param, "param_memory", None)
         if memory is None:
             return None
         total += int(memory)
@@ -412,7 +413,7 @@ def _memory(trace: Any) -> MemoryFacts:
     for op in (trace._layer_list if is_live_trace(trace) else None) or ():
         if not getattr(op, "has_saved_activation", False):
             continue
-        memory = getattr(op, "activation_memory", None)
+        memory = record_member(op, "activation_memory", None)
         size = 0 if memory is None else int(memory)
         at_capture_saved += 1
         at_capture_bytes += size

@@ -64,6 +64,7 @@ import torchlens.backends.torch._ops_exhaustive
 import torchlens.backends.torch._ops_predicate_events
 import torchlens.backends.torch._ops_shared_fields
 from torchlens._runnable import PathFaithfulness
+from torchlens._utils._record_group_table import record_member
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
 
@@ -282,7 +283,7 @@ def test_f3a_honest_param_capture_stays_clean(
     torch.manual_seed(0)
     trace = tl.trace(model_cls().eval(), x)
     op = next(o for o in trace.ops if o.func_name == func_name)
-    assert tuple(getattr(op, "dropped_edge_tensor_args", ()) or ()) == ()
+    assert tuple(record_member(op, "dropped_edge_tensor_args", ()) or ()) == ()
     assert op.num_params > 0
     assert bool(tl.validate(model_cls().eval(), x, scope="forward"))
 
@@ -348,7 +349,7 @@ def test_f3c_slot_permutation_fails_validation(monkeypatch: pytest.MonkeyPatch) 
     trace = tl.trace(_TwinSub().eval(), x)
     sub_op = next(o for o in trace.ops if o.func_name == "__sub__")
     assert state["permuted"] > 0, "injection did not permute any slot -- inconclusive"
-    assert tuple(sub_op.dropped_edge_tensor_args or ()) != ()
+    assert tuple(sub_op.call.dropped_edge_tensor_args or ()) != ()
     assert not bool(tl.validate(_TwinSub().eval(), x, scope="forward"))
 
 
@@ -359,7 +360,7 @@ def test_f3c_honest_twin_capture_stays_clean() -> None:
     x = torch.randn(4)
     trace = tl.trace(_TwinSub().eval(), x)
     sub_op = next(o for o in trace.ops if o.func_name == "__sub__")
-    assert tuple(getattr(sub_op, "dropped_edge_tensor_args", ()) or ()) == ()
+    assert tuple(record_member(sub_op, "dropped_edge_tensor_args", ()) or ()) == ()
     assert bool(tl.validate(_TwinSub().eval(), x, scope="forward"))
 
 
@@ -412,7 +413,7 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
         victim = victims[0]
         target.parents = [p for p in target.parents if p != victim]
         for domain in ("args", "kwargs"):
-            positions = target.parent_arg_positions.get(domain, {})
+            positions = target.call.parent_arg_positions.get(domain, {})
             for key in [k for k, v in positions.items() if v == victim]:
                 del positions[key]
         producer = next((o for o in self._layer_list if o.layer_label == victim), None)
@@ -496,7 +497,7 @@ def test_f1_final_slot_permutation_fails_invariants() -> None:
     )
 
     trace, sub_op = _final_twin_sub_trace()
-    positions = sub_op.parent_arg_positions["args"]
+    positions = sub_op.call.parent_arg_positions["args"]
     slots = sorted(positions, key=str)
     assert len(slots) >= 2, "twin consumer lost its two positional slots -- inconclusive"
     first, second = slots[0], slots[1]
@@ -520,7 +521,7 @@ def test_f1_final_argpos_entry_drop_fails_invariants() -> None:
     )
 
     trace, sub_op = _final_twin_sub_trace()
-    positions = sub_op.parent_arg_positions["args"]
+    positions = sub_op.call.parent_arg_positions["args"]
     assert len(positions) >= 2, "twin consumer lost its two positional slots -- inconclusive"
     victim_slot = sorted(positions, key=str)[0]
     victim_label = positions[victim_slot]

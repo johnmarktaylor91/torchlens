@@ -111,7 +111,7 @@ def _target_key(target: Op) -> str:
         Exact IO role for a model output, otherwise the pass-qualified label.
     """
 
-    return str(target.io_role or target.label)
+    return str(target.graph.io_role or target.label)
 
 
 def _select_targets(source: Op, target: object | None) -> tuple[tuple[Op, ...], bool]:

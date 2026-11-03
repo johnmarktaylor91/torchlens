@@ -169,6 +169,6 @@ def test_gradient_transform_alias_silent() -> None:
 
     assert not any("grad_transform" in str(warning.message) for warning in caught)
     assert any(
-        torch.equal(trace[label].transformed_grad, torch.zeros_like(trace[label].grad))
+        torch.equal(trace[label].payload.transformed_grad, torch.zeros_like(trace[label].grad))
         for label in trace.saved_grad_ops.keys()
     )

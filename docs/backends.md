@@ -255,7 +255,7 @@ divergence error, and one `tape.gradient` call produces leaf gradients for float
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to additionally
 `tape.watch` every float op output live at callback time and attach exact op-level records. Only
 unambiguous `status == "exact"` matches (keyed on stream position, op type, parents, and module
-stack) reach `trace.autograd.intermediate_derived_grads` and read-only `op.derived_grad`;
+stack) reach `trace.autograd.intermediate_derived_grads` and read-only `op.autograd.derived_grad`;
 `has_backward_pass` remains `False`, and true-backward surfaces still raise. `grad_options`
 requires an eager live-capture entry: graph-only FuncGraph captures (compiled `Model.call`,
 `tf.function` roots, SavedModel signatures) refuse it typed because the derived-gradient replay
@@ -325,9 +325,9 @@ capture logging remains off, so module call counts are not incremented by the AD
 uses grouped structural signatures rather than a capture-index map, and duplicate or ambiguous
 groups are skipped. Each public record must pass an independent replacement-gradient and
 perturbation oracle, and only records with `status == "exact"` reach
-`trace.autograd.intermediate_derived_grads` and read-only `op.derived_grad`.
+`trace.autograd.intermediate_derived_grads` and read-only `op.autograd.derived_grad`.
 
-These derived gradients are not true backward capture, and `op.grads` /
+These derived gradients are not true backward capture, and `op.autograd.grads` /
 `trace.saved_grad_ops` stay true-backward-only.
 
 MLX supports static-label live interventions and halt. `trace(intervene=tl.when(static_selector,
@@ -429,7 +429,7 @@ trace.autograd.derived_grads["inputs.0"]
 Set `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to request exact saved-op
 intermediate derived gradients from a second guarded Paddle AD replay. Only unambiguous
 `status == "exact"` records reach `trace.autograd.intermediate_derived_grads` and read-only
-`op.derived_grad`; `has_backward_pass` remains `False`, and true-backward surfaces still raise.
+`op.autograd.derived_grad`; `has_backward_pass` remains `False`, and true-backward surfaces still raise.
 
 Paddle `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
 forward and derived array payloads and load them back as `paddle.Tensor` values when Paddle is
@@ -482,7 +482,7 @@ zero-tap AD replay for saved op boundaries. The producer uses one all-tap `jax.g
 O(k) oracle checks each attached boundary with an independent boundary-replacement VJP and finite
 difference. The hard cap fails explicit requests above `max_intermediate_grads`. Only records whose
 provenance has `status == "exact"` are exposed through `trace.autograd.intermediate_derived_grads` and
-read-only `op.derived_grad`; oracle failures and non-float/control outputs are skipped. If the
+read-only `op.autograd.derived_grad`; oracle failures and non-float/control outputs are skipped. If the
 producer cannot run on the installed JAX runtime, leaf `trace.autograd.derived_grads` remains intact and the
 intermediate accessor is empty.
 
@@ -584,8 +584,8 @@ trace.autograd.derived_grads["inputs.0"]
 Set `GradOptions(intermediate_grads=True)` to run tinygrad's separate no-realize
 intermediate-gradient pass. It calls `loss.backward()` before realizing any copied outputs, then
 attaches exact unambiguous records to `trace.autograd.intermediate_derived_grads`; each owning `Op` exposes
-the payload through read-only `op.derived_grad`. Ambiguous signature matches are skipped instead of
-attached, and `op.grads` / `trace.saved_grad_ops` remain true-backward-only.
+the payload through read-only `op.autograd.derived_grad`. Ambiguous signature matches are skipped instead of
+attached, and `op.autograd.grads` / `trace.saved_grad_ops` remain true-backward-only.
 
 The tinygrad backend rejects mid-capture `Tensor.realize()`, `Tensor.assign()`,
 `Tensor.replace()`, setitem input mutation, TinyJit execution, value-dependent `save=`

@@ -49,7 +49,7 @@ def test_data_alias_write_binds_the_base_consumer() -> None:
         trace = tl.trace(_DataMaskedFill().eval(), torch.randn(3, 4) * 2)
     fill = next(op for op in trace.ops if op.func_name == "masked_fill_")
     softmax = next(op for op in trace.ops if op.func_name == "softmax")
-    assert fill.unattributed_tensor_args == ()
+    assert fill.call.unattributed_tensor_args == ()
     assert list(softmax.parents) == [fill.layer_label]
 
 
@@ -65,4 +65,4 @@ def test_data_alias_marker_stays_without_base_propagation() -> None:
             capture=tl.options.CaptureOptions(save_grads=True),
         )
     fill = next(op for op in trace.ops if op.func_name == "masked_fill_")
-    assert fill.unattributed_tensor_args == ("arg0",)
+    assert fill.call.unattributed_tensor_args == ("arg0",)

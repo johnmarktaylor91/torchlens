@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 
 
 def source_model(log: Any) -> nn.Module:
@@ -165,7 +166,7 @@ def _owning_addresses(layer: Any, modules: dict[str, nn.Module]) -> list[str]:
         Distinct module addresses, in the record's order.
     """
 
-    calls = getattr(layer, "output_of_module_calls", ()) or ()
+    calls = record_member(layer, "output_of_module_calls", ()) or ()
     return [
         address
         for address in dict.fromkeys(_module_call_address(call) for call in calls)
@@ -195,7 +196,7 @@ def _pass_output_owner(log: Any, modules: dict[str, nn.Module], site: str) -> st
 
     owners: set[str] = set()
     for layer in log._layer_list:
-        calls = getattr(layer, "output_of_module_calls", ()) or ()
+        calls = record_member(layer, "output_of_module_calls", ()) or ()
         if not any(_module_call_label(call) == site for call in calls):
             continue
         addresses = _owning_addresses(layer, modules)
@@ -335,7 +336,7 @@ def _module_num_calls(log: Any, address: str) -> int:
     # Duck-typed logs without a module record: count the distinct calls instead.
     seen: set[Any] = set()
     for layer in log._layer_list:
-        for call in getattr(layer, "output_of_module_calls", ()) or ():
+        for call in record_member(layer, "output_of_module_calls", ()) or ():
             if _module_call_address(call) == address:
                 seen.add(call if isinstance(call, tuple) else str(call))
     return max(len(seen), 1)

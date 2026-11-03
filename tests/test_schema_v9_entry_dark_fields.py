@@ -81,11 +81,11 @@ def _evidence_envelope(**overrides):
 
 def test_defaults_round_trip_on_ordinary_captures(tmp_path):
     trace = _traced()
-    assert all(op.injection_provenance is None for op in trace.ops)
+    assert all(op.call.injection_provenance is None for op in trace.ops)
     assert trace.source.snapshots == []
     assert trace.graph.structure_evidence is None
     loaded = _roundtrip(trace, tmp_path, "defaults")
-    assert all(op.injection_provenance is None for op in loaded.ops)
+    assert all(op.call.injection_provenance is None for op in loaded.ops)
     assert loaded.source.snapshots == []
     assert loaded.graph.structure_evidence is None
 
@@ -102,7 +102,7 @@ def test_injection_provenance_on_a_model_op_refuses_at_load(tmp_path):
     """
 
     trace = _traced()
-    trace.ops[-1].injection_provenance = _injection_record()
+    trace.ops[-1]._call_injection_provenance = _injection_record()
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "injection_stamped")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_injection_codec_invalid"
@@ -124,7 +124,7 @@ def test_injection_provenance_on_a_model_op_refuses_at_load(tmp_path):
 )
 def test_malformed_injection_provenance_refuses_at_load(tmp_path, mutation):
     trace = _traced()
-    trace.ops[-1].injection_provenance = _injection_record(**mutation)
+    trace.ops[-1]._call_injection_provenance = _injection_record(**mutation)
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "injection_bad")
     assert (

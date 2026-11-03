@@ -107,8 +107,8 @@ def test_code_context_walk_agrees_with_the_frame_filter(monkeypatch: pytest.Monk
     for filename, verdict in seen:
         assert verdict is normalized_filename(filename).startswith(package_prefix), filename
     for op in trace.ops:
-        for location in op.code_context or ():
+        for location in op.source.frames or ():
             assert not normalized_filename(str(location.file)).startswith(package_prefix), op.label
     assert any(
-        str(location.file) == __file__ for op in trace.ops for location in op.code_context or ()
+        str(location.file) == __file__ for op in trace.ops for location in op.source.frames or ()
     )

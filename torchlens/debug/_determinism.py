@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._debug_report import Report
+from .._utils._record_group_table import record_member
 from .._utils._torch_compat import read_legacy_fp32_controls, snapshot_fp32_precision_controls
 from ._common import _compute_ops, _op_label, _safe_out, _source_line
 from ._first_bad import FirstBadThing
@@ -223,7 +224,7 @@ def _rng_consuming_ops(trace: Trace) -> tuple[tuple[str, ...], str]:
     ops = _compute_ops(trace)
     digests: list[Any] = []
     for op in ops:
-        states = getattr(op, "func_rng_states", None)
+        states = record_member(op, "func_rng_states", None)
         digests.append(repr(states) if states else None)
     if any(digest is not None for digest in digests):
         consumers: list[str] = []

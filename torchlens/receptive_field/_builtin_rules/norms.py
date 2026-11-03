@@ -13,11 +13,11 @@ def _bool_arg(context: ReceptiveFieldRuleContext, name: str) -> bool | None:
     the first boolean in that filtered sequence, regardless of the tensor placeholders.
     """
 
-    value = context.op.non_tensor_kwargs.get(name)
+    value = context.op.call.non_tensor_kwargs.get(name)
     if isinstance(value, bool):
         return value
     return next(
-        (item for item in context.op.non_tensor_pos_args if isinstance(item, bool)),
+        (item for item in context.op.call.non_tensor_pos_args if isinstance(item, bool)),
         None,
     )
 

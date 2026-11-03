@@ -56,6 +56,7 @@ from ..._postprocess.loop_grouping_adapter import (
 )
 from ..._quantities import Bytes, Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._utils._record_group_table import record_member, record_storage_attr
 from ...backends._finalize import (
     attach_function_root_module,
     mirror_param_derived_grads,
@@ -2180,7 +2181,7 @@ class JAXBackend:
                     recurrent_labels=(label,),
                     pass_index=1,
                     num_passes=1,
-                    equivalence_key=op_log.equivalence_class or label,
+                    equivalence_key=op_log.graph.equivalence_class or label,
                 ),
             )
             layer_label = strip_raw_label_suffix(assignment.layer_label)
@@ -2193,7 +2194,7 @@ class JAXBackend:
             op_log.short_layer_label = layer_label
             op_log.pass_number = assignment.pass_index
             op_log.num_passes = assignment.num_passes
-            op_log.equivalence_class = assignment.equivalence_key
+            op_log._graph_equivalence_class = assignment.equivalence_key
             op_log.site_key = assignment.site_key
             op_log.dtype_ref = DtypeRef.from_value(op_log.dtype)
             op_log.device_ref = DeviceRef.from_value(getattr(op_log.out, "device", None))
@@ -2214,17 +2215,21 @@ class JAXBackend:
         equivalent_labels_by_key: dict[str, set[str]] = {}
         for label in raw_labels:
             op_log = trace._raw_graph_ws.raw_layer_dict[label]
-            equivalent_labels_by_key.setdefault(op_log.equivalence_class, set()).add(op_log.label)
+            equivalent_labels_by_key.setdefault(op_log.graph.equivalence_class, set()).add(
+                op_log.label
+            )
 
         for raw_index, label in enumerate(raw_labels):
             op_log = trace._raw_graph_ws.raw_layer_dict[label]
             assignment = assignments[label]
-            op_log.recurrent_ops = [
+            op_log._graph_recurrent_ops = [
                 raw_to_final_op_label[member]
                 for member in assignment.recurrent_labels
                 if member in raw_to_final_op_label
             ]
-            op_log.equivalent_ops = equivalent_labels_by_key.get(op_log.equivalence_class, set())
+            op_log._graph_equivalent_ops = equivalent_labels_by_key.get(
+                op_log.graph.equivalence_class, set()
+            )
             # Torch parity (see the identical fix in
             # ``backends/_finalize.py::_finalize_single_op``): always
             # register the bare layer label, not just for multi-pass groups.
@@ -2272,7 +2277,7 @@ class JAXBackend:
         trace._num_ops = sum(
             1
             for op_log in trace._layer_list
-            if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
+            if not (op_log.is_input or op_log.is_output or op_log.graph.is_buffer)
         )
         if module_tree is None:
             # ``jax_container_path`` is only set on the input-SOURCE event
@@ -2333,7 +2338,7 @@ class JAXBackend:
                         param.num_params for param in consumed_params if param.is_trainable
                     )
                     op_log.num_params_frozen = op_log.num_params - op_log.num_params_trainable
-                    op_log.param_memory = Bytes(
+                    op_log._cost_param_memory = Bytes(
                         sum(int(param.param_memory) for param in consumed_params)
                     )
                     # Set-memoized usage cross-links (the bare list scans were
@@ -2473,7 +2478,7 @@ class JAXBackend:
                 param.num_params for param in params if param.is_trainable
             )
             op_log.num_params_frozen = op_log.num_params - op_log.num_params_trainable
-            op_log.param_memory = sum(int(param.param_memory) for param in params)
+            op_log._cost_param_memory = sum(int(param.param_memory) for param in params)
             # Set-memoized usage cross-links (the bare list scans were
             # O(m^2) for a param consumed by m ops).
             _attach_param_usage(trace, op_log, usage_membership)
@@ -2572,8 +2577,8 @@ class JAXBackend:
             # invariant's claim collection) stringified them as literal
             # ``"('fc1', 1)"`` tuple reprs instead of a parseable module
             # address, so a JAX compute op's attribution never resolved.
-            module_call_stack_calls = normalize_op_module_calls(op_log.module_call_stack)
-            op_log.module_call_stack = [
+            module_call_stack_calls = normalize_op_module_calls(op_log.module_context.call_stack)
+            op_log._module_context_call_stack = [
                 f"{address}:{call_index}" for address, call_index in module_call_stack_calls
             ]
             parent_call_label: str | None = None
@@ -2694,18 +2699,22 @@ class JAXBackend:
         source_labels: list[str] = []
         for label in raw_labels:
             op_log = trace._raw_graph_ws.raw_layer_dict[label]
-            pruned = bool(getattr(op_log, "is_orphan", False))
+            pruned = bool(record_member(op_log, "is_orphan", False))
             retain = not pruned
             if retain:
                 eligible_labels.append(label)
-            if op_log.is_input or op_log.is_internal_source or not data_parents_by_label[label]:
+            if (
+                op_log.is_input
+                or op_log.graph.is_internal_source
+                or not data_parents_by_label[label]
+            ):
                 source_labels.append(label)
             nodes[label] = RecurrenceNode(
                 label=label,
                 raw_order=op_log.raw_index,
-                equivalence_key=op_log.equivalence_class,
+                equivalence_key=op_log.graph.equivalence_class,
                 equivalent_labels=tuple(
-                    member for member in op_log.equivalent_ops if member in raw_label_set
+                    member for member in op_log.graph.equivalent_ops if member in raw_label_set
                 ),
                 data_parents=data_parents_by_label[label],
                 data_children=tuple(data_children_by_label[label]),
@@ -2756,7 +2765,7 @@ class JAXBackend:
             recurrent_labels=(label,),
             pass_index=1,
             num_passes=1,
-            equivalence_key=op_log.equivalence_class or label,
+            equivalence_key=op_log.graph.equivalence_class or label,
             site_key=site_key,
         )
 
@@ -2808,15 +2817,17 @@ class JAXBackend:
                 "internal_source_ancestors",
                 "internal_source_parents",
             ):
-                lineage = getattr(op_log, lineage_field, None)
+                lineage = record_member(op_log, lineage_field, None)
                 if lineage:
                     relabeled = (
                         raw_to_final.get(item, item) if isinstance(item, str) else item
                         for item in lineage
                     )
-                    setattr(op_log, lineage_field, type(lineage)(relabeled))
-            op_log.parent_arg_positions = _relabel_jax_parent_arg_positions(
-                op_log.parent_arg_positions,
+                    setattr(
+                        op_log, record_storage_attr(op_log, lineage_field), type(lineage)(relabeled)
+                    )
+            op_log._call_parent_arg_positions = _relabel_jax_parent_arg_positions(
+                op_log.call.parent_arg_positions,
                 raw_to_final,
             )
             op_log._internal_set(

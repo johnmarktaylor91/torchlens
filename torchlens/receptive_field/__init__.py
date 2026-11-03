@@ -165,7 +165,7 @@ def _empirical_adjoint_checks(
     for validation in containment:
         for role, receptive in validation.grad.items():
             far_label = next(
-                (op.label for op in trace._layer_list if str(op.io_role or op.label) == role),
+                (op.label for op in trace._layer_list if str(op.graph.io_role or op.label) == role),
                 "",
             )
             support = torch.nonzero(receptive.support_mask, as_tuple=False)

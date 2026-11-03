@@ -125,10 +125,10 @@ def _assert_one_boundary(trace: tl.Trace, function: type[torch.autograd.Function
     boundaries = _boundary_ops(trace)
     assert len(boundaries) == 1
     op = boundaries[0]
-    assert op.is_transform is True
-    assert op.transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
-    assert op.transform_fn_qualname == function.forward.__qualname__
-    assert op.transform_config["function"] == function.__qualname__
+    assert op.call.is_func_transform is True
+    assert op.call.func_transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
+    assert op.call.func_transform_fn_qualname == function.forward.__qualname__
+    assert op.call.func_transform_config["function"] == function.__qualname__
     assert is_foreign_function_recorder(op.func)
     # The interior (detach, the host re-entry constructor) is not in the graph.
     interior_types = {"detach", "fromnumpy", "fromdlpack", "contiguous", "zeroslike"}
@@ -195,7 +195,7 @@ def test_foreign_function_owns_its_interior_dispatches() -> None:
         if entry["owner_wrapper"] == FOREIGN_FUNCTION_WRAPPER_NAME
     ]
     assert len(boundary_rows) == 1
-    assert boundary_rows[0]["owner_func_call_id"] == _boundary_ops(trace)[0].func_call_id
+    assert boundary_rows[0]["owner_func_call_id"] == _boundary_ops(trace)[0].call.call_id
     assert boundary_rows[0]["capture_accounted"] is True
     # The interior detach was re-owned: no owner row of its own survives.
     assert not any(
@@ -230,7 +230,7 @@ def test_ordinary_custom_function_is_captured_as_before() -> None:
     assert _boundary_ops(trace) == []
     types = [op.type for op in trace._layer_list]
     assert "mul" in types
-    assert not any(op.is_transform for op in trace._layer_list)
+    assert not any(op.call.is_func_transform for op in trace._layer_list)
     _assert_validates_clean(model, x)
 
 

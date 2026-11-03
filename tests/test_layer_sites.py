@@ -142,16 +142,16 @@ def test_site_peers_finds_reused_site_cohort() -> None:
     relu_labels = [label for label in log.layer_labels if "relu" in label]
     assert len(relu_labels) == 3
     first = log[relu_labels[0]]
-    assert [peer.layer_label for peer in first.site_peers] == relu_labels[1:]
+    assert [peer.layer_label for peer in first.graph.site_peers] == relu_labels[1:]
     # Symmetric membership: every cohort member sees the other two.
     for label in relu_labels:
-        peer_labels = {peer.layer_label for peer in log[label].site_peers}
+        peer_labels = {peer.layer_label for peer in log[label].graph.site_peers}
         assert peer_labels == set(relu_labels) - {label}
 
 
 def test_site_peers_empty_when_site_unshared() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert log["linear_1_1"].site_peers == ()
+    assert log["linear_1_1"].graph.site_peers == ()
 
 
 def test_site_peers_refuses_typed_without_keys() -> None:
@@ -162,11 +162,11 @@ def test_site_peers_refuses_typed_without_keys() -> None:
     for _, op in layer.ops.items():
         op.site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
-        _ = layer.site_peers
+        _ = layer.graph.site_peers
     assert excinfo.value.fields["code"] == "site_key_unavailable"
     # Other layers with keys never match the stripped layer either way.
     other = log[relu_labels[1]]
-    assert relu_labels[0] not in {peer.layer_label for peer in other.site_peers}
+    assert relu_labels[0] not in {peer.layer_label for peer in other.graph.site_peers}
 
 
 # ---------------------------------------------------------------------------

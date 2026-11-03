@@ -267,13 +267,13 @@ def _make_trace_pickleable(trace: Any) -> None:
             if isinstance(value, torch.Tensor):
                 layer._internal_set(field_name, value.detach().cpu())
         layer.func = None
-        layer.grad_fn_handle = None
+        layer._autograd_grad_fn_handle = None
         layer.grad_fn_object_id = 0 if layer.grad_fn_object_id is not None else None
-        layer.grad_fn_handle = None
-        layer.code_context = []
+        layer._autograd_grad_fn_handle = None
+        layer._source_frames = []
         layer._source_trace_ref = None
-        layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
-        layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
+        layer._internal_set("saved_args", _detach_nested_for_cache(layer.call.saved_args))
+        layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.call.saved_kwargs))
     for layer_log in getattr(trace, "_layer_logs", {}).values():
         state = getattr(layer_log, "__dict__", {})
         state["func"] = None

@@ -49,6 +49,7 @@ from typing import Any
 import torch
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._types import Edit
 from .errors import RegionError
 
@@ -241,11 +242,11 @@ def _resolve_boundary_edge(
 
     parent_op = graph.ops[parent_label]
     child_op = graph.ops[child_label]
-    candidates = by_call.get(child_op.func_call_id, [])
+    candidates = by_call.get(child_op.call.call_id, [])
     matches = []
     for record in candidates:
         if record.parent_func_call_id is not None:
-            if record.parent_func_call_id == parent_op.func_call_id:
+            if record.parent_func_call_id == parent_op.call.call_id:
                 matches.append(record)
         elif record.parent_label == parent_op.layer_label:
             matches.append(record)
@@ -895,7 +896,7 @@ def _commit_region_occurrence(
     address, value, edge = occurrence
     _call_id, arg_kind, arg_path = address
     store_key = (arg_kind, tuple(arg_path))
-    store = dict(getattr(child_op, "edge_substitutions", None) or {})
+    store = dict(record_member(child_op, "edge_substitutions", None) or {})
     store[store_key] = {
         "value": value.detach().clone(),
         "parent_label": graph.ops[edge.parent].layer_label,
@@ -914,7 +915,7 @@ def _commit_region_occurrence(
     fire_record = build_fire_record(
         target_label=child_op.layer_label,
         call_label=child_op.label,
-        func_call_id=child_op.func_call_id,
+        func_call_id=child_op.call.call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
         edit=None,
@@ -1011,7 +1012,7 @@ def apply_region_do(
             replay_module.push_from(trace, graph.ops[child_label])
     except BaseException:
         for child_op, store_key in committed:
-            store = dict(getattr(child_op, "edge_substitutions", None) or {})
+            store = dict(record_member(child_op, "edge_substitutions", None) or {})
             stamps = dict(getattr(child_op, "edge_replacement_stamps", None) or {})
             store.pop(store_key, None)
             stamps.pop(store_key, None)

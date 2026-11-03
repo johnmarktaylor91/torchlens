@@ -25,6 +25,7 @@ from .._ir.container import (
 from .._quantities import Bytes
 from .._selection.resolver import _label_index_scope
 from .._trace_state import TraceState
+from .._utils._record_group_table import record_member
 from .._utils._tensor_layout import relay_to_layout
 from .._utils.display import progress_bar
 from .._utils.rng import execute_with_restored_rng_autocast
@@ -390,11 +391,11 @@ def _clear_op_gradient_projection(site: Op) -> None:
     site._internal_set("grad", None)
     site._internal_set("transformed_grad", None)
     site.has_grad = False
-    site.grad_shape = None
-    site.grad_dtype = None
+    site._autograd_grad_shape = None
+    site._autograd_grad_dtype = None
     site.gradient_memory = Bytes(0)
-    site.transformed_grad_shape = None
-    site.transformed_grad_dtype = None
+    site._payload_transformed_grad_shape = None
+    site._payload_transformed_grad_dtype = None
     site.transformed_gradient_memory = Bytes(0)
 
 
@@ -569,11 +570,11 @@ def _run_replay(
         if preserve_origins and site_key in state.origin_keys:
             state.pending_updates[site_key] = state.overlay[site_key]
             continue
-        if site.func_call_id is not None and site.func_call_id in executed_call_ids:
+        if site.call.call_id is not None and site.call.call_id in executed_call_ids:
             continue
         group = _group_for_site(site, call_groups, cone_keys)
-        if site.func_call_id is not None:
-            executed_call_ids.add(site.func_call_id)
+        if site.call.call_id is not None:
+            executed_call_ids.add(site.call.call_id)
         if all(state.is_preserved_origin(member) for member in group):
             continue
         _preflight_group(group, loaded=loaded)
@@ -826,7 +827,7 @@ def _boundary_slot_parent_op(
     same_call = [
         candidate
         for candidate in candidates
-        if getattr(candidate, "func_call_id", None) == member.func_call_id
+        if record_member(candidate, "func_call_id", None) == member.call.call_id
     ]
     if len(same_call) != 1:
         raise ReplayPreconditionError(
@@ -978,7 +979,7 @@ def _install_replay_tensor_hook(log: Trace, site: Op, tensor: torch.Tensor) -> N
     from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
 
     raw_label = getattr(site, "_label_raw", site.layer_label)
-    site.grad_fn_handle = tensor.grad_fn
+    site._autograd_grad_fn_handle = tensor.grad_fn
     if tensor.grad_fn is not None:
         site.grad_fn_object_id = id(tensor.grad_fn)
     _add_tensor_backward_hook(log, tensor, raw_label)
@@ -1012,8 +1013,8 @@ def _execute_replay_func_strict(
         site.func,
         args,
         kwargs,
-        rng_states=site.func_rng_states,
-        autocast_state=site.func_autocast_state,
+        rng_states=site.call.rng_states,
+        autocast_state=site.call.autocast_state,
     )
 
 
@@ -1213,7 +1214,7 @@ def _splice_param_substitutions(
     """
 
     for member in group:
-        entries = getattr(member, "edge_substitutions", None) or {}
+        entries = record_member(member, "edge_substitutions", None) or {}
         for store_key, payload in entries.items():
             if not isinstance(payload, dict):
                 continue
@@ -1390,7 +1391,7 @@ def _template_for_site(site: Op) -> CapturedArgTemplate:
         Captured replay template.
     """
 
-    template = getattr(site, "args_template", None)
+    template = record_member(site, "args_template", None)
     if not isinstance(template, CapturedArgTemplate):
         raise ReplayPreconditionError(f"{site.layer_label!r} has no args_template")
     _raise_on_unsupported_template(site, template)
@@ -1666,7 +1667,7 @@ def _threaded_source_value(
         Threaded value for a buffer record; None for an input leaf or a gap.
     """
 
-    if not getattr(site, "is_buffer", False):
+    if not record_member(site, "is_buffer", False):
         return None
     return _threaded_buffer_value(site, trace, overlay, strict=strict)
 

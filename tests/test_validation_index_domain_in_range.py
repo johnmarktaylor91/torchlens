@@ -175,9 +175,10 @@ def replay_record(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[dict]]:
         output = execute(layer, input_args, layers_to_perturb, layer_label, verbose)
         if getattr(layer, "func_name", None) in _INDEX_DOMAIN_ARG_SPECS:
             index, size = _index_arg(layer, input_args), _index_domain_size(layer)
-            ignore = (layer.saved_kwargs or {}).get("ignore_index")
+            ignore = (layer.call.saved_kwargs or {}).get("ignore_index")
             saved = _index_arg(
-                layer, {"args": layer.saved_args or (), "kwargs": layer.saved_kwargs or {}}
+                layer,
+                {"args": layer.call.saved_args or (), "kwargs": layer.call.saved_kwargs or {}},
             )
             ignore_kept = True
             if isinstance(ignore, int) and index is not None and saved is not None:

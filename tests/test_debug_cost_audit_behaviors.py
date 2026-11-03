@@ -11,9 +11,9 @@ from torch import nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
+from torchlens._data_classes._op_bytes import theoretical_op_bytes  # noqa: E402
 from torchlens.debug import count_compiles, hot_path  # noqa: E402
 from torchlens.debug._audit import audit_trace  # noqa: E402
-from torchlens.debug._cost import theoretical_op_bytes  # noqa: E402
 from torchlens.errors import TraceCaptureError  # noqa: E402
 
 

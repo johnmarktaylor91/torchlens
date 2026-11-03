@@ -119,8 +119,8 @@ def test_h2_roll_tensor_shift_is_parent() -> None:
     sum_label = _ops_by_func(trace, "sum")[0].layer_label
 
     assert sum_label in roll_op.parents
-    assert roll_op.parent_arg_positions["args"].get(1) == sum_label
-    assert roll_op.unattributed_tensor_args == ()
+    assert roll_op.call.parent_arg_positions["args"].get(1) == sum_label
+    assert roll_op.call.unattributed_tensor_args == ()
     assert tl.validate(_RollTensorShift().eval(), x, scope="forward")
 
 
@@ -138,7 +138,7 @@ def test_h2_softmax_tensor_dim_is_parent_and_validates() -> None:
     sum_label = _ops_by_func(trace, "sum")[0].layer_label
 
     assert sum_label in softmax_op.parents
-    assert softmax_op.parent_arg_positions["args"].get(1) == sum_label
+    assert softmax_op.call.parent_arg_positions["args"].get(1) == sum_label
     assert tl.validate(_SoftmaxTensorDim().eval(), x, scope="forward")
 
 
@@ -151,9 +151,9 @@ def test_h2_arange_tensor_end_is_parent_not_internal_source() -> None:
     long_label = _ops_by_func(trace, "long")[0].layer_label
 
     assert arange_op.parents == (long_label,)
-    assert arange_op.parent_arg_positions["args"].get(0) == long_label
-    assert not arange_op.is_internal_source
-    assert arange_op.unattributed_tensor_args == ()
+    assert arange_op.call.parent_arg_positions["args"].get(0) == long_label
+    assert not arange_op.graph.is_internal_source
+    assert arange_op.call.unattributed_tensor_args == ()
     assert tl.validate(_ArangeTensorEnd().eval(), x, scope="forward")
 
 
@@ -181,7 +181,7 @@ def test_h2_literal_control_args_stay_clean() -> None:
     roll_op = _ops_by_func(trace, "roll")[0]
 
     assert roll_op.parents == ("input_1",)
-    assert roll_op.unattributed_tensor_args == ()
+    assert roll_op.call.unattributed_tensor_args == ()
 
 
 # ---------------------------------------------------------------------------
@@ -279,11 +279,11 @@ def test_m3_foreach_out_of_place_parents_are_zipped_without_duplicates() -> None
     assert len(foreach_ops) == 2
     assert foreach_ops[0].parents == ("input_3", "input_1")
     assert foreach_ops[1].parents == ("input_4", "input_2")
-    assert foreach_ops[0].parent_arg_positions["args"] == {
+    assert foreach_ops[0].call.parent_arg_positions["args"] == {
         (1, 0): "input_3",
         (0, 0): "input_1",
     }
-    assert foreach_ops[1].parent_arg_positions["args"] == {
+    assert foreach_ops[1].call.parent_arg_positions["args"] == {
         (1, 1): "input_4",
         (0, 1): "input_2",
     }
@@ -316,9 +316,9 @@ def test_m3_dropped_zipped_edge_still_fails_validation() -> None:
     )
     member0 = _ops_by_func(trace, "_foreach_add")[0]
     member0.parents = [p for p in member0.parents if p != "input_3"]
-    member0.parent_arg_positions["args"] = {
+    member0.call.parent_arg_positions["args"] = {
         key: label
-        for key, label in member0.parent_arg_positions["args"].items()
+        for key, label in member0.call.parent_arg_positions["args"].items()
         if label != "input_3"
     }
 
@@ -463,8 +463,8 @@ def test_m5_inplace_grad_fn_metadata_is_user_op() -> None:
     )
     inplace_op = _ops_by_func(trace, "add_")[0]
 
-    assert inplace_op.grad_fn_class_name == "AddBackward0"
-    assert "CloneBackward" not in str(inplace_op.grad_fn_class_qualname)
+    assert inplace_op.autograd.grad_fn_class_name == "AddBackward0"
+    assert "CloneBackward" not in str(inplace_op.autograd.grad_fn_class_qualname)
     trace.cleanup()
 
 

@@ -14,7 +14,7 @@ def _count_trace_ops(trace: Trace) -> int:
     return sum(
         1
         for op_log in trace._layer_list
-        if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
+        if not (op_log.is_input or op_log.is_output or op_log.graph.is_buffer)
     )
 
 

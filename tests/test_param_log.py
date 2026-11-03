@@ -519,7 +519,7 @@ class TestGradientTracking:
             if entry.has_params:
                 assert entry.has_grad is True
                 assert entry.grad is not None
-                assert entry.grad_shape is not None
+                assert entry.autograd.grad_shape is not None
 
     def test_saved_grad_ops_populated(self):
         model = _make_simple_model()
@@ -731,7 +731,7 @@ class TestIntegration:
         """After postprocessing, parent_params references should be cleared."""
         mh = trace_fn(_make_simple_model(), _simple_input())
         for entry in mh:
-            assert entry.parent_params == ()
+            assert entry.graph.parent_params == ()
 
     def test_vis_renders_without_error(self, tmp_path: Path) -> None:
         """Visualization should emit fresh PDFs for each parameter scenario."""

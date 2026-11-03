@@ -27,7 +27,9 @@ def _sequential_trace() -> Any:
 
 
 def _assert_counts_agree(trace: Any) -> None:
-    counted = [op for op in trace._layer_list if not (op.is_input or op.is_output or op.is_buffer)]
+    counted = [
+        op for op in trace._layer_list if not (op.is_input or op.is_output or op.graph.is_buffer)
+    ]
     assert len(trace.ops) == trace._num_ops == len(counted)
     assert list(trace.ops) == counted
     assert trace.ops.values() == counted
@@ -108,7 +110,7 @@ def test_counts_agree_on_a_recurrent_model_with_buffers() -> None:
             return x
 
     trace = tl.trace(_Recurrent(), torch.randn(1, 3))
-    assert any(op.is_buffer for op in trace._layer_list)
+    assert any(op.graph.is_buffer for op in trace._layer_list)
     _assert_counts_agree(trace)
 
 
@@ -140,7 +142,7 @@ def test_primitive_profile_dense_rows_are_the_layer_list() -> None:
         for ref in row.parent_op_refs:
             op = trace._layer_list[ref.op_row_index]
             assert op.layer_label == ref.op_label
-            assert op.func_call_id == ref.func_call_id
+            assert op.call.call_id == ref.func_call_id
     assert check_metadata_invariants(trace)
 
 

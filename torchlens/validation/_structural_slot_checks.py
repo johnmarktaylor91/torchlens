@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -33,7 +35,7 @@ def _arg_keys_of(layer: Op, layers_to_perturb: list[str]) -> list[Any] | None:
 
     if len(layers_to_perturb) != 1:
         return None
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     label = layers_to_perturb[0]
     if label in (positions.get("kwargs", {}) or {}).values():
         return None
@@ -48,7 +50,7 @@ def check_packed_rnn_batch_sizes_exempt(
 
     del self
     keys = _arg_keys_of(layer, layers_to_perturb)
-    args = tuple(getattr(layer, "saved_args", ()) or ())
+    args = tuple(record_member(layer, "saved_args", ()) or ())
     if keys != [1] or len(args) < 4:
         return False
     data, batch_sizes, params = args[0], args[1], args[3]
@@ -85,7 +87,7 @@ def check_expand_pinned_size_exempt(self: Trace, layer: Op, layers_to_perturb: l
 
     del self
     keys = _arg_keys_of(layer, layers_to_perturb)
-    args = tuple(getattr(layer, "saved_args", ()) or ())
+    args = tuple(record_member(layer, "saved_args", ()) or ())
     if keys is None or len(keys) != 1 or not args or not isinstance(args[0], torch.Tensor):
         return False
     slot = _expand_size_slot(args, keys[0])
@@ -117,7 +119,7 @@ def setitem_bool_mask_at_index_slot(layer: Op, layers_to_perturb: list[str]) -> 
     """
 
     keys = _arg_keys_of(layer, layers_to_perturb)
-    args = tuple(getattr(layer, "saved_args", ()) or ())
+    args = tuple(record_member(layer, "saved_args", ()) or ())
     if keys is None or len(args) < 3 or not isinstance(args[1], tuple):
         return False
     destination, index, value = args[0], args[1], args[2]

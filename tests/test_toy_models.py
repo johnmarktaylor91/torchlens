@@ -1727,7 +1727,7 @@ def test_trace_save_arg_values(default_input1):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input and entry.saved_args is not None:
+        if not entry.is_input and entry.call.saved_args is not None:
             found = True
             break
     assert found, "No non-input layer had saved_args populated"
@@ -1742,8 +1742,8 @@ def test_trace_activation_transform(default_input1):
     # All saved tensors should be scalar (mean reduces to scalar)
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.transformed_out is not None:
-            assert entry.transformed_out.dim() == 0, (
+        if entry.payload.transformed_out is not None:
+            assert entry.payload.transformed_out.dim() == 0, (
                 f"Layer {label} tensor should be scalar after torch.mean transform"
             )
 
@@ -1758,12 +1758,12 @@ def test_trace_mark_distances(default_input1):
     )
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.has_input_ancestor:
-            assert entry.min_distance_from_input is not None
-            assert entry.max_distance_from_input is not None
-        if entry.has_output_descendant:
-            assert entry.min_distance_to_output is not None
-            assert entry.max_distance_to_output is not None
+        if entry.graph.has_input_ancestor:
+            assert entry.graph.min_distance_from_input is not None
+            assert entry.graph.max_distance_from_input is not None
+        if entry.graph.has_output_descendant:
+            assert entry.graph.min_distance_to_output is not None
+            assert entry.graph.max_distance_to_output is not None
 
 
 def test_log_model_metadata(default_input1):

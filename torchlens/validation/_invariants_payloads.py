@@ -6,6 +6,8 @@ from collections import Counter
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -155,7 +157,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
                     f"{child_label!r}",
                 )
 
-        parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+        parent_arg_positions = record_member(layer, "parent_arg_positions", {}) or {}
         if not isinstance(parent_arg_positions, Mapping):
             raise MetadataInvariantError(
                 name,
@@ -206,7 +208,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
             row = getattr(op, "_row", None)
             if row is None:
                 continue
-            parent_arg_positions = getattr(op, "parent_arg_positions", None) or {}
+            parent_arg_positions = record_member(op, "parent_arg_positions", None) or {}
             position_counts: Counter = Counter()
             if isinstance(parent_arg_positions, Mapping):
                 for arg_domain in ("args", "kwargs"):
@@ -320,7 +322,7 @@ def _check_op_log_fields(ml: Trace) -> None:
         is_functionless_replacement = (
             lpl.func_name == "intervention_replacement"
             and getattr(lpl, "is_edited", False)
-            and not getattr(lpl, "is_internal_source", False)
+            and not record_member(lpl, "is_internal_source", False)
             and op_has_genuine_replacement_evidence(lpl, ml)
         )
 
@@ -330,14 +332,14 @@ def _check_op_log_fields(ml: Trace) -> None:
         # and func_name is "none". Traced ops that merely have an internal-source
         # ancestor still carry a real callable func and are NOT exempted here.
         is_functionless_internal_source = (
-            getattr(lpl, "is_internal_source", False) and lpl.func is None
+            record_member(lpl, "is_internal_source", False) and lpl.func is None
         )
 
         # Function applied (non-input, non-buffer, non-output, non-source,
         # non-hook-replacement layers).
         if not (
             lpl.is_input
-            or lpl.is_buffer
+            or lpl.graph.is_buffer
             or lpl.is_output
             or is_functionless_internal_source
             or is_functionless_replacement
@@ -372,7 +374,7 @@ def _check_op_log_fields(ml: Trace) -> None:
                 )
 
         # Operation numbering (input/buffer/output bookkeeping layers have step_index=0)
-        if not (lpl.is_input or lpl.is_buffer or lpl.is_output):
+        if not (lpl.is_input or lpl.graph.is_buffer or lpl.is_output):
             if lpl.step_index is not None and lpl.step_index < 1:
                 raise MetadataInvariantError(
                     name, f"Layer {label}: step_index={lpl.step_index} < 1"
@@ -412,19 +414,19 @@ def _check_op_log_fields(ml: Trace) -> None:
         # entry, and ``module_call_depth`` must be its length. Membership of
         # the entries themselves is ``module_containment_logic``'s check (via
         # ``modules``); equality makes it cover this field too.
-        if tuple(lpl.module_call_stack) != tuple(lpl.modules):
+        if tuple(lpl.module_context.call_stack) != tuple(lpl.modules):
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: module_call_stack={tuple(lpl.module_call_stack)!r} "
+                f"Layer {label}: module_call_stack={tuple(lpl.module_context.call_stack)!r} "
                 f"!= modules={tuple(lpl.modules)!r}; the stack must be the "
                 f"root-first ModuleCall labels active for this op (a fed-call "
                 f"or address-form value is the retired tri-fact bug)",
             )
-        if lpl.module_call_depth != len(lpl.module_call_stack):
+        if lpl.module_context.call_depth != len(lpl.module_context.call_stack):
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: module_call_depth={lpl.module_call_depth} != "
-                f"len(module_call_stack)={len(lpl.module_call_stack)}",
+                f"Layer {label}: module_call_depth={lpl.module_context.call_depth} != "
+                f"len(module_call_stack)={len(lpl.module_context.call_stack)}",
             )
 
         # Label format: pass-qualified label has ":" iff multi-pass
@@ -472,7 +474,7 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
             payload=_live_payload_value(op, "out"),
             shape=getattr(op, "shape", None),
             dtype=getattr(op, "dtype", None),
-            memory=getattr(op, "activation_memory", None),
+            memory=record_member(op, "activation_memory", None),
             presence_flag=getattr(op, "has_saved_activation", False),
             presence_flag_name="has_saved_activation",
             payload_name="out",
@@ -481,9 +483,9 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
             name,
             label,
             payload=_live_payload_value(op, "transformed_out"),
-            shape=getattr(op, "transformed_out_shape", None),
-            dtype=getattr(op, "transformed_out_dtype", None),
-            memory=getattr(op, "transformed_activation_memory", None),
+            shape=record_member(op, "transformed_out_shape", None),
+            dtype=record_member(op, "transformed_out_dtype", None),
+            memory=record_member(op, "transformed_activation_memory", None),
             presence_flag=getattr(op, "has_saved_activation", False),
             presence_flag_name="has_saved_activation",
             payload_name="transformed_out",
@@ -492,8 +494,8 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
             name,
             label,
             payload=_live_payload_value(op, "grad"),
-            shape=getattr(op, "grad_shape", None),
-            dtype=getattr(op, "grad_dtype", None),
+            shape=record_member(op, "grad_shape", None),
+            dtype=record_member(op, "grad_dtype", None),
             memory=getattr(op, "gradient_memory", None),
             presence_flag=getattr(op, "has_grad", False),
             presence_flag_name="has_grad",
@@ -503,8 +505,8 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
             name,
             label,
             payload=_live_payload_value(op, "transformed_grad"),
-            shape=getattr(op, "transformed_grad_shape", None),
-            dtype=getattr(op, "transformed_grad_dtype", None),
+            shape=record_member(op, "transformed_grad_shape", None),
+            dtype=record_member(op, "transformed_grad_dtype", None),
             memory=getattr(op, "transformed_gradient_memory", None),
             presence_flag=getattr(op, "has_grad", False),
             presence_flag_name="has_grad",
@@ -527,8 +529,8 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
                 name,
                 record_label,
                 payload=_live_payload_value(record, "transformed_grad"),
-                shape=getattr(record, "transformed_grad_shape", None),
-                dtype=getattr(record, "transformed_grad_dtype", None),
+                shape=record_member(record, "transformed_grad_shape", None),
+                dtype=record_member(record, "transformed_grad_dtype", None),
                 memory=getattr(record, "transformed_gradient_memory", None),
                 presence_flag=getattr(record, "is_saved", False),
                 presence_flag_name="is_saved",

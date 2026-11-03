@@ -269,14 +269,14 @@ def test_mod_tensor_rhs_parent_is_trace_order_independent() -> None:
     assert len(mods) == 2
     tensor_mod = mods[1]
     assert len(tensor_mod.parents) == 2
-    assert set(tensor_mod.parent_arg_positions["args"]) == {0, 1}
-    assert tensor_mod.unattributed_tensor_args == ()
+    assert set(tensor_mod.call.parent_arg_positions["args"]) == {0, 1}
+    assert tensor_mod.call.unattributed_tensor_args == ()
 
     fresh = tl.trace(_ModTensorOnly().eval(), x)
     fresh_mod = next(op for op in fresh.ops if op.type == "mod")
     assert len(fresh_mod.parents) == 2
-    assert set(fresh_mod.parent_arg_positions["args"]) == {0, 1}
-    assert fresh_mod.unattributed_tensor_args == ()
+    assert set(fresh_mod.call.parent_arg_positions["args"]) == {0, 1}
+    assert fresh_mod.call.unattributed_tensor_args == ()
 
 
 # ---------------------------------------------------------------------------
@@ -365,9 +365,9 @@ def test_lu_solve_third_operand_is_parent_both_spellings() -> None:
     for model in (_LuSolveLinalg(), _LuSolveLegacy()):
         trace = tl.trace(model.eval(), torch.randn(3, 3))
         op = next(o for o in trace.ops if o.type == "lusolve")
-        assert 2 in op.parent_arg_positions["args"], model
+        assert 2 in op.call.parent_arg_positions["args"], model
         assert len(op.parents) == 3, model
-        assert op.unattributed_tensor_args == (), model
+        assert op.call.unattributed_tensor_args == (), model
 
 
 def test_lu_solve_input_ancestry_survives_buffer_matrix() -> None:
@@ -381,8 +381,8 @@ def test_lu_solve_input_ancestry_survives_buffer_matrix() -> None:
     trace = tl.trace(_LuSolveBufferAmplification().eval(), torch.randn(3, 2))
     op = next(o for o in trace.ops if o.type == "lusolve")
 
-    assert op.has_input_ancestor
-    assert all(trace[label].has_input_ancestor for label in trace.output_layers)
+    assert op.graph.has_input_ancestor
+    assert all(trace[label].graph.has_input_ancestor for label in trace.output_layers)
 
 
 class _CosineSimilarity(nn.Module):
@@ -438,8 +438,8 @@ def test_cosine_similarity_kwarg_spelling_parity() -> None:
 
     assert len(positional_op.parents) == 2
     assert len(kwarg_op.parents) == 2
-    assert kwarg_op.has_input_ancestor
-    assert kwarg_op.unattributed_tensor_args == ()
+    assert kwarg_op.graph.has_input_ancestor
+    assert kwarg_op.call.unattributed_tensor_args == ()
 
 
 class _CtcLoss(nn.Module):
@@ -497,9 +497,9 @@ def test_ctc_loss_tensor_lengths_are_parents() -> None:
         trace = tl.trace(_CtcLoss(use_kwargs=use_kwargs).eval(), x)
         op = next(o for o in trace.ops if o.type == "ctcloss")
         assert len(op.parents) == 4, f"use_kwargs={use_kwargs}"
-        assert op.unattributed_tensor_args == (), f"use_kwargs={use_kwargs}"
+        assert op.call.unattributed_tensor_args == (), f"use_kwargs={use_kwargs}"
         if not use_kwargs:
-            assert {0, 1, 2, 3} <= set(op.parent_arg_positions["args"])
+            assert {0, 1, 2, 3} <= set(op.call.parent_arg_positions["args"])
 
 
 class _SearchSortedSorter(nn.Module):
@@ -531,9 +531,9 @@ def test_searchsorted_sorter_kwarg_is_parent() -> None:
     trace = tl.trace(_SearchSortedSorter().eval(), torch.randn(8))
     op = next(o for o in trace.ops if o.type == "searchsorted")
 
-    assert "sorter" in op.parent_arg_positions["kwargs"]
+    assert "sorter" in op.call.parent_arg_positions["kwargs"]
     assert len(op.parents) == 3
-    assert op.unattributed_tensor_args == ()
+    assert op.call.unattributed_tensor_args == ()
 
 
 # ---------------------------------------------------------------------------
@@ -598,9 +598,9 @@ def test_torch_tensor_of_tensor_records_parent() -> None:
     op = next(o for o in trace.ops if o.type == "tensor")
 
     assert len(op.parents) == 1
-    assert 0 in op.parent_arg_positions["args"]
-    assert op.has_input_ancestor
-    assert op.unattributed_tensor_args == ()
+    assert 0 in op.call.parent_arg_positions["args"]
+    assert op.graph.has_input_ancestor
+    assert op.call.unattributed_tensor_args == ()
 
 
 def test_torch_tensor_scalar_factory_stays_clean() -> None:
@@ -617,7 +617,7 @@ def test_torch_tensor_scalar_factory_stays_clean() -> None:
     op = next(o for o in trace.ops if o.type == "tensor")
 
     assert op.parents == ()
-    assert op.unattributed_tensor_args == ()
+    assert op.call.unattributed_tensor_args == ()
     assert not [w for w in caught if _PROVENANCE_MATCH in str(w.message)]
 
 
@@ -659,7 +659,7 @@ def test_spec_regression_is_healed_by_runtime_coverage_guard() -> None:
             trace = tl.trace(_TensorOfTensor().eval(), torch.randn(3))
         op = next(o for o in trace.ops if o.type == "tensor")
         assert len(op.parents) == 1
-        assert op.unattributed_tensor_args == ()
+        assert op.call.unattributed_tensor_args == ()
         assert not [w for w in caught if _PROVENANCE_MATCH in str(w.message)]
     finally:
         FUNC_ARG_SPECS["tensor"] = real_spec

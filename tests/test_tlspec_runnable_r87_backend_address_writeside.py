@@ -50,6 +50,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
@@ -58,7 +59,7 @@ _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cac
 def _buffer_ops(trace: Any) -> list[Any]:
     """Return every materialized buffer op of ``trace``."""
 
-    return [op for op in trace if getattr(op, "is_buffer", False)]
+    return [op for op in trace if record_member(op, "is_buffer", False)]
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:

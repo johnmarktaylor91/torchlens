@@ -76,13 +76,14 @@ class TestFieldOrderSync:
     def test_op_log_field_order_covers_init(self):
         """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in Op.__init__."""
         from torchlens._data_classes.op import Op
+        from torchlens._utils._record_group_table import op_attr
 
         init_attrs = self._init_assigned_attrs(Op)
         # Private fields (prefixed _) are intentionally excluded from some FIELD_ORDERs,
         # but some _ fields ARE in FIELD_ORDER (e.g. _tracing_finished). Check both directions:
         # 1. Every FIELD_ORDER entry should be an init attr or a property
         for field in LAYER_PASS_LOG_FIELD_ORDER:
-            assert field in init_attrs or hasattr(Op, field), (
+            assert field in init_attrs or hasattr(Op, op_attr(field)), (
                 f"{field!r} in LAYER_PASS_LOG_FIELD_ORDER but not in Op"
             )
 
@@ -693,7 +694,7 @@ class TestNestedTupleArgs:
         stack_entry = None
         for label in log.layer_labels:
             entry = log[label]
-            saved_args = entry.saved_args
+            saved_args = entry.call.saved_args
             if saved_args is not None and len(saved_args) > 0 and isinstance(saved_args[0], list):
                 stack_entry = entry
                 break
@@ -701,7 +702,7 @@ class TestNestedTupleArgs:
             "expected to find the torch.stack layer with a nested-list saved_args[0]"
         )
 
-        saved_list = stack_entry.saved_args[0]
+        saved_list = stack_entry.call.saved_args[0]
         assert isinstance(saved_list, list)
         assert len(saved_list) == 2
         live_pair = stashed(log, "_last_pair")

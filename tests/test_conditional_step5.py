@@ -15,6 +15,7 @@ import torch.nn as nn
 from torchlens import trace as trace_fn
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import ConditionalEvent, Trace
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
 
@@ -202,7 +203,11 @@ def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
         Terminal scalar bool layers in execution order.
     """
 
-    return [layer for layer in trace._layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
+    return [
+        layer
+        for layer in trace._layer_list
+        if layer.control_flow.is_terminal_bool and layer.control_flow.is_scalar_bool
+    ]
 
 
 def _find_single_layer(trace: Trace, func_name: str) -> Op:
@@ -279,7 +284,7 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
             set(
                 chain.from_iterable(
                     branch_children.get("then", [])
-                    for branch_children in layer.conditional_arm_children.values()
+                    for branch_children in layer.control_flow.arm_children.values()
                 )
             )
         )
@@ -287,13 +292,13 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
             set(
                 chain.from_iterable(
                     branch_children.get("else", [])
-                    for branch_children in layer.conditional_arm_children.values()
+                    for branch_children in layer.control_flow.arm_children.values()
                 )
             )
         )
         expected_elif_children: dict[int, list[str]] = {}
         grouped_elif_children: dict[int, set[str]] = defaultdict(set)
-        for branch_children in layer.conditional_arm_children.values():
+        for branch_children in layer.control_flow.arm_children.values():
             for branch_kind, child_labels in branch_children.items():
                 if not branch_kind.startswith("elif_"):
                     continue
@@ -302,9 +307,9 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
         for elif_index, child_labels in sorted(grouped_elif_children.items()):
             expected_elif_children[elif_index] = sorted(child_labels)
 
-        assert list(layer.conditional_then_children) == expected_then_children
-        assert layer.conditional_elif_children == expected_elif_children
-        assert list(layer.conditional_else_children) == expected_else_children
+        assert list(layer.control_flow.then_children) == expected_then_children
+        assert layer.control_flow.elif_children == expected_elif_children
+        assert list(layer.control_flow.else_children) == expected_else_children
 
 
 def _has_upstream_path(trace: Trace, source_label: str, target_label: str) -> bool:
@@ -385,11 +390,11 @@ def test_simple_if_else_model_step5_pipeline() -> None:
     negative_bool = _get_terminal_bool_layers(negative_log)
     assert len(positive_bool) == 1
     assert len(negative_bool) == 1
-    assert positive_bool[0].conditional_context_kind == "if_test"
-    assert positive_bool[0].is_terminal_conditional_bool is True
+    assert positive_bool[0].control_flow.context_kind == "if_test"
+    assert positive_bool[0].control_flow.is_terminal_conditional_bool is True
     assert positive_bool[0].terminal_conditional_id == 0
-    assert negative_bool[0].conditional_context_kind == "if_test"
-    assert negative_bool[0].is_terminal_conditional_bool is True
+    assert negative_bool[0].control_flow.context_kind == "if_test"
+    assert negative_bool[0].control_flow.is_terminal_conditional_bool is True
     assert negative_bool[0].terminal_conditional_id == 0
 
     assert positive_log.graph.conditional_branch_edges
@@ -399,8 +404,8 @@ def test_simple_if_else_model_step5_pipeline() -> None:
 
     relu_layer = _find_single_layer(positive_log, "relu")
     sigmoid_layer = _find_single_layer(negative_log, "sigmoid")
-    assert relu_layer.conditional_branch_stack == ((0, "then"),)
-    assert sigmoid_layer.conditional_branch_stack == ((0, "else"),)
+    assert relu_layer.control_flow.branch_stack == ((0, "then"),)
+    assert sigmoid_layer.control_flow.branch_stack == ((0, "else"),)
 
     assert all(
         call_indexs == [1]
@@ -422,8 +427,8 @@ def test_returned_predicate_remains_a_conditional_consumer() -> None:
 
     assert len(trace.graph.conditionals) == 1
     assert trace.graph.conditional_branch_edges
-    assert predicate.is_terminal_bool is True
-    assert predicate.is_terminal_conditional_bool is True
+    assert predicate.control_flow.is_terminal_bool is True
+    assert predicate.control_flow.is_terminal_conditional_bool is True
     assert predicate.label in trace.internally_terminated_bool_ops
 
 
@@ -475,7 +480,7 @@ def test_elif_ladder_model_step5_pipeline() -> None:
         )
 
         target_layer = _find_single_layer(trace, func_name)
-        assert target_layer.conditional_branch_stack == ((0, branch_kind),)
+        assert target_layer.control_flow.branch_stack == ((0, branch_kind),)
         observed_branch_kinds.add(branch_kind)
 
         _assert_derived_views_consistent(trace)
@@ -490,8 +495,8 @@ def test_assert_not_branch_model_step5_pipeline() -> None:
     bool_layers = _get_terminal_bool_layers(trace)
 
     assert len(bool_layers) == 1
-    assert bool_layers[0].conditional_context_kind == "assert"
-    assert bool_layers[0].is_terminal_conditional_bool is False
+    assert bool_layers[0].control_flow.context_kind == "assert"
+    assert bool_layers[0].control_flow.is_terminal_conditional_bool is False
     assert bool_layers[0].terminal_conditional_id is None
     assert trace.graph.conditional_records == []
     assert trace.graph.conditional_arm_entry_edges == {}
@@ -515,11 +520,11 @@ def test_save_code_context_false_still_attributes_branches() -> None:
     assert event.kind == "if_chain"
     assert set(event.branch_ranges) == {"then", "else"}
     assert len(bool_layers) == 1
-    assert bool_layers[0].conditional_context_kind == "if_test"
-    assert bool_layers[0].is_terminal_conditional_bool is True
+    assert bool_layers[0].control_flow.context_kind == "if_test"
+    assert bool_layers[0].control_flow.is_terminal_conditional_bool is True
     assert bool_layers[0].terminal_conditional_id == 0
     assert (0, "then") in trace.graph.conditional_arm_entry_edges
-    assert relu_layer.conditional_branch_stack == ((0, "then"),)
+    assert relu_layer.control_flow.branch_stack == ((0, "then"),)
 
     _assert_derived_views_consistent(trace)
 
@@ -576,12 +581,12 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
         removed = raw_dict["buffer_2_raw"]
         # Precondition: the step-5 conditional-parent role lives on the node
         # about to be merged away.
-        assert removed.conditional_entry_children
+        assert removed.control_flow.entry_children
         assert any(
             parent == removed._label_raw for parent, _ in trace.graph.conditional_branch_edges
         )
         merged["survivor"] = survivor._label_raw
-        merged["bool_child"] = removed.conditional_entry_children[0]
+        merged["bool_child"] = removed.control_flow.entry_children[0]
         deferred: dict = {}
         cf._merge_buffer_entries(trace, survivor, removed, deferred_removals=deferred)
         cf._finish_deferred_buffer_removals(trace, deferred)
@@ -601,13 +606,13 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
         f"{traced.graph.conditional_branch_edges}"
     )
     surviving_buffer_labels = {
-        op.layer_label for op in traced._layer_list if getattr(op, "is_buffer", False)
+        op.layer_label for op in traced._layer_list if record_member(op, "is_buffer", False)
     }
     for parent, _child in buffer_branch_edges:
         assert parent in surviving_buffer_labels
     entry_children = list(
         chain.from_iterable(
-            traced[label].conditional_entry_children for label in surviving_buffer_labels
+            traced[label].control_flow.entry_children for label in surviving_buffer_labels
         )
     )
     assert entry_children, "conditional_entry_children did not transfer to the survivor"

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 from collections import OrderedDict
 from typing import TYPE_CHECKING, cast
 
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._trace_accessors import (
@@ -97,7 +98,7 @@ def ops(trace: Trace) -> TraceOpAccessor:
 def transforms(trace: Trace) -> tuple[Op, ...]:
     """Body of ``Trace.transforms``; the record keeps the thin spelling and docstring."""
 
-    return tuple(op for op in trace._layer_list if getattr(op, "is_transform", False))
+    return tuple(op for op in trace._layer_list if record_member(op, "is_transform", False))
 
 
 def layers(trace: Trace) -> LayerAccessor:
@@ -178,7 +179,7 @@ def graph_num_buffer_edges(trace: Trace) -> int:
             (op.label, resolve(child_label).label)
             for op in trace._layer_list
             for child_label in op.children
-            if op.is_buffer or resolve(child_label).is_buffer
+            if op.graph.is_buffer or resolve(child_label).graph.is_buffer
         }
     )
 
@@ -243,7 +244,9 @@ def graph_orphans(trace: Trace) -> OrphanAccessor:
     """Body of ``Trace._graph_orphans``; the record keeps the thin spelling and docstring."""
 
     orphan_dict = OrderedDict(
-        (log.layer_label, log) for log in trace._orphan_logs if getattr(log, "is_orphan", False)
+        (log.layer_label, log)
+        for log in trace._orphan_logs
+        if record_member(log, "is_orphan", False)
     )
     return OrphanAccessor(orphan_dict)
 
@@ -378,7 +381,7 @@ def compute_ops(trace: Trace) -> Accessor[Op]:
     """Body of ``Trace.compute_ops``; the record keeps the thin spelling and docstring."""
 
     return TraceOpAccessor(
-        [op for op in trace._layer_list if not (op.is_input or op.is_output or op.is_buffer)],
+        [op for op in trace._layer_list if not (op.is_input or op.is_output or op.graph.is_buffer)],
         trace._layer_num_calls,
     )
 
@@ -415,14 +418,18 @@ def output_ops(trace: Trace) -> Accessor[Op]:
 def buffer_read_ops(trace: Trace) -> list[str]:
     """Body of ``Trace.buffer_read_ops``; the record keeps the thin spelling and docstring."""
 
-    return [op.label for op in trace._layer_list if op.is_buffer and op.buffer_write_kind is None]
+    return [
+        op.label for op in trace._layer_list if op.graph.is_buffer and op.buffer_write_kind is None
+    ]
 
 
 def buffer_write_ops(trace: Trace) -> list[str]:
     """Body of ``Trace.buffer_write_ops``; the record keeps the thin spelling and docstring."""
 
     return [
-        op.label for op in trace._layer_list if op.is_buffer and op.buffer_write_kind is not None
+        op.label
+        for op in trace._layer_list
+        if op.graph.is_buffer and op.buffer_write_kind is not None
     ]
 
 

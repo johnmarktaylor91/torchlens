@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._semantic._hops import VALUE_GRAMMAR, HopRefusal, HopWalk, walk_upstream
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 
 __all__ = ["SpineNode", "SpineWalk", "walk_spine"]
@@ -84,7 +85,7 @@ class SpineWalk:
 def _tensor_parent_labels(op: Any) -> tuple[str, ...]:
     """Return the op's tensor-parent labels in operand order."""
 
-    positions = getattr(op, "parent_arg_positions", None) or {}
+    positions = record_member(op, "parent_arg_positions", None) or {}
     args = positions.get("args", {}) if isinstance(positions, dict) else {}
     if args:
         return tuple(str(args[key]) for key in sorted(args))
@@ -106,7 +107,7 @@ def _recorded_shape(op: Any) -> tuple[int, ...] | None:
 def _add_alpha(op: Any) -> float:
     """Return the recorded ``alpha`` coefficient of an add op (default 1)."""
 
-    kwargs = getattr(op, "non_tensor_kwargs", None) or {}
+    kwargs = record_member(op, "non_tensor_kwargs", None) or {}
     alpha = kwargs.get("alpha", 1) if isinstance(kwargs, dict) else 1
     try:
         return float(alpha)

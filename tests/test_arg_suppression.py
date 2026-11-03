@@ -180,8 +180,8 @@ def test_lying_func_config_stays_visible(tmp_path: Path) -> None:
     log = tl.trace(nn.Sequential(nn.Linear(4, 8)), torch.randn(3, 4))
     try:
         record = log["linear_1_1"]
-        record.func_config["out_features"] = 999
-        record.func_config["in_features"] = 999
+        record.call.config["out_features"] = 999
+        record.call.config["in_features"] = 999
         dot = _draw(log, tmp_path)
         assert "out_features=999" in dot
         assert "in_features=999" in dot

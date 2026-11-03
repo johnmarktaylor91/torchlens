@@ -95,7 +95,7 @@ def test_paddle_repeated_block_groups_into_passes() -> None:
     assert {op.layer_label for op in linear_ops} == {linear_ops[0].layer_label}
     assert {op.layer_label for op in relu_ops} == {relu_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*linear_ops, *relu_ops))
-    assert list(linear_ops[0].recurrent_ops) == [op.label for op in linear_ops]
+    assert list(linear_ops[0].graph.recurrent_ops) == [op.label for op in linear_ops]
     assert trace._layer_num_calls[linear_ops[0].layer_label] == 2
     assert PaddleBackend().validate_trace(trace) is True
 

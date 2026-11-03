@@ -70,7 +70,7 @@ def test_single_output_fast_path_traces_shared_fields() -> None:
     assert relu_layer.multi_output_index is None
     assert relu_layer.container_path == ()
     assert relu_layer.container_spec is None
-    assert relu_layer.parent_arg_positions["args"]
+    assert relu_layer.call.parent_arg_positions["args"]
 
 
 def test_multi_output_keeps_sibling_field_isolation(split_trace: tl.Trace) -> None:
@@ -79,8 +79,8 @@ def test_multi_output_keeps_sibling_field_isolation(split_trace: tl.Trace) -> No
     split_layers = [layer for layer in split_trace._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
 
-    first_positions = split_layers[0].parent_arg_positions
-    sibling_positions = split_layers[1].parent_arg_positions
+    first_positions = split_layers[0].call.parent_arg_positions
+    sibling_positions = split_layers[1].call.parent_arg_positions
     sibling_positions_before = copy.deepcopy(sibling_positions)
 
     first_arg_key = next(iter(first_positions["args"]))
@@ -110,6 +110,6 @@ def test_multi_output_siblings_share_one_function_call_ref(split_trace: tl.Trace
     ):
         assert first_ref is second_ref
     else:
-        assert first_ref.code_context is second_ref.code_context
+        assert first_ref.source.frames is second_ref.source.frames
         assert first_ref.non_tensor_pos_args is second_ref.non_tensor_pos_args
         assert first_ref.func_config is second_ref.func_config

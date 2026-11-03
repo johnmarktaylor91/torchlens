@@ -45,6 +45,7 @@ from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
+from .._utils._record_group_table import layer_attr, op_attr, record_member
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from ..backends.torch._tl import clear_meta
@@ -78,13 +79,13 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
     for layer_entry in [*self._layer_list, *self.graph.orphans.values()]:
         if layer_entry.has_saved_activation and layer_entry.out is not None:
             tensors_to_undecorate.append(layer_entry.out)
-        if getattr(layer_entry, "transformed_out", None) is not None:
-            tensors_to_undecorate.append(layer_entry.transformed_out)
+        if record_member(layer_entry, "transformed_out", None) is not None:
+            tensors_to_undecorate.append(layer_entry.payload.transformed_out)
 
-        if layer_entry.saved_args:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.saved_args))
-        if layer_entry.saved_kwargs:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.saved_kwargs))
+        if layer_entry.call.saved_args:
+            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.call.saved_args))
+        if layer_entry.call.saved_kwargs:
+            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.call.saved_kwargs))
 
     for t in tensors_to_undecorate:
         clear_meta(t)
@@ -174,7 +175,7 @@ def _finalize_param_logs(self: "Trace") -> None:
 
     # Clear actual Parameter tensor references from Op entries to save memory.
     for layer_entry in self._layer_list:
-        layer_entry.parent_params = []
+        layer_entry._graph_parent_params = []
 
 
 def _build_root_module_log(
@@ -536,21 +537,21 @@ def _merge_layer_log_conditional_fields(
     pass_log:
         Per-pass layer entry contributing conditional metadata.
     """
-    if pass_log.is_in_conditional_body:
-        layer_log.is_in_conditional_body = True
+    if pass_log.control_flow.is_in_conditional_body:
+        layer_log._control_flow_is_in_conditional_body = True
 
-    stack_signature = tuple(pass_log.conditional_branch_stack)
-    if stack_signature not in layer_log.conditional_branch_stack_ops:
-        layer_log.conditional_role_stacks.append(list(pass_log.conditional_branch_stack))
-        layer_log.conditional_branch_stack_ops[stack_signature] = []
+    stack_signature = tuple(pass_log.control_flow.branch_stack)
+    if stack_signature not in layer_log.control_flow.branch_stack_ops:
+        layer_log.control_flow.role_stacks.append(list(pass_log.control_flow.branch_stack))
+        layer_log.control_flow.branch_stack_ops[stack_signature] = []
 
-    signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
+    signature_ops = layer_log.control_flow.branch_stack_ops[stack_signature]
     if pass_log.pass_number not in signature_ops:
         signature_ops.append(pass_log.pass_number)
         signature_ops.sort()
 
-    for conditional_id, branch_children in pass_log.conditional_arm_children.items():
-        merged_branch_children = layer_log.conditional_arm_children.setdefault(
+    for conditional_id, branch_children in pass_log.control_flow.arm_children.items():
+        merged_branch_children = layer_log.control_flow.arm_children.setdefault(
             conditional_id,
             {},
         )
@@ -573,20 +574,20 @@ def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
     layer_log:
         Aggregate layer entry whose derived conditional fields are refreshed.
     """
-    layer_log.is_in_conditional_body = any(
-        len(branch_stack) > 0 for branch_stack in layer_log.conditional_role_stacks
+    layer_log._control_flow_is_in_conditional_body = any(
+        len(branch_stack) > 0 for branch_stack in layer_log.control_flow.role_stacks
     )
 
     conditional_entry_children: list[str] = []
     entry_seen: set[str] = set()
     for _, pass_log in sorted(layer_log.ops.items()):
-        for child_label in pass_log.conditional_entry_children:
+        for child_label in pass_log.control_flow.entry_children:
             _append_unique_child_label(
                 conditional_entry_children,
                 entry_seen,
                 _strip_pass_suffix(child_label),
             )
-    layer_log.conditional_entry_children = conditional_entry_children
+    layer_log._control_flow_entry_children = conditional_entry_children
 
     conditional_then_children: list[str] = []
     then_seen: set[str] = set()
@@ -594,7 +595,7 @@ def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
     elif_seen_by_index: dict[int, set[str]] = {}
     conditional_else_children: list[str] = []
     else_seen: set[str] = set()
-    for branch_children in layer_log.conditional_arm_children.values():
+    for branch_children in layer_log.control_flow.arm_children.values():
         for child_label in branch_children.get("then", []):
             _append_unique_child_label(conditional_then_children, then_seen, child_label)
         for branch_kind, child_labels in branch_children.items():
@@ -608,9 +609,9 @@ def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
         for child_label in branch_children.get("else", []):
             _append_unique_child_label(conditional_else_children, else_seen, child_label)
 
-    layer_log.conditional_then_children = conditional_then_children
-    layer_log.conditional_elif_children = conditional_elif_children
-    layer_log.conditional_else_children = conditional_else_children
+    layer_log._control_flow_then_children = conditional_then_children
+    layer_log._control_flow_elif_children = conditional_elif_children
+    layer_log._control_flow_else_children = conditional_else_children
 
 
 def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
@@ -711,9 +712,15 @@ def _build_submodule_call_logs(
             # wrote both together; under containment semantics it would drop
             # top-level-created inputs (e.g. the model input) from the call's
             # input roster.
-            if call_label in te.input_to_module_calls and te.layer_label not in pass_input_layers:
+            if (
+                call_label in te.module_context.input_to_module_calls
+                and te.layer_label not in pass_input_layers
+            ):
                 pass_input_layers.append(te.layer_label)
-            if te.is_module_output and call_label in te.output_of_module_calls:
+            if (
+                te.module_context.is_module_output
+                and call_label in te.module_context.output_of_module_calls
+            ):
                 pass_output_layers.append(te.layer_label)
                 pass_output_ops.append(te.label)
                 pass_outputs.append(te)
@@ -922,7 +929,7 @@ def _build_module_logs(self: "Trace") -> None:
     for te in self._layer_list:
         # B3R7-R05-1: iterate the fed-call fact directly; the old
         # ``module_call_stack`` emptiness guard was an enter-lane proxy.
-        for call_label in te.input_to_module_calls:
+        for call_label in te.module_context.input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
 
     # --- Build ModuleLogs for each submodule ---
@@ -1164,22 +1171,22 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
         return False
 
     for field_name in _MULTIPASS_SHAPE_FIELDS:
-        values = [getattr(op, field_name, None) for op in pass_ops]
+        values = [record_member(op, field_name, None) for op in pass_ops]
         if record_if_varying(field_name, values):
-            setattr(layer_log, field_name, _honest_multipass_shape(values))
+            setattr(layer_log, layer_attr(field_name), _honest_multipass_shape(values))
 
     for field_name, quantity_type in (
         *((name, Bytes) for name in _MULTIPASS_BYTES_FIELDS),
         *((name, Flops) for name in _MULTIPASS_FLOPS_FIELDS),
     ):
-        values = [getattr(op, field_name, None) for op in pass_ops]
+        values = [record_member(op, field_name, None) for op in pass_ops]
         if record_if_varying(field_name, values):
             numeric = [value for value in values if isinstance(value, (int, float))]
             if numeric and len(numeric) == len(values):
-                setattr(layer_log, field_name, quantity_type(int(max(numeric))))
+                setattr(layer_log, layer_attr(field_name), quantity_type(int(max(numeric))))
 
     for field_name in _MULTIPASS_MARKER_ONLY_FIELDS:
-        record_if_varying(field_name, [getattr(op, field_name, None) for op in pass_ops])
+        record_if_varying(field_name, [record_member(op, field_name, None) for op in pass_ops])
 
     module_stacks = [
         [module_pass[0] for module_pass in (getattr(op, "modules", None) or ())] for op in pass_ops
@@ -1238,15 +1245,15 @@ def _build_layer_logs(self: "Trace") -> None:
             # Subsequent pass: merge only the 3 aggregate fields.
             layer_log = layer_logs[no_call_label]
             # Merge field 1/3: has_input_ancestor (OR across ops).
-            if pass_log.has_input_ancestor:
-                layer_log.has_input_ancestor = True
+            if pass_log.graph.has_input_ancestor:
+                layer_log._graph_has_input_ancestor = True
             # Merge field 2/3: io_role (char-merge with '*').
-            if layer_log.io_role is not None and pass_log.io_role is not None:
+            if layer_log.graph.io_role is not None and pass_log.graph.io_role is not None:
                 merged = "".join(
                     c if c == s else "*"
                     for c, s in zip_longest(
-                        layer_log.io_role,
-                        pass_log.io_role,
+                        layer_log.graph.io_role,
+                        pass_log.graph.io_role,
                         fillvalue="",
                     )
                 )
@@ -1254,10 +1261,10 @@ def _build_layer_logs(self: "Trace") -> None:
                     merged = merged[:-1]
                 if merged.endswith("*"):
                     merged = merged.rstrip("*") + "*"
-                layer_log.io_role = merged
+                layer_log._graph_io_role = merged
             # Merge field 3/3: is_atomic_module (OR across ops).
-            if pass_log.is_atomic_module:
-                layer_log.is_atomic_module = True
+            if pass_log.module_context.is_atomic_module:
+                layer_log._module_context_is_atomic_module = True
 
         layer_log.ops[pass_log.pass_number] = pass_log
         layer_log.call_labels.append(pass_log.label)
@@ -1281,25 +1288,26 @@ def _build_layer_logs(self: "Trace") -> None:
             if linked_labels:
                 pass_log.annotations["tied_parameter_notation"] = linked_labels
         pass_autograd_bytes = [
-            pass_log.autograd_memory
+            pass_log.cost.autograd_memory
             for pass_log in layer_log.ops.values()
-            if pass_log.autograd_memory is not None
+            if pass_log.cost.autograd_memory is not None
         ]
         pass_autograd_tensor_counts = [
-            pass_log.num_autograd_tensors
+            pass_log.autograd.num_autograd_tensors
             for pass_log in layer_log.ops.values()
-            if pass_log.num_autograd_tensors is not None
+            if pass_log.autograd.num_autograd_tensors is not None
         ]
         if pass_autograd_bytes:
-            layer_log.autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
-            layer_log.total_autograd_memory = layer_log.autograd_memory
-            layer_log.num_autograd_tensors = sum(pass_autograd_tensor_counts)
-            autograd_memory += layer_log.autograd_memory
+            layer_autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
+            layer_log._cost_autograd_memory = layer_autograd_memory
+            layer_log._cost_total_autograd_memory = layer_autograd_memory
+            layer_log._autograd_num_autograd_tensors = sum(pass_autograd_tensor_counts)
+            autograd_memory += layer_autograd_memory
             has_autograd_saved_value = True
         else:
-            layer_log.autograd_memory = None
-            layer_log.total_autograd_memory = None
-            layer_log.num_autograd_tensors = None
+            layer_log._cost_autograd_memory = None
+            layer_log._cost_total_autograd_memory = None
+            layer_log._autograd_num_autograd_tensors = None
         _reconcile_multipass_layer_fields(layer_log)
         _rebuild_layer_log_conditional_views(layer_log)
 
@@ -1400,7 +1408,7 @@ def _build_conditional_records(self: "Trace") -> None:
                 value_op = _resolve_conditional_bool_op(
                     self, terminal_bool, witnessed_indices, bool_layers_raw
                 )
-                raw_bool_value = getattr(value_op, "bool_value", None)
+                raw_bool_value = record_member(value_op, "bool_value", None)
                 # ``bool_value_at_run`` must never contradict ``fired``: apply
                 # the test expression's statically-known polarity, and refuse a
                 # single-bool value for compound (``and``/``or``) tests where
@@ -1456,16 +1464,19 @@ def _build_conditional_records(self: "Trace") -> None:
 
     roles_by_label = _roles_by_label(conditionals, role_labels_by_cond_arm, ConditionalRoleRef)
     for layer in self._layer_list:
-        layer.in_conditionals = roles_held_by_pass(
+        layer._control_flow_in_conditionals = roles_held_by_pass(
             layer, roles_by_label.get(layer.layer_label, []), arm_stack_entries
         )
         if (
             layer.terminal_conditional_id is not None
             and layer.terminal_conditional_id in event_by_id
         ):
-            layer.terminal_bool_for = (conditional_id_by_event_id[layer.terminal_conditional_id], 0)
+            layer._control_flow_terminal_bool_for = (
+                conditional_id_by_event_id[layer.terminal_conditional_id],
+                0,
+            )
         else:
-            layer.terminal_bool_for = None
+            layer._control_flow_terminal_bool_for = None
     bind_layer_conditional_roles(self, roles_by_label)
 
     self._graph_conditionals = ConditionalAccessor(conditionals)
@@ -1694,7 +1705,7 @@ def _reuse_streamed_blob_ids(
             if not isinstance(tensor_blob, BlobRef):
                 setattr(
                     scrubbed_layer,
-                    tensor_field,
+                    op_attr(tensor_field),
                     BlobRef(blob_id=pending_blob_id, kind=tensor_field),
                 )
                 writer.relabel_blob(pending_blob_id, live_layer._streaming_label)
@@ -1702,7 +1713,7 @@ def _reuse_streamed_blob_ids(
             skipped_blob_ids.add(tensor_blob.blob_id)
             setattr(
                 scrubbed_layer,
-                tensor_field,
+                op_attr(tensor_field),
                 BlobRef(blob_id=pending_blob_id, kind=tensor_blob.kind),
             )
             writer.relabel_blob(pending_blob_id, live_layer._streaming_label)

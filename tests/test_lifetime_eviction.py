@@ -69,7 +69,7 @@ def test_nested_container_payloads_evict_with_last_owner() -> None:
         "through the retained Op facade"
     )
     # Metadata stays readable on the retained facade; evicted slots read None.
-    saved = retained_op.saved_args
+    saved = retained_op.call.saved_args
     assert saved is not None
     assert not any(
         isinstance(item, torch.Tensor)

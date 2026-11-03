@@ -8,6 +8,7 @@ from contextvars import ContextVar
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from ._backward_inventory import (
     BackwardStyleInventory,
     _backward_dot_call_node_name,
@@ -461,7 +462,7 @@ def _forward_op_is_module_output(op: "Layer") -> bool:
         if ops is not None:
             first_pass = next(iter(ops.values()), None)
             if first_pass is not None:
-                return bool(getattr(first_pass, "is_module_output", False))
+                return bool(record_member(first_pass, "is_module_output", False))
         return False
     return bool(get_multipass_attr(op, "is_module_output", False, multipass=False))
 
@@ -480,10 +481,10 @@ def _module_key_for_forward_op(op: "Layer") -> str | None:
         Module-call key or None for top-level ops.
     """
 
-    output_modules = list(getattr(op, "output_of_modules", []) or [])
+    output_modules = list(record_member(op, "output_of_modules", []) or [])
     if _forward_op_is_module_output(op) and output_modules:
         output_module = str(output_modules[0])
-        output_calls = list(getattr(op, "output_of_module_calls", []) or [])
+        output_calls = list(record_member(op, "output_of_module_calls", []) or [])
         for output_call in output_calls:
             if str(output_call).split(":", 1)[0] == output_module:
                 return str(output_call)
@@ -961,7 +962,7 @@ def _collapse_address_for_node(
     # account, even at the top level or when reused across split call sites. Drop
     # its innermost (own) module address so only genuinely-collapsible ancestor
     # modules remain eligible to absorb it.
-    if getattr(node, "is_atomic_module", False) and modules:
+    if record_member(node, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     if not modules:
         return None
@@ -2024,9 +2025,9 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
             bool_layer = trace[bool_label]
             bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
             context_kinds = (
-                {getattr(op, "conditional_context_kind", None) for op in bool_ops}
+                {record_member(op, "conditional_context_kind", None) for op in bool_ops}
                 if bool_ops
-                else {getattr(bool_layer, "conditional_context_kind", None)}
+                else {record_member(bool_layer, "conditional_context_kind", None)}
             )
             kind = "ELIF" if context_kinds == {"elif_test"} else "IF"
             bool_kind[bool_label.split(":", 1)[0]] = kind
@@ -2261,7 +2262,7 @@ def _node_gradient_passes(layer: Any) -> set[int]:
         for pass_log in ops.values():
             pass_indices.update(_node_gradient_passes(pass_log))
         return pass_indices
-    grads = getattr(layer, "grads", None)
+    grads = record_member(layer, "grads", None)
     if grads is None:
         return set()
     return {

@@ -61,11 +61,11 @@ def test_op_grads_are_local_dense_per_pass_records() -> None:
 
     trace = _trace_with_two_backward_passes()
     try:
-        op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
-        assert [record.ordinal for record in op.grads] == [1, 2]
-        assert [record.backward_pass_number for record in op.grads] == [1, 2]
-        assert torch.equal(op.grads.for_pass(1).grad, op.grad_for(bwd=1))
-        assert torch.equal(op.grads.for_pass(2).grad, op.grad_for(bwd=2))
+        op = next(op for op in trace.saved_grad_ops if len(op.autograd.grads) == 2)
+        assert [record.ordinal for record in op.autograd.grads] == [1, 2]
+        assert [record.backward_pass_number for record in op.autograd.grads] == [1, 2]
+        assert torch.equal(op.autograd.grads.for_pass(1).grad, op.autograd.grad_for(bwd=1))
+        assert torch.equal(op.autograd.grads.for_pass(2).grad, op.autograd.grad_for(bwd=2))
     finally:
         trace.cleanup()
 
@@ -100,8 +100,10 @@ def test_op_grad_is_loud_when_multiple_passes_are_saved() -> None:
 
     trace = _trace_with_two_backward_passes()
     try:
-        op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
-        with pytest.raises(ValueError, match=r"use op\.grads\[\.\.\.\] / op\.grad_for\(bwd=k\)"):
+        op = next(op for op in trace.saved_grad_ops if len(op.autograd.grads) == 2)
+        with pytest.raises(
+            ValueError, match=r"use op\.autograd\.grads\[\.\.\.\] / op\.autograd\.grad_for\(bwd=k\)"
+        ):
             _ = op.grad
     finally:
         trace.cleanup()
@@ -117,11 +119,14 @@ def test_backward_save_grads_override_widens_and_narrows_payloads() -> None:
     try:
         loss = trace[trace.output_layers[0]].out
         trace.backward(loss, retain_graph=True, save_grads=True)
-        assert any(record.grad is not None for op in trace.ops for record in op.grads)
+        assert any(record.grad is not None for op in trace.ops for record in op.autograd.grads)
 
         trace.backward(loss, retain_graph=True, save_grads=None)
         second_pass_records = [
-            record for op in trace.ops for record in op.grads if record.backward_pass_number == 2
+            record
+            for op in trace.ops
+            for record in op.autograd.grads
+            if record.backward_pass_number == 2
         ]
         assert second_pass_records
         assert all(record.grad is None for record in second_pass_records)
@@ -152,10 +157,16 @@ def test_save_grads_predicate_can_select_backward_pass() -> None:
         trace.backward(loss, retain_graph=True)
         trace.backward(loss, retain_graph=True)
         first_pass_records = [
-            record for op in trace.ops for record in op.grads if record.backward_pass_number == 1
+            record
+            for op in trace.ops
+            for record in op.autograd.grads
+            if record.backward_pass_number == 1
         ]
         second_pass_records = [
-            record for op in trace.ops for record in op.grads if record.backward_pass_number == 2
+            record
+            for op in trace.ops
+            for record in op.autograd.grads
+            if record.backward_pass_number == 2
         ]
         assert first_pass_records
         assert second_pass_records
@@ -181,11 +192,15 @@ def test_grad_transform_is_projected_per_backward_pass() -> None:
         loss = trace[trace.output_layers[0]].out
         trace.backward(loss, retain_graph=True)
         trace.backward(loss, retain_graph=True)
-        op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
-        assert all(record.transformed_grad is not None for record in op.grads)
-        assert all(record.transformed_grad_shape == () for record in op.grads)
-        assert torch.equal(op.grads.for_pass(1).transformed_grad, op.grads[0].grad.mean())
-        assert torch.equal(op.grads.for_pass(2).transformed_grad, op.grads[1].grad.mean())
+        op = next(op for op in trace.saved_grad_ops if len(op.autograd.grads) == 2)
+        assert all(record.transformed_grad is not None for record in op.autograd.grads)
+        assert all(record.transformed_grad_shape == () for record in op.autograd.grads)
+        assert torch.equal(
+            op.autograd.grads.for_pass(1).transformed_grad, op.autograd.grads[0].grad.mean()
+        )
+        assert torch.equal(
+            op.autograd.grads.for_pass(2).transformed_grad, op.autograd.grads[1].grad.mean()
+        )
     finally:
         trace.cleanup()
 
@@ -209,22 +224,22 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
     try:
         loss = trace[trace.output_layers[0]].out
         trace.backward(loss)
-        op = next(op for op in trace.saved_grad_ops if len(op.grads) == 1)
-        record = op.grads.for_pass(1)
+        op = next(op for op in trace.saved_grad_ops if len(op.autograd.grads) == 1)
+        record = op.autograd.grads.for_pass(1)
         assert record.grad is None
         assert record.transformed_grad is not None
         assert op.grad is None
-        assert op.transformed_grad is not None
+        assert op.payload.transformed_grad is not None
         expected_backward_memory = sum(
             int(record.transformed_gradient_memory or 0)
             for saved_op in trace.saved_grad_ops
-            for record in saved_op.grads
+            for record in saved_op.autograd.grads
             if record.transformed_grad is not None
         )
         expected_gradient_memory = sum(
             int(record.memory)
             for saved_op in trace.saved_grad_ops
-            for record in saved_op.grads
+            for record in saved_op.autograd.grads
             if record.is_saved
         )
         assert trace.cost.total_backward_memory == expected_backward_memory
@@ -238,7 +253,9 @@ def test_to_pandas_raises_on_ambiguous_multi_backward_grad() -> None:
 
     trace = _trace_with_two_backward_passes()
     try:
-        with pytest.raises(ValueError, match=r"use op\.grads\[\.\.\.\] / op\.grad_for\(bwd=k\)"):
+        with pytest.raises(
+            ValueError, match=r"use op\.autograd\.grads\[\.\.\.\] / op\.autograd\.grad_for\(bwd=k\)"
+        ):
             trace.to_pandas()
     finally:
         trace.cleanup()
@@ -268,9 +285,9 @@ def test_tlspec_round_trip_preserves_per_pass_op_grads(tmp_path: Path) -> None:
     trace = _trace_with_two_backward_passes()
     bundle_path = tmp_path / "backward_grads.tlspec"
     try:
-        op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
+        op = next(op for op in trace.saved_grad_ops if len(op.autograd.grads) == 2)
         expected_label = op.label
-        expected_grads = [record.grad.detach().clone() for record in op.grads]
+        expected_grads = [record.grad.detach().clone() for record in op.autograd.grads]
         trace.save(bundle_path)
     finally:
         trace.cleanup()
@@ -278,10 +295,10 @@ def test_tlspec_round_trip_preserves_per_pass_op_grads(tmp_path: Path) -> None:
     loaded = tl.load(bundle_path)
     try:
         loaded_op = loaded.ops[expected_label]
-        assert [record.backward_pass_number for record in loaded_op.grads] == [1, 2]
-        assert loaded_op.grads[0].owner is loaded_op
-        assert torch.equal(loaded_op.grads.for_pass(1).grad, expected_grads[0])
-        assert torch.equal(loaded_op.grads.for_pass(2).grad, expected_grads[1])
+        assert [record.backward_pass_number for record in loaded_op.autograd.grads] == [1, 2]
+        assert loaded_op.autograd.grads[0].owner is loaded_op
+        assert torch.equal(loaded_op.autograd.grads.for_pass(1).grad, expected_grads[0])
+        assert torch.equal(loaded_op.autograd.grads.for_pass(2).grad, expected_grads[1])
     finally:
         loaded.cleanup()
 
@@ -294,7 +311,7 @@ def test_total_backward_memory_counts_unique_saved_payload_refs() -> None:
         expected = sum(
             int(record.memory)
             for op in trace.saved_grad_ops
-            for record in op.grads
+            for record in op.autograd.grads
             if record.grad is not None
         )
         assert trace.cost.total_backward_memory == expected

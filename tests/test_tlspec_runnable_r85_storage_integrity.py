@@ -61,6 +61,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._record_type import record_type
 from torchlens._runnable import PathFaithfulness
+from torchlens._utils._record_group_table import record_member
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
 
@@ -621,6 +622,6 @@ def test_backend_address_registered_vs_plain_attr_decoupling_preserved() -> None
 
     torch.manual_seed(0)
     log = tl.trace(_MixedBuffers(), torch.randn(4), capture=_CAPTURE)
-    by_address = {layer.address: layer for layer in log if getattr(layer, "is_buffer", False)}
+    by_address = {layer.address: layer for layer in log if record_member(layer, "is_buffer", False)}
     assert by_address["rb"].backend_address == "rb"  # registered state keeps both
     assert by_address["pa"].backend_address is None  # plain-attr not declared state

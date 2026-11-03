@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from . import ArtifactError
 
 if TYPE_CHECKING:
@@ -36,7 +37,7 @@ def _refuse_incoherent_structure_only_write(scrubbed_state: dict[str, Any]) -> N
 
     for entry in scrubbed_state.get("_layer_list") or ():
         for field_name in _OP_VALUE_PAYLOAD_FIELDS:
-            if getattr(entry, field_name, None) is not None:
+            if record_member(entry, field_name, None) is not None:
                 label = getattr(entry, "label", "<unknown>")
                 raise ArtifactError(
                     "Refusing to write a structure-only artifact that its own "

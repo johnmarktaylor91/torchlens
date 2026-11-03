@@ -71,6 +71,7 @@ from .._selection.selection import (
     Site,
     _apply_invalid,
 )
+from .._utils._record_group_table import record_member
 from ._masked_edit import _derive_masked_edit, _validate_edited
 from ._types import Edit, FireRecord, LiteralTensor
 
@@ -421,7 +422,7 @@ def _existing_param_substitution(
     """
 
     for child_op, _consumer_label, occurrences in occurrences_by_op:
-        entries = getattr(child_op, "edge_substitutions", None) or {}
+        entries = record_member(child_op, "edge_substitutions", None) or {}
         for arg_kind, arg_path, _matched in occurrences:
             value = _staged_param_value(entries.get((arg_kind, tuple(arg_path))), param_address)
             if value is not None:
@@ -565,7 +566,7 @@ def _stage_occurrence(
         },
     )
     _stamp_param_kind(child_op, store_key, param_address)
-    address = (child_op.func_call_id,) + tuple(store_key)
+    address = (child_op.call.call_id,) + tuple(store_key)
     fire_record = _param_fire_record(
         child_op,
         meta["helper_spec"],
@@ -602,7 +603,7 @@ def _propagate_staged(trace: Trace, staging: _Staging, *, strict: bool) -> None:
 def _stamp_param_kind(child_op: Any, store_key: tuple[Any, ...], param_address: str) -> None:
     """Mark one tier-(ii) entry + stamp as param-derived (drives the re-splice)."""
 
-    store = dict(getattr(child_op, "edge_substitutions", None) or {})
+    store = dict(record_member(child_op, "edge_substitutions", None) or {})
     payload = dict(store[store_key])
     payload["substitution_kind"] = PARAM_SUBSTITUTION_KIND
     payload["param_address"] = param_address
@@ -630,7 +631,7 @@ def _param_fire_record(
     return build_fire_record(
         target_label=child_op.layer_label,
         call_label=child_op.label,
-        func_call_id=child_op.func_call_id,
+        func_call_id=child_op.call.call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
         edit=(
@@ -664,7 +665,7 @@ def _rollback_param_substitutions(committed: list[tuple[Any, tuple[Any, ...]]]) 
     """Strip staged tier-(ii) entries after a failed apply."""
 
     for child_op, store_key in committed:
-        store = dict(getattr(child_op, "edge_substitutions", None) or {})
+        store = dict(record_member(child_op, "edge_substitutions", None) or {})
         stamps = dict(getattr(child_op, "edge_replacement_stamps", None) or {})
         store.pop(store_key, None)
         stamps.pop(store_key, None)

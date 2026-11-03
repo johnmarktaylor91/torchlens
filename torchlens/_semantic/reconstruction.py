@@ -9,6 +9,7 @@ from typing import Any, Literal
 import torch
 
 from .._errors import ParamReleasedError
+from .._utils._record_group_table import record_member
 from .facets import FacetCapabilityFlags, FacetSpec, MissingFacet
 
 ReconstructionFacet = Literal["scores", "pattern", "z", "result"]
@@ -183,7 +184,7 @@ def _is_sdpa_op(op: Any) -> bool:
 
     fields = (
         getattr(op, "func_name", None),
-        getattr(op, "func_qualname", None),
+        record_member(op, "func_qualname", None),
         getattr(op, "label", None),
     )
     return any("scaled_dot_product_attention" in str(field) for field in fields)
@@ -203,12 +204,15 @@ def _missing_sdpa_prerequisite(op: Any) -> str | None:
         Missing prerequisite message, or ``None`` when ready.
     """
 
-    if getattr(op, "saved_args", None) is None or getattr(op, "saved_kwargs", None) is None:
+    if (
+        record_member(op, "saved_args", None) is None
+        or record_member(op, "saved_kwargs", None) is None
+    ):
         return "save_args=True or reconstruction_ready=True"
-    args = list(getattr(op, "saved_args", ()) or ())
+    args = list(record_member(op, "saved_args", ()) or ())
     if len(args) < 3 or not all(isinstance(value, torch.Tensor) for value in args[:3]):
         return "saved SDPA Q/K/V tensor args"
-    kwargs = dict(getattr(op, "saved_kwargs", {}) or {})
+    kwargs = dict(record_member(op, "saved_kwargs", {}) or {})
     dropout_p = float(kwargs.get("dropout_p", _positional_or_default(args, 4, 0.0)) or 0.0)
     if dropout_p:
         return "dropout_p=0.0; stochastic SDPA dropout reconstruction is fail-closed"
@@ -232,8 +236,8 @@ def _sdpa_record(op: Any) -> SDPAReconstruction | MissingFacet:
     missing = _missing_sdpa_prerequisite(op)
     if missing is not None:
         return MissingFacet(f"SDPA reconstruction missing prerequisite: {missing}.")
-    args = list(getattr(op, "saved_args", ()) or ())
-    kwargs = dict(getattr(op, "saved_kwargs", {}) or {})
+    args = list(record_member(op, "saved_args", ()) or ())
+    kwargs = dict(record_member(op, "saved_kwargs", {}) or {})
     q, k, v = args[:3]
     attn_mask = kwargs.get("attn_mask", _positional_or_default(args, 3, None))
     dropout_p = float(kwargs.get("dropout_p", _positional_or_default(args, 4, 0.0)) or 0.0)

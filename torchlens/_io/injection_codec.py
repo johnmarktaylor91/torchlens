@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._torch_symbols import torch_attr
 from .format_contract import ArtifactError, BlobRef
 from .scrub import BlobSpec
@@ -302,10 +303,10 @@ def split_restored_injected_rows(trace: Any) -> None:
     rows = trace.__dict__.get("_layer_list")
     if not isinstance(rows, list):
         return
-    injected = [op for op in rows if getattr(op, "injection_provenance", None) is not None]
+    injected = [op for op in rows if record_member(op, "injection_provenance", None) is not None]
     if not injected:
         return
-    remaining = [op for op in rows if getattr(op, "injection_provenance", None) is None]
+    remaining = [op for op in rows if record_member(op, "injection_provenance", None) is None]
     _validate_split_rows(injected, remaining, _recorded_rule_ids(trace))
     rows[:] = remaining
     from ..intervention._injection import injection_state
@@ -401,7 +402,7 @@ def _validate_one_split_row(
     label = getattr(row, "layer_label", None)
     if not isinstance(label, str) or not label:
         _refuse_codec("an injected-op row carries no layer_label", "record_label")
-    record = row.injection_provenance
+    record = row.call.injection_provenance
     check_injection_provenance_row(record, label)
     durable = (
         record["host_site_key"],
@@ -686,7 +687,7 @@ def finalize_loaded_injected_ops(
     records: list[InjectedOp] = []
     for row in pending:
         envelope = row.annotations[_ENVELOPE_KEY]
-        provenance_record = row.injection_provenance
+        provenance_record = row.call.injection_provenance
         out = row.out
         if isinstance(out, BlobRef):
             out = materialize(out)

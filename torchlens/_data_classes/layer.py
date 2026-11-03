@@ -41,7 +41,7 @@ import weakref
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
-from .._constants import LAYER_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
+from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import InvalidArgumentError, RecordBindingError
 from .._io import (
     TLSPEC_VERSION,
@@ -52,10 +52,17 @@ from .._io import (
 )
 from .._io.state_keys import refuse_callable_shadowing_state_keys
 from .._ir.refs import DtypeRef
-from .._quantities import Bytes, Duration, Flops, Macs
+from .._quantities import Bytes, Macs
 from .._selection.selection import _SelectionOperand
 from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
+from .._utils._record_group_table import (
+    LAYER_MOVED_MEMBERS,
+    LAYER_STORAGE_ATTRS,
+    OP_MOVED_MEMBERS,
+    op_attr,
+    op_spelling,
+)
 from .._utils.facade import refuse_removed_member
 from . import _doors
 
@@ -82,6 +89,14 @@ from ._layer_views import (  # noqa: F401  (materialize_layer_mirrors is re-expo
     layer_total_macs_forward,
     materialize_layer_mirrors,
 )
+from ._record_group_base import _LAYER_DELEGATED_PASS_FIELDS
+from ._record_groups import LayerControlFlow, LayerCost, MovedMemberField
+from ._record_groups_autograd import LayerAutograd
+from ._record_groups_call import LayerCall
+from ._record_groups_graph import LayerGraph
+from ._record_groups_module_context import LayerModuleContext
+from ._record_groups_payload import LayerPayload
+from ._record_groups_source import LayerSource
 from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items
 from ._value_repr import layer_card, layer_repr_line
@@ -94,8 +109,6 @@ if TYPE_CHECKING:
     from .op import Op
     from .trace import Trace
 
-
-_LAYER_DELEGATED_PASS_FIELDS = frozenset((*LAYER_PASS_LOG_FIELD_ORDER, "out_ref", "grad_ref"))
 
 # Typed container defaults for every non-Optional container field Layer
 # stores directly (as opposed to delegating to ``self.ops[i]``). Same defect
@@ -321,79 +334,79 @@ class Layer(_SelectionOperand):
         func_name: Any
         func_qualname: Any
         is_inplace: Any
-        grad_fn_class_name: Any
-        grad_fn_class_qualname: Any
+        _autograd_grad_fn_class_name: Any
+        _autograd_grad_fn_class_qualname: Any
         grad_fn_object_id: Any
-        grad_fn_handle: Any
-        grad_fn: Any
-        arg_names: Any
-        num_args_total: Any
-        num_pos_args: Any
-        num_kwargs: Any
+        _autograd_grad_fn_handle: Any
+        _autograd_grad_fn: Any
+        _call_arg_names: Any
+        _call_num_args_total: Any
+        _call_num_pos_args: Any
+        _call_num_kwargs: Any
         in_multi_output: Any
         multi_output_index: Any
         multi_output_name: Any
         shape: Any
-        transformed_out_shape: Any
+        _payload_transformed_out_shape: Any
         dtype: Any
         dtype_ref: Any
-        transformed_out_dtype: Any
+        _payload_transformed_out_dtype: Any
         device_ref: Any
         backend_address: Any
         resolver_status: Any
-        activation_memory: Any
-        transformed_activation_memory: Any
-        autograd_memory: Any
-        total_autograd_memory: Any
-        num_autograd_tensors: Any
+        _cost_activation_memory: Any
+        _cost_transformed_activation_memory: Any
+        _cost_autograd_memory: Any
+        _cost_total_autograd_memory: Any
+        _autograd_num_autograd_tensors: Any
         output_device: Any
         visualizer_path: Any
         activation_transform: Any
         is_edited: Any
         detach_saved_activations: Any
         save_grads: Any
-        transformed_grad_shape: Any
-        transformed_grad_dtype: Any
+        _payload_transformed_grad_shape: Any
+        _payload_transformed_grad_dtype: Any
         transformed_gradient_memory: Any
-        flops_forward: Any
-        flops_backward: Any
+        _cost_flops_forward: Any
+        _cost_flops_backward: Any
         _param_barcodes: Any
         _param_logs: Any
         param_shapes: Any
         num_params: Any
         num_params_trainable: Any
         num_params_frozen: Any
-        total_param_memory: Any
-        func_config: Any
-        equivalence_class: Any
+        _cost_total_param_memory: Any
+        _call_config: Any
+        _graph_equivalence_class: Any
         is_input: Any
         input_was_parameter: Any
         is_output: Any
-        is_final_output: Any
-        is_buffer: Any
+        _graph_is_final_output: Any
+        _graph_is_buffer: Any
         address: Any
-        buffer_source: Any
+        _graph_buffer_source: Any
         buffer_write_kind: Any
         buffer_value_changed: Any
         buffer_replay_validated: Any
-        buffer_source_func_name: Any
-        is_internal_source: Any
-        is_internal_sink: Any
-        is_terminal_bool: Any
-        is_scalar_bool: Any
-        bool_value: Any
+        _graph_buffer_source_func_name: Any
+        _graph_is_internal_source: Any
+        _graph_is_internal_sink: Any
+        _control_flow_is_terminal_bool: Any
+        _control_flow_is_scalar_bool: Any
+        _control_flow_bool_value: Any
         module: Any
         modules: Any
-        output_of_modules: Any
-        output_of_module_calls: Any
-        conditional_entry_children: Any
-        conditional_then_children: Any
-        conditional_elif_children: Any
-        conditional_else_children: Any
-        has_input_ancestor: Any
-        io_role: Any
-        buffer_pass: Any
-        is_atomic_module: Any
+        _module_context_output_of_modules: Any
+        _module_context_output_of_module_calls: Any
+        _control_flow_entry_children: Any
+        _control_flow_then_children: Any
+        _control_flow_elif_children: Any
+        _control_flow_else_children: Any
+        _graph_has_input_ancestor: Any
+        _graph_io_role: Any
+        _graph_buffer_pass: Any
+        _module_context_is_atomic_module: Any
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_is_in_conditional_body": FieldPolicy.KEEP,
@@ -535,11 +548,11 @@ class Layer(_SelectionOperand):
         # (end of step 15.5) rebinds these two fields on the OPS after the
         # aggregate Layers are built, and the public Layer contract keeps the
         # pre-rebind values (the dict-era copies never saw the update).
-        self.in_conditionals = first_pass.in_conditionals
-        self.terminal_bool_for = first_pass.terminal_bool_for
+        self._control_flow_in_conditionals = first_pass.control_flow.in_conditionals
+        self._control_flow_terminal_bool_for = first_pass.control_flow.terminal_bool_for
         # Cached conditional-body predicate (the ``is_in_conditional_body``
         # property's storage slot; multi-pass merge ORs into it).
-        self.is_in_conditional_body = first_pass.is_in_conditional_body
+        self._control_flow_is_in_conditional_body = first_pass.control_flow.is_in_conditional_body
         # Raw ``__dict__`` writes by contract: these are BUILD-PHASE staging
         # containers the multi-pass merge mutates in place, so they must
         # never pass through the finished-layer view normalization (a
@@ -549,7 +562,7 @@ class Layer(_SelectionOperand):
         self.__dict__["conditional_branch_stack_ops"] = cast(
             "dict[tuple[tuple[int, str], ...], list[int]]", {}
         )
-        self.conditional_arm_children: dict[int, dict[str, list[str]]] = {}
+        self._control_flow_arm_children: dict[int, dict[str, list[str]]] = {}
         # Genuinely per-layer USER-owned state, never a mirror: the dict era
         # initialized a fresh empty dict here rather than copying from the
         # first pass, so layer annotations must not alias ``ops[0]``'s dict
@@ -570,14 +583,64 @@ class Layer(_SelectionOperand):
         self.call_labels: list[str] = []
 
     @property
-    def macs_forward(self) -> Macs | None:
-        """TRUE forward MAC count of the representative pass, never flops//2.
+    def cost(self) -> LayerCost:
+        """Compute, memory and timing facts of this Layer (``layer.cost.total_flops``)."""
 
-        ``None`` when the exact split is unknown for the representative op.
-        """
+        return LayerCost(self)
 
-        first_op = next(iter(self.ops.values()), None)
-        return None if first_op is None else first_op.macs_forward
+    @property
+    def control_flow(self) -> LayerControlFlow:
+        """Conditional and branch facts of this Layer (``layer.control_flow.depth``)."""
+
+        return LayerControlFlow(self)
+
+    @property
+    def call(self) -> LayerCall:
+        """How this Layer's function was called (``layer.call.config``)."""
+
+        return LayerCall(self)
+
+    @property
+    def source(self) -> LayerSource:
+        """Where this Layer's call sits in the user's source (``layer.source.fx_path``)."""
+
+        return LayerSource(self)
+
+    @property
+    def autograd(self) -> LayerAutograd:
+        """Autograd facts of this Layer (``layer.autograd.grad_fn``)."""
+
+        return LayerAutograd(self)
+
+    @property
+    def module_context(self) -> LayerModuleContext:
+        """Module-nesting facts of this Layer (``layer.module_context.call_depth``)."""
+
+        return LayerModuleContext(self)
+
+    @property
+    def graph(self) -> LayerGraph:
+        """Graph position of this Layer (``layer.graph.has_parents``)."""
+
+        return LayerGraph(self)
+
+    @property
+    def _payload_transformed_out(self) -> Any:
+        """Transformed output of the single pass (computed, so not a stored Layer column)."""
+
+        return self._single_pass_or_error("transformed_out")
+
+    @property
+    def _payload_transformed_grad(self) -> Any:
+        """Transformed gradient of the single pass (computed, so not a stored Layer column)."""
+
+        return self._single_pass_or_error("transformed_grad")
+
+    @property
+    def payload(self) -> LayerPayload:
+        """Saved transformed payloads of this Layer (``layer.payload.transformed_out``)."""
+
+        return LayerPayload(self)
 
     @property
     def macs_backward(self) -> Macs | None:
@@ -586,40 +649,10 @@ class Layer(_SelectionOperand):
         return None
 
     @property
-    def total_activation_memory(self) -> Bytes:
-        """Sum activation memory across all Ops in this Layer."""
-
-        return Bytes(sum(int(op.activation_memory or 0) for op in self.ops.values()))
-
-    @property
     def total_gradient_memory(self) -> Bytes:
         """Sum gradient memory across all Ops in this Layer."""
 
         return Bytes(sum(int(op.gradient_memory or 0) for op in self.ops.values()))
-
-    @property
-    def flops_total(self) -> Flops:
-        """Representative total FLOPs for this Layer."""
-
-        return Flops((self.flops_forward or 0) + (self.flops_backward or 0))
-
-    @property
-    def total_flops_forward(self) -> Flops:
-        """Sum forward FLOPs across all Ops in this Layer."""
-
-        return Flops(sum((op.flops_forward or 0) for op in self.ops.values()))
-
-    @property
-    def total_flops_backward(self) -> Flops:
-        """Sum backward FLOPs across all Ops in this Layer."""
-
-        return Flops(sum((op.flops_backward or 0) for op in self.ops.values()))
-
-    @property
-    def total_flops_total(self) -> Flops:
-        """Sum total FLOPs across all Ops in this Layer."""
-
-        return Flops(self.total_flops_forward + self.total_flops_backward)
 
     @property
     def macs_total(self) -> Macs | None:
@@ -628,24 +661,8 @@ class Layer(_SelectionOperand):
         return None
 
     @property
-    def total_macs_forward(self) -> Macs | None:
-        """Sum TRUE forward MACs across all Ops in this Layer.
-
-        ``None`` when any pass's exact MAC split is unknown -- a partial sum
-        under a total's name would silently under-claim.
-        """
-
-        return layer_total_macs_forward(self)
-
-    @property
     def total_macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None`` (estimates only)."""
-
-        return None
-
-    @property
-    def total_macs_total(self) -> Macs | None:
-        """Total MACs are not derivable and always ``None`` (see Op.macs_total)."""
 
         return None
 
@@ -691,34 +708,22 @@ class Layer(_SelectionOperand):
         return self.num_params_frozen > 0
 
     @property
-    def is_compute_layer(self) -> bool:
+    def _graph_is_compute(self) -> bool:
         """Whether this Layer's representative Op is a compute Op."""
 
-        return bool(self.ops and self.ops[0].is_compute_op)
+        return bool(self.ops and self.ops[0].graph.is_compute)
 
     @property
-    def is_orphan(self) -> bool:
+    def _graph_is_orphan(self) -> bool:
         """Whether any Op in this Layer is disconnected from the main graph."""
 
-        return any(op.is_orphan for op in self.ops.values())
+        return any(op.graph.is_orphan for op in self.ops.values())
 
     @property
     def fx_label(self) -> str | None:
         """Return a torch.fx-style label for a single-Op Layer."""
 
         return cast(str | None, self._single_pass_or_error("fx_label"))
-
-    @property
-    def fx_qualpath(self) -> str | None:
-        """Return the FX-style qualified path for a single-Op Layer."""
-
-        return cast(str | None, self._single_pass_or_error("fx_qualpath"))
-
-    @property
-    def fx_call_index(self) -> int:
-        """Return the FX-style call index for a single-Op Layer."""
-
-        return cast(int, self._single_pass_or_error("fx_call_index"))
 
     @property
     def in_submodule(self) -> bool:
@@ -736,11 +741,6 @@ class Layer(_SelectionOperand):
         return self if self.num_passes > 1 else self.layer_label
 
     @property
-    def module_call_depth(self) -> int:
-        """Depth of module nesting for this layer."""
-        return len(self.modules)
-
-    @property
     def op_labels(self) -> list[str]:
         """Op labels belonging to this Layer (glossary name for ``call_labels``)."""
 
@@ -754,7 +754,7 @@ class Layer(_SelectionOperand):
         Layer (true when its representative Op is a buffer source).
         """
 
-        return bool(self.is_buffer)
+        return bool(self.graph.is_buffer)
 
     @property
     def buffer_overwrite_index(self) -> Any:
@@ -763,17 +763,7 @@ class Layer(_SelectionOperand):
         Glossary name for the stored ``buffer_pass`` index.
         """
 
-        return self.buffer_pass
-
-    @property
-    def is_module_input(self) -> bool:
-        """Whether this Layer's representative Op feeds into at least one ModuleCall.
-
-        Delegates from ``Op.is_module_input`` semantics for single-Op Layers.
-        Raises ``ValueError`` for multi-Op Layers.
-        """
-
-        return cast(bool, self._single_pass_or_error("is_module_input"))
+        return self.graph.buffer_pass
 
     @property
     def source_trace(self) -> "Trace":
@@ -829,7 +819,7 @@ class Layer(_SelectionOperand):
         return self.source_trace
 
     @property
-    def equivalent_ops(self) -> Any:
+    def _graph_equivalent_ops(self) -> Any:
         """Labels of ops equivalent to this layer.
 
         On finished traces the value is the group's ONE cached immutable
@@ -851,19 +841,19 @@ class Layer(_SelectionOperand):
             rep = _layer_rep_op(self)
             if rep is None:
                 raise AttributeError("equivalent_ops")
-            value = rep.equivalent_ops
+            value = rep.graph.equivalent_ops
         return set(value) if value.__class__ is set else value
 
-    @equivalent_ops.setter
-    def equivalent_ops(self, value: Any) -> None:
+    @_graph_equivalent_ops.setter
+    def _graph_equivalent_ops(self, value: Any) -> None:
         """Shadow ``equivalent_ops`` per layer, normalizing to the immutable view type."""
 
         self.__dict__["equivalent_ops"] = _layer_normalize_relation_write(
             self, "equivalent_ops", value
         )
 
-    @equivalent_ops.deleter
-    def equivalent_ops(self) -> None:
+    @_graph_equivalent_ops.deleter
+    def _graph_equivalent_ops(self) -> None:
         """Tombstone ``equivalent_ops`` so batch removal of finished layers works."""
 
         # ``state_items`` skips the tombstone, so cleanup ``delattr``s this
@@ -895,7 +885,7 @@ class Layer(_SelectionOperand):
             # The RAW canonical container (finished: the ONE frozen group
             # view; staging: the shared staging set), matching the value the
             # dict era stored — never the property's per-read staging copy.
-            return rep.equivalent_ops
+            return rep.graph.equivalent_ops
         raise AttributeError(name)
 
     def __tl_state_items__(self) -> Iterator[tuple[str, Any]]:
@@ -1018,13 +1008,13 @@ class Layer(_SelectionOperand):
             raise InvalidArgumentError(
                 f"Layer '{self.layer_label}' has {self.num_passes} ops. "
                 f"Access '{field_name}' on a specific pass: "
-                f"log['{self.layer_label}'].ops[0].{field_name}",
+                f"log['{self.layer_label}'].ops[0].{op_spelling(field_name)}",
                 code="layer_pass_ambiguous",
-                remedy=f"access {field_name!r} on one pass via .ops[k]",
+                remedy=f"access {op_spelling(field_name)!r} on one pass via .ops[k]",
                 layer_label=self.layer_label,
                 field_name=field_name,
             )
-        return getattr(self.ops[0], field_name)
+        return getattr(self.ops[0], op_attr(field_name))
 
     def __selection__(self) -> object:
         """Lift this layer's whole output as an ACT selection term (ALL passes)."""
@@ -1051,7 +1041,7 @@ class Layer(_SelectionOperand):
         return _doors.receptive_field()._layer_fields.layer_projective_field(self)
 
     @property
-    def site_peers(self) -> tuple["Layer", ...]:
+    def _graph_site_peers(self) -> tuple["Layer", ...]:
         """Layers sharing any of this layer's site keys (live index)."""
 
         return layer_site_peers(self)
@@ -1103,12 +1093,6 @@ class Layer(_SelectionOperand):
         return self._single_pass_or_error("out")
 
     @property
-    def transformed_out(self) -> Any:
-        """Transformed out on single-pass layers."""
-
-        return self._single_pass_or_error("transformed_out")
-
-    @property
     def has_saved_activation(self) -> bool:
         """Return whether the single pass has a saved out.
 
@@ -1118,28 +1102,6 @@ class Layer(_SelectionOperand):
             ``True`` when an out was saved for the only pass.
         """
         return cast(bool, self._single_pass_or_error("has_saved_activation"))
-
-    @property
-    def saved_args(self) -> Any:
-        """Return captured positional arguments for a single-pass layer.
-
-        Returns
-        -------
-        Any
-            Captured positional arguments from the only pass.
-        """
-        return self._single_pass_or_error("saved_args")
-
-    @property
-    def saved_kwargs(self) -> Any:
-        """Return captured keyword arguments for a single-pass layer.
-
-        Returns
-        -------
-        Any
-            Captured keyword arguments from the only pass.
-        """
-        return self._single_pass_or_error("saved_kwargs")
 
     @property
     def grad(self) -> Any:
@@ -1158,12 +1120,6 @@ class Layer(_SelectionOperand):
         return self._single_pass_or_error("grad")
 
     @property
-    def transformed_grad(self) -> Any:
-        """Transformed grad on single-pass layers."""
-
-        return self._single_pass_or_error("transformed_grad")
-
-    @property
     def has_grad(self) -> bool:
         """Return whether the single pass has a saved grad.
 
@@ -1175,45 +1131,6 @@ class Layer(_SelectionOperand):
             ``True`` when a grad was saved for the only pass.
         """
         return cast(bool, self._single_pass_or_error("has_grad"))
-
-    @property
-    def code_context(self) -> Any:
-        """Return the captured call stack for a single-pass layer.
-
-        Returns
-        -------
-        Any
-            Function call stack from the only pass.
-        """
-        return self._single_pass_or_error("code_context")
-
-    @property
-    def func_duration(self) -> Duration:
-        """Return function execution time for a single-pass layer.
-
-        Returns
-        -------
-        Duration
-            Function timing value from the only pass.
-        """
-        return cast(Duration, self._single_pass_or_error("func_duration"))
-
-    @property
-    def total_func_duration(self) -> Duration:
-        """Sum of function-call duration across all Ops in this Layer."""
-
-        return Duration(sum(float(op.func_duration or 0) for op in self.ops.values()))
-
-    @property
-    def func_rng_states(self) -> Any:
-        """Return RNG states captured for a single-pass layer.
-
-        Returns
-        -------
-        Any
-            RNG state snapshot from the only pass.
-        """
-        return self._single_pass_or_error("func_rng_states")
 
     @property
     def pass_index(self) -> int:
@@ -1264,7 +1181,7 @@ class Layer(_SelectionOperand):
         return layer_parents(self)
 
     @property
-    def has_children(self) -> bool:
+    def _graph_has_children(self) -> bool:
         """Return whether any pass has child layers.
 
         Returns
@@ -1272,10 +1189,10 @@ class Layer(_SelectionOperand):
         bool
             ``True`` when at least one pass has graph children.
         """
-        return any(p.has_children for p in self.ops.values())
+        return any(p.graph.has_children for p in self.ops.values())
 
     @property
-    def has_parents(self) -> bool:
+    def _graph_has_parents(self) -> bool:
         """Return whether any pass has parent layers.
 
         Returns
@@ -1283,7 +1200,7 @@ class Layer(_SelectionOperand):
         bool
             ``True`` when at least one pass has graph parents.
         """
-        return any(p.has_parents for p in self.ops.values())
+        return any(p.graph.has_parents for p in self.ops.values())
 
     @property
     def siblings(self) -> list[str]:
@@ -1296,7 +1213,7 @@ class Layer(_SelectionOperand):
         return layer_siblings(self)
 
     @property
-    def has_siblings(self) -> bool:
+    def _graph_has_siblings(self) -> bool:
         """Return whether this layer has any sibling layers besides itself.
 
         Returns
@@ -1316,7 +1233,7 @@ class Layer(_SelectionOperand):
         return layer_co_parents(self)
 
     @property
-    def has_co_parents(self) -> bool:
+    def _graph_has_co_parents(self) -> bool:
         """Return whether this layer has any co-parent layers besides itself.
 
         Returns
@@ -1327,42 +1244,24 @@ class Layer(_SelectionOperand):
         return len(self.co_parents) > 0
 
     @property
-    def is_in_conditional(self) -> bool:
-        """Whether this layer participates in any conditional role."""
-
-        return bool(self.in_conditionals)
-
-    @property
-    def is_in_conditional_evaluation(self) -> bool:
-        """Whether this layer computes a conditional arm condition."""
-
-        return any(role.role == "evaluation" for role in self.in_conditionals or [])
-
-    @property
-    def is_in_conditional_body(self) -> bool:
+    def _control_flow_is_in_conditional_body(self) -> bool:
         """Whether this layer is in a conditional arm body."""
 
         return bool(self.__dict__.get("_is_in_conditional_body", False)) or any(
-            role.role == "body" for role in self.in_conditionals or []
+            role.role == "body" for role in self.control_flow.in_conditionals or []
         )
 
-    @is_in_conditional_body.setter
-    def is_in_conditional_body(self, value: bool) -> None:
+    @_control_flow_is_in_conditional_body.setter
+    def _control_flow_is_in_conditional_body(self, value: bool) -> None:
         """Set the cached conditional-body predicate used during aggregation."""
 
         self.__dict__["_is_in_conditional_body"] = value
 
-    @is_in_conditional_body.deleter
-    def is_in_conditional_body(self) -> None:
+    @_control_flow_is_in_conditional_body.deleter
+    def _control_flow_is_in_conditional_body(self) -> None:
         """Delete the cached conditional-body predicate during cleanup."""
 
         self.__dict__.pop("_is_in_conditional_body", None)
-
-    @property
-    def conditional_depth(self) -> int:
-        """Number of distinct conditionals this layer participates in."""
-
-        return len({role.conditional_id for role in self.in_conditionals or []})
 
     @property
     def _tracing_finished(self) -> bool:
@@ -1409,22 +1308,22 @@ class Layer(_SelectionOperand):
     # Used by the visualization renderer to draw pass-annotated edges.
 
     @property
-    def children_per_pass(self) -> dict[int, list[str]]:
+    def _graph_children_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: child layer labels (no-pass) for each pass."""
         return layer_children_per_pass(self)
 
     @property
-    def parents_per_pass(self) -> dict[int, list[str]]:
+    def _graph_parents_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: parent layer labels (no-pass) for each pass."""
         return layer_parents_per_pass(self)
 
     @property
-    def child_ops_per_layer(self) -> dict[str, list[int]]:
+    def _graph_child_ops_per_layer(self) -> dict[str, list[int]]:
         """Dict[str, List[int]]: for each child layer, which ops connect to it."""
         return layer_child_ops_per_layer(self)
 
     @property
-    def parent_ops_per_layer(self) -> dict[str, list[int]]:
+    def _graph_parent_ops_per_layer(self) -> dict[str, list[int]]:
         """Dict[str, List[int]]: for each parent layer, which ops connect from it."""
         return layer_parent_ops_per_layer(self)
 
@@ -1437,15 +1336,6 @@ class Layer(_SelectionOperand):
     def leaf_module_ops(self) -> set[Any]:
         """Set of module ops exited across all ops."""
         return layer_leaf_module_ops(self)
-
-    @property
-    def parent_arg_positions(self) -> dict[str, dict[Any, str]]:
-        """Merged parent_arg_positions across ops (set-union).
-
-        For single-pass layers, delegates to ops[0].
-        For multi-pass, merges arg locs using set-union of no-pass labels.
-        """
-        return layer_parent_arg_positions(self)
 
     # ********************************************
     # ******* Fallback __getattr__ ***************
@@ -1465,11 +1355,15 @@ class Layer(_SelectionOperand):
         """
         if name.startswith("_"):
             raise AttributeError(name)
+        refuse_removed_member(type(self).__name__, name, LAYER_MOVED_MEMBERS)
         if name in {
             "param_memory",
         }:
             raise AttributeError(name)
         ops = self.__dict__.get("ops")
+        # A former flat Op spelling refuses here, typed, instead of being lost to
+        # the plain miss below when the delegated Op read refuses it.
+        refuse_removed_member(type(self).__name__, name, OP_MOVED_MEMBERS)
         if ops and len(ops) == 1:
             try:
                 return getattr(ops[0], name)
@@ -1698,11 +1592,11 @@ class Layer(_SelectionOperand):
             # One pass/op vocabulary (A10): an aggregate multi-pass layer is
             # "xN passes", never "N ops".
             s += f" (x{self.num_passes} passes)"
-        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.activation_memory}"
+        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.cost.activation_memory}"
         if not self.is_input:
-            s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name})"
-            if self.func_config:
-                config_str = format_config_items(self.func_config)
+            s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.autograd.grad_fn_class_name})"
+            if self.call.config:
+                config_str = format_config_items(self.call.config)
                 s += f"\n\tConfig: {config_str}"
         if self.module is not None:
             s += f"\n\tComputed inside module: {self.module}"
@@ -1710,7 +1604,7 @@ class Layer(_SelectionOperand):
             params_shapes_str = format_shape_list(self.param_shapes)
             s += (
                 f"\n\tParams: {params_shapes_str}; "
-                f"{self.num_params} total ({self.total_param_memory})"
+                f"{self.num_params} total ({self.cost.total_param_memory})"
             )
         s += "\n\tRelated Layers:"
         s += f"\n\t\t- parents: {', '.join(self.parents) or 'none'}"
@@ -1779,11 +1673,12 @@ def _install_layer_mirror_descriptors() -> None:
     """
 
     for name, (source, normalize) in _LAYER_MIRROR_SPEC.items():
-        if name in vars(Layer):
+        attr = LAYER_STORAGE_ATTRS.get(name, name)
+        if attr in vars(Layer):
             raise RuntimeError(
-                f"Layer mirror field {name!r} collides with an existing class attribute"
+                f"Layer mirror field {attr!r} collides with an existing class attribute"
             )
-        setattr(Layer, name, _LayerMirrorField(name, source, normalize))
+        setattr(Layer, attr, _LayerMirrorField(name, source, normalize))
 
 
 class _LayerViewField:
@@ -1838,12 +1733,32 @@ def _install_layer_view_descriptors() -> None:
     for name in _LAYER_RELATION_VIEW_TYPES:
         if name == "equivalent_ops" or name in _LAYER_MIRROR_SPEC:
             continue
-        if name in vars(Layer):
+        attr = LAYER_STORAGE_ATTRS.get(name, name)
+        if attr in vars(Layer):
             raise RuntimeError(
-                f"Layer view field {name!r} collides with an existing class attribute"
+                f"Layer view field {attr!r} collides with an existing class attribute"
             )
-        setattr(Layer, name, _LayerViewField(name))
+        setattr(Layer, attr, _LayerViewField(name))
+
+
+def _install_layer_moved_member_refusals() -> None:
+    """Refuse every former flat Layer spelling typed, over any ``__dict__`` shadow.
+
+    A restored or materialized shadow keeps its persisted key in
+    ``__dict__``; the data descriptor wins over it, so the former spelling
+    still names its replacement instead of reading the shadow.
+    """
+
+    stored = frozenset(LAYER_LOG_FIELD_ORDER)
+    for name, remedy in LAYER_MOVED_MEMBERS.items():
+        attr = LAYER_STORAGE_ATTRS[name]
+        if name in stored and attr not in vars(Layer):
+            # A plain ``__dict__`` field: its storage attribute reads the persisted key.
+            setattr(Layer, attr, _LayerViewField(name))
+        if name not in vars(Layer):
+            setattr(Layer, name, MovedMemberField("Layer", name, remedy))
 
 
 _install_layer_mirror_descriptors()
 _install_layer_view_descriptors()
+_install_layer_moved_member_refusals()

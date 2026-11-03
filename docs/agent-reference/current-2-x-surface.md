@@ -39,7 +39,7 @@
   output-difference metrics (relative metrics anchored on the first argument).
 - Relation accessors on FINISHED traces return IMMUTABLE views (authorized public type
   break, decided 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
-  `op.module_call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)
+  `op.module_context.call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)
   are `tuple`; label sets (`input_ancestors`, `output_descendants`, `root_ancestors`,
   `internal_source_ancestors`) are `frozenset`. Reads are identity-stable, in-place
   mutation (`op.children.append(...)`) raises, direct assignment still works on `Op`
@@ -730,7 +730,7 @@
   analysis-only); `"health_facts"` and `"capture_advisories"` are reserved annotation
   families with their validation rows; and three ENTRY-DARK slots are declared with
   fail-closed load validation so their Phase-3 writers need no further bump:
-  `Op.injection_provenance` (F01 log_injections), `Trace.source.snapshots` (F30),
+  `Op.call.injection_provenance` (F01 log_injections), `Trace.source.snapshots` (F30),
   `Trace.graph.structure_evidence` (F33). Contract of record:
   `torchlens/schemas/writer_contract_v10.json` (the v9 and v8 contracts left with the 2.x readers);
   the C07-adjudicated field-intent census is maintained privately. The C07X
@@ -755,7 +755,7 @@
   entry-dark slots with fail-closed validation: `Trace.provenance.root_entry_point` (the closed
   `module_call|bound_method|function_call` root descriptor, written UNCONDITIONALLY on
   every capture; joined to the rerun identity gate FAIL-CLOSED — the F41 bullet above),
-  `Op.episode_step` (F-EPISODE writes), `Op.tl_authored_root` (F41 writes it on
+  `Op.episode_step` (F-EPISODE writes), `Op.call.tl_authored_root` (F41 writes it on
   bound-method captures, live). The Bundle-side ledger rows
   join (foldB s4.4 item 12) SPLIT OFF per the review proviso: the C07 ledger shape stays
   unresolved pre-F03 and must not hold the amendment past V9-FREEZE.
@@ -769,7 +769,7 @@
   position, never proven source identity: per-call-instance cardinality guard
   + source-location witness + corroborated/positional/refused verdict tiers,
   internal until S2). Per-pass keys read as `layer.ops[k].site_key`
-  (within-call recurrence groups span sites); `Layer.site_peers` indexes same-site layers live; keyless legacy
+  (within-call recurrence groups span sites); `Layer.graph.site_peers` indexes same-site layers live; keyless legacy
   artifacts refuse `site_key_unavailable`. `Layer.shape_summary` is the
   derived across-pass shape string ("2->4" monotone / "2-4" min-max /
   first->last full shapes; contains `->`, escape at render). The
@@ -1005,7 +1005,7 @@
   design is an escalated named future) — the child re-executes from the
   substituted input (node-level `is_edited` never fires for
   edges), the substituted value rides the tier-(ii) store
-  `Op.edge_substitutions` (+ `edge_replacement_stamps`,
+  `Op.graph.edge_substitutions` (+ `edge_replacement_stamps`,
   `FireRecord.edge_address`; all persisted as of tlspec v8, so ordinary
   saves of edge-intervened traces proceed), and capture truth
   (saved_args / out_versions_by_child / parent.out) is retained unmodified
@@ -1706,7 +1706,28 @@
   group views a Trace serves are `tl.types.TraceProvenance`, `tl.types.TraceSettings`,
   `tl.types.TraceCost`, `tl.types.TraceSource`, `tl.types.TraceHealth`, `tl.types.TraceGraph` and
   `tl.types.TraceAutograd` (`trace.provenance`, `trace.options`, `trace.cost`, `trace.source`,
-  `trace.health`, `trace.graph`, `trace.autograd`); callers read them, never construct them. The backend registry
+  `trace.health`, `trace.graph`, `trace.autograd`); callers read them, never construct them. Op and
+  Layer group their fields by concern the same way: `op.cost` (`tl.types.OpCost`) and `layer.cost`
+  (`tl.types.LayerCost`) hold compute, memory and timing facts (`op.cost.flops_forward`,
+  `op.cost.duration`, `layer.cost.total_flops_forward`), and `op.control_flow`
+  (`tl.types.OpControlFlow`) and `layer.control_flow` (`tl.types.LayerControlFlow`) hold
+  conditional-branch facts (`op.control_flow.is_terminal_bool`, `layer.control_flow.depth`), and
+  `op.call` (`tl.types.OpCall`) and `layer.call` (`tl.types.LayerCall`) hold how the function was
+  called (`op.call.call_id`, `op.call.saved_args`, `layer.call.num_pos_args`), `op.source`
+  (`tl.types.OpSource`) and `layer.source` (`tl.types.LayerSource`) hold where it was called
+  (`op.source.frames`, `op.source.arg_expressions`, `layer.source.fx_path`), and `op.autograd`
+  (`tl.types.OpAutograd`) and `layer.autograd` (`tl.types.LayerAutograd`) hold autograd linkage and
+  saved gradients (`op.autograd.grad_fn_class_name`, `op.autograd.grads`,
+  `op.autograd.grad_for(bwd=0)`), and `op.module_context` (`tl.types.OpModuleContext`) and
+  `layer.module_context` (`tl.types.LayerModuleContext`) hold module nesting
+  (`op.module_context.call_stack`, `op.module_context.atomic_module`,
+  `layer.module_context.output_of_modules`), and `op.payload` (`tl.types.OpPayload`) and
+  `layer.payload` (`tl.types.LayerPayload`) hold the transformed payloads and lazy materialization
+  (`op.payload.transformed_out`, `op.payload.materialize_out()`), and `op.graph`
+  (`tl.types.OpGraph`) and `layer.graph` (`tl.types.LayerGraph`) hold graph position
+  (`op.graph.has_parents`, `op.graph.min_distance_from_input`, `layer.graph.is_orphan`); a Layer group reads an
+  Op-only member of its group through the single pass (`layer.control_flow.branch_stack`); a former
+  flat spelling such as `op.flops_forward` refuses typed (`facade_redirect`) and names the new one. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
   `tl.clear_cache()` (`torchlens._user_funcs.clear_cache`), `tl.observers.register_tensor_connection`

@@ -33,6 +33,7 @@ from typing import Any
 
 from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._record_type import first_op
+from ..._utils._record_group_table import record_member
 from ._access import CopyRoot, resolve_copy_root
 from ._axis_labels import sdpa_attention_hint
 from ._card_suppression import card_render_suppressed
@@ -199,7 +200,7 @@ def _identity_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
     identity = f"{getattr(op, 'func_name', '?')}"
     if pass_index is not None and num_passes is not None and num_passes > 1:
         identity += f" (pass {pass_index}/{num_passes})"
-    module = getattr(op, "atomic_module_address", None) or getattr(op, "module", None)
+    module = record_member(op, "atomic_module_address", None) or getattr(op, "module", None)
     nodes: list[CardNode] = [CardText(identity)]
     if module:
         nodes.append(CardText(f"module: {module}"))
@@ -263,7 +264,7 @@ def _context_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
         ("func_duration", "time"),
         ("activation_memory", "memory"),
     ):
-        value = getattr(op, attribute, None)
+        value = record_member(op, attribute, None)
         if value is not None:
             costs.append(f"{prefix}: {value}")
     if costs:
@@ -277,7 +278,7 @@ def _intervention_badges(op: Any) -> tuple[CardNode, ...]:
     nodes: list[CardNode] = []
     if getattr(op, "is_edited", False):
         nodes.append(CardText("intervened: value replaced", role="notice"))
-    if getattr(op, "edge_substitutions", None):
+    if record_member(op, "edge_substitutions", None):
         nodes.append(CardText("intervened: edge substitution", role="notice"))
     return tuple(nodes)
 
@@ -382,7 +383,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
         ),
         CardText(
             f"params: {getattr(trace, 'num_params', '?')} | "
-            f"flops fwd: {getattr(getattr(trace, 'cost', None), 'total_flops_forward', '?')}"
+            f"flops fwd: {record_member(getattr(trace, 'cost', None), 'total_flops_forward', '?')}"
         ),
         CardText(f"saved: {saved if saved is not None else '?'}/{total or '?'} op records"),
     ]

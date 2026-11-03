@@ -76,7 +76,7 @@ def test_g2_loaded_recompute_byte_parity(tmp_path) -> None:
     for label in loaded.op_labels:
         op = loaded.ops[label]
         recomputed = minter.mint(
-            tuple(op.module_call_stack or ()),
+            tuple(op.module_context.call_stack or ()),
             op.type,
             getattr(op, "multi_output_index", None),
         )

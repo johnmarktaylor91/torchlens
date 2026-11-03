@@ -15,6 +15,7 @@ import torch
 from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._record_type import record_type
 from ..._utils._multipass_access import get_multipass_attr
+from ..._utils._record_group_table import record_member
 from ..._utils.display import human_readable_size
 from ..._visualization.node_spec import (
     INTERVENTION_CONE_COLOR,
@@ -351,7 +352,7 @@ def _shape_memory_line(entry: Any) -> str | None:
     if not shape:
         return None
     shape_str = "x".join(str(v) for v in shape)
-    memory = getattr(entry, "activation_memory", None)
+    memory = record_member(entry, "activation_memory", None)
     if memory:
         return f"{shape_str}  {human_readable_size(memory)}"
     return shape_str
@@ -403,7 +404,7 @@ def _module_line(entry: Any) -> str | None:
         Address text, or ``None`` when there is no module/buffer address.
     """
 
-    if getattr(entry, "is_buffer", False):
+    if record_member(entry, "is_buffer", False):
         addr = getattr(entry, "address", None)
         return f"@{addr}" if addr else "@buffer"
     addr = getattr(entry, "module", None)
@@ -429,8 +430,8 @@ def _build_node_label(entry: Any, vis_mode: str) -> str:
     """
 
     lines: list[str] = []
-    if getattr(entry, "is_terminal_bool", False):
-        val = getattr(entry, "bool_value", None)
+    if record_member(entry, "is_terminal_bool", False):
+        val = record_member(entry, "bool_value", None)
         if val is not None:
             lines.append("TRUE" if bool(val) else "FALSE")
     lines.append(_display_label(entry, vis_mode))
@@ -480,9 +481,9 @@ def _base_node_type(entry: Any) -> str:
         return "input"
     if getattr(entry, "is_output", False):
         return "output"
-    if getattr(entry, "is_buffer", False):
+    if record_member(entry, "is_buffer", False):
         return "buffer"
-    if getattr(entry, "is_terminal_bool", False):
+    if record_member(entry, "is_terminal_bool", False):
         return "bool"
     trainable = int(getattr(entry, "num_params_trainable", 0) or 0)
     frozen = int(getattr(entry, "num_params_frozen", 0) or 0)
@@ -556,7 +557,7 @@ def _argument_edge_label(child: Any, parent_label: str) -> str | None:
         Comma-separated argument labels, or ``None`` when not applicable.
     """
 
-    arg_locs = getattr(child, "parent_arg_positions", None) or {}
+    arg_locs = record_member(child, "parent_arg_positions", None) or {}
     func_name = (getattr(child, "func_name", None) or record_type(child, "") or "").lower()
     if len(getattr(child, "parents", None) or []) <= 1:
         return None
@@ -590,8 +591,8 @@ def _is_skip_edge(parent: Any, child: Any) -> bool:
         Whether the child is more than one input-distance step after parent.
     """
 
-    p = getattr(parent, "min_distance_from_input", None)
-    c = getattr(child, "min_distance_from_input", None)
+    p = record_member(parent, "min_distance_from_input", None)
+    c = record_member(child, "min_distance_from_input", None)
     if p is None or c is None:
         return False
     try:
@@ -616,8 +617,8 @@ def _is_recurrent_edge(parent: Any, child: Any) -> bool:
         Whether either endpoint indicates recurrence.
     """
 
-    p_group = getattr(parent, "recurrent_ops", None)
-    c_group = getattr(child, "recurrent_ops", None)
+    p_group = record_member(parent, "recurrent_ops", None)
+    c_group = record_member(child, "recurrent_ops", None)
     if p_group and c_group and p_group == c_group:
         return True
     return (
@@ -643,11 +644,11 @@ def _classify_forward_edge(parent: Any, child: Any) -> str:
     """
 
     child_label = getattr(child, "layer_label", "")
-    if child_label in (getattr(parent, "conditional_then_children", None) or []):
+    if child_label in (record_member(parent, "conditional_then_children", None) or []):
         return "then"
-    if child_label in (getattr(parent, "conditional_entry_children", None) or []):
+    if child_label in (record_member(parent, "conditional_entry_children", None) or []):
         return "if"
-    if getattr(parent, "is_buffer", False):
+    if record_member(parent, "is_buffer", False):
         return "buffer"
     if _is_recurrent_edge(parent, child):
         return "recurrent"
@@ -767,7 +768,7 @@ def trace_to_dagua_graph(
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
     entries = _entries_for_mode(trace, vis_mode)
     if not show_buffers:
-        entries = [e for e in entries if not getattr(e, "is_buffer", False)]
+        entries = [e for e in entries if not record_member(e, "is_buffer", False)]
     entries_by_label = {getattr(e, "layer_label"): e for e in entries}
     site_labels, cone_labels = intervention_site_and_cone_labels(trace, show_cone=True)
     g.is_intervention_site = []
@@ -798,12 +799,14 @@ def trace_to_dagua_graph(
         g.container_role.append(container_attrs["container_role"])
 
         shape_override = op_shape
-        if getattr(entry, "is_buffer", False):
+        if record_member(entry, "is_buffer", False):
             shape_override = buffer_shape
-        elif getattr(entry, "is_module_output", False) or getattr(entry, "is_atomic_module", False):
+        elif record_member(entry, "is_module_output", False) or record_member(
+            entry, "is_atomic_module", False
+        ):
             shape_override = module_shape
 
-        if not getattr(entry, "has_input_ancestor", True):
+        if not record_member(entry, "has_input_ancestor", True):
             shape_override = dagua.NodeStyle(
                 shape=shape_override.shape,
                 corner_radius=shape_override.corner_radius,
@@ -840,7 +843,7 @@ def trace_to_dagua_graph(
             )
 
             style = None
-            if not getattr(parent, "has_input_ancestor", True):
+            if not record_member(parent, "has_input_ancestor", True):
                 style = dagua.EdgeStyle(style="dashed")
             g.add_edge(parent_label, child_id, label=edge_label, type=edge_type, style=style)
             g.edge_container_role.append(_container_semantic_attrs(child)["container_role"])

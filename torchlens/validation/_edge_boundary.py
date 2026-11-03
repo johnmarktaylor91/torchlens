@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -42,7 +44,7 @@ def _check_edge_intervention_boundary(
     edge substitution replaces no node's output.
     """
 
-    entries = getattr(target_op, "edge_substitutions", None) or {}
+    entries = record_member(target_op, "edge_substitutions", None) or {}
     if not entries:
         return None
     failure = _fail_uncorroborated_edge_entries(trace, target_op, entries)
@@ -69,7 +71,7 @@ def _fail_uncorroborated_edge_entries(
 
     for store_key, payload in entries.items():
         arg_kind, arg_path = store_key
-        address = (target_op.func_call_id, arg_kind, tuple(arg_path))
+        address = (target_op.call.call_id, arg_kind, tuple(arg_path))
         stamp = stamps.get(store_key)
         if address not in fire_addresses or not stamp or not stamp.get("verdict"):
             record_validation_failure(

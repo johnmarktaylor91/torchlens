@@ -38,7 +38,7 @@ def _backward_ops(trace: Any) -> list[Any]:
 
 
 def _engine_flags(op: Any) -> dict[str, Any]:
-    return {k: v for k, v in op.transform_config.items() if not k.startswith("_tl")}
+    return {k: v for k, v in op.call.func_transform_config.items() if not k.startswith("_tl")}
 
 
 @contextmanager
@@ -123,16 +123,16 @@ def test_backward_in_forward_is_a_recorded_boundary_op() -> None:
     ops = _backward_ops(trace)
     assert len(ops) == 2  # fc1.weight and fc1.bias
     for op in ops:
-        assert op.is_transform is True
-        assert op.transform_kind == "autograd.backward"
+        assert op.call.is_func_transform is True
+        assert op.call.func_transform_kind == "autograd.backward"
         assert not _engine_flags(op).get("retain_graph")
         assert op.is_inplace is False
         assert len(op.parents) == 1 and op.parents[0].startswith("sum")
-        assert not op.unattributed_tensor_args
+        assert not op.call.unattributed_tensor_args
     mean_ops = [op for op in trace.ops if op.func_name == "mean"]
     assert len(mean_ops) == 1
     assert set(mean_ops[0].parents) <= {op.label for op in ops}
-    assert not mean_ops[0].unattributed_tensor_args
+    assert not mean_ops[0].call.unattributed_tensor_args
     assert [op.label for op in trace.transforms] == [op.label for op in ops]
     selected = tl.trace(
         _GradReader(), torch.rand(2, 4), save=tl.func_transform("autograd.backward")
@@ -234,7 +234,7 @@ def test_forged_backward_func_fails_replay() -> None:
 
         op = _backward_ops(trace)[0]
         op.func = autogradbackward
-        assert op.transform_kind == "autograd.backward"
+        assert op.call.func_transform_kind == "autograd.backward"
 
     torch.manual_seed(0)
     with _tampered_validation(forge):

@@ -26,6 +26,7 @@ from .._ir.predicate import EventKind, coerce_deferred_value
 from .._ir.refs import DeviceRef, DtypeRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
 from .._record_type import record_type
+from .._utils._record_group_table import OP_GROUP_VIEWS, OP_STORAGE_ATTRS, record_member
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.tensor_utils import get_memory_amount_from_metadata
@@ -974,7 +975,7 @@ def _grad_fn_handle_from_index(trace: Trace, event: OpEvent) -> Any:
             return handle
     # Compat OpEvents still carry the handle field; decomposed OpRecords never
     # do (single ownership) and read as None here by strict-protocol default.
-    return getattr(event, "grad_fn_handle", None)
+    return record_member(event, "grad_fn_handle", None)
 
 
 def _live_grad_fn_object_id(trace: Trace, event: OpEvent) -> Any:
@@ -1283,6 +1284,10 @@ def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
     }
 
 
+#: Group storage attribute (``_call_call_id``) -> the live event field it reads.
+_LIVE_FIELD_BY_STORAGE: dict[str, str] = {attr: old for old, attr in OP_STORAGE_ATTRS.items()}
+
+
 class LiveOpView:
     """Read-only Op-shaped adapter over a capture-time operation event."""
 
@@ -1333,8 +1338,11 @@ class LiveOpView:
             Current live field value.
         """
 
+        group = OP_GROUP_VIEWS.get(name)
+        if group is not None:
+            return group(self)
         record = object.__getattribute__(self, "_record")
-        return _event_live_field(self._trace, record, name)
+        return _event_live_field(self._trace, record, _LIVE_FIELD_BY_STORAGE.get(name, name))
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Reject direct mutation of live views.
@@ -1534,7 +1542,7 @@ def _grad_record_context_from_op_grad_event(
     op = trace._layer_dict_all_keys[event.op_label]
     return GradRecordContext(
         label=event.op_label,
-        grad_fn_class_name=getattr(op, "grad_fn_class_name", None) or "",
+        grad_fn_class_name=record_member(op, "grad_fn_class_name", None) or "",
         kind=record_type(op, None) or "op",
         backward_call_index=event.pass_index,
         grad_kind="grad_output",

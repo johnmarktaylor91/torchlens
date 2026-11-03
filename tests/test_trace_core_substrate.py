@@ -26,6 +26,7 @@ from torchlens._trace_core import (
     Transaction,
 )
 from torchlens._trace_core.pools import ClosurePool
+from torchlens._utils._record_group_table import record_member
 
 
 @pytest.mark.smoke
@@ -471,7 +472,7 @@ def test_pickle_load_rehydrates_into_the_store() -> None:
     op = clone.ops["relu_1_2"]
     assert object.__getattribute__(op, "_core") is core.ops
     assert op.parents == ("linear_1_1",)
-    assert type(op.equivalent_ops) is frozenset
+    assert type(op.graph.equivalent_ops) is frozenset
 
     param = next(iter(clone.params.values()))
     assert param.__dict__["_tl_core"] is core.kind_rows["param"]
@@ -757,7 +758,7 @@ def test_fork_shares_one_equivalent_ops_view_per_class() -> None:
     views_by_class: dict = {}
     members_checked: dict = {}
     for layer in fork._layer_logs.values():
-        equivalence_class = getattr(layer, "equivalence_class", None)
+        equivalence_class = record_member(layer, "equivalence_class", None)
         view = layer.__dict__.get("equivalent_ops")
         if equivalence_class not in multi_member or view is None:
             continue
@@ -963,7 +964,7 @@ def test_tlspec_load_adopts_every_record_kind() -> None:
     def op_cell_fcls(t: object) -> list:
         found = []
         for op in t._layer_list:
-            for item in getattr(op, "code_context", None) or ():
+            for item in record_member(op, "code_context", None) or ():
                 if type(item).__name__ == "FuncCallLocation":
                     found.append(item)
         return found

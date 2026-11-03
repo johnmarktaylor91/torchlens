@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from .._quantities import Bytes
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -34,7 +35,8 @@ def count_saved_module_calls_from_output_ops(
         saved_labels = {
             op.label
             for op in trace._layer_list
-            if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
+            if getattr(op, "has_saved_activation", False)
+            and not record_member(op, "is_orphan", False)
         }
     else:
         saved_labels = set(saved_op_labels)
@@ -127,7 +129,7 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
     payloads = [
         payload
         for op in saved_ops
-        for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None))
+        for payload in (getattr(op, "out", None), record_member(op, "transformed_out", None))
     ]
     trace._cost_pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))
 
@@ -154,11 +156,11 @@ def _has_retained_gradient_payloads(self: "Trace") -> bool:
     """
 
     for op in self._layer_list:
-        for record in getattr(op, "grads", ()):
+        for record in record_member(op, "grads", ()):
             if record.grad is not None or record.transformed_grad is not None:
                 return True
     for param in self._param_logs.values():
-        if any(record.grad is not None for record in getattr(param, "grads", ())):
+        if any(record.grad is not None for record in record_member(param, "grads", ())):
             return True
     return False
 
@@ -177,7 +179,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
         layer_entry
         for layer_entry in self._layer_list
         if getattr(layer_entry, "has_saved_activation", False)
-        and not getattr(layer_entry, "is_orphan", False)
+        and not record_member(layer_entry, "is_orphan", False)
     ]
     self._num_saved_ops = len(saved_layers)
     # F20 (brainpipe D-17): read the ONE byte model -- physically retained

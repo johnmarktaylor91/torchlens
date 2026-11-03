@@ -98,11 +98,11 @@ _SUBPROCESS_SOURCE = _MODEL_SOURCE + textwrap.dedent(
         seen = {}
         internal = []
         for op in trace._layer_list:
-            if op.is_input or op.is_output or op.is_buffer:
+            if op.is_input or op.is_output or op.graph.is_buffer:
                 continue
             seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
         for op in trace.ops:
-            for location in op.code_context or ():
+            for location in op.source.frames or ():
                 if os.path.normcase(os.path.abspath(str(location.file))).startswith(PREFIX):
                     internal.append([op.label, str(location.file), location.func_name])
         print(json.dumps({
@@ -120,7 +120,7 @@ def _layer_shape(trace: Any) -> list[tuple[str, int]]:
 
     seen: dict[str, tuple[str, int]] = {}
     for op in trace._layer_list:
-        if op.is_input or op.is_output or op.is_buffer:
+        if op.is_input or op.is_output or op.graph.is_buffer:
             continue
         seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
     return sorted(seen.values())
@@ -164,7 +164,7 @@ def test_no_torchlens_frame_in_any_code_context() -> None:
     leaked = [
         (op.label, str(location.file))
         for op in trace.ops
-        for location in op.code_context or ()
+        for location in op.source.frames or ()
         if _normalized(str(location.file)).startswith(_PACKAGE_PREFIX)
     ]
     assert leaked == []

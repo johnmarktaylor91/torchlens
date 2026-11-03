@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._data_classes.op import Op
+from .._utils._record_group_table import record_member
 from ._destination_coverage import (
     _get_scatter_destination_dim_index,
     _index_positions_cover_destination_exactly,
@@ -266,9 +267,9 @@ def _new_call_is_size_only_overload(op: Any) -> bool:
     if len(parents) > 1:
         # A second tensor parent is the value-bearing new(tensor) overload.
         return False
-    if getattr(op, "non_tensor_kwargs", None):
+    if record_member(op, "non_tensor_kwargs", None):
         return False
-    for arg in getattr(op, "non_tensor_pos_args", None) or ():
+    for arg in record_member(op, "non_tensor_pos_args", None) or ():
         if isinstance(arg, bool):
             return False
         if isinstance(arg, (int, torch.Size)):
@@ -356,7 +357,7 @@ def _perturbed_parent_is_uninitialized_setitem_dest(
     # The destination tensor of an in-place write is the first positional arg.
     # The perturbed parent must occupy that args[0] slot to be the destination.
     dest_labels: set[str] = set()
-    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    parent_arg_positions = record_member(layer, "parent_arg_positions", {}) or {}
     for key, parent_label in parent_arg_positions.get("args", {}).items():
         # args[0] is the destination; a nested key like (0, ...) is NOT the
         # whole-destination tensor (it would index INTO the value/index args).
@@ -378,7 +379,7 @@ def _perturbed_parent_is_uninitialized_setitem_dest(
 def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
     """Exempt ``__setitem__`` for structural masks or proven full overwrites."""
     perturbed_tensor = self[layers_to_perturb[0]].out
-    args = layer.saved_args
+    args = layer.call.saved_args
     if args is None:
         # No saved call to prove anything from: not exempt. The replay's own
         # missing-saved-args guard then reports the op unverified.
@@ -536,7 +537,7 @@ def _perturbed_parent_is_arg_position(
     match the destination.
     """
 
-    arg_positions = (getattr(layer, "parent_arg_positions", None) or {}).get("args", {})
+    arg_positions = (record_member(layer, "parent_arg_positions", None) or {}).get("args", {})
     return arg_positions.get(position) == layers_to_perturb[0]
 
 
@@ -559,7 +560,7 @@ def _perturbed_parent_arg_positions(layer: Op, layers_to_perturb: list[str]) -> 
 
     if len(layers_to_perturb) != 1:
         return set()
-    arg_positions = (getattr(layer, "parent_arg_positions", None) or {}).get("args", {})
+    arg_positions = (record_member(layer, "parent_arg_positions", None) or {}).get("args", {})
     return {
         position
         for position, parent_label in arg_positions.items()
@@ -600,7 +601,7 @@ def _perturbed_parent_occupies_arg_slot(
 
     if len(layers_to_perturb) != 1:
         return False
-    arg_positions = (getattr(layer, "parent_arg_positions", None) or {}).get("args", {})
+    arg_positions = (record_member(layer, "parent_arg_positions", None) or {}).get("args", {})
     for position, parent_label in arg_positions.items():
         if parent_label != layers_to_perturb[0]:
             continue
@@ -631,15 +632,15 @@ def _check_interpolate_exempt(self: "Trace", layer: Op, layers_to_perturb: list[
     del self
     if len(layers_to_perturb) != 1:
         return False
-    args = layer.saved_args
-    kwargs = layer.saved_kwargs
+    args = layer.call.saved_args
+    kwargs = layer.call.saved_kwargs
     if (
         _perturbed_parent_occupies_arg_slot(layer, layers_to_perturb, 2)
         and len(args) >= 3
         and args[2] is not None
     ):
         return True
-    kwarg_positions = (getattr(layer, "parent_arg_positions", None) or {}).get("kwargs", {})
+    kwarg_positions = (record_member(layer, "parent_arg_positions", None) or {}).get("kwargs", {})
     return (
         kwargs.get("scale_factor") is not None
         and kwarg_positions.get("scale_factor") == layers_to_perturb[0]
@@ -697,8 +698,8 @@ def _check_one_arg_where_index_exempt(layer: Op) -> bool:
         return False
     if layer.dtype not in (torch.int, torch.long, torch.int32, torch.int64):
         return False
-    saved_args = layer.saved_args or ()
-    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    saved_args = layer.call.saved_args or ()
+    saved_kwargs = record_member(layer, "saved_kwargs", None) or {}
     if len(saved_args) == 1 and saved_kwargs == {}:
         return True
     return bool(len(saved_args) == 0 and set(saved_kwargs) == {"condition"})
@@ -719,7 +720,7 @@ def _check_where_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]) 
     perturbed_positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
     if not perturbed_positions:
         return False
-    args = layer.saved_args
+    args = layer.call.saved_args
     if args is None:
         return False
     if len(args) < 3:
@@ -899,7 +900,7 @@ def _check_masked_fill_exempt(self: "Trace", layer: Op, layers_to_perturb: list[
     perturbed_positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
     if not perturbed_positions:
         return False
-    args = layer.saved_args
+    args = layer.call.saved_args
     if args is None or len(args) < 3:
         return False
     input_tensor, mask, value = args[:3]
@@ -984,7 +985,7 @@ def _check_norm_running_stat_exempt(self: "Trace", layer: Op, layers_to_perturb:
     if _check_norm_zero_weight_annihilates(layer, layers_to_perturb):
         return True
 
-    args = layer.saved_args
+    args = layer.call.saved_args
     if args is None or len(args) <= 5 or args[5] is not True:
         return False
     perturbed_positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
@@ -1037,7 +1038,7 @@ def _perturbed_parents_are_zipped_siblings(layer: Op, layers_to_perturb: list[st
     own_index = getattr(layer, "multi_output_index", None)
     if not isinstance(own_index, int):
         return False
-    parent_arg_positions = getattr(layer, "parent_arg_positions", None) or {}
+    parent_arg_positions = record_member(layer, "parent_arg_positions", None) or {}
     args_map = parent_arg_positions.get("args") if isinstance(parent_arg_positions, dict) else None
     if not isinstance(args_map, dict) or not args_map:
         return False
@@ -1144,7 +1145,7 @@ def perturbed_layer_at_structural_position(
     if len(layers_to_perturb) != 1:
         return False
     perturbed_label = layers_to_perturb[0]
-    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    parent_arg_positions = record_member(layer, "parent_arg_positions", {}) or {}
     func_name = getattr(layer, "func_name", None)
     alias_by_position = (
         STRUCTURAL_ARG_KWARG_ALIASES.get(func_name, {}) if isinstance(func_name, str) else {}
@@ -1247,7 +1248,7 @@ def posthoc_perturb_check(
     Returns a structured decision. ``exempt=False`` means replay-level probes
     may still provide diagnostic evidence before validation fails.
     """
-    args = layer_to_validate_parents_for.saved_args or ()
+    args = layer_to_validate_parents_for.call.saved_args or ()
 
     decision = _posthoc_discrete_output_decision(layer_to_validate_parents_for, layers_to_perturb)
     if decision.exempt:
@@ -1333,8 +1334,8 @@ def _bool_comparison_straddle_probe(layer: Op, layers_to_perturb: list[str]) -> 
     func = getattr(layer, "func", None)
     if func is None or layer.func_name not in _ELEMENTWISE_COMPARISON_FUNCS:
         return None
-    args: tuple[Any, ...] = tuple(layer.saved_args or ())
-    kwargs = dict(getattr(layer, "saved_kwargs", None) or {})
+    args: tuple[Any, ...] = tuple(layer.call.saved_args or ())
+    kwargs = dict(record_member(layer, "saved_kwargs", None) or {})
     if kwargs or len(args) != 2:
         return None
     positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
@@ -1456,8 +1457,8 @@ def _bool_predicate_influence_probe(layer: Op, layers_to_perturb: list[str]) -> 
     func = getattr(layer, "func", None)
     if func is None or layer.func_name in _ELEMENTWISE_COMPARISON_FUNCS:
         return None
-    args: tuple[Any, ...] = tuple(layer.saved_args or ())
-    kwargs = dict(getattr(layer, "saved_kwargs", None) or {})
+    args: tuple[Any, ...] = tuple(layer.call.saved_args or ())
+    kwargs = dict(record_member(layer, "saved_kwargs", None) or {})
     if kwargs or not args:
         return None
     positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
@@ -1643,7 +1644,7 @@ def _perturbed_parents_only_occupy_template_slot(
 
     if not layers_to_perturb:
         return False
-    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    parent_arg_positions = record_member(layer, "parent_arg_positions", {}) or {}
     args_map = parent_arg_positions.get("args", {}) or {}
     kwargs_map = parent_arg_positions.get("kwargs", {}) or {}
     for perturbed_label in layers_to_perturb:
@@ -1730,7 +1731,7 @@ def _posthoc_structural_output_decision(
         # fill_value tensor -- whose replay output stays unchanged is a missed
         # or broken dependency and must fall through to the failure path.
         return PosthocPerturbDecision(True, "structural_output_template")
-    if layer.func_name == "bernoulli" and "p" in layer.saved_kwargs:
+    if layer.func_name == "bernoulli" and "p" in layer.call.saved_kwargs:
         return PosthocPerturbDecision(True, "rng_probability_template")
     if (
         layer.func_name in _RNG_FILL_DESTINATION_OPS
@@ -1799,8 +1800,8 @@ def _unique_disabled_auxiliary_output(layer: Op) -> bool:
         layer.func_name in {"unique", "_unique2"}
         and isinstance(output, torch.Tensor)
         and output.numel() == 0
-        and not bool((getattr(layer, "saved_kwargs", {}) or {}).get("return_inverse", False))
-        and not bool((getattr(layer, "saved_kwargs", {}) or {}).get("return_counts", False))
+        and not bool((record_member(layer, "saved_kwargs", {}) or {}).get("return_inverse", False))
+        and not bool((record_member(layer, "saved_kwargs", {}) or {}).get("return_counts", False))
     )
 
 
@@ -2054,7 +2055,7 @@ def _posthoc_value_proof_decision(
             return decision
         dividend, divisor = args[:2]
         if isinstance(dividend, torch.Tensor) and isinstance(divisor, torch.Tensor):
-            arg_positions = layer.parent_arg_positions.get("args", {})
+            arg_positions = layer.call.parent_arg_positions.get("args", {})
             perturbed_label = layers_to_perturb[0]
             if arg_positions.get(1) == perturbed_label and torch.equal(
                 layer.out.to(dividend.device), dividend
@@ -2164,7 +2165,7 @@ def _index_domain_value_irrelevance_decision(
     if not _parent_is_index_domain_arg(layer, layers_to_perturb[0]):
         return not_proved
     func_name = layer.func_name
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     if func_name == "embedding":
         weight = kwargs.get("weight", args[0] if args else None)
         if isinstance(weight, torch.Tensor) and weight.ndim >= 2 and weight.shape[0] > 0:
@@ -2299,7 +2300,7 @@ def _addcmul_zero_annihilator_decision(
 
     if len(layers_to_perturb) != 1:
         return PosthocPerturbDecision(False, "not_addcmul_zero_annihilator")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(1) == perturbed_label:
         other_position = 2
@@ -2310,7 +2311,7 @@ def _addcmul_zero_annihilator_decision(
 
     if not _saved_output_all_finite(layer):
         return PosthocPerturbDecision(False, "not_addcmul_zero_annihilator")
-    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    saved_kwargs = record_member(layer, "saved_kwargs", None) or {}
     value: Any = saved_kwargs.get("value", 1)
     if isinstance(value, (int, float)) and not isinstance(value, bool) and value == 0:
         return PosthocPerturbDecision(
@@ -2355,7 +2356,7 @@ def _multiplicative_zero_annihilator_decision(
 
     if len(layers_to_perturb) != 1:
         return PosthocPerturbDecision(False, "not_multiplicative_zero_annihilator")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(0) == perturbed_label:
         other_position = 1
@@ -2422,7 +2423,7 @@ def _sdpa_zero_query_decision(
 
     if len(layers_to_perturb) != 1:
         return PosthocPerturbDecision(False, "not_sdpa_zero_query")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(1) != perturbed_label:
         return PosthocPerturbDecision(False, "not_sdpa_zero_query")
@@ -2474,14 +2475,14 @@ def _softmax_singleton_dim_decision(
 
     if len(layers_to_perturb) != 1:
         return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(0) != perturbed_label:
         return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
     out = getattr(layer, "out", None)
     if not isinstance(out, torch.Tensor) or out.ndim == 0:
         return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
-    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    saved_kwargs = record_member(layer, "saved_kwargs", None) or {}
     dim = saved_kwargs.get("dim")
     if dim is None and len(args) > 1:
         dim = args[1]
@@ -2547,7 +2548,7 @@ def _layer_norm_singleton_shape_decision(
 
     if len(layers_to_perturb) != 1:
         return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(0) != perturbed_label:
         return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
@@ -2611,7 +2612,7 @@ def _locally_constant_nan_multiplication_decision(
         return PosthocPerturbDecision(False, "not_locally_constant_nan_multiplication")
     if not _is_all_nan_value(getattr(layer, "out", None)):
         return PosthocPerturbDecision(False, "not_locally_constant_nan_multiplication")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(0) == perturbed_label:
         other_position = 1
@@ -2659,7 +2660,7 @@ def _matmul_zero_annihilator_decision(
         return PosthocPerturbDecision(False, "not_matmul_zero_annihilator")
     if not _is_all_zero_value(getattr(layer, "out", None)):
         return PosthocPerturbDecision(False, "not_matmul_zero_annihilator")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(0) == perturbed_label:
         other_position = 1
@@ -2715,7 +2716,7 @@ def _linear_zero_weight_input_decision(
 
     if len(layers_to_perturb) != 1:
         return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(0) == perturbed_label:
         other_position = 1
@@ -2759,7 +2760,7 @@ def _conv_zero_weight_input_decision(
 
     if len(layers_to_perturb) != 1:
         return PosthocPerturbDecision(False, "not_conv_zero_weight_input")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(0) != perturbed_label:
         return PosthocPerturbDecision(False, "not_conv_zero_weight_input")
@@ -2799,7 +2800,7 @@ def _locally_constant_nonfinite_addition_decision(
 
     if len(layers_to_perturb) != 1 or len(args) < 2:
         return PosthocPerturbDecision(False, "not_locally_constant_nonfinite_addition")
-    arg_positions = layer.parent_arg_positions.get("args", {})
+    arg_positions = layer.call.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
     if arg_positions.get(0) == perturbed_label:
         other_position = 1

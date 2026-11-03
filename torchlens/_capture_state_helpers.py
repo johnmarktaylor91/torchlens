@@ -1809,9 +1809,9 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
             value = _raw_cache_payload_field(layer, field_name)
             if isinstance(value, torch.Tensor):
                 layer._internal_set(field_name, value.detach().cpu())
-        layer.grad_fn_handle = None
-        layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
-        layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
+        layer._autograd_grad_fn_handle = None
+        layer._internal_set("saved_args", _detach_nested_for_cache(layer.call.saved_args))
+        layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.call.saved_kwargs))
     for layer_log in trace._layer_logs.values():
         # ``Layer.transformed_out``/``transformed_grad`` are read-only proxies that read
         # through to the underlying ``Layer.ops[i]`` -- the real tensors live on the Op
@@ -1824,7 +1824,7 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
                 value = _raw_cache_payload_field(op, field_name)
                 if isinstance(value, torch.Tensor):
                     op._internal_set(field_name, value.detach().cpu())
-        layer_log.grad_fn_handle = None
+        layer_log._autograd_grad_fn_handle = None
     trace.__dict__.pop("_container_ordinals_by_output_op_label", None)
     trace.__dict__.pop("_container_ordinals_by_input_func_call_id", None)
     if trace.__dict__.get("_predicate_save_options") is not None:

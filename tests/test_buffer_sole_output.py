@@ -232,7 +232,7 @@ def test_buffer_sole_output_traces_with_output_layer() -> None:
         # The output node hangs off a real buffer source node, not thin air.
         assert len(output_layer.parents) == 1
         parent = log[output_layer.parents[0]]
-        assert parent.is_buffer
+        assert parent.graph.is_buffer
         assert parent.address == "buf"
         assert parent.layer_label in {label.rsplit(":", 1)[0] for label in log.buffer_layers} | set(
             log.buffer_layers
@@ -300,13 +300,13 @@ def test_buffer_alongside_computed_outputs_pairs_values_correctly() -> None:
 
         buffer_output = log["output_1"]
         assert torch.equal(buffer_output.out, model.buf)
-        assert buffer_output.io_role == "output.0"
-        assert log[buffer_output.parents[0]].is_buffer
+        assert buffer_output.graph.io_role == "output.0"
+        assert log[buffer_output.parents[0]].graph.is_buffer
 
         computed_output = log["output_2"]
         assert torch.equal(computed_output.out, model.lin(x))
-        assert computed_output.io_role == "output.1"
-        assert not log[computed_output.parents[0]].is_buffer
+        assert computed_output.graph.io_role == "output.1"
+        assert not log[computed_output.parents[0]].graph.is_buffer
 
         assert check_metadata_invariants(log) is True
     finally:
@@ -329,7 +329,7 @@ def test_duplicate_direct_buffer_outputs_share_one_buffer_parent() -> None:
         assert output_1.parents == output_2.parents
 
         buffer_parent = log[output_1.parents[0]]
-        assert buffer_parent.is_buffer
+        assert buffer_parent.graph.is_buffer
         assert buffer_parent.address == "buf"
         assert check_metadata_invariants(log) is True
     finally:
@@ -427,13 +427,13 @@ def test_unlogged_buffer_before_reassigned_buffer_output() -> None:
         static_output = log["output_1"]
         assert torch.equal(static_output.out, model.static_buf)
         static_parent = log[static_output.parents[0]]
-        assert static_parent.is_buffer
+        assert static_parent.graph.is_buffer
         assert static_parent.address == "static_buf"
 
         state_output = log["output_2"]
         assert torch.equal(state_output.out, model.state)
         state_parent = log[state_output.parents[0]]
-        assert state_parent.is_buffer
+        assert state_parent.graph.is_buffer
         assert state_parent.address == "state"
 
         assert check_metadata_invariants(log) is True

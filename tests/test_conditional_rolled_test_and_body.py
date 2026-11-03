@@ -46,18 +46,18 @@ def test_body_roles_only_on_passes_inside_the_body() -> None:
     lt_passes = [op for op in trace.ops if op.func_name == "__lt__"]
     rolled = [op for op in lt_passes if op.num_passes > 1]
     assert rolled, "the test and body comparisons should roll into one layer"
-    in_body = [op for op in rolled if op.conditional_branch_stack]
-    outside = [op for op in rolled if not op.conditional_branch_stack]
+    in_body = [op for op in rolled if op.control_flow.branch_stack]
+    outside = [op for op in rolled if not op.control_flow.branch_stack]
     assert in_body and outside
 
     def has_body_role(op: tl.Op) -> bool:
-        return any(role.role == "body" for role in op.in_conditionals or [])
+        return any(role.role == "body" for role in op.control_flow.in_conditionals or [])
 
     assert all(has_body_role(op) for op in in_body)
     assert not any(has_body_role(op) for op in outside)
     for op in trace.ops:
-        if any(role.role == "body" for role in op.in_conditionals or []):
-            assert op.conditional_branch_stack, op.label
+        if any(role.role == "body" for role in op.control_flow.in_conditionals or []):
+            assert op.control_flow.branch_stack, op.label
 
 
 def test_rolled_test_and_body_validates() -> None:

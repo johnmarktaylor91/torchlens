@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 from torchlens._errors import InvalidArgumentError, KeywordConflictError
 
 from .._debug_report import Report, table_report, trace_subject
+from .._utils._record_group_table import record_member
 from ._common import _op_label, _require_pandas, _tensor_unavailable_reason
 
 #: Column order shared by the rows core and the DataFrame view. The first
@@ -259,9 +260,9 @@ def _collect_norm_rows(
     children_by_label: dict[str, tuple[str, ...]] = {}
     for op in saved_grad_ops:
         label = _op_label(op)
-        module = getattr(op, "atomic_module_address", None)
+        module = record_member(op, "atomic_module_address", None)
         try:
-            grad = op.grad_for(bwd=selected_bwd)
+            grad = op.autograd.grad_for(bwd=selected_bwd)
         except (KeyError, ValueError) as exc:
             rows.append(_unavailable_row(label, module, str(exc)))
             counts["unavailable"] += 1

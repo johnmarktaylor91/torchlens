@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 
@@ -70,14 +71,18 @@ def _injected_rows(state):
     """The forged artifact's injected op rows."""
 
     return [
-        op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is not None
+        op
+        for op in state["_layer_list"]
+        if record_member(op, "injection_provenance", None) is not None
     ]
 
 
 def _model_rows(state):
     """The forged artifact's ordinary model op rows."""
 
-    return [op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is None]
+    return [
+        op for op in state["_layer_list"] if record_member(op, "injection_provenance", None) is None
+    ]
 
 
 def _assert_refuses(tmp_path, tamper, code: str, reason: str | None = None) -> None:
@@ -97,7 +102,7 @@ def test_malformed_grammar_refuses(tmp_path) -> None:
     def tamper(state) -> None:
         """Drop one closed-grammar key."""
 
-        del _injected_rows(state)[0].injection_provenance["output_slot"]
+        del _injected_rows(state)[0].call.injection_provenance["output_slot"]
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_provenance_invalid", "record_schema")
 
@@ -108,7 +113,7 @@ def test_negative_ordinal_refuses(tmp_path) -> None:
     def tamper(state) -> None:
         """Forge an impossible ordinal."""
 
-        _injected_rows(state)[0].injection_provenance["firing_index"] = -3
+        _injected_rows(state)[0].call.injection_provenance["firing_index"] = -3
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_provenance_invalid", "record_ordinals")
 
@@ -120,7 +125,7 @@ def test_host_site_key_must_exist_in_the_artifact(tmp_path) -> None:
         """Point the anchor at a site the artifact does not contain."""
 
         for row in _injected_rows(state):
-            row.injection_provenance["host_site_key"] = "s1|nowhere/relu/0/0"
+            row.call.injection_provenance["host_site_key"] = "s1|nowhere/relu/0/0"
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "host_missing")
 
@@ -132,7 +137,7 @@ def test_duplicate_durable_keys_refuse(tmp_path) -> None:
         """Copy row 0's whole identity onto row 1."""
 
         rows = _injected_rows(state)
-        rows[1].injection_provenance = dict(rows[0].injection_provenance)
+        rows[1]._call_injection_provenance = dict(rows[0].call.injection_provenance)
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_duplicate")
 
@@ -278,8 +283,8 @@ def test_model_op_wearing_the_slot_cannot_hide(tmp_path) -> None:
         model_row = next(
             op for op in _model_rows(state) if (op.parents or ()) and (op.children or ())
         )
-        model_row.injection_provenance = dict(rows[0].injection_provenance)
-        model_row.injection_provenance["local_op_ordinal"] = 99
+        model_row._call_injection_provenance = dict(rows[0].call.injection_provenance)
+        model_row.call.injection_provenance["local_op_ordinal"] = 99
 
     with pytest.raises(Exception) as excinfo:
         _tampered_load(tmp_path, tamper)

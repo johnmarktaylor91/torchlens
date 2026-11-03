@@ -117,7 +117,7 @@ def test_tf_static_captures_loaded_saved_model_structure_values_and_modules(
             for op in trace._layer_list
             if not op.is_input
             and not op.is_output
-            and not op.is_output_parent
+            and not op.graph.is_output_parent
             and op.func_name not in {"Relu"}
         )
     else:

@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._errors import SinkProtocolError
 
 __tl_layer__ = "L8"
@@ -114,7 +115,7 @@ def node_name_for(layer: Any) -> str:
     spelling the TB Graphs dashboard collapses on and the site tokens use.
     """
 
-    stack = getattr(layer, "module_call_stack", None) or ()
+    stack = record_member(layer, "module_call_stack", None) or ()
     parts: list[str] = []
     for entry in stack:
         text = str(entry).replace(":", "_")
@@ -152,11 +153,11 @@ def build_graph_ir(trace: Any, *, include_timing: bool = True) -> GraphIR:
         )
         duration_us: int | None = None
         if include_timing:
-            raw_duration = getattr(layer, "func_duration", None)
+            raw_duration = record_member(layer, "func_duration", None)
             if raw_duration:
                 duration_us = max(1, int(float(raw_duration) * 1_000_000))
                 timed_any = True
-        output_bytes_raw = getattr(layer, "activation_memory", None)
+        output_bytes_raw = record_member(layer, "activation_memory", None)
         nodes.append(
             GraphNodeIR(
                 name=names[label],

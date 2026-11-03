@@ -77,12 +77,12 @@ def test_deepcopy_of_a_buffer_is_its_own_node_and_validates() -> None:
     x = torch.ones(4)
     trace = tl.trace(model, x)
     try:
-        (buffer_op,) = [op for op in trace._layer_list if op.is_buffer]
+        (buffer_op,) = [op for op in trace._layer_list if op.graph.is_buffer]
         (mul_op,) = [op for op in trace._layer_list if op.func_name == "__mul__"]
         assert buffer_op.label not in mul_op.parents, mul_op.parents
         (copy_parent,) = [trace[label] for label in mul_op.parents if label != "input_1"]
         assert copy_parent.func_name == "__deepcopy__"
-        assert [trace[label].is_buffer for label in copy_parent.parents] == [True]
+        assert [trace[label].graph.is_buffer for label in copy_parent.parents] == [True]
         assert trace.provenance.verified is not False, trace.provenance.verification_reason
     finally:
         trace.cleanup()

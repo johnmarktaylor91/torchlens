@@ -21,6 +21,7 @@ from typing import Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from .._validation_argument_references import CONSUMED_DEVICE_ATTR
 
 
@@ -198,8 +199,8 @@ def saved_args_on_consumed_devices(trace: Any, label: str) -> Iterator[None]:
     swapped: list[tuple[Any, Any, Any, Any]] = []
     try:
         for op in _validation_ops_for_entry(entry):
-            _hold_on_consumed_devices(getattr(op, "saved_args", None), swapped)
-            _hold_on_consumed_devices(getattr(op, "saved_kwargs", None), swapped)
+            _hold_on_consumed_devices(record_member(op, "saved_args", None), swapped)
+            _hold_on_consumed_devices(record_member(op, "saved_kwargs", None), swapped)
         yield
     finally:
         for container, key, host_value, moved in reversed(swapped):

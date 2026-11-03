@@ -18,6 +18,7 @@ from .._errors import InvalidArgumentError
 from .._ir.intervention import FireResult
 from .._record_type import record_type
 from .._state import pause_logging
+from .._utils._record_group_table import record_member
 from .._utils.arg_handling import copy_arg_tree
 from ..backends.torch._tl import copy_replacement_meta
 from ._audit import build_fire_record
@@ -1159,7 +1160,7 @@ def _gradient_site_ops(trace: Any, op: Any) -> list[Any]:
     """
 
     ops = [op]
-    if not getattr(op, "is_output_parent", False):
+    if not record_member(op, "is_output_parent", False):
         return ops
     layer_dict = trace._layer_dict_all_keys if is_live_trace(trace) else {}
     for child_label in getattr(op, "children", ()) or ():
@@ -1442,7 +1443,7 @@ class _LiveSiteMinter:
         if not getattr(site, "container_path", ()):
             return None
         raw_index = getattr(site, "raw_index", None)
-        call_id = getattr(site, "func_call_id", None)
+        call_id = record_member(site, "func_call_id", None)
         if not isinstance(raw_index, int) or call_id is None:
             return None
         first = self._first_raw_index_by_call.setdefault(call_id, raw_index)

@@ -347,7 +347,7 @@ def test_aliasing_raw_and_transformed_payloads_are_charged_once() -> None:
         save=tl.func("relu"),
     )
     relu = next(op for op in trace._layer_list if getattr(op, "func_name", None) == "relu")
-    assert relu.out is relu.transformed_out
+    assert relu.out is relu.payload.transformed_out
     assert int(trace._save_budget_accountant.ledgers["cpu"].committed_bytes) == 32
 
 

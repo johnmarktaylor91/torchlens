@@ -18,6 +18,8 @@ from torch import Tensor
 
 from torchlens.errors._base import ConfigurationError, TorchLensWarning
 
+from .._utils._record_group_table import record_member
+
 AttributionValueTree: TypeAlias = Tensor | tuple[Any, ...] | list[Any] | dict[str, Any]
 
 
@@ -241,7 +243,7 @@ def _classify_entries(
     known_labels: set[str] = set()
     for label in trace.layer_labels:
         known_labels.add(label)
-        known_modules.update(trace[label].output_of_modules)
+        known_modules.update(trace[label].module_context.output_of_modules)
 
     module_values: dict[str, float] = {}
     label_values: dict[str, float] = {}
@@ -279,7 +281,7 @@ def _attribution_painter(trace: Any, source: Any, reduce: str) -> Callable[[Any]
         label = getattr(node, "layer_label", None)
         if label in label_values:
             return label_values[label]
-        for address in getattr(node, "output_of_modules", ()) or ():
+        for address in record_member(node, "output_of_modules", ()) or ():
             if address in module_values:
                 return module_values[address]
         return None

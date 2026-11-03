@@ -15,6 +15,7 @@ import torch
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens._utils._record_group_table import record_member
 
 captum_attr = pytest.importorskip("captum.attr")
 torchvision = pytest.importorskip("torchvision")
@@ -26,7 +27,7 @@ def _outermost(layer: Any) -> str | None:
     """Return the outermost module address an op's tensor is the output of."""
 
     addresses = []
-    for call in getattr(layer, "output_of_module_calls", ()) or ():
+    for call in record_member(layer, "output_of_module_calls", ()) or ():
         if isinstance(call, tuple):
             addresses.append(str(call[0]))
         else:

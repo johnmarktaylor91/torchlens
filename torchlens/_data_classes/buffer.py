@@ -258,7 +258,7 @@ class Buffer:
     def activation_memory(self) -> Any:
         """Return final observed buffer activation memory."""
 
-        return None if not self.versions else self.versions[-1].activation_memory
+        return None if not self.versions else self.versions[-1].cost.activation_memory
 
     @property
     def has_saved_activation(self) -> bool:
@@ -276,13 +276,13 @@ class Buffer:
     def grad_shape(self) -> Any:
         """Return final observed gradient shape."""
 
-        return None if not self.versions else self.versions[-1].grad_shape
+        return None if not self.versions else self.versions[-1].autograd.grad_shape
 
     @property
     def grad_dtype(self) -> Any:
         """Return final observed gradient dtype."""
 
-        return None if not self.versions else self.versions[-1].grad_dtype
+        return None if not self.versions else self.versions[-1].autograd.grad_dtype
 
     @property
     def grad_memory(self) -> Any:
@@ -295,8 +295,8 @@ class Buffer:
         """Return the most recent write producer label, if any."""
 
         for version in reversed(self.versions):
-            if version.buffer_source is not None:
-                return cast(str, version.buffer_source)
+            if version.graph.buffer_source is not None:
+                return cast(str, version.graph.buffer_source)
         return None
 
     @property

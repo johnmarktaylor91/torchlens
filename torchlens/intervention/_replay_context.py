@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._replay_values import tensor_content_digest
 
 if TYPE_CHECKING:
@@ -221,7 +222,7 @@ def journal_replay_state(trace: Trace) -> tuple[list[tuple[Any, dict[str, Any]]]
     """
 
     ops = [
-        (op, {name: _journal_copy(getattr(op, name, None)) for name in _JOURNAL_OP_FIELDS})
+        (op, {name: _journal_copy(record_member(op, name, None)) for name in _JOURNAL_OP_FIELDS})
         for op in trace._layer_list
     ]
     fields = {
@@ -240,7 +241,7 @@ def restore_replay_state(
     ops, fields = journal
     for op, values in ops:
         for name, value in values.items():
-            if not _journal_same(getattr(op, name, None), value):
+            if not _journal_same(record_member(op, name, None), value):
                 op._internal_set(name, _journal_copy(value))
     for name, value in fields.items():
         current = getattr(trace, name)
@@ -266,7 +267,7 @@ def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:
 
     groups: dict[int | None, list[Op]] = {}
     for layer in log._layer_list:
-        groups.setdefault(layer.func_call_id, []).append(layer)
+        groups.setdefault(layer.call.call_id, []).append(layer)
     return {call_id: tuple(layers) for call_id, layers in groups.items()}
 
 
@@ -292,11 +293,11 @@ def _group_for_site(
         Same-call members in topological order.
     """
 
-    if site.func_call_id is None:
+    if site.call.call_id is None:
         return (site,)
     return tuple(
         member
-        for member in call_groups.get(site.func_call_id, (site,))
+        for member in call_groups.get(site.call.call_id, (site,))
         if _replay_site_key(member) in cone_keys
     )
 
@@ -323,9 +324,9 @@ def _group_representative(
         representative = next(
             (
                 member
-                for member in call_groups.get(site.func_call_id, ())
+                for member in call_groups.get(site.call.call_id, ())
                 if not getattr(member, "is_output", False)
-                and not getattr(member, "is_buffer", False)
+                and not record_member(member, "is_buffer", False)
             ),
             replay_group[0],
         )

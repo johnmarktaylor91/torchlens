@@ -78,7 +78,7 @@ def test_tinygrad_repeated_block_groups_into_passes() -> None:
     assert {op.num_passes for op in where_ops} == {2}
     assert [op.pass_number for op in where_ops] == [1, 2]
     assert {op.layer_label for op in where_ops} == {where_ops[0].layer_label}
-    assert list(where_ops[0].recurrent_ops) == [op.label for op in where_ops]
+    assert list(where_ops[0].graph.recurrent_ops) == [op.label for op in where_ops]
     assert trace._layer_num_calls[where_ops[0].layer_label] == 2
     assert TinygradBackend().validate_trace(trace) is True
 

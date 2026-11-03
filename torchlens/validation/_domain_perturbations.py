@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
 
@@ -99,9 +101,9 @@ def _bernoulli_has_explicit_probability(layer: Op) -> bool:
         True when an explicit probability argument is present.
     """
 
-    if len(getattr(layer, "saved_args", None) or ()) > 1:
+    if len(record_member(layer, "saved_args", None) or ()) > 1:
         return True
-    return "p" in (getattr(layer, "saved_kwargs", None) or {})
+    return "p" in (record_member(layer, "saved_kwargs", None) or {})
 
 
 def _bernoulli_probability_slot_hit(layer: Op, parent_label: str) -> bool:
@@ -129,7 +131,9 @@ def _bernoulli_probability_slot_hit(layer: Op, parent_label: str) -> bool:
     if layer.func_name == "bernoulli_":
         if not _bernoulli_has_explicit_probability(layer):
             return False
-        kwarg_positions = (getattr(layer, "parent_arg_positions", None) or {}).get("kwargs", {})
+        kwarg_positions = (record_member(layer, "parent_arg_positions", None) or {}).get(
+            "kwargs", {}
+        )
         return _parent_label_occupies_arg_position(layer, parent_label, 1) or (
             kwarg_positions.get("p") == parent_label
         )
@@ -435,8 +439,8 @@ def _clamp_scalar_bounds(layer: Op) -> tuple[float | None, float | None]:
         Lower and upper scalar bounds when available.
     """
 
-    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
-    saved_kwargs = getattr(layer, "saved_kwargs", {}) or {}
+    saved_args = cast(Sequence[Any], record_member(layer, "saved_args", ()) or ())
+    saved_kwargs = record_member(layer, "saved_kwargs", {}) or {}
     lower = saved_kwargs.get("min", saved_kwargs.get("min_val"))
     upper = saved_kwargs.get("max", saved_kwargs.get("max_val"))
     if lower is None and len(saved_args) > 1:
@@ -524,7 +528,7 @@ def _finite_fill_distinct_from(
 def _pow_zero_base_exponent_parent(layer: Op, parent_label: str) -> bool:
     """Return whether ``parent_label`` is only the exponent of a power whose saved base is zero."""
 
-    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    saved_args = cast(Sequence[Any], record_member(layer, "saved_args", ()) or ())
     if len(saved_args) < 2 or _parent_label_occupies_arg_position(layer, parent_label, 0):
         return False
     if not _parent_label_occupies_arg_position(layer, parent_label, 1):
@@ -549,10 +553,10 @@ def _pow_exponent(layer: Op) -> Any:
         Positional or keyword exponent value, if captured.
     """
 
-    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    saved_args = cast(Sequence[Any], record_member(layer, "saved_args", ()) or ())
     if len(saved_args) > 1:
         return saved_args[1]
-    return (getattr(layer, "saved_kwargs", {}) or {}).get("exponent")
+    return (record_member(layer, "saved_kwargs", {}) or {}).get("exponent")
 
 
 def _parent_label_occupies_arg_position(layer: Op, parent_label: str, position: int) -> bool:
@@ -573,6 +577,6 @@ def _parent_label_occupies_arg_position(layer: Op, parent_label: str, position: 
         True when ``parent_label`` is registered at ``args[position]``.
     """
 
-    return (getattr(layer, "parent_arg_positions", None) or {}).get("args", {}).get(
+    return (record_member(layer, "parent_arg_positions", None) or {}).get("args", {}).get(
         position
     ) == parent_label

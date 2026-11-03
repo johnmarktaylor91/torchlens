@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
+from ..._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -241,6 +242,6 @@ def source_coverage(trace: Trace, member: str) -> SourceCoverage:
     encoded = 0
     for record in records_for_member(trace, member):
         total += 1
-        if scalar_or_none(getattr(record, member, None)) is not None:
+        if scalar_or_none(record_member(record, member, None)) is not None:
             encoded += 1
     return SourceCoverage(member=member, encoded=encoded, total=total)

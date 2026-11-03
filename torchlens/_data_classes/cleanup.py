@@ -28,6 +28,7 @@ import torch
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._trace_core.groups import GroupRef
 from .._utils._cuda_probe import _is_cuda_available
+from .._utils._record_group_table import op_attr, record_member, record_storage_attr
 from .._utils.collections import remove_entry_from_list
 from .._utils.display import cleanup_trace_visualizer_dir
 from .._utils.tensor_utils import capture_touched_cuda
@@ -220,7 +221,7 @@ def _clear_entry_attributes(log_entry: Op) -> None:
     if row_store is not None:
         mark_op_row_released(row_store, row)
     for attr, _ in list(state_items(log_entry)):
-        delattr(log_entry, attr)
+        delattr(log_entry, record_storage_attr(log_entry, attr))
     # Rebind the emptied facade to a detached row so a user-held husk cannot
     # pin the trace's shared columnar store (slot-era husks pinned nothing).
     _detach_op_husk(log_entry)
@@ -503,22 +504,22 @@ def _scrub_layer_entry_conditional_fields(
     """
     entry_children: list[str] = []
     entry_seen: set[str] = set()
-    for child_label in layer_entry.conditional_entry_children:
+    for child_label in layer_entry.control_flow.entry_children:
         mapped = _map_removed_label(child_label, labels_to_remove, replacements)
         if mapped is not None and mapped not in entry_seen:
             entry_seen.add(mapped)
             entry_children.append(mapped)
-    layer_entry.conditional_entry_children = entry_children
-    layer_entry.conditional_arm_children = _filter_conditional_arm_children(
-        layer_entry.conditional_arm_children,
+    layer_entry._control_flow_entry_children = entry_children
+    layer_entry._control_flow_arm_children = _filter_conditional_arm_children(
+        layer_entry.control_flow.arm_children,
         labels_to_remove,
         replacements,
     )
     (
-        layer_entry.conditional_then_children,
-        layer_entry.conditional_elif_children,
-        layer_entry.conditional_else_children,
-    ) = _project_conditional_child_views(layer_entry.conditional_arm_children)
+        layer_entry._control_flow_then_children,
+        layer_entry._control_flow_elif_children,
+        layer_entry._control_flow_else_children,
+    ) = _project_conditional_child_views(layer_entry.control_flow.arm_children)
 
 
 def _scrub_layer_log_conditional_fields(
@@ -542,14 +543,14 @@ def _scrub_layer_log_conditional_fields(
         # surface: tuple views in, tuple views out.
         aggregate_entry_children: list[str] = []
         aggregate_seen: set[str] = set()
-        for child_label in layer_log.conditional_entry_children:
+        for child_label in layer_log.control_flow.entry_children:
             mapped = _map_removed_label(child_label, labels_to_remove_no_pass, replacements_no_pass)
             if mapped is not None and mapped not in aggregate_seen:
                 aggregate_seen.add(mapped)
                 aggregate_entry_children.append(mapped)
-        layer_log.conditional_entry_children = tuple(aggregate_entry_children)
-        layer_log.conditional_arm_children = _filter_conditional_arm_children(
-            layer_log.conditional_arm_children,
+        layer_log._control_flow_entry_children = tuple(aggregate_entry_children)
+        layer_log._control_flow_arm_children = _filter_conditional_arm_children(
+            layer_log.control_flow.arm_children,
             labels_to_remove_no_pass,
             replacements_no_pass,
         )
@@ -557,10 +558,10 @@ def _scrub_layer_log_conditional_fields(
             then_children,
             elif_children,
             else_children,
-        ) = _project_aggregate_conditional_child_views(layer_log.conditional_arm_children)
-        layer_log.conditional_then_children = tuple(then_children)
-        layer_log.conditional_elif_children = elif_children
-        layer_log.conditional_else_children = tuple(else_children)
+        ) = _project_aggregate_conditional_child_views(layer_log.control_flow.arm_children)
+        layer_log._control_flow_then_children = tuple(then_children)
+        layer_log._control_flow_elif_children = elif_children
+        layer_log._control_flow_else_children = tuple(else_children)
 
 
 def _scrub_conditional_fields_after_removal(
@@ -689,11 +690,11 @@ def _scrub_intervention_fields_after_removal(
             if edge.parent_label not in labels_to_remove
             and edge.child_label not in labels_to_remove
         ]
-        layer_entry.args_template = _replace_removed_parent_refs(
-            getattr(layer_entry, "args_template", None), labels_to_remove
+        layer_entry._call_args_template = _replace_removed_parent_refs(
+            record_member(layer_entry, "args_template", None), labels_to_remove
         )
-        layer_entry.kwargs_template = _replace_removed_parent_refs(
-            getattr(layer_entry, "kwargs_template", None), labels_to_remove
+        layer_entry._call_kwargs_template = _replace_removed_parent_refs(
+            record_member(layer_entry, "kwargs_template", None), labels_to_remove
         )
         interventions = [
             record
@@ -979,7 +980,7 @@ def _scrub_op_label_collections(op: "Op", labels_to_remove: set[str]) -> None:
                         [label for label in view if label not in labels_to_remove],
                     )
                 continue
-        value = getattr(op, field_name, None)
+        value = getattr(op, op_attr(field_name), None)
         if not value:
             continue
         if isinstance(value, (list, tuple)):
@@ -993,7 +994,11 @@ def _scrub_op_label_collections(op: "Op", labels_to_remove: set[str]) -> None:
             # view back, so removal can never resurrect through the edge
             # table.
             if not labels_to_remove.isdisjoint(value):
-                setattr(op, field_name, [label for label in value if label not in labels_to_remove])
+                setattr(
+                    op,
+                    op_attr(field_name),
+                    [label for label in value if label not in labels_to_remove],
+                )
         elif isinstance(value, (set, frozenset)):
             # Only rebind when a dead label is actually present. ``equivalent_ops``
             # shares ONE set object across every Op of an equivalence class, and
@@ -1001,7 +1006,7 @@ def _scrub_op_label_collections(op: "Op", labels_to_remove: set[str]) -> None:
             # so an unconditional ``value - labels_to_remove`` would hand every Op
             # its own equal-but-distinct copy and undo that sharing for nothing.
             if not value.isdisjoint(labels_to_remove):
-                setattr(op, field_name, value - labels_to_remove)
+                setattr(op, op_attr(field_name), value - labels_to_remove)
 
 
 def _scrub_parent_arg_positions(op: "Op", labels_to_remove: set[str]) -> None:
@@ -1015,7 +1020,7 @@ def _scrub_parent_arg_positions(op: "Op", labels_to_remove: set[str]) -> None:
         Raw labels that no longer have a materialized operation record.
     """
 
-    parent_arg_positions = getattr(op, "parent_arg_positions", None)
+    parent_arg_positions = record_member(op, "parent_arg_positions", None)
     if not parent_arg_positions:
         return
     for arg_type in ("args", "kwargs"):
@@ -1057,9 +1062,9 @@ def _scrub_conditional_child_maps(op: "Op", labels_to_remove: set[str]) -> None:
         Raw labels that no longer have a materialized operation record.
     """
 
-    conditional_arm_children = getattr(op, "conditional_arm_children", None)
+    conditional_arm_children = record_member(op, "conditional_arm_children", None)
     if conditional_arm_children:
-        op.conditional_arm_children = {
+        op._control_flow_arm_children = {
             cond_id: {
                 branch_kind: [label for label in child_labels if label not in labels_to_remove]
                 for branch_kind, child_labels in branch_children.items()
@@ -1067,15 +1072,15 @@ def _scrub_conditional_child_maps(op: "Op", labels_to_remove: set[str]) -> None:
             for cond_id, branch_children in conditional_arm_children.items()
         }
         (
-            op.conditional_then_children,
-            op.conditional_elif_children,
-            op.conditional_else_children,
-        ) = _project_conditional_child_views(op.conditional_arm_children)
+            op._control_flow_then_children,
+            op._control_flow_elif_children,
+            op._control_flow_else_children,
+        ) = _project_conditional_child_views(op.control_flow.arm_children)
         return
 
-    conditional_elif_children = getattr(op, "conditional_elif_children", None)
+    conditional_elif_children = record_member(op, "conditional_elif_children", None)
     if conditional_elif_children:
-        op.conditional_elif_children = {
+        op._control_flow_elif_children = {
             elif_ix: [label for label in child_labels if label not in labels_to_remove]
             for elif_ix, child_labels in conditional_elif_children.items()
         }

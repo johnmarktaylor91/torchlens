@@ -104,7 +104,7 @@ def test_validate_backward_scope_detects_corrupted_captured_grad(
             grad = getattr(op, "grad", None)
             if not isinstance(grad, torch.Tensor) or not getattr(op, "modules", None):
                 continue
-            op.grads.for_pass(1).grad = torch.full_like(grad, 12345.0)
+            op.autograd.grads.for_pass(1).grad = torch.full_like(grad, 12345.0)
             break
         return result
 

@@ -59,9 +59,9 @@ def _raw_recurrent_member_sets(trace: Any) -> set[frozenset[str]]:
     """
     member_sets: set[frozenset[str]] = set()
     for op in trace._layer_list:
-        if len(op.recurrent_ops) <= 1:
+        if len(op.graph.recurrent_ops) <= 1:
             continue
-        raw_members = frozenset(_raw_label(trace, label) for label in op.recurrent_ops)
+        raw_members = frozenset(_raw_label(trace, label) for label in op.graph.recurrent_ops)
         member_sets.add(raw_members)
     return member_sets
 
@@ -93,10 +93,10 @@ def _neutral_graph_from_torch_recurrent_fixture(trace: Any) -> RecurrenceGroupin
         nodes[raw_label] = RecurrenceNode(
             label=raw_label,
             raw_order=op.raw_index,
-            equivalence_key=op.equivalence_class,
+            equivalence_key=op.graph.equivalence_class,
             equivalent_labels=tuple(
                 op_label_to_raw[equiv_label]
-                for equiv_label in op.equivalent_ops
+                for equiv_label in op.graph.equivalent_ops
                 if equiv_label in op_label_to_raw
             ),
             data_parents=tuple(

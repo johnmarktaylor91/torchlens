@@ -138,7 +138,7 @@ class Cell:
 
         leaves = [_detached(leaf) for leaf in flatten_leaves(trace.reconstruct_output())]
         if self.changes("payloads") and any(leaf is None for leaf in leaves):
-            leaves = [_detached(op.materialize_out()) for op in trace.output_ops]
+            leaves = [_detached(op.payload.materialize_out()) for op in trace.output_ops]
         return leaves
 
     def expect_same_leaves(self, want: Sequence[Any], got: Sequence[Any], what: str) -> None:

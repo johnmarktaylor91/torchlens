@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -67,4 +69,4 @@ def _consumed_unattributed_data_operand(layer: Op) -> bool:
         metadata-slot exclusion is gone.
     """
 
-    return bool(tuple(getattr(layer, "unattributed_tensor_args", ()) or ()))
+    return bool(tuple(record_member(layer, "unattributed_tensor_args", ()) or ()))

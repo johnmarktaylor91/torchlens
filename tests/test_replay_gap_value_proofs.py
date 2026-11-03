@@ -46,7 +46,7 @@ def _op(trace: Any, *func_names: str) -> Any:
 
 
 def _edge(trace: Any, op: Any, slot: Any) -> Any:
-    parent = op.parent_arg_positions["args"][slot]
+    parent = op.call.parent_arg_positions["args"][slot]
     return _check_whether_func_on_saved_parents_yields_saved_tensor(
         trace, op.label, perturb=True, layers_to_perturb=[parent]
     )
@@ -376,7 +376,7 @@ def test_dead_conv_weight_edge_on_a_near_zero_input_still_fails() -> None:
     torch.manual_seed(0)
     trace = _capture(_ZeroInputConv(fill=TINY), torch.randn(1, 2, 8))
     op = _op(trace, "conv1d")
-    assert torch.equal(op.out, op.saved_args[2].view(1, -1, 1).expand_as(op.out))
+    assert torch.equal(op.out, op.call.saved_args[2].view(1, -1, 1).expand_as(op.out))
     _assert_dead_edge_fails(trace, op, 1)
 
 

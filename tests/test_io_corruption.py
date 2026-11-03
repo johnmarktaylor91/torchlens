@@ -163,7 +163,7 @@ def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> Non
         ArtifactError,
         match=rf"Failed to materialize blob at {re.escape(str(blob_path))}\.",
     ):
-        layer.materialize_out()
+        layer.payload.materialize_out()
 
 
 def test_missing_blob_file_raises_with_blob_id(tmp_path: Path) -> None:

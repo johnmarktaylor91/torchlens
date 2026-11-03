@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .._data_classes._nonfinite import coverage_gap_note, first_nonfinite_layer
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
+from .._utils._record_group_table import record_member
 from ._notebook.cards import BRIDGE_SENTINEL_HTML, trace_repr_html
 from ._summary_config import resolve_config
 from ._summary_report import SummaryReport
@@ -32,7 +33,7 @@ def first_nonfinite(trace: Trace, link_format: Literal["terminal", "html", "text
     # answer below names how many ops could not be examined.
     layer = first_nonfinite_layer(trace, kind="saved")
     if layer is not None:
-        stack = getattr(layer, "code_context", None) or []
+        stack = record_member(layer, "code_context", None) or []
         location = "source unavailable"
         if stack:
             frame = stack[0]

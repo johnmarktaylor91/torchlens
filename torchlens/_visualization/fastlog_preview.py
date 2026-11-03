@@ -11,6 +11,7 @@ from .._capture.predicates import _normalize_capture_decision
 from .._capture.projections import _build_record_context
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from ..recording._exceptions import RecordContextFieldError
 from ..recording._types import CaptureDecision, CaptureSpec, ModuleStackFrame, RecordContext
 from .node_spec import NodeSpec
@@ -79,7 +80,7 @@ def _kind_from_layer(op_log: Any) -> str:
 
     if bool(getattr(op_log, "is_input", False)):
         return "input"
-    if bool(getattr(op_log, "is_buffer", False)):
+    if bool(record_member(op_log, "is_buffer", False)):
         return "buffer"
     return "op"
 
@@ -117,7 +118,7 @@ def _context_from_layer(
             "dtype": getattr(op_log, "dtype", None),
             "output_index": getattr(op_log, "multi_output_index", None),
             "is_bottom_level_func": getattr(op_log, "is_bottom_level_func", None),
-            "input_output_address": getattr(op_log, "io_role", None),
+            "input_output_address": record_member(op_log, "io_role", None),
             "address": module_frame.address if module_frame else None,
             "module_type": module_frame.module_type if module_frame else None,
             "module_pass_number": module_frame.pass_number if module_frame else None,
@@ -155,7 +156,7 @@ def _evaluate_preview_node(
 ) -> PreviewNode:
     """Evaluate one preview predicate and capture display metadata."""
 
-    if not bool(getattr(op_log, "has_input_ancestor", True)):
+    if not bool(record_member(op_log, "has_input_ancestor", True)):
         return PreviewNode(ctx=ctx, decision=Decision.UNREACHABLE)
     if predicate is None:
         return PreviewNode(ctx=ctx, decision=Decision.REJECTED)
@@ -221,8 +222,8 @@ def _append_module_event_lines(lines: list[str], layer_log: Any) -> None:
     # B3R7-R05-1: ``module_call_stack`` is the op's containment stack (the
     # calls it ran inside), not the entered-module stack the old enter-lane
     # semantics implied -- label the line accordingly.
-    active = tuple(getattr(layer_log, "module_call_stack", ()) or ())
-    exited = tuple(getattr(layer_log, "output_of_modules", ()) or ())
+    active = tuple(record_member(layer_log, "module_call_stack", ()) or ())
+    exited = tuple(record_member(layer_log, "output_of_modules", ()) or ())
     if active:
         lines.append("module_stack: " + ", ".join(str(item) for item in active))
     if exited:

@@ -27,6 +27,7 @@ from torchlens._io.state_keys import (
     static_class_attr,
 )
 from torchlens._trace_selector_helpers import _predicate_cache_key
+from torchlens._utils._record_group_table import record_member
 from torchlens._utils.display import cleanup_trace_visualizer_dir, ensure_trace_visualizer_dir
 from torchlens._visualization import auto_collapse
 from torchlens._visualization.auto_collapse import analyze_collapse
@@ -573,7 +574,7 @@ def test_barcode_remap_scrubs_every_registered_barcode(tmp_path: Path) -> None:
 
     leaked: list[str] = []
     for op in loaded.ops:
-        equivalence = getattr(op, "equivalence_class", None)
+        equivalence = record_member(op, "equivalence_class", None)
         if isinstance(equivalence, str):
             leaked.extend(b for b in raw_barcodes if b in equivalence)
     for key in getattr(loaded, "_graph_op_equivalence_classes", {}) or {}:
@@ -581,9 +582,9 @@ def test_barcode_remap_scrubs_every_registered_barcode(tmp_path: Path) -> None:
             leaked.extend(b for b in raw_barcodes if b in key)
     assert not leaked, f"raw capture barcodes leaked into persisted identity keys: {leaked!r}"
     remapped = [
-        getattr(op, "equivalence_class", "")
+        record_member(op, "equivalence_class", "")
         for op in loaded.ops
-        if isinstance(getattr(op, "equivalence_class", None), str)
-        and "param_" in getattr(op, "equivalence_class", "")
+        if isinstance(record_member(op, "equivalence_class", None), str)
+        and "param_" in record_member(op, "equivalence_class", "")
     ]
     assert remapped, "expected canonical param_NNNNNN identities on param ops"

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
 
+from .._utils._record_group_table import record_member
 from ._capture_override import _with_capture_fields
 from ._common import _ordered_ops, _source_line
 
@@ -261,7 +262,7 @@ def _module_address(op: Op) -> str | None:
         Atomic module address or the innermost containing module address.
     """
 
-    atomic_address = getattr(op, "atomic_module_address", None)
+    atomic_address = record_member(op, "atomic_module_address", None)
     if isinstance(atomic_address, str):
         return atomic_address
     # Live (mid-capture) ops have no atomic_module_address yet; the fallback

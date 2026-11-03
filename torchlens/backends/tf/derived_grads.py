@@ -27,6 +27,7 @@ from ..._data_classes.derived_grad import (
 )
 from ..._data_classes.trace import Trace
 from ..._ir.refs import DtypeRef
+from ..._utils._record_group_table import record_member
 from .._finalize import mirror_param_derived_grads, stable_callable_name as _callable_identity
 from .._validation_shared import float_replay_tolerances
 from ..registry import BackendUnsupportedError
@@ -464,7 +465,7 @@ def _tf_trace_intermediate_signatures(
         if not _is_float_dtype_text(str(getattr(op, "dtype", ""))):
             continue
         signature = TFIntermediateSignature(
-            func_call_id=int(getattr(op, "func_call_id", 0)),
+            func_call_id=int(record_member(op, "func_call_id", 0)),
             op_name=str(getattr(op, "func_name", "")),
             parent_labels=tuple(
                 dict.fromkeys(

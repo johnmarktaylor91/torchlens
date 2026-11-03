@@ -602,7 +602,7 @@ def test_midgraph_escape_is_rescued_full_signature(corpus_env: _CorpusEnv) -> No
     assert _op_names(trace) == ["none", "sigmoid", "cos", "relu", "none"]
     relu_op = [op for op in trace.ops if op.func_name == "relu"][0]
     assert relu_op.parents != ()
-    assert not relu_op.is_internal_source
+    assert not relu_op.graph.is_internal_source
     _assert_rescued(trace, "cos")
     assert trace._rescue_rerun["trigger"] == "unattributed_tensor_args"
     assert trace._rescue_rerun["residual_signal"] is None

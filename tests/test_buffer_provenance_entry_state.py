@@ -183,12 +183,12 @@ def test_nan_reached_by_a_rewritten_buffer_keeps_its_identity_edge() -> None:
         _fill_buffers(_Reassign(), float("nan")), torch.rand(4), capture=_SAVE_ALL, save="all"
     )
     try:
-        versions = [op for op in trace._layer_list if op.is_buffer and op.buffer_source]
+        versions = [op for op in trace._layer_list if op.graph.is_buffer and op.graph.buffer_source]
         assert versions, "the reassignment must log a buffer version node"
         for op in versions:
             assert torch.isnan(op.out).all()
             assert op.func_name == "identity"
-            assert list(op.parents) == [op.buffer_source]
+            assert list(op.parents) == [op.graph.buffer_source]
     finally:
         trace.cleanup()
 
@@ -200,7 +200,7 @@ def test_equal_valued_storage_swap_keeps_its_own_version_node() -> None:
         _fill_buffers(_DataSwapToZeros(), 0.0), torch.rand(4), capture=_SAVE_ALL, save="all"
     )
     try:
-        buffer_ops = [op for op in trace._layer_list if op.is_buffer]
+        buffer_ops = [op for op in trace._layer_list if op.graph.is_buffer]
         kinds = [op.buffer_write_kind for op in buffer_ops]
         assert kinds == [None, "data_reassign"]
     finally:

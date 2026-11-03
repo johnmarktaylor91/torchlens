@@ -372,10 +372,10 @@ def test_tinygrad_object_module_corruption_invariant_fails() -> None:
     victim = next(layer for layer in trace._layer_list if layer.module and not layer.is_input)
     victim.module = None
     victim.modules = []
-    victim.module_call_stack = []
-    victim.output_of_modules = []
-    victim.output_of_module_calls = []
-    victim.atomic_module_call = None
+    victim._module_context_call_stack = []
+    victim._module_context_output_of_modules = []
+    victim._module_context_output_of_module_calls = []
+    victim._module_context_atomic_module_call = None
 
     with pytest.raises(MetadataInvariantError, match="module_attribution"):
         check_metadata_invariants(trace)

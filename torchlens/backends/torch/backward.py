@@ -53,6 +53,7 @@ from ..._ir.events import (
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
 from ..._utils._package_frames import is_torchlens_code
+from ..._utils._record_group_table import record_member
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
     get_current_autograd_node_fn,
@@ -895,10 +896,10 @@ def _op_module_address(
     module_address = getattr(op, "module_address", None)
     if module_address is not None:
         return cast(str, module_address)
-    atomic_module_address = getattr(op, "atomic_module_address", None)
+    atomic_module_address = record_member(op, "atomic_module_address", None)
     if atomic_module_address is not None:
         return cast(str, atomic_module_address)
-    output_module_calls = list(getattr(op, "output_of_module_calls", []) or [])
+    output_module_calls = list(record_member(op, "output_of_module_calls", []) or [])
     if output_module_calls:
         return str(output_module_calls[-1]).rsplit(":", 1)[0]
     module_calls = list(getattr(op, "modules", []) or [])
@@ -1080,7 +1081,10 @@ def _prefer_direct_pairing_source_for_paired_ops(trace: Any) -> None:
         op = grad_fn_record.op
         if (
             op is not None
-            and (getattr(op, "is_compute_op", False) or getattr(op, "is_compute_layer", False))
+            and (
+                record_member(op, "is_compute_op", False)
+                or record_member(op, "is_compute_layer", False)
+            )
             and grad_fn_record.module_membership_source == "inferred"
         ):
             grad_fn_record.module_membership_source = "paired"
@@ -1497,18 +1501,18 @@ def _materialize_backward_projections_impl(
 
     for grad_fn_record in trace._grad_fn_logs.values():
         if grad_fn_record.op is not None:
-            grad_fn_record.op.grad_fn = grad_fn_record
+            grad_fn_record.op._autograd_grad_fn = grad_fn_record
             parent_layer = trace._layer_logs.get(grad_fn_record.op.layer_label)
             if parent_layer is not None:
-                parent_layer.grad_fn = grad_fn_record
+                parent_layer._autograd_grad_fn = grad_fn_record
     for layer in trace._layer_list:
         grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
         if grad_fn_object_id in trace._grad_fn_logs:
-            layer.grad_fn = trace._grad_fn_logs[grad_fn_object_id]
+            layer._autograd_grad_fn = trace._grad_fn_logs[grad_fn_object_id]
     for layer in trace._layer_logs.values():
         grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
         if grad_fn_object_id in trace._grad_fn_logs:
-            layer.grad_fn = trace._grad_fn_logs[grad_fn_object_id]
+            layer._autograd_grad_fn = trace._grad_fn_logs[grad_fn_object_id]
 
     trace._backward_projection_fold_state = state
 
@@ -1622,14 +1626,14 @@ def _fold_op_grad_events(
             continue
         op.has_grad = True
         if event.shape is not None:
-            op.grad_shape = tuple(event.shape)
+            op._autograd_grad_shape = tuple(event.shape)
         if event.dtype is not None:
-            op.grad_dtype = _torch_dtype_from_string(event.dtype)
+            op._autograd_grad_dtype = _torch_dtype_from_string(event.dtype)
         op.gradient_memory = Bytes(event.memory or 0)
         op._internal_set("grad", payload)
         op._internal_set("transformed_grad", transformed_payload)
-        op.transformed_grad_shape = _shape_or_none(transformed_payload)
-        op.transformed_grad_dtype = _dtype_or_none(transformed_payload)
+        op._payload_transformed_grad_shape = _shape_or_none(transformed_payload)
+        op._payload_transformed_grad_dtype = _dtype_or_none(transformed_payload)
         op.transformed_gradient_memory = _memory_or_none(transformed_payload)
         state.saved_grad_labels.add(op.layer_label)
         for payload_key, payload_memory in _retained_grad_payload_refs(
@@ -2384,7 +2388,7 @@ def _layer_grad_fn_pairing_rank(layer: Any) -> int:
         Lower rank is preferred; compute ops outrank boundary sentinels.
     """
 
-    is_compute = getattr(layer, "is_compute_op", False) or getattr(
+    is_compute = record_member(layer, "is_compute_op", False) or record_member(
         layer,
         "is_compute_layer",
         False,
@@ -2565,10 +2569,10 @@ def _walk_and_hook_backward_graph(
         _flag_reentrant_checkpoint_if_sentinel(trace, grad_fn_record.class_qualname)
         if layer_label is not None:
             layer = trace._layer_dict_all_keys[layer_label]
-            layer.grad_fn = grad_fn_record
+            layer._autograd_grad_fn = grad_fn_record
             parent_layer = trace._layer_logs.get(layer.layer_label)
             if parent_layer is not None:
-                parent_layer.grad_fn = grad_fn_record
+                parent_layer._autograd_grad_fn = grad_fn_record
         try:
             aten_marker_tokens: list[Any] = []
             fire_start_stamps = _fire_timing_stamp_list(trace, grad_fn_object_id)
@@ -2924,9 +2928,9 @@ def _clear_forward_grad_fn_refs(trace: Any) -> None:
         released.
     """
     for layer in trace._layer_list:
-        layer.grad_fn_handle = None
+        layer._autograd_grad_fn_handle = None
     for layer_log in trace._layer_logs.values():
-        layer_log.grad_fn_handle = None
+        layer_log._autograd_grad_fn_handle = None
 
 
 def _warn_zero_match_backward_interventions(trace: Any) -> None:

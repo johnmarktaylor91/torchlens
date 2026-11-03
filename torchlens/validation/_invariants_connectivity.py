@@ -56,56 +56,62 @@ def _check_distance_invariants(ml: Trace) -> None:
         label = lpl.layer_label
 
         # min <= max for input distances
-        if lpl.min_distance_from_input is not None and lpl.max_distance_from_input is not None:
-            if lpl.min_distance_from_input > lpl.max_distance_from_input:
+        if (
+            lpl.graph.min_distance_from_input is not None
+            and lpl.graph.max_distance_from_input is not None
+        ):
+            if lpl.graph.min_distance_from_input > lpl.graph.max_distance_from_input:
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{label}': min_distance_from_input="
-                    f"{lpl.min_distance_from_input} > max={lpl.max_distance_from_input}",
+                    f"{lpl.graph.min_distance_from_input} > max={lpl.graph.max_distance_from_input}",
                 )
 
         # min <= max for output distances
-        if lpl.min_distance_to_output is not None and lpl.max_distance_to_output is not None:
-            if lpl.min_distance_to_output > lpl.max_distance_to_output:
+        if (
+            lpl.graph.min_distance_to_output is not None
+            and lpl.graph.max_distance_to_output is not None
+        ):
+            if lpl.graph.min_distance_to_output > lpl.graph.max_distance_to_output:
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{label}': min_distance_to_output="
-                    f"{lpl.min_distance_to_output} > max={lpl.max_distance_to_output}",
+                    f"{lpl.graph.min_distance_to_output} > max={lpl.graph.max_distance_to_output}",
                 )
 
         # Input layers: distance from input == 0
         if label in input_set:
-            if lpl.min_distance_from_input != 0 or lpl.max_distance_from_input != 0:
+            if lpl.graph.min_distance_from_input != 0 or lpl.graph.max_distance_from_input != 0:
                 raise MetadataInvariantError(
                     name,
                     f"Input layer '{label}': distance_from_input should be 0, got "
-                    f"min={lpl.min_distance_from_input}, max={lpl.max_distance_from_input}",
+                    f"min={lpl.graph.min_distance_from_input}, max={lpl.graph.max_distance_from_input}",
                 )
 
         # Output layers: distance from output == 0
         if label in output_set:
-            if lpl.min_distance_to_output != 0 or lpl.max_distance_to_output != 0:
+            if lpl.graph.min_distance_to_output != 0 or lpl.graph.max_distance_to_output != 0:
                 raise MetadataInvariantError(
                     name,
                     f"Output layer '{label}': distance_from_output should be 0, got "
-                    f"min={lpl.min_distance_to_output}, max={lpl.max_distance_to_output}",
+                    f"min={lpl.graph.min_distance_to_output}, max={lpl.graph.max_distance_to_output}",
                 )
 
         # has_input_ancestor ↔ input_ancestors non-empty
         has_ancestors = len(lpl.input_ancestors) > 0
-        if lpl.has_input_ancestor != has_ancestors:
+        if lpl.graph.has_input_ancestor != has_ancestors:
             raise MetadataInvariantError(
                 name,
-                f"Layer '{label}': has_input_ancestor={lpl.has_input_ancestor} but "
+                f"Layer '{label}': has_input_ancestor={lpl.graph.has_input_ancestor} but "
                 f"len(input_ancestors)={len(lpl.input_ancestors)}",
             )
 
         # has_output_descendant ↔ output_descendants non-empty
         has_descendents = len(lpl.output_descendants) > 0
-        if lpl.has_output_descendant != has_descendents:
+        if lpl.graph.has_output_descendant != has_descendents:
             raise MetadataInvariantError(
                 name,
-                f"Layer '{label}': has_output_descendant={lpl.has_output_descendant} but "
+                f"Layer '{label}': has_output_descendant={lpl.graph.has_output_descendant} but "
                 f"len(output_descendants)={len(lpl.output_descendants)}",
             )
 
@@ -231,7 +237,7 @@ def _check_ancestry_closure(ml: Trace) -> None:
         )
         internal_source_ancestors[key(lpl)] = (
             own
-            if lpl.is_internal_source
+            if lpl.graph.is_internal_source
             else set().union(
                 *(internal_source_ancestors.get(key(parent), set()) for parent in parents), set()
             )
@@ -298,19 +304,19 @@ def _check_one_ancestry_record(
             f"Layer '{label}': output_descendants={sorted(lpl.output_descendants)} != the "
             f"closure of the recorded child edges {sorted(expected_output)}",
         )
-    if normalize(lpl.internal_source_ancestors) != expected_internal:
+    if normalize(lpl.graph.internal_source_ancestors) != expected_internal:
         raise MetadataInvariantError(
             name,
             f"Layer '{label}': internal_source_ancestors="
-            f"{sorted(lpl.internal_source_ancestors)} != the closure of the recorded "
+            f"{sorted(lpl.graph.internal_source_ancestors)} != the closure of the recorded "
             f"parent edges {sorted(expected_internal)}",
         )
-    if not lpl.is_internal_source:
+    if not lpl.graph.is_internal_source:
         expected_root = expected_input | expected_internal
-        if normalize(lpl.root_ancestors) != expected_root:
+        if normalize(lpl.graph.root_ancestors) != expected_root:
             raise MetadataInvariantError(
                 name,
-                f"Layer '{label}': root_ancestors={sorted(lpl.root_ancestors)} != "
+                f"Layer '{label}': root_ancestors={sorted(lpl.graph.root_ancestors)} != "
                 f"input_ancestors | internal_source_ancestors {sorted(expected_root)}",
             )
 
@@ -321,7 +327,7 @@ def _check_one_ancestry_record(
         record.layer_label for record in map(resolve, lpl.parents) if record is not None
     }
     parent_names |= set(lpl.parents)
-    stored_internal_parents = tuple(lpl.internal_source_parents)
+    stored_internal_parents = tuple(lpl.graph.internal_source_parents)
     not_a_parent = [item for item in stored_internal_parents if item not in parent_names]
     if not_a_parent:
         raise MetadataInvariantError(
@@ -331,17 +337,17 @@ def _check_one_ancestry_record(
         )
     for item in stored_internal_parents:
         record = resolve(item)
-        if record is not None and not record.has_internal_source_ancestor:
+        if record is not None and not record.graph.has_internal_source_ancestor:
             raise MetadataInvariantError(
                 name,
                 f"Layer '{label}': internal_source_parents names {item!r}, which carries "
                 f"no internal-source ancestry",
             )
-    if not lpl.is_internal_source:
+    if not lpl.graph.is_internal_source:
         expected_names = {
             record.layer_label
             for record in map(resolve, lpl.parents)
-            if record is not None and record.has_internal_source_ancestor
+            if record is not None and record.graph.has_internal_source_ancestor
         }
         stored_names = {
             record.layer_label
@@ -359,12 +365,12 @@ def _check_one_ancestry_record(
     for flag_name, stored_set in (
         ("has_input_ancestor", lpl.input_ancestors),
         ("has_output_descendant", lpl.output_descendants),
-        ("has_internal_source_ancestor", lpl.internal_source_ancestors),
+        ("has_internal_source_ancestor", lpl.graph.internal_source_ancestors),
     ):
-        if bool(getattr(lpl, flag_name)) != bool(stored_set):
+        if bool(record_member(lpl, flag_name)) != bool(stored_set):
             raise MetadataInvariantError(
                 name,
-                f"Layer '{label}': {flag_name}={getattr(lpl, flag_name)} but its set has "
+                f"Layer '{label}': {flag_name}={record_member(lpl, flag_name)} but its set has "
                 f"{len(stored_set)} members",
             )
     extra_ancestors = normalize(lpl.input_ancestors) - normalize(input_set)
@@ -396,8 +402,8 @@ def _check_distance_closure(name: str, entries: list[Any], resolve: Any, key: An
         ("output", "children", "is_output", "min_distance_to_output", "max_distance_to_output"),
     ):
         for lpl in entries:
-            stored_min = getattr(lpl, min_field)
-            stored_max = getattr(lpl, max_field)
+            stored_min = record_member(lpl, min_field)
+            stored_max = record_member(lpl, max_field)
             if stored_min is None or stored_max is None:
                 continue
             if getattr(lpl, boundary_flag):
@@ -412,8 +418,8 @@ def _check_distance_closure(name: str, entries: list[Any], resolve: Any, key: An
                 record
                 for record in map(resolve, getattr(lpl, edge_field))
                 if record is not None
-                and getattr(record, min_field) is not None
-                and getattr(record, max_field) is not None
+                and record_member(record, min_field) is not None
+                and record_member(record, max_field) is not None
             ]
             if not neighbours:
                 # The flood seeds ONLY at boundary nodes and propagates along
@@ -427,8 +433,8 @@ def _check_distance_closure(name: str, entries: list[Any], resolve: Any, key: An
                     f"{stored_max}) but no recorded {edge_field} carries populated "
                     f"distances -- the flood cannot have reached this record",
                 )
-            expected_min = min(getattr(record, min_field) for record in neighbours) + 1
-            expected_max = max(getattr(record, max_field) for record in neighbours) + 1
+            expected_min = min(record_member(record, min_field) for record in neighbours) + 1
+            expected_max = max(record_member(record, max_field) for record in neighbours) + 1
             if stored_min != expected_min or stored_max != expected_max:
                 raise MetadataInvariantError(
                     name,
@@ -462,7 +468,7 @@ def _check_graph_connectivity(ml: Trace) -> None:
         if (
             label not in input_set
             and label not in buffer_set
-            and not lpl.is_internal_source
+            and not lpl.graph.is_internal_source
             and not lpl.is_output
             and len(lpl.parents) == 0
         ):
@@ -488,7 +494,7 @@ def _check_graph_connectivity(ml: Trace) -> None:
         # place. Non-data (size/shape/metadata) positions are excluded via the
         # same ATen-schema classifier the capture witness uses.
         if (
-            lpl.is_internal_source
+            lpl.graph.is_internal_source
             and len(lpl.parents) == 0
             and callable(getattr(lpl, "func", None))
             and label not in input_set
@@ -508,7 +514,7 @@ def _check_graph_connectivity(ml: Trace) -> None:
                 f"Layer '{label}' is marked is_internal_source but consumed "
                 f"unattributed tensor data "
                 f"(unattributed_tensor_args="
-                f"{tuple(getattr(lpl, 'unattributed_tensor_args', ()) or ())}); "
+                f"{tuple(record_member(lpl, 'unattributed_tensor_args', ()) or ())}); "
                 f"a tensor consumer with no recorded parents is a dangling "
                 f"computational node (silent capture drop), not a graph source",
             )
@@ -836,6 +842,7 @@ def _metadata_invariant_applies(
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists. The contracts tuple is read
 # through the hub module at call time: it is built after the hub imports this module.
+from .._utils._record_group_table import record_member  # noqa: E402
 from . import _invariants as _invariants_hub  # noqa: E402
 from ._invariants import (  # noqa: E402
     MetadataInvariantContract,

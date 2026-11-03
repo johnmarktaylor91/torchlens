@@ -10,6 +10,8 @@ census seam (R43 file-size ratchet); the logic is unchanged.
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -150,7 +152,9 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
         and isinstance(entry.get("owner_func_call_id"), int)
     }
     captured_fcids: set[int] = {
-        op.func_call_id for op in layer_list if isinstance(getattr(op, "func_call_id", None), int)
+        op.call.call_id
+        for op in layer_list
+        if isinstance(record_member(op, "func_call_id", None), int)
     }
 
     # Captured census: captured ops that own an accounted aten dispatch. A captured

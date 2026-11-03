@@ -26,6 +26,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._postprocess as pp
 from torchlens._postprocess import ast_branches
+from torchlens._utils._record_group_table import record_member
 from torchlens.errors import TraceCaptureError
 
 # Markers are per-test, not module-level: every case here is smoke-fast EXCEPT the
@@ -153,5 +154,5 @@ def test_released_hot_tier_still_answers_lazy_source_queries() -> None:
     )
     assert _hot_tier_files() == []
     # Exercise the lazy re-parse path on every op that has one.
-    expressions = [getattr(op, "arg_expressions", None) for op in trace.ops]
+    expressions = [record_member(op, "arg_expressions", None) for op in trace.ops]
     assert any(value for value in expressions)

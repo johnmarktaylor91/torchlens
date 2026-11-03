@@ -18,8 +18,7 @@ from pathlib import Path
 # `Tuple` are deliberately re-exported through this module's __all__ for the
 # sibling renderers that do `from ._render_common import *`, which still
 # annotate with them. Modernizing the alias here means modernizing every
-# star-import consumer first. (Reworded so this prose line no longer LEXES as
-# a blanket noqa directive — SF-24.)
+# star-import consumer first. (Worded so no prose line lexes as a noqa directive, SF-24.)
 from typing import (  # noqa: UP035
     TYPE_CHECKING,
     Any,
@@ -64,6 +63,7 @@ from .._literals import (
     VisRendererLiteral,
 )
 from .._quantities import Duration
+from .._utils._record_group_table import record_member
 from .._utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
 from .._utils.env_flags import closed_bool_env
 from ..errors._base import CompatibilityError
@@ -215,9 +215,9 @@ class FocusNode:
     modules: list[str]
 
     def __getattr__(self, name: str) -> Any:
-        """Delegate unknown attributes to the source node."""
+        """Delegate unknown attributes to the source node, following former flat names."""
 
-        return getattr(self.original, name)
+        return record_member(self.original, name)
 
 
 @dataclass(frozen=True)
@@ -290,6 +290,22 @@ class BoundaryNode:
         self.is_output = self.boundary_kind == "output"
         self.layer_type = self.boundary_kind
         self.io_role = self.boundary_kind
+
+    @property
+    def graph(self) -> "BoundaryNode":
+        """Answer the record graph-group spelling (``node.graph.is_buffer``) from own fields.
+
+        Render code reads ``node.graph.<leaf>`` on every graph node; an Op or Layer
+        answers through its graph group, a boundary stub through its flat fields.
+        """
+
+        return self
+
+    @property
+    def module_context(self) -> "BoundaryNode":
+        """Answer ``node.module_context.<leaf>`` (``is_atomic_module``) from own fields."""
+
+        return self
 
 
 GraphNode = BaseGraphNode | BoundaryNode | FocusNode

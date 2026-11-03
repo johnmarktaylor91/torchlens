@@ -118,7 +118,7 @@ def permute(context: ReceptiveFieldRuleContext) -> _RuleResult:
 
     rank = len(context.in_shapes[0]) if context.in_shapes else len(context.out_shape)
     name = str(context.op.func_name).replace("_", "").lower()
-    positional = tuple(context.op.non_tensor_pos_args)
+    positional = tuple(context.op.call.non_tensor_pos_args)
     if name == "permute":
         dims = positional
         if len(dims) == 1 and isinstance(dims[0], (tuple, list)):
@@ -272,10 +272,10 @@ def pad(context: ReceptiveFieldRuleContext) -> _RuleResult:
 def getitem(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Map basic integer and slice indexing without tainting descendants."""
 
-    if not context.in_shapes or not context.op.non_tensor_pos_args:
+    if not context.in_shapes or not context.op.call.non_tensor_pos_args:
         return context.unknown("getitem index metadata was not captured")
     parent_shape = context.in_shapes[0]
-    raw_key = context.op.non_tensor_pos_args[0]
+    raw_key = context.op.call.non_tensor_pos_args[0]
     key = raw_key if isinstance(raw_key, tuple) else (raw_key,)
     expanded: list[object] = []
     ellipsis_count = sum(item is Ellipsis for item in key)

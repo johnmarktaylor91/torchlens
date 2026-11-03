@@ -544,7 +544,7 @@ def test_tinygrad_multi_output_marks_outputs() -> None:
     # by the pass-qualified op.label (torch parity too), so look each output
     # up through the full lookup cascade (trace[label]) rather than
     # layer_dict_main_keys directly.
-    assert all(trace[label].is_output_parent for label in trace.output_layers)
+    assert all(trace[label].graph.is_output_parent for label in trace.output_layers)
     assert trace.validate_forward_pass(list(_multi_output(x))) is True
 
 
@@ -689,7 +689,7 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.cost.saved_activation_memory) == sum(
-        int(op.activation_memory or 0) for op in saved_ops
+        int(op.cost.activation_memory or 0) for op in saved_ops
     )
     assert trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))]) is True
 
@@ -873,8 +873,8 @@ def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() ->
     assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert x.grad is None
     assert len(trace.autograd.intermediate_derived_grads) > 0
-    assert hidden_op.derived_grad.tolist() == pytest.approx(oracle_hidden.grad.tolist())
-    assert scaled_op.derived_grad.tolist() == pytest.approx(oracle_scaled.grad.tolist())
+    assert hidden_op.autograd.derived_grad.tolist() == pytest.approx(oracle_hidden.grad.tolist())
+    assert scaled_op.autograd.derived_grad.tolist() == pytest.approx(oracle_scaled.grad.tolist())
     assert hidden_op.label in trace.autograd.intermediate_derived_grads
     assert trace.autograd.intermediate_derived_grads[hidden_op.label].provenance["mechanism"] == (
         "tinygrad_retained_tensor_backward_no_realize"
@@ -904,7 +904,7 @@ def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 def test_tinygrad_derived_grads_reject_audit_only_payload_envelope() -> None:
@@ -999,7 +999,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 def test_tinygrad_capture_options_does_not_reject_the_whole_object() -> None:

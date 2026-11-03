@@ -127,7 +127,9 @@ def _unit_memory(trace: Trace, unit: Any) -> int | None:
             node = trace.ops[module_call.output_ops[-1]]
         except (KeyError, IndexError, AttributeError, TypeError):
             pass
-    value = getattr(node, "activation_memory", None)
+    # A render node delegates to its record; read through the group, which
+    # both an Op and a Layer serve.
+    value = getattr(getattr(node, "cost", None), "activation_memory", None)
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return int(value)

@@ -285,7 +285,7 @@ def _tag_tensor_and_track_variations(
         parent_tensor_contents = _get_parent_output_version_snapshot(
             self,
             parent_label,
-            new_layer_entry.parent_arg_positions,
+            new_layer_entry.call.parent_arg_positions,
             contract.mutated_input_positions,
             contract.aliased_output_inputs,
             parent_event.output.has_saved_activation,

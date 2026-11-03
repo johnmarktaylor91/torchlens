@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._capture.flops import DISPATCH_COUNTING_CONVENTION
+from .._utils._record_group_table import record_member
 from ._backward_attribution import node_resolver_missing, pass_failed
 
 if TYPE_CHECKING:
@@ -82,7 +83,7 @@ def _has_grad_fn(op: Any) -> bool:
     absent value; both spellings mean "no grad_fn".
     """
 
-    name = getattr(op, "grad_fn_class_name", None)
+    name = record_member(op, "grad_fn_class_name", None)
     return bool(name) and str(name).lower() != "none"
 
 
@@ -109,7 +110,7 @@ def op_needs_input_grad(op: Any) -> bool | None:
     recorded no autograd facts at all (grad disabled).
     """
 
-    name = getattr(op, "grad_fn_class_name", None)
+    name = record_member(op, "grad_fn_class_name", None)
     if name is None:
         return None
     return _has_grad_fn(op)
@@ -501,8 +502,8 @@ def backward_estimate(trace: Trace) -> BackwardEstimate:
     for op in trace._layer_list or ():
         if classify_row(op) != "known":
             continue
-        record = getattr(op, "compute_record", None)
-        flops = getattr(op, "flops_forward", None)
+        record = record_member(op, "compute_record", None)
+        flops = record_member(op, "flops_forward", None)
         if flops is None or int(flops) == 0:
             continue
         if record is not None and getattr(record, "mac_applicability", None) == "mac":

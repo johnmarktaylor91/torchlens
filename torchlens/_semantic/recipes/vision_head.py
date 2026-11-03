@@ -32,6 +32,7 @@ from typing import Any
 
 import torch
 
+from ..._utils._record_group_table import record_member
 from ..._utils.collections import _path_component_key
 from .._hops import HopRefusal, HopWalk, walk_upstream
 from ..facets import AbsenceReason, FacetSpec, register
@@ -120,7 +121,7 @@ def _single_token_position(op: Any) -> int | None:
 
     if str(getattr(op, "func_name", "")) not in _INDEX_FUNCS:
         return None
-    pos = list(getattr(op, "non_tensor_pos_args", ()) or ())
+    pos = list(record_member(op, "non_tensor_pos_args", ()) or ())
     entries = pos[0] if len(pos) == 1 else None
     if not isinstance(entries, tuple) or not _is_token_read(entries):
         return None

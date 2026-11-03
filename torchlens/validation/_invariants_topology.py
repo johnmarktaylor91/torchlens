@@ -51,7 +51,7 @@ def _check_trace_self_consistency(ml: Trace) -> None:
     # sets because buffer_layers stores pass-qualified labels while
     # layer_labels strips the pass suffix -- they use different formats.
     expected_ops = sum(
-        1 for lpl in ml._layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
+        1 for lpl in ml._layer_list if not (lpl.is_input or lpl.is_output or lpl.graph.is_buffer)
     )
     expected_ops += _retained_orphan_computational_count(ml, name)
     if ml._num_ops != expected_ops:
@@ -135,7 +135,7 @@ def _retained_orphan_computational_count(ml: Trace, name: str) -> int:
         records established during postprocessing.
     """
     orphan_logs = tuple(getattr(ml, "_orphan_logs", ()))
-    retained_orphans = tuple(log for log in orphan_logs if getattr(log, "is_orphan", False))
+    retained_orphans = tuple(log for log in orphan_logs if record_member(log, "is_orphan", False))
     if not retained_orphans:
         return 0
 
@@ -170,7 +170,7 @@ def _retained_orphan_computational_count(ml: Trace, name: str) -> int:
     return sum(
         1
         for orphan in retained_orphans
-        if not (orphan.is_input or orphan.is_output or orphan.is_buffer)
+        if not (orphan.is_input or orphan.is_output or orphan.graph.is_buffer)
     )
 
 
@@ -191,7 +191,7 @@ def _retained_orphan_op_labels(ml: Trace) -> set[str]:
     return {
         orphan.label
         for orphan in getattr(ml, "_orphan_logs", ())
-        if getattr(orphan, "is_orphan", False)
+        if record_member(orphan, "is_orphan", False)
     }
 
 
@@ -212,7 +212,7 @@ def _retained_orphan_layer_labels(ml: Trace) -> set[str]:
     return {
         orphan.layer_label
         for orphan in getattr(ml, "_orphan_logs", ())
-        if getattr(orphan, "is_orphan", False)
+        if record_member(orphan, "is_orphan", False)
     }
 
 
@@ -231,7 +231,7 @@ def _check_special_layer_lists(ml: Trace) -> None:
     retained_orphans_by_label = {
         orphan.label: orphan
         for orphan in getattr(ml, "_orphan_logs", ())
-        if getattr(orphan, "is_orphan", False)
+        if record_member(orphan, "is_orphan", False)
     }
     for list_attr, flag_attr, label_kind in _SPECIAL_LIST_FLAG_PAIRS:
         special_list = getattr(ml, list_attr)
@@ -255,7 +255,7 @@ def _check_special_layer_lists(ml: Trace) -> None:
                 if label in retained_orphans_by_label
                 else ml[label]
             )
-            if not getattr(lpl, flag_attr):
+            if not record_member(lpl, flag_attr):
                 raise MetadataInvariantError(
                     name,
                     f"{label_kind.title()} {label} is in {list_attr} but {flag_attr}=False",
@@ -264,7 +264,7 @@ def _check_special_layer_lists(ml: Trace) -> None:
         # Reverse: every layer/op with the flag is in the list.
         for lpl in ml._layer_list:
             label = lpl.label if label_kind == "op" else lpl.layer_label
-            if getattr(lpl, flag_attr) and label not in special_set:
+            if record_member(lpl, flag_attr) and label not in special_set:
                 raise MetadataInvariantError(
                     name,
                     f"{label_kind.title()} {label} has {flag_attr}=True but is not in {list_attr}",
@@ -322,7 +322,7 @@ def _check_capture_edge_survival(trace: Trace) -> None:
             continue
         if getattr(op, "edits", None):
             continue
-        positions = getattr(op, "parent_arg_positions", None) or {}
+        positions = record_member(op, "parent_arg_positions", None) or {}
         recorded = set(op.parents or ())
         recorded.update(
             label
@@ -581,10 +581,10 @@ def _check_graph_topology(ml: Trace) -> None:
         non_output_children = [
             c for c in lpl.children if c not in output_set and ml[c].layer_label not in output_set
         ]
-        if lpl.has_children != (len(non_output_children) > 0):
+        if lpl.graph.has_children != (len(non_output_children) > 0):
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: has_children={lpl.has_children} but "
+                f"Layer {label}: has_children={lpl.graph.has_children} but "
                 f"non-output children={non_output_children}",
             )
 
@@ -605,7 +605,7 @@ def _check_graph_topology(ml: Trace) -> None:
         # only those two, so a foreign top-level key (e.g. a label used as a
         # domain, the B3R7-R05-2 plant shape) would otherwise never be
         # examined at all -- an unguarded domain on relation metadata.
-        foreign_domains = set(lpl.parent_arg_positions) - {"args", "kwargs"}
+        foreign_domains = set(lpl.call.parent_arg_positions) - {"args", "kwargs"}
         if foreign_domains:
             raise MetadataInvariantError(
                 name,
@@ -614,7 +614,9 @@ def _check_graph_topology(ml: Trace) -> None:
                 f"'args' and 'kwargs'",
             )
         for arg_domain in ("args", "kwargs"):
-            for position, attributed_label in lpl.parent_arg_positions.get(arg_domain, {}).items():
+            for position, attributed_label in lpl.call.parent_arg_positions.get(
+                arg_domain, {}
+            ).items():
                 try:
                     attributed_entry = ml[attributed_label]
                 except (KeyError, ValueError):
@@ -721,7 +723,7 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
                     if candidate is None or candidate.is_output:
                         continue
                     expected.add(candidate_label)
-            stored = list(getattr(lpl, relation))
+            stored = list(record_member(lpl, relation))
             if len(stored) != len(set(stored)) or set(stored) != expected:
                 raise MetadataInvariantError(
                     name,
@@ -731,16 +733,17 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
                     f"{relation.rstrip('s').replace('_', '-')})",
                 )
             has_flag = f"has_{relation}"
-            if bool(getattr(lpl, has_flag)) != bool(expected):
+            if bool(record_member(lpl, has_flag)) != bool(expected):
                 raise MetadataInvariantError(
                     name,
-                    f"Layer {report_label}: {has_flag}={getattr(lpl, has_flag)} but the "
+                    f"Layer {report_label}: {has_flag}={record_member(lpl, has_flag)} but the "
                     f"derived {relation} list has {len(expected)} members",
                 )
 
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
 from ._invariants import (  # noqa: E402
     _SPECIAL_LIST_FLAG_PAIRS,
     MetadataInvariantError,

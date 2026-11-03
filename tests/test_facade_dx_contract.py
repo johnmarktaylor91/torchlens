@@ -23,6 +23,7 @@ from torchlens._data_classes.module import Module, ModuleCall
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
 from torchlens._data_classes.trace import Trace
+from torchlens._utils._record_group_table import record_storage_attr
 
 
 class _DxModel(nn.Module):
@@ -143,7 +144,8 @@ def test_all_declared_fields_are_debugger_visible(
     instance = _get_instance(dx_trace, kind)
     assert isinstance(instance, cls)
     visible = _debugger_visible_names(instance)
-    missing = {name for name in field_order if name not in visible}
+    # A field moved into a concern group stays visible under its storage attribute.
+    missing = {name for name in field_order if record_storage_attr(instance, name) not in visible}
     assert missing == _EXPECTED_ABSENT[kind], (
         f"{cls.__name__} debugger-invisible field set changed: "
         f"unexpected={sorted(missing - _EXPECTED_ABSENT[kind])} "
@@ -159,7 +161,9 @@ def test_all_declared_fields_have_inspectable_descriptors(
 
     instance = _get_instance(dx_trace, kind)
     uninspectable = {
-        name for name in field_order if not _has_inspectable_descriptor(instance, name)
+        name
+        for name in field_order
+        if not _has_inspectable_descriptor(instance, record_storage_attr(instance, name))
     }
     assert uninspectable == _EXPECTED_ABSENT[kind], (
         f"{cls.__name__} fields without slot/property/dict backing changed: "

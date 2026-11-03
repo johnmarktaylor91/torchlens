@@ -20,6 +20,7 @@ from ..._data_classes.op import Op
 from ..._ir.events import BackwardPassStart, OpGradObserved
 from ..._selection.selectors import BaseSelector
 from ..._state import pause_logging
+from ..._utils._record_group_table import record_member
 from ..._utils._torch_compat import get_current_graph_task_id_fn
 from ..._utils.display import _record_phase_timing
 from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
@@ -1056,7 +1057,7 @@ class _GradPayloadContext:
         self.type = op.type
         self.module_stack = tuple(getattr(op, "module_stack", ()) or ())
         self.modules = tuple(getattr(op, "modules", ()) or ())
-        self.output_of_module_calls = tuple(getattr(op, "output_of_module_calls", ()) or ())
+        self.output_of_module_calls = tuple(record_member(op, "output_of_module_calls", ()) or ())
         self.has_forward_op = True
         self.has_op = True
         self.grad_kind = "grad_output"
@@ -1214,7 +1215,7 @@ def _log_tensor_grad(
     layer_log_entry = self._layer_dict_all_keys[tensor_label]
     layers_to_update = [tensor_label]
     # Output layers are identity wrappers; propagate grad to them too.
-    if layer_log_entry.is_output_parent:
+    if layer_log_entry.graph.is_output_parent:
         for child_layer in layer_log_entry.children:
             if self._layer_dict_all_keys[child_layer].is_output:
                 layers_to_update.append(child_layer)
@@ -1374,7 +1375,7 @@ def _get_ancestors_from_parents(
 
     for parent_entry in parent_entries:
         input_ancestors.update(parent_entry.input_ancestors)
-        internal_source_ancestors.update(parent_entry.internal_source_ancestors)
+        internal_source_ancestors.update(parent_entry.graph.internal_source_ancestors)
     return input_ancestors, internal_source_ancestors
 
 

@@ -29,6 +29,7 @@ from torchlens._errors import _actionable_message, _ActionableErrorMixin
 from torchlens.errors._base import ConfigurationError
 
 from ._record_type import record_type
+from ._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from torch import nn
@@ -311,7 +312,7 @@ def _op_selector(trace: Any, layer: Any, address_counts: Counter[str]) -> str:
         The selector string.
     """
 
-    outputs_of = tuple(getattr(layer, "output_of_modules", ()) or ())
+    outputs_of = tuple(record_member(layer, "output_of_modules", ()) or ())
     address = outputs_of[0] if outputs_of else None
     if address and address_counts[address] == 1:
         # engine-ambiguous or unresolvable addresses fall to the label
@@ -346,12 +347,12 @@ def sites_of_trace(trace: Any) -> SiteInventory:
         if record_type(layer, None) not in {"input", "output", "buffer"}
     ]
     for layer in layers:
-        outputs_of = tuple(getattr(layer, "output_of_modules", ()) or ())
+        outputs_of = tuple(record_member(layer, "output_of_modules", ()) or ())
         if outputs_of:
             address_counts[outputs_of[0]] += 1
     rows: list[SiteRow] = []
     for layer in layers:
-        outputs_of = tuple(getattr(layer, "output_of_modules", ()) or ())
+        outputs_of = tuple(record_member(layer, "output_of_modules", ()) or ())
         address = outputs_of[0] if outputs_of else None
         shape = getattr(layer, "shape", None)
         module_record = _module_record_of(trace, address)

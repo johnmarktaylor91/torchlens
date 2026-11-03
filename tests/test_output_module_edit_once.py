@@ -389,7 +389,10 @@ def test_module_selectors_never_resolve_to_the_output_alias(
     stamped = [
         op
         for op in trace.output_ops
-        if any(module_address_matches(call, address) for call in op.output_of_module_calls)
+        if any(
+            module_address_matches(call, address)
+            for call in op.module_context.output_of_module_calls
+        )
     ]
     assert stamped, f"{case}: output alias lost its display stamp"
 

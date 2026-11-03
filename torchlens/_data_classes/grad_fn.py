@@ -20,6 +20,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Duration
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._runtime_handles import runtime_handle_from_owner
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -551,7 +552,7 @@ class GradFn:
             op = None
         if op is None:
             return None
-        grad_fn_handle = getattr(op, "grad_fn_handle", None)
+        grad_fn_handle = record_member(op, "grad_fn_handle", None)
         if grad_fn_handle is not None and id(grad_fn_handle) == self.grad_fn_object_id:
             return grad_fn_handle
         return None

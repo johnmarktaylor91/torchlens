@@ -352,7 +352,7 @@ def test_trace_under_no_grad_with_enable_grad_inside_keeps_backward() -> None:
         assert loss.grad_fn is not None
         trace.backward(loss, save_grads=True)
         assert model.lin.weight.grad is not None
-        assert any(layer.grads for layer in trace._layer_list)
+        assert any(layer.autograd.grads for layer in trace._layer_list)
     finally:
         trace.cleanup()
 

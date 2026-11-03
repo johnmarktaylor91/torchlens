@@ -27,6 +27,7 @@ from typing import Any
 
 import pytest
 
+from tests._record_fakes import FlatNamespace
 from torchlens.validation._invariants import (
     MetadataInvariantError,
     _check_non_torch_primitive_op_inert,
@@ -138,7 +139,7 @@ def test_backend_identity_invariants_fires_on_unsupported_module_identity_mode()
 def test_backend_neutral_graph_topology_fires_on_parent_outside_labels() -> None:
     """Arm 0: a parent label outside the trace's labels must raise."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1", label="relu_1", parents=["missing_parent"], children=[]
     )
     fake_trace = _FakeTrace(_layer_list=[layer])
@@ -149,8 +150,8 @@ def test_backend_neutral_graph_topology_fires_on_parent_outside_labels() -> None
 def test_backend_neutral_graph_topology_fires_on_missing_reciprocal_child() -> None:
     """Arm 1: a parent that does not list this layer as a child must raise."""
 
-    parent = SimpleNamespace(layer_label="conv_1", label="conv_1", parents=[], children=[])
-    child = SimpleNamespace(layer_label="relu_1", label="relu_1", parents=["conv_1"], children=[])
+    parent = FlatNamespace(layer_label="conv_1", label="conv_1", parents=[], children=[])
+    child = FlatNamespace(layer_label="relu_1", label="relu_1", parents=["conv_1"], children=[])
     fake_trace = _FakeTrace(_layer_list=[parent, child])
     with pytest.raises(MetadataInvariantError, match="reciprocal child is missing"):
         _check_backend_neutral_graph_topology(fake_trace)  # type: ignore[arg-type]
@@ -159,7 +160,7 @@ def test_backend_neutral_graph_topology_fires_on_missing_reciprocal_child() -> N
 def test_backend_neutral_graph_topology_fires_on_child_outside_labels() -> None:
     """Arm 2: a child label outside the trace's labels must raise."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1", label="relu_1", parents=[], children=["missing_child"]
     )
     fake_trace = _FakeTrace(_layer_list=[layer])
@@ -188,7 +189,7 @@ def test_buffer_xrefs_fires_on_buffer_layer_outside_layer_labels() -> None:
 def test_distance_invariants_fires_on_inverted_output_distance_bounds() -> None:
     """Arm 1: min_distance_to_output must not exceed max_distance_to_output."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1",
         min_distance_from_input=None,
         max_distance_from_input=None,
@@ -205,7 +206,7 @@ def test_distance_invariants_fires_on_inverted_output_distance_bounds() -> None:
 def test_distance_invariants_fires_on_output_descendant_flag_mismatch() -> None:
     """Arm 5: has_output_descendant must match whether output_descendants is non-empty."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1",
         min_distance_from_input=0,
         max_distance_from_input=0,
@@ -226,7 +227,7 @@ def test_distance_invariants_fires_on_output_descendant_flag_mismatch() -> None:
 def test_distance_invariants_fires_on_input_ancestors_outside_input_layers() -> None:
     """Arm 6: input_ancestors must be a subset of input_layers."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1",
         min_distance_from_input=0,
         max_distance_from_input=0,
@@ -252,10 +253,10 @@ def test_distance_invariants_fires_on_input_ancestors_outside_input_layers() -> 
 def test_edge_use_parent_arg_consistency_fires_on_invalid_arg_kind() -> None:
     """Arm 1: an edge-use record's arg_kind must be a known domain value."""
 
-    record = SimpleNamespace(
+    record = FlatNamespace(
         edge_use="arg", arg_kind="not_a_real_kind", parent_label="p", child_label="c"
     )
-    layer = SimpleNamespace(layer_label="relu_1", _edge_uses=[record], parent_arg_positions={})
+    layer = FlatNamespace(layer_label="relu_1", _edge_uses=[record], parent_arg_positions={})
     fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
     with pytest.raises(MetadataInvariantError, match="invalid edge arg_kind"):
         _check_edge_use_parent_arg_invariants(fake_trace)  # type: ignore[arg-type]
@@ -264,10 +265,10 @@ def test_edge_use_parent_arg_consistency_fires_on_invalid_arg_kind() -> None:
 def test_edge_use_parent_arg_consistency_fires_on_unresolved_edge_use_parent() -> None:
     """Arm 2: an edge-use record's parent label must resolve."""
 
-    record = SimpleNamespace(
+    record = FlatNamespace(
         edge_use="arg", arg_kind="positional", parent_label="ghost_parent", child_label="c"
     )
-    layer = SimpleNamespace(layer_label="relu_1", _edge_uses=[record], parent_arg_positions={})
+    layer = FlatNamespace(layer_label="relu_1", _edge_uses=[record], parent_arg_positions={})
     fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
     with pytest.raises(MetadataInvariantError, match="unresolved parent"):
         _check_edge_use_parent_arg_invariants(fake_trace)  # type: ignore[arg-type]
@@ -276,7 +277,7 @@ def test_edge_use_parent_arg_consistency_fires_on_unresolved_edge_use_parent() -
 def test_edge_use_parent_arg_consistency_fires_on_non_mapping_parent_arg_positions() -> None:
     """Arm 4: parent_arg_positions must be a mapping."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1", _edge_uses=[], parent_arg_positions=["not", "a", "map"]
     )
     fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
@@ -287,7 +288,7 @@ def test_edge_use_parent_arg_consistency_fires_on_non_mapping_parent_arg_positio
 def test_edge_use_parent_arg_consistency_fires_on_non_mapping_arg_domain_entries() -> None:
     """Arm 5: parent_arg_positions['args']/['kwargs'] must each be a mapping."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1", _edge_uses=[], parent_arg_positions={"args": ["not", "a", "map"]}
     )
     fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
@@ -298,7 +299,7 @@ def test_edge_use_parent_arg_consistency_fires_on_non_mapping_arg_domain_entries
 def test_edge_use_parent_arg_consistency_fires_on_non_string_arg_position_value() -> None:
     """Arm 6: a parent_arg_positions entry value must be a label string."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1", _edge_uses=[], parent_arg_positions={"args": {0: 12345}}
     )
     fake_trace = SimpleNamespace(_layer_list=[layer], _layer_dict_all_keys={})
@@ -353,7 +354,7 @@ def test_equivalence_symmetry_fires_on_whole_trace_label_cross_check() -> None:
 def test_equivalence_symmetry_fires_on_non_set_op_equivalent_ops() -> None:
     """Arm 3: Op.equivalent_ops must be a set or frozenset."""
 
-    op = SimpleNamespace(label="op_1_1", equivalence_class=None, equivalent_ops=["op_1_1"])
+    op = FlatNamespace(label="op_1_1", equivalence_class=None, equivalent_ops=["op_1_1"])
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
         op_labels=["op_1_1"],
@@ -368,7 +369,7 @@ def test_equivalence_symmetry_fires_on_non_set_op_equivalent_ops() -> None:
 def test_equivalence_symmetry_fires_on_op_equivalent_ops_outside_op_labels() -> None:
     """Arm 4: Op.equivalent_ops members must be valid op labels."""
 
-    op = SimpleNamespace(label="op_1_1", equivalence_class=None, equivalent_ops={"ghost_op"})
+    op = FlatNamespace(label="op_1_1", equivalence_class=None, equivalent_ops={"ghost_op"})
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
         op_labels=["op_1_1"],
@@ -383,7 +384,7 @@ def test_equivalence_symmetry_fires_on_op_equivalent_ops_outside_op_labels() -> 
 def test_equivalence_symmetry_fires_on_non_set_layer_equivalent_ops() -> None:
     """Arm 6: Layer.equivalent_ops must be a set or frozenset."""
 
-    layer = SimpleNamespace(layer_label="layer_1", ops={}, equivalent_ops=["not", "a", "set"])
+    layer = FlatNamespace(layer_label="layer_1", ops={}, equivalent_ops=["not", "a", "set"])
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
         op_labels=[],
@@ -398,7 +399,7 @@ def test_equivalence_symmetry_fires_on_non_set_layer_equivalent_ops() -> None:
 def test_equivalence_symmetry_fires_on_layer_equivalent_ops_outside_op_labels() -> None:
     """Arm 7: Layer.equivalent_ops members must be valid op labels."""
 
-    layer = SimpleNamespace(layer_label="layer_1", ops={}, equivalent_ops={"ghost_op"})
+    layer = FlatNamespace(layer_label="layer_1", ops={}, equivalent_ops={"ghost_op"})
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
         op_labels=[],
@@ -413,9 +414,9 @@ def test_equivalence_symmetry_fires_on_layer_equivalent_ops_outside_op_labels() 
 def test_equivalence_symmetry_fires_on_pass_disagreement() -> None:
     """Arm 8: every pass of a Layer must agree on equivalent_ops."""
 
-    op1 = SimpleNamespace(equivalent_ops={"op_1_1"})
-    op2 = SimpleNamespace(equivalent_ops={"op_1_2"})
-    layer = SimpleNamespace(layer_label="layer_1", ops={1: op1, 2: op2}, equivalent_ops={"op_1_1"})
+    op1 = FlatNamespace(equivalent_ops={"op_1_1"})
+    op2 = FlatNamespace(equivalent_ops={"op_1_2"})
+    layer = FlatNamespace(layer_label="layer_1", ops={1: op1, 2: op2}, equivalent_ops={"op_1_1"})
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
         op_labels=["op_1_1", "op_1_2"],
@@ -435,7 +436,7 @@ def test_equivalence_symmetry_fires_on_pass_disagreement() -> None:
 def test_func_call_id_consistency_fires_on_non_integer_func_call_id() -> None:
     """Arm 1: a populated func_call_id must be an int."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1",
         is_input=False,
         is_output=False,
@@ -456,7 +457,7 @@ def test_func_call_id_consistency_fires_on_non_integer_func_call_id() -> None:
 def test_graph_connectivity_fires_on_internal_source_consuming_unattributed_data() -> None:
     """Arm 1: an internal-source op that consumed unattributed tensor data must raise."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="mystery_op",
         label="mystery_op",
         is_internal_source=True,
@@ -479,7 +480,7 @@ def test_graph_connectivity_fires_on_internal_source_consuming_unattributed_data
 def test_graph_connectivity_fires_on_leaked_retained_orphan() -> None:
     """Arm 4: a retained orphan island's label must not leak into active labels."""
 
-    orphan = SimpleNamespace(label="retained_op", layer_label="retained_op", is_orphan=True)
+    orphan = FlatNamespace(label="retained_op", layer_label="retained_op", is_orphan=True)
     fake_trace = SimpleNamespace(
         layer_labels=["retained_op"],
         input_layers=[],
@@ -515,8 +516,8 @@ def test_graph_ordering_fires(first_raw_index: int, second_raw_index: int, match
     Arm 1: raw_index must increase monotonically in layer_list order.
     """
 
-    layer1 = SimpleNamespace(layer_label="a", raw_index=first_raw_index)
-    layer2 = SimpleNamespace(layer_label="b", raw_index=second_raw_index)
+    layer1 = FlatNamespace(layer_label="a", raw_index=first_raw_index)
+    layer2 = FlatNamespace(layer_label="b", raw_index=second_raw_index)
     fake_trace = SimpleNamespace(_layer_list=[layer1, layer2])
     with pytest.raises(MetadataInvariantError, match=match):
         _check_graph_ordering(fake_trace)  # type: ignore[arg-type]
@@ -541,7 +542,7 @@ def _topology_layer(**overrides: Any) -> SimpleNamespace:
         "out_versions_by_child": {},
     }
     base.update(overrides)
-    return SimpleNamespace(**base)
+    return FlatNamespace(**base)
 
 
 def test_graph_topology_fires_on_parent_label_not_canonical() -> None:
@@ -646,8 +647,8 @@ def test_layer_pass_layer_log_xrefs_fires(
     Arm 3: an Op's layer_label must match its parent Layer's layer_label.
     """
 
-    op = SimpleNamespace(pass_number=op_pass_index, layer_label=op_layer_label)
-    layer = SimpleNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
+    op = FlatNamespace(pass_number=op_pass_index, layer_label=op_layer_label)
+    layer = FlatNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
     fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer})
     with pytest.raises(MetadataInvariantError, match=match):
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
@@ -712,7 +713,7 @@ def test_loop_detection_invariants_fires_on_shortcut_mismatch(
     Arm 1: a later pass sharing an already-validated group must match num_passes.
     """
 
-    layer1 = SimpleNamespace(
+    layer1 = FlatNamespace(
         label="relu_1:1",
         layer_label="relu_1",
         recurrent_ops=["relu_1:1", "relu_1:2"],
@@ -724,7 +725,7 @@ def test_loop_detection_invariants_fires_on_shortcut_mismatch(
         num_passes=2,
         pass_number=1,
     )
-    layer2 = SimpleNamespace(
+    layer2 = FlatNamespace(
         label="relu_1:2",
         layer_label="relu_1",
         recurrent_ops=["relu_1:1", "relu_1:2"],
@@ -751,7 +752,7 @@ def test_loop_detection_invariants_fires_on_shortcut_mismatch(
 def test_loop_detection_invariants_fires_on_unknown_recurrent_ops_member() -> None:
     """Arm 3: every recurrent_ops member must be a known op label."""
 
-    op = SimpleNamespace(label="relu_1", layer_label="relu_1", recurrent_ops=["relu_1", "ghost_op"])
+    op = FlatNamespace(label="relu_1", layer_label="relu_1", recurrent_ops=["relu_1", "ghost_op"])
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
         _layer_list=[op],
@@ -767,10 +768,8 @@ def test_loop_detection_invariants_fires_on_unknown_recurrent_ops_member() -> No
 def test_loop_detection_invariants_fires_on_asymmetric_recurrent_ops() -> None:
     """Arm 5: every recurrent_ops member must report the identical group back."""
 
-    anchor = SimpleNamespace(
-        label="relu_1", layer_label="relu_1", recurrent_ops=["relu_1", "relu_2"]
-    )
-    other = SimpleNamespace(label="relu_2", layer_label="relu_1", recurrent_ops=["relu_2"])
+    anchor = FlatNamespace(label="relu_1", layer_label="relu_1", recurrent_ops=["relu_1", "relu_2"])
+    other = FlatNamespace(label="relu_2", layer_label="relu_1", recurrent_ops=["relu_2"])
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
         _layer_list=[anchor],
@@ -786,13 +785,13 @@ def test_loop_detection_invariants_fires_on_asymmetric_recurrent_ops() -> None:
 def test_loop_detection_invariants_fires_on_equivalence_class_mismatch() -> None:
     """Arm 7: every recurrent_ops member must share the anchor's equivalence_class."""
 
-    anchor = SimpleNamespace(
+    anchor = FlatNamespace(
         label="relu_1",
         layer_label="relu_1",
         recurrent_ops=["relu_1", "relu_2"],
         equivalence_class="type_a",
     )
-    other = SimpleNamespace(
+    other = FlatNamespace(
         label="relu_2",
         layer_label="relu_1",
         recurrent_ops=["relu_1", "relu_2"],
@@ -813,7 +812,7 @@ def test_loop_detection_invariants_fires_on_equivalence_class_mismatch() -> None
 def test_loop_detection_invariants_fires_on_full_path_func_mismatch() -> None:
     """Arm 8: a computational anchor's recurrent_ops members must share func_name."""
 
-    anchor = SimpleNamespace(
+    anchor = FlatNamespace(
         label="relu_1",
         layer_label="relu_1",
         recurrent_ops=["relu_1", "relu_2"],
@@ -823,7 +822,7 @@ def test_loop_detection_invariants_fires_on_full_path_func_mismatch() -> None:
         is_output=False,
         func_name="relu",
     )
-    other = SimpleNamespace(
+    other = FlatNamespace(
         label="relu_2",
         layer_label="relu_1",
         recurrent_ops=["relu_1", "relu_2"],
@@ -845,7 +844,7 @@ def test_loop_detection_invariants_fires_on_full_path_func_mismatch() -> None:
 def test_loop_detection_invariants_fires_on_cross_pass_equivalence_type_drift() -> None:
     """Arm 12: all recurrent_ops group members must share one equivalence type."""
 
-    anchor = SimpleNamespace(
+    anchor = FlatNamespace(
         label="relu_1",
         layer_label="relu_1",
         recurrent_ops=["relu_1", "relu_2"],
@@ -858,7 +857,7 @@ def test_loop_detection_invariants_fires_on_cross_pass_equivalence_type_drift() 
         pass_number=1,
         has_params=False,
     )
-    other = SimpleNamespace(
+    other = FlatNamespace(
         label="relu_2",
         layer_label="relu_1",
         recurrent_ops=["relu_1", "relu_2"],
@@ -901,10 +900,10 @@ def test_module_containment_logic_fires(nested_module: str, module: str, match: 
     Arm 4: every nested module path entry must be a known module address.
     """
 
-    mod_self = SimpleNamespace(
+    mod_self = FlatNamespace(
         address="self", address_parent=None, address_depth=0, address_children=[]
     )
-    layer = SimpleNamespace(layer_label="relu_1", modules=[nested_module], module=module)
+    layer = FlatNamespace(layer_label="relu_1", modules=[nested_module], module=module)
     fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]), _layer_list=[layer])
     with pytest.raises(MetadataInvariantError, match=match):
         _check_module_containment_logic(fake_trace)  # type: ignore[arg-type]
@@ -926,10 +925,10 @@ def test_module_hierarchy_fires_on_missing_root_module() -> None:
 def test_module_hierarchy_fires_on_missing_address_child_listing() -> None:
     """Arm 1: a module's address_parent must list it back in address_children."""
 
-    mod_self = SimpleNamespace(
+    mod_self = FlatNamespace(
         address="self", address_parent=None, address_children=[], ops={}, num_calls=0
     )
-    mod_encoder = SimpleNamespace(
+    mod_encoder = FlatNamespace(
         address="encoder",
         address_parent="self",
         address_children=[],
@@ -945,10 +944,10 @@ def test_module_hierarchy_fires_on_missing_address_child_listing() -> None:
 def test_module_hierarchy_fires_on_child_address_parent_mismatch() -> None:
     """Arm 2: a module's address_children must report it as their address_parent."""
 
-    mod_self = SimpleNamespace(
+    mod_self = FlatNamespace(
         address="self", address_parent=None, address_children=["encoder"], ops={}, num_calls=0
     )
-    mod_encoder = SimpleNamespace(
+    mod_encoder = FlatNamespace(
         address="encoder",
         address_parent="wrong_parent",
         address_children=[],
@@ -964,11 +963,11 @@ def test_module_hierarchy_fires_on_child_address_parent_mismatch() -> None:
 def test_module_hierarchy_fires_on_pass_key_mismatch() -> None:
     """Arm 4: a module's call pass keys must be exactly {1..num_calls}."""
 
-    mod_self = SimpleNamespace(
+    mod_self = FlatNamespace(
         address="self",
         address_parent=None,
         address_children=[],
-        ops={2: SimpleNamespace(call_parent=None, call_children=[])},
+        ops={2: FlatNamespace(call_parent=None, call_children=[])},
         num_calls=1,
     )
     fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]))
@@ -979,8 +978,8 @@ def test_module_hierarchy_fires_on_pass_key_mismatch() -> None:
 def test_module_hierarchy_fires_on_unresolvable_call_parent() -> None:
     """Arm 5: a ModuleCall's call_parent must resolve in the module accessor."""
 
-    mpl = SimpleNamespace(call_parent="ghost_parent", call_children=[])
-    mod_self = SimpleNamespace(
+    mpl = FlatNamespace(call_parent="ghost_parent", call_children=[])
+    mod_self = FlatNamespace(
         address="self", address_parent=None, address_children=[], ops={1: mpl}, num_calls=1
     )
     fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]))
@@ -991,8 +990,8 @@ def test_module_hierarchy_fires_on_unresolvable_call_parent() -> None:
 def test_module_hierarchy_fires_on_unresolvable_call_child() -> None:
     """Arm 6: a ModuleCall's call_children must all resolve in the module accessor."""
 
-    mpl = SimpleNamespace(call_parent=None, call_children=["ghost_child"])
-    mod_self = SimpleNamespace(
+    mpl = FlatNamespace(call_parent=None, call_children=["ghost_child"])
+    mod_self = FlatNamespace(
         address="self", address_parent=None, address_children=[], ops={1: mpl}, num_calls=1
     )
     fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]))
@@ -1012,12 +1011,12 @@ def test_module_layer_containment_fires_on_duplicate_layer_label() -> None:
     layer count, honest only when no Layer is listed twice.
     """
 
-    mod = SimpleNamespace(address="self", layer_labels=["relu_1", "relu_1"], ops={})
+    mod = FlatNamespace(address="self", layer_labels=["relu_1", "relu_1"], ops={})
     fake_trace = SimpleNamespace(
         modules=_AddrIndexed([mod]),
         op_labels=["relu_1"],
         layer_labels=["relu_1"],
-        _layer_logs={"relu_1": SimpleNamespace()},
+        _layer_logs={"relu_1": FlatNamespace()},
         _layer_list=[],
     )
     with pytest.raises(MetadataInvariantError, match="distinct layer labels=1"):
@@ -1027,8 +1026,8 @@ def test_module_layer_containment_fires_on_duplicate_layer_label() -> None:
 def test_module_layer_containment_fires_on_invalid_modulecall_op_label() -> None:
     """Arm 2: a ModuleCall's ops must be valid op or layer labels."""
 
-    mcall = SimpleNamespace(ops=["ghost_op"], num_layers=1, input_layers=[], output_layers=[])
-    mod = SimpleNamespace(address="self", layer_labels=[], num_layers=0, ops={1: mcall})
+    mcall = FlatNamespace(ops=["ghost_op"], num_layers=1, input_layers=[], output_layers=[])
+    mod = FlatNamespace(address="self", layer_labels=[], num_layers=0, ops={1: mcall})
     fake_trace = SimpleNamespace(
         modules=_AddrIndexed([mod]),
         op_labels=[],
@@ -1043,16 +1042,16 @@ def test_module_layer_containment_fires_on_invalid_modulecall_op_label() -> None
 def test_module_layer_containment_fires_on_modulecall_num_layers_mismatch() -> None:
     """Arm 3: ModuleCall.num_layers must equal the distinct Layers of its ops."""
 
-    mcall = SimpleNamespace(
+    mcall = FlatNamespace(
         ops=["relu_1"], num_ops=1, num_layers=5, input_layers=[], output_layers=[]
     )
-    mod = SimpleNamespace(address="self", layer_labels=[], num_layers=0, ops={1: mcall})
+    mod = FlatNamespace(address="self", layer_labels=[], num_layers=0, ops={1: mcall})
     fake_trace = SimpleNamespace(
         modules=_AddrIndexed([mod]),
         op_labels=["relu_1"],
         layer_labels=[],
         _layer_logs={},
-        _layer_dict_all_keys={"relu_1": SimpleNamespace(layer_label="relu_1")},
+        _layer_dict_all_keys={"relu_1": FlatNamespace(layer_label="relu_1")},
         _layer_list=[],
     )
     with pytest.raises(MetadataInvariantError, match="num_layers=5"):
@@ -1062,7 +1061,7 @@ def test_module_layer_containment_fires_on_modulecall_num_layers_mismatch() -> N
 def test_module_layer_containment_fires_on_unresolvable_layer_module() -> None:
     """Arm 5: a layer's module address must resolve in the module accessor."""
 
-    layer = SimpleNamespace(layer_label="relu_1", module="ghost_module")
+    layer = FlatNamespace(layer_label="relu_1", module="ghost_module")
     fake_trace = SimpleNamespace(
         modules=_AddrIndexed([]),
         op_labels=[],
@@ -1124,7 +1123,7 @@ def test_non_torch_backward_inert_fires_on_backward_root_grad_fn_object_ids() ->
 def test_non_torch_primitive_op_inert_fires_on_primitive_op_store() -> None:
     """Arm 1: a non-torch trace's core must not carry a primitive_op kind-row store."""
 
-    core = SimpleNamespace(kind_rows={"primitive_op": []}, backward_epochs=[])
+    core = FlatNamespace(kind_rows={"primitive_op": []}, backward_epochs=[])
     fake_trace = SimpleNamespace(_primitive_op_profile=None, _trace_core=core)
     with pytest.raises(MetadataInvariantError, match="primitive_op store"):
         _check_non_torch_primitive_op_inert(fake_trace)  # type: ignore[arg-type]
@@ -1133,8 +1132,8 @@ def test_non_torch_primitive_op_inert_fires_on_primitive_op_store() -> None:
 def test_non_torch_primitive_op_inert_fires_on_backward_primitive_op_store() -> None:
     """Arm 2: a non-torch trace's backward epochs must not carry a primitive_op store."""
 
-    epoch = SimpleNamespace(stores={"primitive_op": []})
-    core = SimpleNamespace(kind_rows={}, backward_epochs=[epoch])
+    epoch = FlatNamespace(stores={"primitive_op": []})
+    core = FlatNamespace(kind_rows={}, backward_epochs=[epoch])
     fake_trace = SimpleNamespace(_primitive_op_profile=None, _trace_core=core)
     with pytest.raises(MetadataInvariantError, match="backward primitive_op store"):
         _check_non_torch_primitive_op_inert(fake_trace)  # type: ignore[arg-type]
@@ -1148,7 +1147,7 @@ def test_non_torch_primitive_op_inert_fires_on_backward_primitive_op_store() -> 
 def test_op_log_fields_fires_on_pass_index_below_one() -> None:
     """Arm 2: pass_index must be >= 1."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1", has_saved_activation=False, out=None, pass_number=0, num_passes=1
     )
     fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
@@ -1159,7 +1158,7 @@ def test_op_log_fields_fires_on_pass_index_below_one() -> None:
 def test_op_log_fields_fires_on_num_passes_below_pass_index() -> None:
     """Arm 3: num_passes must be >= pass_index."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1", has_saved_activation=False, out=None, pass_number=3, num_passes=1
     )
     fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
@@ -1170,7 +1169,7 @@ def test_op_log_fields_fires_on_num_passes_below_pass_index() -> None:
 def test_op_log_fields_fires_on_empty_func_name() -> None:
     """Arm 6: a computational layer's func_name must be non-empty."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1",
         has_saved_activation=False,
         out=None,
@@ -1192,7 +1191,7 @@ def test_op_log_fields_fires_on_empty_func_name() -> None:
 def test_op_log_fields_fires_on_raw_index_below_one() -> None:
     """Arm 9: raw_index must be >= 1."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1",
         has_saved_activation=False,
         out=None,
@@ -1221,7 +1220,7 @@ def test_op_log_fields_fires_on_raw_index_below_one() -> None:
 def test_op_log_fields_fires_on_multipass_label_without_colon() -> None:
     """Arm 13: a multi-pass op's label must carry a ':pass' suffix."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         layer_label="relu_1",
         has_saved_activation=False,
         out=None,
@@ -1255,7 +1254,7 @@ def test_op_log_fields_fires_on_multipass_label_without_colon() -> None:
 def test_param_xrefs_fires_on_used_by_ops_outside_op_labels() -> None:
     """Arm 0: Param.used_by_ops must only name valid op labels."""
 
-    param = SimpleNamespace(
+    param = FlatNamespace(
         address="layer.weight",
         used_by_ops=["ghost_op"],
         used_by_layers=[],
@@ -1271,7 +1270,7 @@ def test_param_xrefs_fires_on_used_by_ops_outside_op_labels() -> None:
 def test_param_xrefs_fires_on_uses_params_without_param_logs() -> None:
     """Arm 3: a layer with has_params=True must have non-empty _param_logs."""
 
-    layer = SimpleNamespace(layer_label="relu_1", has_params=True, _param_logs=[])
+    layer = FlatNamespace(layer_label="relu_1", has_params=True, _param_logs=[])
     fake_trace = SimpleNamespace(
         _param_logs=[], layer_labels=[], op_labels=[], _layer_list=[layer], layers_with_params={}
     )
@@ -1317,8 +1316,8 @@ def test_pass_count_consistency_fires_on_op_mismatch(
     Arm 2: a stored op's num_passes must match its Layer's num_passes.
     """
 
-    op = SimpleNamespace(pass_number=op_pass_index, num_passes=op_num_passes, label="relu_1:1")
-    layer_log = SimpleNamespace(ops={1: op}, num_passes=1)
+    op = FlatNamespace(pass_number=op_pass_index, num_passes=op_num_passes, label="relu_1:1")
+    layer_log = FlatNamespace(ops={1: op}, num_passes=1)
     fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer_log}, _layer_num_calls={})
     with pytest.raises(MetadataInvariantError, match=match):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
@@ -1327,7 +1326,7 @@ def test_pass_count_consistency_fires_on_op_mismatch(
 def test_pass_count_consistency_fires_on_layer_num_calls_mismatch() -> None:
     """Arm 3: layer_num_calls must match Layer.num_passes."""
 
-    layer_log = SimpleNamespace(ops={}, num_passes=0)
+    layer_log = FlatNamespace(ops={}, num_passes=0)
     fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer_log}, _layer_num_calls={"relu_1": 5})
     with pytest.raises(MetadataInvariantError, match="Layer.num_passes=0"):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
@@ -1343,7 +1342,7 @@ def test_recurrence_invariants_fires_on_is_recurrent_mismatch() -> None:
 
     fake_trace = SimpleNamespace(
         _layer_num_calls={"relu_1": 3},
-        graph=SimpleNamespace(is_recurrent=False),
+        graph=FlatNamespace(is_recurrent=False),
         layer_labels=["relu_1"],
         _layer_logs={},
     )
@@ -1356,7 +1355,7 @@ def test_recurrence_invariants_fires_on_max_layer_op_count_mismatch() -> None:
 
     fake_trace = SimpleNamespace(
         _layer_num_calls={"relu_1": 3},
-        graph=SimpleNamespace(is_recurrent=True, max_ops_per_layer=99),
+        graph=FlatNamespace(is_recurrent=True, max_ops_per_layer=99),
         layer_labels=["relu_1"],
         _layer_logs={},
     )
@@ -1369,7 +1368,7 @@ def test_recurrence_invariants_fires_on_unknown_layer_num_calls_key() -> None:
 
     fake_trace = SimpleNamespace(
         _layer_num_calls={"ghost_layer": 1},
-        graph=SimpleNamespace(is_recurrent=False),
+        graph=FlatNamespace(is_recurrent=False),
         layer_labels=[],
         _layer_logs={},
     )
@@ -1380,10 +1379,10 @@ def test_recurrence_invariants_fires_on_unknown_layer_num_calls_key() -> None:
 def test_recurrence_invariants_fires_on_layer_log_pass_keys_mismatch() -> None:
     """Arm 4: a top-level Layer's ops keys must be exactly {1..num_passes}."""
 
-    layer_log = SimpleNamespace(num_passes=2, ops={1: object()})
+    layer_log = FlatNamespace(num_passes=2, ops={1: object()})
     fake_trace = SimpleNamespace(
         _layer_num_calls={},
-        graph=SimpleNamespace(is_recurrent=False),
+        graph=FlatNamespace(is_recurrent=False),
         layer_labels=[],
         _layer_logs={"relu_1": layer_log},
     )
@@ -1399,7 +1398,7 @@ def test_recurrence_invariants_fires_on_layer_log_pass_keys_mismatch() -> None:
 def test_special_layer_lists_fires_on_input_layers_outside_layer_labels() -> None:
     """Arm 0: input_layers must only name valid layer labels."""
 
-    layer = SimpleNamespace(layer_label="relu_1", label="relu_1", is_input=True)
+    layer = FlatNamespace(layer_label="relu_1", label="relu_1", is_input=True)
     fake_trace = SimpleNamespace(
         input_layers=["ghost_input"],
         output_layers=[],
@@ -1433,7 +1432,7 @@ def test_trace_self_consistency_fires_on_duplicate_op_labels() -> None:
     """Arm 1: op_labels must not contain duplicates."""
 
     fake_trace = SimpleNamespace(
-        op_labels=["relu_1", "relu_1"], _layer_list=[SimpleNamespace(), SimpleNamespace()]
+        op_labels=["relu_1", "relu_1"], _layer_list=[FlatNamespace(), FlatNamespace()]
     )
     with pytest.raises(MetadataInvariantError, match="Duplicate op_labels"):
         _check_trace_self_consistency(fake_trace)  # type: ignore[arg-type]
@@ -1442,7 +1441,7 @@ def test_trace_self_consistency_fires_on_duplicate_op_labels() -> None:
 def test_trace_self_consistency_fires_on_num_param_tensors_mismatch() -> None:
     """Arm 3: num_param_tensors must equal len(param_logs)."""
 
-    layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
+    layer = FlatNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
         _layer_list=[layer],
@@ -1458,8 +1457,8 @@ def test_trace_self_consistency_fires_on_num_param_tensors_mismatch() -> None:
 def test_trace_self_consistency_fires_on_num_params_mismatch() -> None:
     """Arm 4: num_params must equal sum(param_logs num_params)."""
 
-    layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
-    param = SimpleNamespace(num_params=10)
+    layer = FlatNamespace(is_input=False, is_output=False, is_buffer=False)
+    param = FlatNamespace(num_params=10)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
         _layer_list=[layer],
@@ -1476,7 +1475,7 @@ def test_trace_self_consistency_fires_on_num_params_mismatch() -> None:
 def test_trace_self_consistency_fires_on_trainable_frozen_sum_mismatch() -> None:
     """Arm 5: num_params_trainable + num_params_frozen must equal num_params."""
 
-    layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
+    layer = FlatNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
         _layer_list=[layer],
@@ -1495,7 +1494,7 @@ def test_trace_self_consistency_fires_on_trainable_frozen_sum_mismatch() -> None
 def test_trace_self_consistency_fires_on_negative_capture_duration() -> None:
     """Arm 7: capture_duration must be non-negative."""
 
-    layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
+    layer = FlatNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
         _layer_list=[layer],
@@ -1516,7 +1515,7 @@ def test_trace_self_consistency_fires_on_negative_capture_duration() -> None:
 def test_trace_self_consistency_fires_on_start_after_end_time() -> None:
     """Arm 8: capture_start_time must not exceed capture_end_time."""
 
-    layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
+    layer = FlatNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = SimpleNamespace(
         op_labels=["relu_1"],
         _layer_list=[layer],
@@ -1546,7 +1545,7 @@ class _SizedNamespace(SimpleNamespace):
 def test_trace_self_consistency_fires_on_num_tensors_below_saved_ops() -> None:
     """Arm 9: num_tensors must be >= num_saved_ops."""
 
-    layer = SimpleNamespace(is_input=False, is_output=False, is_buffer=False)
+    layer = FlatNamespace(is_input=False, is_output=False, is_buffer=False)
     fake_trace = _SizedNamespace(
         op_labels=["relu_1"],
         _layer_list=[layer],

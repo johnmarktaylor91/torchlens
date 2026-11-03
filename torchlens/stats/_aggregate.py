@@ -253,7 +253,7 @@ def _trace_reference_stream(log: Any) -> tuple[tuple[_StreamEntry, ...], dict[st
         for layer in log._layer_list:
             if layer.is_input:
                 input_labels.add(layer.layer_label)
-            elif layer.is_buffer:
+            elif layer.graph.is_buffer:
                 buffer_labels.add(layer.layer_label)
             elif not layer.is_output:
                 ops.append(layer)

@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
 
@@ -63,7 +64,7 @@ def test_second_backward_does_not_rewrite_recorded_grads(save_mode: str) -> None
     op_payloads = [
         record.out if hasattr(record, "out") else record.grad
         for layer in trace._layer_list
-        for record in layer.grads
+        for record in layer.autograd.grads
     ]
     payloads = [p for p in param_payloads + op_payloads if isinstance(p, torch.Tensor)]
     assert payloads, "expected recorded pass-1 gradient payloads"
@@ -130,7 +131,7 @@ def test_op_grad_payloads_charge_the_save_budget() -> None:
     grad_bytes = sum(
         int(record.grad.nelement() * record.grad.element_size())
         for layer in trace._layer_list
-        for record in layer.grads
+        for record in layer.autograd.grads
         if isinstance(record.grad, torch.Tensor)
     )
     assert grad_bytes > 0, "expected retained op gradient payloads"
@@ -173,7 +174,7 @@ def test_selective_save_grads_consults_predicate_for_params() -> None:
     op_payloads = [
         record.out if hasattr(record, "out") else record.grad
         for layer in trace._layer_list
-        for record in layer.grads
+        for record in layer.autograd.grads
     ]
     assert all(not isinstance(p, torch.Tensor) for p in op_payloads)
 
@@ -346,7 +347,7 @@ def test_saved_grad_hook_clones_once_and_transforms_once() -> None:
         layer = trace._layer_dict_all_keys.get(label)
         if layer is None or not getattr(layer, "has_grad", False):
             continue
-        transformed_slot = getattr(layer, "transformed_grad", None)
+        transformed_slot = record_member(layer, "transformed_grad", None)
         if transformed_slot is not None:
             assert transformed_slot is event.transformed_payload_ref, (
                 f"{label}: layer transformed_grad is a second clone, not the charged event payload"

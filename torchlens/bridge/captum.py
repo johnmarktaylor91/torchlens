@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 
 # ``source_model`` stays importable from this module (audit notebook 16 calls
 # ``bridge.captum.source_model``).
@@ -118,7 +119,7 @@ def _positional_inputs(log: Any) -> tuple[tuple[torch.Tensor, ...], str | None]:
     for layer in log._layer_list:
         if not getattr(layer, "is_input", False):
             continue
-        role = str(getattr(layer, "io_role", "") or "")
+        role = str(record_member(layer, "io_role", "") or "")
         parts = role.split(".")
         out = getattr(layer, "out", None)
         if len(parts) != 2 or parts[0] != "input" or not isinstance(out, torch.Tensor):

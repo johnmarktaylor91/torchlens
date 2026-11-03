@@ -61,7 +61,7 @@ def source_provenance_gaps(trace: "Trace") -> list[tuple[str, str | None, str]]:
     for op in trace._layer_list:
         if op.type == "output":
             continue
-        positions = tuple(op.unattributed_tensor_args or ())
+        positions = tuple(op.call.unattributed_tensor_args or ())
         if not positions or _is_intentional_intervention_replacement(op):
             continue
         label = str(op.label or op.layer_label)

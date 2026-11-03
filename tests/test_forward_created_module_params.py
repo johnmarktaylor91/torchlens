@@ -35,7 +35,7 @@ def test_forward_created_parameters_bind_to_their_initializer_ops() -> None:
     trace = tl.trace(_ModuleInForward(), torch.randn(2, 4))
     by_label = {op.label.split(":")[0]: op for op in trace.ops}
     late = [op for op in trace.ops if op.func_name == "linear"][-1]
-    assert not late.unattributed_tensor_args
+    assert not late.call.unattributed_tensor_args
     parent_funcs = sorted(by_label[label.split(":")[0]].func_name for label in late.parents)
     assert parent_funcs == ["relu", "uniform_", "uniform_"]
     # Each initializer nests to one bottom-level ``uniform_`` write; the enclosing
@@ -47,7 +47,7 @@ def test_forward_created_parameters_bind_to_their_initializer_ops() -> None:
     for op in trace.ops:
         if op.func_name == "uniform_":
             assert [by_label[p.split(":")[0]].func_name for p in op.parents] == ["empty"]
-            assert not op.unattributed_tensor_args
+            assert not op.call.unattributed_tensor_args
 
 
 @pytest.mark.smoke

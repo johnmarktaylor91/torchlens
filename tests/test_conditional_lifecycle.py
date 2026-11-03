@@ -9,6 +9,8 @@ import torch.nn as nn
 
 pd = pytest.importorskip("pandas")
 
+from _record_fakes import FakeRecord  # noqa: E402
+
 import torchlens as tl  # noqa: E402
 from torchlens._data_classes._trace_groups import TraceGraph  # noqa: E402
 from torchlens._data_classes.cleanup import _remove_log_entry_references  # noqa: E402
@@ -169,7 +171,7 @@ def _make_layer_stub(label: str, layer_label: str | None = None) -> SimpleNamesp
         Layer-like object with the fields touched by the lifecycle helpers.
     """
     label_no_pass = layer_label or label.split(":", 1)[0]
-    return SimpleNamespace(
+    return FakeRecord(
         label=label,
         layer_label=label_no_pass,
         _label_raw=label,
@@ -202,11 +204,11 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
         "raw_child_else": "add_1_5",
     }
     parent_layer = _make_layer_stub("raw_parent")
-    parent_layer.conditional_entry_children = ["raw_bool"]
-    parent_layer.conditional_then_children = ["raw_child_then"]
-    parent_layer.conditional_elif_children = {1: ["raw_child_elif"]}
-    parent_layer.conditional_else_children = ["raw_child_else"]
-    parent_layer.conditional_arm_children = {
+    parent_layer._control_flow_entry_children = ["raw_bool"]
+    parent_layer._control_flow_then_children = ["raw_child_then"]
+    parent_layer._control_flow_elif_children = {1: ["raw_child_elif"]}
+    parent_layer._control_flow_else_children = ["raw_child_else"]
+    parent_layer._control_flow_arm_children = {
         0: {
             "then": ["raw_child_then"],
             "elif_1": ["raw_child_elif"],
@@ -234,11 +236,11 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
     _replace_layer_names_for_layer_entry(trace, parent_layer)
     _rename_model_history_layer_names(trace)
 
-    assert parent_layer.conditional_entry_children == ["gt_1_2"]
-    assert parent_layer.conditional_then_children == ["relu_1_3"]
-    assert parent_layer.conditional_elif_children == {1: ["sigmoid_1_4"]}
-    assert parent_layer.conditional_else_children == ["add_1_5"]
-    assert parent_layer.conditional_arm_children == {
+    assert parent_layer.control_flow.entry_children == ["gt_1_2"]
+    assert parent_layer.control_flow.then_children == ["relu_1_3"]
+    assert parent_layer.control_flow.elif_children == {1: ["sigmoid_1_4"]}
+    assert parent_layer.control_flow.else_children == ["add_1_5"]
+    assert parent_layer.control_flow.arm_children == {
         0: {
             "then": ["relu_1_3"],
             "elif_1": ["sigmoid_1_4"],
@@ -262,11 +264,11 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
 def test_conditional_cleanup_scrubs_removed_labels() -> None:
     """Conditional cleanup removes deleted labels and prunes empty containers."""
     parent_pass = _make_layer_stub("parent:1", "parent")
-    parent_pass.conditional_entry_children = ["removed_child:2", "kept_start:1"]
-    parent_pass.conditional_then_children = ["removed_child:2", "kept_child:1"]
-    parent_pass.conditional_elif_children = {1: ["removed_child:2"]}
-    parent_pass.conditional_else_children = ["removed_child:2"]
-    parent_pass.conditional_arm_children = {
+    parent_pass._control_flow_entry_children = ["removed_child:2", "kept_start:1"]
+    parent_pass._control_flow_then_children = ["removed_child:2", "kept_child:1"]
+    parent_pass._control_flow_elif_children = {1: ["removed_child:2"]}
+    parent_pass._control_flow_else_children = ["removed_child:2"]
+    parent_pass._control_flow_arm_children = {
         0: {
             "then": ["removed_child:2", "kept_child:1"],
             "else": ["removed_child:2"],
@@ -274,17 +276,20 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
     }
 
     parent_layer = _make_layer_stub("parent", "parent")
-    parent_layer.conditional_entry_children = ["removed_child", "kept_start"]
-    parent_layer.conditional_then_children = ["removed_child", "kept_child"]
-    parent_layer.conditional_elif_children = {1: ["removed_child"]}
-    parent_layer.conditional_else_children = ["removed_child"]
-    parent_layer.conditional_arm_children = {
+    parent_layer._control_flow_entry_children = ["removed_child", "kept_start"]
+    parent_layer._control_flow_then_children = ["removed_child", "kept_child"]
+    parent_layer._control_flow_elif_children = {1: ["removed_child"]}
+    parent_layer._control_flow_else_children = ["removed_child"]
+    parent_layer._control_flow_arm_children = {
         0: {
             "then": ["removed_child", "kept_child"],
             "else": ["removed_child"],
         }
     }
-    parent_layer.conditional_branch_stack_ops = {((0, "then"),): [1, 2]}
+    parent_layer._control_flow_branch_stack_ops = {((0, "then"),): [1, 2]}
+    # A real Layer keeps its conditional fields under their persisted keys in
+    # ``__dict__``; the Layer scrub keys on that, so the stub carries the key too.
+    parent_layer.__dict__["conditional_entry_children"] = parent_layer.control_flow.entry_children
 
     trace = _StubTrace(layer_list=[parent_pass], layer_logs={"parent": parent_layer})
     trace._graph_conditional_branch_edges = [
@@ -312,18 +317,18 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
     }
     assert trace.graph.conditional_records[0].bool_layers == ["kept_bool:1"]
 
-    assert parent_pass.conditional_entry_children == ["kept_start:1"]
-    assert parent_pass.conditional_then_children == ["kept_child:1"]
-    assert parent_pass.conditional_elif_children == {}
-    assert parent_pass.conditional_else_children == []
-    assert parent_pass.conditional_arm_children == {0: {"then": ["kept_child:1"]}}
+    assert parent_pass.control_flow.entry_children == ["kept_start:1"]
+    assert parent_pass.control_flow.then_children == ["kept_child:1"]
+    assert parent_pass.control_flow.elif_children == {}
+    assert parent_pass.control_flow.else_children == []
+    assert parent_pass.control_flow.arm_children == {0: {"then": ["kept_child:1"]}}
 
-    assert parent_layer.conditional_entry_children == ("kept_start",)
-    assert parent_layer.conditional_then_children == ("kept_child",)
-    assert parent_layer.conditional_elif_children == {}
-    assert parent_layer.conditional_else_children == ()
-    assert parent_layer.conditional_arm_children == {0: {"then": ["kept_child"]}}
-    assert parent_layer.conditional_branch_stack_ops == {((0, "then"),): [1, 2]}
+    assert parent_layer.control_flow.entry_children == ("kept_start",)
+    assert parent_layer.control_flow.then_children == ("kept_child",)
+    assert parent_layer.control_flow.elif_children == {}
+    assert parent_layer.control_flow.else_children == ()
+    assert parent_layer.control_flow.arm_children == {0: {"then": ["kept_child"]}}
+    assert parent_layer._control_flow_branch_stack_ops == {((0, "then"),): [1, 2]}
 
 
 def test_batch_remove_log_entries_accepts_finished_layer_objects() -> None:
@@ -334,7 +339,7 @@ def test_batch_remove_log_entries_accepts_finished_layer_objects() -> None:
 
     trace._batch_remove_log_entries([relu_layer], remove_references=True)
 
-    assert not hasattr(relu_layer, "conditional_entry_children")
+    assert not hasattr(relu_layer, "_control_flow_entry_children")
 
 
 def test_to_pandas_exports_conditional_columns() -> None:
@@ -347,16 +352,16 @@ def test_to_pandas_exports_conditional_columns() -> None:
     target_layer = next(
         layer for layer in trace._layer_list if layer.type not in {"input", "output"}
     )
-    target_layer.func_config = {"alpha": 1}
-    target_layer.is_terminal_conditional_bool = True
-    target_layer.conditional_context_kind = "if_test"
-    target_layer.conditional_wrapper_kind = "bool_cast"
+    target_layer._call_config = {"alpha": 1}
+    target_layer._control_flow_is_terminal_conditional_bool = True
+    target_layer._control_flow_context_kind = "if_test"
+    target_layer._control_flow_wrapper_kind = "bool_cast"
     target_layer.terminal_conditional_id = 7
-    target_layer.conditional_branch_depth = 2
-    target_layer.conditional_branch_stack = [(0, "then"), (1, "elif_1")]
-    target_layer.conditional_then_children = ["then_child"]
-    target_layer.conditional_elif_children = {1: ["elif_child"]}
-    target_layer.conditional_else_children = ["else_child"]
+    target_layer._control_flow_branch_depth = 2
+    target_layer._control_flow_branch_stack = [(0, "then"), (1, "elif_1")]
+    target_layer._control_flow_then_children = ["then_child"]
+    target_layer._control_flow_elif_children = {1: ["elif_child"]}
+    target_layer._control_flow_else_children = ["else_child"]
 
     layer_df = trace.to_pandas()
 

@@ -15,6 +15,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 
+from .._utils._record_group_table import record_member
 from . import ArtifactError
 from ._forgery_identity_facts import _validate_identity_facts
 
@@ -301,7 +302,7 @@ def _validate_site_keys(trace: Trace) -> None:
             )
         else:
             expected = minter.mint(
-                tuple(getattr(op, "module_call_stack", ()) or ()),
+                tuple(record_member(op, "module_call_stack", ()) or ()),
                 str(getattr(op, "type", "") or ""),
                 (
                     getattr(op, "multi_output_index", None)
@@ -1333,7 +1334,7 @@ def _validate_structure_only_coherence(trace: Trace) -> None:
         )
     for op in _trace_ops(trace):
         for field_name in _OP_VALUE_PAYLOAD_FIELDS:
-            if getattr(op, field_name, None) is not None:
+            if record_member(op, field_name, None) is not None:
                 _structure_only_invalid(
                     f"op {getattr(op, 'label', '<unknown>')!r} retains a value "
                     f"payload in {field_name!r} under the structure-only marker",
@@ -1772,7 +1773,7 @@ def _validate_injection_provenance(trace: Trace) -> None:
     """
 
     for op in _trace_ops(trace):
-        record = getattr(op, "injection_provenance", None)
+        record = record_member(op, "injection_provenance", None)
         if record is None:
             continue
         check_injection_provenance_row(record, getattr(op, "label", "<unknown>"))

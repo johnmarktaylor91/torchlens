@@ -105,7 +105,7 @@ def test_memory_fields_are_bytes_and_format_directly() -> None:
     """Trace, Op, Layer, Buffer, Module, ModuleCall, and Param memory are Bytes."""
 
     trace = _trace_memory_model()
-    op = next(record for record in trace.ops if record.activation_memory)
+    op = next(record for record in trace.ops if record.cost.activation_memory)
     layer = trace.layers[op.layer_label]
     module = trace.modules["linear"]
     call = module.ops[0]
@@ -115,11 +115,11 @@ def test_memory_fields_are_bytes_and_format_directly() -> None:
     fields = [
         trace.cost.total_activation_memory,
         trace.cost.saved_activation_memory,
-        op.activation_memory,
-        op.input_memory,
-        op.param_memory,
-        layer.activation_memory,
-        layer.total_activation_memory,
+        op.cost.activation_memory,
+        op.cost.input_memory,
+        op.cost.param_memory,
+        layer.cost.activation_memory,
+        layer.cost.total_activation_memory,
         module.param_memory,
         module.total_output_activation_memory,
         call.output_activation_memory,
@@ -129,15 +129,15 @@ def test_memory_fields_are_bytes_and_format_directly() -> None:
     ]
 
     assert all(isinstance(field, tl.types.Bytes) for field in fields)
-    assert re.fullmatch(r"-?\d+(?:\.\d+)? [KMGTPE]?B", str(op.activation_memory))
-    assert op.activation_memory + 1 > op.activation_memory
+    assert re.fullmatch(r"-?\d+(?:\.\d+)? [KMGTPE]?B", str(op.cost.activation_memory))
+    assert op.cost.activation_memory + 1 > op.cost.activation_memory
 
 
 def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
     """Runtime duration, FLOP, and MAC fields use quantity wrappers."""
 
     trace = _trace_memory_model()
-    op = next(record for record in trace.ops if record.flops_forward)
+    op = next(record for record in trace.ops if record.cost.flops_forward)
     layer = trace.layers[op.layer_label]
     module = trace.modules["linear"]
     call = module.ops[0]
@@ -148,8 +148,8 @@ def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
         trace.provenance.cleanup_duration,
         trace.provenance.duration,
         trace.cost.func_calls_duration,
-        op.func_duration,
-        layer.func_duration,
+        op.cost.duration,
+        layer.cost.duration,
         module.forward_duration,
         module.total_forward_duration,
         module.func_calls_duration,
@@ -158,11 +158,11 @@ def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
         call.func_calls_duration,
     ]
     flops_fields = [
-        op.flops_forward,
-        op.flops_backward,
-        op.flops_total,
-        layer.flops_forward,
-        layer.total_flops_forward,
+        op.cost.flops_forward,
+        op.cost.flops_backward,
+        op.cost.flops_total,
+        layer.cost.flops_forward,
+        layer.cost.total_flops_forward,
         trace.cost.total_flops_forward,
         trace.cost.total_flops,
         module.total_flops_forward,
@@ -170,10 +170,10 @@ def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
         trace.cost.flops_by_op_type()[op.type]["forward"],
     ]
     macs_fields = [
-        op.macs_forward,
+        op.cost.macs_forward,
         op.macs_total,
-        layer.macs_forward,
-        layer.total_macs_forward,
+        layer.cost.macs_forward,
+        layer.cost.total_macs_forward,
         trace.cost.total_macs_forward,
         trace.cost.total_macs,
         module.total_macs_forward,

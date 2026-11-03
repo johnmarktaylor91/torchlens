@@ -158,7 +158,7 @@ def test_giant_equivalence_class_is_exact(wide_capture) -> None:
     mults = _mult_labels(log)
     assert len(mults) == N_STREAMS
     assert len(log._layer_list) == N_STREAMS + 5  # input, linear, stack, sum, output
-    members = log[mults[0]].equivalent_ops
+    members = log[mults[0]].graph.equivalent_ops
     assert len(members) == N_STREAMS
     assert all(label in members for label in mults)
 
@@ -168,9 +168,9 @@ def test_giant_equivalence_view_is_one_shared_object(wide_capture) -> None:
 
     log, _ = wide_capture
     mults = _mult_labels(log)
-    view_ids = {id(log[label].equivalent_ops) for label in mults}
+    view_ids = {id(log[label].graph.equivalent_ops) for label in mults}
     assert len(view_ids) == 1
-    assert log[mults[0]].equivalent_ops is log[mults[-1]].equivalent_ops
+    assert log[mults[0]].graph.equivalent_ops is log[mults[-1]].graph.equivalent_ops
 
 
 @pytest.mark.usefixtures("legacy_structural_grouper")
@@ -202,8 +202,8 @@ def test_giant_cohort_groups_silently_below_real_ceiling() -> None:
     ]
     assert scaling_warnings == []
     mults = _mult_labels(log)
-    assert len(log[mults[0]].recurrent_ops) == 1
-    assert len(log[mults[-1]].recurrent_ops) == 1
+    assert len(log[mults[0]].graph.recurrent_ops) == 1
+    assert len(log[mults[-1]].graph.recurrent_ops) == 1
     log.cleanup()
 
 
@@ -216,8 +216,8 @@ def test_giant_comprehension_is_one_layer_under_call_sites(wide_capture) -> None
 
     log, _ = wide_capture
     mults = _mult_labels(log)
-    assert len(log[mults[0]].recurrent_ops) == N_STREAMS
-    assert log[mults[0]].recurrent_ops is log[mults[-1]].recurrent_ops
+    assert len(log[mults[0]].graph.recurrent_ops) == N_STREAMS
+    assert log[mults[0]].graph.recurrent_ops is log[mults[-1]].graph.recurrent_ops
 
 
 def test_deep_recurrence_rolls_to_one_layer_per_site(deep_capture) -> None:
@@ -246,9 +246,9 @@ def test_deep_recurrence_group_view_shared_across_all_passes(deep_capture) -> No
     """All 300 passes read the ONE cached recurrent_ops view (O(1) live view)."""
 
     log = deep_capture
-    views = {id(log[f"linear_1_1:{p}"].recurrent_ops) for p in range(1, N_PASSES + 1)}
+    views = {id(log[f"linear_1_1:{p}"].graph.recurrent_ops) for p in range(1, N_PASSES + 1)}
     assert len(views) == 1
-    assert len(log["linear_1_1:1"].recurrent_ops) == N_PASSES
+    assert len(log["linear_1_1:1"].graph.recurrent_ops) == N_PASSES
 
 
 def test_deep_recurrence_site_key_stable_across_passes(deep_capture) -> None:

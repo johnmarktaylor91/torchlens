@@ -12,6 +12,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
 
 from .._capture.arg_positions import _normalize_func_name
+from .._utils._record_group_table import record_member
 from ._errors import ReceptiveFieldConfigurationError
 
 if TYPE_CHECKING:
@@ -125,7 +126,7 @@ class ReceptiveFieldRuleContext:
             is a tuple, preserving per-axis rule call sites.
         """
 
-        value = self.op.func_config.get(key, default)
+        value = self.op.call.config.get(key, default)
         if isinstance(default, tuple) and not isinstance(value, tuple):
             return (value,) * len(default)
         return value
@@ -156,21 +157,21 @@ class ReceptiveFieldRuleContext:
         """
 
         if isinstance(name_or_pos, str):
-            if name_or_pos in self.op.non_tensor_kwargs:
-                return self.op.non_tensor_kwargs[name_or_pos]
+            if name_or_pos in self.op.call.non_tensor_kwargs:
+                return self.op.call.non_tensor_kwargs[name_or_pos]
             try:
-                raw_position = tuple(self.op.arg_names).index(name_or_pos)
+                raw_position = tuple(self.op.call.arg_names).index(name_or_pos)
             except ValueError:
                 return default
-            num_pos_args = int(getattr(self.op, "num_pos_args", 0) or 0)
+            num_pos_args = int(record_member(self.op, "num_pos_args", 0) or 0)
             if raw_position >= num_pos_args:
                 return default
             compacted = self._compacted_positional_index(raw_position, num_pos_args)
             if compacted is None:
                 return default
             name_or_pos = compacted
-        if 0 <= name_or_pos < len(self.op.non_tensor_pos_args):
-            return self.op.non_tensor_pos_args[name_or_pos]
+        if 0 <= name_or_pos < len(self.op.call.non_tensor_pos_args):
+            return self.op.call.non_tensor_pos_args[name_or_pos]
         return default
 
     def _compacted_positional_index(self, raw_position: int, num_pos_args: int) -> int | None:
@@ -191,17 +192,17 @@ class ReceptiveFieldRuleContext:
             reconstructed exactly (the lookup then fails closed).
         """
 
-        dropped = num_pos_args - len(self.op.non_tensor_pos_args)
+        dropped = num_pos_args - len(self.op.call.non_tensor_pos_args)
         if dropped == 0:
             return raw_position
         tensor_positions: set[int] = set()
-        positions = getattr(self.op, "parent_arg_positions", None) or {}
+        positions = record_member(self.op, "parent_arg_positions", None) or {}
         for key in positions.get("args", {}):
             if isinstance(key, int):
                 tensor_positions.add(key)
             elif isinstance(key, tuple) and key and isinstance(key[0], int):
                 tensor_positions.add(key[0])
-        for token in getattr(self.op, "unattributed_tensor_args", ()) or ():
+        for token in record_member(self.op, "unattributed_tensor_args", ()) or ():
             if isinstance(token, str) and token.startswith("arg"):
                 head = token[3:].split(".", 1)[0]
                 if head.isdigit():
@@ -233,7 +234,7 @@ class ReceptiveFieldRuleContext:
         if parent_index < 0 or parent_index >= len(self.op.parents):
             return None
         parent_label = self.op.parents[parent_index]
-        positions = self.op.parent_arg_positions
+        positions = self.op.call.parent_arg_positions
         for position, label in positions.get("args", {}).items():
             if label == parent_label:
                 return f"args:{position}"

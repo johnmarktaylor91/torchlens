@@ -130,7 +130,7 @@ def test_tampered_snapshot_at_recomputed_parent_slot_fails(two) -> None:
     fork = trace.fork()
     fork.do(tl.label("relu_1_2"), tl.zero_ablate())
     child = first_op(fork[_add_op(trace).label])
-    saved = list(child.saved_args)
+    saved = list(child.call.saved_args)
     saved[0] = saved[0] + 1.0
     child._internal_set("saved_args", saved)
     assert _validate(fork, 2.0 * b) is False
@@ -143,7 +143,7 @@ def test_swapped_parent_positions_on_recomputed_child_fails(two) -> None:
     fork = trace.fork()
     fork.do(tl.label("relu_1_2"), tl.zero_ablate())
     child = first_op(fork[_add_op(trace).label])
-    positions = child.parent_arg_positions["args"]
+    positions = child.call.parent_arg_positions["args"]
     child._internal_set(
         "parent_arg_positions",
         {"args": {0: positions[1], 1: positions[0]}, "kwargs": {}},
@@ -178,7 +178,7 @@ def test_stamp_digest_mismatch_fails_the_boundary_and_the_validation(two) -> Non
     fork.do(edge.__selection__(), tl.zero_ablate())
     child = first_op(fork[_add_op(trace).label])
     key = (edge.arg_kind, edge.arg_path)
-    store = dict(child.edge_substitutions)
+    store = dict(child.graph.edge_substitutions)
     store[key] = {**store[key], "value": store[key]["value"] + 1.0}
     child._internal_set("edge_substitutions", store)
     verdict = _check_edge_intervention_boundary(fork, child)

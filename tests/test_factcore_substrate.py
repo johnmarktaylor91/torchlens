@@ -11,6 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.report._compute_truth import compute_aggregation
 from torchlens.report._factcore import GRAINS, capture_fingerprint, factcore
 from torchlens.report._health import health_facts
@@ -50,7 +51,7 @@ def test_counts_record_names_its_grains(loop_trace) -> None:
         for op in loop_trace._layer_list
         if getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
-        or getattr(op, "is_buffer", False)
+        or record_member(op, "is_buffer", False)
     )
     assert counts.tracked_tensor_rows == len(loop_trace._layer_list)
     assert counts.alias_rows == alias_rows
@@ -212,7 +213,7 @@ def test_health_alias_rows_excluded_and_disclosed(loop_trace) -> None:
         for op in trace._layer_list
         if getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
-        or getattr(op, "is_buffer", False)
+        or record_member(op, "is_buffer", False)
     }
     for label in facts.nonfinite_labels:
         assert label not in alias_labels

@@ -358,7 +358,7 @@ def test_opaque_nested_output_fallback_preserves_each_tensor_leaf() -> None:
     trace = tl.trace(HFLikeOpaqueCacheModel(), torch.tensor([1.0]))
 
     assert trace.output_layers == ["output_1", "output_2", "output_3", "output_4", "output_5"]
-    assert [trace.ops[label].io_role for label in trace.output_layers] == [
+    assert [trace.ops[label].graph.io_role for label in trace.output_layers] == [
         "output.logits",
         "output.past_key_values.layers.0.keys",
         "output.past_key_values.layers.0.values",

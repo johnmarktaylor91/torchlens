@@ -113,12 +113,14 @@ def test_closure_constant_is_a_constant_source_op_and_validates() -> None:
     assert _captured_op_kinds(trace) == ROWS[CLOSURE_ROW].expected_op_kinds
     (constant,) = _constant_ops(trace)
     assert tuple(constant.parents or ()) == ()
-    assert constant.is_internal_source and not constant.is_buffer and not constant.is_input
+    assert (
+        constant.graph.is_internal_source and not constant.graph.is_buffer and not constant.is_input
+    )
     assert constant.layer_label.startswith("constant_")
     np.testing.assert_array_equal(constant.out.detach().numpy(), torch_roster.W44)
     (matmul,) = [op for op in trace._layer_list if str(op.func_name) == "matmul"]
     assert constant.layer_label in {str(parent).split(":")[0] for parent in matmul.parents}
-    assert not tuple(matmul.unattributed_tensor_args or ())
+    assert not tuple(matmul.call.unattributed_tensor_args or ())
     status = protocol.validate(trace, reference)
     assert status.state == "passed", status.message
     assert not [d for d in status.decisions if d.get("decision") == "failed"]
@@ -279,9 +281,9 @@ def test_after_load_cell_reloads_at_the_replay_level(tmp_path: Any) -> None:
     path = tmp_path / "c2.tlspec"
     adapter.save(trace, path)
     loaded = adapter.load(path)
-    assert all(op.saved_args is None for op in loaded._layer_list)
+    assert all(op.call.saved_args is None for op in loaded._layer_list)
     replay = load_for_replay(adapter, trace, path, loaded)
-    assert replay is not loaded and any(op.saved_args is not None for op in replay._layer_list)
+    assert replay is not loaded and any(op.call.saved_args is not None for op in replay._layer_list)
     status = protocol.validate(replay, reference)
     assert status.state == "passed", status.message
     assert load_for_replay(SimpleNamespace(), trace, path, loaded) is loaded

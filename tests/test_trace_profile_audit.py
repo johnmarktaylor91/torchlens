@@ -88,7 +88,7 @@ def test_trace_profile_levels_columns_aggregation_and_sorting() -> None:
         trace[label] for call in trace.modules["features"].calls.values() for label in call.ops
     ]
     assert features_row["op_count"] == len(features_ops)
-    assert features_row["flops"] == sum(int(op.flops_forward or 0) for op in features_ops)
+    assert features_row["flops"] == sum(int(op.cost.flops_forward or 0) for op in features_ops)
     assert "ProfileReport(" not in repr(trace.profile())
 
 
@@ -157,7 +157,7 @@ def test_trace_profile_honesty_labels_missing_timing_as_unknown() -> None:
 
     trace = tl.trace(ProfileModel().eval(), torch.randn(2, 4))
     missing_timing_op = next(
-        op for op in trace._layer_list if not (op.is_input or op.is_output or op.is_buffer)
+        op for op in trace._layer_list if not (op.is_input or op.is_output or op.graph.is_buffer)
     )
     missing_timing_op._internal_set("func_duration", None)
     profile = trace.profile(sort_by="activation_memory")

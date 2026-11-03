@@ -33,6 +33,7 @@ import torch.nn as nn
 from torchlens import trace as trace_fn
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
+from torchlens._utils._record_group_table import record_member
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
@@ -216,14 +217,14 @@ def test_assert_then_if_still_materializes_branch() -> None:
 
     guarded_relu = _find_only_layer(guarded, "relu")
     control_relu = _find_only_layer(control, "relu")
-    assert guarded_relu.conditional_branch_stack == ((0, "then"),)
-    assert guarded_relu.conditional_branch_stack == control_relu.conditional_branch_stack
+    assert guarded_relu.control_flow.branch_stack == ((0, "then"),)
+    assert guarded_relu.control_flow.branch_stack == control_relu.control_flow.branch_stack
 
     (conditional,) = list(guarded.graph.conditionals)
     assert conditional.fired_arm_kind == "then"
     bool_layer = _find_only_layer(guarded, "all")
-    assert bool_layer.conditional_context_kind == "if_test"
-    assert bool_layer.is_terminal_conditional_bool is True
+    assert bool_layer.control_flow.context_kind == "if_test"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is True
     assert bool_layer.terminal_conditional_id == 0
 
     _assert_no_false_fired(guarded, {"relu", "all", "__gt__", "mul"}, {"sigmoid"})
@@ -237,7 +238,7 @@ def test_while_then_if_still_materializes_branch() -> None:
 
     assert len(trace.graph.conditional_records) == 1
     sigmoid_layer = _find_only_layer(trace, "sigmoid")
-    assert sigmoid_layer.conditional_branch_stack == ((0, "else"),)
+    assert sigmoid_layer.control_flow.branch_stack == ((0, "else"),)
     (conditional,) = list(trace.graph.conditionals)
     assert conditional.fired_arm_kind == "else"
 
@@ -277,13 +278,13 @@ def test_predicate_reuse_materializes_every_branch_consumer() -> None:
 
     relu_layer = _find_only_layer(trace, "relu")
     sigmoid_layer = _find_only_layer(trace, "sigmoid")
-    assert list(relu_layer.conditional_branch_stack) == [(events[0].id, "then")]
-    assert list(sigmoid_layer.conditional_branch_stack) == [(events[1].id, "then")]
+    assert list(relu_layer.control_flow.branch_stack) == [(events[0].id, "then")]
+    assert list(sigmoid_layer.control_flow.branch_stack) == [(events[1].id, "then")]
     assert {conditional.fired_arm_kind for conditional in trace.graph.conditionals} == {"then"}
 
     # The shared bool keeps a deterministic primary conditional id.
     assert bool_layer.terminal_conditional_id == events[0].id
-    assert bool_layer.is_terminal_conditional_bool is True
+    assert bool_layer.control_flow.is_terminal_conditional_bool is True
 
     _assert_no_false_fired(trace, {"relu", "sigmoid", "all", "__gt__", "mul", "add"}, set())
     _assert_bool_value_never_contradicts_fired(trace)
@@ -335,8 +336,8 @@ def test_same_line_nested_ternary_does_not_cross_wire_bools() -> None:
         assert bool_lists[0] != bool_lists[1]
     else:
         for layer in trace._layer_list:
-            assert layer.conditional_branch_stack == ()
-            assert getattr(layer, "is_terminal_conditional_bool", False) is False
+            assert layer.control_flow.branch_stack == ()
+            assert record_member(layer, "is_terminal_conditional_bool", False) is False
 
     # relu executed; tanh/sigmoid did not — no arm may claim they fired.
     _assert_no_false_fired(trace, {"relu", "all", "__gt__", "__lt__", "mul"}, {"sigmoid", "tanh"})
@@ -353,12 +354,12 @@ def test_multi_line_nested_ternary_does_not_cross_wire_bools() -> None:
     bool_layers = [
         layer
         for layer in trace._layer_list
-        if getattr(layer, "is_scalar_bool", False) and not layer.is_output
+        if record_member(layer, "is_scalar_bool", False) and not layer.is_output
     ]
     assert len(bool_layers) == 2
     creation_lines = {
         layer.layer_label: next(
-            frame.line_number for frame in layer.code_context if frame.file == __file__
+            frame.line_number for frame in layer.source.frames if frame.file == __file__
         )
         for layer in bool_layers
     }
@@ -457,7 +458,7 @@ def test_multi_decorator_forward_attributes_taken_branch(
 
     assert len(trace.graph.conditional_records) == 1
     relu_layer = _find_only_layer(trace, "relu")
-    assert relu_layer.conditional_branch_stack == ((0, "then"),)
+    assert relu_layer.control_flow.branch_stack == ((0, "then"),)
     (conditional,) = list(trace.graph.conditionals)
     assert conditional.fired_arm_kind == "then"
     then_arm = conditional.arms[0]
@@ -639,9 +640,9 @@ def test_float_truthiness_stays_documented_false_negative(
     assert trace.graph.conditional_records == []
     assert list(trace.graph.conditionals) == []
     sum_layer = _find_only_layer(trace, "sum")
-    assert sum_layer.is_terminal_conditional_bool is not True
+    assert sum_layer.control_flow.is_terminal_conditional_bool is not True
     for layer in trace._layer_list:
-        assert layer.conditional_branch_stack == ()
+        assert layer.control_flow.branch_stack == ()
 
     _assert_no_false_fired(trace, executed, not_executed)
     _assert_bool_value_never_contradicts_fired(trace)
@@ -867,7 +868,7 @@ def test_single_line_item_scalar_if_never_false_fires() -> None:
 
     assert list(trace.graph.conditionals) == []
     for layer in trace._layer_list:
-        assert layer.conditional_branch_stack == ()
+        assert layer.control_flow.branch_stack == ()
 
     _assert_no_false_fired(trace, {"sum", "item", "mul"}, {"relu"})
     _assert_bool_value_never_contradicts_fired(trace)
@@ -902,7 +903,7 @@ def test_single_line_arm_body_bool_never_becomes_the_test() -> None:
     all_ops = [layer for layer in trace._layer_list if layer.func_name == "all"]
     assert len(all_ops) == 2
     for op in all_ops:
-        assert op.is_terminal_conditional_bool is False
+        assert op.control_flow.is_terminal_conditional_bool is False
         assert op.terminal_conditional_id is None
     for event in trace.graph.conditional_records:
         assert not set(event.bool_layers) & {op.layer_label for op in all_ops}
@@ -1025,7 +1026,7 @@ def test_rolled_loop_multi_evaluation_refuses_arbitrary_pass_value() -> None:
     # queryable on the ops themselves.
     bool_ops = [layer for layer in trace._layer_list if layer.func_name == "__lt__"]
     assert len({op.layer_label for op in bool_ops}) == 1
-    assert {op.pass_number: op.bool_value for op in bool_ops} == {1: True, 2: False}
+    assert {op.pass_number: op.control_flow.bool_value for op in bool_ops} == {1: True, 2: False}
 
     _assert_no_false_fired(trace, {"relu", "mul", "sum", "__lt__", "add"}, set())
     _assert_bool_value_never_contradicts_fired(trace)
@@ -1049,7 +1050,7 @@ def test_single_witness_rolled_bool_resolves_exact_pass_value() -> None:
 
     bool_ops = [layer for layer in trace._layer_list if layer.func_name == "__lt__"]
     assert len({op.layer_label for op in bool_ops}) == 1, "loop no longer rolls; fix the model"
-    assert {op.pass_number: op.bool_value for op in bool_ops} == {1: True, 2: False}
+    assert {op.pass_number: op.control_flow.bool_value for op in bool_ops} == {1: True, 2: False}
 
     _assert_no_false_fired(trace, {"relu", "mul", "sum", "__lt__"}, {"sigmoid"})
     _assert_bool_value_never_contradicts_fired(trace)

@@ -55,7 +55,7 @@ def test_witness_side_one_constructions_are_zero_by_rule() -> None:
         for name in ("arange", "tensor", "zeros", "ones_like"):
             assert name in by_func, f"construction {name} not captured"
             for op in by_func[name]:
-                assert int(op.flops_forward) == 0, name
+                assert int(op.cost.flops_forward) == 0, name
         coverage = log.compute_coverage
         assert coverage["unknown"] == 0
         assert coverage["zero_by_rule"] >= 4

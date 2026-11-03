@@ -172,8 +172,8 @@ def test_validation_capture_saves_an_alias_of_its_copys_parameters() -> None:
 
     def observe(trace: Any) -> None:
         for op in trace._layer_list:
-            if op.func_name == "linear" and op.saved_args:
-                saved_weights.append(op.saved_args[1])
+            if op.func_name == "linear" and op.call.saved_args:
+                saved_weights.append(op.call.saved_args[1])
 
     handle = model.register_forward_pre_hook(record)
     with warnings.catch_warnings():
@@ -206,7 +206,7 @@ def test_a_user_save_arg_values_trace_still_saves_copies_after_validation() -> N
     linears = [op for op in trace._layer_list if op.func_name == "linear"]
     assert len(linears) == 2
     for op, parameter in zip(linears, (model.lin.weight, model.out.weight), strict=True):
-        saved = op.saved_args[1]
+        saved = op.call.saved_args[1]
         assert not isinstance(saved, nn.Parameter)
         assert saved.untyped_storage().data_ptr() != parameter.untyped_storage().data_ptr()
         assert torch.equal(saved, parameter.detach())

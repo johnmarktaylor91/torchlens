@@ -121,13 +121,13 @@ def test_sp1_wide_output_linear_quantities() -> None:
         n_params = d_in * d_out + d_out
         macs = batch * d_in * d_out
         assert int(trace.num_params) == n_params
-        assert int(op.param_memory) == n_params * fp32
-        assert int(op.macs_forward) == macs
+        assert int(op.cost.param_memory) == n_params * fp32
+        assert int(op.cost.macs_forward) == macs
         # fma2 convention: 2 x MACs plus the bias adds (batch x d_out).
-        assert int(op.flops_forward) == 2 * macs + batch * d_out
-        assert int(op.bytes_read) == (batch * d_in + n_params) * fp32
-        assert int(op.bytes_written) == batch * d_out * fp32
-        assert int(op.activation_memory) == batch * d_out * fp32
+        assert int(op.cost.flops_forward) == 2 * macs + batch * d_out
+        assert int(op.cost.bytes_read) == (batch * d_in + n_params) * fp32
+        assert int(op.cost.bytes_written) == batch * d_out * fp32
+        assert int(op.cost.activation_memory) == batch * d_out * fp32
         assert int(trace.cost.saved_activation_memory) == _real_retained_bytes(trace)
         rss_growth_mib = _current_rss_mib() - rss_before
     finally:

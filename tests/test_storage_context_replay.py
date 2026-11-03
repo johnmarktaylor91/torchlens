@@ -140,7 +140,7 @@ def test_capture_saves_the_aliased_receiver_with_its_source_storage() -> None:
         )
     try:
         op = next(layer for layer in trace._layer_list if layer.func_name == "as_strided_")
-        saved = op.saved_args[0]
+        saved = op.call.saved_args[0]
         assert saved.storage_offset() == 1 and saved.untyped_storage().nbytes() == _SRC_BYTES
         assert saved.untyped_storage().data_ptr() != model.src.untyped_storage().data_ptr()
         assert torch.equal(op.out, torch.tensor([2.0, 3.0]))
@@ -188,12 +188,12 @@ def test_wrong_storage_context_still_fails_replay() -> None:
         from torchlens.validation._core import validate_saved_outs
 
         op = next(layer for layer in trace._layer_list if layer.func_name == "as_strided_")
-        saved = op.saved_args[0]
+        saved = op.call.saved_args[0]
         context = torch.arange(16, dtype=torch.float32) + 1
         context[1:5] = saved
         wrong = torch.empty(0).set_(context.untyped_storage(), 1, (4,), (1,))
         assert torch.equal(wrong, saved)
-        op.saved_args[0] = wrong
+        op.call.saved_args[0] = wrong
         status = validate_saved_outs(trace, [model(x)], validate_metadata=False)
         assert status.state == "failed"
     finally:

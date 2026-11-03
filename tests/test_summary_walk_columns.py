@@ -267,7 +267,7 @@ def test_graph_label_flops_rows_carry_the_note_on_attention_nodes_only() -> None
 
     field_lines = compute_default_node_lines(sdpa, node_label_fields=["label", "flops"])
     assert field_lines[-1] == ATTENTION_FULL_SQUARE_NOTE
-    assert field_lines[-2] == str(sdpa.flops_forward)
+    assert field_lines[-2] == str(sdpa.cost.flops_forward)
     overlay_lines = compute_default_node_lines(sdpa, node_overlay="flops")
     assert overlay_lines[-2].startswith("flops: ")
     assert overlay_lines[-1] == ATTENTION_FULL_SQUARE_NOTE

@@ -20,6 +20,7 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
+from .._utils._record_group_table import record_member
 from .._utils._torch_compat import tensor_has_named_dims
 from .._utils.hashing import compute_graph_shape_hash
 from ..backends.torch.backward import _register_forward_grad_fn
@@ -240,7 +241,7 @@ def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
             trace.__dict__[key] = new_log.__dict__[key]
     for layer in trace._layer_list:
         _register_forward_grad_fn(
-            trace, getattr(layer, "grad_fn_handle", None), layer._layer_label_raw
+            trace, record_member(layer, "grad_fn_handle", None), layer._layer_label_raw
         )
 
 
@@ -734,7 +735,7 @@ def _is_append_buffer_side_effect_layer(layer: Any, layer_by_raw: dict[str, Any]
         if child_layer is None:
             return False
         if not (
-            getattr(child_layer, "is_buffer", False)
+            record_member(child_layer, "is_buffer", False)
             and getattr(child_layer, "buffer_write_kind", None) is not None
         ):
             return False
@@ -755,10 +756,10 @@ def _validate_append_tensor_pair(old_layer: Any, new_layer: Any, field_name: str
         Tensor field to compare.
     """
 
-    if getattr(old_layer, "is_buffer", False) or getattr(new_layer, "is_buffer", False):
+    if record_member(old_layer, "is_buffer", False) or record_member(new_layer, "is_buffer", False):
         return
-    old_value = getattr(old_layer, field_name, None)
-    new_value = getattr(new_layer, field_name, None)
+    old_value = record_member(old_layer, field_name, None)
+    new_value = record_member(new_layer, field_name, None)
     if old_value is None and new_value is None:
         return
     if not isinstance(old_value, torch.Tensor) or not isinstance(new_value, torch.Tensor):
@@ -806,7 +807,7 @@ def _validate_append_grad_pair(
 
     grad_fields = ("grad", "transformed_grad")
     has_any_grad = any(
-        isinstance(getattr(layer, field_name, None), torch.Tensor)
+        isinstance(record_member(layer, field_name, None), torch.Tensor)
         for layer in (old_layer, new_layer)
         for field_name in grad_fields
     )

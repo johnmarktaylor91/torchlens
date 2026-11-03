@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._utils._record_group_table import record_member
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
@@ -1570,7 +1571,7 @@ def _orphan_island_logs(self: "Trace") -> tuple[Any, ...]:
     orphan_logs = tuple(
         op
         for op in orphan_husks
-        if bool(getattr(op, "is_orphan", False))
+        if bool(record_member(op, "is_orphan", False))
         and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
     )
     if not orphan_logs and orphan_husks:
@@ -1849,7 +1850,7 @@ def _is_collapsed_module(
     # Bottom-level submodule outputs are rendered at the parent nesting level,
     # not their own. Top-level atomic leaves have no module parent to bubble
     # up to, so they remain eligible for top-level collapse.
-    if getattr(node, "is_atomic_module", False) and node_call_depth > 1:
+    if record_member(node, "is_atomic_module", False) and node_call_depth > 1:
         node_call_depth -= 1
 
     return node_call_depth >= vis_call_depth

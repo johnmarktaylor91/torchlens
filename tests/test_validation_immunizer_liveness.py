@@ -214,7 +214,7 @@ def test_structural_template_decision_must_exclude_runtime_fill_values(
     trace = _capture(_FullLikeTensorFillModel(), torch.randn(3, 4))
     try:
         op = _op_with_func_name(trace, "full_like")
-        positions = op.parent_arg_positions["args"]
+        positions = op.call.parent_arg_positions["args"]
         fill_parent = positions[1]
         _freeze_op_replay(op)
         _assert_dead_edge_is_caught(trace, op, fill_parent)

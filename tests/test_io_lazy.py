@@ -264,7 +264,7 @@ def test_lazy_materialize_matches_eager_load_bit_exactly(tmp_path: Path) -> None
 
     eager_tensor = eager_layer.out
     assert isinstance(eager_tensor, torch.Tensor)
-    lazy_tensor = lazy_layer.materialize_out()
+    lazy_tensor = lazy_layer.payload.materialize_out()
 
     assert torch.equal(lazy_tensor, eager_tensor)
 
@@ -280,7 +280,7 @@ def test_lazy_materialize_honors_cuda_map_location(tmp_path: Path) -> None:
     lazy_log = load(bundle_path, lazy=True)
     layer = _first_saved_layer(lazy_log)
 
-    tensor = layer.materialize_out(map_location="cuda")
+    tensor = layer.payload.materialize_out(map_location="cuda")
 
     assert tensor.device.type == "cuda"
 
@@ -340,17 +340,17 @@ def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> N
     layer = next(
         layer
         for layer in lazy_log._layer_list
-        if layer.has_saved_args
-        and layer.saved_args is not None
-        and _contains_blob_ref(layer.saved_args)
+        if layer.call.has_saved_args
+        and layer.call.saved_args is not None
+        and _contains_blob_ref(layer.call.saved_args)
     )
 
-    assert _contains_blob_ref(layer.saved_args)
+    assert _contains_blob_ref(layer.call.saved_args)
 
     materialize_nested(lazy_log)
 
-    assert not _contains_blob_ref(layer.saved_args)
-    assert any(isinstance(arg, torch.Tensor) for arg in layer.saved_args)
+    assert not _contains_blob_ref(layer.call.saved_args)
+    assert any(isinstance(arg, torch.Tensor) for arg in layer.call.saved_args)
 
 
 def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:

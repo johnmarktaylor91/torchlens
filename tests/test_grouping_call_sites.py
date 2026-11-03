@@ -56,7 +56,7 @@ def _layer_shape(trace: Any) -> Counter[tuple[str, int]]:
 
     seen: dict[str, tuple[str, int]] = {}
     for op in trace._layer_list:
-        if op.is_input or op.is_output or op.is_buffer:
+        if op.is_input or op.is_output or op.graph.is_buffer:
             continue
         seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
     return Counter(seen.values())
@@ -1314,7 +1314,9 @@ def _buffer_passes(build: Callable[[], nn.Module]) -> list[int]:
     """Sorted pass counts of the buffer layers of one trace."""
 
     trace = _capture(build, _x())
-    seen = {op.layer_label: int(op.num_passes or 1) for op in trace._layer_list if op.is_buffer}
+    seen = {
+        op.layer_label: int(op.num_passes or 1) for op in trace._layer_list if op.graph.is_buffer
+    }
     return sorted(seen.values())
 
 
@@ -1347,6 +1349,6 @@ def test_row74_buffer_versions_group_by_writing_line() -> None:
 def test_row74_batchnorm_running_stats_stay_separate_layers() -> None:
     """Row 74: BatchNorm writes each running stat once, so each version is its own layer."""
     trace = _capture(lambda: nn.BatchNorm1d(4).train(), _x())
-    buffers = {op.layer_label: op for op in trace._layer_list if op.is_buffer}
+    buffers = {op.layer_label: op for op in trace._layer_list if op.graph.is_buffer}
     assert buffers, "BatchNorm in train mode logs its running stats"
     assert {int(op.num_passes or 1) for op in buffers.values()} == {1}

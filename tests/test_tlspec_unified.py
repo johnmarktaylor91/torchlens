@@ -488,7 +488,9 @@ def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
     """Current manifests must not apply the v4 backend-address repair."""
 
     trace = tl.trace(UnifiedPlainAttributeBufferModel(), torch.ones(2, 3))
-    plain_buffer_op = next(op for op in trace._layer_list if op.is_buffer and op.address == "scale")
+    plain_buffer_op = next(
+        op for op in trace._layer_list if op.graph.is_buffer and op.address == "scale"
+    )
     assert plain_buffer_op.backend_address is None
     assert trace[plain_buffer_op.layer_label].backend_address is None
 
@@ -520,7 +522,7 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     loaded = tl.load(path)
     loaded_out = loaded[source_op.layer_label].ops[0].out
     lazy_loaded = tl.load(path, lazy=True)
-    lazy_out = lazy_loaded[source_op.layer_label].ops[0].materialize_out()
+    lazy_out = lazy_loaded[source_op.layer_label].ops[0].payload.materialize_out()
 
     assert any(entry["requires_grad"] is True for entry in manifest["tensors"])
     assert isinstance(loaded_out, torch.Tensor)

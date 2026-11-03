@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._state import pause_logging
+from .._utils._record_group_table import record_member
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..backends.torch._autograd_grad_boundary import grad_signature, recorder_signature
 from ..backends.torch._autograd_grad_marker import (
@@ -131,7 +132,7 @@ def _parent_slots_under(layer: Op, slot: tuple[str, Any]) -> dict[tuple[Any, ...
 
     arg_domain, root_key = slot
     found: dict[tuple[Any, ...], str] = {}
-    positions = (getattr(layer, "parent_arg_positions", {}) or {}).get(arg_domain, {})
+    positions = (record_member(layer, "parent_arg_positions", {}) or {}).get(arg_domain, {})
     for key, parent_label in positions.items():
         key_path = key if isinstance(key, tuple) else (key,)
         if key_path[0] == root_key:
@@ -321,7 +322,7 @@ class _SubgraphReplay:
 
         is_inplace = bool(getattr(op, "is_inplace", False))
         for arg_domain in ("args", "kwargs"):
-            positions = (getattr(op, "parent_arg_positions", {}) or {}).get(arg_domain, {})
+            positions = (record_member(op, "parent_arg_positions", {}) or {}).get(arg_domain, {})
             for key, parent_label in positions.items():
                 replayed = self._connected_value(parent_label)
                 if replayed is None:
@@ -527,8 +528,8 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
             layer.func,
             tuple(input_args["args"]),
             dict(input_args["kwargs"]),
-            rng_states=layer.func_rng_states,
-            autocast_state=layer.func_autocast_state,
+            rng_states=layer.call.rng_states,
+            autocast_state=layer.call.autocast_state,
         )
 
 
@@ -554,7 +555,7 @@ def captured_grad_modes(layer: Op) -> tuple[bool, bool]:
         the op carries no execution record (source ops, synthesized records).
     """
 
-    autocast_state = getattr(layer, "func_autocast_state", None)
+    autocast_state = record_member(layer, "func_autocast_state", None)
     execution = autocast_state.get("__execution__") if isinstance(autocast_state, dict) else None
     record = execution if isinstance(execution, dict) else {}
     grad_enabled = record.get("grad_enabled")

@@ -71,7 +71,7 @@ def test_op_and_layer_convenience_properties() -> None:
     op = next(record for record in trace.compute_ops if record.num_params)
     layer = trace.layers[op.layer_label]
 
-    assert op.flops_total == (op.flops_forward or 0) + (op.flops_backward or 0)
+    assert op.cost.flops_total == (op.cost.flops_forward or 0) + (op.cost.flops_backward or 0)
     # A07 numbers truth: MACs are TRUE multiply-accumulate counts derived from
     # the two-term compute record, never flops//2; backward/total MACs are not
     # derivable from multiplier-estimated backward FLOPs and read None.
@@ -83,30 +83,34 @@ def test_op_and_layer_convenience_properties() -> None:
     assert op.num_param_tensors_frozen == sum(1 for param in op.params if not param.is_trainable)
     assert op.has_trainable_params == (op.num_params_trainable > 0)
     assert op.has_frozen_params == (op.num_params_frozen > 0)
-    assert op.is_compute_op is True
+    assert op.graph.is_compute is True
 
-    assert layer.total_activation_memory == sum(
-        (child.activation_memory or 0) for child in layer.ops.values()
+    assert layer.cost.total_activation_memory == sum(
+        (child.cost.activation_memory or 0) for child in layer.ops.values()
     )
     assert layer.total_gradient_memory == sum(
         (child.gradient_memory or 0) for child in layer.ops.values()
     )
-    assert layer.flops_total == (layer.flops_forward or 0) + (layer.flops_backward or 0)
-    assert layer.total_flops_total == layer.total_flops_forward + layer.total_flops_backward
+    assert layer.cost.flops_total == (layer.cost.flops_forward or 0) + (
+        layer.cost.flops_backward or 0
+    )
+    assert (
+        layer.cost.total_flops == layer.cost.total_flops_forward + layer.cost.total_flops_backward
+    )
     assert layer.macs_total is None
-    assert layer.total_macs_total is None
-    assert layer.macs_forward is not None  # forward MACs stay derivable here
+    assert layer.cost.total_macs is None
+    assert layer.cost.macs_forward is not None  # forward MACs stay derivable here
     assert layer.param_names == [param.name for param in layer.params]
     assert layer.param_dtypes == [param.dtype for param in layer.params]
     assert layer.has_trainable_params == (layer.num_params_trainable > 0)
     assert layer.has_frozen_params == (layer.num_params_frozen > 0)
-    assert layer.is_compute_layer is True
-    assert layer.is_orphan == any(child.is_orphan for child in layer.ops.values())
+    assert layer.graph.is_compute is True
+    assert layer.graph.is_orphan == any(child.graph.is_orphan for child in layer.ops.values())
 
     if op.fx_label is not None:
         assert layer.fx_label == op.fx_label
-        assert layer.fx_qualpath == op.fx_qualpath
-        assert layer.fx_call_index == op.fx_call_index
+        assert layer.source.fx_path == op.source.fx_path
+        assert layer.source.fx_call_index == op.source.fx_call_index
         assert trace[op.fx_label] is op
 
 

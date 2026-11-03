@@ -33,7 +33,7 @@ def _write_rows(trace) -> list[tuple[str, str, object]]:
         rows.append(
             (
                 layer.buffer_write_kind,
-                layer.buffer_source_func_name,
+                layer.graph.buffer_source_func_name,
                 layer.buffer_value_changed,
             )
         )

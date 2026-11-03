@@ -433,7 +433,7 @@ def test_arg_names_distinct_per_spelling():
             return z * 1.0
 
     log = tl.trace(Spellings(), torch.zeros(3))
-    by_func = {log[lab].func_name: log[lab].arg_names for lab in log.op_labels}
+    by_func = {log[lab].func_name: log[lab].call.arg_names for lab in log.op_labels}
     # torch.add's real signature.
     assert by_func["add"][:2] == ("input", "other")
     # add_'s OWN signature (other, alpha), not torch.add's 4-name signature.

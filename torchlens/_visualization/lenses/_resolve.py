@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
 from ..._record_type import record_type
+from ..._utils._record_group_table import record_member
 from ...errors._base import TorchLensWarning
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
 from ._budget import BudgetResolution, resolve_budget
@@ -251,7 +252,7 @@ def _resolve_perf_source(
 
     values: dict[str, float] = {}
     for record in records_for_member(trace, source.member):
-        value = scalar_or_none(getattr(record, source.member, None))
+        value = scalar_or_none(record_member(record, source.member, None))
         if value is not None:
             values[safe_label(record)] = value
     return source, values
@@ -601,7 +602,7 @@ def _secondary_stages(trace: Trace, lens: LensPreset, build: _LensBuild) -> None
     # -- Memory: saved-for-backward SECONDARY degrade. ---------------------
     if lens.name == "memory" and build.effective.get("show_saved_for_backward"):
         has_autograd_evidence = any(
-            scalar_or_none(getattr(op, "autograd_memory", None)) is not None
+            scalar_or_none(record_member(op, "autograd_memory", None)) is not None
             for op in trace._layer_list
         )
         if not has_autograd_evidence:

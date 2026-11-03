@@ -169,7 +169,7 @@ def test_uniqueness_per_key_and_call_instance() -> None:
     seen: Counter = Counter()
     for label in log.op_labels:
         op = log.ops[label]
-        stack = tuple(op.module_call_stack or ())
+        stack = tuple(op.module_context.call_stack or ())
         seen[(op.site_key, stack[-1] if stack else ROOT_CALL_INSTANCE)] += 1
     assert all(count == 1 for count in seen.values())
 
@@ -247,8 +247,8 @@ def test_build_vs_serialized_axis_parity_on_real_capture() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     for label in log.op_labels:
         op = log.ops[label]
-        assert site_axis(op.modules) == site_axis(op.module_call_stack)
-        assert call_instance_id(op.modules) == call_instance_id(op.module_call_stack)
+        assert site_axis(op.modules) == site_axis(op.module_context.call_stack)
+        assert call_instance_id(op.modules) == call_instance_id(op.module_context.call_stack)
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +258,9 @@ def test_build_vs_serialized_axis_parity_on_real_capture() -> None:
 
 def _site_spanning_recurrent_groups(log: tl.Trace) -> tuple[int, int]:
     ops = _ops(log)
-    groups = {frozenset(op.recurrent_ops) for op in ops.values() if len(op.recurrent_ops) > 1}
+    groups = {
+        frozenset(op.graph.recurrent_ops) for op in ops.values() if len(op.graph.recurrent_ops) > 1
+    }
     spanning = sum(
         1
         for group in groups
@@ -367,7 +369,7 @@ def test_witness_on_real_capture_is_operation_frame() -> None:
         if op.type in ("input", "output", "buffer"):
             assert operation_witness(op) is None  # I/O boundary: witness-absent
             continue
-        context = list(op.code_context or ())
+        context = list(op.source.frames or ())
         assert len(context) >= 2
         witness = operation_witness(op)
         # The selected frame is the deepest OPERATION frame [-2] -- never the

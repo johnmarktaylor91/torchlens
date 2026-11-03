@@ -388,11 +388,11 @@ def _op_projection(op: Any) -> dict[str, Any]:
         "func_name": op.func_name,
         "parents": list(op.parents),
         "children": list(op.children),
-        "parent_arg_positions": _normalize(op.parent_arg_positions),
+        "parent_arg_positions": _normalize(op.call.parent_arg_positions),
         "has_saved_activation": bool(op.has_saved_activation),
-        "has_saved_args": bool(op.has_saved_args),
+        "has_saved_args": bool(op.call.has_saved_args),
         "has_grad": bool(op.has_grad),
-        "num_saved_grads": len(op.grads),
+        "num_saved_grads": len(op.autograd.grads),
         "shape": _normalize(op.shape),
         "dtype": _normalize(op.dtype),
         "dtype_ref": None if op.dtype_ref is None else str(op.dtype_ref),
@@ -588,10 +588,10 @@ def _public_accessor_projection(trace: Trace) -> dict[str, Any]:
         "grad_adjacent": {
             "op_label": first_compute.label,
             "has_grad": bool(first_compute.has_grad),
-            "num_saved_grads": len(first_compute.grads),
+            "num_saved_grads": len(first_compute.autograd.grads),
             "grad_is_none": first_compute.grad is None,
             "grad_for_bwd1_shape": _normalize(
-                first_compute.grad_for(bwd=1).shape if first_compute.has_grad else None
+                first_compute.autograd.grad_for(bwd=1).shape if first_compute.has_grad else None
             ),
         },
     }

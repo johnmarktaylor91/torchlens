@@ -63,7 +63,7 @@ def test_capture_records_the_strided_parent_layout() -> None:
     """The linear's parent ref carries the slice's stride, not the compact copy's."""
 
     trace = _sliced_trace()
-    ref = _linear_op(trace).args_template.args[0]
+    ref = _linear_op(trace).call.args_template.args[0]
     assert isinstance(ref, ParentRef)
     assert ref._capture_layout == ((4, 5), (30, 1), 0)
     assert trace[ref.parent_label].out.stride() == (5, 1)
@@ -74,7 +74,7 @@ def test_capture_records_no_layout_for_a_contiguous_parent() -> None:
 
     torch.manual_seed(0)
     trace = _capture(_PlainLinear(), torch.rand(4, 5))
-    ref = _linear_op(trace).args_template.args[0]
+    ref = _linear_op(trace).call.args_template.args[0]
     assert isinstance(ref, ParentRef)
     assert ref._capture_layout is None
 
@@ -84,7 +84,7 @@ def test_replay_resolves_the_parent_in_its_capture_layout() -> None:
 
     trace = _sliced_trace()
     op = _linear_op(trace)
-    ref = op.args_template.args[0]
+    ref = op.call.args_template.args[0]
     value = _resolve_arg_component(ref, op, trace, {}, strict=True)
     assert value.stride() == (30, 1)
     assert value.storage_offset() == 0

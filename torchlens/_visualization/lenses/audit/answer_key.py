@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from ...._errors import InvalidArgumentError
+from ...._utils._record_group_table import record_member
 from .._families import scalar_or_none
 
 if TYPE_CHECKING:
@@ -66,7 +67,7 @@ def _channel_values(trace: Trace, member: str) -> dict[str, float]:
 
     values: dict[str, float] = {}
     for op in trace._layer_list:
-        value = scalar_or_none(getattr(op, member, None))
+        value = scalar_or_none(record_member(op, member, None))
         if value is not None:
             values[op.layer_label] = value
     return values
@@ -213,7 +214,9 @@ def generate_answer_key(
     lens_name = resolution.lens.name if resolution is not None else "bare"
 
     inputs = [op.layer_label for op in trace._layer_list if getattr(op, "is_input", False)]
-    outputs = [op.layer_label for op in trace._layer_list if getattr(op, "is_final_output", False)]
+    outputs = [
+        op.layer_label for op in trace._layer_list if record_member(op, "is_final_output", False)
+    ]
     if inputs and outputs:
         questions.append(
             KeyQuestion(

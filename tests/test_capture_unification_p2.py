@@ -204,9 +204,9 @@ def test_atomic_module_classification_matches_phase1_expectation() -> None:
     )
     by_func = {op.func_name: op for op in log.ops if op.func_name in {"linear", "relu"}}
 
-    assert by_func["linear"].is_module_output is True
-    assert by_func["linear"].is_atomic_module is True
-    assert by_func["linear"].atomic_module_call == "block.0:1"
-    assert by_func["relu"].is_module_output is True
-    assert by_func["relu"].is_atomic_module is True
-    assert by_func["relu"].atomic_module_call == "block.1:1"
+    assert by_func["linear"].module_context.is_module_output is True
+    assert by_func["linear"].module_context.is_atomic_module is True
+    assert by_func["linear"].module_context.atomic_module_call == "block.0:1"
+    assert by_func["relu"].module_context.is_module_output is True
+    assert by_func["relu"].module_context.is_atomic_module is True
+    assert by_func["relu"].module_context.atomic_module_call == "block.1:1"

@@ -45,7 +45,7 @@ def macs_forward(op: Op) -> Macs | None:
     in the summary's MAC coverage disclosure.
     """
 
-    record = op.compute_record
+    record = op.cost.compute_record
     if record is None or record.fma_macs is None:
         return None
     return as_macs(record.fma_macs)
@@ -71,7 +71,7 @@ def flops_total(op: Op) -> Flops:
         Forward plus backward FLOPs, treating unknown halves as zero.
     """
 
-    return Flops((op.flops_forward or 0) + (op.flops_backward or 0))
+    return Flops((op.cost.flops_forward or 0) + (op.cost.flops_backward or 0))
 
 
 def macs_total(op: Op) -> Macs | None:
@@ -100,11 +100,11 @@ def arithmetic_intensity(op: Op) -> float | None:
         Theoretical forward arithmetic intensity in FLOPs per byte.
     """
 
-    bytes_read = op.bytes_read
-    bytes_written = op.bytes_written
-    if op.flops_forward is None or bytes_read is None or bytes_written is None:
+    bytes_read = op.cost.bytes_read
+    bytes_written = op.cost.bytes_written
+    if op.cost.flops_forward is None or bytes_read is None or bytes_written is None:
         return None
     total_bytes = int(bytes_read) + int(bytes_written)
     if total_bytes == 0:
         return None
-    return float(op.flops_forward) / total_bytes
+    return float(op.cost.flops_forward) / total_bytes

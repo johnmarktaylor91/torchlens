@@ -50,6 +50,8 @@ if TYPE_CHECKING:
 from torchlens._ir.op_record import IngestExtras as _IngestExtras
 from torchlens._ir.op_record_scatter import CELL_SOURCES
 
+from .._utils._record_group_table import record_member
+
 _EMPTY_INGEST_EXTRAS = _IngestExtras()
 
 
@@ -417,9 +419,9 @@ def _drop_missing_buffer_sources(local_registrations: dict[str, Any]) -> None:
 
     raw_labels = set(local_registrations)
     for op_log in local_registrations.values():
-        buffer_source = getattr(op_log, "buffer_source", None)
+        buffer_source = record_member(op_log, "buffer_source", None)
         if buffer_source is not None and buffer_source not in raw_labels:
-            op_log.buffer_source = None
+            op_log._graph_buffer_source = None
 
 
 def _output_versions_by_parent(

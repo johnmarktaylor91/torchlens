@@ -54,7 +54,6 @@ from .._errors import (
 )
 from .._io import (
     TLSPEC_VERSION,
-    ArtifactError,
     FieldPolicy,
     coerce_container_typed_state,
     default_fill_state,
@@ -90,6 +89,7 @@ from .._trace_core.relation_views import (
     materialize_dataflow_view,
 )
 from .._trace_state import TraceState
+from .._utils._record_group_table import OP_STORAGE_ATTRS, op_attr, record_member
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils.arg_handling import copy_arg_tree
 from .._utils.tensor_utils import (
@@ -125,6 +125,13 @@ from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch imp
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
+from ._record_groups import OpControlFlow, OpCost
+from ._record_groups_autograd import OpAutograd
+from ._record_groups_call import OpCall
+from ._record_groups_graph import OpGraph
+from ._record_groups_module_context import OpModuleContext
+from ._record_groups_payload import OpPayload
+from ._record_groups_source import OpSource
 from ._state_adapter import state_items, state_restore
 from .container import (
     container_from_op,
@@ -327,6 +334,9 @@ _OP_SLOT_NAMES = tuple(
 # ``state_restore``) already speaks the descriptor protocol, so behavior is
 # unchanged while the physical cells live in per-trace columns.
 _OP_STORE_LAYOUT = OpStoreLayout(_OP_SLOT_NAMES)
+#: ``(persisted field name, attribute that holds it)`` in declared order; a
+#: concern-group member keeps its persisted name under a private attribute.
+_OP_STATE_ATTRS = tuple((name, OP_STORAGE_ATTRS.get(name, name)) for name in _OP_SLOT_NAMES)
 # Bulk-ingress seed constants: the converted-at-construction fields and the
 # layout ids of the cells `__init__` overrides after the one-pass dict seed.
 _INIT_BYTES_FIELDS = (
@@ -438,7 +448,10 @@ _UNPOOLED_SLOTS = frozenset(
         "recurrent_ops",
     }
 )
-_POOLED_SLOTS = tuple(name for name in _OP_SLOT_NAMES if name not in _UNPOOLED_SLOTS)
+# Attribute names (a concern-group member reads under its private storage name).
+_POOLED_SLOTS = tuple(
+    OP_STORAGE_ATTRS.get(name, name) for name in _OP_SLOT_NAMES if name not in _UNPOOLED_SLOTS
+)
 # Depth of container nesting the pass descends into.  Every field that carries
 # real repetition (ancestor sets, label lists, config dicts) is at depth 0-1.
 _POOL_MAX_DEPTH = 2
@@ -1137,9 +1150,11 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
         Bytes(get_memory_amount_from_metadata(tensor, shape, dtype)),
     )
     entry._internal_set("has_saved_activation", True)
-    entry._internal_set("transformed_out_shape", _shape_or_none(entry.transformed_out))
-    entry._internal_set("transformed_out_dtype", _dtype_or_none(entry.transformed_out))
-    entry._internal_set("transformed_activation_memory", _memory_or_none(entry.transformed_out))
+    entry._internal_set("transformed_out_shape", _shape_or_none(entry.payload.transformed_out))
+    entry._internal_set("transformed_out_dtype", _dtype_or_none(entry.payload.transformed_out))
+    entry._internal_set(
+        "transformed_activation_memory", _memory_or_none(entry.payload.transformed_out)
+    )
 
 
 def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
@@ -1169,7 +1184,6 @@ if TYPE_CHECKING:
     from ..receptive_field._view import ReceptiveFieldView
     from .func_call_location import FuncCallLocation
     from .layer import Layer
-    from .module import Module
     from .param import Param
     from .trace import Trace
 
@@ -1210,27 +1224,27 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         device_ref: DeviceRef | None
         backend_address: str | None
         resolver_status: str
-        activation_memory: Bytes | None
-        transformed_activation_memory: Bytes | None
+        _cost_activation_memory: Bytes | None
+        _cost_transformed_activation_memory: Bytes | None
         visualizer_path: str | None
-        autograd_memory: Bytes | None
-        num_autograd_tensors: int | None
-        bytes_delta_at_call: Bytes | None
-        bytes_peak_at_call: Bytes | None
+        _cost_autograd_memory: Bytes | None
+        _autograd_num_autograd_tensors: int | None
+        _cost_bytes_delta_at_call: Bytes | None
+        _cost_bytes_peak_at_call: Bytes | None
         gradient_memory: Bytes | None
         transformed_gradient_memory: Bytes | None
         func_id: FunctionRegistryKey | None
-        code_context: list["FuncCallLocation"]
-        var_names: list[str]
-        func_duration: Duration | None
-        flops_forward: Flops | None
-        flops_backward: Flops | None
+        _source_frames: list["FuncCallLocation"]
+        _source_var_names: list[str]
+        _cost_duration: Duration | None
+        _cost_flops_forward: Flops | None
+        _cost_flops_backward: Flops | None
         _param_barcodes: list[Any]
         _param_logs: list["Param"]
-        param_memory: Bytes
-        is_orphan: bool
-        fx_qualpath: str | None
-        fx_call_index: int
+        _cost_param_memory: Bytes
+        _graph_is_orphan: bool
+        _source_fx_path: str | None
+        _source_fx_call_index: int
         out_ref: "LazyActivationRef" | None
         grad_ref: "LazyActivationRef" | None
         _pending_blob_id: str | None
@@ -1262,135 +1276,135 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         edits: Any
         is_edited: Any
         detach_saved_activations: Any
-        has_saved_args: Any
-        saved_args: Any
-        saved_kwargs: Any
-        args_template: Any
-        kwargs_template: Any
+        _call_has_saved_args: Any
+        _call_saved_args: Any
+        _call_saved_kwargs: Any
+        _call_args_template: Any
+        _call_kwargs_template: Any
         shape: Any
-        transformed_out_shape: Any
+        _payload_transformed_out_shape: Any
         dtype: Any
-        transformed_out_dtype: Any
-        transformed_out: Any
+        _payload_transformed_out_dtype: Any
+        _payload_transformed_out: Any
         has_out_variations: Any
         out_versions_by_child: Any
         grad: Any
-        transformed_grad: Any
+        _payload_transformed_grad: Any
         save_grads: Any
         has_grad: Any
-        grad_shape: Any
-        transformed_grad_shape: Any
-        grad_dtype: Any
-        transformed_grad_dtype: Any
+        _autograd_grad_shape: Any
+        _payload_transformed_grad_shape: Any
+        _autograd_grad_dtype: Any
+        _payload_transformed_grad_dtype: Any
         func: Any
-        func_call_id: Any
+        _call_call_id: Any
         func_name: Any
-        func_qualname: Any
-        func_rng_states: Any
-        func_autocast_state: Any
-        arg_names: Any
-        num_args_total: Any
-        num_pos_args: Any
-        num_kwargs: Any
-        non_tensor_pos_args: Any
-        non_tensor_kwargs: Any
-        func_non_tensor_args: Any
+        _source_func_qualname: Any
+        _call_rng_states: Any
+        _call_autocast_state: Any
+        _call_arg_names: Any
+        _call_num_args_total: Any
+        _call_num_pos_args: Any
+        _call_num_kwargs: Any
+        _call_non_tensor_pos_args: Any
+        _call_non_tensor_kwargs: Any
+        _call_non_tensor_args: Any
         is_inplace: Any
-        grad_fn_class_name: Any
-        grad_fn_class_qualname: Any
+        _autograd_grad_fn_class_name: Any
+        _autograd_grad_fn_class_qualname: Any
         grad_fn_object_id: Any
-        grad_fn_handle: Any
-        grad_fn: Any
+        _autograd_grad_fn_handle: Any
+        _autograd_grad_fn: Any
         in_multi_output: Any
         multi_output_index: Any
         multi_output_name: Any
         container_path: Any
         container_spec: Any
-        is_transform: Any
-        transform_kind: Any
-        transform_chain: Any
-        transform_config: Any
-        transform_fn_name: Any
-        transform_fn_qualname: Any
-        transform_fn_source: Any
-        unattributed_tensor_args: Any
-        dropped_edge_tensor_args: Any
-        parent_params: Any
-        parent_param_ops: Any
+        _call_is_func_transform: Any
+        _call_func_transform_kind: Any
+        _call_func_transform_chain: Any
+        _call_func_transform_config: Any
+        _call_func_transform_fn_name: Any
+        _call_func_transform_fn_qualname: Any
+        _call_func_transform_fn_source: Any
+        _call_unattributed_tensor_args: Any
+        _call_dropped_edge_tensor_args: Any
+        _graph_parent_params: Any
+        _graph_parent_param_ops: Any
         param_shapes: Any
         num_params: Any
         num_params_trainable: Any
         num_params_frozen: Any
-        equivalence_class: Any
-        equivalent_ops: Any
-        recurrent_ops: Any
+        _graph_equivalence_class: Any
+        _graph_equivalent_ops: Any
+        _graph_recurrent_ops: Any
         site_key: str | None
         injection_provenance: dict[str, Any] | None
         episode_step: int | None
         tl_authored_root: bool | None
         parents: Any
-        parent_arg_positions: Any
+        _call_parent_arg_positions: Any
         _edge_uses: Any
-        edge_substitutions: dict[Any, Any]
+        _graph_edge_substitutions: dict[Any, Any]
         edge_replacement_stamps: dict[Any, Any]
-        root_ancestors: Any
+        _graph_root_ancestors: Any
         children: Any
-        has_children: Any
+        _graph_has_children: Any
         is_input: Any
         input_was_parameter: Any
-        has_input_ancestor: Any
+        _graph_has_input_ancestor: Any
         input_ancestors: Any
-        min_distance_from_input: Any
-        max_distance_from_input: Any
+        _graph_min_distance_from_input: Any
+        _graph_max_distance_from_input: Any
         is_output: Any
-        is_output_parent: Any
-        is_final_output: Any
-        has_output_descendant: Any
+        _graph_is_output_parent: Any
+        _graph_is_final_output: Any
+        _graph_has_output_descendant: Any
         output_descendants: Any
-        io_role: Any
-        min_distance_to_output: Any
-        max_distance_to_output: Any
-        is_buffer: Any
+        _graph_io_role: Any
+        _graph_min_distance_to_output: Any
+        _graph_max_distance_to_output: Any
+        _graph_is_buffer: Any
         address: Any
         buffer_pass: Any
-        buffer_source: Any
+        _graph_buffer_source: Any
         buffer_write_kind: Any
         buffer_value_changed: Any
         buffer_replay_validated: Any
-        buffer_source_func_name: Any
-        is_internal_source: Any
-        has_internal_source_ancestor: Any
-        internal_source_parents: Any
-        internal_source_ancestors: Any
+        _graph_buffer_source_func_name: Any
+        _graph_is_internal_source: Any
+        _graph_has_internal_source_ancestor: Any
+        _graph_internal_source_parents: Any
+        _graph_internal_source_ancestors: Any
         is_internal_sink: Any
-        is_terminal_bool: Any
-        is_terminal_conditional_bool: Any
-        conditional_context_kind: Any
-        conditional_wrapper_kind: Any
+        _control_flow_is_terminal_bool: Any
+        _control_flow_is_terminal_conditional_bool: Any
+        _control_flow_context_kind: Any
+        _control_flow_wrapper_kind: Any
         terminal_conditional_id: Any
-        is_scalar_bool: Any
-        bool_value: Any
-        in_conditionals: Any
-        terminal_bool_for: Any
-        conditional_branch_stack: Any
-        conditional_branch_depth: Any
-        conditional_entry_children: Any
-        conditional_then_children: Any
-        conditional_elif_children: Any
-        conditional_else_children: Any
-        conditional_arm_children: Any
+        _control_flow_is_scalar_bool: Any
+        _control_flow_bool_value: Any
+        _control_flow_in_conditionals: Any
+        _control_flow_terminal_bool_for: Any
+        _control_flow_branch_stack: Any
+        _control_flow_branch_depth: Any
+        _control_flow_entry_children: Any
+        _control_flow_then_children: Any
+        _control_flow_elif_children: Any
+        _control_flow_else_children: Any
+        _control_flow_arm_children: Any
         module: Any
         _address_normalized: Any
         modules: Any
-        module_call_stack: Any
-        input_to_module_calls: Any
-        module_entry_arg_keys: Any
-        output_of_modules: Any
-        output_of_module_calls: Any
-        is_module_output: Any
-        is_atomic_module: Any
-        atomic_module_call: Any
-        func_config: Any
+        _module_context_call_stack: Any
+        _module_context_input_to_module_calls: Any
+        _module_context_entry_arg_keys: Any
+        _module_context_output_of_modules: Any
+        _module_context_output_of_module_calls: Any
+        _module_context_is_module_output: Any
+        _module_context_is_atomic_module: Any
+        _module_context_atomic_module_call: Any
+        _call_config: Any
         _source_trace_ref: Any
         _facets_cache: Any
         _receptive_field_cache: Any
@@ -1632,7 +1646,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Return one physical slot value, or ``default`` when it is unset."""
 
         try:
-            return _object_getattribute(self, name)
+            return _object_getattribute(self, OP_STORAGE_ATTRS.get(name, name))
         except AttributeError:
             return default
 
@@ -1664,14 +1678,14 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
                     passes = [record.backward_pass_number for record in saved]
                     raise InvalidArgumentError(
                         f"op {label} has gradients saved from multiple backward passes {passes}; "
-                        "use op.grads[...] / op.grad_for(bwd=k)",
+                        "use op.autograd.grads[...] / op.autograd.grad_for(bwd=k)",
                         code="gradient_pass_ambiguous",
-                        remedy="use op.grads[...] or op.grad_for(bwd=k) to pick one pass",
+                        remedy="use op.autograd.grads[...] or op.autograd.grad_for(bwd=k) to pick one pass",
                         label=str(label),
                     )
             grad = slot("grad")
             if grad is None and slot("grad_ref") is not None:
-                return object.__getattribute__(self, "materialize_grad")()
+                return object.__getattribute__(self, "payload").materialize_grad()
             return grad
         if name == "out":
             slot = _object_getattribute(self, "_slot")
@@ -1696,7 +1710,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
                     or getattr(source_trace, "payload_load_status", None) == "loaded_lazy"
                 )
             ):
-                return object.__getattribute__(self, "materialize_out")()
+                return object.__getattribute__(self, "payload").materialize_out()
             if (
                 slot("_tracing_finished")
                 and not slot("has_saved_activation", False)
@@ -1783,7 +1797,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             Value to assign.
         """
 
-        _object_setattr(self, attr, value)
+        _object_setattr(self, OP_STORAGE_ATTRS.get(attr, attr), value)
 
     def _compact_metadata(self, pool: dict[Any, Any]) -> None:
         """Replace repeated immutable metadata with pooled shared instances.
@@ -1840,8 +1854,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             Tensor attribute name to concatenate.
         """
 
-        current_value = getattr(self, field_name)
-        other_value = getattr(other, field_name)
+        current_value = getattr(self, op_attr(field_name))
+        other_value = getattr(other, op_attr(field_name))
         if isinstance(current_value, torch.Tensor) and isinstance(other_value, torch.Tensor):
             self._internal_set(field_name, concatenate_batch_tensors(current_value, other_value))
 
@@ -1943,16 +1957,52 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         set_(self, "_row", row)
 
     @property
-    def compute_record(self) -> Any | None:
-        """Two-term compute record (fma_macs / other_flops), derived on read."""
+    def cost(self) -> OpCost:
+        """Compute, memory and timing facts of this Op (``op.cost.flops_forward``)."""
 
-        return _op_cost.compute_record(self)
+        return OpCost(self)
 
     @property
-    def macs_forward(self) -> Macs | None:
-        """TRUE forward multiply-accumulate count, never ``flops // 2``."""
+    def control_flow(self) -> OpControlFlow:
+        """Conditional and branch facts of this Op (``op.control_flow.depth``)."""
 
-        return _op_cost.macs_forward(self)
+        return OpControlFlow(self)
+
+    @property
+    def call(self) -> OpCall:
+        """How this Op's function was called (``op.call.config``)."""
+
+        return OpCall(self)
+
+    @property
+    def source(self) -> OpSource:
+        """Where this Op's call sits in the user's source (``op.source.frames``)."""
+
+        return OpSource(self)
+
+    @property
+    def autograd(self) -> OpAutograd:
+        """Autograd facts and saved gradients of this Op (``op.autograd.grad_fn``)."""
+
+        return OpAutograd(self)
+
+    @property
+    def module_context(self) -> OpModuleContext:
+        """Module-nesting facts of this Op (``op.module_context.call_depth``)."""
+
+        return OpModuleContext(self)
+
+    @property
+    def graph(self) -> OpGraph:
+        """Graph position of this Op (``op.graph.has_parents``)."""
+
+        return OpGraph(self)
+
+    @property
+    def payload(self) -> OpPayload:
+        """Saved transformed payloads and lazy materialization (``op.payload.transformed_out``)."""
+
+        return OpPayload(self)
 
     @property
     def macs_backward(self) -> Macs | None:
@@ -1961,34 +2011,10 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return _op_cost.macs_backward(self)
 
     @property
-    def flops_total(self) -> Flops:
-        """Approximate total FLOPs for this Op."""
-
-        return _op_cost.flops_total(self)
-
-    @property
     def macs_total(self) -> Macs | None:
         """Total MACs are not derivable and always ``None``."""
 
         return _op_cost.macs_total(self)
-
-    @property
-    def bytes_read(self) -> Bytes | None:
-        """Theoretical ideal read-once traffic for this operation."""
-
-        return _doors.debug()._cost.theoretical_op_bytes(self)[0]
-
-    @property
-    def bytes_written(self) -> Bytes | None:
-        """Theoretical ideal write-once traffic for this operation."""
-
-        return _doors.debug()._cost.theoretical_op_bytes(self)[1]
-
-    @property
-    def arithmetic_intensity(self) -> float | None:
-        """Return theoretical forward FLOPs per ideal traffic byte."""
-
-        return _op_cost.arithmetic_intensity(self)
 
     @property
     def param_names(self) -> list[str]:
@@ -2039,16 +2065,16 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return self.num_params_frozen > 0
 
     @property
-    def is_compute_op(self) -> bool:
+    def _graph_is_compute(self) -> bool:
         """Whether this Op executed a torch function rather than a boundary sentinel."""
 
-        return not (self.is_input or self.is_output or self.is_buffer)
+        return not (self.is_input or self.is_output or self.graph.is_buffer)
 
     @property
     def fx_label(self) -> str | None:
         """Return a torch.fx-style label for this Op when module context is available."""
 
-        return _labels.fx_label(self.fx_qualpath, self.fx_call_index)
+        return _labels.fx_label(self.source.fx_path, self.source.fx_call_index)
 
     @property
     def trace(self) -> "Trace":
@@ -2057,7 +2083,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return self.source_trace
 
     @property
-    def grads(self) -> GradientRecordAccessor:
+    def _autograd_grads(self) -> GradientRecordAccessor:
         """Per-pass gradient records saved for this Op.
 
         One record per backward pass that reached this op's output, each the
@@ -2065,7 +2091,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """
 
         trace = self.source_trace
-        raise_if_no_backward_capture(trace, plural_subject="op.grads or saved_grad_ops")
+        raise_if_no_backward_capture(trace, plural_subject="op.autograd.grads or saved_grad_ops")
         records = self._slot("_grad_records")
         if records is None:
             records = []
@@ -2073,12 +2099,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return GradientRecordAccessor(records)
 
     @property
-    def derived_grad(self) -> Any | None:
+    def _autograd_derived_grad(self) -> Any | None:
         """Return this op's derived intermediate gradient payload, if available."""
 
         return _doors.intervention()._op_edits.derived_grad(self)
 
-    def grad_for(self, *, bwd: int) -> torch.Tensor:
+    def _autograd_grad_for(self, *, bwd: int) -> torch.Tensor:
         """Return the saved gradient tensor for one backward pass."""
 
         return _doors.intervention()._op_edits.grad_for(self, bwd=bwd)
@@ -2157,7 +2183,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         TorchLens GradFn record, while ``grad_fn_label`` is the portable label.
         """
 
-        grad_fn = self.grad_fn
+        grad_fn = self.autograd.grad_fn
         if grad_fn is None:
             return None
         return cast("str | None", getattr(grad_fn, "label", None))
@@ -2183,7 +2209,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         positional-argument information was captured.
         """
 
-        return _summarize_call_args(self.saved_args, self.non_tensor_pos_args)
+        return _summarize_call_args(self.call.saved_args, self.call.non_tensor_pos_args)
 
     @property
     def kwargs_summary(self) -> str | None:
@@ -2193,7 +2219,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         keyword-argument information was captured.
         """
 
-        return _summarize_call_kwargs(self.saved_kwargs, self.non_tensor_kwargs)
+        return _summarize_call_kwargs(self.call.saved_kwargs, self.call.non_tensor_kwargs)
 
     @property
     def multi_output_type(self) -> type | str | None:
@@ -2226,17 +2252,6 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return containers_from_op(self)
 
     @property
-    def is_module_input(self) -> bool:
-        """Whether this Op's output feeds into at least one ModuleCall as an input.
-
-        The Op itself is OUTSIDE the module (the upstream producer). Equivalent to
-        ``bool(self.input_to_module_calls)``. Direction-of-data-flow framing:
-        inputs come FROM outside the module.
-        """
-
-        return bool(self.input_to_module_calls)
-
-    @property
     def atomic_module_call_label(self) -> str | None:
         """Stable ModuleCall label for an atomic-module output Op, else ``None``.
 
@@ -2244,29 +2259,10 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         the ModuleCall record.
         """
 
-        return cast("str | None", self.atomic_module_call)
+        return cast("str | None", self._module_context_atomic_module_call)
 
     @property
-    def atomic_module_address(self) -> str | None:
-        """Module address (no ``:N``) for an atomic-module output Op, else ``None``.
-
-        Derived from ``atomic_module_call_label`` by stripping the ``:N`` pass
-        suffix; pairs with the ``atomic_module`` resolver.
-        """
-
-        label = self.atomic_module_call_label
-        if label is None:
-            return None
-        return label.rsplit(":", 1)[0]
-
-    @property
-    def atomic_module(self) -> "Module | None":
-        """Module record resolved from ``atomic_module_address``, or ``None``."""
-
-        return _op_relations.atomic_module(self)
-
-    @property
-    def has_parents(self) -> bool:
+    def _graph_has_parents(self) -> bool:
         """Whether this layer has any parent layers."""
         return len(self.parents) > 0
 
@@ -2289,69 +2285,51 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return _labels.own_label_spellings(self)
 
     @property
-    def siblings(self) -> list[str]:
+    def _graph_siblings(self) -> list[str]:
         """Layers sharing at least one parent (excluding output layers and this op)."""
 
         return _op_relations.siblings(self)
 
     @property
-    def has_siblings(self) -> bool:
+    def _graph_has_siblings(self) -> bool:
         """Whether this layer shares parents with other layers."""
-        return len(self.siblings) > 0
+        return len(self.graph.siblings) > 0
 
     @property
-    def co_parents(self) -> list[str]:
+    def _graph_co_parents(self) -> list[str]:
         """Layers sharing at least one child (excluding output layers and this op)."""
 
         return _op_relations.co_parents(self)
 
     @property
-    def has_co_parents(self) -> bool:
+    def _graph_has_co_parents(self) -> bool:
         """Whether this layer shares children with other layers."""
-        return len(self.co_parents) > 0
+        return len(self.graph.co_parents) > 0
 
     @property
-    def is_in_conditional(self) -> bool:
-        """Whether this op participates in any conditional role."""
-
-        return bool(self.in_conditionals)
-
-    @property
-    def is_in_conditional_evaluation(self) -> bool:
-        """Whether this op computes a conditional arm condition."""
-
-        return any(role.role == "evaluation" for role in self.in_conditionals or [])
-
-    @property
-    def is_in_conditional_body(self) -> bool:
+    def _control_flow_is_in_conditional_body(self) -> bool:
         """Whether this op is in a conditional arm body."""
 
-        if self.has_output_descendant and not self.conditional_entry_children:
+        if self.graph.has_output_descendant and not self.control_flow.entry_children:
             return False
         return bool(self._slot("_is_in_conditional_body", False)) or any(
-            role.role == "body" for role in self.in_conditionals or []
+            role.role == "body" for role in self.control_flow.in_conditionals or []
         )
 
-    @is_in_conditional_body.setter
-    def is_in_conditional_body(self, value: bool) -> None:
+    @_control_flow_is_in_conditional_body.setter
+    def _control_flow_is_in_conditional_body(self, value: bool) -> None:
         """Set the cached conditional-body predicate used during postprocessing."""
 
         object.__setattr__(self, "_is_in_conditional_body", value)
 
-    @is_in_conditional_body.deleter
-    def is_in_conditional_body(self) -> None:
+    @_control_flow_is_in_conditional_body.deleter
+    def _control_flow_is_in_conditional_body(self) -> None:
         """Delete the cached conditional-body predicate during cleanup."""
 
         try:
             object.__delattr__(self, "_is_in_conditional_body")
         except AttributeError:
             pass
-
-    @property
-    def conditional_depth(self) -> int:
-        """Number of distinct conditionals this op participates in."""
-
-        return len({role.conditional_id for role in self.in_conditionals or []})
 
     @property
     def has_params(self) -> bool:
@@ -2369,23 +2347,23 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Ignore cleanup deletion for derived input Op access."""
 
     @property
-    def buffer_source_ops(self) -> "OpAccessor":
+    def _graph_buffer_source_ops(self) -> "OpAccessor":
         """Accessor over buffer source Ops that feed this Op."""
 
         return OpAccessor(_op_relations.buffer_source_ops_by_index(self))
 
-    @buffer_source_ops.deleter
-    def buffer_source_ops(self) -> None:
+    @_graph_buffer_source_ops.deleter
+    def _graph_buffer_source_ops(self) -> None:
         """Ignore cleanup deletion for derived buffer source Op access."""
 
     @property
-    def buffer_sink_ops(self) -> "OpAccessor":
+    def _graph_buffer_sink_ops(self) -> "OpAccessor":
         """Accessor over buffer sink Ops directly consuming this Op."""
 
         return OpAccessor(_op_relations.buffer_sink_ops_by_index(self))
 
-    @buffer_sink_ops.deleter
-    def buffer_sink_ops(self) -> None:
+    @_graph_buffer_sink_ops.deleter
+    def _graph_buffer_sink_ops(self) -> None:
         """Ignore cleanup deletion for derived buffer sink Op access."""
 
     @property
@@ -2425,51 +2403,35 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Ignore cleanup deletion for derived input dtypes."""
 
     @property
-    def input_memory(self) -> Bytes:
-        """Sum of activation bytes across saved graph-parent Ops."""
+    def _cost_input_memory(self) -> Bytes:
+        """Sum of activation bytes across saved graph-parent Ops (``op.cost.input_memory``)."""
 
         return Bytes(
             sum(
-                int(getattr(parent, "activation_memory", 0) or 0)
+                int(record_member(parent, "activation_memory", 0) or 0)
                 for parent in self.input_ops.values()
                 if parent.has_saved_activation
             )
         )
 
-    @input_memory.deleter
-    def input_memory(self) -> None:
+    @_cost_input_memory.deleter
+    def _cost_input_memory(self) -> None:
         """Ignore cleanup deletion for derived input memory."""
 
     @property
-    def num_inputs(self) -> int:
+    def _graph_num_inputs(self) -> int:
         """Number of graph-parent input Ops."""
 
         return len(self.parents)
 
-    @num_inputs.deleter
-    def num_inputs(self) -> None:
+    @_graph_num_inputs.deleter
+    def _graph_num_inputs(self) -> None:
         """Ignore cleanup deletion for derived input count."""
 
     @property
     def in_submodule(self) -> bool:
         """Whether this operation was computed inside a submodule."""
         return self.module is not None
-
-    @property
-    def module_call_depth(self) -> int:
-        """Depth of ``module_call_stack``, the op's active ModuleCall nesting.
-
-        ``module_call_stack`` holds the same containment fact as ``modules``
-        (root-first ModuleCall labels active for this op; B3R7-R05-1 tied the
-        two by invariant), so the length of either is this depth.
-        """
-        return len(self.modules)
-
-    @property
-    def input_to_modules(self) -> list[str]:
-        """Module addresses (no ``:N``) whose input this Op's output fed."""
-
-        return _op_relations.input_to_modules(self)
 
     @property
     def gradient_transform(self) -> Callable[..., Any] | None:
@@ -2491,7 +2453,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         Glossary name for the stored ``is_buffer`` flag.
         """
 
-        return bool(self.is_buffer)
+        return bool(self.graph.is_buffer)
 
     @property
     def has_saved_grad(self) -> bool:
@@ -2621,96 +2583,6 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             confirm_mutation=confirm_mutation,
         )
 
-    def materialize_out(
-        self,
-        *,
-        map_location: str | torch.device = "cpu",
-        payload_hints: Any | None = None,
-    ) -> Any:
-        """Materialize this layer's saved out from a lazy bundle ref.
-
-        Parameters
-        ----------
-        map_location:
-            Target device for the materialized tensor.
-        payload_hints:
-            Optional backend payload hints used during materialization.
-
-        Returns
-        -------
-        Any
-            Materialized out payload.
-
-        Raises
-        ------
-        ArtifactError
-            If no out ref is available for this layer.
-
-        Examples
-        --------
-        >>> import torchlens as tl
-        >>> trace = tl.load("demo_bundle", lazy=True)
-        >>> tensor = trace["linear_1_1"].materialize_out()
-        >>> tensor.shape
-        torch.Size([2, 3])
-        """
-
-        current_out = self._slot("out")
-        if current_out is not None:
-            return current_out
-        if self.out_ref is None:
-            raise ArtifactError("no out_ref to materialize from")
-        self._internal_set(
-            "out",
-            self.out_ref.materialize(map_location=map_location, payload_hints=payload_hints),
-        )
-        return self.out
-
-    def materialize_grad(
-        self,
-        *,
-        map_location: str | torch.device = "cpu",
-        payload_hints: Any | None = None,
-    ) -> Any:
-        """Materialize this layer's saved grad from a lazy bundle ref.
-
-        Parameters
-        ----------
-        map_location:
-            Target device for the materialized tensor.
-        payload_hints:
-            Optional backend payload hints used during materialization.
-
-        Returns
-        -------
-        Any
-            Materialized grad payload.
-
-        Raises
-        ------
-        ArtifactError
-            If no grad ref is available for this layer.
-
-        Examples
-        --------
-        >>> import torchlens as tl
-        >>> trace = tl.load("demo_bundle", lazy=True)
-        >>> grad = trace["linear_1_1"].materialize_grad()
-        >>> grad.shape
-        torch.Size([2, 3])
-        """
-
-        grad = self._slot("grad")
-        if grad is not None:
-            return grad
-        if self.grad_ref is None:
-            raise ArtifactError("no grad_ref to materialize from")
-        self._internal_set(
-            "grad",
-            self.grad_ref.materialize(map_location=map_location, payload_hints=payload_hints),
-        )
-        return self.grad
-
     def __tl_state_items__(self) -> Any:
         """Yield live state ``(field_name, value)`` pairs in declared order.
 
@@ -2725,9 +2597,9 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """
 
         getattribute = _object_getattribute
-        for name in _OP_SLOT_NAMES:
+        for name, attr in _OP_STATE_ATTRS:
             try:
-                yield name, getattribute(self, name)
+                yield name, getattribute(self, attr)
             except AttributeError:
                 continue
 
@@ -2742,8 +2614,9 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """
 
         _ensure_detached_store(self)
+        storage_attrs = OP_STORAGE_ATTRS
         for field_name, field_value in mapping.items():
-            _object_setattr(self, field_name, field_value)
+            _object_setattr(self, storage_attrs.get(field_name, field_name), field_value)
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
@@ -2889,7 +2762,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             )
 
     @property
-    def arg_expressions(self) -> list[str]:
+    def _source_arg_expressions(self) -> list[str]:
         """Return source expressions used for this op's call arguments.
 
         Returns
@@ -2904,12 +2777,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             return cast(list[str], cached)
         from .._postprocess.ast_branches import resolve_arg_expressions
 
-        resolved = resolve_arg_expressions(self.code_context, self.func_name)
+        resolved = resolve_arg_expressions(self.source.frames, self.func_name)
         object.__setattr__(self, "_arg_expressions_cache", resolved)
         return resolved
 
-    @arg_expressions.setter
-    def arg_expressions(self, value: Any) -> None:
+    @_source_arg_expressions.setter
+    def _source_arg_expressions(self, value: Any) -> None:
         """Set or clear the lazy argument-expression cache."""
 
         if value is None:
@@ -2920,8 +2793,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             return
         object.__setattr__(self, "_arg_expressions_cache", list(value))
 
-    @arg_expressions.deleter
-    def arg_expressions(self) -> None:
+    @_source_arg_expressions.deleter
+    def _source_arg_expressions(self) -> None:
         """Drop the cached argument-expression parse result."""
 
         try:
@@ -2930,7 +2803,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             pass
 
     @property
-    def is_internally_initialized(self) -> bool:
+    def _call_is_internally_initialized(self) -> bool:
         """Return whether this op is an internally initialized source op.
 
         Returns
@@ -2939,13 +2812,13 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             Alias of ``is_internal_source`` for tabular compatibility.
         """
 
-        return bool(self.is_internal_source)
+        return bool(self.graph.is_internal_source)
 
-    @is_internally_initialized.setter
-    def is_internally_initialized(self, value: Any) -> None:
+    @_call_is_internally_initialized.setter
+    def _call_is_internally_initialized(self, value: Any) -> None:
         """Accept compatibility writes for the computed internal-source alias."""
 
-        if value is not None and bool(value) != bool(self.is_internal_source):
+        if value is not None and bool(value) != bool(self.graph.is_internal_source):
             raise InvalidArgumentError(
                 "is_internally_initialized is derived from is_internal_source and "
                 f"cannot be set to {value!r}",
@@ -2994,7 +2867,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Store copies of the call's tensor args and kwargs, or clear them."""
 
         if save_args:
-            self.has_saved_args = True
+            self._call_has_saved_args = True
             self._internal_set("saved_args", [copy_arg_tree(arg) for arg in t_args])
             self._internal_set(
                 "saved_kwargs",
@@ -3175,7 +3048,10 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
-        row = {field_name: getattr(self, field_name) for field_name in LAYER_PASS_LOG_FIELD_ORDER}
+        row = {
+            field_name: getattr(self, OP_STORAGE_ATTRS.get(field_name, field_name))
+            for field_name in LAYER_PASS_LOG_FIELD_ORDER
+        }
         row["is_internally_initialized"] = bool(row["is_internally_initialized"])
         for field_name in (
             "min_distance_from_input",
@@ -3226,25 +3102,25 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
         s += f"\n\tComputed from params: {self.has_params}"
         s += f"\n\tComputed in modules: {self.modules}"
-        s += f"\n\tOutput of modules: {self.output_of_module_calls}"
-        if self.is_atomic_module:
+        s += f"\n\tOutput of modules: {self.module_context.output_of_module_calls}"
+        if self.module_context.is_atomic_module:
             s += " (bottom-level submodule output)"
         else:
             s += " (not bottom-level submodule output)"
         s += "\n\tFamily info:"
         s += f"\n\t\tParents: {self.parents}"
         s += f"\n\t\tChildren: {self.children}"
-        s += f"\n\t\tSpouses: {self.co_parents}"
-        s += f"\n\t\tSiblings: {self.siblings}"
+        s += f"\n\t\tSpouses: {self.graph.co_parents}"
+        s += f"\n\t\tSiblings: {self.graph.siblings}"
         s += (
-            f"\n\t\tOriginal Ancestors: {self.root_ancestors} "
-            f"(min dist {self.min_distance_from_input} nodes, max dist {self.max_distance_from_input} nodes)"
+            f"\n\t\tOriginal Ancestors: {self.graph.root_ancestors} "
+            f"(min dist {self.graph.min_distance_from_input} nodes, max dist {self.graph.max_distance_from_input} nodes)"
         )
         s += f"\n\t\tInput Ancestors: {self.input_ancestors}"
-        s += f"\n\t\tInternal Ancestors: {self.internal_source_ancestors}"
+        s += f"\n\t\tInternal Ancestors: {self.graph.internal_source_ancestors}"
         s += (
             f"\n\t\tOutput Descendents: {self.output_descendants} "
-            f"(min dist {self.min_distance_to_output} nodes, max dist {self.max_distance_to_output} nodes)"
+            f"(min dist {self.graph.min_distance_to_output} nodes, max dist {self.graph.max_distance_to_output} nodes)"
         )
         if self.out is not None:
             s += f"\n\tTensor contents: \n{print_override(self.out, '__str__')}"
@@ -3554,8 +3430,9 @@ def _install_op_field_descriptors() -> None:
     dataflow_names = frozenset(OP_DATAFLOW_FIELDS)
     existing = vars(Op)
     for fid, name in enumerate(_OP_SLOT_NAMES):
-        if name in existing:
-            raise RuntimeError(f"Op facade collision: {name!r} is already defined on Op")
+        attr = OP_STORAGE_ATTRS.get(name, name)
+        if attr in existing:
+            raise RuntimeError(f"Op facade collision: {attr!r} is already defined on Op")
         if name in dataflow_names:
             descriptor: _OpField = _DataflowField(name, fid, tuple)
         elif name in OP_GROUP_VIEW_FIELDS:
@@ -3568,7 +3445,7 @@ def _install_op_field_descriptors() -> None:
             descriptor = _FactField(name, fid)
         else:
             descriptor = _OpField(name, fid)
-        setattr(Op, name, descriptor)
+        setattr(Op, attr, descriptor)
 
 
 _install_op_field_descriptors()

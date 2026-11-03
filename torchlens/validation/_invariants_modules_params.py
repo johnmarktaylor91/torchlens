@@ -137,10 +137,10 @@ def _check_module_call_tree_links(ml: Trace, module_call: object, name: str) -> 
                 f"ModuleCall '{call_label}' child {child_label!r} has call_parent="
                 f"{getattr(child_call, 'call_parent', None)!r}",
             )
-        expected_prefix = list(getattr(module_call, "module_call_stack", ()) or ())
+        expected_prefix = list(record_member(module_call, "module_call_stack", ()) or ())
         if call_label != "self:1":
             expected_prefix.append(call_label)
-        child_stack = list(getattr(child_call, "module_call_stack", ()) or ())
+        child_stack = list(record_member(child_call, "module_call_stack", ()) or ())
         if child_stack[: len(expected_prefix)] != expected_prefix:
             raise MetadataInvariantError(
                 name,
@@ -577,6 +577,7 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
 from ._invariants import (  # noqa: E402
     MetadataInvariantError,
 )

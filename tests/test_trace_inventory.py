@@ -125,7 +125,9 @@ def test_bill_of_materials_reports_captured_facts() -> None:
     # retained_now; the at_capture facts print BESIDE them.
     assert bom["activations"]["payload_scope"] == "retained_now"
     assert bom["activations"]["num_saved_at_capture"] == len(saved)
-    assert bom["activations"]["at_capture_memory"] == sum(int(op.activation_memory) for op in saved)
+    assert bom["activations"]["at_capture_memory"] == sum(
+        int(op.cost.activation_memory) for op in saved
+    )
     # A live full-save trace still holds everything it captured.
     assert bom["activations"]["retained_now_memory"] == bom["activations"]["at_capture_memory"]
     assert bom["backward"]["num_grad_fn_records"] == 0

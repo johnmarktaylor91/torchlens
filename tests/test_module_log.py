@@ -455,11 +455,11 @@ class TestModuleAccessorSummary:
         # double-count and no miss versus a manual sum over log.ops.
         root = log.root_module
         all_ops = list(log._layer_list)
-        manual_func = sum(getattr(op, "func_duration", 0.0) or 0.0 for op in all_ops)
-        manual_autograd = sum(int(getattr(op, "autograd_memory", 0) or 0) for op in all_ops)
+        manual_func = sum(op.cost.duration or 0.0 for op in all_ops)
+        manual_autograd = sum(int(op.cost.autograd_memory or 0) for op in all_ops)
         out_label_set = set(root.calls[0].output_ops)
         manual_out_act = sum(
-            int(getattr(op, "activation_memory", 0) or 0)
+            int(op.cost.activation_memory or 0)
             for op in all_ops
             if op.label in out_label_set or op.layer_label in out_label_set
         )

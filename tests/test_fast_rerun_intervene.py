@@ -471,8 +471,8 @@ def test_greedy_growing_length_reruns_stay_exact_and_shape_varied() -> None:
         if step > 0:
             stale = trace[unsaved_label]
             assert stale.shape is None
-            assert stale.transformed_out_shape is None
-            assert stale.activation_memory is None
+            assert stale.payload.transformed_out_shape is None
+            assert stale.cost.activation_memory is None
 
         token = _site_op(trace, _HEAD).out[:, -1, :].argmax(dim=-1, keepdim=True)
         reference_token = reference["output"].argmax(dim=-1, keepdim=True)

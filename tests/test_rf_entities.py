@@ -142,7 +142,7 @@ def test_view_mapping_passthrough_at_and_center_unit() -> None:
     trace, target = _conv_trace()
     view = target.receptive_field
     input_op = next(op for op in trace._layer_list if op.is_input)
-    role = str(input_op.io_role)
+    role = str(input_op.graph.io_role)
     descriptor = view.per_input[role]
 
     assert view[role] is descriptor

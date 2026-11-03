@@ -504,7 +504,7 @@ def apply_leaf_selection_edits(trace: Trace, leaf_items: list[dict[str, Any]]) -
             build_fire_record(
                 target_label=op.layer_label,
                 call_label=op.label,
-                func_call_id=op.func_call_id,
+                func_call_id=op.call.call_id,
                 container_path=tuple(op.container_path or ()),
                 engine="replay",
                 edit=helper_spec,

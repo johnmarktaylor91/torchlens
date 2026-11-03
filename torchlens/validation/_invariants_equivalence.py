@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, cast
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -150,7 +151,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
     verified_keepalive: list[object] = []
     group_by_member, key_by_member = _equivalence_members(ml)
     for op in ml._layer_list:
-        equivalence_class = getattr(op, "equivalence_class", None)
+        equivalence_class = record_member(op, "equivalence_class", None)
         expected_group = None
         if isinstance(equivalence_class, str):
             member_key = key_by_member.get(op.label)
@@ -166,7 +167,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
             op_pair_key = (id(canonical), id(expected_group))
             if op_pair_key in verified_op_pairs:
                 continue
-        equivalent_ops = getattr(op, "equivalent_ops", None)
+        equivalent_ops = record_member(op, "equivalent_ops", None)
         if not isinstance(equivalent_ops, (set, frozenset)):
             raise MetadataInvariantError(
                 name,
@@ -204,7 +205,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
             )
             if layer_key in verified_layer_keys:
                 continue
-        equivalent_ops = getattr(layer, "equivalent_ops", None)
+        equivalent_ops = record_member(layer, "equivalent_ops", None)
         if not isinstance(equivalent_ops, (set, frozenset)):
             raise MetadataInvariantError(
                 name,
@@ -217,7 +218,9 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
                     f"Layer {layer.layer_label}.equivalent_ops contains '{label}' not in op_labels",
                 )
         pass_ops = list(layer.ops.values())
-        pass_equivalent_ops = {frozenset(getattr(op, "equivalent_ops", set())) for op in pass_ops}
+        pass_equivalent_ops = {
+            frozenset(record_member(op, "equivalent_ops", set())) for op in pass_ops
+        }
         if len(pass_equivalent_ops) > 1:
             # Under callsite_v1 the passes of one layer may sit in different
             # equivalence sets exactly when their classes differ only in what
@@ -226,7 +229,11 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
             # the layer then serves one of its passes' sets.
             narrowed = call_site_grouped and all(
                 _equivalence_classes_agree(
-                    pass_ops[0], pass_ops[0].equivalence_class, op, op.equivalence_class, True
+                    pass_ops[0],
+                    pass_ops[0].graph.equivalence_class,
+                    op,
+                    op.graph.equivalence_class,
+                    True,
                 )
                 for op in pass_ops
             )
@@ -324,21 +331,21 @@ def _check_graph_ordering(ml: Trace) -> None:
             raise MetadataInvariantError(name, f"Raw label '{label}' survived postprocessing")
     for lpl in ml._layer_list:
         for field in _RAW_LABEL_BEARING_LIST_FIELDS:
-            for item in getattr(lpl, field, ()) or ():
+            for item in record_member(lpl, field, ()) or ():
                 if isinstance(item, str) and _RAW_LABEL_PATTERN.search(item):
                     raise MetadataInvariantError(
                         name,
                         f"Raw label {item!r} survived postprocessing in {lpl.layer_label}.{field}",
                     )
         for field in _RAW_LABEL_BEARING_SCALAR_FIELDS:
-            item = getattr(lpl, field, None)
+            item = record_member(lpl, field, None)
             if isinstance(item, str) and _RAW_LABEL_PATTERN.search(item):
                 raise MetadataInvariantError(
                     name,
                     f"Raw label {item!r} survived postprocessing in {lpl.layer_label}.{field}",
                 )
         for field in _RAW_LABEL_BEARING_DICT_FIELDS:
-            mapping = getattr(lpl, field, None) or {}
+            mapping = record_member(lpl, field, None) or {}
             for key, values in mapping.items():
                 candidates = [key]
                 if isinstance(values, str):
@@ -440,14 +447,14 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     group_func_checked: dict[frozenset[str], bool] = {}
 
     for lpl in ml._layer_list:
-        slo = lpl.recurrent_ops
+        slo = lpl.graph.recurrent_ops
 
         group_key = member_group.get(lpl.label)
         if group_key is not None and _resolve(lpl.label) is lpl:
             # This op was already validated as a member of its group; only
             # the genuinely per-layer checks remain.
             if not group_func_checked[group_key] and not (
-                lpl.is_input or lpl.is_buffer or lpl.is_output
+                lpl.is_input or lpl.graph.is_buffer or lpl.is_output
             ):
                 for member_label in slo:
                     member = _resolve(member_label)
@@ -496,12 +503,12 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
         for member_label in slo:
             member = _resolve(member_label)
             members.append((member_label, member))
-            if set(member.recurrent_ops) != slo_set:
+            if set(member.graph.recurrent_ops) != slo_set:
                 raise MetadataInvariantError(
                     name,
                     f"Asymmetric recurrent_ops: '{lpl.layer_label}' has "
                     f"{sorted(slo)} but '{member_label}' has "
-                    f"{sorted(member.recurrent_ops)}",
+                    f"{sorted(member.graph.recurrent_ops)}",
                 )
 
         # All members share layer_label
@@ -517,17 +524,21 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
         # All members share equivalence_class (per component under callsite_v1)
         for member_label, member in members:
             if not _equivalence_classes_agree(
-                lpl, lpl.equivalence_class, member, member.equivalence_class, call_site_grouped
+                lpl,
+                lpl.graph.equivalence_class,
+                member,
+                member.graph.equivalence_class,
+                call_site_grouped,
             ):
                 raise MetadataInvariantError(
                     name,
                     f"recurrent_ops type mismatch: '{lpl.layer_label}' "
-                    f"type='{lpl.equivalence_class}' vs '{member_label}' "
-                    f"type='{member.equivalence_class}'",
+                    f"type='{lpl.graph.equivalence_class}' vs '{member_label}' "
+                    f"type='{member.graph.equivalence_class}'",
                 )
 
         # All members share func_name (for computational layers)
-        anchor_computational = not (lpl.is_input or lpl.is_buffer or lpl.is_output)
+        anchor_computational = not (lpl.is_input or lpl.graph.is_buffer or lpl.is_output)
         if anchor_computational:
             for member_label, member in members:
                 if member.func_name != lpl.func_name:
@@ -576,7 +587,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     param_groups: dict[tuple[str, tuple[str, ...], str], list[Op]] = defaultdict(list)
     for lpl in [] if call_site_grouped else ml._layer_list:
         if lpl.has_params and lpl._param_barcodes:
-            key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.equivalence_class)
+            key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.graph.equivalence_class)
             param_groups[key].append(lpl)
 
     for param_key, layers in param_groups.items():

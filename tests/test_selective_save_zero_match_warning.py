@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from _record_fakes import FlatNamespace
 
 import torchlens as tl
 from torchlens._postprocess._selective_save import apply_static_label_save_policy
@@ -23,7 +24,7 @@ def _stub_trace() -> Any:
     """Return a minimal trace-like object the resolver can filter."""
 
     ops = [
-        SimpleNamespace(
+        FlatNamespace(
             label="relu_1_1",
             _label_raw="relu_1_1",
             layer_label="relu_1_1",
@@ -34,7 +35,7 @@ def _stub_trace() -> Any:
             is_orphan=False,
             activation_memory=16,
         ),
-        SimpleNamespace(
+        FlatNamespace(
             label="add_1_2",
             _label_raw="add_1_2",
             layer_label="add_1_2",
@@ -50,7 +51,9 @@ def _stub_trace() -> Any:
     class _Stub(SimpleNamespace):
         @property
         def saved_ops(self) -> list[Any]:
-            return [op for op in self._layer_list if op.has_saved_activation and not op.is_orphan]
+            return [
+                op for op in self._layer_list if op.has_saved_activation and not op.graph.is_orphan
+            ]
 
     return _Stub(_layer_list=ops, module_calls=(), _provenance_backend="torch")
 
@@ -113,8 +116,6 @@ def test_tf_eager_session_counts_save_predicate_matches() -> None:
     attributes and ``_should_save_payload`` consults only the predicate.
     """
 
-    from types import SimpleNamespace
-
     from torchlens.backends.tf.op_callback_capture import TFEagerCaptureSession
 
     session = TFEagerCaptureSession(
@@ -127,9 +128,9 @@ def test_tf_eager_session_counts_save_predicate_matches() -> None:
         save_predicate=lambda ctx: ctx.func_name == "relu",
     )
     assert session.save_predicate_match_count == 0
-    assert session._should_save_payload(SimpleNamespace(func_name="matmul")) is False
+    assert session._should_save_payload(FlatNamespace(func_name="matmul")) is False
     assert session.save_predicate_match_count == 0
-    assert session._should_save_payload(SimpleNamespace(func_name="relu")) is True
+    assert session._should_save_payload(FlatNamespace(func_name="relu")) is True
     assert session.save_predicate_match_count == 1
 
 

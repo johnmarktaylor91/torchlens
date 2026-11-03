@@ -43,6 +43,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._utils._record_group_table import record_member
+
 #: Version prefix of the current site-key schema.
 SITE_KEY_PREFIX = "s1"
 
@@ -246,7 +248,7 @@ def operation_witness(op: Any) -> tuple[str | None, int | None] | None:
     is pinned byte-for-byte against the reference implementation.
     """
 
-    code_context = getattr(op, "code_context", None)
+    code_context = record_member(op, "code_context", None)
     if not code_context:
         return None
     frame = code_context[-2] if len(code_context) >= 2 else code_context[0]

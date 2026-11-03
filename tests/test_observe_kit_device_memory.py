@@ -64,8 +64,8 @@ def test_default_off_and_swept_fields_are_none_not_zero() -> None:
     captured = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
     try:
         for op in captured._layer_list:
-            assert op.bytes_delta_at_call is None, op.layer_label
-            assert op.bytes_peak_at_call is None, op.layer_label
+            assert op.cost.bytes_delta_at_call is None, op.layer_label
+            assert op.cost.bytes_peak_at_call is None, op.layer_label
         assert device_memory_samples(captured) == {}
     finally:
         captured.cleanup()
@@ -108,10 +108,10 @@ def test_flat_fields_are_projections_of_the_typed_samples(monkeypatch) -> None:
         monkeypatch, provider, nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4)
     )
     try:
-        relu = captured["relu_1_2"]
-        assert relu.bytes_delta_at_call is not None
-        assert int(relu.bytes_delta_at_call) > 0
-        assert int(relu.bytes_peak_at_call) > 0
+        relu = captured.ops["relu_1_2"]
+        assert relu.cost.bytes_delta_at_call is not None
+        assert int(relu.cost.bytes_delta_at_call) > 0
+        assert int(relu.cost.bytes_peak_at_call) > 0
     finally:
         captured.cleanup()
 
@@ -157,7 +157,7 @@ def test_unsupported_devices_produce_typed_absence(monkeypatch) -> None:
     try:
         assert device_memory_samples(captured) == {}
         for op in captured._layer_list:
-            assert op.bytes_delta_at_call is None
+            assert op.cost.bytes_delta_at_call is None
     finally:
         captured.cleanup()
 

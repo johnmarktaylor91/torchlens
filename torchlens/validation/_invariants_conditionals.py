@@ -41,9 +41,9 @@ def _check_conditional_child_labels_resolve(
     # Invariant 3: every child label in conditional child views exists in the log.
     for layer in ml._layer_list:
         for field_name, child_labels in (
-            ("conditional_entry_children", layer.conditional_entry_children),
-            ("conditional_then_children", layer.conditional_then_children),
-            ("conditional_else_children", layer.conditional_else_children),
+            ("conditional_entry_children", layer.control_flow.entry_children),
+            ("conditional_then_children", layer.control_flow.then_children),
+            ("conditional_else_children", layer.control_flow.else_children),
         ):
             for child_label in child_labels:
                 if child_label not in valid_child_labels:
@@ -53,7 +53,7 @@ def _check_conditional_child_labels_resolve(
                         f"{layer.layer_label}.{field_name} contains missing child label "
                         f"{child_label!r}",
                     )
-        for elif_index, child_labels in layer.conditional_elif_children.items():
+        for elif_index, child_labels in layer.control_flow.elif_children.items():
             for child_label in child_labels:
                 if child_label not in valid_child_labels:
                     _fail_conditional_invariant(
@@ -65,9 +65,9 @@ def _check_conditional_child_labels_resolve(
 
     for layer_log in ml._layer_logs.values():
         for field_name, child_labels in (
-            ("conditional_entry_children", layer_log.conditional_entry_children),
-            ("conditional_then_children", layer_log.conditional_then_children),
-            ("conditional_else_children", layer_log.conditional_else_children),
+            ("conditional_entry_children", layer_log.control_flow.entry_children),
+            ("conditional_then_children", layer_log.control_flow.then_children),
+            ("conditional_else_children", layer_log.control_flow.else_children),
         ):
             for child_label in child_labels:
                 if child_label not in valid_child_labels:
@@ -77,7 +77,7 @@ def _check_conditional_child_labels_resolve(
                         f"Layer {layer_log.layer_label}.{field_name} contains missing child "
                         f"label {child_label!r}",
                     )
-        for elif_index, child_labels in layer_log.conditional_elif_children.items():
+        for elif_index, child_labels in layer_log.control_flow.elif_children.items():
             for child_label in child_labels:
                 if child_label not in valid_child_labels:
                     _fail_conditional_invariant(
@@ -124,36 +124,39 @@ def _check_conditional_bool_classification(
 
     # Invariant 4: bool classification fields are mutually consistent.
     for layer in ml._layer_list:
-        expected_is_branch = layer.conditional_context_kind in branch_context_kinds
-        if layer.is_terminal_conditional_bool != expected_is_branch:
+        expected_is_branch = layer.control_flow.context_kind in branch_context_kinds
+        if layer.control_flow.is_terminal_conditional_bool != expected_is_branch:
             _fail_conditional_invariant(
                 name,
                 4,
-                f"{layer.layer_label} has is_terminal_conditional_bool={layer.is_terminal_conditional_bool} but "
-                f"conditional_context_kind={layer.conditional_context_kind!r}",
+                f"{layer.layer_label} has is_terminal_conditional_bool={layer.control_flow.is_terminal_conditional_bool} but "
+                f"conditional_context_kind={layer.control_flow.context_kind!r}",
             )
-        if layer.is_terminal_conditional_bool and layer.terminal_conditional_id is None:
+        if (
+            layer.control_flow.is_terminal_conditional_bool
+            and layer.terminal_conditional_id is None
+        ):
             _fail_conditional_invariant(
                 name,
                 4,
                 f"{layer.layer_label} has is_terminal_conditional_bool=True but terminal_conditional_id is None",
             )
-        if layer.conditional_context_kind is not None and not layer.is_terminal_bool:
+        if layer.control_flow.context_kind is not None and not layer.control_flow.is_terminal_bool:
             _fail_conditional_invariant(
                 name,
                 4,
-                f"{layer.layer_label} has conditional_context_kind={layer.conditional_context_kind!r} but "
+                f"{layer.layer_label} has conditional_context_kind={layer.control_flow.context_kind!r} but "
                 f"is_terminal_bool=False",
             )
         if (
-            layer.conditional_wrapper_kind is not None
-            and layer.conditional_context_kind not in wrapped_context_kinds
+            layer.control_flow.wrapper_kind is not None
+            and layer.control_flow.context_kind not in wrapped_context_kinds
         ):
             _fail_conditional_invariant(
                 name,
                 4,
-                f"{layer.layer_label} has conditional_wrapper_kind={layer.conditional_wrapper_kind!r} but "
-                f"conditional_context_kind={layer.conditional_context_kind!r}",
+                f"{layer.layer_label} has conditional_wrapper_kind={layer.control_flow.wrapper_kind!r} but "
+                f"conditional_context_kind={layer.control_flow.context_kind!r}",
             )
 
 
@@ -176,18 +179,18 @@ def _check_conditional_event_references(
     referenced_cond_ids: set[int] = set()
     for layer in ml._layer_list:
         referenced_cond_ids.update(
-            conditional_id for conditional_id, _ in layer.conditional_branch_stack
+            conditional_id for conditional_id, _ in layer.control_flow.branch_stack
         )
         if layer.terminal_conditional_id is not None:
             referenced_cond_ids.add(layer.terminal_conditional_id)
-        referenced_cond_ids.update(layer.conditional_arm_children)
+        referenced_cond_ids.update(layer.control_flow.arm_children)
     for layer_log in ml._layer_logs.values():
         referenced_cond_ids.update(
             conditional_id
-            for branch_stack in layer_log.conditional_role_stacks
+            for branch_stack in layer_log.control_flow.role_stacks
             for conditional_id, _ in branch_stack
         )
-        referenced_cond_ids.update(layer_log.conditional_arm_children)
+        referenced_cond_ids.update(layer_log.control_flow.arm_children)
     referenced_cond_ids.update(
         conditional_id for conditional_id, _ in ml._graph_conditional_arm_entry_edges
     )
@@ -222,22 +225,22 @@ def _check_conditional_branch_stack_monotonicity(
             child_layer = ml[child_label]
             if parent_op.pass_number != child_layer.pass_number:
                 continue
-            if parent_op.conditional_branch_stack == child_layer.conditional_branch_stack:
+            if parent_op.control_flow.branch_stack == child_layer.control_flow.branch_stack:
                 continue
             if _is_prefix_stack(
-                parent_op.conditional_branch_stack, child_layer.conditional_branch_stack
+                parent_op.control_flow.branch_stack, child_layer.control_flow.branch_stack
             ):
                 continue
             if _is_prefix_stack(
-                child_layer.conditional_branch_stack, parent_op.conditional_branch_stack
+                child_layer.control_flow.branch_stack, parent_op.control_flow.branch_stack
             ):
                 continue
             _fail_conditional_invariant(
                 name,
                 6,
                 f"Edge ({parent_op.layer_label!r}, {child_label!r}) has non-prefix "
-                f"conditional stacks parent={parent_op.conditional_branch_stack} "
-                f"child={child_layer.conditional_branch_stack}",
+                f"conditional stacks parent={parent_op.control_flow.branch_stack} "
+                f"child={child_layer.control_flow.branch_stack}",
             )
 
 
@@ -342,25 +345,25 @@ def _check_conditional_layer_aggregate_views(
         expected_stack_order: list[list[tuple[int, str]]] = []
         expected_stack_ops: dict[tuple[tuple[int, str], ...], list[int]] = {}
         for call_index, pass_log in sorted(layer_log.ops.items()):
-            stack_signature = tuple(pass_log.conditional_branch_stack)
+            stack_signature = tuple(pass_log.control_flow.branch_stack)
             if stack_signature not in expected_stack_ops:
-                expected_stack_order.append(list(pass_log.conditional_branch_stack))
+                expected_stack_order.append(list(pass_log.control_flow.branch_stack))
                 expected_stack_ops[stack_signature] = []
             expected_stack_ops[stack_signature].append(call_index)
 
-        if [list(stack) for stack in layer_log.conditional_role_stacks] != expected_stack_order:
+        if [list(stack) for stack in layer_log.control_flow.role_stacks] != expected_stack_order:
             _fail_conditional_invariant(
                 name,
                 9,
                 f"Layer {layer_log.layer_label}.conditional_role_stacks="
-                f"{layer_log.conditional_role_stacks} != expected {expected_stack_order}",
+                f"{layer_log.control_flow.role_stacks} != expected {expected_stack_order}",
             )
-        if layer_log.conditional_branch_stack_ops != expected_stack_ops:
+        if layer_log.control_flow.branch_stack_ops != expected_stack_ops:
             _fail_conditional_invariant(
                 name,
                 9,
                 f"Layer {layer_log.layer_label}.conditional_branch_stack_ops="
-                f"{layer_log.conditional_branch_stack_ops} != expected "
+                f"{layer_log.control_flow.branch_stack_ops} != expected "
                 f"{expected_stack_ops}",
             )
 
@@ -477,12 +480,12 @@ def _check_conditional_arm_child_pass_union(
     # Invariant 12: Layer conditional_arm_children is the exact pass union.
     for layer_log in ml._layer_logs.values():
         expected_children_by_cond = _expected_layer_log_child_union(layer_log)
-        if layer_log.conditional_arm_children != expected_children_by_cond:
+        if layer_log.control_flow.arm_children != expected_children_by_cond:
             _fail_conditional_invariant(
                 name,
                 12,
                 f"Layer {layer_log.layer_label}.conditional_arm_children="
-                f"{layer_log.conditional_arm_children} != expected pass union "
+                f"{layer_log.control_flow.arm_children} != expected pass union "
                 f"{expected_children_by_cond}",
             )
 
@@ -511,16 +514,16 @@ def _check_conditional_branch_entry_edges(
                 f"conditional_branch_edges references missing parent layer {parent_label!r}",
             )
         parent_layer = ml._layer_logs[parent_label]
-        if bool_label not in parent_layer.conditional_entry_children:
+        if bool_label not in parent_layer.control_flow.entry_children:
             _fail_conditional_invariant(
                 name,
                 13,
                 f"conditional_branch_edges includes ({parent_label!r}, {bool_label!r}) but "
-                f"{parent_label}.conditional_entry_children={parent_layer.conditional_entry_children}",
+                f"{parent_label}.conditional_entry_children={parent_layer.control_flow.entry_children}",
             )
 
     for parent_layer in ml._layer_logs.values():
-        for bool_label in parent_layer.conditional_entry_children:
+        for bool_label in parent_layer.control_flow.entry_children:
             if (parent_layer.layer_label, bool_label) not in ml._graph_conditional_branch_edges:
                 _fail_conditional_invariant(
                     name,

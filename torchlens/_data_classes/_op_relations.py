@@ -11,20 +11,17 @@ from typing import TYPE_CHECKING, cast
 import torch
 
 if TYPE_CHECKING:
-    from .module import Module
     from .op import Op
 
 
 __all__ = [
     "multi_output_type",
-    "atomic_module",
     "siblings",
     "co_parents",
     "input_ops_by_index",
     "buffer_source_ops_by_index",
     "buffer_sink_ops_by_index",
     "input_activations",
-    "input_to_modules",
     "get_children",
     "get_parents",
 ]
@@ -73,25 +70,6 @@ def multi_output_type(op: Op) -> type | str | None:
     if type_module:
         return f"{type_module}.{type_qualname}"
     return type_qualname
-
-
-def atomic_module(op: Op) -> Module | None:
-    """Module record resolved from ``atomic_module_address``, or ``None``.
-
-    Returns ``None`` when this Op is not an atomic-module output or when the
-    owning Trace is unavailable.
-    """
-
-    address = op.atomic_module_address
-    if address is None:
-        return None
-    trace = op._source_trace
-    if trace is None:
-        return None
-    try:
-        return cast("Module", trace.modules[address])
-    except (KeyError, TypeError):
-        return None
 
 
 def siblings(op: Op) -> list[str]:
@@ -180,7 +158,7 @@ def buffer_source_ops_by_index(op: Op) -> dict[int, Op]:
             if parent_label not in trace._layer_dict_all_keys:
                 continue
             parent = trace._layer_dict_all_keys[parent_label]
-        if parent.is_buffer and parent.buffer_write_kind is None:
+        if parent.graph.is_buffer and parent.buffer_write_kind is None:
             source_ops[parent_index] = parent
     return source_ops
 
@@ -197,7 +175,7 @@ def buffer_sink_ops_by_index(op: Op) -> dict[int, Op]:
             if child_label not in trace._layer_dict_all_keys:
                 continue
             child = trace._layer_dict_all_keys[child_label]
-        if child.is_buffer and child.buffer_write_kind is not None:
+        if child.graph.is_buffer and child.buffer_write_kind is not None:
             sink_ops[child_index] = child
     return sink_ops
 
@@ -241,22 +219,6 @@ def input_activations(op: Op) -> tuple[torch.Tensor | None, ...]:
         )
         activations.append(consumed if isinstance(consumed, torch.Tensor) else None)
     return tuple(activations)
-
-
-def input_to_modules(op: Op) -> list[str]:
-    """Module addresses (no ``:N``) whose input this Op's output fed.
-
-    Derived from ``input_to_module_calls`` by stripping the ``:N`` pass suffix
-    and de-duplicating, mirroring the ``output_of_modules`` /
-    ``output_of_module_calls`` split. Use ``input_to_module_calls`` for the
-    ModuleCall-label list.
-    """
-
-    seen: dict[str, None] = {}
-    for call_label in op.input_to_module_calls:
-        address = str(call_label).rsplit(":", 1)[0]
-        seen.setdefault(address, None)
-    return list(seen)
 
 
 def _resolve_relation_record(op: Op, label: str) -> Op | None:

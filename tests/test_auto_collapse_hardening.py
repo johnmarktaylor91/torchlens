@@ -47,6 +47,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens._visualization._render_edges import (
     _collapsed_module_should_show_remainder,
     _plan_separately_rendered_op_labels,
@@ -459,7 +460,7 @@ def _occurrence_witness_partition(trace, result):
         # module of an atomic exit op is dropped and the op stays visible.
         original_bases = {call.rsplit(":", 1)[0] for call in modules}
         effective = modules
-        if getattr(op, "is_atomic_module", False) and effective:
+        if record_member(op, "is_atomic_module", False) and effective:
             effective = effective[:-1]
         if (
             any(call in box_calls for call in effective)
@@ -1064,7 +1065,7 @@ def _effective_stack(op) -> tuple[str, ...]:
     """Independently recompute the renderer's effective cluster stack."""
 
     modules = [str(module) for module in (getattr(op, "modules", ()) or ())]
-    if getattr(op, "is_atomic_module", False) and modules:
+    if record_member(op, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     return tuple(modules)
 
@@ -1546,8 +1547,8 @@ def _boxed_surfaced_labels(trace, plan) -> set[str]:
     for op in trace.ops:
         modules = list(getattr(op, "modules", ()) or ())
         if (
-            getattr(op, "is_atomic_module", False)
-            and not getattr(op, "is_buffer", False)
+            record_member(op, "is_atomic_module", False)
+            and not record_member(op, "is_buffer", False)
             and modules
             and modules[-1].rsplit(":", 1)[0] in addresses
         ):
@@ -1605,7 +1606,7 @@ def test_surfaced_exit_op_not_double_represented(tmp_path):
             surfaced = {
                 str(op.layer_label)
                 for op in trace.ops
-                if getattr(op, "is_atomic_module", False)
+                if record_member(op, "is_atomic_module", False)
                 and (getattr(op, "modules", ()) or ("",))[-1].rsplit(":", 1)[0] == address
             }
             module_labels -= surfaced

@@ -17,6 +17,7 @@ from typing import Any
 
 from .._errors import InvalidArgumentError
 from .._utils._callable_safety import _unwrap_capture_wrapper
+from .._utils._record_group_table import record_member
 
 #: Registry namespaces resolved for replay; ``custom`` (foreign code) never is.
 RESOLVABLE_NAMESPACES: frozenset[str] = frozenset(
@@ -41,7 +42,7 @@ def _is_resolution_exempt(layer: Any) -> bool:
     if (
         getattr(layer, "is_input", False)
         or getattr(layer, "is_output", False)
-        or getattr(layer, "is_buffer", False)
+        or record_member(layer, "is_buffer", False)
     ):
         return True
     return str(getattr(layer, "func_name", "none")) in STRUCTURAL_FUNC_NAMES
@@ -55,7 +56,7 @@ def _resolution_candidate(layer: Any) -> Any:
     if _is_resolution_exempt(layer):
         return None
     func_name = str(getattr(layer, "func_name", "none"))
-    key = getattr(layer, "func_id", None)
+    key = record_member(layer, "func_id", None)
     if not isinstance(key, FunctionRegistryKey):
         return None
     if key.namespace == "custom":

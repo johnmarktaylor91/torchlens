@@ -23,6 +23,7 @@ from .._capture.arg_positions import (
     _schema_arg_is_parent_candidate,
 )
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ..backends import TORCH_BACKEND_NAME
 from ._engine_descriptor import _descriptor
 from ._engine_geometry import (
@@ -358,7 +359,7 @@ def _seed_input(op: Op) -> _InputState:
     """
 
     shape = tuple(op.shape)
-    role = op.io_role or op.label
+    role = op.graph.io_role or op.label
     identity = _Mapped(_Affine(Fraction(1), Fraction(0)), _Affine(Fraction(1), Fraction(0)))
     return _InputState(
         input_op_label=op.label,
@@ -1600,9 +1601,11 @@ def _geometry_args_snapshot(op: Op) -> tuple[object, ...]:
     """
 
     return (
-        _snapshot_mapping(getattr(op, "func_config", None)),
-        tuple(_snapshot_value(value) for value in getattr(op, "non_tensor_pos_args", ()) or ()),
-        _snapshot_mapping(getattr(op, "non_tensor_kwargs", None)),
+        _snapshot_mapping(record_member(op, "func_config", None)),
+        tuple(
+            _snapshot_value(value) for value in record_member(op, "non_tensor_pos_args", ()) or ()
+        ),
+        _snapshot_mapping(record_member(op, "non_tensor_kwargs", None)),
     )
 
 
@@ -1633,7 +1636,7 @@ def _graph_revision(trace: Trace) -> tuple[object, ...]:
             tuple(op.parents),
             tuple(op.children),
             tuple(op.shape) if op.shape is not None else None,
-            op.io_role,
+            op.graph.io_role,
             op.func_name,
             _geometry_args_snapshot(op),
             _edge_uses_snapshot(op),

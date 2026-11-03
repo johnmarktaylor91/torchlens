@@ -50,7 +50,7 @@ def _is_noise_buffer(node: GraphNode) -> bool:
     """
 
     source_node = _unwrap_focus_node(node)
-    if not source_node.is_buffer:
+    if not source_node.graph.is_buffer:
         return False
     address = getattr(source_node, "address", None)
     return _buffer_name_segment(address) in _NOISE_BUFFER_NAMES
@@ -72,7 +72,7 @@ def _is_buffer_visible(node: GraphNode, show_buffer_layers: BufferVisibilityLite
         True when the node is visible. Non-buffer nodes are always visible.
     """
 
-    if not node.is_buffer:
+    if not node.graph.is_buffer:
         return True
     if show_buffer_layers == "always":
         return True

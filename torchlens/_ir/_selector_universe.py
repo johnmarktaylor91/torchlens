@@ -23,6 +23,7 @@ import re
 from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._utils._record_group_table import record_member
 from ..backends._backend_names import TORCH_BACKEND_NAME
 
 #: String-label attribute universes per lifecycle, in match order.
@@ -205,7 +206,7 @@ def _module_containment_candidates(subject: Any, lifecycle: str) -> tuple[Any, .
 
     if lifecycle == "capture":
         return _capture_module_candidates(subject)
-    return tuple(getattr(subject, "output_of_module_calls", ()) or ()) + tuple(
+    return tuple(record_member(subject, "output_of_module_calls", ()) or ()) + tuple(
         getattr(subject, "modules", ()) or ()
     )
 
@@ -237,7 +238,7 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
     for frame in getattr(ctx, "module_stack", ()):
         candidates.extend(_module_frame_candidates(frame))
     modules = getattr(ctx, "modules", ())
-    module_ops = getattr(ctx, "output_of_module_calls", ())
+    module_ops = record_member(ctx, "output_of_module_calls", ())
     candidates.extend(
         _module_candidate_string(candidate) for candidate in tuple(modules) + tuple(module_ops)
     )
@@ -327,7 +328,7 @@ def _is_module_scope_alias(kind: str, subject: Any, lifecycle: str) -> bool:
 def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
     """Return module-output-boundary candidates for ``tl.module``."""
 
-    module_outputs = tuple(getattr(subject, "output_of_module_calls", ()) or ())
+    module_outputs = tuple(record_member(subject, "output_of_module_calls", ()) or ())
     if lifecycle == "capture" and not module_outputs:
         # Capture subjects include backend ``OpEvent`` records, which carry the
         # owning session as ``source_trace`` (they have no ``trace`` member).

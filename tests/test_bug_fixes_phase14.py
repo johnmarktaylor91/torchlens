@@ -11,6 +11,7 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from _record_fakes import FlatNamespace
 
 import torchlens as tl
 from torchlens._capture.arg_positions import FUNC_ARG_SPECS, extract_tensors_and_params
@@ -368,15 +369,15 @@ def test_view_mutation_output_recomputes_transformed_payload_metadata(
 
     assert output_op.shape == (6, 3)
     assert output_op.dtype == expected_raw.dtype
-    assert output_op.activation_memory == expected_raw.nelement() * expected_raw.element_size()
+    assert output_op.cost.activation_memory == expected_raw.nelement() * expected_raw.element_size()
     if save_raw_activations:
         assert torch.equal(output_op.out, expected_raw)
     else:
         assert output_op.out is None
-    assert torch.equal(output_op.transformed_out, expected_transformed)
-    assert output_op.transformed_out_shape == (6, 3)
-    assert output_op.transformed_out_dtype == expected_transformed.dtype
-    assert output_op.transformed_activation_memory == (
+    assert torch.equal(output_op.payload.transformed_out, expected_transformed)
+    assert output_op.payload.transformed_out_shape == (6, 3)
+    assert output_op.payload.transformed_out_dtype == expected_transformed.dtype
+    assert output_op.cost.transformed_activation_memory == (
         expected_transformed.nelement() * expected_transformed.element_size()
     )
     assert check_metadata_invariants(trace) is True
@@ -395,13 +396,13 @@ def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
     parent_layer = next(
         layer
         for layer in trace._layer_logs.values()
-        if conditional_id in layer.conditional_arm_children
-        and "then" in layer.conditional_arm_children[conditional_id]
-        and "else" in layer.conditional_arm_children[conditional_id]
+        if conditional_id in layer.control_flow.arm_children
+        and "then" in layer.control_flow.arm_children[conditional_id]
+        and "else" in layer.control_flow.arm_children[conditional_id]
     )
 
-    assert parent_layer.conditional_then_children
-    assert parent_layer.conditional_else_children
+    assert parent_layer.control_flow.then_children
+    assert parent_layer.control_flow.else_children
     assert check_metadata_invariants(trace) is True
 
 
@@ -415,9 +416,9 @@ def test_conditional_then_invariant_catches_derived_view_corruption() -> None:
         save="all",
     )
     parent_layer = next(
-        layer for layer in trace._layer_logs.values() if layer.conditional_then_children
+        layer for layer in trace._layer_logs.values() if layer.control_flow.then_children
     )
-    parent_layer.conditional_then_children = []
+    parent_layer._control_flow_then_children = []
 
     with pytest.raises(MetadataInvariantError, match="conditional_then_children"):
         check_metadata_invariants(trace)
@@ -468,7 +469,7 @@ def test_validation_arglocs_allow_same_parent_tensor_in_multiple_slots() -> None
         out_versions_by_child={},
         func_name="input",
     )
-    target = SimpleNamespace(
+    target = FlatNamespace(
         layer_label="add_1_1",
         parents=["input_1"],
         parent_arg_positions={"args": {0: "input_1"}, "kwargs": {}},
@@ -491,7 +492,7 @@ def test_lstm_exemption_only_treats_hidden_state_as_structural() -> None:
     h = torch.zeros(1, 2, 3)
     c = torch.ones(1, 2, 3)
     weight = torch.randn(12, 3)
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         saved_args=(h.clone(), (h, c), [weight]),
         parent_arg_positions={
             "args": {0: "equal_data", 1: "hidden", 2: "weight"},
@@ -519,7 +520,7 @@ def test_lstm_exemption_resolves_real_nested_hidden_state_positions() -> None:
 
     h = torch.zeros(1, 2, 3)
     c = torch.ones(1, 2, 3)
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         saved_args=(torch.randn(4, 2, 3), (h, c)),
         parent_arg_positions={
             "args": {0: "data", (1, 0): "h0", (1, 1): "c0"},
@@ -541,7 +542,7 @@ def test_interpolate_exemption_uses_scale_factor_position_not_content() -> None:
     """Equal-valued input and scale tensors are disambiguated structurally."""
 
     equal_value = torch.tensor(2.0)
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         saved_args=(equal_value, None, equal_value.clone()),
         saved_kwargs={},
         parent_arg_positions={

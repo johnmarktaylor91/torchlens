@@ -540,7 +540,7 @@ def _replay_fire_record(
     return build_fire_record(
         target_label=site.layer_label,
         call_label=site.label,
-        func_call_id=site.func_call_id,
+        func_call_id=site.call.call_id,
         container_path=tuple(site.container_path or ()),
         engine="replay",
         edit=entry.helper_spec,

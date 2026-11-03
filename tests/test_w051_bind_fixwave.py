@@ -21,6 +21,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._capture._run_setup as capture_run_setup
+from torchlens._utils._record_group_table import record_member
 from torchlens.intervention._injection import attest_injected_ops, injected_ops
 from torchlens.intervention.errors import BindingPreflightError
 
@@ -148,14 +149,18 @@ def _injected_rows(state):
     """Injected op rows of a pickled artifact state."""
 
     return [
-        op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is not None
+        op
+        for op in state["_layer_list"]
+        if record_member(op, "injection_provenance", None) is not None
     ]
 
 
 def _model_rows(state):
     """Model op rows of a pickled artifact state."""
 
-    return [op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is None]
+    return [
+        op for op in state["_layer_list"] if record_member(op, "injection_provenance", None) is None
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -274,9 +279,9 @@ def test_reanchored_rows_refuse_at_load(tmp_path) -> None:
         for row in _injected_rows(state):
             envelope = row.annotations["injection_codec_v1"]
             suffix = row.layer_label[len(envelope["host_label"]) :]
-            row.injection_provenance["host_site_key"] = tanh.site_key
-            row.injection_provenance["host_pass"] = 7
-            row.injection_provenance["spec_rule_id"] = "r-forged"
+            row.call.injection_provenance["host_site_key"] = tanh.site_key
+            row.call.injection_provenance["host_pass"] = 7
+            row.call.injection_provenance["spec_rule_id"] = "r-forged"
             envelope["host_label"] = f"{tanh.layer_label}:{tanh.pass_number}"
             row.layer_label = f"{tanh.layer_label}:{tanh.pass_number}{suffix}"
 
@@ -294,7 +299,7 @@ def test_site_key_label_disagreement_refuses_at_load(tmp_path) -> None:
     def inconsistent(state) -> None:
         tanh = next(op for op in _model_rows(state) if op.layer_label.startswith("tanh"))
         for row in _injected_rows(state):
-            row.injection_provenance["host_site_key"] = tanh.site_key
+            row.call.injection_provenance["host_site_key"] = tanh.site_key
 
     with pytest.raises(Exception) as excinfo:
         _save_tamper_load(tmp_path, logged, inconsistent)
@@ -320,7 +325,7 @@ def test_forged_injection_provenance_refuses_at_load(
 
     def forge(state) -> None:
         for row in _injected_rows(state):
-            row.injection_provenance[provenance_key] = forged_value
+            row.call.injection_provenance[provenance_key] = forged_value
 
     with pytest.raises(Exception) as excinfo:
         _save_tamper_load(tmp_path, logged, forge)
@@ -525,7 +530,7 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
     records = injected_ops(logged)
     assert records
     host = next(op for op in logged.ops if getattr(op, "is_edited", False))
-    assert "fc1:1" in host.output_of_module_calls
+    assert "fc1:1" in host.module_context.output_of_module_calls
     for record in records:
         assert record.host_label == host.label
         assert record.provenance.host_site_key == host.site_key

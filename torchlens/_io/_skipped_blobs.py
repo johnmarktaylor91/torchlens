@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._data_classes._state_adapter import state_items
+from .._utils._record_group_table import record_member, record_storage_attr
 from .format_contract import BlobRef
 
 
@@ -38,7 +39,7 @@ def _apply_skipped_blobs_to_scrubbed_state(
             1 for layer in layer_list if bool(getattr(layer, "has_saved_activation", False))
         )
         scrubbed_state["_cost_saved_activation_memory"] = sum(
-            int(getattr(layer, "activation_memory", 0) or 0)
+            int(record_member(layer, "activation_memory", 0) or 0)
             for layer in layer_list
             if bool(getattr(layer, "has_saved_activation", False))
         )
@@ -82,7 +83,7 @@ def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
 
     for field_name, field_value in list(state_items(value)):
         replaced_value = _replace_skipped_blob_refs(field_value, skipped_blob_ids)
-        setattr(value, field_name, replaced_value)
+        setattr(value, record_storage_attr(value, field_name), replaced_value)
         if (
             field_name == "out"
             and replaced_value is None

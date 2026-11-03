@@ -42,7 +42,7 @@ def _setitem_op(trace: tl.Trace):
 
 
 def _parent_at(op, slot: int) -> str:
-    return str(op.parent_arg_positions["args"][slot])
+    return str(op.call.parent_arg_positions["args"][slot])
 
 
 def test_setitem_exempt_with_no_saved_args_answers_not_exempt() -> None:
@@ -53,7 +53,7 @@ def test_setitem_exempt_with_no_saved_args_answers_not_exempt() -> None:
         x = torch.randn(3, 5)
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=False))
         op = _setitem_op(trace)
-        assert op.saved_args is None
+        assert op.call.saved_args is None
         assert exemptions._check_setitem_exempt(trace, op, [_parent_at(op, slot)]) is False
 
 

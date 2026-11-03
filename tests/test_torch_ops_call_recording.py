@@ -59,7 +59,7 @@ def _assert_recorded_and_valid(model: nn.Module, func_name: str) -> None:
     assert not [w for w in caught if "no graph/source provenance" in str(w.message)]
     recorded = next(op for op in trace.ops if op.func_name == func_name)
     assert recorded.parents, recorded
-    assert not recorded.unattributed_tensor_args
+    assert not recorded.call.unattributed_tensor_args
     assert _validate(model, x), last_validation_failure()
 
 

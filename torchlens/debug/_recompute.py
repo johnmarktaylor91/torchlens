@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
 from .._debug_report import Report, table_report, trace_subject
+from .._utils._record_group_table import record_member
 from ._common import _compute_ops, _op_label, _require_pandas
 
 
@@ -37,8 +38,8 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
         "nonpositive_flops_forward": 0,
     }
     for op in _compute_ops(trace):
-        activation_memory = getattr(op, "activation_memory", None)
-        flops_forward = getattr(op, "flops_forward", None)
+        activation_memory = record_member(op, "activation_memory", None)
+        flops_forward = record_member(op, "flops_forward", None)
         if activation_memory is None:
             excluded["missing_activation_memory"] += 1
             continue

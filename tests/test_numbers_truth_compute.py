@@ -34,8 +34,8 @@ def test_biased_linear_true_macs_not_flops_over_two() -> None:
     log = _capture(nn.Linear(8, 16, bias=True), torch.randn(2, 8))
     try:
         op = log["linear_1_1"]
-        assert int(op.macs_forward) == 256
-        record = next(iter(op.ops.values())).compute_record
+        assert int(op.cost.macs_forward) == 256
+        record = next(iter(op.ops.values())).cost.compute_record
         assert record.fma_macs == 256
         assert record.other_flops == 32  # the bias adds, NOT MACs
         assert record.mac_applicability == "mac"
@@ -51,11 +51,11 @@ def test_relu_has_zero_macs_non_mac() -> None:
     log = _capture(nn.Sequential(nn.Linear(4, 4, bias=False), nn.ReLU()), torch.randn(2, 4))
     try:
         relu = log["relu_1_2"]
-        assert int(relu.macs_forward) == 0
-        record = next(iter(relu.ops.values())).compute_record
+        assert int(relu.cost.macs_forward) == 0
+        record = next(iter(relu.ops.values())).cost.compute_record
         assert record.mac_applicability == "non_mac"
         assert record.fma_macs == 0
-        assert int(relu.flops_forward) > 0
+        assert int(relu.cost.flops_forward) > 0
     finally:
         log.cleanup()
 
@@ -228,10 +228,10 @@ def test_record_collapse_matches_stored_flops_everywhere() -> None:
     try:
         checked = 0
         for op in log._layer_list:
-            record = op.compute_record
+            record = op.cost.compute_record
             if record is None or record.fma_macs is None:
                 continue
-            assert record.flops(fma=2) == int(op.flops_forward), op.label
+            assert record.flops(fma=2) == int(op.cost.flops_forward), op.label
             checked += 1
         assert checked >= 5
     finally:
@@ -258,11 +258,11 @@ def test_bert_base_exact_mac_decomposition() -> None:
         fused = [
             op
             for op in log._layer_list
-            if op.func_name in ("addmm", "linear") and op.macs_forward is not None
+            if op.func_name in ("addmm", "linear") and op.cost.macs_forward is not None
         ]
         assert len(fused) == 73
-        assert sum(int(op.macs_forward) for op in fused) == 1_019_805_696
-        assert sum(int(op.macs_forward) for op in fused) != 1_020_303_744
+        assert sum(int(op.cost.macs_forward) for op in fused) == 1_019_805_696
+        assert sum(int(op.cost.macs_forward) for op in fused) != 1_020_303_744
         assert int(log.cost.total_macs_forward) == 1_019_805_696 + 2_654_208
         assert log.macs_unknown_split_ops == ()
     finally:

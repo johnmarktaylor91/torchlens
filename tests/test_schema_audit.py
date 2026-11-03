@@ -11,6 +11,7 @@ from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORD
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
 from torchlens._trace_state import TraceState
+from torchlens._utils._record_group_table import op_attr
 from torchlens.intervention._types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     MODEL_LOG_FIELD_FORK_POLICY,
@@ -87,7 +88,7 @@ def test_layer_pass_construction_guard_and_direct_write_flag() -> None:
     log = _capture_tiny_log()
     layer = next(iter(log))
     fields_dict: dict[str, Any] = {
-        field_name: getattr(layer, field_name) for field_name in LAYER_PASS_LOG_FIELD_ORDER
+        field_name: getattr(layer, op_attr(field_name)) for field_name in LAYER_PASS_LOG_FIELD_ORDER
     }
     fields_dict["source_trace"] = log
     fields_dict["_construction_done"] = True
@@ -107,7 +108,7 @@ def test_postprocess_internal_writes_do_not_mark_direct_write_dirty() -> None:
     assert log._has_direct_writes is False
     assert log.state is TraceState.PRISTINE
     for layer in log:
-        assert hasattr(layer, "func_call_id")
+        assert hasattr(layer.call, "call_id")
         assert hasattr(layer, "container_path")
         assert hasattr(layer, "edits")
         assert hasattr(layer, "_edge_uses")

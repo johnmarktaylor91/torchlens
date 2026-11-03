@@ -339,12 +339,12 @@ def test_runnable_sparse_core_contains_no_tensor_payload_family(tmp_path: Path) 
     assert all(op.func is None for op in metadata["_layer_list"])
     for op in metadata["_layer_list"]:
         assert op.out is None
-        assert op.transformed_out is None
-        assert op.saved_args is None
-        assert op.saved_kwargs is None
+        assert op.payload.transformed_out is None
+        assert op.call.saved_args is None
+        assert op.call.saved_kwargs is None
         assert op.out_versions_by_child in (None, {})
         assert op.grad is None
-        assert op.transformed_grad is None
+        assert op.payload.transformed_grad is None
 
 
 def test_runnable_preflight_rejects_unregistered_tensor_constant(tmp_path: Path) -> None:
@@ -461,13 +461,13 @@ def test_runnable_preflight_recurses_nested_mixed_mapping_tensor_container() -> 
 
     trace = _capture(CatContainerModel(), torch.randn(2, 3))
     target = next(op for op in trace._layer_list if op.func_name == "cat")
-    original = target.args_template
+    original = target.call.args_template
     assert isinstance(original, CapturedArgTemplate)
     parents = original.args[0]
     assert isinstance(parents, tuple)
     object.__setattr__(
         target,
-        "args_template",
+        "_call_args_template",
         CapturedArgTemplate(
             args=({"nested": [parents[0], LiteralValue(3), (parents[1],)]},),
             kwargs=original.kwargs,
@@ -492,13 +492,13 @@ def test_runnable_preflight_keeps_typed_rejection_for_opaque_tensor_container_me
 
     trace = _capture(CatContainerModel(), torch.randn(2, 3))
     target = next(op for op in trace._layer_list if op.func_name == "cat")
-    original = target.args_template
+    original = target.call.args_template
     assert isinstance(original, CapturedArgTemplate)
     parents = original.args[0]
     assert isinstance(parents, tuple)
     object.__setattr__(
         target,
-        "args_template",
+        "_call_args_template",
         CapturedArgTemplate(
             args=((parents[0], _OpaqueContainerMember()),),
             kwargs=original.kwargs,

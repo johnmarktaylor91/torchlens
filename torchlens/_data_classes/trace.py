@@ -413,7 +413,7 @@ class ConditionalArm:
                 ref.conditional_id == self._conditional_id
                 and ref.arm_index == self._arm_index
                 and ref.role == role
-                for ref in op.in_conditionals or []
+                for ref in op.control_flow.in_conditionals or []
             ):
                 labels.append(op.layer_label)
         return labels
@@ -2069,7 +2069,7 @@ class Trace(TraceOutputMixin, TraceLike):
     @property
     def _graph_has_conditional_branching(self) -> bool:
         """Whether any layer is in a conditional branch."""
-        return any(entry.is_in_conditional_body for entry in self._layer_list)
+        return any(entry.control_flow.is_in_conditional_body for entry in self._layer_list)
 
     @property
     def _graph_has_conditionals(self) -> bool:
@@ -2171,9 +2171,9 @@ class Trace(TraceOutputMixin, TraceLike):
         """Total backward FLOPs across all layers (skipping None/unknown)."""
         return Flops(
             sum(
-                entry.flops_backward
+                entry.cost.flops_backward
                 for entry in self._layer_list
-                if entry.flops_backward is not None
+                if entry.cost.flops_backward is not None
             )
         )
 

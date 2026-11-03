@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens._utils._torch_compat import get_gradient_edge_support
 from torchlens.attribution import _onebackward as ob
 
@@ -94,7 +95,7 @@ class TestAccessor:
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
         )
         trace.backward(trace["output_1"].out.sum(), retain_graph=True)
-        assert all(getattr(op, "grad_fn_handle", None) is None for op in trace.ops), (
+        assert all(record_member(op, "grad_fn_handle", None) is None for op in trace.ops), (
             "backward is expected to null per-op handles"
         )
         index = ob.read_edge_index(trace)

@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, trace as trace_fn
+from torchlens._utils._record_group_table import record_member
 
 
 class _PlainPickleModel(nn.Module):
@@ -128,20 +129,20 @@ def test_conditional_body_cache_survives_pickle_and_tlspec_round_trips(tmp_path:
     )
     cached_op = next(op for op in trace.ops if op._is_in_conditional_body is True)
     label = cached_op.layer_label
-    assert cached_op.is_in_conditional_body is True
+    assert cached_op.control_flow.is_in_conditional_body is True
     trace[label]._is_in_conditional_body = True
 
     pickle_restored = pickle.loads(pickle.dumps(trace))
     assert pickle_restored[label].ops[0]._is_in_conditional_body is True
-    assert pickle_restored[label].ops[0].is_in_conditional_body is True
+    assert pickle_restored[label].ops[0].control_flow.is_in_conditional_body is True
 
     bundle_path = tmp_path / "conditional_cache.tlspec"
     trace.save(bundle_path)
     tlspec_restored = tl.load(bundle_path)
     assert tlspec_restored[label].ops[0]._is_in_conditional_body is True
-    assert tlspec_restored[label].ops[0].is_in_conditional_body is True
+    assert tlspec_restored[label].ops[0].control_flow.is_in_conditional_body is True
     assert tlspec_restored[label]._is_in_conditional_body is True
-    assert tlspec_restored[label].is_in_conditional_body is True
+    assert tlspec_restored[label].control_flow.is_in_conditional_body is True
 
 
 def test_old_style_pickle_without_io_format_version_refuses_typed(
@@ -366,17 +367,17 @@ def test_op_setstate_absent_container_fields_restore_typed() -> None:
     restored = Op.__new__(Op)
     restored.__setstate__(state)
 
-    assert isinstance(restored.input_to_module_calls, tuple)
+    assert isinstance(restored.module_context.input_to_module_calls, tuple)
     assert isinstance(restored.parents, tuple)
     assert isinstance(restored.children, tuple)
-    assert isinstance(restored.equivalent_ops, frozenset)
-    assert isinstance(restored.root_ancestors, frozenset)
+    assert isinstance(restored.graph.equivalent_ops, frozenset)
+    assert isinstance(restored.graph.root_ancestors, frozenset)
     assert isinstance(restored._param_barcodes, tuple)
     assert isinstance(restored.param_shapes, list)
     assert isinstance(restored.modules, tuple)
     # Consumer patterns from finalization/loop_detection/invariants must work.
-    assert "missing" not in restored.input_to_module_calls
-    assert list(restored.input_to_module_calls) == []
+    assert "missing" not in restored.module_context.input_to_module_calls
+    assert list(restored.module_context.input_to_module_calls) == []
 
 
 def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:
@@ -471,7 +472,7 @@ def test_all_field_order_container_defaults_are_typed() -> None:
             partial.pop(field_name)
             restored = factory()
             restored.__setstate__(partial)
-            value = getattr(restored, field_name, None)
+            value = record_member(restored, field_name, None)
             assert isinstance(value, (list, dict, tuple, set)), (
                 f"{type(instance).__name__}.{field_name} restored as "
                 f"{type(value).__name__} (expected a container) when absent"

@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 
 __all__ = ["SCHEMA_ID", "memory_timeline_v2", "module_rollup"]
 
@@ -108,10 +109,10 @@ def _public_label(op: Any) -> str:
 def _owner_and_stack(record: Any) -> tuple[str, tuple[str, ...]]:
     """Return (innermost exclusive owner, ordered module-call stack)."""
 
-    stack = tuple(str(frame) for frame in getattr(record, "module_call_stack", ()) or ())
+    stack = tuple(str(frame) for frame in record_member(record, "module_call_stack", ()) or ())
     if stack:
         return stack[-1], stack
-    module_address = getattr(record, "module_address", None) or getattr(
+    module_address = getattr(record, "module_address", None) or record_member(
         record, "atomic_module_address", None
     )
     if isinstance(module_address, str) and module_address:
@@ -259,7 +260,7 @@ def _persistent_events(trace: Any) -> tuple[list[dict[str, Any]], int]:
     for param in getattr(trace, "params", ()) or ():
         address = str(getattr(param, "address", "") or "")
         emitted_param_addresses.add(address)
-        bytes_value = int(getattr(param, "param_memory", 0) or 0)
+        bytes_value = int(record_member(param, "param_memory", 0) or 0)
         counted_alias = alias_of.get(address)
         if counted_alias is not None and counted_alias in emitted_param_addresses:
             bytes_value = 0
@@ -321,7 +322,7 @@ def _buffer_event(buffer_record: Any) -> dict[str, Any]:
         numel *= int(dimension)
     bytes_value = int(
         getattr(buffer_record, "buffer_memory", None)
-        or getattr(buffer_record, "activation_memory", None)
+        or record_member(buffer_record, "activation_memory", None)
         or (numel * element_size)
         or 0
     )
@@ -374,7 +375,7 @@ def _forward_events(
                 kind="op",
                 category="input" if layer_type == "input" else "activation",
                 label=label,
-                bytes_value=int(getattr(op, "activation_memory", 0) or 0),
+                bytes_value=int(record_member(op, "activation_memory", 0) or 0),
                 dtype=str(getattr(op, "dtype", None)),
                 device=str(getattr(op, "device_ref", None) or "") or None,
                 owner=owner,
@@ -385,7 +386,7 @@ def _forward_events(
                 last_consumer_ordinal=last_consumer.get(str(getattr(op, "layer_label", "") or "")),
             )
         )
-        gross_saved = int(getattr(op, "autograd_memory", 0) or 0)
+        gross_saved = int(record_member(op, "autograd_memory", 0) or 0)
         if gross_saved:
             band = _saved_band_for(trace, op)
             events.append(
@@ -396,7 +397,7 @@ def _forward_events(
                     category="autograd_saved",
                     label=label,
                     bytes_value=gross_saved,
-                    tensor_count=int(getattr(op, "num_autograd_tensors", 0) or 0),
+                    tensor_count=int(record_member(op, "num_autograd_tensors", 0) or 0),
                     owner=owner,
                     module_stack=stack,
                     availability="measured" if band is not None else "gross_only",
@@ -436,7 +437,7 @@ def _gradient_events(trace: Any, start_ordinal: int) -> tuple[list[dict[str, Any
         pass_index = int(getattr(backward_pass, "pass_number", 0) or 0)
         for op in getattr(trace, "saved_grad_ops", ()) or ():
             try:
-                grad = op.grad_for(bwd=pass_index)
+                grad = op.autograd.grad_for(bwd=pass_index)
             except (KeyError, ValueError):
                 continue
             if grad is None or not hasattr(grad, "numel"):

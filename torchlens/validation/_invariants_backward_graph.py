@@ -312,7 +312,7 @@ def _check_backward_layer_backpointers(trace: Trace, name: str) -> None:
         grad_fn_object_id = layer.grad_fn_object_id
         if grad_fn_object_id is None:
             continue
-        if layer.grad_fn is None:
+        if layer.autograd.grad_fn is None:
             if _layer_postdates_all_backward_triggers(trace, layer):
                 continue
             # Dead-branch carve-out (b7-opus R24-X): autograd visits a grad_fn

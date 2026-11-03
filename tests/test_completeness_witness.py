@@ -586,7 +586,7 @@ def test_deep_input_tensor_is_captured_and_witnessed() -> None:
     trace = tl.trace(_DeepInputModel(7), nested)
 
     assert len(trace.input_layers) == 1
-    assert not any(op.unattributed_tensor_args for op in trace.ops)
+    assert not any(op.call.unattributed_tensor_args for op in trace.ops)
     assert trace.provenance.verified is True
     assert trace.health.completeness_verified is True
     assert trace.provenance.verification_reason == "dispatch_witness_verified"
@@ -733,7 +733,7 @@ def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
     assert len(module_owners) == 1
     assert module_owners[0]["capture_accounted"] is True
     assert len(module_owners[0]["capture_accounted_boundary_labels"]) == 1
-    assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
+    assert any(op.func_name == "none" and op.graph.is_internal_source for op in trace.ops)
 
 
 def test_direct_aten_child_intermediate_still_trips_witness(
@@ -791,7 +791,7 @@ def test_untraceable_child_output_does_not_mask_observable_mutation(
     assert len(child_owners) == 1
     assert child_owners[0]["capture_accounted"] is True
     assert len(child_owners[0]["capture_accounted_boundary_labels"]) == 1
-    assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
+    assert any(op.func_name == "none" and op.graph.is_internal_source for op in trace.ops)
 
 
 def test_record_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
@@ -865,7 +865,7 @@ def test_logged_nested_wrapper_calls_are_accounted(
         if item["owner_func_name"] == owner_name
     )
     assert row["capture_accounted"] is True
-    assert any(op.func_call_id == row["owner_func_call_id"] for op in trace.ops)
+    assert any(op.call.call_id == row["owner_func_call_id"] for op in trace.ops)
 
 
 def test_scalar_extraction_boundaries_are_narrowly_accounted() -> None:
@@ -910,7 +910,7 @@ def test_linear_decomposition_is_owned_by_one_captured_call() -> None:
     linear_row = linear_rows[0]
     assert linear_row["capture_accounted"] is True
     assert linear_row["aten_ops"] == ("aten.t.default", "aten.addmm.default")
-    assert any(op.func_call_id == linear_row["owner_func_call_id"] for op in trace.ops)
+    assert any(op.call.call_id == linear_row["owner_func_call_id"] for op in trace.ops)
 
 
 def test_vmap_interior_is_expected_opaque() -> None:

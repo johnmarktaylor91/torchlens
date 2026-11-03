@@ -35,6 +35,7 @@ from ..._ir.op_record import (
     amend_raw_hook_intervention,
 )
 from ..._quantities import Bytes
+from ..._utils._record_group_table import op_attr, record_member
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import (
     _get_code_context,
@@ -1344,7 +1345,7 @@ def _note_replacement_event(
             timestamp=time.time(),
             run_token=events.run_nonce,
             target_seq=int(getattr(target_event, "seq", 0) or 0),
-            target_func_call_id=getattr(target_event, "func_call_id", None),
+            target_func_call_id=record_member(target_event, "func_call_id", None),
         )
     )
 
@@ -1455,7 +1456,9 @@ def _ensure_module_output_tensor_logged(
     raw_label, raw_index, type_index = _next_untagged_tensor_label(trace, layer_type)
     fields_dict = {
         field_name: _copy_field_value_for_replacement(
-            getattr(template_entry, field_name, None) if template_entry is not None else None
+            getattr(template_entry, op_attr(field_name), None)
+            if template_entry is not None
+            else None
         )
         for field_name in LAYER_PASS_LOG_FIELD_ORDER
     }
@@ -1512,9 +1515,9 @@ def _ensure_module_output_tensor_logged(
     input_ancestors: set[str] = set()
     internal_source_ancestors: set[str] = set()
     for parent_entry in parent_entries:
-        root_ancestors.update(parent_entry.root_ancestors or set())
+        root_ancestors.update(parent_entry.graph.root_ancestors or set())
         input_ancestors.update(parent_entry.input_ancestors or set())
-        internal_source_ancestors.update(parent_entry.internal_source_ancestors or set())
+        internal_source_ancestors.update(parent_entry.graph.internal_source_ancestors or set())
     if is_internal_source:
         # A self-rooted internal source: it is its own root and internal-source
         # ancestor, with no input ancestry (mirrors buffer source tagging).
@@ -1639,7 +1642,7 @@ def _ensure_module_output_tensor_logged(
             "children": [],
             "has_children": False,
             "is_input": False,
-            "has_input_ancestor": any(entry.has_input_ancestor for entry in parent_entries),
+            "has_input_ancestor": any(entry.graph.has_input_ancestor for entry in parent_entries),
             "input_ancestors": input_ancestors,
             "min_distance_from_input": None,
             "max_distance_from_input": None,
@@ -1661,7 +1664,7 @@ def _ensure_module_output_tensor_logged(
             "buffer_source_func_name": None,
             "is_internal_source": is_internal_source,
             "has_internal_source_ancestor": is_internal_source
-            or any(entry.has_internal_source_ancestor for entry in parent_entries),
+            or any(entry.graph.has_internal_source_ancestor for entry in parent_entries),
             "internal_source_parents": [],
             "internal_source_ancestors": internal_source_ancestors,
             "is_internal_sink": False,

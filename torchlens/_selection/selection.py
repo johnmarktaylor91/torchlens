@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
+from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ..errors._base import TorchLensError
 from .align import align_resolved_selection
@@ -1001,7 +1002,7 @@ def _find_act_ops(trace: Any, site: str) -> tuple[Any, ...]:
         if (
             op.label == site
             or getattr(op, "layer_label", None) == site
-            or getattr(op, "io_role", None) == site
+            or record_member(op, "io_role", None) == site
         ):
             matches.append(op)
     return tuple(matches)

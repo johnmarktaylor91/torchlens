@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from ._netron_records import NetronAttr
 
@@ -105,7 +107,7 @@ def build_leaf_attrs(
     if dtype is not None:
         attrs.append(NetronAttr("dtype", "s", dtype_string(dtype)))
     members = rolled_members or [entry]
-    flops = [q for m in members if (q := _quantity(getattr(m, "flops_forward", None)))]
+    flops = [q for m in members if (q := _quantity(record_member(m, "flops_forward", None)))]
     if flops:
         attrs.append(NetronAttr("flops_estimated", "i", int(sum(flops))))
     if intervened:
@@ -113,10 +115,10 @@ def build_leaf_attrs(
     module_path = module_path_of(entry)
     if module_path:
         attrs.append(NetronAttr("module_path", "s", module_path))
-    durations = [q for m in members if (q := _quantity(getattr(m, "func_duration", None)))]
+    durations = [q for m in members if (q := _quantity(record_member(m, "func_duration", None)))]
     if durations:
         attrs.append(NetronAttr("observed_duration_us", "i", int(round(sum(durations) * 1e6))))
-    memory = _quantity(getattr(entry, "activation_memory", None))
+    memory = _quantity(record_member(entry, "activation_memory", None))
     if memory:
         attrs.append(NetronAttr("output_tensor_bytes", "i", int(memory)))
     params = getattr(entry, "num_params", None)
@@ -174,7 +176,7 @@ def rolled_variance_attrs(members: list[Any], *, feedback_sources: list[str]) ->
 def module_path_of(entry: Any) -> str:
     """Return the innermost containing module-call address for the sidebar."""
 
-    stack = getattr(entry, "module_call_stack", None) or ()
+    stack = record_member(entry, "module_call_stack", None) or ()
     if not stack:
         return ""
     return _strip_single_pass(str(stack[-1]))
@@ -193,7 +195,7 @@ def node_doc(entry: Any) -> str:
     paths; the innermost recorded frame is the op's own call site.
     """
 
-    contexts = getattr(entry, "code_context", None) or []
+    contexts = record_member(entry, "code_context", None) or []
     location = ""
     for frame in reversed(list(contexts)):
         file_name = str(getattr(frame, "file", "") or "")
@@ -202,7 +204,7 @@ def node_doc(entry: Any) -> str:
             base = file_name.replace("\\", "/").rsplit("/", 1)[-1]
             location = f"{base}:{line}" if line else base
             break
-    func = str(getattr(entry, "func_qualname", "") or getattr(entry, "func_name", ""))
+    func = str(record_member(entry, "func_qualname", "") or getattr(entry, "func_name", ""))
     # torch's free functions carry an internal holder-class qualname that
     # reads as noise in the sidebar; the bare function name is the fact.
     if "_VariableFunctionsClass." in func:
@@ -219,8 +221,8 @@ def port_names(entry: Any, inputs: list[str]) -> list[str] | None:
     mismatch the hook is omitted -- a numeric port beats a wrong name.
     """
 
-    positions = getattr(entry, "parent_arg_positions", None)
-    arg_names = list(getattr(entry, "arg_names", None) or [])
+    positions = record_member(entry, "parent_arg_positions", None)
+    arg_names = list(record_member(entry, "arg_names", None) or [])
     if not isinstance(positions, dict) or not arg_names or not inputs:
         return None
     label_to_name: dict[str, str] = {}

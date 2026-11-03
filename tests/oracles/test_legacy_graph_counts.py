@@ -247,12 +247,12 @@ def test_parent_child_and_input_counts(graph_trace) -> None:
     add_inner, add_outer = by_type["add"]
     # mul consumes the second linear pass and the buffer read, and feeds
     # sigmoid, the inner add and relu.
-    assert len(mul.parents) == int(mul.num_inputs) == 2
+    assert len(mul.parents) == int(mul.graph.num_inputs) == 2
     assert len(mul.children) == 3
     assert len(first.parents) == len(first.children) == 1
     assert len(second.parents) == len(second.children) == 1
     assert len(add_inner.parents) == 2  # mul, ones
-    assert len(add_outer.parents) == int(add_outer.num_inputs) == 2  # inner add, y
+    assert len(add_outer.parents) == int(add_outer.graph.num_inputs) == 2  # inner add, y
     assert len(relu.parents) == len(relu.children) == 1
     # The linear Layer: parents {x, itself}, children {itself, mul}.
     linear_layer = layers[first.layer_label]
@@ -350,10 +350,10 @@ def test_internal_source_flag_and_list_name_the_same_ops(axis: str) -> None:
     trace = tl.trace(model, model_input)
     try:
         listed = set(trace.internal_source_ops)
-        flagged = {op.label for op in trace._layer_list if op.is_internal_source}
+        flagged = {op.label for op in trace._layer_list if op.graph.is_internal_source}
         assert listed == flagged, (listed, flagged)
         for op in trace._layer_list:
-            if op.is_internal_source:
+            if op.graph.is_internal_source:
                 assert not op.parents, op.label
     finally:
         trace.cleanup()

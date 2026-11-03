@@ -35,7 +35,7 @@ def _conv_trace() -> tuple[nn.Conv2d, object, object, object]:
 def _gradient_record_snapshot(trace: object) -> tuple[tuple[object, ...], ...]:
     """Snapshot every operation's retained gradient record sequence."""
 
-    return tuple(tuple(op.grads) for op in trace._layer_list)  # type: ignore[attr-defined]
+    return tuple(tuple(op.autograd.grads) for op in trace._layer_list)  # type: ignore[attr-defined]
 
 
 def test_probe_does_not_mutate_any_backward_or_gradient_state() -> None:

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.module import Module
@@ -312,7 +313,7 @@ def _is_buffer_op_label(trace: Trace, op_label: str) -> bool:
 
     if op_label not in trace.ops:
         return False
-    return bool(getattr(cast("Op", trace.ops[op_label]), "is_buffer", False))
+    return bool(record_member(cast("Op", trace.ops[op_label]), "is_buffer", False))
 
 
 def _is_forward_dataflow_edge(trace: Trace, source_label: str, target_label: str) -> bool:
@@ -607,7 +608,7 @@ def _count_landmark_edges(
     for parent_label, child_label in boundary_edges:
         parent = cast("Op", trace.ops[parent_label])
         child = cast("Op", trace.ops[child_label])
-        if getattr(parent, "is_buffer", False) or getattr(child, "is_buffer", False):
+        if record_member(parent, "is_buffer", False) or record_member(child, "is_buffer", False):
             continue
         parent_inside = parent.label in subtree
         child_inside = child.label in subtree
@@ -689,7 +690,7 @@ def _has_external_parent(
 
     for parent_label in getattr(op, "parents", ()) or ():
         parent = _resolve_relationship_op(trace, parent_label, revision)
-        if parent.label not in subtree and not getattr(parent, "is_buffer", False):
+        if parent.label not in subtree and not record_member(parent, "is_buffer", False):
             return True
     return False
 
@@ -701,7 +702,7 @@ def _has_external_child(
 
     for child_label in getattr(op, "children", ()) or ():
         child = _resolve_relationship_op(trace, child_label, revision)
-        if child.label not in subtree and not getattr(child, "is_buffer", False):
+        if child.label not in subtree and not record_member(child, "is_buffer", False):
             return True
     return False
 

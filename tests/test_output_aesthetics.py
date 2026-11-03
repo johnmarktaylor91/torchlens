@@ -518,8 +518,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     )
                     out.write(_capture("has_grad", entry.has_grad))
                     out.write(_capture("grad", entry.grad))
-                    out.write(_capture("grad_shape", entry.grad_shape))
-                    out.write(_capture("grad_dtype", entry.grad_dtype))
+                    out.write(_capture("grad_shape", entry.autograd.grad_shape))
+                    out.write(_capture("grad_dtype", entry.autograd.grad_dtype))
                     out.write(_capture("gradient_memory", entry.gradient_memory))
                     out.write(_capture("gradient_memory", entry.gradient_memory))
                     break

@@ -81,7 +81,7 @@ def test_late_buffer_append_is_materialized_today() -> None:
     # The cooked trace carries the buffer op, output-parent marked.
     buffer_ops = [op for op in cooked._layer_list if op.raw_label.startswith("buffer")]
     assert buffer_ops, [op.raw_label for op in cooked._layer_list]
-    assert all(op.is_output_parent for op in buffer_ops)
+    assert all(op.graph.is_output_parent for op in buffer_ops)
 
 
 def test_hash_covers_post_pre0_stream_today() -> None:

@@ -98,9 +98,9 @@ first_call = grad_fn.calls[0]
 second_pass_call = grad_fn.calls.for_pass(2)
 ```
 
-`op.grads` is a local-dense accessor over saved per-pass gradient records. `op.grad` returns a
+`op.autograd.grads` is a local-dense accessor over saved per-pass gradient records. `op.grad` returns a
 tensor only when exactly one gradient was saved. With zero or several saved gradients it raises a
-specific actionable error; use `op.grads[...]` or `op.grad_for(bwd=k)` for multi-pass traces.
+specific actionable error; use `op.autograd.grads[...]` or `op.autograd.grad_for(bwd=k)` for multi-pass traces.
 
 `param.grad` remains the live accumulated PyTorch tensor. Per-pass parameter increments are only
 available when autograd fires `AccumulateGrad`, so `torch.autograd.grad` calls that do not
@@ -111,7 +111,7 @@ accumulate into `.grad` do not populate parameter increment records.
 Each backward engine invocation becomes one `BackwardPass`. Loops are not backward passes and do
 not affect backward naming. Retained op gradients default to all observed passes when gradient
 saving is enabled, so repeated backwards over a retained graph produce multiple entries in
-`op.grads`.
+`op.autograd.grads`.
 
 `BackwardPass.save_grads_policy` records the policy snapshot active for that pass. This makes
 mixed policies auditable when one trace has several backward triggers.
@@ -290,27 +290,27 @@ features such as autograd node records and live backward intervention remain out
 another backend exposes hookable backward graphs. JAX exposes `trace.autograd.derived_grads`, populated by
 `tl.backends.jax.GradOptions` through a second pure `jax.value_and_grad` run over
 `fn(params, *inputs)`, and can optionally expose exact saved-op records through
-`trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad` with
+`trace.autograd.intermediate_derived_grads` plus read-only `op.autograd.derived_grad` with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The JAX intermediate producer
 runs as a separate zero-tap AD replay and only exposes oracle-confirmed `status == "exact"`
 records. MLX exposes `trace.autograd.derived_grads`, populated by
 `tl.backends.mlx.GradOptions` through a second pure `mx.value_and_grad` run that rebinds
 `mlx.nn.Module` params with `model.update(params)` and refuses records unless the AD-rerun raw
 output matches the captured output. MLX can optionally expose exact saved-op records through
-`trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad` with
+`trace.autograd.intermediate_derived_grads` plus read-only `op.autograd.derived_grad` with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The MLX intermediate producer
 uses custom-VJP identity taps in that auxiliary AD replay, attaches by unambiguous grouped
 signatures, skips duplicates, and only exposes oracle-confirmed `status == "exact"` records.
 tinygrad exposes `trace.autograd.derived_grads`, populated by `tl.backends.tinygrad.GradOptions` through a
 bracketed `DEV=PYTHON` leaf-gradient run, and can optionally expose exact unambiguous per-op
-records through `trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad`. These are not
+records through `trace.autograd.intermediate_derived_grads` plus read-only `op.autograd.derived_grad`. These are not
 Paddle exposes `trace.autograd.derived_grads`, populated by `tl.backends.paddle.GradOptions` through a
 second guarded Paddle AD pass over module params and selected inputs, and can optionally expose
 exact saved-op records through `trace.autograd.intermediate_derived_grads` plus read-only
-`op.derived_grad`. Paddle traces keep `has_backward_pass=False`; this is not true backward
+`op.autograd.derived_grad`. Paddle traces keep `has_backward_pass=False`; this is not true backward
 capture. TensorFlow currently defers true backward capture and T1/intermediate derived gradients;
 TF traces are forward eager-capture records only. `trace.backward(...)`,
-`trace.autograd.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise on JAX, MLX, tinygrad,
+`trace.autograd.backward_passes`, `trace.saved_grad_ops`, and `op.autograd.grads` raise on JAX, MLX, tinygrad,
 Paddle, and TensorFlow traces.
 
 Real per-fire timing is measured on every hooked node (universal path): a lightweight timing
