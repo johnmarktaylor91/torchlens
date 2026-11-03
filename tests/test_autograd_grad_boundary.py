@@ -419,7 +419,8 @@ def test_grad_fns_of_a_backward_inside_forward_pair_with_their_captured_ops(
             assert grad_fn.has_op, grad_fn.label
             assert grad_fn.op is not None and grad_fn.op_label == op.layer_label
         paired = [grad_fn for grad_fn in grad_fns.values() if grad_fn.has_op]
-        assert {grad_fn.op.func_name for grad_fn in paired} >= paired_funcs
+        # Operator calls record their dunder name (``x @ w`` is ``__matmul__``).
+        assert {grad_fn.op.func_name.strip("_") for grad_fn in paired} >= paired_funcs
         check_metadata_invariants(trace)
     finally:
         trace.cleanup()
@@ -440,14 +441,14 @@ def test_second_order_inside_forward_keeps_the_orders_of_the_same_math_after_the
     try:
         assert [p.order for p in trace.autograd.backward_passes] == [1, 2]
         grad_fns = list(trace.autograd.grad_fns)
-        first_grad = next(op for op in trace._layer_list if op.transform_kind == "autograd.grad")
-        penalty_pow = next(
-            op
-            for op in trace._layer_list
-            if op.func_name == "pow" and first_grad.label in op.parents
-        )
-        penalty_sum = next(op for op in trace._layer_list if penalty_pow.label in op.parents)
-        penalty_ids = {penalty_pow.grad_fn_object_id, penalty_sum.grad_fn_object_id}
+        ops = list(trace.ops)
+        first_grad, second_grad = [
+            index for index, op in enumerate(ops) if op.transform_kind == "autograd.grad"
+        ]
+        # ``penalty = (g ** 2).sum()`` runs between the two grads: ``__pow__`` then ``sum``.
+        penalty_ops = {op.func_name.strip("_"): op for op in ops[first_grad + 1 : second_grad]}
+        assert {"pow", "sum"} <= set(penalty_ops), sorted(penalty_ops)
+        penalty_ids = {penalty_ops["pow"].grad_fn_object_id, penalty_ops["sum"].grad_fn_object_id}
         penalty_nodes = [g for g in grad_fns if g.grad_fn_object_id in penalty_ids]
         assert len(penalty_nodes) == 2 and all(g.has_op for g in penalty_nodes)
         assert {grad_fn.order for grad_fn in penalty_nodes} == {2}
