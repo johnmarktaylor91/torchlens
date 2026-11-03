@@ -79,10 +79,8 @@ class _Branchy(nn.Module):
         """
 
         h = self.stem(x)
-        if h.sum() > 0:
-            h = torch.relu(self.up(h))
-        else:
-            h = torch.sigmoid(self.down(h)) * 2.0
+        # Data-dependent branch: the sign of the stem output picks the graph.
+        h = torch.relu(self.up(h)) if h.sum() > 0 else torch.sigmoid(self.down(h)) * 2.0
         return h + 1
 
 
