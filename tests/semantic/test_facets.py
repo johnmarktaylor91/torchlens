@@ -53,6 +53,63 @@ def _restore_registry() -> None:
     facets_mod._REGISTRY[:] = original
 
 
+def test_facet_view_dict_and_attribute_access_uniformity() -> None:
+    """Attribute and item access return the same cached value."""
+
+    @tl.facets.register(class_name="UnitFacetRecord")
+    def unit_recipe(record: Any) -> dict[str, Any]:
+        """Return a test facet."""
+
+        return {"x": 10}
+
+    view = FacetView(_Record())
+    assert view.x == 10
+    assert view["x"] == 10
+
+
+def test_lazy_compute_keys_has_and_cache() -> None:
+    """Available-now dictionary methods compute once and reuse the cache."""
+
+    calls = 0
+
+    @tl.facets.register(class_name="UnitFacetRecord")
+    def lazy_recipe(record: Any) -> dict[str, Any]:
+        """Return a lazily computed facet."""
+
+        nonlocal calls
+        calls += 1
+        return {"x": 10}
+
+    view = FacetView(_Record())
+    assert view.keys() == ["x"]
+    assert view.has("x")
+    assert list(view) == ["x"]
+    assert len(view) == 1
+    assert calls == 1
+    assert view.x == 10
+    assert view.x == 10
+    assert calls == 1
+
+
+def test_invalidate_clears_cached_values() -> None:
+    """Invalidation causes the next access to re-run the recipe."""
+
+    calls = 0
+
+    @tl.facets.register(class_name="UnitFacetRecord")
+    def invalidated_recipe(record: Any) -> dict[str, Any]:
+        """Return a monotonically increasing test facet."""
+
+        nonlocal calls
+        calls += 1
+        return {"x": calls}
+
+    view = FacetView(_Record())
+    assert view.x == 1
+    view.invalidate()
+    assert view.x == 2
+
+
 def test_empty_facet_view() -> None:
     """Unmatched records have an empty but usable view."""
 
@@ -411,6 +468,19 @@ def test_list_info_glob_and_recipe_record() -> None:
         "functions": ["discovery_recipe"],
         "facets": ["q"],
     }
+
+
+def test_register_preserves_function_object_and_docstring() -> None:
+    """The register decorator returns the original function unchanged."""
+
+    def original_recipe(record: Any) -> dict[str, Any]:
+        """Original docstring."""
+
+        return {"x": 1}
+
+    registered = tl.facets.register(class_name="UnitFacetRecord")(original_recipe)
+    assert registered is original_recipe
+    assert registered.__doc__ == "Original docstring."
 
 
 class _FacetP2Model(nn.Module):

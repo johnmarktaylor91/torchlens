@@ -26,6 +26,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._ir.capture_events import (
+    REBINDABLE_TARGET_LANES,
     AmendmentTargetError,
     CaptureEvents,
     LaneMergePolicyError,
@@ -35,8 +36,10 @@ from torchlens._ir.capture_events import (
     _clone_op_event_for_replay,
 )
 from torchlens._ir.op_record import (
+    FACET_DEFAULTS,
     AmendmentValidationError,
     OpAmendment,
+    OpRecord,
     amend_graph_edge_insertion,
     amend_raw_hook_intervention,
     validate_amendment,
@@ -70,6 +73,55 @@ def leg_templates(request: pytest.FixtureRequest) -> dict[str, list[Any]]:
     monkeypatch = pytest.MonkeyPatch()
     request.addfinalizer(monkeypatch.undo)
     return {leg: grab_journal_events(monkeypatch, leg) for leg in _LEGS}
+
+
+@pytest.mark.parametrize("leg", _LEGS)
+def test_append_stamps_folds_and_keeps_raw_lane_append_only(
+    leg: str, leg_templates: dict[str, list[Any]]
+) -> None:
+    journal = _fresh_journal(leg_templates[leg])
+    raw_before = list(journal.op_events)
+    event_seq_before = journal.event_seq
+    target = _target(journal)
+
+    folded = journal.append_amendment(
+        amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=True)
+    )
+
+    amendment = journal.op_amendments[0]
+    assert amendment.seq == 1 and journal.amendment_seq == 1
+    assert amendment.run_nonce == journal.run_nonce
+    # Lane-local domain: appending an amendment must NOT consume the shared
+    # event counter (Tier-F event seq facts are pinned by the baselines).
+    assert journal.event_seq == event_seq_before
+    # Raw lane genuinely append-only: same objects at same positions.
+    assert all(a is b for a, b in zip(journal.op_events, raw_before, strict=True))
+    assert not getattr(target, "is_edited")
+    # Reducer + one-record view + live index all present the folded state.
+    view = journal.amended_op_records()
+    assert view[1] is not target and view[1].is_edited
+    assert journal.amended_op_record(target.label_raw).is_edited
+    assert journal.live_index.by_raw_label[target.label_raw].is_edited
+    assert folded.is_edited
+    # Unamended entries pass through by identity.
+    assert view[0] is journal.op_events[0]
+    if leg == "decomposed":
+        assert isinstance(view[1], OpRecord)
+
+
+@pytest.mark.parametrize("leg", _LEGS)
+def test_last_wins_per_path_in_amendment_order(
+    leg: str, leg_templates: dict[str, list[Any]]
+) -> None:
+    journal = _fresh_journal(leg_templates[leg])
+    target = _target(journal)
+    journal.append_amendment(
+        amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=True)
+    )
+    journal.append_amendment(
+        amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=False)
+    )
+    assert journal.amended_op_record(target.label_raw).is_edited is False
 
 
 @pytest.mark.parametrize("leg", _LEGS)
@@ -141,6 +193,101 @@ def test_validation_refusals(leg: str, leg_templates: dict[str, list[Any]]) -> N
         journal.append_amendment(
             amend_raw_hook_intervention(target.seq + 7, target.label_raw, is_edited=True)
         )
+
+
+def test_absent_facet_materializes_from_defaults_with_planted_s5_violation(
+    leg_templates: dict[str, list[Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    journal = _fresh_journal(leg_templates["decomposed"])
+    target = next(
+        event for event in journal.op_events if getattr(event, "intervention", None) is None
+    )
+
+    def _assert_untouched_fields_are_defaults(folded_record: Any) -> None:
+        materialized = folded_record.intervention
+        assert materialized is not None
+        defaults = FACET_DEFAULTS["intervention"]()
+        assert materialized.is_edited is True
+        for name in ("intervention_fired", "fire_results"):
+            assert getattr(materialized, name) == getattr(defaults, name), (
+                f"materialized facet field {name!r} drifted from FACET_DEFAULTS"
+            )
+
+    journal.append_amendment(
+        amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=True)
+    )
+    _assert_untouched_fields_are_defaults(journal.amended_op_record(target.label_raw))
+
+    # Planted S5 violation: a drifted defaults table must be CAUGHT by the
+    # assertion above — proving the check is sensitive, not vacuous.
+    from torchlens._ir import op_record as op_record_module
+    from torchlens._ir.op_record import InterventionFacet
+
+    planted = dict(op_record_module.FACET_DEFAULTS)
+    planted["intervention"] = lambda: InterventionFacet(
+        intervention_fired=True,  # wrong default
+        is_edited=False,
+        fire_results=(),
+    )
+    monkeypatch.setattr(op_record_module, "FACET_DEFAULTS", planted)
+    journal2 = _fresh_journal(leg_templates["decomposed"])
+    target2 = next(
+        event for event in journal2.op_events if getattr(event, "intervention", None) is None
+    )
+    journal2.append_amendment(
+        amend_raw_hook_intervention(target2.seq, target2.label_raw, is_edited=True)
+    )
+    with pytest.raises(AssertionError, match="drifted"):
+        _assert_untouched_fields_are_defaults(journal2.amended_op_record(target2.label_raw))
+
+
+@pytest.mark.parametrize("leg", _LEGS)
+def test_sealed_source_refuses_working_projection_accepts(
+    leg: str, leg_templates: dict[str, list[Any]]
+) -> None:
+    journal = _fresh_journal(leg_templates[leg])
+    target = _target(journal)
+    journal.core_seal_watermark = journal.amendment_seq
+    journal.amendments_sealed = True
+    with pytest.raises(SealedJournalAmendmentError):
+        journal.append_amendment(
+            amend_raw_hook_intervention(target.seq, target.label_raw, is_edited=True)
+        )
+    working = journal._copy_for_replay()
+    assert working.amendments_sealed is False
+    assert working.core_seal_watermark == journal.core_seal_watermark
+    working_target = working.op_event_by_label_raw[target.label_raw]
+    working.append_amendment(
+        amend_raw_hook_intervention(working_target.seq, working_target.label_raw, is_edited=True)
+    )
+    assert working.amended_op_record(target.label_raw).is_edited
+
+
+@pytest.mark.parametrize("leg", _LEGS)
+def test_watermark_filters_seeded_copies_only(
+    leg: str, leg_templates: dict[str, list[Any]]
+) -> None:
+    journal = _fresh_journal(leg_templates[leg])
+    first, second = journal.op_events[0], journal.op_events[1]
+    journal.append_amendment(
+        amend_raw_hook_intervention(first.seq, first.label_raw, is_edited=True)
+    )
+    folded_at_seal = list(journal.amended_op_records())
+    journal.core_seal_watermark = journal.amendment_seq  # "seal" consumed #1
+    journal.append_amendment(
+        amend_raw_hook_intervention(second.seq, second.label_raw, is_edited=True)
+    )
+
+    # Plain structural copy: the whole lane rides along.
+    plain = journal._copy_for_replay()
+    assert [a.seq for a in plain.op_amendments] == [1, 2]
+
+    # Folded-seed copy: seal-consumed amendments are filtered out; genuinely
+    # post-seal knowledge survives.
+    seeded = journal._copy_for_replay(projected_op_events=folded_at_seal)
+    assert [a.seq for a in seeded.op_amendments] == [2]
+    # And the surviving amendment still folds on the copy.
+    assert seeded.amended_op_record(second.label_raw).is_edited
 
 
 @pytest.mark.parametrize("leg", _LEGS)
@@ -226,6 +373,30 @@ def test_merged_multi_pass_journal_binds_amendments_by_seq(
     assert len(combined_positions) == 2
     assert combined_view[combined_positions[0]].is_edited is True
     assert combined_view[combined_positions[1]].is_edited is False
+
+
+@pytest.mark.parametrize("leg", _LEGS)
+def test_concat_rebinds_target_seq_and_refolds(
+    leg: str, leg_templates: dict[str, list[Any]]
+) -> None:
+    assert {"intervention_events", "op_amendments"} == REBINDABLE_TARGET_LANES
+    source = _fresh_journal(leg_templates[leg], count=3)
+    target_journal = _fresh_journal(leg_templates[leg], count=0)
+    source_target = source.op_events[2]
+    source.append_amendment(
+        amend_raw_hook_intervention(source_target.seq, source_target.label_raw, is_edited=True)
+    )
+    target_journal.concat(source)
+    merged = target_journal.op_amendments
+    assert len(merged) == 1
+    merged_amendment = merged[0]
+    # Re-stamped into the target's lane-local domain and run nonce.
+    assert merged_amendment.seq == 1
+    assert merged_amendment.run_nonce == target_journal.run_nonce
+    # target_seq rebound through the merge seq map onto the merged clone.
+    merged_target = target_journal.op_event_by_label_raw[source_target.label_raw]
+    assert merged_amendment.target_seq == merged_target.seq
+    assert target_journal.amended_op_record(source_target.label_raw).is_edited
 
 
 class _RecordModel(nn.Module):
@@ -357,6 +528,23 @@ def test_sealed_journal_refusals_share_one_catchable_base(
         )
     assert issubclass(SealedJournalAppendError, SealedJournalWriteError)
     assert issubclass(SealedJournalAmendmentError, SealedJournalWriteError)
+
+
+def test_working_projection_of_a_sealed_journal_accepts_forward_appends(
+    leg_templates: dict[str, list[Any]],
+) -> None:
+    """The fence names the escape hatch, and the escape hatch works."""
+
+    journal = _fresh_journal(leg_templates["decomposed"])
+    journal.core_seal_watermark = journal.amendment_seq
+    journal.amendments_sealed = True
+    working = journal._copy_for_replay()
+    assert working.amendments_sealed is False
+    template = journal.op_events[0]
+    working.append(_clone_op_event_for_replay(template))
+    assert len(working.op_events) == len(journal.op_events) + 1
+    # And the sealed source is untouched.
+    assert len(journal.op_events) == len(working.op_events) - 1
 
 
 def test_extend_is_fenced_through_append(leg_templates: dict[str, list[Any]]) -> None:

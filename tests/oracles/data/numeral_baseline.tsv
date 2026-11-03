@@ -7068,6 +7068,7 @@ test-docstrings	tests/composition_expectations/conftest.py	14
 test-docstrings	tests/composition_expectations/conftest.py	75
 test-docstrings	tests/composition_expectations/ledger.py	11
 test-docstrings	tests/composition_expectations/ledger.py	3.1
+test-docstrings	tests/composition_expectations/test_backend_operation_rows.py	10
 test-docstrings	tests/composition_expectations/test_contract_lockstep.py	3.1
 test-docstrings	tests/composition_expectations/test_diagnostic_site_contract.py	3.5
 test-docstrings	tests/composition_expectations/test_galleries.py	12
@@ -7154,6 +7155,7 @@ test-docstrings	tests/oracles/test_oracle_w0_deprecation.py	12
 test-docstrings	tests/oracles/test_oracle_w0_deprecation.py	18
 test-docstrings	tests/oracles/test_oracle_w0_lints.py	119
 test-docstrings	tests/oracles/test_oracle_w0_lints.py	13
+test-docstrings	tests/oracles/test_oracle_w0_lints.py	14
 test-docstrings	tests/oracles/test_oracle_w0_lints.py	20,
 test-docstrings	tests/oracles/test_oracle_w0_lints.py	36
 test-docstrings	tests/oracles/test_oracle_w0_lints.py	45
@@ -7614,6 +7616,7 @@ test-docstrings	tests/test_containers.py	22
 test-docstrings	tests/test_coverage_floor_governance.py	72
 test-docstrings	tests/test_critical_invariant_guards.py	16
 test-docstrings	tests/test_data_substrate_artifact.py	16
+test-docstrings	tests/test_data_substrate_artifact.py	32.
 test-docstrings	tests/test_data_substrate_digests.py	256
 test-docstrings	tests/test_data_substrate_digests.py	32
 test-docstrings	tests/test_data_substrate_digests.py	65536
@@ -7784,7 +7787,9 @@ test-docstrings	tests/test_fastlog/test_ddp_unwrap.py	2026
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	10
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	15
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	200
+test-docstrings	tests/test_fastlog/test_persistence_recover.py	33
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	41
+test-docstrings	tests/test_fastlog/test_persistence_recover.py	512
 test-docstrings	tests/test_fastlog_bundle_perms.py	59
 test-docstrings	tests/test_fastlog_bundle_perms.py	600.
 test-docstrings	tests/test_fastlog_bundle_perms.py	700
@@ -8297,6 +8302,7 @@ test-docstrings	tests/test_neuro_pkg_datasets.py	16
 test-docstrings	tests/test_neuro_pkg_datasets.py	32
 test-docstrings	tests/test_neuro_pkg_datasets.py	4.1
 test-docstrings	tests/test_neuro_pkg_geometry.py	100.
+test-docstrings	tests/test_neuro_pkg_geometry.py	12
 test-docstrings	tests/test_neuro_pkg_geometry.py	13
 test-docstrings	tests/test_neuro_pkg_geometry.py	2022
 test-docstrings	tests/test_neuro_pkg_geometry.py	31
@@ -8312,6 +8318,9 @@ test-docstrings	tests/test_no_string_private_getattr.py	96
 test-docstrings	tests/test_node_label_dtype.py	16.
 test-docstrings	tests/test_node_label_dtype.py	32
 test-docstrings	tests/test_nonfinite_record.py	18
+test-docstrings	tests/test_normalize_sdist.py	10
+test-docstrings	tests/test_normalize_sdist.py	83
+test-docstrings	tests/test_normalize_sdist.py	84
 test-docstrings	tests/test_numbers_truth_compute.py	1,019,805,696
 test-docstrings	tests/test_numbers_truth_compute.py	1,020,303,744
 test-docstrings	tests/test_numbers_truth_compute.py	12.
@@ -8581,6 +8590,10 @@ test-docstrings	tests/test_r7_torch_type_io_rce.py	49
 test-docstrings	tests/test_r8_operator_gate_rce.py	32
 test-docstrings	tests/test_r8_operator_gate_rce.py	41
 test-docstrings	tests/test_ragged_docs_moe_grouper.py	11
+test-docstrings	tests/test_ragged_docs_moe_grouper.py	17
+test-docstrings	tests/test_ragged_docs_moe_grouper.py	17,
+test-docstrings	tests/test_ragged_docs_moe_grouper.py	26
+test-docstrings	tests/test_ragged_docs_moe_grouper.py	51
 test-docstrings	tests/test_real_world_models.py	10
 test-docstrings	tests/test_real_world_models.py	79
 test-docstrings	tests/test_recipe_dissection.py	12
@@ -9231,7 +9244,11 @@ test-docstrings	tests/test_torchnative_backward.py	18
 test-docstrings	tests/test_torchnative_flops_crosscheck.py	17
 test-docstrings	tests/test_torchnative_flops_crosscheck.py	2.7
 test-docstrings	tests/test_torchnative_flops_crosscheck.py	2026
+test-docstrings	tests/test_torchnative_join.py	10
+test-docstrings	tests/test_torchnative_join.py	10,000
 test-docstrings	tests/test_torchnative_join.py	19
+test-docstrings	tests/test_torchnative_join.py	200
+test-docstrings	tests/test_torchnative_join.py	4.5
 test-docstrings	tests/test_torchnative_markers.py	11
 test-docstrings	tests/test_torchnative_markers.py	13
 test-docstrings	tests/test_torchnative_memory_parity.py	2.13
@@ -9262,6 +9279,7 @@ test-docstrings	tests/test_track_export_parity_real.py	3.29
 test-docstrings	tests/test_track_watch_op_grain.py	34.1
 test-docstrings	tests/test_trackers_sinks_callbacks.py	3.8
 test-docstrings	tests/test_trackers_sinks_delivery.py	11
+test-docstrings	tests/test_trackers_sinks_delivery.py	512
 test-docstrings	tests/test_trackers_sinks_graph.py	28206
 test-docstrings	tests/test_trackers_sinks_records.py	3.11
 test-docstrings	tests/test_trackers_sinks_records.py	3.3
@@ -9272,6 +9290,7 @@ test-docstrings	tests/test_trackers_sinks_watch.py	3.13
 test-docstrings	tests/test_trackers_sinks_watch.py	32.1
 test-docstrings	tests/test_train_mode/test_no_bare_detach.py	24
 test-docstrings	tests/test_transforms_lib_corpus.py	128
+test-docstrings	tests/test_transforms_lib_corpus.py	256
 test-docstrings	tests/test_transforms_lib_fidelity.py	0.265
 test-docstrings	tests/test_transforms_lib_fidelity.py	0.293
 test-docstrings	tests/test_transforms_lib_fidelity.py	1.43
@@ -9749,6 +9768,7 @@ test-names	tests/test_numbers_truth_execution.py	18
 test-names	tests/test_numbers_truth_external_pins.py	18_
 test-names	tests/test_obs_substrate_kernels.py	16_
 test-names	tests/test_obs_substrate_kernels.py	32_
+test-names	tests/test_obs_substrate_kernels.py	64
 test-names	tests/test_onebackward_core.py	15
 test-names	tests/test_onebackward_edgeplumbing.py	10_
 test-names	tests/test_onebackward_realmodel.py	18

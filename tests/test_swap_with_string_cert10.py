@@ -61,6 +61,18 @@ class _TwoLinear(nn.Module):
         return self.b(x)
 
 
+def test_swap_with_string_label_raises_immediately() -> None:
+    """A bare string label must raise HookValueError at construction time.
+
+    No trace, hook attachment, or forward pass should be required to
+    surface the failure -- the label can never resolve, so the error must
+    not wait for fire time.
+    """
+
+    with pytest.raises(HookValueError, match="not implemented"):
+        tl.intervention.helpers.swap_with("linear_1_1")
+
+
 def test_swap_with_string_label_error_names_alternatives() -> None:
     """The error message must point at the supported tensor / Op-like forms."""
 

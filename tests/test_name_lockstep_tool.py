@@ -94,6 +94,23 @@ def fake_inventory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     return {row["id"]: row for row in build_inventory("fakelens_pkg")["rows"]}
 
 
+def test_inventory_rows_use_the_stable_id_scheme(fake_inventory: dict) -> None:
+    """Root, export, member and param rows carry the naming-sweep ids."""
+
+    ids = set(fake_inventory)
+    assert {"root:tl.Probe", "root:tl.run_probe", "root:tl.core", "root:tl.ns"} <= ids
+    assert "export:tl.ns.helper" in ids
+    assert {
+        "member:fakelens_pkg.core:Probe.depth",
+        "member:fakelens_pkg.core:Probe.label",
+        "member:fakelens_pkg.core:Probe.fire",
+    } <= ids
+    assert fake_inventory["member:fakelens_pkg.core:Probe.label"]["subkind"] == "property"
+    assert fake_inventory["param:budget"]["uses"] == ["tl.core.run_probe", "tl.run_probe"]
+    assert "Probe.fire" in fake_inventory["param:strength"]["uses"]
+    assert "param:self" not in ids
+
+
 def _row(row_id: str, kind: str, name: str, path: str, fingerprint: str = "", **extra) -> dict:
     """Build a minimal inventory row."""
 
@@ -388,6 +405,38 @@ def test_numpydoc_sections_give_the_first_paragraph() -> None:
     assert "bare" not in entries
     assert docsections._clip("word " * 100).endswith(" ...")
     assert len(docsections._clip("word " * 100)) <= docsections.MAX_MEANING + 4
+
+
+def test_fields_and_keywords_get_their_documented_meaning(documented_inventory: dict) -> None:
+    """A field reads its owner's Attributes; a keyword reads the Parameters of its callables."""
+
+    rows = documented_inventory
+    area = rows["member:doclens_pkg.core:Curve.area"]
+    assert area["doc_first_line"] == "Area under the curve, by the trapezoid rule."
+    assert area["doc_source"] == "Curve Attributes"
+    origin = rows["member:doclens_pkg.core:Base.origin"]
+    assert (origin["doc_first_line"], origin["doc_source"]) == (
+        "Where the base came from.",
+        "Base Attributes",
+    )
+    assert rows["member:doclens_pkg.core:Curve.bare"]["doc_first_line"] == ""
+    assert rows["member:doclens_pkg.core:Curve.width"]["doc_first_line"] == ""
+    budget = rows["param:budget"]
+    assert budget["doc_first_line"] == "How many evaluations to spend."
+    assert [d["use"] for d in budget["param_docs"]] == ["tl.core.make_curve", "tl.make_curve"]
+    area_kw = rows["param:area"]
+    assert "Area to start from." in area_kw["doc_first_line"]
+    assert "Area under the curve" in area_kw["doc_first_line"]
+    assert area_kw["doc_first_line"].count(" | ") == 1
+    assert area_kw["doc_source"] == "tl.Curve Attributes"
+
+
+def test_section_meanings_stay_out_of_the_fingerprint(documented_inventory: dict) -> None:
+    """Two fields of one class still share a fingerprint, as before meanings were read."""
+
+    rows = documented_inventory
+    area = rows["member:doclens_pkg.core:Curve.area"]["fingerprint"]
+    assert rows["member:doclens_pkg.core:Curve.steps"]["fingerprint"] == area
 
 
 def test_gate_items_use_documented_meaning_over_a_leaf_index_row(

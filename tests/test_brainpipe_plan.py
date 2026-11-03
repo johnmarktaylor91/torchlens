@@ -198,6 +198,14 @@ def test_npz_refusals_are_typed(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "npz_export_invalid"
 
 
+def test_lazy_facade_reaches_brainpipe() -> None:
+    """tl.neuro resolves through the lazy facade (no eager import)."""
+
+    import torchlens as tl
+
+    assert tl.neuro.plan_extraction is bp.plan_extraction
+
+
 def test_probe_invalid_refusals_are_typed() -> None:
     """Non-tensor probes and non-positive sizes refuse extraction_probe_invalid."""
 

@@ -72,6 +72,27 @@ def test_rows_from_different_baselines_refuse(tmp_path: Path) -> None:
     assert caught.value.fields["code"] == "tv_receipt_invalid"
 
 
+def test_receipt_without_a_baseline_says_so() -> None:
+    """A directly built receipt (no recorded baseline) names what its cells are."""
+
+    receipt = tviz.CausalReceipt(
+        module_address="blk.0.attn",
+        heads=(0,),
+        effects=(1.0,),
+        metric="m",
+        intervention="head contribution zeroed",
+        engine="rerun",
+        disclosure="direct",
+        fires=1,
+        negative_control=0.0,
+        positive_control=1.0,
+        joint_effect=1.0,
+    )
+    assert receipt.baseline_run == "unpatched baseline run"
+    lines = _receipts._receipt_disclosures([receipt], None)
+    assert "each cell: change in m under the intervention (baseline value not recorded)" in lines
+
+
 def test_non_finite_baseline_refuses() -> None:
     with pytest.raises(torchlens.errors.RenderError) as caught:
         _receipt(_grid(torch.zeros(1, 2), corrupted_metric=float("nan")))

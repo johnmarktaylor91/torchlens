@@ -248,6 +248,22 @@ def test_disk_roundtrip_label_index_deduplicates_same_raw_label(tmp_path: Path) 
     assert len(loaded[label]) == 1
 
 
+def test_cleanup_partial_treats_bundle_name_as_data_not_glob(tmp_path: Path) -> None:
+    """Glob metacharacters in the bundle name must not sweep sibling bundles' partials."""
+
+    victim_a = tmp_path / "run0.tmp.aaaa"
+    victim_b = tmp_path / "run1.tmp.bbbb"
+    for victim in (victim_a, victim_b):
+        victim.mkdir()
+        (victim / "PARTIAL").write_text("", encoding="utf-8")
+
+    removed = tl.recording.cleanup_partial(tmp_path / "run[01]")
+
+    assert removed == []
+    assert victim_a.is_dir()
+    assert victim_b.is_dir()
+
+
 def test_cleanup_partial_still_sweeps_own_partials(tmp_path: Path) -> None:
     """The escaped pattern still matches the bundle's own temp directories."""
 
@@ -333,3 +349,32 @@ def test_recover_refuses_below_floor_bundle_instead_of_resurrecting(tmp_path: Pa
 
     with pytest.raises(ArtifactTooOldError):
         tl.recording.recover(bundle_path)
+
+
+def test_recover_index_read_allocates_the_file_not_the_ceiling(tmp_path: Path) -> None:
+    """R33-1 sibling: the index read must not pre-allocate the ~512 MiB ceiling.
+
+    Fail-before: the fstat-first refusal landed (R10-3) but the read still
+    asked for ``_INDEX_MAX_BYTES + 1``, so every recovery transiently
+    requested the whole ceiling for a KB-sized index.
+    """
+
+    import importlib
+    import tracemalloc
+
+    recover_module = importlib.import_module("torchlens.recording.recover")
+    index_path = tmp_path / "fastlog_index.jsonl"
+    index_path.write_text('{"kind": "noop"}\n' * 10)
+
+    tracemalloc.start()
+    try:
+        lines = recover_module._read_index_lines(index_path)
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert len(lines) == 10
+    assert peak < 32 * 1024 * 1024, (
+        f"index read peaked at {peak} bytes on a "
+        f"{index_path.stat().st_size}-byte index; it is allocating the ceiling"
+    )

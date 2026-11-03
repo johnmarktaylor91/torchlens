@@ -18,6 +18,8 @@ from tests.composition_expectations import _censuses
 from tests.composition_expectations.universes import (
     ADEQUACY_STATUSES,
     UNIVERSES,
+    baseline_cardinalities,
+    derived_cardinalities,
 )
 
 pytestmark = pytest.mark.compo
@@ -53,6 +55,37 @@ def test_universe_descriptors_are_well_formed() -> None:
                 f"{universe.universe_id}: a planted status requires an independent census "
                 "that can see the plant (memo Dis-3, the review's enforceable form)"
             )
+
+
+def test_universe_cardinalities_print_and_lockstep() -> None:
+    """Every universe's live count matches the committed baseline EXACTLY.
+
+    The counts are printed (the memo's 'printed cardinality' rule: blindness
+    survives exactly as long as nobody prints the number). Deliberate changes
+    update ``data/universe_cardinalities.tsv`` in the same change; new
+    diagnostic sites are classified in S-17/S-18 in that same change.
+    """
+
+    live = derived_cardinalities()
+    baseline = baseline_cardinalities()
+    print("\nuniverse cardinalities (live):")
+    for universe_id, count in live.items():
+        print(f"  {universe_id}\t{count}")
+    assert set(live) == set(baseline), (
+        "universe registry rows and the cardinality baseline drifted: "
+        f"missing={sorted(set(live) - set(baseline))} "
+        f"stale={sorted(set(baseline) - set(live))}"
+    )
+    drifted = {
+        universe_id: (baseline[universe_id], str(count))
+        for universe_id, count in live.items()
+        if str(count) != baseline[universe_id]
+    }
+    assert not drifted, (
+        "universe cardinalities drifted (baseline, live). If the change is deliberate, "
+        "update tests/composition_expectations/data/universe_cardinalities.tsv in the "
+        f"same change and classify any new S-17/S-18 sites: {drifted}"
+    )
 
 
 def test_every_declared_universe_has_an_owner_and_no_silent_absence() -> None:
@@ -241,6 +274,38 @@ def test_warn_site_code_kwarg_is_seen() -> None:
     by_scope = {site.scope: site for site in sites}
     assert by_scope["coded"].has_code and by_scope["coded"].category == "PlantedWarning"
     assert not by_scope["uncoded"].has_code
+
+
+def test_capture_options_private_filter_both_directions() -> None:
+    """The options private filter is explicit and fail-closed BOTH ways.
+
+    Direction 1: a private-named field OUTSIDE the declared filter refuses
+    (the census cannot silently narrow). Direction 2: a declared filter row
+    the class lacks refuses (a stale filter cannot hide a removed field).
+    """
+
+    import dataclasses
+
+    @dataclasses.dataclass
+    class PlantedOptions:
+        visible: int = 0
+        _hidden: int = 0
+
+    with pytest.raises(AssertionError, match="_hidden"):
+        _censuses.public_option_fields(PlantedOptions, frozenset())
+    with pytest.raises(AssertionError, match="stale"):
+        _censuses.public_option_fields(PlantedOptions, frozenset({"_hidden", "_gone"}))
+    assert _censuses.public_option_fields(PlantedOptions, frozenset({"_hidden"})) == ("visible",)
+    # And the live class resolves under the declared filter.
+    # 48 -> 49 (T82d re-reconcile, F44): union of the landed
+    # track_device_memory and the F44 log_injections options. As of T85
+    # (F01-AMENDED landed) both parents carry log_injections; pins agree.
+    # 49 -> 50: U40.1 CaptureOptions.carry_state.
+    # 50 -> 51: measure.2 CaptureOptions.measure_host_peak_memory.
+    # 51 -> 57: the options restructure (C2, JMT's rulings of 2026-11-01): the train
+    # pinned 49 and the C2 base 59; the merged class carries 57 public fields.
+    # 57 -> 58: CaptureOptions.aten_ops (public ATen operation recording).
+    assert len(_censuses.capture_option_fields()) == 58
 
 
 def test_env_var_census_shapes() -> None:

@@ -19,6 +19,7 @@ from ._lints import (
     cache_key_uncovered,
     declared_ledger_constant,
     declared_ledger_length,
+    default_truth_findings,
     load_dont_care,
     option_universe,
     static_all_count,
@@ -31,6 +32,26 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 # ---------------------------------------------------------------------------
 # Lint 1: cache-key set difference (D14).
 # ---------------------------------------------------------------------------
+
+
+def test_cache_key_coverage_is_closed() -> None:
+    """Every option/entry parameter is keyed, dont-cared, or gap-rowed.
+
+    Burden inversion (D14): a NEW option field lands in NO bucket and fails
+    here, so it cannot be out-of-key by default -- the design under which
+    the ``raise_on_nan``/``track_nonfinite`` warm-cache fail-opens (facts
+    5-6, live at the panel's SHA) could not have shipped.
+    """
+
+    uncovered = cache_key_uncovered()
+    licensed = licensed_keys(load_known_gaps(), "cache_key_coverage")
+    new, stale = partition_monotone(uncovered, licensed)
+    assert not new, (
+        f"option/entry parameters absent from the capture-cache key with no "
+        f"dated KNOWN-GAP row: {new} -- key the field, register a witnessed "
+        "dont-care (data/cache_key_dont_care.tsv), or add an owned gap row"
+    )
+    assert not stale, f"cache-key gap rows now covered: {stale} -- delete them (monotone-down)"
 
 
 def test_cache_key_dont_care_rows_are_not_also_keyed() -> None:
@@ -68,6 +89,36 @@ def test_option_universe_publishes_its_denominator() -> None:
 # ---------------------------------------------------------------------------
 # Lint 2: default-truth 3-source (D20).
 # ---------------------------------------------------------------------------
+
+
+def test_default_truth_claims_reconcile_or_are_gap_rowed() -> None:
+    """Every parsed docstring default claim agrees or holds a gap row."""
+
+    disagreeing = frozenset(
+        f"trace.{claim.param}" for claim in default_truth_findings() if not claim.agrees
+    )
+    licensed = licensed_keys(load_known_gaps(), "default_truth")
+    new, stale = partition_monotone(disagreeing, licensed)
+    assert not new, (
+        f"docstring default claims contradict their authority: {new} -- fix the "
+        "docstring or the stored constant; the signature is a NON-AUTHORITY for "
+        "MISSING-sentinel parameters (D20)"
+    )
+    assert not stale, f"default-truth gap rows now reconcile: {stale} -- delete them"
+
+
+def test_plant_default_truth_catches_a_contradiction() -> None:
+    """PLANT: the claim parser sees through agreement to a planted lie.
+
+    The parser is exercised on the live docstring; this plant proves the
+    AGREEMENT verdict flips when the authority differs from the claim.
+    """
+
+    claims = default_truth_findings()
+    assert claims, "the default-claim parser found nothing; channel dead"
+    for claim in claims:
+        flipped = claim.claimed + "_planted"
+        assert flipped != claim.authority
 
 
 # ---------------------------------------------------------------------------

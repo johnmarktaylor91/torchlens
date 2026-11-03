@@ -19,7 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._observability import HistoryCollector, region
+from torchlens._observability import HistoryCollector, region, session
+from torchlens._observability._session import active_session
 
 
 def _model() -> nn.Sequential:
@@ -103,3 +104,23 @@ class TestCaptureComposition:
 
         with region("offline"):
             assert observers.active_span_records() == []
+
+
+class TestSessionStatePurity:
+    """The active-session slot and region stacks restore on every path."""
+
+    def test_slot_restores_after_success_and_error(self) -> None:
+        assert active_session() is None
+        with session(mode="owned"):
+            assert active_session() is not None
+        assert active_session() is None
+        with pytest.raises(RuntimeError), session(mode="owned"):
+            raise RuntimeError("halt")
+        assert active_session() is None
+
+    def test_region_stack_unwinds_on_error(self) -> None:
+        with pytest.raises(RuntimeError), region("outer"):
+            raise RuntimeError("body crashed")
+        # A fresh region sees no stale parent.
+        with region("fresh") as record:
+            assert record.parent_name is None

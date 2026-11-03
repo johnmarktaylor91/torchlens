@@ -222,6 +222,25 @@ class TokenEmbeddingModel(nn.Module):
         return self.embedding(input_ids).mean(dim=1)
 
 
+def test_tensor_passthrough() -> None:
+    """Tensor inputs are returned unchanged."""
+
+    tensor = torch.tensor([1, 2, 3])
+    assert _coerce_input(object(), tensor) is tensor
+
+
+def test_numpy_array_to_tensor() -> None:
+    """NumPy arrays are converted with dtype and values preserved."""
+
+    import numpy as np
+
+    array = np.array([[1, 2], [3, 4]], dtype=np.int64)
+    result = _coerce_input(object(), array)
+    assert isinstance(result, torch.Tensor)
+    assert result.dtype is torch.int64
+    assert torch.equal(result, torch.tensor([[1, 2], [3, 4]], dtype=torch.int64))
+
+
 def test_transformerlens_text_to_tokens() -> None:
     """String input uses a duck-typed TransformerLens to_tokens method."""
 
@@ -229,6 +248,36 @@ def test_transformerlens_text_to_tokens() -> None:
     result = _coerce_input(model, "hello world")
     assert model.calls == ["hello world"]
     assert torch.equal(result, torch.tensor([[1, 2, 3]]))
+
+
+def test_hf_text_tokenizer_input_ids() -> None:
+    """String input uses an attached HuggingFace tokenizer."""
+
+    model = HFTextModel()
+    result = _coerce_input(model, "hello world")
+    assert model.calls == [("hello world", "pt")]
+    assert torch.equal(result, torch.tensor([[4, 5, 6]]))
+
+
+def test_hf_text_batch_tokenizer_input_ids() -> None:
+    """Batched string input uses the attached HuggingFace tokenizer once."""
+
+    model = HFTextModel()
+    result = _coerce_input(model, ["a", "b", "c"])
+    assert model.calls == [(["a", "b", "c"], "pt")]
+    assert torch.equal(result, torch.tensor([[4, 5, 6]]))
+
+
+def test_pil_image_processor() -> None:
+    """PIL image input uses an attached image processor."""
+
+    from PIL import Image as pil_image
+
+    image = pil_image.new("RGB", (8, 8))
+    model = ImageModel()
+    result = _coerce_input(model, image)
+    assert model.calls == [(image, "pt")]
+    assert torch.equal(result, torch.ones(1, 3, 8, 8))
 
 
 def test_pil_image_batch_processor() -> None:

@@ -8,6 +8,16 @@ from torchlens._registry import _facet_snapshot
 from torchlens._registry.kernel import RegistryError
 
 
+def test_facets_module_registers_the_direct_snapshot() -> None:
+    """Importing the facets appliance installs its ``snapshot`` as the provider."""
+
+    from torchlens._semantic import facets
+
+    assert _facet_snapshot._PROVIDER is facets.snapshot
+    result = _facet_snapshot.facet_snapshot(None)
+    assert isinstance(result, facets.FacetRegistrySnapshot)
+
+
 def test_capture_door_provider_builds_a_real_snapshot() -> None:
     """The public door's lazy provider yields the same snapshot type."""
 

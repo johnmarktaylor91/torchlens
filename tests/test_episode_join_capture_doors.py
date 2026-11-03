@@ -54,6 +54,24 @@ def _root_callables_mentioning_trace() -> dict[str, str]:
     return found
 
 
+def test_capture_door_inventory_matches_the_declared_allowlist() -> None:
+    found = _root_callables_mentioning_trace()
+    unexpected = set(found) - set(CAPTURE_DOOR_ALLOWLIST)
+    missing = set(CAPTURE_DOOR_ALLOWLIST) - set(found)
+    assert not unexpected, (
+        f"NEW root callable(s) whose return type mentions Trace: "
+        f"{ {name: found[name] for name in sorted(unexpected)} }. "
+        "tl.trace is the only live-capture door; if this entry is a "
+        "conversion/loader/product-bound replay, add it to "
+        "CAPTURE_DOOR_ALLOWLIST with its stated reason (a reviewed contract "
+        "change), otherwise it must not ship."
+    )
+    assert not missing, (
+        f"allowlisted capture-door entries no longer found at root: "
+        f"{sorted(missing)}; prune the allowlist with the removal."
+    )
+
+
 def test_every_allowlist_entry_states_a_reason() -> None:
     for name, reason in CAPTURE_DOOR_ALLOWLIST.items():
         assert isinstance(reason, str) and len(reason) >= 20, (

@@ -42,6 +42,15 @@ def test_multimodal_predicate_accepts_plausible_media() -> None:
     assert hf._is_hf_multimodal_input({"audio": b"\x00\x01"}) is True
 
 
+def test_text_predicate_declines_malformed_chat() -> None:
+    """Chat records with non-string role or non-str/list content must decline."""
+
+    assert hf._is_hf_text_input([{"role": None, "content": object()}]) is False
+    assert hf._is_hf_text_input([{"role": "user"}]) is False
+    assert hf._is_hf_text_input([{"content": "hi"}]) is False
+    assert hf._is_hf_text_input([{"role": 1, "content": "hi"}]) is False
+
+
 def test_text_predicate_accepts_valid_chat_and_strings() -> None:
     """Valid chat messages and plain strings still route as text."""
 

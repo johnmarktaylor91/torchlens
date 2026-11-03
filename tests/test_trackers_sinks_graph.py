@@ -57,6 +57,20 @@ def conv_trace():
 class TestGraphIR:
     """The dep-free layer: names, edges, truthful fields, join oracle."""
 
+    def test_truthful_fields_disclosed(self, conv_trace) -> None:  # noqa: ANN001
+        """No allocator claim anywhere; timing carries its evidence label."""
+
+        trace, _ = conv_trace
+        ir = trk.build_graph_ir(trace)
+        payload = json.dumps(ir.as_dict())
+        assert "allocator" not in payload.replace(
+            "memory_coloring: unavailable (no allocator source)", ""
+        )
+        assert any("memory_coloring: unavailable" in d for d in ir.disclosures)
+        if ir.timing_evidence is not None:
+            assert ir.timing_evidence == trk.TIMING_EVIDENCE
+            assert any("host bracket" in d for d in ir.disclosures)
+
     def test_join_oracle_catches_corruption(self, conv_trace) -> None:  # noqa: ANN001
         """Corrupt one stats name -> the oracle names the unmatched node."""
 

@@ -64,6 +64,22 @@ def test_nn_module_and_bound_method_values_measure() -> None:
 # --- collision pairs SEPARATE ---------------------------------------------------------
 
 
+def test_default_argument_collisions_separate() -> None:
+    """Two functions differing only in a default value get distinct digests."""
+
+    def f_two(t, factor=2.0):
+        """Scale by 2 by default."""
+
+        return t * factor
+
+    def f_three(t, factor=3.0):
+        """Scale by 3 by default."""
+
+        return t * factor
+
+    assert _digest(f_two) != _digest(f_three)
+
+
 def test_kwonly_default_collisions_separate() -> None:
     """Keyword-only defaults fold by value too."""
 
@@ -100,6 +116,25 @@ def test_closure_tensor_collisions_separate() -> None:
     # NOTE: distinct FUNCTIONS with distinct cells; the digest must separate
     # on the cell BYTES even though the code is identical up to names.
     assert _digest(use_a) != _digest(use_b)
+
+
+def test_bound_method_instance_state_separates() -> None:
+    """Bound methods differing only in __self__ state separate (D8)."""
+
+    class _Scaler:
+        """Instance-stateful scaler."""
+
+        def __init__(self, factor: float) -> None:
+            """Store the factor."""
+
+            self.factor = factor
+
+        def scale(self, tensor: torch.Tensor) -> torch.Tensor:
+            """Scale by the instance factor."""
+
+            return tensor * self.factor
+
+    assert _digest(_Scaler(2.0).scale) != _digest(_Scaler(3.0).scale)
 
 
 def test_partial_argument_collisions_separate() -> None:
@@ -195,6 +230,21 @@ def test_opaque_instance_demotes_named() -> None:
 
 
 # --- mutable-state hazards + stability ----------------------------------------------------
+
+
+def test_mutable_closure_state_changes_digest() -> None:
+    """Mutating observed closure state changes the digest (hazard caught)."""
+
+    state = {"scale": 2.0}
+
+    def uses_state(t):
+        """Scale by mutable dict state."""
+
+        return t * state["scale"]
+
+    before = _digest(uses_state)
+    state["scale"] = 3.0
+    assert _digest(uses_state) != before
 
 
 def test_digest_stable_across_processes() -> None:

@@ -19,6 +19,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.export._model_explorer._ids import escape_component, mint_node_ids
 from torchlens.export._model_explorer._namespace import (
+    address_call_counts,
     namespace_for_entry,
 )
 
@@ -162,3 +163,17 @@ def test_legacy_entries_get_prefixed_ids() -> None:
     assert legacy_count == 2
     assert ids[0].startswith("legacy|op_1_1|")
     assert ids == ["legacy|op_1_1|1", "legacy|op_1_1|2"]
+
+
+def test_call_counts_drive_qualification() -> None:
+    """address_call_counts sees distinct call indices per address."""
+
+    class _Entry:
+        def __init__(self, stack: tuple[str, ...]) -> None:
+            self.module_call_stack = stack
+
+    counts = address_call_counts(
+        [_Entry(("a:1", "a.b:1")), _Entry(("a:1", "a.b:2")), _Entry(("a:1",))]
+    )
+    assert counts["a"] == {1}
+    assert counts["a.b"] == {1, 2}

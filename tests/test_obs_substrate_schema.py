@@ -15,6 +15,7 @@ from torchlens._observability import (
     SiteRecord,
     StepBlockRecord,
     merge_observations,
+    validate_step_order,
 )
 from torchlens.errors import HistorySchemaError
 
@@ -79,6 +80,10 @@ class TestVocabularies:
             RunRecord(run_id="r", segment_id="s", cadences={"activation": 0})
         with pytest.raises(HistorySchemaError):
             RunRecord(run_id="r", segment_id="s", cadences={"nonsense": 1})
+
+    def test_site_kind_closed(self) -> None:
+        with pytest.raises(HistorySchemaError):
+            SiteRecord(site_id="x", kind="tensor", display_label="x")
 
 
 class TestPayloadCoherence:
@@ -164,6 +169,19 @@ class TestMerges:
 
 class TestStepOrder:
     """Duplicate/decreasing steps refuse without a declared new segment."""
+
+    def test_increasing_ok(self) -> None:
+        validate_step_order(None, 0, same_segment=True)
+        validate_step_order(0, 1, same_segment=True)
+
+    @pytest.mark.parametrize("prior, step", [(5, 5), (5, 4)])
+    def test_regression_refuses(self, prior: int, step: int) -> None:
+        with pytest.raises(HistorySchemaError) as excinfo:
+            validate_step_order(prior, step, same_segment=True)
+        assert excinfo.value.fields["code"] == "history_step_regression"
+
+    def test_new_segment_resets_the_axis(self) -> None:
+        validate_step_order(5, 0, same_segment=False)
 
     def test_drift_ends_a_series_with_disclosure(self) -> None:
         site = SiteRecord(site_id="module:x", kind="module", display_label="x")

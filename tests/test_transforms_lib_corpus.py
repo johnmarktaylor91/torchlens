@@ -16,12 +16,49 @@ import pytest
 
 from tests.transforms_corpus.loader import (
     COCO_URL_PREFIX,
+    IMAGES_DIR,
+    O14_MIN_DISTINCT,
     CocoChecksumMismatch,
     coco_manifest_rows,
     fetch_coco,
+    manifest_rows,
+    verify_vendored_integrity,
 )
 
 pytest.importorskip("PIL", reason="the corpus loader decodes JPEG via PIL")
+
+
+def test_vendored_images_match_their_manifest_hashes() -> None:
+    """Byte drift in the vendored corpus refuses (sha256 per file)."""
+
+    verify_vendored_integrity()
+
+
+def test_manifest_carries_unambiguous_licensing_provenance() -> None:
+    """Every row: CC0/PD license, source page, artist, retrieval date."""
+
+    rows = manifest_rows()
+    assert len(rows) >= O14_MIN_DISTINCT
+    files_on_disk = {path.name for path in IMAGES_DIR.glob("*.jpg")}
+    assert files_on_disk == {row["file"] for row in rows}
+    for row in rows:
+        assert row["license"] in ("CC0", "Public domain"), row["file"]
+        assert row["source_page"].startswith("https://commons.wikimedia.org/"), row["file"]
+        assert row["artist"], row["file"]
+        assert row["retrieved"], row["file"]
+        assert len(row["sha256"]) == 64
+
+
+def test_coco_precision_manifest_is_pinned_not_vendored() -> None:
+    """128 rows, sha256-pinned URLs; no COCO bytes live in the repo."""
+
+    rows = coco_manifest_rows()
+    assert len(rows) == 128
+    for row in rows:
+        assert row["url"].startswith("http://images.cocodataset.org/test2017/")
+        assert len(row["sha256"]) == 64
+        assert row["bytes"] > 0
+    assert not any(row["file"] in {p.name for p in IMAGES_DIR.glob("*")} for row in rows)
 
 
 def _fixture_server(tmp_path: Path, bodies: dict[str, bytes]) -> tuple[str, list[dict]]:
@@ -104,6 +141,16 @@ def test_coco_fetch_refuses_a_size_mismatch_and_refetches_a_corrupt_cache(
         fetch_coco(dest, rows=rows, base_url=base_url)
     assert excinfo.value.actual_sha256 is None
     assert excinfo.value.actual_bytes == rows[0]["bytes"] + 1
+
+
+def test_coco_fetch_refuses_unpinned_urls_and_the_vendored_dir(tmp_path: Path) -> None:
+    """Only pinned COCO URLs are fetched, and never into the vendored images."""
+
+    row = dict(coco_manifest_rows()[0], url="http://example.invalid/x.jpg")
+    with pytest.raises(ValueError, match="unpinned URL"):
+        fetch_coco(tmp_path, rows=[row])
+    with pytest.raises(ValueError, match="vendored images"):
+        fetch_coco(IMAGES_DIR, rows=[])
 
 
 @pytest.mark.rare

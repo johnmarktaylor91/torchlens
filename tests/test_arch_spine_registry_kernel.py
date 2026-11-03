@@ -34,6 +34,29 @@ CAPS = {"supports_x": True, "grain": "op"}
 
 
 class TestLifecycle:
+    def test_register_get_info_list_unregister(self) -> None:
+        registry = _fresh_registry()
+        unit = object()
+        info = registry.register("u1", unit, capabilities=CAPS, provider=TORCHLENS_PROVIDER)
+        assert registry.get("u1") is unit
+        assert registry.info("u1") == info
+        assert info.value_type == "object"
+        assert info.replaced_prior is False
+        assert registry.list_ids() == ("u1",)
+        registry.unregister("u1")
+        assert registry.list_ids() == ()
+
+    def test_epoch_is_monotone_across_all_mutations(self) -> None:
+        registry = _fresh_registry()
+        assert registry.epoch == 0
+        registry.register("a", 1, capabilities=CAPS, provider=TORCHLENS_PROVIDER)
+        first = registry.epoch
+        registry.register("b", 2, capabilities=CAPS, provider=TORCHLENS_PROVIDER)
+        second = registry.epoch
+        registry.unregister("a")
+        third = registry.epoch
+        assert 0 < first < second < third
+
     def test_replace_requires_explicit_opt_in(self) -> None:
         registry = _fresh_registry()
         registry.register("a", 1, capabilities=CAPS, provider=TORCHLENS_PROVIDER)
@@ -82,6 +105,12 @@ class TestCapabilityRows:
             registry.register("u", 1, capabilities={"": True}, provider=TORCHLENS_PROVIDER)
         assert excinfo.value.fields["code"] == "registry_capability_key_invalid"
 
+    def test_capability_rows_are_frozen_on_info(self) -> None:
+        registry = _fresh_registry()
+        info = registry.register("u", 1, capabilities=dict(CAPS), provider=TORCHLENS_PROVIDER)
+        with pytest.raises(TypeError):
+            info.capabilities["supports_x"] = False  # type: ignore[index]
+
 
 class TestProviderIdentity:
     def test_provider_required_with_stable_id(self) -> None:
@@ -98,6 +127,17 @@ class TestProviderIdentity:
 
 
 class TestSnapshotsAndCacheKeys:
+    def test_snapshot_is_immutable_and_isolated(self) -> None:
+        registry = _fresh_registry()
+        registry.register("a", 1, capabilities=CAPS, provider=TORCHLENS_PROVIDER)
+        snap = registry.snapshot()
+        registry.register("b", 2, capabilities=CAPS, provider=TORCHLENS_PROVIDER)
+        assert set(snap.values) == {"a"}
+        with pytest.raises(TypeError):
+            snap.values["c"] = 3  # type: ignore[index]
+        with pytest.raises(TypeError):
+            snap.entries["c"] = None  # type: ignore[index]
+
     def test_cache_key_moves_with_epoch_and_provider_version(self) -> None:
         registry = _fresh_registry()
         registry.register(

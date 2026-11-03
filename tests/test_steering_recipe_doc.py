@@ -66,6 +66,23 @@ def test_recipe_bind_matches_plain_hook_exactly(recipe):
     assert not torch.equal(recipe["tokens"], unsteered), "the steer must change generation"
 
 
+def test_recipe_record_and_trace_match_plain_hook(recipe):
+    """tl.record's output and the trace oracle's saved site equal the plain hook."""
+
+    logits, _tokens = _plain_hook_reference(recipe)
+    assert torch.equal(recipe["out"].logits, logits)
+    lm, ids, direction = recipe["lm"], recipe["ids"], recipe["direction"]
+    captured: list[torch.Tensor] = []
+    handle = lm.model.layers[1].mlp.register_forward_hook(
+        lambda _module, _args, output: captured.append(output + 4.0 * direction) or captured[-1]
+    )
+    try:
+        lm(ids)
+    finally:
+        handle.remove()
+    assert torch.equal(recipe["steered_mlp"], captured[0])
+
+
 def test_recipe_leaves_model_hook_free(recipe):
     """Binding, recording and tracing leave no hooks on the user's model."""
 

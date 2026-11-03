@@ -27,6 +27,7 @@ from torchlens._observability import (
     color_by_watch,
     derived_quantile,
     histogram_payload,
+    observation_row,
     rank_sites,
 )
 from torchlens._observability._artifact import CommittedBlock
@@ -211,6 +212,18 @@ class TestHistogramPayload:
         with pytest.raises(WatchRenderError) as excinfo:
             histogram_payload(obs)
         assert excinfo.value.fields["code"] == "watch_sketch_missing"
+
+    def test_observation_row_none_payload_for_gaps(self) -> None:
+        gap = ObservationRecord(
+            global_step=1,
+            site_id="m:a",
+            stream="activation",
+            phase="forward",
+            presence="site_absent",
+        )
+        row = observation_row(gap)
+        assert row["presence"] == "site_absent"
+        assert row["mean"] is None and row["numel"] is None
 
 
 class TestHistoryView:

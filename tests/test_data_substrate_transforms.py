@@ -9,6 +9,8 @@ evidence-based axis-role vocabulary, and the role-free kernels.
 
 from __future__ import annotations
 
+import functools
+
 import pytest
 import torch
 
@@ -257,6 +259,33 @@ def test_custom_registration_and_rehydration_round_trip() -> None:
 
 
 # --- P2: ctx dispatch by DECLARATION, never inspect.signature ----------------
+
+
+def test_wants_context_is_false_for_every_sniffing_counterexample() -> None:
+    """The measured counterexamples: C-ops and modules report (*args, **kwargs).
+
+    ``inspect.signature``-based dispatch would call each of these WITH ctx
+    (TypeError at batch 1); declaration-based dispatch keeps them unary.
+    """
+
+    assert wants_context(torch.abs) is False
+    assert wants_context(torch.nn.ReLU()) is False
+    assert wants_context(torch.nn.Flatten(start_dim=1)) is False
+    assert wants_context(lambda t: t) is False
+
+
+def test_wants_context_is_false_for_keyword_only_ctx_partials() -> None:
+    """The other measured direction: a kw-only ctx partial reports unary.
+
+    Signature sniffing would call it unary and silently run mask-blind;
+    declaration keeps that a conscious choice — undeclared means unary.
+    """
+
+    def masked(tensor: torch.Tensor, *, ctx: TransformContext | None = None) -> torch.Tensor:
+        return tensor
+
+    partial = functools.partial(masked)
+    assert wants_context(partial) is False
 
 
 def test_with_context_declares_and_receives_ctx() -> None:

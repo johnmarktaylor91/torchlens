@@ -65,6 +65,12 @@ class TestHistogramReference:
         h.update(data)
         assert h.result().numel == 50_000
 
+    def test_bucket_edges_are_the_manifest_descriptor_values(self) -> None:
+        d = HistogramDescriptor(bins_per_octave=1, lo_exp=-2, hi_exp=2)
+        edges = d.bucket_edges()
+        assert edges == (0.25, 0.5, 1.0, 2.0, 4.0)
+        assert d.bins_per_side == 4
+
 
 class TestHistogramMerge:
     """Integer merges are EXACT; descriptor mismatch refuses typed (D9)."""
@@ -133,6 +139,11 @@ class TestDtypes:
 
 class TestCountWidth:
     """Count-width row: int64 accumulators, int32-fit disclosure (D9)."""
+
+    def test_counts_accumulate_in_int64(self) -> None:
+        h = Histogram()
+        assert h._pos.dtype == torch.int64
+        assert h._neg.dtype == torch.int64
 
     def test_int32_fit_helper(self) -> None:
         h = Histogram()

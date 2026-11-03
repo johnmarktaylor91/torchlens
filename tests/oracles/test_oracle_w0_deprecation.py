@@ -93,6 +93,24 @@ def test_plant_registered_nonwarning_door_goes_red(tmp_path: Path) -> None:
     assert any("silently overwritten" in finding for finding in findings), findings
 
 
+def test_plant_registered_door_with_dead_replacement_goes_red() -> None:
+    """PLANT: a registered replacement that does not resolve is caught."""
+
+    door = DeprecatedDoor(
+        door="planted.old", replacement="torchlens.no_such_replacement", since="2026-08-26"
+    )
+    findings = audit_registered_door(door, _planted_warning_door)
+    assert any("does not resolve" in finding for finding in findings), findings
+
+
+def test_plant_warning_that_names_no_replacement_goes_red() -> None:
+    """PLANT: a warning that omits the registered replacement is caught."""
+
+    door = DeprecatedDoor(door="planted.old", replacement="torchlens.extract", since="2026-08-26")
+    findings = audit_registered_door(door, _planted_warning_door)
+    assert any("does not name" in finding for finding in findings), findings
+
+
 def test_plant_registry_row_parses(tmp_path: Path) -> None:
     """PLANT: a real registry row round-trips through the loader."""
 

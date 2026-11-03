@@ -23,6 +23,13 @@ def _acts(n: int = 10, d: int = 24) -> torch.Tensor:
     return torch.randn(n, d, dtype=torch.float64)
 
 
+def test_no_new_keyword_call_is_bit_identical() -> None:
+    """D-5's compatibility law: plain rdm() moves no caller's numbers."""
+
+    acts = _acts()
+    assert (repgeom.rdm(acts) == repgeom.activation_distance_matrix(acts)).all()
+
+
 def test_batched_input_kind_is_explicit() -> None:
     """[B, N, D] means one RDM per batch element ONLY under input_kind."""
 

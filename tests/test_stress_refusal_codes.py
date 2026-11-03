@@ -13,6 +13,7 @@ production raise site and pin the sparse capture.
 
 from __future__ import annotations
 
+import contextlib
 from types import SimpleNamespace
 from typing import Any
 
@@ -21,6 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.arg_positions import FUNC_ARG_SPECS, extract_tensors_and_params
 from torchlens._constants import ORIG_TORCH_FUNCS
 from torchlens._robustness import UnsupportedTensorVariantError
 from torchlens._utils._sparse_parts import sparse_component_tensors
@@ -169,6 +171,12 @@ def test_hooks_fallback_refusal_carries_code(monkeypatch: pytest.MonkeyPatch) ->
     assert excinfo.value.fields["code"] == "label_selector_not_live"
 
 
+def test_live_mode_label_error_defaults_its_code() -> None:
+    assert LiveModeLabelError("message only").fields["code"] == "label_selector_not_live"
+    explicit = LiveModeLabelError("x", code="rerun_staged_label_unmatchable")
+    assert explicit.fields["code"] == "rerun_staged_label_unmatchable"
+
+
 def test_sparse_buffer_refuses_typed_at_entry() -> None:
     model = _SparseAdjacency().eval()
     with pytest.raises(UnsupportedTensorVariantError) as info:
@@ -235,6 +243,20 @@ def test_sparse_spsolve_captures_both_operands_and_validates() -> None:
     trace = tl.trace(model, [x])
     assert len(_single_op(trace, "spsolve").parents) == 2
     assert tl.validate(model, [x], scope="forward", seed=0)
+
+
+def test_spsolve_arg_spec_extracts_both_operands() -> None:
+    """The static row matches the binding's ``(A, B)`` names; the docstring says input/other."""
+    a = torch.eye(2).to_sparse_csr()
+    b = torch.ones(2)
+    spec = FUNC_ARG_SPECS["spsolve"]
+    assert extract_tensors_and_params(spec, (a, b), {}) == ([a, b], [])
+    assert extract_tensors_and_params(spec, (), {"A": a, "B": b, "left": True}) == ([a, b], [])
+    if hasattr(torch.sparse, "spsolve"):
+        # A wrong keyword name raises TypeError before dispatch; a build with no CPU
+        # kernel raises after the keywords parsed.
+        with contextlib.suppress(NotImplementedError, RuntimeError):
+            torch.sparse.spsolve(A=a, B=b)
 
 
 def test_portable_save_of_a_sparse_activation_refuses_with_a_code(tmp_path) -> None:

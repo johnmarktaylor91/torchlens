@@ -48,7 +48,7 @@ def _write(path: Path) -> None:
     writer.append_block(_committed(1, "traces/step-1.tlspec"))
 
 
-@pytest.mark.parametrize("bad", [7])
+@pytest.mark.parametrize("bad", ["", 7])
 def test_malformed_trace_ref_refuses_typed(bad: object) -> None:
     with pytest.raises(HistorySchemaError) as info:
         StepBlockRecord(segment_id="s", global_step=0, provenance="explicit", trace_ref=bad)  # type: ignore[arg-type]

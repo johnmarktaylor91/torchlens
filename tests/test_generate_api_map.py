@@ -43,6 +43,24 @@ def model(generator):  # type: ignore[no-untyped-def]
     return generator.build_model(REPO_ROOT, scope="root")
 
 
+def test_every_root_surface_name_is_in_the_map(generator, model) -> None:  # type: ignore[no-untyped-def]
+    rows = generator.read_surface_rows(REPO_ROOT)
+    assert rows, "the frozen root surface table is empty"
+    nodes = model["nodes"]
+    root = nodes[model["roots"]["tl"]]
+    mapped = {nodes[child]["n"] for child in root["c"]}
+    expected = {row["canonical_path"].split(".")[-1] for row in rows}
+    assert expected <= mapped, f"root names missing from the map: {sorted(expected - mapped)}"
+    assert model["root_count"] == len(rows)
+    for child in root["c"]:
+        alias = nodes[child]
+        target = nodes[alias["A"]]
+        assert target["k"] in {"function", "class", "module", "package", "variable", "constant"}, (
+            alias
+        )
+        assert "f" in target, f"root name {alias['n']} has no defining file"
+
+
 def test_generated_page_names_every_root_surface_name(generator, model) -> None:  # type: ignore[no-untyped-def]
     html = generator.render_html(model)
     assert html.count("<script") == html.count("</script"), (

@@ -19,6 +19,7 @@ from ._censuses import (
     CENSUS_ROOTS,
     census_memoization_sites,
     census_options_fields,
+    census_signature_params,
     load_schema_table,
 )
 from ._known_gaps import KnownGap, load_known_gaps, partition_monotone
@@ -75,6 +76,7 @@ def test_every_census_root_is_described_and_baselined() -> None:
     ("census", "baseline"),
     [
         (census_options_fields, "options_fields.tsv"),
+        (census_signature_params, "signature_params.tsv"),
         (census_memoization_sites, "memoization_sites.tsv"),
     ],
 )

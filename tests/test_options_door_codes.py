@@ -46,3 +46,17 @@ def test_on_nonfinite_warn_emits_one_capture_nonfinite_detected_warning() -> Non
     ]
     assert codes.count("capture_nonfinite_detected") == 1
     assert len(trace) >= 1
+
+
+def test_door_probe_skips_a_non_capture_options_object() -> None:
+    """A ``ReplayOptions`` passed as ``capture=`` is not probed for capture fields.
+
+    The door's private field probe exists only on ``CaptureOptions``; a different
+    options object must reach the door's own handling, never an AttributeError
+    from the probe.
+    """
+
+    from torchlens._user_funcs import _unfold_door_capture_fields
+
+    flat = _unfold_door_capture_fields(tl.options.ReplayOptions())  # type: ignore[arg-type]
+    assert flat == _unfold_door_capture_fields(None)

@@ -155,7 +155,7 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
         "test_distributed_census_topologies.py:109",
         "test_distributed_honesty.py:741",
         "test_distributed_honesty.py:757",
-        "test_input_coercion.py:299",
+        "test_input_coercion.py:348",
         "test_layer_log.py:435",
         "test_lit_bridge_real.py:53",
         "test_mlp_recipes.py:83",
@@ -220,6 +220,29 @@ def test_except_skip_scanner_is_red_capable(tmp_path: Path) -> None:
     )
     sites = _except_skip_sites(planted)
     assert len(sites) == 1 and sites[0].endswith(":6")
+
+
+def test_executes_nowhere_tier_only_burns_down() -> None:
+    """The unavailable-ok tier IS executes-nowhere: capped, monotone down."""
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts" / "checks"))
+    from skip_audit import IMPORTORSKIP_LEDGER, UNAVAILABLE_OK
+
+    rows = {
+        target: note
+        for target, (tier, note) in IMPORTORSKIP_LEDGER.items()
+        if tier == UNAVAILABLE_OK
+    }
+    count = len(rows)
+    assert count <= EXECUTES_NOWHERE_CEILING, (
+        f"{count} executes-nowhere importorskip targets exceed the frozen"
+        f" ceiling {EXECUTES_NOWHERE_CEILING}: a new gate entered the tier"
+        " that no CI runner executes -- declare its extra/leg instead"
+    )
+    assert count == EXECUTES_NOWHERE_CEILING, (
+        f"only {count} executes-nowhere rows remain but the ceiling reads"
+        f" {EXECUTES_NOWHERE_CEILING}: lower it in the same commit"
+    )
 
 
 def test_junit_witness_property_lands_in_junitxml(tmp_path: Path) -> None:

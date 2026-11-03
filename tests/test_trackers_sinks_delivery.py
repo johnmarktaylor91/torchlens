@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 import torchlens.trackers as trk
@@ -51,9 +53,36 @@ class TestProtocol:
             trk.require_capabilities(_Weird(), ("scalar",))
         assert info.value.fields["unknown"] == ("telepathy",)
 
+    def test_missing_capability_named(self) -> None:
+        sink = trk.MemorySink(capabilities=frozenset({"scalar"}))
+        with pytest.raises(SinkProtocolError) as info:
+            trk.require_capabilities(sink, ("scalar", "raw_histogram"))
+        assert info.value.fields["missing"] == ("raw_histogram",)
+
 
 class TestJSONLSink:
     """Build item 11: persisted rows, header first, footer marks complete."""
+
+    def test_round_trip(self, tmp_path) -> None:  # noqa: ANN001
+        path = tmp_path / "run.jsonl"
+        sink = trk.JSONLSink(path)
+        sink.emit_scalar(trk.ScalarPoint("gradients/norm/w", 100, 1.5))
+        sink.emit_histogram(
+            trk.HistogramPoint("gradients/hist/w", 100, (1, 2), (0.0, 1.0, 2.0), {"num": 3.0})
+        )
+        sink.emit_text(trk.TextPoint("torchlens/meta/manifest", 0, "{}"))
+        sink.close()
+        rows = [json.loads(line) for line in path.read_text().splitlines()]
+        assert rows[0]["format"] == trk.JSONL_FORMAT
+        assert rows[1] == {
+            "kind": "scalar",
+            "tag": "gradients/norm/w",
+            "step": 100,
+            "value": 1.5,
+        }
+        assert rows[2]["counts"] == [1, 2]
+        assert rows[2]["edges"] == [0.0, 1.0, 2.0]
+        assert rows[-1] == {"kind": "closed"}
 
     def test_write_failure_latches(self, tmp_path) -> None:  # noqa: ANN001
         path = tmp_path / "run.jsonl"
@@ -114,6 +143,11 @@ class TestTensorBoardSinkDuckPath:
             sink.emit_histogram(trk.HistogramPoint("gradients/hist/w", 0, (1,), (0.0, 1.0), {}))
         assert info.value.fields["code"] == "tracker_relay_histogram_unsupported"
 
+    def test_no_relay_reports_clean(self) -> None:
+        sink = trk.TensorBoardSink(_DuckWriter())
+        assert sink.relays == {}
+        assert trk.detect_relays() == {}
+
 
 class TestWandbSinkContract:
     """Native sink invariants that need no wandb install."""
@@ -139,6 +173,12 @@ class TestWandbSinkContract:
         with pytest.raises(TrackersError) as info:
             sink.emit_histogram(point)
         assert info.value.fields["code"] == "tracker_histogram_bucket_cap"
+
+    def test_safe_descriptor_fits_the_cap(self) -> None:
+        """The named remedy really renders under 512 buckets."""
+
+        bins = 2 * trk.WANDB_SAFE_DESCRIPTOR.bins_per_side + 1
+        assert bins <= trk.WANDB_BUCKET_CAP
 
     def test_scalar_logs_at_caller_step(self) -> None:
         logged: list[tuple[dict, int]] = []

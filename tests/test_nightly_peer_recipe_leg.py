@@ -41,6 +41,17 @@ def _run_text(job: dict[str, Any]) -> str:
     return "\n".join(step.get("run", "") for step in job["steps"])
 
 
+def test_peer_recipe_job_follows_the_workflow_conventions() -> None:
+    """SHA-pinned actions, no persisted checkout credentials, a bounded runtime."""
+
+    job = _job()
+    assert isinstance(job.get("timeout-minutes"), int)
+    uses = [step["uses"] for step in job["steps"] if "uses" in step]
+    assert uses and all(_SHA_PINNED_USE.match(use) for use in uses), uses
+    checkout = next(step for step in job["steps"] if step.get("uses", "").startswith("actions/"))
+    assert checkout["with"]["persist-credentials"] is False
+
+
 def test_peer_recipe_job_requires_peers_and_fails_on_any_skip() -> None:
     """The recipe run sets the peer flag and a zero-skip check follows it."""
 

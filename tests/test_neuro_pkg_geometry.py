@@ -41,6 +41,19 @@ def _thingsvision_gaussian_rdm(features: np.ndarray) -> np.ndarray:
     return 1.0 - np.exp(-squared / squared.mean())
 
 
+def test_gaussian_metric_matches_thingsvision_reference() -> None:
+    """Item 12: reference equivalence against the credited convention."""
+
+    rng = np.random.default_rng(7)
+    features = rng.normal(size=(9, 13))
+    ours = rdm(features, metric="gaussian")
+    reference = _thingsvision_gaussian_rdm(features)
+    assert np.allclose(ours, reference, atol=1e-12)
+    assert np.allclose(ours, ours.T)
+    assert np.allclose(np.diagonal(ours), 0.0)
+    assert float(ours.max()) < 1.0
+
+
 def test_gaussian_metric_refuses_identical_stimuli() -> None:
     """A zero data-derived bandwidth refuses typed, never NaN."""
 

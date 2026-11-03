@@ -43,6 +43,22 @@ def _detector_two(model: Any, payload: Any, **kwargs: Any) -> str | None:
     return "two"
 
 
+def test_registry_mechanics_register_list_iter_unregister() -> None:
+    """Register, list, iterate, and unregister detectors."""
+
+    registry = Registry(kind="test")
+
+    registry.register(name="one", priority=20)(_detector_one)
+    registry.register(name="two", priority=10)(_detector_two)
+
+    assert [detector.name for detector in registry.list()] == ["two", "one"]
+    assert list(registry.iter_by_priority()) == [_detector_two, _detector_one]
+
+    registry.unregister("two")
+
+    assert [detector.name for detector in registry.list()] == ["one"]
+
+
 def test_duplicate_name_registration_raises() -> None:
     """Registering an existing built-in name should fail closed."""
 
@@ -133,3 +149,12 @@ def test_priority_ordering_is_deterministic() -> None:
     registry.register(name="fifth", priority=30)(fifth)
 
     assert list(registry.iter_by_priority()) == [first, second, third, fourth, fifth]
+
+
+def test_output_namespace_lists_registered_detectors() -> None:
+    """The output auto-route namespace lists registered detectors."""
+
+    detector_names = [detector.name for detector in tl._autoroute.output.list()]
+
+    assert "hf_config_classifier" in detector_names
+    assert "imagenet_verified" in detector_names

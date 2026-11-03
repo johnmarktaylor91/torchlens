@@ -98,6 +98,7 @@ def test_environment_beats_the_derived_cadence(monkeypatch: pytest.MonkeyPatch) 
 @pytest.mark.parametrize(
     ("name", "value"),
     [
+        ("TORCHLENS_WATCH_EVERY", "0"),
         ("TORCHLENS_WATCH_EVERY", "often"),
         ("TORCHLENS_WATCH_HIST_EVERY", "-2"),
         ("TORCHLENS_WATCH_SIGNALS", "grads"),

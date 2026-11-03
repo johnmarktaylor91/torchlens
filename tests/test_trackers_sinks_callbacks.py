@@ -12,6 +12,9 @@ import torchlens.trackers as trk
 class TestDerivedCadence:
     """Memo 3.8: callbacks derive cadence from the framework's own signals."""
 
+    def test_logging_steps_wins(self) -> None:
+        assert trk.derived_cadence(logging_steps=25) == 25
+
     def test_run_length_targets_100_points(self) -> None:
         assert trk.derived_cadence(max_steps=5000) == 50
         assert trk.derived_cadence(max_steps=50) == 1
@@ -54,6 +57,11 @@ class TestHFTrainerCallback:
         # HF increments ``state.global_step`` AFTER optimizer.step() and logs
         # at the incremented value; rows land on that axis (AUD-CODE 2.14).
         assert steps and steps[0] == 1
+
+    def test_derived_cadence_from_trainer_args(self) -> None:
+        pytest.importorskip("transformers")
+        callback = trk.HFTrainerWatchCallback(to=trk.MemorySink(), every=7)
+        assert callback.every == 7
 
 
 class TestLightningCallback:
