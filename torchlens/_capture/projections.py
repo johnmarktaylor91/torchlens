@@ -40,7 +40,8 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
-from ._record_stores import _GradFnContextMap, _StorageBackend
+from ._record_stores import _GradFnContextMap, _RetainedRecordKeys, _StorageBackend
+from ._sparse_shell import _sparse_function_ref
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -125,9 +126,6 @@ class RecordingState:
     step_index: int = 0
     no_tensor_capture: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
-    #: Op contexts by raw label (latest wins, as a scan of ``all_contexts`` answers): the
-    #: module-exit re-evaluation of a ``tl.module`` save reads it instead of rescanning.
-    op_contexts_by_label: dict[str, RecordContext] = field(default_factory=dict)
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
     grad_fn_to_context: _GradFnContextMap = field(default_factory=_GradFnContextMap)
@@ -146,6 +144,12 @@ class RecordingState:
     prepared_params: dict[int, tuple[weakref.ref[torch.nn.Parameter], bool]] = field(
         default_factory=dict
     )
+    # Live indexes the module-boundary retention step reads on EVERY module
+    # exit: the latest op context per raw label (last-wins, like a dict built
+    # over ``all_contexts``) and the retained records' keys. Rebuilding both
+    # per exit made that step quadratic in model size.
+    op_context_by_raw_label: dict[str, RecordContext] = field(default_factory=dict)
+    retained_keys: _RetainedRecordKeys = field(default_factory=_RetainedRecordKeys)
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -165,7 +169,7 @@ class RecordingState:
 
         self.all_contexts.append(ctx)
         if ctx.kind == "op" and ctx.raw_label is not None:
-            self.op_contexts_by_label[ctx.raw_label] = ctx
+            self.op_context_by_raw_label[ctx.raw_label] = ctx
         window_size = self.options.lookback or self.options.history_size
         if window_size == 0:
             return
@@ -327,7 +331,7 @@ def _read_field(source: Any, name: str, default: Any = None) -> Any:
 
     if source is None:
         return default
-    if isinstance(source, Mapping):
+    if type(source) is dict or isinstance(source, Mapping):
         return source.get(name, default)
     return getattr(source, name, default)
 
@@ -617,32 +621,6 @@ def _sparse_freeze_values(
         modules=modules,
         is_scalar_bool=is_scalar_bool,
         bool_value=bool_value,
-    )
-
-
-def _sparse_function_ref(ctx: RecordContext, function: FunctionCallRef | None) -> FunctionCallRef:
-    """Return the sparse commit's function facet (name-only SHELL fallback)."""
-
-    return function or FunctionCallRef(
-        func=None,
-        func_name=ctx.func_name,
-        func_qualname=None,
-        func_call_id=None,
-        code_context=(),
-        func_duration=None,
-        flops_forward=None,
-        flops_backward=None,
-        func_rng_states=None,
-        func_autocast_state=None,
-        arg_names=(),
-        num_args_total=0,
-        num_pos_args=0,
-        num_kwargs=0,
-        non_tensor_pos_args=(),
-        non_tensor_kwargs=(),
-        func_non_tensor_args=(),
-        is_inplace=False,
-        func_config=(),
     )
 
 

@@ -4371,3 +4371,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: b75fa3c2a082783d76ec05057ba0bb8a4f04e5cf (dirty)
 recorded: 2026-11-03T20:13:55.748259+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-overhead lane: the module-exit retention read sites of _predicate_forward.py moved into _record_stores._RetainedRecordKeys and projections.RecordingState.append_context (one ctx.kind site fewer, sites re-keyed); no producer or consumer semantics changed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bebc218bd7546af063ae93349f5288057dd07bd2 (dirty)
+recorded: 2026-11-03T17:34:27.084895+00:00

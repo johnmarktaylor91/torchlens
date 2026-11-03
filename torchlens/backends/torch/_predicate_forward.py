@@ -78,12 +78,8 @@ def _record_predicate_module_boundary_outputs(
         _plain_module_union(predicate) is None and not selector_contains_kind(predicate, "module")
     ):
         return
-    contexts_by_label = state.op_contexts_by_label
-    existing = {
-        (record.ctx.raw_label, record.ctx.pass_number)
-        for record in state.recording.records
-        if record.ctx.raw_label is not None
-    }
+    contexts_by_label = state.op_context_by_raw_label
+    existing = state.retained_keys.sync(state.recording.records)
     module_call_label = f"{module_address}:{module_call_index}"
     labeled_outputs: list[tuple[torch.Tensor, tuple[Any, ...], str]] = []
     walked_leaf_count = 0

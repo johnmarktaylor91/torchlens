@@ -769,7 +769,7 @@
    "status": "composes",
    "evidence": "docs/intervention_api.md",
    "confidence": "high",
-   "note": "bundle.do, attach_hooks, push and fork broadcast over members; M1 matrix marks bundle fork WORKS."
+   "note": "bundle.do, push and fork broadcast over members; M1 matrix marks bundle fork WORKS."
   },
   {
    "a": "bundle",
@@ -1740,7 +1740,7 @@
    "status": "composes",
    "evidence": "docs/facets.md",
    "confidence": "high",
-   "note": "Facet edits reuse fork, attach_hooks and rerun; overlapping writes refuse before rerun."
+   "note": "Facet edits reuse fork, do and run; overlapping writes refuse before the rerun."
   },
   {
    "a": "fork_do",
@@ -2014,7 +2014,7 @@
    "status": "asymmetry",
    "asymmetry": "A28",
    "confidence": "high",
-   "note": "trace['label'] returns a Layer for a multi-pass layer; a bare label in do() and attach_hooks refuses multipass_bare_label_ambiguous, while pass-qualified labels (label:2) work."
+   "note": "trace['label'] returns a Layer for a multi-pass layer; a bare label in do() refuses multipass_bare_label_ambiguous, while pass-qualified labels (label:2) work."
   },
   {
    "a": "index",
@@ -2801,7 +2801,7 @@
     "index",
     "multipass"
    ],
-   "summary": "A bare label works on single-pass layers; on a multi-pass layer trace['label'] returns a Layer, op-level reads need a pass qualifier, and do and attach_hooks refuse the bare label (multipass_bare_label_ambiguous).",
+   "summary": "A bare label works on single-pass layers; on a multi-pass layer trace['label'] returns a Layer, op-level reads need a pass qualifier, and do refuses the bare label (multipass_bare_label_ambiguous).",
    "evidence": "tests/test_replay_pass_qualified.py::test_bare_multipass_label_refuses_in_do_and_resolve_sites",
    "recommendation": "document",
    "ruling": "document"
