@@ -10,6 +10,7 @@ from types import ModuleType, SimpleNamespace
 import pytest
 import torch
 import torch.nn as nn
+from _record_fakes import FakeRecord
 
 import torchlens as tl
 from torchlens._data_classes.trace import ConditionalAccessor, ConditionalEvent, Trace
@@ -65,7 +66,7 @@ class _ConditionalBuildTrace:
             _make_layer_stub("then_2:1", "then_2", branch_stack=[(1, "then")]),
         ]
         self._layer_dict_all_keys = {
-            "gt_1_3": SimpleNamespace(
+            "gt_1_3": FakeRecord(
                 bool_value=True,
                 parents=[],
                 has_output_descendant=True,
@@ -134,7 +135,7 @@ def _make_layer_stub(
         Layer-like object exposing the fields touched by finalization.
     """
 
-    return SimpleNamespace(
+    return FakeRecord(
         label=label,
         layer_label=layer_label,
         in_conditionals=[],
@@ -379,8 +380,6 @@ def test_internal_sink_logging_never_rescans_the_sink_ledgers() -> None:
     portable source of truth and stay duplicate-free.
     """
 
-    from types import SimpleNamespace
-
     from torchlens._postprocess.graph_traversal import _log_internally_terminated_tensor
 
     class _CountingList(list):
@@ -393,7 +392,7 @@ def test_internal_sink_logging_never_rescans_the_sink_ledgers() -> None:
             return super().__contains__(item)
 
     layers = {
-        f"op_{i}_raw": SimpleNamespace(
+        f"op_{i}_raw": FakeRecord(
             is_internal_sink=False,
             is_scalar_bool=(i % 2 == 0),
             is_terminal_bool=False,

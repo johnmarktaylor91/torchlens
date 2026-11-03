@@ -30,6 +30,7 @@ from typing import Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._operand_value_proofs import sole_perturbed_slot
 from ._posthoc_decision import PosthocPerturbDecision
 from ._value_predicates import _is_all_zero_value
@@ -42,7 +43,7 @@ _SDPA_PARAMS = {"attn_mask": (3, None), "dropout_p": (4, 0.0), "scale": (6, None
 def _sdpa_param(layer: Any, args: tuple[Any, ...], name: str) -> Any:
     """Return an sdpa parameter from the saved keywords, else its position, else its default."""
 
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     index, default = _SDPA_PARAMS[name]
     if name in kwargs:
         return kwargs[name]

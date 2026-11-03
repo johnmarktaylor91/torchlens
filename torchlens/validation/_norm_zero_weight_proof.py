@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
 
 if TYPE_CHECKING:
@@ -56,7 +57,7 @@ def _norm_weight_operand(layer: Any, args: tuple[Any, ...]) -> Any:
 
     if len(args) > _WEIGHT_POSITION:
         return args[_WEIGHT_POSITION]
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     return kwargs.get("weight")
 
 
@@ -140,7 +141,7 @@ def _batch_norm_weight_operand(layer: Op) -> Any:
     from positions 3/4, not 1/2.
     """
 
-    args = layer.saved_args
+    args = layer.call.saved_args
     if args is None or len(args) <= 1:
         return None
     return args[1]

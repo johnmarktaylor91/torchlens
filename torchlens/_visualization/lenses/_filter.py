@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
 from ..._record_type import record_type
+from ..._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -145,7 +146,7 @@ def _token_predicate(token: str) -> Callable[[Any], bool]:
         return lambda layer: str(record_type(layer, "")) in _RESHAPE_FAMILY
     if token == "constants":
         return lambda layer: (
-            bool(getattr(layer, "is_internally_initialized", False))
+            bool(record_member(layer, "is_internally_initialized", False))
             and not bool(getattr(layer, "has_input_ancestor", True))
         )
     if token == "non_module_ops":

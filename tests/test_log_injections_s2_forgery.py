@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 
@@ -70,14 +71,18 @@ def _injected_rows(state):
     """The forged artifact's injected op rows."""
 
     return [
-        op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is not None
+        op
+        for op in state["_layer_list"]
+        if record_member(op, "injection_provenance", None) is not None
     ]
 
 
 def _model_rows(state):
     """The forged artifact's ordinary model op rows."""
 
-    return [op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is None]
+    return [
+        op for op in state["_layer_list"] if record_member(op, "injection_provenance", None) is None
+    ]
 
 
 def _assert_refuses(tmp_path, tamper, code: str, reason: str | None = None) -> None:

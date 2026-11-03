@@ -780,7 +780,7 @@ def _normalize_edge_use_record(
         arg_kind="keyword" if edge_use == "kwarg" else "positional",
         arg_path=cast(Any, arg_path),
         view_or_copy=cast(Any, storage_relation),
-        parent_func_call_id=None if parent_event is None else parent_event.func_call_id,
+        parent_func_call_id=None if parent_event is None else parent_event.call.call_id,
         child_func_call_id=event.func_call_id or 0,
         edge_use=edge_use,
     )

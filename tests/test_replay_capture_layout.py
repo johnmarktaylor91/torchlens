@@ -84,7 +84,7 @@ def test_replay_resolves_the_parent_in_its_capture_layout() -> None:
 
     trace = _sliced_trace()
     op = _linear_op(trace)
-    ref = op.args_template.args[0]
+    ref = op.call.args_template.args[0]
     value = _resolve_arg_component(ref, op, trace, {}, strict=True)
     assert value.stride() == (30, 1)
     assert value.storage_offset() == 0

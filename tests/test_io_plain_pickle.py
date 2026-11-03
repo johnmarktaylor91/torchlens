@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, trace as trace_fn
+from torchlens._utils._record_group_table import record_member
 
 
 class _PlainPickleModel(nn.Module):
@@ -471,7 +472,7 @@ def test_all_field_order_container_defaults_are_typed() -> None:
             partial.pop(field_name)
             restored = factory()
             restored.__setstate__(partial)
-            value = getattr(restored, field_name, None)
+            value = record_member(restored, field_name, None)
             assert isinstance(value, (list, dict, tuple, set)), (
                 f"{type(instance).__name__}.{field_name} restored as "
                 f"{type(value).__name__} (expected a container) when absent"

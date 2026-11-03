@@ -13,6 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.intervention.injection import attest_injected_ops
 
 transformers = pytest.importorskip("transformers")
@@ -87,5 +88,5 @@ def test_torchvision_block_splice_injection_persists_and_attests(tmp_path) -> No
     assert {row.status for row in report.rows} == {"attested"}
     # the model op family is untouched by the injected rows after load
     assert not any(
-        getattr(op, "injection_provenance", None) is not None for op in loaded._layer_list
+        record_member(op, "injection_provenance", None) is not None for op in loaded._layer_list
     )

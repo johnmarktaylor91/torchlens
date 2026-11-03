@@ -4626,9 +4626,9 @@ alphabetical order.
 | --- | --- |
 | `Op.activation_transform` | The callable applied to this Op's output before it is saved, or `None` |
 | `Op.arg_expressions` | Source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable |
-| `Op.arg_names` | Names of the arguments in this Op's function call |
+| `Op.call.arg_names` | Names of the arguments in this Op's function call |
 | `Op.args_summary` | Human-readable summary of this Op's positional arguments |
-| `Op.args_template` | Structural template of this Op's positional arguments, used to rebuild the call |
+| `Op.call.args_template` | Structural template of this Op's positional arguments, used to rebuild the call |
 | `Op.atomic_module` | The `Module` record for the atomic module this Op is the output of, or `None` |
 | `Op.atomic_module_address` | Module address, without the pass suffix, of the atomic module this Op outputs from, or `None` |
 | `Op.atomic_module_call` | Stored `ModuleCall` label for an atomic-module output Op, or `None` |
@@ -4660,6 +4660,11 @@ alphabetical order.
 | `Op.container` | Runtime container view for this Op, when available |
 | `Op.container_spec` | Rebuildable description of the container that holds this Op's output |
 | `Op.containers` | All input and output container views associated with this Op |
+| `Op.call` | How this Op's function was called: arguments, saved values, RNG and autocast state, and transform boundaries (`tl.types.OpCall`) |
+| `Op.call.call_id` | Identifier of the function call that produced this Op; Ops from one call share it |
+| `Op.call.func_transform_kind` | Kind of function transform at this boundary Op, such as `vmap` or `grad`, or `None` |
+| `Op.call.saved_args` | Positional argument values saved for this Op's call, or `None` when not saved |
+| `Op.call.tl_authored_root` | Whether this Op is the root of a TorchLens-authored call rather than a model call |
 | `Op.control_flow` | Conditional-branch facts of this Op: branch membership, terminal bools and arm children (`tl.types.OpControlFlow`) |
 | `Op.cost` | Compute, memory and timing facts of this Op (`tl.types.OpCost`) |
 | `Op.cost.activation_memory` | Bytes of this Op's output activation |
@@ -4679,16 +4684,16 @@ alphabetical order.
 | `Op.cost.param_memory` | Bytes used by the parameters consumed by this Op |
 | `Op.cost.transformed_activation_memory` | Bytes of this Op's transformed output activation, if one was kept |
 | `Op.derived_grad` | Backend-owned intermediate gradient payload for this Op, or `None` |
-| `Op.dropped_edge_tensor_args` | Argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture |
+| `Op.call.dropped_edge_tensor_args` | Argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture |
 | `Op.edge_uses` | Tuple of `EdgeUseRecord` entries, one per parent edge use captured for this Op |
 | `Op.equivalence_class` | Key of the equivalence class that loop detection assigned to this Op |
 | `Op.equivalent_ops` | Labels of other Ops in the same equivalence class (same function and arguments) |
-| `Op.func_autocast_state` | Autocast state in effect when this Op's function was called |
-| `Op.func_config` | Dict of lightweight hyperparameters captured from the call, such as `kernel_size` and `stride` |
-| `Op.func_id` | Portable key identifying the captured function this Op ran: its namespace, qualified name and dispatch kind |
-| `Op.func_non_tensor_args` | Flat list of all non-tensor arguments of this Op's function call |
+| `Op.call.autocast_state` | Autocast state in effect when this Op's function was called |
+| `Op.call.config` | Dict of lightweight hyperparameters captured from the call, such as `kernel_size` and `stride` |
+| `Op.call.func_id` | Portable key identifying the captured function this Op ran: its namespace, qualified name and dispatch kind |
+| `Op.call.non_tensor_args` | Flat list of all non-tensor arguments of this Op's function call |
 | `Op.func_qualname` | Qualified name of the function this Op called |
-| `Op.func_rng_states` | RNG state snapshots recorded for this Op's function call |
+| `Op.call.rng_states` | RNG state snapshots recorded for this Op's function call |
 | `Op.fx_call_index` | Call index in the `torch.fx`-style identity of this Op, when applicable |
 | `Op.fx_label` | A `torch.fx`-style label for this Op, or `None` when module context is unavailable |
 | `Op.fx_qualpath` | Module path in the `torch.fx`-style identity of this Op, when applicable |
@@ -4715,12 +4720,12 @@ alphabetical order.
 | `Op.has_output_descendant` | Whether any model output is a descendant of this Op |
 | `Op.has_parents` | Whether this Op has any parent Ops |
 | `Op.has_saved_activation` | Whether this Op's output activation was saved |
-| `Op.has_saved_args` | Whether this Op's argument values were saved |
+| `Op.call.has_saved_args` | Whether this Op's argument values were saved |
 | `Op.has_siblings` | Whether this Op shares parents with other Ops |
 | `Op.has_trainable_params` | Whether this Op consumes at least one trainable parameter |
 | `Op.in_multi_output` | Whether this Op's output came from a list, tuple, dict or set returned by a function |
 | `Op.in_submodule` | Whether this Op was computed inside a non-root module's forward |
-| `Op.injection_provenance` | Record of which intervention injected this Op and where, or `None` for ordinary model Ops |
+| `Op.call.injection_provenance` | Record of which intervention injected this Op and where, or `None` for ordinary model Ops |
 | `Op.input_activations` | Saved parent activations consumed by this Op, in `parents` order |
 | `Op.input_ancestors` | Labels of the model inputs that are ancestors of this Op |
 | `Op.input_containers` | Input container views consumed by this Op |
@@ -4741,7 +4746,7 @@ alphabetical order.
 | `Op.is_input` | Whether this Op is a model input |
 | `Op.is_internal_sink` | Whether this Op's result ends inside the model without reaching an output |
 | `Op.is_internal_source` | Whether this Op was created inside the model, such as by a factory call, rather than fed from an input |
-| `Op.is_internally_initialized` | Alias of `is_internal_source`: whether this Op was created inside the model rather than fed from an input |
+| `Op.call.is_internally_initialized` | Alias of `is_internal_source`: whether this Op was created inside the model rather than fed from an input |
 | `Op.is_module_input` | Whether this Op's output feeds at least one `ModuleCall` as an input |
 | `Op.is_module_output` | Whether this Op is the output of a `ModuleCall` |
 | `Op.is_orphan` | Whether this Op is disconnected from both the input and output flows |
@@ -4750,9 +4755,9 @@ alphabetical order.
 | `Op.control_flow.is_scalar_bool` | Whether this Op's output is a scalar bool |
 | `Op.control_flow.is_terminal_bool` | Whether this Op is a scalar bool that ends a chain of operations and decides control flow |
 | `Op.control_flow.is_terminal_conditional_bool` | Whether this terminal bool is the test of a recorded conditional |
-| `Op.is_transform` | Whether this Op is a function-transform boundary node |
+| `Op.call.is_func_transform` | Whether this Op is a function-transform boundary node |
 | `Op.kwargs_summary` | Human-readable summary of this Op's keyword arguments |
-| `Op.kwargs_template` | Structural template of this Op's keyword arguments, used to rebuild the call |
+| `Op.call.kwargs_template` | Structural template of this Op's keyword arguments, used to rebuild the call |
 | `Op.short_label` | Short Op label without the step index, such as `conv2d_1:2` |
 | `Op.short_layer_label` | Short layer label without the pass suffix or step index, such as `conv2d_1` |
 | `Op.lookup_keys` | Alternate keys that resolve to this Op in lookups |
@@ -4769,16 +4774,16 @@ alphabetical order.
 | `Op.multi_output_index` | 0-based position of this Op's output within its multi-output container |
 | `Op.multi_output_name` | Semantic name of this Op's output within its multi-output container, such as a dict key or namedtuple field |
 | `Op.multi_output_type` | Python class of the multi-output container this Op came from, or `None` |
-| `Op.non_tensor_kwargs` | Non-tensor keyword arguments of this Op's function call |
-| `Op.non_tensor_pos_args` | Non-tensor positional arguments of this Op's function call |
-| `Op.num_args_total` | Total number of arguments in this Op's function call |
+| `Op.call.non_tensor_kwargs` | Non-tensor keyword arguments of this Op's function call |
+| `Op.call.non_tensor_pos_args` | Non-tensor positional arguments of this Op's function call |
+| `Op.call.num_args_total` | Total number of arguments in this Op's function call |
 | `Op.num_inputs` | Number of parent Ops of this Op |
-| `Op.num_kwargs` | Number of keyword arguments in this Op's function call |
+| `Op.call.num_kwargs` | Number of keyword arguments in this Op's function call |
 | `Op.num_param_tensors_frozen` | Number of frozen parameter tensors consumed by this Op |
 | `Op.num_param_tensors_trainable` | Number of trainable parameter tensors consumed by this Op |
 | `Op.num_params_frozen` | Total number of frozen parameter elements consumed by this Op |
 | `Op.num_params_trainable` | Total number of trainable parameter elements consumed by this Op |
-| `Op.num_pos_args` | Number of positional arguments in this Op's function call |
+| `Op.call.num_pos_args` | Number of positional arguments in this Op's function call |
 | `Op.ordinal_index` | 0-based position of this Op in `trace.ops`; `trace[op.ordinal_index]` returns it |
 | `Op.out_ref` | Lazy reference to this Op's saved output blob in a saved bundle, or `None`; the tensor loads only when read |
 | `Op.output_containers` | Output container views associated with this Op |
@@ -4787,7 +4792,7 @@ alphabetical order.
 | `Op.output_of_modules` | Module addresses, without the pass suffix, whose output this Op is |
 | `Op.param_dtypes` | Dtypes of the parameters consumed by this Op |
 | `Op.param_shapes` | Shapes of the parameters consumed by this Op |
-| `Op.parent_arg_positions` | Mapping from call argument positions, positional and keyword, to the parent Op label used there |
+| `Op.call.parent_arg_positions` | Mapping from call argument positions, positional and keyword, to the parent Op label used there |
 | `Op.parent_param_ops` | Mapping from each consumed parameter's identifying barcode to its pass number |
 | `Op.parent_params` | The `nn.Parameter` objects consumed by this Op |
 | `Op.parents` | Labels of the Ops that directly feed this Op |
@@ -4796,21 +4801,21 @@ alphabetical order.
 | `Op.resolver_status` | Status of the backend's address resolution for this Op, such as `resolved` |
 | `Op.root_ancestors` | Labels of the root Ops at the start of the graph that this Op descends from |
 | `Op.save_activation` | Save the output tensor, and optionally the call arguments, for this Op |
-| `Op.saved_kwargs` | Keyword argument values saved for this Op's call, or `None` when not saved |
+| `Op.call.saved_kwargs` | Keyword argument values saved for this Op's call, or `None` when not saved |
 | `Op.siblings` | Labels of other Ops that share at least one parent with this Op |
 | `Op.control_flow.terminal_bool_for` | `(conditional_id, arm_index)` when this Op is the terminal bool of a conditional arm |
 | `Op.terminal_conditional_id` | Id of the conditional whose test this terminal bool decides, or `None` |
-| `Op.transform_chain` | Tuple of transform tags applied to the function this Op ran |
-| `Op.transform_config` | Configuration of the function transform for this transform-boundary Op |
-| `Op.transform_fn_name` | Name of the function wrapped by the transform at this boundary Op |
-| `Op.transform_fn_qualname` | Qualified name of the function wrapped by the transform at this boundary Op |
-| `Op.transform_fn_source` | Source location of the function wrapped by the transform at this boundary Op |
+| `Op.call.func_transform_chain` | Tuple of transform tags applied to the function this Op ran |
+| `Op.call.func_transform_config` | Configuration of the function transform for this transform-boundary Op |
+| `Op.call.func_transform_fn_name` | Name of the function wrapped by the transform at this boundary Op |
+| `Op.call.func_transform_fn_qualname` | Qualified name of the function wrapped by the transform at this boundary Op |
+| `Op.call.func_transform_fn_source` | Source location of the function wrapped by the transform at this boundary Op |
 | `Op.transformed_grad_dtype` | Dtype of this Op's saved transformed gradient |
 | `Op.transformed_grad_shape` | Shape of this Op's saved transformed gradient |
 | `Op.transformed_gradient_memory` | Bytes used by this Op's saved transformed gradient |
 | `Op.transformed_out_dtype` | Dtype of this Op's saved transformed output |
 | `Op.type_index` | 1-based position of this Op among Ops of the same type |
-| `Op.unattributed_tensor_args` | Tensor arguments that could not be attributed to a parent Op |
+| `Op.call.unattributed_tensor_args` | Tensor arguments that could not be attributed to a parent Op |
 | `Op.var_names` | Variable names the Op's result is assigned to at its call site; empty when unresolved |
 | `Op.visualizer_path` | PNG path used for the node thumbnail in graph renders, or `None` |
 
@@ -4819,7 +4824,7 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `Layer.activation_transform` | The callable applied to saved activations before they are stored, or `None` when no transform was set |
-| `Layer.arg_names` | Parameter names from the signature of the function this layer calls |
+| `Layer.call.arg_names` | Parameter names from the signature of the function this layer calls |
 | `Layer.backend_address` | Backend-native address of the op or state this layer stands for, as the capturing backend names it, or `None` |
 | `Layer.control_flow.bool_value` | The Python `bool` value of a scalar boolean layer, or `None` otherwise |
 | `Layer.buffer_overwrite_index` | Which overwrite of its buffer this layer represents |
@@ -4844,6 +4849,8 @@ alphabetical order.
 | `Layer.control_flow.entry_children` | List of labels of this layer's child ops whose edge from it enters a conditional arm |
 | `Layer.control_flow.role_stacks` | List of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under |
 | `Layer.control_flow.then_children` | List of labels of this layer's child ops that sit in a `then` arm of a conditional |
+| `Layer.call` | How this layer's function was called: argument counts and names, saved arguments, RNG state and parent argument positions (`tl.types.LayerCall`) |
+| `Layer.call.saved_args` | Positional arguments captured for this layer's function call, for single-pass layers |
 | `Layer.control_flow` | Conditional-branch facts of this layer: branch membership, terminal bools and arm children (`tl.types.LayerControlFlow`) |
 | `Layer.cost` | Compute, memory and timing facts of this Layer (`tl.types.LayerCost`) |
 | `Layer.cost.activation_memory` | Bytes of the representative pass's output activation |
@@ -4866,9 +4873,9 @@ alphabetical order.
 | `Layer.edges_vary_across_ops` | Whether the graph edges of this layer differ between its passes |
 | `Layer.equivalence_class` | Fingerprint string that groups ops repeating the same operation, used for loop detection |
 | `Layer.equivalent_ops` | Labels of the ops that share this layer's equivalence class |
-| `Layer.func_config` | Non-tensor configuration of the function call, stored as a dict |
+| `Layer.call.config` | Non-tensor configuration of the function call, stored as a dict |
 | `Layer.func_qualname` | Qualified name of the function this layer calls |
-| `Layer.func_rng_states` | RNG states captured for this layer's function call, for single-pass layers |
+| `Layer.call.rng_states` | RNG states captured for this layer's function call, for single-pass layers |
 | `Layer.fx_call_index` | The FX-style call index of a single-op layer |
 | `Layer.fx_label` | A `torch.fx`-style label for a single-op layer, or `None` |
 | `Layer.fx_qualpath` | The FX-style qualified path of a single-op layer, or `None` |
@@ -4919,13 +4926,13 @@ alphabetical order.
 | `Layer.module_call_depth` | Depth of module nesting around this layer |
 | `Layer.multi_output_index` | Position of this layer among the outputs of a multi-output function, or `None` |
 | `Layer.multi_output_name` | Name of this output within a multi-output result, derived from its container path, or `None` |
-| `Layer.num_args_total` | Total number of positional and keyword arguments passed to this layer's function |
-| `Layer.num_kwargs` | Number of keyword arguments passed to this layer's function |
+| `Layer.call.num_args_total` | Total number of positional and keyword arguments passed to this layer's function |
+| `Layer.call.num_kwargs` | Number of keyword arguments passed to this layer's function |
 | `Layer.num_param_tensors_frozen` | Number of frozen parameter tensors used by this layer |
 | `Layer.num_param_tensors_trainable` | Number of trainable parameter tensors used by this layer |
 | `Layer.num_params_frozen` | Number of frozen parameter elements used by this layer |
 | `Layer.num_params_trainable` | Number of trainable parameter elements used by this layer |
-| `Layer.num_pos_args` | Number of positional arguments passed to this layer's function |
+| `Layer.call.num_pos_args` | Number of positional arguments passed to this layer's function |
 | `Layer.op_labels` | Labels of the ops that belong to this layer |
 | `Layer.ordinal_index` | Ordinal index of this layer, read from its first op |
 | `Layer.output_descendants` | Labels of the model-output layers reachable downstream of this layer |
@@ -4933,14 +4940,14 @@ alphabetical order.
 | `Layer.output_of_modules` | Addresses of the modules whose output this layer is |
 | `Layer.param_dtypes` | Dtypes of the parameters used by this layer |
 | `Layer.param_shapes` | Shapes of the parameters used by this layer |
-| `Layer.parent_arg_positions` | Map from argument kind and position to the parent layer label, merged across ops |
+| `Layer.call.parent_arg_positions` | Map from argument kind and position to the parent layer label, merged across ops |
 | `Layer.parent_ops_per_layer` | Mapping from each parent layer label to the pass numbers of this layer's ops that connect from it |
 | `Layer.parent_params` | The parameter objects that feed this layer's operation |
 | `Layer.parents` | Union of parent layer labels across all ops of this layer, without pass suffixes |
 | `Layer.parents_per_pass` | Mapping from pass number to the parent layer labels (without pass suffixes) of that pass |
 | `Layer.raw_index` | Position of this layer's first op in raw capture order |
 | `Layer.resolver_status` | Whether the backend address resolves to a live object, as a string such as `resolved` or `metadata_only` |
-| `Layer.saved_kwargs` | Keyword arguments captured for this layer's function call, for single-pass layers |
+| `Layer.call.saved_kwargs` | Keyword arguments captured for this layer's function call, for single-pass layers |
 | `Layer.siblings` | Union across ops of the sibling layer labels, without pass suffixes |
 | `Layer.control_flow.terminal_bool_for` | The conditional that this terminal boolean decides, or `None` |
 | `Layer.total_gradient_memory` | Sum of gradient memory in bytes across all ops of this layer |
@@ -5357,6 +5364,12 @@ alphabetical order.
 <!-- end trace group views -->
 
 <!-- record group views: Op and Layer concern groups -->
+**`tl.types.LayerCall`**
+: How one Layer's function was called; per-pass members (`saved_args`, `saved_kwargs`, `rng_states`) require a single-pass layer; `layer.call` is the instance a Layer serves. `LayerCall.arg_names`: parameter names from the signature of the function this layer calls; `LayerCall.config`: non-tensor configuration of the function call, stored as a dict; `LayerCall.num_args_total`: total number of positional and keyword arguments passed to this layer's function; `LayerCall.num_kwargs`: number of keyword arguments passed to this layer's function; `LayerCall.num_pos_args`: number of positional arguments passed to this layer's function; `LayerCall.parent_arg_positions`: map from argument kind and position to the parent layer label, merged across ops; `LayerCall.rng_states`: rNG states captured for this layer's function call, for single-pass layers; `LayerCall.saved_args`: positional arguments captured for this layer's function call, for single-pass layers; `LayerCall.saved_kwargs`: keyword arguments captured for this layer's function call, for single-pass layers.
+
+**`tl.types.OpCall`**
+: How one Op's function was called; `op.call` is the instance an Op serves. `OpCall.arg_names`: names of the arguments in this Op's function call; `OpCall.args_template`: structural template of this Op's positional arguments, used to rebuild the call; `OpCall.autocast_state`: autocast state in effect when this Op's function was called; `OpCall.call_id`: identifier of the function call that produced this Op; Ops from one call share it; `OpCall.config`: dict of lightweight hyperparameters captured from the call, such as `kernel_size` and `stride`; `OpCall.dropped_edge_tensor_args`: argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture; `OpCall.func_id`: portable key identifying the captured function this Op ran: its namespace, qualified name and dispatch kind; `OpCall.func_transform_chain`: tuple of transform tags applied to the function this Op ran; `OpCall.func_transform_config`: configuration of the function transform for this transform-boundary Op; `OpCall.func_transform_fn_name`: name of the function wrapped by the transform at this boundary Op; `OpCall.func_transform_fn_qualname`: qualified name of the function wrapped by the transform at this boundary Op; `OpCall.func_transform_fn_source`: source location of the function wrapped by the transform at this boundary Op; `OpCall.func_transform_kind`: kind of function transform at this boundary Op, such as `vmap` or `grad`, or `None`; `OpCall.has_saved_args`: whether this Op's argument values were saved; `OpCall.injection_provenance`: record of which intervention injected this Op and where, or `None` for ordinary model Ops; `OpCall.is_func_transform`: whether this Op is a function-transform boundary node; `OpCall.is_internally_initialized`: alias of `is_internal_source`: whether this Op was created inside the model rather than fed from an input; `OpCall.kwargs_template`: structural template of this Op's keyword arguments, used to rebuild the call; `OpCall.non_tensor_args`: flat list of all non-tensor arguments of this Op's function call; `OpCall.non_tensor_kwargs`: non-tensor keyword arguments of this Op's function call; `OpCall.non_tensor_pos_args`: non-tensor positional arguments of this Op's function call; `OpCall.num_args_total`: total number of arguments in this Op's function call; `OpCall.num_kwargs`: number of keyword arguments in this Op's function call; `OpCall.num_pos_args`: number of positional arguments in this Op's function call; `OpCall.parent_arg_positions`: mapping from call argument positions, positional and keyword, to the parent Op label used there; `OpCall.rng_states`: rNG state snapshots recorded for this Op's function call; `OpCall.saved_args`: positional argument values saved for this Op's call, or `None` when not saved; `OpCall.saved_kwargs`: keyword argument values saved for this Op's call, or `None` when not saved; `OpCall.tl_authored_root`: whether this Op is the root of a TorchLens-authored call rather than a model call; `OpCall.unattributed_tensor_args`: tensor arguments that could not be attributed to a parent Op.
+
 **`tl.types.LayerControlFlow`**
 : Conditional-branch facts of one Layer; `layer.control_flow` is the instance a Layer serves. `LayerControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm; `LayerControlFlow.bool_value`: the Python `bool` value of a scalar boolean layer, or `None` otherwise; `LayerControlFlow.branch_stack_ops`: dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it; `LayerControlFlow.depth`: number of distinct conditionals this layer takes part in, derived on read from `in_conditionals`; `LayerControlFlow.elif_children`: dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm; `LayerControlFlow.else_children`: list of labels of this layer's child ops that sit in an `else` arm of a conditional; `LayerControlFlow.entry_children`: list of labels of this layer's child ops whose edge from it enters a conditional arm; `LayerControlFlow.in_conditionals`: ids of the conditionals this layer takes part in, as a test or inside an arm; `LayerControlFlow.is_in_conditional`: whether this layer takes part in any conditional role; `LayerControlFlow.is_in_conditional_body`: whether this layer sits in the body of a conditional arm; `LayerControlFlow.is_in_conditional_evaluation`: whether this layer computes the condition of a conditional arm; `LayerControlFlow.is_scalar_bool`: whether this layer's value is a scalar boolean; `LayerControlFlow.is_terminal_bool`: whether this layer is a scalar boolean that ends inside the model, such as a branch condition; `LayerControlFlow.role_stacks`: list of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under; `LayerControlFlow.terminal_bool_for`: the conditional that this terminal boolean decides, or `None`; `LayerControlFlow.then_children`: list of labels of this layer's child ops that sit in a `then` arm of a conditional.
 

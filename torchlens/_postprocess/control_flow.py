@@ -972,9 +972,9 @@ def _fix_buffer_layers(self: Trace) -> None:
             layer.input_ancestors.update(self[layer.buffer_source].input_ancestors)
             layer.root_ancestors.discard(layer._label_raw)
             layer.root_ancestors.update(self[layer.buffer_source].root_ancestors)
-            layer.parent_arg_positions["args"][0] = layer.buffer_source
-            if (self[layer.buffer_source].out is not None) and (layer.saved_args is not None):
-                layer.saved_args.append(
+            layer.call.parent_arg_positions["args"][0] = layer.buffer_source
+            if (self[layer.buffer_source].out is not None) and (layer.call.saved_args is not None):
+                layer.call.saved_args.append(
                     safe_copy(self[layer.buffer_source].out, detach_tensor=True)
                 )
 
@@ -1230,9 +1230,9 @@ def _merge_buffer_entries(
             self[child_layer].internal_source_parents.append(source_buffer._label_raw)
 
         for arg_type in ["args", "kwargs"]:
-            for arg_label, arg_val in self[child_layer].parent_arg_positions[arg_type].items():
+            for arg_label, arg_val in self[child_layer].call.parent_arg_positions[arg_type].items():
                 if arg_val == buffer_to_remove._label_raw:
-                    self[child_layer].parent_arg_positions[arg_type][arg_label] = (
+                    self[child_layer].call.parent_arg_positions[arg_type][arg_label] = (
                         source_buffer._label_raw
                     )
 
@@ -1311,7 +1311,7 @@ def _merge_buffer_entries(
         # CRDNN LiGRU per-forward ``drop_mask_te.to(device)`` reassign buffers).
         if layer.buffer_source == buffer_to_remove._label_raw:
             layer.buffer_source = source_buffer._label_raw
-            arg_positions = layer.parent_arg_positions.get("args")
+            arg_positions = layer.call.parent_arg_positions.get("args")
             if arg_positions is not None and arg_positions.get(0) == buffer_to_remove._label_raw:
                 arg_positions[0] = source_buffer._label_raw
 
@@ -1357,7 +1357,7 @@ def _finish_deferred_buffer_removals(
         if replacement is not None:
             old_source = layer.buffer_source
             layer.buffer_source = replacement
-            arg_positions = layer.parent_arg_positions.get("args")
+            arg_positions = layer.call.parent_arg_positions.get("args")
             if arg_positions is not None and arg_positions.get(0) == old_source:
                 arg_positions[0] = replacement
 

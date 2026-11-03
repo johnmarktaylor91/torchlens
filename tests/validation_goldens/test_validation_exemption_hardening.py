@@ -203,7 +203,7 @@ def test_setitem_blank_destination_partial_overwrite_is_not_exempt() -> None:
 
     trace = _trace_saving_args(PartialSetitemDestinationModel(), torch.randn(4, 2))
     setitem_op = next(op for op in trace._layer_list if op.func_name == "__setitem__")
-    destination_label = setitem_op.parent_arg_positions["args"][0]
+    destination_label = setitem_op.call.parent_arg_positions["args"][0]
 
     assert not _check_setitem_exempt(trace, setitem_op, [destination_label])
 
@@ -224,7 +224,7 @@ def test_setitem_duplicate_advanced_index_destination_is_not_exempt() -> None:
 
     trace = _trace_saving_args(DuplicateIndexSetitemDestinationModel(), torch.tensor([3.0, 4.0]))
     setitem_op = next(op for op in trace._layer_list if op.func_name == "__setitem__")
-    destination_label = setitem_op.parent_arg_positions["args"][0]
+    destination_label = setitem_op.call.parent_arg_positions["args"][0]
 
     assert not _check_setitem_exempt(trace, setitem_op, [destination_label])
 
@@ -1289,12 +1289,12 @@ def test_to_tensor_template_exemption_refuses_perturbed_data_source() -> None:
     )
 
     source_decision = _posthoc_structural_output_decision(
-        layer, layer.saved_args, ["source_parent"]
+        layer, layer.call.saved_args, ["source_parent"]
     )
     assert not source_decision.exempt
 
     template_decision = _posthoc_structural_output_decision(
-        layer, layer.saved_args, ["template_parent"]
+        layer, layer.call.saved_args, ["template_parent"]
     )
     assert template_decision.exempt
     assert template_decision.reason == "type_template_output"
@@ -1302,7 +1302,7 @@ def test_to_tensor_template_exemption_refuses_perturbed_data_source() -> None:
     # Missing position metadata fails closed, like the *_like template proof.
     unmapped = _fake_layer(
         func_name="to",
-        saved_args=layer.saved_args,
+        saved_args=layer.call.saved_args,
         saved_kwargs={},
         parent_arg_positions={"args": {}, "kwargs": {}},
         out=layer.out,
@@ -1913,7 +1913,7 @@ def test_structural_arg_exemption_covers_keyword_parent_positions() -> None:
 
     assert result is True
     cross_entropy_op = next(op for op in trace._layer_list if op.func_name == "cross_entropy")
-    assert cross_entropy_op.parent_arg_positions["kwargs"]["target"]
+    assert cross_entropy_op.call.parent_arg_positions["kwargs"]["target"]
     perturbation_decisions = [
         decision
         for decision in trace.validation_replay_status.decisions
@@ -2010,7 +2010,9 @@ def test_selective_save_interior_gap_is_unverified() -> None:
     assert "not_saved_by_user" not in status.exempted_reason_counts
     computational_ops = [op for op in trace._layer_list if op.func is not None]
     assert computational_ops
-    assert all(op.has_saved_args and op.saved_args is not None for op in computational_ops)
+    assert all(
+        op.call.has_saved_args and op.call.saved_args is not None for op in computational_ops
+    )
 
 
 def test_not_saved_by_user_requires_exact_negative_predicate_decision() -> None:
@@ -2492,8 +2494,8 @@ def test_norm_running_stat_exemption_uses_position_and_training_flag() -> None:
     assert not _check_norm_running_stat_exempt(None, layer, ["input"])  # type: ignore[arg-type]
 
     eval_layer = _fake_layer(
-        saved_args=layer.saved_args[:5] + (False,),
-        parent_arg_positions=layer.parent_arg_positions,
+        saved_args=layer.call.saved_args[:5] + (False,),
+        parent_arg_positions=layer.call.parent_arg_positions,
     )
     assert not _check_norm_running_stat_exempt(  # type: ignore[arg-type]
         None, eval_layer, ["running_mean"]

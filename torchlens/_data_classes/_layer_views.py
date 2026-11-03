@@ -277,12 +277,12 @@ def layer_parent_arg_positions(layer: Layer) -> dict[str, dict[Any, str]]:
     """
 
     if layer.num_passes == 1:
-        return cast(dict[str, dict[Any, str]], layer.ops[0].parent_arg_positions)
+        return cast(dict[str, dict[Any, str]], layer.ops[0].call.parent_arg_positions)
 
     result: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
     for pass_log in layer.ops.values():
         for arg_type in ["args", "kwargs"]:
-            for arg_key, layer_label in pass_log.parent_arg_positions[arg_type].items():
+            for arg_key, layer_label in pass_log.call.parent_arg_positions[arg_type].items():
                 no_pass = layer.source_trace[layer_label].layer_label
                 if arg_key not in result[arg_type]:
                     result[arg_type][arg_key] = no_pass

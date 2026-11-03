@@ -545,7 +545,7 @@ def _replace_layer_names_for_layer_entry(
             set_entry_field(scalar_field, mapping[raw_value])
 
     # Fix the arg locations field:
-    arg_locs = getattr(layer_entry, "parent_arg_positions", None)
+    arg_locs = record_member(layer_entry, "parent_arg_positions", None)
     if arg_locs:
         for arg_type in ("args", "kwargs"):
             sub = arg_locs[arg_type]
@@ -602,10 +602,10 @@ def _replace_layer_names_for_layer_entry(
             "_edge_uses", [_rename_label_dataclass(record, mapping) for record in edge_uses]
         )
 
-    args_template = getattr(layer_entry, "args_template", None)
+    args_template = record_member(layer_entry, "args_template", None)
     if args_template is not None:
         set_entry_field("args_template", _rename_template_parent_refs(args_template, mapping))
-    kwargs_template = getattr(layer_entry, "kwargs_template", None)
+    kwargs_template = record_member(layer_entry, "kwargs_template", None)
     if kwargs_template is not None:
         set_entry_field("kwargs_template", _rename_template_parent_refs(kwargs_template, mapping))
     interventions = getattr(layer_entry, "edits", None)

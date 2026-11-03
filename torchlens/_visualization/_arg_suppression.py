@@ -34,6 +34,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ..backends._backend_names import TORCH_BACKEND_NAME
 
 if TYPE_CHECKING:  # typing only
@@ -160,7 +161,7 @@ def suppressed_arg_keys_for_record(
 ) -> frozenset[str]:
     """Return the constructor-arg keys provably redundant for one record."""
 
-    config = getattr(node, "func_config", None)
+    config = record_member(node, "func_config", None)
     if not config:
         return frozenset()
     normalized_type = str(record_type(node, "")).lower().replace("_", "")

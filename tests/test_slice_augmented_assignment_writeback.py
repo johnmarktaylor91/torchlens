@@ -50,8 +50,8 @@ def test_writeback_setitem_parents_are_the_base_and_the_view() -> None:
     setitems = [op for op in trace.ops if op.func_name == "__setitem__"]
     assert len(setitems) == 2
     for op in setitems:
-        base_parent = op.parent_arg_positions["args"][0]
-        value_parent = op.parent_arg_positions["args"][2]
+        base_parent = op.call.parent_arg_positions["args"][0]
+        value_parent = op.call.parent_arg_positions["args"][2]
         assert base_parent != value_parent
         assert value_parent.startswith("iadd")
 

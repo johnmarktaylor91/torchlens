@@ -69,7 +69,7 @@ def _fail_uncorroborated_edge_entries(
 
     for store_key, payload in entries.items():
         arg_kind, arg_path = store_key
-        address = (target_op.func_call_id, arg_kind, tuple(arg_path))
+        address = (target_op.call.call_id, arg_kind, tuple(arg_path))
         stamp = stamps.get(store_key)
         if address not in fire_addresses or not stamp or not stamp.get("verdict"):
             record_validation_failure(

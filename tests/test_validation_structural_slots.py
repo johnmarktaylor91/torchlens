@@ -92,12 +92,12 @@ def _packed_trace(kind: str) -> tuple[Any, Any]:
 def test_packed_recurrence_batch_sizes_slot_is_exempt() -> None:
     for kind in ("gru", "tanh", "relu"):
         trace, op = _packed_trace(kind)
-        assert _decision(trace, op, op.parent_arg_positions["args"][1]) == _EXEMPT
+        assert _decision(trace, op, op.call.parent_arg_positions["args"][1]) == _EXEMPT
 
 
 def test_packed_recurrence_data_slot_still_fails_when_frozen() -> None:
     trace, op = _packed_trace("gru")
-    _assert_frozen_edge_fails(trace, op, op.parent_arg_positions["args"][0])
+    _assert_frozen_edge_fails(trace, op, op.call.parent_arg_positions["args"][0])
 
 
 # ------------------------------------------------------- expand pinned size
@@ -118,7 +118,7 @@ class _ExpandToWidth(nn.Module):
 
 
 def _expand_size_parent(op: Any) -> str:
-    return op.parent_arg_positions["args"][2]
+    return op.call.parent_arg_positions["args"][2]
 
 
 def test_expand_size_pinned_to_the_input_extent_is_exempt() -> None:
@@ -154,14 +154,14 @@ def test_bool_mask_at_a_later_index_slot_is_exempt() -> None:
     assert _validates(_MaskedColumnWrite(), torch.randn(2, 4))
     trace = _capture(_MaskedColumnWrite(), torch.randn(2, 4))
     op = _op(trace, "__setitem__")
-    assert _decision(trace, op, op.parent_arg_positions["args"][(1, 1)]) == _EXEMPT
+    assert _decision(trace, op, op.call.parent_arg_positions["args"][(1, 1)]) == _EXEMPT
 
 
 def test_masked_write_value_and_destination_still_fail_when_frozen() -> None:
     for slot in (2, 0):
         trace = _capture(_MaskedColumnWrite(), torch.randn(2, 4))
         op = _op(trace, "__setitem__")
-        _assert_frozen_edge_fails(trace, op, op.parent_arg_positions["args"][slot])
+        _assert_frozen_edge_fails(trace, op, op.call.parent_arg_positions["args"][slot])
 
 
 class _MaskedColumnScalarWrite(nn.Module):
@@ -210,10 +210,10 @@ def test_mask_with_a_scalar_or_broadcast_value_still_fails_when_frozen() -> None
     for model in (_MaskedColumnScalarWrite(), _MaskedColumnBroadcastWrite()):
         trace = _capture(model, torch.randn(2, 4))
         op = _op(trace, "__setitem__")
-        _assert_frozen_edge_fails(trace, op, op.parent_arg_positions["args"][(1, 1)])
+        _assert_frozen_edge_fails(trace, op, op.call.parent_arg_positions["args"][(1, 1)])
 
 
 def test_integer_index_at_a_later_slot_still_fails_when_frozen() -> None:
     trace = _capture(_IndexedColumnWrite(), torch.randn(2, 4))
     op = _op(trace, "__setitem__")
-    _assert_frozen_edge_fails(trace, op, op.parent_arg_positions["args"][(1, 1)])
+    _assert_frozen_edge_fails(trace, op, op.call.parent_arg_positions["args"][(1, 1)])

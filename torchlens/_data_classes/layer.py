@@ -41,7 +41,7 @@ import weakref
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
-from .._constants import LAYER_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
+from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import InvalidArgumentError, RecordBindingError
 from .._io import (
     TLSPEC_VERSION,
@@ -89,7 +89,9 @@ from ._layer_views import (  # noqa: F401  (materialize_layer_mirrors is re-expo
     layer_total_macs_forward,
     materialize_layer_mirrors,
 )
+from ._record_group_base import _LAYER_DELEGATED_PASS_FIELDS
 from ._record_groups import LayerControlFlow, LayerCost, MovedMemberField
+from ._record_groups_call import LayerCall
 from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items
 from ._value_repr import layer_card, layer_repr_line
@@ -102,8 +104,6 @@ if TYPE_CHECKING:
     from .op import Op
     from .trace import Trace
 
-
-_LAYER_DELEGATED_PASS_FIELDS = frozenset((*LAYER_PASS_LOG_FIELD_ORDER, "out_ref", "grad_ref"))
 
 # Typed container defaults for every non-Optional container field Layer
 # stores directly (as opposed to delegating to ``self.ops[i]``). Same defect
@@ -334,10 +334,10 @@ class Layer(_SelectionOperand):
         grad_fn_object_id: Any
         grad_fn_handle: Any
         grad_fn: Any
-        arg_names: Any
-        num_args_total: Any
-        num_pos_args: Any
-        num_kwargs: Any
+        _call_arg_names: Any
+        _call_num_args_total: Any
+        _call_num_pos_args: Any
+        _call_num_kwargs: Any
         in_multi_output: Any
         multi_output_index: Any
         multi_output_name: Any
@@ -349,10 +349,10 @@ class Layer(_SelectionOperand):
         device_ref: Any
         backend_address: Any
         resolver_status: Any
-        activation_memory: Any
-        transformed_activation_memory: Any
-        autograd_memory: Any
-        total_autograd_memory: Any
+        _cost_activation_memory: Any
+        _cost_transformed_activation_memory: Any
+        _cost_autograd_memory: Any
+        _cost_total_autograd_memory: Any
         num_autograd_tensors: Any
         output_device: Any
         visualizer_path: Any
@@ -363,16 +363,16 @@ class Layer(_SelectionOperand):
         transformed_grad_shape: Any
         transformed_grad_dtype: Any
         transformed_gradient_memory: Any
-        flops_forward: Any
-        flops_backward: Any
+        _cost_flops_forward: Any
+        _cost_flops_backward: Any
         _param_barcodes: Any
         _param_logs: Any
         param_shapes: Any
         num_params: Any
         num_params_trainable: Any
         num_params_frozen: Any
-        total_param_memory: Any
-        func_config: Any
+        _cost_total_param_memory: Any
+        _call_config: Any
         equivalence_class: Any
         is_input: Any
         input_was_parameter: Any
@@ -387,17 +387,17 @@ class Layer(_SelectionOperand):
         buffer_source_func_name: Any
         is_internal_source: Any
         is_internal_sink: Any
-        is_terminal_bool: Any
-        is_scalar_bool: Any
-        bool_value: Any
+        _control_flow_is_terminal_bool: Any
+        _control_flow_is_scalar_bool: Any
+        _control_flow_bool_value: Any
         module: Any
         modules: Any
         output_of_modules: Any
         output_of_module_calls: Any
-        conditional_entry_children: Any
-        conditional_then_children: Any
-        conditional_elif_children: Any
-        conditional_else_children: Any
+        _control_flow_entry_children: Any
+        _control_flow_then_children: Any
+        _control_flow_elif_children: Any
+        _control_flow_else_children: Any
         has_input_ancestor: Any
         io_role: Any
         buffer_pass: Any
@@ -588,6 +588,12 @@ class Layer(_SelectionOperand):
         """Conditional and branch facts of this Layer (``layer.control_flow.depth``)."""
 
         return LayerControlFlow(self)
+
+    @property
+    def call(self) -> LayerCall:
+        """How this Layer's function was called (``layer.call.config``)."""
+
+        return LayerCall(self)
 
     @property
     def macs_backward(self) -> Macs | None:
@@ -1084,28 +1090,6 @@ class Layer(_SelectionOperand):
         return cast(bool, self._single_pass_or_error("has_saved_activation"))
 
     @property
-    def saved_args(self) -> Any:
-        """Return captured positional arguments for a single-pass layer.
-
-        Returns
-        -------
-        Any
-            Captured positional arguments from the only pass.
-        """
-        return self._single_pass_or_error("saved_args")
-
-    @property
-    def saved_kwargs(self) -> Any:
-        """Return captured keyword arguments for a single-pass layer.
-
-        Returns
-        -------
-        Any
-            Captured keyword arguments from the only pass.
-        """
-        return self._single_pass_or_error("saved_kwargs")
-
-    @property
     def grad(self) -> Any:
         """Return the saved grad for a single-pass layer.
 
@@ -1150,17 +1134,6 @@ class Layer(_SelectionOperand):
             Function call stack from the only pass.
         """
         return self._single_pass_or_error("code_context")
-
-    @property
-    def func_rng_states(self) -> Any:
-        """Return RNG states captured for a single-pass layer.
-
-        Returns
-        -------
-        Any
-            RNG state snapshot from the only pass.
-        """
-        return self._single_pass_or_error("func_rng_states")
 
     @property
     def pass_index(self) -> int:
@@ -1366,15 +1339,6 @@ class Layer(_SelectionOperand):
     def leaf_module_ops(self) -> set[Any]:
         """Set of module ops exited across all ops."""
         return layer_leaf_module_ops(self)
-
-    @property
-    def parent_arg_positions(self) -> dict[str, dict[Any, str]]:
-        """Merged parent_arg_positions across ops (set-union).
-
-        For single-pass layers, delegates to ops[0].
-        For multi-pass, merges arg locs using set-union of no-pass labels.
-        """
-        return layer_parent_arg_positions(self)
 
     # ********************************************
     # ******* Fallback __getattr__ ***************
@@ -1634,8 +1598,8 @@ class Layer(_SelectionOperand):
         s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.cost.activation_memory}"
         if not self.is_input:
             s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name})"
-            if self.func_config:
-                config_str = format_config_items(self.func_config)
+            if self.call.config:
+                config_str = format_config_items(self.call.config)
                 s += f"\n\tConfig: {config_str}"
         if self.module is not None:
             s += f"\n\tComputed inside module: {self.module}"

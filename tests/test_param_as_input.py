@@ -253,9 +253,9 @@ def test_parameter_input_replay_template_uses_parent_ref() -> None:
     trace = tl.trace(model, z, capture=tl.options.CaptureOptions(replayable=True))
     first_op = _first_non_boundary_op(trace)
 
-    assert first_op.args_template is not None
-    assert isinstance(first_op.args_template.args[0], ParentRef)
-    assert first_op.args_template.args[0].parent_label == trace.input_layers[0]
+    assert first_op.call.args_template is not None
+    assert isinstance(first_op.call.args_template.args[0], ParentRef)
+    assert first_op.call.args_template.args[0].parent_label == trace.input_layers[0]
 
 
 def test_registered_model_parameter_fed_as_input_traces() -> None:

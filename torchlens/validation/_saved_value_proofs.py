@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
+from .._utils._record_group_table import record_member
 from ._posthoc_decision import PosthocPerturbDecision
 from ._sdpa_value_proofs import _output_equals_value_rows, sdpa_softmax_rows_well_defined
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
@@ -107,7 +108,7 @@ def _perturbed_arg_keys(layer: Op, layers_to_perturb: list[str]) -> set[Any] | N
 
     if len(layers_to_perturb) != 1:
         return None
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     label = layers_to_perturb[0]
     kwarg_slots = _KWARG_SLOTS.get(getattr(layer, "func_name", None) or "", {})
     keys: set[Any] = set()
@@ -227,7 +228,7 @@ def _pow_decision(layer: Op, keys: set[Any], args: tuple[Any, ...]) -> PosthocPe
 def _pow_zero_exponent_decision(layer: Op, args: tuple[Any, ...]) -> PosthocPerturbDecision:
     """Exempt the base of a power whose saved exponent is all zero."""
 
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     exponent = args[1] if len(args) > 1 else kwargs.get("exponent")
     if exponent is None or not _is_all_zero_value(exponent):
         return _NOT_PROVED
@@ -264,7 +265,7 @@ def _sdpa_singleton_key_decision(
 
     if keys != {3} or len(args) < 3 or not isinstance(args[1], torch.Tensor):
         return _NOT_PROVED
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     mask = kwargs.get("attn_mask", args[3] if len(args) > 3 else None)
     if not (isinstance(mask, torch.Tensor) and mask.is_floating_point()):
         return _NOT_PROVED

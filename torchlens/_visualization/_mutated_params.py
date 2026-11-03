@@ -25,6 +25,7 @@ from urllib.parse import quote as _percent_quote
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
 
+from .._utils._record_group_table import record_member
 from ._render_common import (
     FROZEN_PARAMS_BG_COLOR,
     TRAINABLE_PARAMS_BG_COLOR,
@@ -128,7 +129,7 @@ def _receiver_param(op: Any) -> Any | None:
     param_logs = tuple((op._param_logs if isinstance(op, (Op, Layer)) else ()) or ())
     if not param_logs:
         return None
-    positions = getattr(op, "parent_arg_positions", None) or {}
+    positions = record_member(op, "parent_arg_positions", None) or {}
     arg_positions = positions.get("args", {}) if isinstance(positions, Mapping) else {}
     if 0 in arg_positions:
         return None

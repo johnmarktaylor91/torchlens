@@ -523,7 +523,7 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
     for layer in trace._layer_list:
         if _is_func_call_id_exempt(layer):
             continue
-        func_call_id = getattr(layer, "func_call_id", None)
+        func_call_id = record_member(layer, "func_call_id", None)
         if func_call_id is None:
             raise MetadataInvariantError(
                 name,
@@ -559,6 +559,7 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
 from ._invariants_backward_flow import (  # noqa: E402
     _is_func_call_id_exempt,
     _plain_func_call_group_signature,

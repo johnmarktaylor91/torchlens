@@ -16,6 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.bridge import sae as sae_bridge
 from torchlens.intervention.types import LiteralValue, Unsupported
 
@@ -69,7 +70,7 @@ def test_ellipsis_is_stored_as_a_literal_on_gemma_class_indexing() -> None:
     trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     stored_ellipses = 0
     for op in trace._layer_list:
-        template = getattr(op, "args_template", None)
+        template = record_member(op, "args_template", None)
         for component in getattr(template, "args", ()):
             for leaf in _template_leaves(component):
                 assert not (isinstance(leaf, Unsupported) and "ellipsis" in leaf.reason), (

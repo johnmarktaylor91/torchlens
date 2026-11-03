@@ -82,10 +82,10 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
         if getattr(layer_entry, "transformed_out", None) is not None:
             tensors_to_undecorate.append(layer_entry.transformed_out)
 
-        if layer_entry.saved_args:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.saved_args))
-        if layer_entry.saved_kwargs:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.saved_kwargs))
+        if layer_entry.call.saved_args:
+            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.call.saved_args))
+        if layer_entry.call.saved_kwargs:
+            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.call.saved_kwargs))
 
     for t in tensors_to_undecorate:
         clear_meta(t)

@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
 
@@ -179,7 +181,7 @@ def _index_put_destination_is_fully_overwritten(
         through).
     """
 
-    args = layer.saved_args
+    args = layer.call.saved_args
     if not isinstance(perturbed_tensor, torch.Tensor):
         return False
     if args is None or len(args) < 3:
@@ -196,8 +198,8 @@ def _index_put_destination_is_fully_overwritten(
     accumulate = False
     if len(args) > 3:
         accumulate = bool(args[3])
-    elif "accumulate" in (layer.saved_kwargs or {}):
-        accumulate = bool(layer.saved_kwargs["accumulate"])
+    elif "accumulate" in (layer.call.saved_kwargs or {}):
+        accumulate = bool(layer.call.saved_kwargs["accumulate"])
     if accumulate:
         return False
     # index_put indices are an advanced-indexing tuple/list of LongTensors.
@@ -280,8 +282,8 @@ def _get_scatter_destination_dim_index(
 
     if getattr(layer, "func_name", None) not in _OVERWRITE_SCATTER_FUNC_NAMES:
         return None
-    args = layer.saved_args
-    kwargs = layer.saved_kwargs
+    args = layer.call.saved_args
+    kwargs = layer.call.saved_kwargs
     if len(args) < 1 or not isinstance(args[0], torch.Tensor):
         return None
     if kwargs.get("reduce") is not None or (len(args) > 4 and args[4] is not None):
@@ -365,7 +367,7 @@ def _perturbed_parents_only_occupy_out_kwarg(layer: Op, layers_to_perturb: list[
 
     if not layers_to_perturb:
         return False
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     arg_positions = positions.get("args", {}) or {}
     kwarg_positions = positions.get("kwargs", {}) or {}
     for perturbed_label in layers_to_perturb:

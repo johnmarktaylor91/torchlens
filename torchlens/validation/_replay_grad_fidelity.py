@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._grad_flags import _mirror_captured_requires_grad, _snapshot_grad_flags
 
 if TYPE_CHECKING:
@@ -117,7 +118,9 @@ def replay_copy_for_slot(
 
     from .core import _op_for_validation_label
 
-    parent_label = (getattr(layer, "parent_arg_positions", {}) or {}).get(arg_type, {}).get(key)
+    parent_label = (
+        (record_member(layer, "parent_arg_positions", {}) or {}).get(arg_type, {}).get(key)
+    )
     parent_layer = None
     if parent_label is not None:
         try:
@@ -174,7 +177,7 @@ def _captured_slot_grad_flags(
 
     try:
         snapshot = _read_replay_arg_value(
-            tuple(layer.saved_args or ()), dict(layer.saved_kwargs or {}), arg_type, key
+            tuple(layer.call.saved_args or ()), dict(layer.call.saved_kwargs or {}), arg_type, key
         )
     except (IndexError, KeyError, TypeError):
         # No snapshot at this position (the parent fills a slot the saved args

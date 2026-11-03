@@ -23,6 +23,7 @@ from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
 from .._selection.resolver import _resolve_sites
+from .._utils._record_group_table import record_member
 from .._utils.hashing import sha256_file
 from ..intervention._resolver_registry import (
     function_registry_key_from_callable,
@@ -710,8 +711,8 @@ def _function_key_for_layer(layer: Any) -> FunctionRegistryKey | None:
         Function registry key or ``None`` for source nodes.
     """
 
-    template = getattr(layer, "args_template", None)
-    key = getattr(template, "func_id", None)
+    template = record_member(layer, "args_template", None)
+    key = record_member(template, "func_id", None)
     if isinstance(key, FunctionRegistryKey):
         return key
     func = getattr(layer, "func", None)

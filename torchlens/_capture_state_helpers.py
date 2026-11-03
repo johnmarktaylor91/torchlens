@@ -1810,8 +1810,8 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
             if isinstance(value, torch.Tensor):
                 layer._internal_set(field_name, value.detach().cpu())
         layer.grad_fn_handle = None
-        layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
-        layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
+        layer._internal_set("saved_args", _detach_nested_for_cache(layer.call.saved_args))
+        layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.call.saved_kwargs))
     for layer_log in trace._layer_logs.values():
         # ``Layer.transformed_out``/``transformed_grad`` are read-only proxies that read
         # through to the underlying ``Layer.ops[i]`` -- the real tensors live on the Op

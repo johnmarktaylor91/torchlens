@@ -86,8 +86,8 @@ def test_rms_norm_zero_weight_is_proved() -> None:
     """``rms_norm(input, normalized_shape, weight, eps)`` reads weight at args[2]."""
 
     op = _FakeNormOp("rms_norm", torch.zeros(4), arg_labels={0: "x", 2: "weight"})
-    op.saved_args = (torch.randn(2, 4), (4,), torch.zeros(4), None)
-    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.saved_args) is True
+    op._call_saved_args = (torch.randn(2, 4), (4,), torch.zeros(4), None)
+    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is True
 
 
 @pytest.mark.parametrize("func_name", ["group_norm", "layer_norm"])
@@ -95,10 +95,10 @@ def test_zero_weight_exempts_only_the_input_edge(func_name: str) -> None:
     """Input is exempt under a zero weight; weight and bias never are."""
 
     op = _FakeNormOp(func_name, torch.zeros(4))
-    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.saved_args) is True
-    assert norm_input_annihilated_by_zero_weight(op, ["weight"], op.saved_args) is False
-    assert norm_input_annihilated_by_zero_weight(op, ["bias"], op.saved_args) is False
-    decision = _posthoc_value_proof_decision(op, ["x"], op.saved_args)
+    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is True
+    assert norm_input_annihilated_by_zero_weight(op, ["weight"], op.call.saved_args) is False
+    assert norm_input_annihilated_by_zero_weight(op, ["bias"], op.call.saved_args) is False
+    decision = _posthoc_value_proof_decision(op, ["x"], op.call.saved_args)
     assert decision.exempt is True
     assert decision.reason == "multiplicative_zero_annihilator"
 
@@ -112,7 +112,7 @@ def test_nonzero_missing_or_empty_weight_proves_nothing(weight: object) -> None:
     """Only a non-empty, exactly zero weight tensor annihilates the input."""
 
     op = _FakeNormOp("group_norm", weight)
-    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.saved_args) is False
+    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is False
 
 
 def test_input_also_feeding_another_slot_stays_strict() -> None:
@@ -130,24 +130,24 @@ def test_non_finite_saved_output_stays_strict() -> None:
     """``0 * inf`` is NaN: a non-finite saved output means the input reached it."""
 
     op = _FakeNormOp("group_norm", torch.zeros(4), out=torch.full((2, 4, 3), float("nan")))
-    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.saved_args) is False
+    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is False
 
 
 def test_other_ops_and_multi_parent_perturbations_are_not_proved() -> None:
     """The proof is scoped to the three normalizations and one perturbed parent."""
 
     op = _FakeNormOp("batch_norm", torch.zeros(4))
-    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.saved_args) is False
+    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is False
     op = _FakeNormOp("group_norm", torch.zeros(4))
-    assert norm_input_annihilated_by_zero_weight(op, ["x", "bias"], op.saved_args) is False
+    assert norm_input_annihilated_by_zero_weight(op, ["x", "bias"], op.call.saved_args) is False
 
 
 def test_weight_keyword_is_read_when_not_positional() -> None:
     """``F.group_norm(x, 2, weight=w)`` records the weight as a keyword."""
 
     op = _FakeNormOp("group_norm", None)
-    op.saved_args = (torch.randn(2, 4, 3), 2)
-    op.saved_kwargs = {"weight": torch.zeros(4)}
-    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.saved_args) is True
-    op.saved_kwargs = {"weight": torch.ones(4)}
-    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.saved_args) is False
+    op._call_saved_args = (torch.randn(2, 4, 3), 2)
+    op._call_saved_kwargs = {"weight": torch.zeros(4)}
+    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is True
+    op._call_saved_kwargs = {"weight": torch.ones(4)}
+    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is False

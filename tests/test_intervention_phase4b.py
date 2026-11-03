@@ -193,7 +193,7 @@ def test_intervention_ready_records_unique_container_paths_for_multi_output_op()
 
     split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
-    assert len({layer.func_call_id for layer in split_layers}) == 1
+    assert len({layer.call.call_id for layer in split_layers}) == 1
     assert len({layer.container_path for layer in split_layers}) == 2
     assert {type(layer.container_path[0]) for layer in split_layers} == {TupleIndex}
     assert all(layer.container_spec is not None for layer in split_layers)
@@ -234,7 +234,9 @@ def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None
     )
 
     templates = [
-        layer.args_template for layer in log._layer_list if layer.args_template is not None
+        layer.call.args_template
+        for layer in log._layer_list
+        if layer.call.args_template is not None
     ]
     flattened = [component for template in templates for component in template.args]
 
@@ -274,8 +276,8 @@ def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> N
     edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:
-        loc_labels = set(layer.parent_arg_positions["args"].values()) | set(
-            layer.parent_arg_positions["kwargs"].values()
+        loc_labels = set(layer.call.parent_arg_positions["args"].values()) | set(
+            layer.call.parent_arg_positions["kwargs"].values()
         )
         edge_labels = {
             log._raw_to_final_layer_labels.get(edge.parent_label, edge.parent_label)
@@ -287,7 +289,7 @@ def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> N
             == layer.layer_label
             for edge in layer._edge_uses
         )
-        assert all(edge.child_func_call_id == layer.func_call_id for edge in layer._edge_uses)
+        assert all(edge.child_func_call_id == layer.call.call_id for edge in layer._edge_uses)
 
 
 def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persisted() -> None:
@@ -314,8 +316,8 @@ def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persist
 
     log = tl.trace(TinyModel(), torch.randn(2, 3))
 
-    assert all(layer.args_template is None for layer in log._layer_list)
-    assert all(layer.kwargs_template is None for layer in log._layer_list)
+    assert all(layer.call.args_template is None for layer in log._layer_list)
+    assert all(layer.call.kwargs_template is None for layer in log._layer_list)
     edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:

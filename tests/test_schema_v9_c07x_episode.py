@@ -379,7 +379,7 @@ def test_op_entry_dark_facts_default_none() -> None:
     log = tl.trace(model, torch.randn(2, 4))
     for op in log.ops:
         assert op.episode_step is None
-        assert op.tl_authored_root is None
+        assert op.call.tl_authored_root is None
 
 
 def test_episode_step_stamp_without_declaration_refuses(tmp_path) -> None:
@@ -412,7 +412,7 @@ def test_tl_authored_root_without_bound_method_root_refuses(tmp_path) -> None:
 
     model = _Greedy()
     log = tl.trace(model, torch.randn(2, 4))
-    log.ops[0].tl_authored_root = True
+    log.ops[0]._call_tl_authored_root = True
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(log, tmp_path, "marker_bad")
     assert excinfo.value.fields["code"] == "artifact_tl_authored_root_invalid"

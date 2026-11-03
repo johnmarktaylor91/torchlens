@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from .._utils.tensor_utils import tensor_nanequal
 
 if TYPE_CHECKING:
@@ -84,7 +85,7 @@ def _parent_arg_paths(layer: Op) -> dict[str, set[tuple[Any, ...]]]:
         Path sets for positional and keyword arguments.
     """
 
-    parent_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    parent_positions = record_member(layer, "parent_arg_positions", {}) or {}
     paths: dict[str, set[tuple[Any, ...]]] = {"args": set(), "kwargs": set()}
     for arg_type in ("args", "kwargs"):
         for key in parent_positions.get(arg_type, {}):
@@ -203,4 +204,4 @@ def _live_parameter_matches_snapshot(
 def _is_autograd_backward_boundary(layer: Op) -> bool:
     """Return whether ``layer`` is a recorded in-forward ``autograd.backward`` op."""
 
-    return getattr(layer, "transform_kind", None) == "autograd.backward"
+    return record_member(layer, "transform_kind", None) == "autograd.backward"

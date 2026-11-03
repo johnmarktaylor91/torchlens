@@ -29,6 +29,7 @@ from dataclasses import replace as _dataclass_replace
 from typing import TYPE_CHECKING, Any
 
 from .._ir.events import is_control_edge_use
+from .._utils._record_group_table import record_member
 from .loop_detection import _module_site, _structural_arg_signature
 from .loop_grouping_adapter import (
     _PSEUDO_FUNC_NAME,
@@ -322,9 +323,9 @@ def relabel_edge_metadata(
                 raw_to_final.get(item, item) if isinstance(item, str) else item for item in lineage
             )
             setattr(op_log, lineage_field, type(lineage)(relabeled))
-    parent_arg_positions = getattr(op_log, "parent_arg_positions", None)
+    parent_arg_positions = record_member(op_log, "parent_arg_positions", None)
     if parent_arg_positions:
-        op_log.parent_arg_positions = {
+        op_log._call_parent_arg_positions = {
             section: {
                 position: (raw_to_final.get(value, value) if isinstance(value, str) else value)
                 for position, value in positions.items()

@@ -101,9 +101,9 @@ def test_hydration_identity_and_row_isolation(stack_trace: tl.Trace) -> None:
     hydrated["marker"] = 1
     assert op_b.annotations == {} and op_b.annotations is not hydrated
 
-    autocast_a = op_a.func_autocast_state
+    autocast_a = op_a.call.autocast_state
     autocast_a["cpu"]["injected"] = True
-    assert "injected" not in op_b.func_autocast_state["cpu"]
+    assert "injected" not in op_b.call.autocast_state["cpu"]
 
     entry_keys = op_a.module_entry_arg_keys
     assert type(entry_keys) is defaultdict and entry_keys.default_factory is list
@@ -141,7 +141,7 @@ def test_pickle_round_trip_never_leaks_encoding(stack_trace: tl.Trace) -> None:
         assert value.__class__ is not PooledCell, name
     restored = pickle.loads(pickle.dumps(stack_trace["linear_2_3"]))
     assert restored.annotations == {}
-    assert restored.func_autocast_state == op.func_autocast_state
+    assert restored.func_autocast_state == op.call.autocast_state
 
     module_restored = pickle.loads(pickle.dumps(stack_trace.modules["layers.2"]))
     assert module_restored.forward_hooks == []

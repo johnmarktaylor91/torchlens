@@ -160,13 +160,15 @@ def test_autograd_grad_in_forward_is_a_recorded_boundary_op() -> None:
     grad_ops = _grad_ops(trace)
     assert len(grad_ops) == 4
     for index, op in enumerate(grad_ops):
-        assert op.is_transform is True
-        assert op.transform_kind == "autograd.grad"
-        engine_flags = {k: v for k, v in op.transform_config.items() if not k.startswith("_tl")}
+        assert op.call.is_func_transform is True
+        assert op.call.func_transform_kind == "autograd.grad"
+        engine_flags = {
+            k: v for k, v in op.call.func_transform_config.items() if not k.startswith("_tl")
+        }
         assert engine_flags == {"create_graph": True}
         assert op.multi_output_index == index
         assert len(op.parents) == 1 and op.parents[0].startswith("mean")
-        assert not op.unattributed_tensor_args
+        assert not op.call.unattributed_tensor_args
     transform_labels = [op.label for op in trace.transforms]
     assert transform_labels == [op.label for op in grad_ops]
     selected = tl.trace(MAMLInnerLoop(), torch.rand(4, 8), save=tl.func_transform("autograd.grad"))
@@ -248,7 +250,7 @@ def test_forged_autograd_grad_func_fails_replay() -> None:
 
         op = _grad_ops(trace)[0]
         op.func = autogradgrad
-        assert op.transform_kind == "autograd.grad"
+        assert op.call.func_transform_kind == "autograd.grad"
 
     torch.manual_seed(0)
     with _tampered_validation(forge):
@@ -268,8 +270,8 @@ def test_forged_autograd_grad_parent_fails_replay() -> None:
             forged = next(s for s in sums if s.label.split(":")[0] != true_root)
             forged_label = forged.label.split(":")[0]
             op.parents = (forged_label,)
-            op.parent_arg_positions = {"args": {0: forged_label}, "kwargs": {}}
-            op.saved_args = (forged.out.detach().clone(), *tuple(op.saved_args)[1:])
+            op._call_parent_arg_positions = {"args": {0: forged_label}, "kwargs": {}}
+            op._call_saved_args = (forged.out.detach().clone(), *tuple(op.call.saved_args)[1:])
             results.append(
                 validation_core._check_whether_func_on_saved_parents_yields_saved_tensor(
                     trace, op.label

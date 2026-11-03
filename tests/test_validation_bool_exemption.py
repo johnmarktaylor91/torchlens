@@ -14,6 +14,8 @@ import torch
 import torch.nn as nn
 from _validation_capture import _capture, _quiet_validate
 
+from torchlens._utils._record_group_table import record_member
+
 # ---------------------------------------------------------------------------
 # R08 (b1-opus round-5): the discrete-bool blanket posthoc exemption
 # ---------------------------------------------------------------------------
@@ -247,7 +249,7 @@ def test_bool_predicate_probe_never_mutates_retained_saved_args() -> None:
     snapshots = [
         arg.detach().clone() if isinstance(arg, torch.Tensor) else arg for arg in saved_args
     ]
-    arg_positions = (getattr(target, "parent_arg_positions", None) or {}).get("args", {})
+    arg_positions = (record_member(target, "parent_arg_positions", None) or {}).get("args", {})
     assert arg_positions, "expected positional parent metadata on the in-place op"
     # Probe through each single-parent slot the metadata knows about.
     for position, parent_label in arg_positions.items():

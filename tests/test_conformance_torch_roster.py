@@ -279,9 +279,9 @@ def test_after_load_cell_reloads_at_the_replay_level(tmp_path: Any) -> None:
     path = tmp_path / "c2.tlspec"
     adapter.save(trace, path)
     loaded = adapter.load(path)
-    assert all(op.saved_args is None for op in loaded._layer_list)
+    assert all(op.call.saved_args is None for op in loaded._layer_list)
     replay = load_for_replay(adapter, trace, path, loaded)
-    assert replay is not loaded and any(op.saved_args is not None for op in replay._layer_list)
+    assert replay is not loaded and any(op.call.saved_args is not None for op in replay._layer_list)
     status = protocol.validate(replay, reference)
     assert status.state == "passed", status.message
     assert load_for_replay(SimpleNamespace(), trace, path, loaded) is loaded

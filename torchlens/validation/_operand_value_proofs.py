@@ -43,6 +43,7 @@ from typing import Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._destination_coverage import _scatter_index_fully_overwrites_dim
 from ._posthoc_decision import PosthocPerturbDecision
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
@@ -77,7 +78,7 @@ def sole_perturbed_slot(layer: Any, layers_to_perturb: list[str]) -> int | tuple
 
     if len(layers_to_perturb) != 1:
         return None
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     label = layers_to_perturb[0]
     if any(parent == label for parent in (positions.get("kwargs") or {}).values()):
         return None
@@ -207,7 +208,7 @@ def scatter_reduce_destination_overwritten(
         return False
     if len(args) < 4 or sole_perturbed_slot(layer, layers_to_perturb) != 0:
         return False
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     include_self = kwargs.get("include_self", args[5] if len(args) > 5 else True)
     dest, dim, index = args[0], args[1], args[2]
     if include_self is not False or not isinstance(dim, int) or isinstance(dim, bool):
@@ -251,7 +252,7 @@ def grid_sampler_zero_input(
 def _conv_bias_view(layer: Any, args: tuple[Any, ...], out: torch.Tensor) -> torch.Tensor | None:
     """Return the conv bias shaped to broadcast over ``out`` (zeros without a bias)."""
 
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     bias = kwargs.get("bias", args[2] if len(args) > 2 else None)
     channel_dim = out.ndim - _CONV_SPATIAL_DIMS[layer.func_name] - 1
     if channel_dim < 0:

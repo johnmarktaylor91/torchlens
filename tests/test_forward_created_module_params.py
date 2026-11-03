@@ -47,7 +47,7 @@ def test_forward_created_parameters_bind_to_their_initializer_ops() -> None:
     for op in trace.ops:
         if op.func_name == "uniform_":
             assert [by_label[p.split(":")[0]].func_name for p in op.parents] == ["empty"]
-            assert not op.unattributed_tensor_args
+            assert not op.call.unattributed_tensor_args
 
 
 @pytest.mark.smoke

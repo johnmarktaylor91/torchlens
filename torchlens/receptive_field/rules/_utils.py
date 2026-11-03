@@ -99,7 +99,7 @@ def int_config(
         Normalized parameter, or ``None`` for malformed captured data.
     """
 
-    return int_tuple(context.op.func_config.get(key, default), rank)
+    return int_tuple(context.op.call.config.get(key, default), rank)
 
 
 def number_tuple(value: object, rank: int) -> tuple[int | float | Fraction, ...] | None:

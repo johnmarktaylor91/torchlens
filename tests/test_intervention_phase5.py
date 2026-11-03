@@ -242,7 +242,7 @@ def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
 
     split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
-    assert len({layer.func_call_id for layer in split_layers}) == 1
+    assert len({layer.call.call_id for layer in split_layers}) == 1
     assert {type(layer.container_path[0]) for layer in split_layers} == {TupleIndex}
 
     final_labels = set(log.layer_labels)
@@ -250,7 +250,7 @@ def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
         for edge in layer._edge_uses:
             assert edge.parent_label in final_labels
             assert edge.child_label in final_labels
-        for template in (layer.args_template, layer.kwargs_template):
+        for template in (layer.call.args_template, layer.call.kwargs_template):
             for parent_ref in _parent_refs(template):
                 assert parent_ref.parent_label in final_labels
 
@@ -268,7 +268,7 @@ def test_selective_save_preserves_replay_call_group_siblings() -> None:
     split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
     assert not all(layer.has_saved_activation for layer in split_layers)
-    assert len({layer.func_call_id for layer in split_layers}) == 1
+    assert len({layer.call.call_id for layer in split_layers}) == 1
     assert check_metadata_invariants(log) is True
 
 
@@ -283,7 +283,7 @@ def test_recurrent_iterations_keep_distinct_func_call_ids() -> None:
 
     relu_layers = [layer for layer in log._layer_list if layer.func_name == "relu"]
     assert len(relu_layers) == 3
-    assert len({layer.func_call_id for layer in relu_layers}) == 3
+    assert len({layer.call.call_id for layer in relu_layers}) == 3
     assert check_metadata_invariants(log) is True
 
 

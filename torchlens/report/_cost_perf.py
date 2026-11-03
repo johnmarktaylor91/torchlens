@@ -453,7 +453,7 @@ _pin_traffic_fields()
 def _op_ideal_traffic(op: Any, trace: Any) -> int | None:
     """Read-once/write-once logical traffic for one op, if derivable."""
 
-    output_bytes = getattr(op, _TRAFFIC_OUTPUT_FIELD, None)
+    output_bytes = record_member(op, _TRAFFIC_OUTPUT_FIELD, None)
     if output_bytes is None:
         return None
     total = int(output_bytes)
@@ -462,10 +462,10 @@ def _op_ideal_traffic(op: Any, trace: Any) -> int | None:
             parent = trace[str(parent_label)]
         except (KeyError, ValueError):
             return None
-        parent_bytes = getattr(parent, _TRAFFIC_OUTPUT_FIELD, None)
+        parent_bytes = record_member(parent, _TRAFFIC_OUTPUT_FIELD, None)
         if parent_bytes is not None:
             total += int(parent_bytes)
-    param_bytes = getattr(op, _TRAFFIC_PARAM_FIELD, None)
+    param_bytes = record_member(op, _TRAFFIC_PARAM_FIELD, None)
     if param_bytes is not None:
         total += int(param_bytes)
     return total

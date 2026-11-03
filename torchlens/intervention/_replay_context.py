@@ -267,7 +267,7 @@ def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:
 
     groups: dict[int | None, list[Op]] = {}
     for layer in log._layer_list:
-        groups.setdefault(layer.func_call_id, []).append(layer)
+        groups.setdefault(layer.call.call_id, []).append(layer)
     return {call_id: tuple(layers) for call_id, layers in groups.items()}
 
 
@@ -293,11 +293,11 @@ def _group_for_site(
         Same-call members in topological order.
     """
 
-    if site.func_call_id is None:
+    if site.call.call_id is None:
         return (site,)
     return tuple(
         member
-        for member in call_groups.get(site.func_call_id, (site,))
+        for member in call_groups.get(site.call.call_id, (site,))
         if _replay_site_key(member) in cone_keys
     )
 
@@ -324,7 +324,7 @@ def _group_representative(
         representative = next(
             (
                 member
-                for member in call_groups.get(site.func_call_id, ())
+                for member in call_groups.get(site.call.call_id, ())
                 if not getattr(member, "is_output", False)
                 and not getattr(member, "is_buffer", False)
             ),

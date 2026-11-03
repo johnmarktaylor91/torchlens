@@ -70,7 +70,7 @@ def test_single_output_fast_path_traces_shared_fields() -> None:
     assert relu_layer.multi_output_index is None
     assert relu_layer.container_path == ()
     assert relu_layer.container_spec is None
-    assert relu_layer.parent_arg_positions["args"]
+    assert relu_layer.call.parent_arg_positions["args"]
 
 
 def test_multi_output_keeps_sibling_field_isolation(split_trace: tl.Trace) -> None:

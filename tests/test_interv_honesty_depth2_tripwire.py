@@ -80,7 +80,7 @@ def test_edge_reexecution_splice_refuses_nested_address(capture) -> None:
 
     model, x, trace = capture
     child = trace["conv2d_2_3"].ops[0]
-    address = (child.func_call_id, "positional", (0, 1))
+    address = (child.call.call_id, "positional", (0, 1))
     with pytest.raises(SelectionError) as excinfo:
         _reexecute_child_with_substitution(trace, child, address, torch.zeros(1), strict=False)
     assert excinfo.value.fields["code"] == "selection_apply_invalid"
@@ -132,7 +132,7 @@ def test_validation_splice_fails_nested_key_even_when_corroborated(capture) -> N
             records.append(
                 dataclasses.replace(
                     record,
-                    edge_address=(child.func_call_id, arg_kind, tuple(arg_path) + (1,)),
+                    edge_address=(child.call.call_id, arg_kind, tuple(arg_path) + (1,)),
                 )
             )
         else:

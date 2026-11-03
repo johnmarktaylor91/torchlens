@@ -119,8 +119,8 @@ def test_h2_roll_tensor_shift_is_parent() -> None:
     sum_label = _ops_by_func(trace, "sum")[0].layer_label
 
     assert sum_label in roll_op.parents
-    assert roll_op.parent_arg_positions["args"].get(1) == sum_label
-    assert roll_op.unattributed_tensor_args == ()
+    assert roll_op.call.parent_arg_positions["args"].get(1) == sum_label
+    assert roll_op.call.unattributed_tensor_args == ()
     assert tl.validate(_RollTensorShift().eval(), x, scope="forward")
 
 
@@ -138,7 +138,7 @@ def test_h2_softmax_tensor_dim_is_parent_and_validates() -> None:
     sum_label = _ops_by_func(trace, "sum")[0].layer_label
 
     assert sum_label in softmax_op.parents
-    assert softmax_op.parent_arg_positions["args"].get(1) == sum_label
+    assert softmax_op.call.parent_arg_positions["args"].get(1) == sum_label
     assert tl.validate(_SoftmaxTensorDim().eval(), x, scope="forward")
 
 
@@ -151,9 +151,9 @@ def test_h2_arange_tensor_end_is_parent_not_internal_source() -> None:
     long_label = _ops_by_func(trace, "long")[0].layer_label
 
     assert arange_op.parents == (long_label,)
-    assert arange_op.parent_arg_positions["args"].get(0) == long_label
+    assert arange_op.call.parent_arg_positions["args"].get(0) == long_label
     assert not arange_op.is_internal_source
-    assert arange_op.unattributed_tensor_args == ()
+    assert arange_op.call.unattributed_tensor_args == ()
     assert tl.validate(_ArangeTensorEnd().eval(), x, scope="forward")
 
 
@@ -181,7 +181,7 @@ def test_h2_literal_control_args_stay_clean() -> None:
     roll_op = _ops_by_func(trace, "roll")[0]
 
     assert roll_op.parents == ("input_1",)
-    assert roll_op.unattributed_tensor_args == ()
+    assert roll_op.call.unattributed_tensor_args == ()
 
 
 # ---------------------------------------------------------------------------

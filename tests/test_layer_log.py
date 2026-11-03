@@ -157,7 +157,7 @@ class TestSinglePassDelegation:
         for layer_log in simple_log._layer_logs.values():
             pass_log = layer_log.ops[0]
             # func_autocast_state is per-pass, not an explicit @property
-            assert layer_log.func_autocast_state is pass_log.func_autocast_state
+            assert layer_log.call.autocast_state is pass_log.call.autocast_state
 
     def test_multi_pass_fallback_getattr_raises_guided_value_error(
         self: "TestSinglePassDelegation",
@@ -239,7 +239,7 @@ class TestMultiPassLayerLog:
         for layer_log in recurrent_log._layer_logs.values():
             if layer_log.num_passes > 1:
                 with pytest.raises(ValueError, match=r"\.ops\[0\]"):
-                    _ = layer_log.func_autocast_state
+                    _ = layer_log.call.autocast_state
                 break
 
     def test_multi_pass_aggregate_graph_union(self, recurrent_log):
@@ -478,7 +478,7 @@ class TestParentLayerArgLocs:
         model = _SimpleLinear()
         log = tl.trace(model, torch.randn(2, 10))
         for layer in log:
-            arg_locs = layer.parent_arg_positions
+            arg_locs = layer.call.parent_arg_positions
             for arg_type in ["args", "kwargs"]:
                 for key, val in arg_locs[arg_type].items():
                     assert isinstance(val, str), (

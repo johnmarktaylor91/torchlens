@@ -312,7 +312,7 @@ def test_chained_index_copy_dropped_dest_dependency_still_fails() -> None:
         for layer in trace._layer_list:
             op = layer.ops[1] if hasattr(getattr(layer, "ops", None), "_list") else layer
             if op.func_name in ("index_copy_", "indexcopy_") and str(
-                op.parent_arg_positions["args"].get(0, "")
+                op.call.parent_arg_positions["args"].get(0, "")
             ).startswith("indexcopy"):
                 second = op
         assert second is not None, "expected a chained index_copy_ op"

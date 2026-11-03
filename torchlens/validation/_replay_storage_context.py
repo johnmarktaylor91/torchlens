@@ -19,6 +19,7 @@ from .._storage_bindings import (
     copy_with_storage_context,
     views_part_of_its_storage,
 )
+from .._utils._record_group_table import record_member
 from .._utils.collections import assign_to_sequence_or_dict
 from ._grad_flags import _mirror_captured_requires_grad, _snapshot_grad_flags
 
@@ -37,7 +38,7 @@ def restore_receiver_storage_context(layer: Any, input_args: dict[str, Any]) -> 
 
     if getattr(layer, "func_name", None) not in STORAGE_CONTEXT_RECEIVER_FUNCS:
         return
-    saved_args = getattr(layer, "saved_args", None)
+    saved_args = record_member(layer, "saved_args", None)
     args = input_args.get("args")
     if not saved_args or not args:
         return

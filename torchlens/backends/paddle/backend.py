@@ -41,6 +41,7 @@ from ..._postprocess._selective_save import (
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._utils._record_group_table import record_member
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
@@ -2184,7 +2185,7 @@ def _paddle_intervention_corroborated(trace: Trace, capture: Any, op: Any) -> bo
     for record in getattr(op, "edits", ()) or ():
         if not bool(getattr(record, "replaced", False)):
             continue
-        record_call_id = getattr(record, "func_call_id", None)
+        record_call_id = record_member(record, "func_call_id", None)
         if record_call_id is None or record_call_id == intervention.func_call_id:
             return True
     return False
@@ -2560,7 +2561,7 @@ def _paddle_trace_intermediate_signatures(
         if require_float and not _is_float_dtype_text(str(getattr(op, "dtype", ""))):
             continue
         signature = PaddleIntermediateSignature(
-            func_call_id=int(getattr(op, "func_call_id", 0)),
+            func_call_id=int(record_member(op, "func_call_id", 0)),
             op_name=str(getattr(op, "func_name", "")),
             parent_labels=tuple(
                 final_to_raw.get(str(parent), str(parent)) for parent in getattr(op, "parents", ())

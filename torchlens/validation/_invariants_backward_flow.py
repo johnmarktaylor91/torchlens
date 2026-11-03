@@ -427,7 +427,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
             getattr(layer, "layer_label", None),
         }
         candidate_labels.discard(None)
-        layer_func_call_id = getattr(layer, "func_call_id", None)
+        layer_func_call_id = record_member(layer, "func_call_id", None)
         for event in bound_edits:
             if event.label_raw not in candidate_labels:
                 continue
@@ -572,6 +572,7 @@ def _plain_func_call_group_signature(layer: Op) -> tuple[object, ...]:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
 from ._invariants_backward_domain import (  # noqa: E402
     _resolve_op_grad_event_label,
 )

@@ -59,7 +59,7 @@ def _check_op_ref(ref: Any, ops: list[Any], *, row_label: str) -> None:
         )
     op = ops[ref.op_row_index]
     actual_label = getattr(op, "layer_label", None)
-    actual_func_call_id = getattr(op, "func_call_id", None)
+    actual_func_call_id = record_member(op, "func_call_id", None)
     if actual_label != ref.op_label or actual_func_call_id != ref.func_call_id:
         _primitive_failure(
             f"{row_label} parent OpRef witnesses disagree with dense row {ref.op_row_index}"
@@ -362,6 +362,7 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
 
 
 # Bottom import: the hub defines this error before it imports its split modules.
+from .._utils._record_group_table import record_member  # noqa: E402
 from .invariants import MetadataInvariantError  # noqa: E402
 
 __all__ = [

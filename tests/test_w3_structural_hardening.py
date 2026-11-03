@@ -253,8 +253,8 @@ def test_rf_table_matches_at_after_geometry_mutation() -> None:
 
     # In-place, shape-preserving geometry mutation: dil 1->2 / pad 1->2 keeps
     # the 16x16 output while changing the true RF span from 3 to 5.
-    conv_op.func_config["dilation"] = (2, 2)
-    conv_op.func_config["padding"] = (2, 2)
+    conv_op.call.config["dilation"] = (2, 2)
+    conv_op.call.config["padding"] = (2, 2)
 
     # The staleness signature must bump and the cached solution must be rebuilt.
     assert _engine._graph_revision(log) != revision_before

@@ -9,6 +9,8 @@ import torch.nn as nn
 
 pd = pytest.importorskip("pandas")
 
+from _record_fakes import FakeRecord  # noqa: E402
+
 import torchlens as tl  # noqa: E402
 from torchlens._data_classes._trace_groups import TraceGraph  # noqa: E402
 from torchlens._data_classes.cleanup import _remove_log_entry_references  # noqa: E402
@@ -169,7 +171,7 @@ def _make_layer_stub(label: str, layer_label: str | None = None) -> SimpleNamesp
         Layer-like object with the fields touched by the lifecycle helpers.
     """
     label_no_pass = layer_label or label.split(":", 1)[0]
-    return SimpleNamespace(
+    return FakeRecord(
         label=label,
         layer_label=label_no_pass,
         _label_raw=label,
@@ -347,7 +349,7 @@ def test_to_pandas_exports_conditional_columns() -> None:
     target_layer = next(
         layer for layer in trace._layer_list if layer.type not in {"input", "output"}
     )
-    target_layer.func_config = {"alpha": 1}
+    target_layer._call_config = {"alpha": 1}
     target_layer._control_flow_is_terminal_conditional_bool = True
     target_layer._control_flow_context_kind = "if_test"
     target_layer._control_flow_wrapper_kind = "bool_cast"

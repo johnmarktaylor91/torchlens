@@ -84,8 +84,8 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     assert log.output_layers == ["output_1"]
     assert log.saved_ops
     assert all(layer.out is not None for layer in log._layer_list)
-    assert all(layer.args_template is None for layer in log._layer_list)
-    assert all(layer.kwargs_template is None for layer in log._layer_list)
+    assert all(layer.call.args_template is None for layer in log._layer_list)
+    assert all(layer.call.kwargs_template is None for layer in log._layer_list)
     edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:

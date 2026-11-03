@@ -91,7 +91,7 @@ def _drop_edge_symmetrically(log, child_label: str, parent_label: str) -> None:
     # graph_topology pair (children vs has_children) catches it before any
     # independence question arises.
     parent.has_children = len(parent.children) > 0
-    for positions in (child.parent_arg_positions or {}).values():
+    for positions in (child.call.parent_arg_positions or {}).values():
         stale = [
             argloc
             for argloc, owner in positions.items()

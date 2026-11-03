@@ -565,7 +565,7 @@ def _stage_occurrence(
         },
     )
     _stamp_param_kind(child_op, store_key, param_address)
-    address = (child_op.func_call_id,) + tuple(store_key)
+    address = (child_op.call.call_id,) + tuple(store_key)
     fire_record = _param_fire_record(
         child_op,
         meta["helper_spec"],
@@ -630,7 +630,7 @@ def _param_fire_record(
     return build_fire_record(
         target_label=child_op.layer_label,
         call_label=child_op.label,
-        func_call_id=child_op.func_call_id,
+        func_call_id=child_op.call.call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
         edit=(

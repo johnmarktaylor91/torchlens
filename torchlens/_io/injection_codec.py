@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._torch_symbols import torch_attr
 from .format_contract import ArtifactError, BlobRef
 from .scrub import BlobSpec
@@ -302,10 +303,10 @@ def split_restored_injected_rows(trace: Any) -> None:
     rows = trace.__dict__.get("_layer_list")
     if not isinstance(rows, list):
         return
-    injected = [op for op in rows if getattr(op, "injection_provenance", None) is not None]
+    injected = [op for op in rows if record_member(op, "injection_provenance", None) is not None]
     if not injected:
         return
-    remaining = [op for op in rows if getattr(op, "injection_provenance", None) is None]
+    remaining = [op for op in rows if record_member(op, "injection_provenance", None) is None]
     _validate_split_rows(injected, remaining, _recorded_rule_ids(trace))
     rows[:] = remaining
     from ..intervention.injection import injection_state

@@ -221,8 +221,8 @@ def port_names(entry: Any, inputs: list[str]) -> list[str] | None:
     mismatch the hook is omitted -- a numeric port beats a wrong name.
     """
 
-    positions = getattr(entry, "parent_arg_positions", None)
-    arg_names = list(getattr(entry, "arg_names", None) or [])
+    positions = record_member(entry, "parent_arg_positions", None)
+    arg_names = list(record_member(entry, "arg_names", None) or [])
     if not isinstance(positions, dict) or not arg_names or not inputs:
         return None
     label_to_name: dict[str, str] = {}

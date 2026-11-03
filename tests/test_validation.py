@@ -27,6 +27,7 @@ import torchlens._capture.run_entry as run_entry
 import torchlens._user_funcs as user_funcs
 import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
+from torchlens._utils._record_group_table import record_member
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
@@ -2130,9 +2131,9 @@ def test_validation_dispatch_op_count_backstop_rejects_synthetic_missed_op() -> 
     try:
         trace._validation_captured_dispatchable_op_count = len(
             {
-                getattr(op, "func_call_id")
+                record_member(op, "func_call_id")
                 for op in trace._layer_list
-                if isinstance(getattr(op, "func_call_id", None), int)
+                if isinstance(record_member(op, "func_call_id", None), int)
             }
         )
         trace._validation_dispatch_op_count = trace._validation_captured_dispatchable_op_count + 1
@@ -2945,8 +2946,11 @@ def test_replay_validation_detects_corrupted_third_recurrent_pass_inputs() -> No
         capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     third_pass = next(op for op in trace._layer_list if op.label == "linear_1_1:3")
-    assert third_pass.saved_args is not None
-    third_pass.saved_args = (third_pass.saved_args[0] + 1.0, *third_pass.saved_args[1:])
+    assert third_pass.call.saved_args is not None
+    third_pass._call_saved_args = (
+        third_pass.call.saved_args[0] + 1.0,
+        *third_pass.call.saved_args[1:],
+    )
 
     decision_recorder = ValidationDecisionRecorder()
     result = validate_parents_of_saved_layer(
@@ -3004,10 +3008,10 @@ def test_perturbation_validation_catches_spurious_third_recurrent_pass_edge() ->
     )
     third_pass = next(op for op in trace._layer_list if op.label == "nantonum_1_1:3")
     first_pass = next(op for op in trace._layer_list if op.label == "nantonum_1_1:1")
-    assert third_pass.saved_args is not None
-    third_pass.saved_args.append(first_pass.out.detach().clone())
+    assert third_pass.call.saved_args is not None
+    third_pass.call.saved_args.append(first_pass.out.detach().clone())
     third_pass.parents = tuple(third_pass.parents) + (first_pass.label,)
-    third_pass.parent_arg_positions["args"][1] = first_pass.label
+    third_pass.call.parent_arg_positions["args"][1] = first_pass.label
 
     decision_recorder = ValidationDecisionRecorder()
     result = validate_parents_of_saved_layer(
@@ -3842,7 +3846,7 @@ def _assert_custom_exemption_for_arg(
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         layer = _only_layer_with_func_name(trace, func_name)
-        parent = layer.parent_arg_positions["args"][arg_position]
+        parent = layer.call.parent_arg_positions["args"][arg_position]
 
         assert CUSTOM_EXEMPTION_CHECKS[func_name](trace, layer, [parent]) is expected
         assert _check_perturbation_exemptions(trace, layer, [parent]) is expected
@@ -3928,14 +3932,14 @@ def test_runtime_tensor_fill_value_is_replayed_and_perturbation_sensitive(
         factory_layer = _only_layer_with_func_name(trace, factory_name)
         fill_domain = "kwargs" if use_keyword else "args"
         fill_position: str | int = "fill_value" if use_keyword else 1
-        fill_parent = factory_layer.parent_arg_positions[fill_domain][fill_position]
+        fill_parent = factory_layer.call.parent_arg_positions[fill_domain][fill_position]
 
         assert fill_parent in factory_layer.parents
-        assert factory_layer.unattributed_tensor_args == ()
+        assert factory_layer.call.unattributed_tensor_args == ()
         if factory_name == "full":
             assert factory_layer.parents == (fill_parent,)
         else:
-            assert set(factory_layer.parent_arg_positions["args"]) >= {0}
+            assert set(factory_layer.call.parent_arg_positions["args"]) >= {0}
             assert len(factory_layer.parents) == 2
 
         expected_output = model(x).detach().clone()
@@ -4753,8 +4757,8 @@ def test_validation_with_setitem_slice_full_overwrite() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         setitem_layer = _only_layer_with_func_name(trace, "__setitem__")
-        destination_parent = setitem_layer.parent_arg_positions["args"][0]
-        replacement_parent = setitem_layer.parent_arg_positions["args"][2]
+        destination_parent = setitem_layer.call.parent_arg_positions["args"][0]
+        replacement_parent = setitem_layer.call.parent_arg_positions["args"][2]
 
         assert _check_perturbation_exemptions(trace, setitem_layer, [destination_parent]) is True
         assert _check_perturbation_exemptions(trace, setitem_layer, [replacement_parent]) is False
@@ -4802,8 +4806,8 @@ def test_validation_with_index_put_destination_full_overwrite() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
-        destination_parent = index_put_layer.parent_arg_positions["args"][0]
-        replacement_parent = index_put_layer.parent_arg_positions["args"][2]
+        destination_parent = index_put_layer.call.parent_arg_positions["args"][0]
+        replacement_parent = index_put_layer.call.parent_arg_positions["args"][2]
 
         assert (
             CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [destination_parent])
@@ -4854,7 +4858,7 @@ def test_index_put_partial_overwrite_destination_is_not_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
-        destination_parent = index_put_layer.parent_arg_positions["args"][0]
+        destination_parent = index_put_layer.call.parent_arg_positions["args"][0]
 
         # Tripwire: the influential (partially-surviving) destination is NOT exempt.
         assert (
@@ -4916,7 +4920,7 @@ def test_index_put_value_parent_equal_to_destination_is_not_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
-        arg_positions = index_put_layer.parent_arg_positions["args"]
+        arg_positions = index_put_layer.call.parent_arg_positions["args"]
         destination_parent = arg_positions[0]
         value_parent = arg_positions[2]
 
@@ -5066,7 +5070,7 @@ def test_index_put_index_parent_is_not_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
-        index_parent = index_put_layer.parent_arg_positions["args"][(1, 0)]
+        index_parent = index_put_layer.call.parent_arg_positions["args"][(1, 0)]
 
         assert (
             CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [index_parent]) is False
@@ -5159,7 +5163,7 @@ def test_trace_save_arg_values_handles_namedtuple_tensor_arguments() -> None:
     )
 
     cat_layer = _only_layer_with_func_name(trace, "cat")
-    arg_positions = cat_layer.parent_arg_positions["args"]
+    arg_positions = cat_layer.call.parent_arg_positions["args"]
 
     assert set(arg_positions) == {(0, 0), (0, 1)}
     assert {
@@ -5201,7 +5205,7 @@ def test_where_different_branches_are_not_condition_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
-        condition_parent = where_layer.parent_arg_positions["args"][0]
+        condition_parent = where_layer.call.parent_arg_positions["args"][0]
 
         assert CUSTOM_EXEMPTION_CHECKS["where"](trace, where_layer, [condition_parent]) is False
         assert _check_perturbation_exemptions(trace, where_layer, [condition_parent]) is False
@@ -5282,8 +5286,8 @@ def test_where_branch_selectedness_uses_saved_condition_not_parent_out() -> None
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
-        condition_parent = where_layer.parent_arg_positions["args"][0]
-        true_parent = where_layer.parent_arg_positions["args"][1]
+        condition_parent = where_layer.call.parent_arg_positions["args"][0]
+        true_parent = where_layer.call.parent_arg_positions["args"][1]
         # Layer.out is read-only under cert10 strict accessors; simulate the
         # mutated parent out through the per-pass Op record instead.
         condition_op = trace[condition_parent].ops[0]
@@ -5304,7 +5308,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
-        unselected_parent = where_layer.parent_arg_positions["args"][2]
+        unselected_parent = where_layer.call.parent_arg_positions["args"][2]
 
         assert _check_perturbation_exemptions(trace, where_layer, [unselected_parent]) is True
 
@@ -5351,7 +5355,7 @@ def test_remainder_divisor_not_exempt_when_output_differs_from_dividend() -> Non
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         remainder_layer = _only_layer_with_func_name(trace, "remainder")
-        divisor_parent = remainder_layer.parent_arg_positions["args"][1]
+        divisor_parent = remainder_layer.call.parent_arg_positions["args"][1]
         ground_truth = [model(x).detach().clone()]
 
         # PosthocPerturbDecision API (74318b5d): the divisor perturbation must
@@ -5381,7 +5385,7 @@ def test_new_tensor_data_arg_is_not_structural_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         new_tensor_layer = _only_layer_with_func_name(trace, "new_tensor")
-        data_parent = new_tensor_layer.parent_arg_positions["args"][1]
+        data_parent = new_tensor_layer.call.parent_arg_positions["args"][1]
 
         assert _check_perturbation_exemptions(trace, new_tensor_layer, [data_parent]) is False
     finally:
@@ -5845,9 +5849,9 @@ def test_edge_use_invariant_rejects_missing_parent_arg_reference() -> None:
 
     log = _make_clean_log()
     try:
-        layer = next(layer for layer in log._layer_list if layer.parent_arg_positions["args"])
-        first_position = next(iter(layer.parent_arg_positions["args"]))
-        layer.parent_arg_positions["args"][first_position] = "missing_parent_label"
+        layer = next(layer for layer in log._layer_list if layer.call.parent_arg_positions["args"])
+        first_position = next(iter(layer.call.parent_arg_positions["args"]))
+        layer.call.parent_arg_positions["args"][first_position] = "missing_parent_label"
 
         with pytest.raises(MetadataInvariantError, match="references missing parent"):
             check_metadata_invariants(log)
@@ -5864,7 +5868,7 @@ def test_edge_use_parent_arg_preconditions_reach_real_trace() -> None:
         parent_arg_layers = [
             layer
             for layer in log._layer_list
-            if layer.parent_arg_positions["args"] or layer.parent_arg_positions["kwargs"]
+            if layer.call.parent_arg_positions["args"] or layer.call.parent_arg_positions["kwargs"]
         ]
         assert edge_use_layers
         assert parent_arg_layers
@@ -6102,7 +6106,7 @@ def test_func_call_id_invariant_rejects_plain_group_func_name_mismatch() -> None
     try:
         split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
         assert len(split_layers) == 2
-        assert len({layer.func_call_id for layer in split_layers}) == 1
+        assert len({layer.call.call_id for layer in split_layers}) == 1
 
         split_layers[1].func_name = "chunk"
 
@@ -6119,7 +6123,7 @@ def test_func_call_id_plain_preconditions_reach_real_trace() -> None:
     try:
         split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
         assert len(split_layers) == 2
-        assert len({layer.func_call_id for layer in split_layers}) == 1
+        assert len({layer.call.call_id for layer in split_layers}) == 1
         assert all(layer.container_path for layer in split_layers)
         assert check_metadata_invariants(log) is True
     finally:
@@ -6140,8 +6144,8 @@ def test_func_call_id_invariant_allows_sparse_recording_projection() -> None:
             layer for layer in log._layer_list if not (layer.is_input or layer.is_output)
         ]
         assert compute_layers
-        assert any(layer.func_call_id is not None for layer in compute_layers)
-        assert all(layer.args_template is None for layer in compute_layers)
+        assert any(layer.call.call_id is not None for layer in compute_layers)
+        assert all(layer.call.args_template is None for layer in compute_layers)
         assert all(layer.container_spec is None for layer in compute_layers)
         result = check_func_call_id_invariant(log)
         assert result.passed is True
@@ -6981,9 +6985,9 @@ def test_corruption_raw_label_in_parent_arg_positions_key():
     """
 
     log = _make_clean_log()
-    positions = dict(log._layer_list[1].parent_arg_positions or {})
+    positions = dict(log._layer_list[1].call.parent_arg_positions or {})
     positions["linear_1_1_raw"] = 0
-    log._layer_list[1].parent_arg_positions = positions
+    log._layer_list[1]._call_parent_arg_positions = positions
     with pytest.raises(MetadataInvariantError, match="parent_arg_positions"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -7103,7 +7107,7 @@ def test_raw_label_survival_roster_is_closed():
     for lpl in log._layer_list:
         foreign = labels - {lpl.layer_label, lpl.label}
         for field in fields - rostered - allowlist:
-            hits = _collect_strings(getattr(lpl, field, None)) & foreign
+            hits = _collect_strings(record_member(lpl, field, None)) & foreign
             if hits:
                 offenders.setdefault(field, sorted(hits)[:3])
     log.cleanup()
@@ -7409,13 +7413,13 @@ def test_corruption_capture_witnessed_slot_permutation_is_rejected() -> None:
     try:
         target = None
         for op in log._layer_list:
-            positions = (op.parent_arg_positions or {}).get("args") or {}
+            positions = (op.call.parent_arg_positions or {}).get("args") or {}
             if len(set(positions.values())) >= 2:
                 target = (op, sorted(positions)[:2])
                 break
         assert target, "fixture produced no op with two distinct args-slot parents"
         op, (slot_a, slot_b) = target
-        positions = op.parent_arg_positions["args"]
+        positions = op.call.parent_arg_positions["args"]
         positions[slot_a], positions[slot_b] = positions[slot_b], positions[slot_a]
         with pytest.raises(MetadataInvariantError, match="dropped or rewired"):
             _check_capture_edge_survival(log)
@@ -7457,7 +7461,7 @@ def test_corruption_plain_parent_witnessed_edge_drop_is_rejected() -> None:
                 break
         assert target, "fixture produced no witnessed args edge to reshape"
         op, raw_label, parent_raw = target
-        dropped = op.parent_arg_positions["args"].pop(0, None)
+        dropped = op.call.parent_arg_positions["args"].pop(0, None)
         assert dropped is not None
         # Reshape the sealed witness for this op to the plain-parent form of
         # the SAME true edge, and scrub the recorded graph surfaces.
@@ -7897,7 +7901,7 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
     assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
 
     # The mask is instead logged as a transform boundary node with a clean parent edge.
-    transform_ops = [op for op in log.ops if getattr(op, "is_transform", False)]
+    transform_ops = [op for op in log.ops if record_member(op, "is_transform", False)]
     assert [op.type for op in transform_ops] == ["vmap"]
     assert transform_ops[0].transform_chain == ("vmap", "vmap")
     assert transform_ops[0].parents
@@ -8609,7 +8613,7 @@ def test_corruption_arm_graph_topology_slot_names_non_parent() -> None:
         ops = list(log._layer_list)
         relu_op = next(op for op in ops if op.label.startswith("relu"))
         tanh_op = next(op for op in ops if op.label.startswith("tanh"))
-        positions = relu_op.parent_arg_positions["args"]
+        positions = relu_op.call.parent_arg_positions["args"]
         positions[next(iter(positions))] = tanh_op.label
         with pytest.raises(MetadataInvariantError, match="which is not a recorded parent"):
             _check_graph_topology(log)

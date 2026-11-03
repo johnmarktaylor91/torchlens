@@ -157,7 +157,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
                     f"{child_label!r}",
                 )
 
-        parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+        parent_arg_positions = record_member(layer, "parent_arg_positions", {}) or {}
         if not isinstance(parent_arg_positions, Mapping):
             raise MetadataInvariantError(
                 name,
@@ -208,7 +208,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
             row = getattr(op, "_row", None)
             if row is None:
                 continue
-            parent_arg_positions = getattr(op, "parent_arg_positions", None) or {}
+            parent_arg_positions = record_member(op, "parent_arg_positions", None) or {}
             position_counts: Counter = Counter()
             if isinstance(parent_arg_positions, Mapping):
                 for arg_domain in ("args", "kwargs"):

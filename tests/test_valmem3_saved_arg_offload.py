@@ -155,7 +155,7 @@ def _saved_arg_tensors(trace: Any, outputs: bool = True) -> list[torch.Tensor]:
     for op in trace._layer_list:
         if not outputs and getattr(op, "is_output", False):
             continue
-        values = [*(op.saved_args or ()), *(op.saved_kwargs or {}).values()]
+        values = [*(op.call.saved_args or ()), *(op.call.saved_kwargs or {}).values()]
         for value in values:
             items = value if type(value) in (list, tuple) else (value,)
             tensors.extend(item for item in items if isinstance(item, torch.Tensor))
@@ -326,16 +326,18 @@ def test_swap_holds_exact_copies_and_restores_the_host_copies() -> None:
     pair = (_tagged(torch.arange(4.0)), 7)
     plain = torch.ones(2)
     op = _FakeOp([host, pair, plain, "x"], {"w": _tagged(torch.full((2,), 2.0))})
-    host_kwarg = op.saved_kwargs["w"]
+    host_kwarg = op.call.saved_kwargs["w"]
     with _replay_device.saved_args_on_consumed_devices(_FakeTrace(op), "op"):
-        held = op.saved_args[0]
+        held = op.call.saved_args[0]
         assert held is not host and torch.equal(held, host) and held.requires_grad
-        assert type(op.saved_args[1]) is tuple and op.saved_args[1][1] == 7
-        assert op.saved_args[1][0] is not pair[0] and torch.equal(op.saved_args[1][0], pair[0])
-        assert op.saved_args[2] is plain and op.saved_args[3] == "x"
-        assert op.saved_kwargs["w"] is not host_kwarg
-    assert op.saved_args[0] is host and op.saved_args[1] is pair
-    assert op.saved_kwargs["w"] is host_kwarg
+        assert type(op.call.saved_args[1]) is tuple and op.call.saved_args[1][1] == 7
+        assert op.call.saved_args[1][0] is not pair[0] and torch.equal(
+            op.call.saved_args[1][0], pair[0]
+        )
+        assert op.call.saved_args[2] is plain and op.call.saved_args[3] == "x"
+        assert op.call.saved_kwargs["w"] is not host_kwarg
+    assert op.call.saved_args[0] is host and op.call.saved_args[1] is pair
+    assert op.call.saved_kwargs["w"] is host_kwarg
 
 
 def test_swap_restores_the_host_copies_when_the_check_raises() -> None:
@@ -345,16 +347,16 @@ def test_swap_restores_the_host_copies_when_the_check_raises() -> None:
         pytest.raises(RuntimeError, match="check failed"),
         _replay_device.saved_args_on_consumed_devices(_FakeTrace(op), "op"),
     ):
-        assert op.saved_args[0] is not host
+        assert op.call.saved_args[0] is not host
         raise RuntimeError("check failed")
-    assert op.saved_args[0] is host
+    assert op.call.saved_args[0] is host
 
 
 def test_swap_changes_nothing_without_tags() -> None:
     values = [torch.ones(2), (torch.zeros(1),), None]
     op = _FakeOp(list(values), {"k": torch.ones(1)})
     with _replay_device.saved_args_on_consumed_devices(_FakeTrace(op), "op"):
-        assert all(a is b for a, b in zip(op.saved_args, values, strict=True))
+        assert all(a is b for a, b in zip(op.call.saved_args, values, strict=True))
 
 
 # ---------------------------------------------------------------------------
@@ -400,7 +402,7 @@ def test_validation_capture_holds_no_saved_argument_copy_on_the_accelerator() ->
             t.untyped_storage().data_ptr()
             for op in trace._layer_list
             if getattr(op, "is_output", False)
-            for t in op.saved_args or ()
+            for t in op.call.saved_args or ()
             if isinstance(t, torch.Tensor)
         }
         assert output_refs
@@ -501,17 +503,17 @@ def test_nested_swaps_move_nothing_twice_and_restore_on_every_exit() -> None:
     op = _FakeOp([host], {})
     trace = _FakeTrace(op)
     with _replay_device.saved_args_on_consumed_devices(trace, "op"):
-        outer = op.saved_args[0]
+        outer = op.call.saved_args[0]
         with _replay_device.saved_args_on_consumed_devices(trace, "op"):
-            assert op.saved_args[0] is outer
-        assert op.saved_args[0] is outer
+            assert op.call.saved_args[0] is outer
+        assert op.call.saved_args[0] is outer
         with (
             pytest.raises(RuntimeError, match="inner"),
             _replay_device.saved_args_on_consumed_devices(trace, "op"),
         ):
             raise RuntimeError("inner")
-        assert op.saved_args[0] is outer
-    assert op.saved_args[0] is host
+        assert op.call.saved_args[0] is outer
+    assert op.call.saved_args[0] is host
 
 
 def _grad_models() -> list[tuple[str, Any, tuple[int, ...]]]:

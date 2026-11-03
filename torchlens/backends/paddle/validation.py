@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from ... import _state
+from ..._utils._record_group_table import record_member
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
 from ._param_writes import PARAMETER_WRITE_MARKER
 
@@ -155,11 +156,11 @@ def _rebuild_inputs(capture: Any, ops_by_label: Mapping[str, Any]) -> RebuiltPad
     try:
         args = tuple(
             _rebuild(item, ("args", index))
-            for index, item in enumerate(getattr(capture, "args_template", ()))
+            for index, item in enumerate(record_member(capture, "args_template", ()))
         )
         kwargs = {
             str(key): _rebuild(item, ("kwargs", str(key)))
-            for key, item in getattr(capture, "kwargs_template", {}).items()
+            for key, item in record_member(capture, "kwargs_template", {}).items()
         }
     except (AttributeError, TypeError, ValueError) as exc:
         return RebuiltPaddleInputs(False, (), {}, str(exc), {}, {})
@@ -404,8 +405,8 @@ def _perturb_parent(
     for candidate in _perturb_candidates(parent_value):
         attempted = True
         args, kwargs = _replace_template_paths(
-            tuple(getattr(capture, "args_template", ())),
-            dict(getattr(capture, "kwargs_template", {})),
+            tuple(record_member(capture, "args_template", ())),
+            dict(record_member(capture, "kwargs_template", {})),
             dict.fromkeys(paths, candidate),
             rebuilt,
         )

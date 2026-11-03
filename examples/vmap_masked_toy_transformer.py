@@ -55,7 +55,7 @@ def main() -> None:
     trace = tl.trace(model, x, save="all")
 
     print(trace.transforms)
-    print(trace["vmap_1_1"].transform_config)
+    print(trace["vmap_1_1"].call.func_transform_config)
     trace.draw(path="vmap_masked_toy_transformer")
 
 

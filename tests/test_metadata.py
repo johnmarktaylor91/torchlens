@@ -1925,5 +1925,5 @@ def test_transpose_positional_args_expose_salient_dims():
         save="all",
     )
     op = next(o for o in trace._layer_list if "transpose" in o.func_name)
-    assert op.func_config.get("dim0") == 0
-    assert op.func_config.get("dim1") == 1
+    assert op.call.config.get("dim0") == 0
+    assert op.call.config.get("dim1") == 1

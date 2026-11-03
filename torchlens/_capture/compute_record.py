@@ -491,7 +491,7 @@ def derive_compute_record_for_op(op: Any) -> ComputeRecord | None:
 def _parent_arg_shape(op: Any, index: int, keyword: str) -> Shape | None:
     """Shape of the traced tensor an op received at one argument, or ``None``."""
 
-    positions = getattr(op, "parent_arg_positions", None) or {}
+    positions = record_member(op, "parent_arg_positions", None) or {}
     trace = getattr(op, "source_trace", None)
     label = (positions.get("args") or {}).get(index)
     if label is None:
@@ -508,7 +508,7 @@ def _parent_arg_shape(op: Any, index: int, keyword: str) -> Shape | None:
 def _resolve_qk_parent_shapes(op: Any) -> tuple[Shape | None, Shape | None] | None:
     """Resolve sdpa Q/K argument shapes from the op's recorded parent edges."""
 
-    positions = getattr(op, "parent_arg_positions", None)
+    positions = record_member(op, "parent_arg_positions", None)
     trace = getattr(op, "source_trace", None)
     if not positions or trace is None:
         return None

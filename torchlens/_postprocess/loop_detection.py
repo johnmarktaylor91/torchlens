@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._data_classes._site_key import SiteKeyMinter
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._call_site_contract import (
     CallSiteEntry,
     call_site_contract_violation,
@@ -190,9 +191,9 @@ def _structural_arg_signature(op: Any) -> str:
     """
 
     tokens: list[str] = []
-    for index, arg in enumerate(getattr(op, "non_tensor_pos_args", ()) or ()):
+    for index, arg in enumerate(record_member(op, "non_tensor_pos_args", ()) or ()):
         _append_signature_tokens(arg, f"pos{index}", tokens)
-    kwargs = getattr(op, "non_tensor_kwargs", None) or {}
+    kwargs = record_member(op, "non_tensor_kwargs", None) or {}
     kwarg_items = kwargs.items() if isinstance(kwargs, dict) else kwargs
     for key, arg in sorted(kwarg_items, key=lambda item: str(item[0])):
         _append_signature_tokens(arg, f"kw_{key}", tokens)

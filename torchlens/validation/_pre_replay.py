@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ..backends.torch._foreign_data import FOREIGN_DATA_REPLAY_REASON, is_unresolved_foreign_data
 from .diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
 
@@ -75,7 +76,7 @@ def pre_replay_verdict(
 def _record_unresolved_foreign_data_failure(trace: Any, layer: Op, op_label: str) -> None:
     """Record the typed failure of a foreign data round trip that cannot be re-run."""
 
-    config = dict(getattr(layer, "transform_config", None) or {})
+    config = dict(record_member(layer, "transform_config", None) or {})
     parents = tuple(getattr(layer, "parents", ()) or ())
     record_validation_failure(
         trace,
@@ -125,13 +126,13 @@ def _is_provable_functionless_source_or_boundary(
         return True
     parents = tuple(getattr(layer, "parents", ()) or ())
     children = tuple(getattr(layer, "children", ()) or ())
-    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    parent_arg_positions = record_member(layer, "parent_arg_positions", {}) or {}
     has_parent_arg_positions = any(
         bool(parent_arg_positions.get(arg_type)) for arg_type in ("args", "kwargs")
     )
-    saved_args = getattr(layer, "saved_args", None)
+    saved_args = record_member(layer, "saved_args", None)
     has_saved_args = bool(saved_args)
-    func_call_id = getattr(layer, "func_call_id", None)
+    func_call_id = record_member(layer, "func_call_id", None)
     is_buffer_boundary = (
         func_call_id is None
         and bool(getattr(layer, "buffer_source", None))

@@ -78,7 +78,7 @@ def _freeze_op_replay(op: Any) -> None:
 def _edge_result(trace: Any, op: Any, slot: int) -> Any:
     """Run the perturbation check on the parent recorded at positional ``slot``."""
 
-    parent_label = op.parent_arg_positions["args"][slot]
+    parent_label = op.call.parent_arg_positions["args"][slot]
     return _check_whether_func_on_saved_parents_yields_saved_tensor(
         trace, op.label, perturb=True, layers_to_perturb=[parent_label]
     )

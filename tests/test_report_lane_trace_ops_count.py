@@ -140,7 +140,7 @@ def test_primitive_profile_dense_rows_are_the_layer_list() -> None:
         for ref in row.parent_op_refs:
             op = trace._layer_list[ref.op_row_index]
             assert op.layer_label == ref.op_label
-            assert op.func_call_id == ref.func_call_id
+            assert op.call.call_id == ref.func_call_id
     assert check_metadata_invariants(trace)
 
 

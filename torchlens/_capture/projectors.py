@@ -15,6 +15,7 @@ from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
@@ -376,7 +377,7 @@ class RefreshProjector:
                     layer._layer_label_raw,
                     layer.type,
                     tuple(layer.parents),
-                    _normalized_parent_arg_positions(layer.parent_arg_positions),
+                    _normalized_parent_arg_positions(layer.call.parent_arg_positions),
                 )
                 for layer in layers
             )
@@ -532,7 +533,7 @@ class RefreshProjector:
         source = trace._layer_dict_all_keys[source_label]
         tail = (qualname or "").rsplit(".", 1)[-1].removesuffix("_")
         mode_argument = "use_input_stats" if tail.endswith("instance_norm") else "training"
-        kwargs = getattr(source, "non_tensor_kwargs", None) or {}
+        kwargs = record_member(source, "non_tensor_kwargs", None) or {}
         literal = kwargs.get(mode_argument)
         if not isinstance(literal, bool):
             # The mode flag is the first boolean among the positional non-tensor
@@ -541,7 +542,7 @@ class RefreshProjector:
             literal = next(
                 (
                     value
-                    for value in getattr(source, "non_tensor_pos_args", None) or ()
+                    for value in record_member(source, "non_tensor_pos_args", None) or ()
                     if isinstance(value, bool)
                 ),
                 None,
@@ -743,9 +744,11 @@ class RefreshProjector:
                 )
             expected_parents = tuple(target_layer.parents)
             actual_parents = tuple(refreshed_layer.parents)
-            expected_positions = _normalized_parent_arg_positions(target_layer.parent_arg_positions)
+            expected_positions = _normalized_parent_arg_positions(
+                target_layer.call.parent_arg_positions
+            )
             actual_positions = _normalized_parent_arg_positions(
-                refreshed_layer.parent_arg_positions
+                refreshed_layer.call.parent_arg_positions
             )
             if expected_parents != actual_parents or expected_positions != actual_positions:
                 changed_fields: list[str] = []
@@ -859,7 +862,7 @@ class RefreshProjector:
                 layer._layer_label_raw,
                 record_type(layer),
                 tuple(layer.parents),
-                _normalized_parent_arg_positions(layer.parent_arg_positions),
+                _normalized_parent_arg_positions(layer.call.parent_arg_positions),
             )
             for layer in trace._layer_list
         )

@@ -202,13 +202,13 @@ def test_plain_mutable_containers_are_observably_mutable() -> None:
     """
 
     trace = _capture_cnn()
-    op = next(op for op in trace.ops.values() if op.parent_arg_positions)
-    read = op.parent_arg_positions
-    assert read is op.parent_arg_positions
+    op = next(op for op in trace.ops.values() if op.call.parent_arg_positions)
+    read = op.call.parent_arg_positions
+    assert read is op.call.parent_arg_positions
     read["__aliases_v1_domain__"] = {}
-    assert "__aliases_v1_domain__" in op.parent_arg_positions
-    del op.parent_arg_positions["__aliases_v1_domain__"]
-    assert "__aliases_v1_domain__" not in op.parent_arg_positions
+    assert "__aliases_v1_domain__" in op.call.parent_arg_positions
+    del op.call.parent_arg_positions["__aliases_v1_domain__"]
+    assert "__aliases_v1_domain__" not in op.call.parent_arg_positions
 
 
 def test_multi_output_siblings_share_call_facts_not_identity() -> None:
@@ -266,8 +266,8 @@ def test_op_copy_selective_depth() -> None:
     # Documented shared-by-reference fields.
     assert clone.func is op.func
     assert clone.out is op.out
-    if op.saved_args is not None:
-        assert clone.saved_args is op.saved_args
+    if op.call.saved_args is not None:
+        assert clone.saved_args is op.call.saved_args
     if op.container_spec is not None:
         assert clone.container_spec is op.container_spec
     if op.parent_params:

@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 import torch
+from _record_fakes import FakeRecord
 from torch import nn
 
 import torchlens as tl
@@ -69,7 +70,7 @@ def test_buffer_write_tracker_uninstall_restores_class_after_model_gc() -> None:
 def test_removed_buffer_raw_label_is_scrubbed_from_per_op_graph_fields() -> None:
     """Deleted buffer nodes leave no stale raw labels for final label mapping."""
 
-    op = SimpleNamespace(
+    op = FakeRecord(
         parents=["buffer_3_raw", "add_1_raw"],
         root_ancestors={"buffer_3_raw", "input_1_raw"},
         children=["mul_1_raw", "buffer_3_raw"],
@@ -105,7 +106,7 @@ def test_removed_buffer_raw_label_is_scrubbed_from_per_op_graph_fields() -> None
     # the dead per-op scrub for it was removed by the cert round-1 data-model fix.
     assert op.equivalent_ops == ["add_1_raw"]
     assert op.recurrent_ops == []
-    assert op.parent_arg_positions == {"args": {1: "add_1_raw"}, "kwargs": {}}
+    assert op.call.parent_arg_positions == {"args": {1: "add_1_raw"}, "kwargs": {}}
     assert set(op.out_versions_by_child) == {"add_1_raw"}
     assert op.control_flow.elif_children == {}
     assert op.control_flow.arm_children == {1: {"then": [], "else": ["add_1_raw"]}}
@@ -122,7 +123,7 @@ def test_conditional_child_views_are_rebuilt_after_label_rename() -> None:
         },
         _raw_to_final_op_labels={},
     )
-    layer_entry = SimpleNamespace(
+    layer_entry = FakeRecord(
         parents=[],
         root_ancestors=set(),
         children=[],
@@ -149,7 +150,7 @@ def test_conditional_child_views_are_rebuilt_after_label_rename() -> None:
 def test_cleanup_rebuilds_conditional_child_views_from_primary_structure() -> None:
     """Conditional cleanup normalizes derived branch-child order from the primary map."""
 
-    layer_entry = SimpleNamespace(
+    layer_entry = FakeRecord(
         conditional_entry_children=[],
         conditional_then_children=["drop_me", "child_b", "child_a"],
         conditional_else_children=[],
@@ -519,7 +520,7 @@ def test_buffer_write_models_validate_and_expose_entities(
         # runnable data-alias ceiling is pinned in test_tlspec_runnable_r25_producer).
         copy_op = next(op for op in trace.ops if op.func_name == "copy_")
         add_op = next(op for op in trace.ops if op.func_name == "__add__")
-        assert copy_op.unattributed_tensor_args == ()
+        assert copy_op.call.unattributed_tensor_args == ()
         # The read of ``b`` after the write is the buffer's post-write version
         # node, whose parent is the copy.
         buffer_read = next(label for label in add_op.parents if label.startswith("buffer"))

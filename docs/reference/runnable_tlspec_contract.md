@@ -195,7 +195,7 @@ The sole future capture-spine coupling is this contract; Stage 0 does not implem
 
 ```python
 FunctionCallRef.func_id: FunctionRegistryKey | None
-Op.func_id: FunctionRegistryKey | None
+Op.call.func_id: FunctionRegistryKey | None
 ```
 
 Capture must populate the first where it already computes the live key, copy it to cooked `Op`, and

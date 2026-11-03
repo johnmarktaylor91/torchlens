@@ -204,7 +204,7 @@ def test_edge_substitution_storage_fork_honesty(capture):
     baseline_parent = trace["relu_1_2"].out.clone()
     baseline_child_args = [
         a.clone() if isinstance(a, torch.Tensor) else a
-        for a in trace["conv2d_2_3"].ops[0].saved_args
+        for a in trace["conv2d_2_3"].ops[0].call.saved_args
     ]
     fork.do(edge.__selection__(), tl.zero_ablate())
 
@@ -222,7 +222,7 @@ def test_edge_substitution_storage_fork_honesty(capture):
 
     # tier (iii) capture-surface parity pin: no post-edit value reaches a
     # persisted capture field on the supported engine
-    for saved, baseline in zip(child.saved_args, baseline_child_args, strict=True):
+    for saved, baseline in zip(child.call.saved_args, baseline_child_args, strict=True):
         if isinstance(saved, torch.Tensor):
             assert torch.equal(saved, baseline)
     parent_op = fork["relu_1_2"].ops[0]

@@ -28,6 +28,7 @@ from torchlens._ir.predicate import RecordContext
 from torchlens._ir.refs import DtypeRef, ReservedLabel, TensorRef
 from torchlens._ir.semantics import BackendSemantics, CapturePolicy
 from torchlens._postprocess._materialize import materialize_from_events
+from torchlens._utils._record_group_table import record_member
 from torchlens.backends._backend_protocol import REFUSAL_CODES, VALIDATION_REASONS
 from torchlens.backends._constants import (
     CONSTANT_FUNC_NAME,
@@ -688,4 +689,4 @@ def test_torch_already_satisfies_the_rule_structure() -> None:
     assert sources[0].is_buffer is True
     assert tuple(sources[0].parents) == ()
     assert sources[0].out is not None
-    assert tuple(getattr(mul, "unattributed_tensor_args", ()) or ()) == ()
+    assert tuple(record_member(mul, "unattributed_tensor_args", ()) or ()) == ()

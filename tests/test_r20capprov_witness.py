@@ -181,4 +181,4 @@ def test_provenanced_dynamic_size_arg_becomes_recorded_parent() -> None:
     reshape_op = next(op for op in trace.ops if op.func_name == "reshape")
     getitem_labels = [op.layer_label for op in trace.ops if op.func_name == "__getitem__"]
     assert any(parent in getitem_labels for parent in reshape_op.parents)
-    assert reshape_op.unattributed_tensor_args == ()
+    assert reshape_op.call.unattributed_tensor_args == ()

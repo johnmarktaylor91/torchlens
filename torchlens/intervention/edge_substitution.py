@@ -282,7 +282,7 @@ def apply_edge_substitution_do(
             fire_record = build_fire_record(
                 target_label=child_op.layer_label,
                 call_label=child_op.label,
-                func_call_id=child_op.func_call_id,
+                func_call_id=child_op.call.call_id,
                 container_path=tuple(child_op.container_path or ()),
                 engine="replay",
                 edit=(
@@ -515,7 +515,7 @@ def _rollback_uncommitted_edges(
         store = dict(getattr(child_op, "edge_substitutions", None) or {})
         stamps = dict(getattr(child_op, "edge_replacement_stamps", None) or {})
         if not any(
-            item["edge_address"] == repr((child_op.func_call_id,) + store_key) for item in applied
+            item["edge_address"] == repr((child_op.call.call_id,) + store_key) for item in applied
         ):
             store.pop(store_key, None)
             stamps.pop(store_key, None)

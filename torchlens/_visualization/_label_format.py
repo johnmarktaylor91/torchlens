@@ -297,7 +297,7 @@ def format_module_kwargs(module: Any, suppressed_keys: frozenset[str] = frozense
         Comma-separated ``name=value`` entries, or ``None`` when none are available.
     """
 
-    config = getattr(module, "func_config", None)
+    config = record_member(module, "func_config", None)
     if not isinstance(config, Mapping) or len(config) == 0:
         return None
 

@@ -557,7 +557,7 @@ def _argument_edge_label(child: Any, parent_label: str) -> str | None:
         Comma-separated argument labels, or ``None`` when not applicable.
     """
 
-    arg_locs = getattr(child, "parent_arg_positions", None) or {}
+    arg_locs = record_member(child, "parent_arg_positions", None) or {}
     func_name = (getattr(child, "func_name", None) or record_type(child, "") or "").lower()
     if len(getattr(child, "parents", None) or []) <= 1:
         return None

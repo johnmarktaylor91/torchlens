@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 from collections import OrderedDict
 from typing import TYPE_CHECKING, cast
 
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._trace_accessors import (
@@ -97,7 +98,7 @@ def ops(trace: Trace) -> TraceOpAccessor:
 def transforms(trace: Trace) -> tuple[Op, ...]:
     """Body of ``Trace.transforms``; the record keeps the thin spelling and docstring."""
 
-    return tuple(op for op in trace._layer_list if getattr(op, "is_transform", False))
+    return tuple(op for op in trace._layer_list if record_member(op, "is_transform", False))
 
 
 def layers(trace: Trace) -> LayerAccessor:

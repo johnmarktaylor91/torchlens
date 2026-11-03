@@ -2815,8 +2815,8 @@ class JAXBackend:
                         for item in lineage
                     )
                     setattr(op_log, lineage_field, type(lineage)(relabeled))
-            op_log.parent_arg_positions = _relabel_jax_parent_arg_positions(
-                op_log.parent_arg_positions,
+            op_log._call_parent_arg_positions = _relabel_jax_parent_arg_positions(
+                op_log.call.parent_arg_positions,
                 raw_to_final,
             )
             op_log._internal_set(

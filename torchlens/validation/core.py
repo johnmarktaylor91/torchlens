@@ -42,6 +42,7 @@ from .._ir.events import is_control_edge_use
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
+from .._utils._record_group_table import record_member
 from .._utils.tensor_utils import (
     _ACCUMULATING_REPLAY_ULP_HEADROOM,
     derive_float_tolerances,
@@ -647,8 +648,8 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
         getattr(layer, "layer_label", "<unknown>")
         for layer in self._layer_list
         if getattr(layer, "func", None) is not None
-        and bool(getattr(layer, "has_saved_args", False))
-        and getattr(layer, "saved_args", None) is None
+        and bool(record_member(layer, "has_saved_args", False))
+        and record_member(layer, "saved_args", None) is None
     ]
     if unresolved:
         message = (
@@ -1456,7 +1457,7 @@ def _not_saved_by_user_justification(
         return None
     label = str(getattr(layer, "label", getattr(layer, "layer_label", "<unknown>")))
     func_name = str(getattr(layer, "func_name", "<unknown>"))
-    saved_args_present = getattr(layer, "saved_args", None) is not None
+    saved_args_present = record_member(layer, "saved_args", None) is not None
     default_op = getattr(predicate_options, "default_op", None)
     keep_op = getattr(predicate_options, "keep_op", None)
     keep_op_name = getattr(keep_op, "__name__", type(keep_op).__name__) if keep_op else None
@@ -1653,7 +1654,7 @@ def _check_layer_arguments_logged_correctly(
         data_parents = _data_parent_labels(target_layer)
         parents_in_args = set()
         for arg_type in ["args", "kwargs"]:
-            parents_in_args.update(list(target_layer.parent_arg_positions[arg_type].values()))
+            parents_in_args.update(list(target_layer.call.parent_arg_positions[arg_type].values()))
         if parents_in_args != data_parents:
             try:
                 _raise_if_replay_arg_version_data_incomplete(self, target_layer)
@@ -1808,7 +1809,7 @@ def _parent_logged_for_any_arg_alias(target_layer: Op, parent_layer_labels: set[
     return any(
         logged_parent in parent_layer_labels
         for arg_type in ("args", "kwargs")
-        for logged_parent in target_layer.parent_arg_positions[arg_type].values()
+        for logged_parent in target_layer.call.parent_arg_positions[arg_type].values()
     )
 
 
@@ -1891,8 +1892,8 @@ def _check_arglocs_correct_for_arg(
     # the digest path the snapshot IS that value whenever it matched.
     evidence = saved_arg_val if capture_digest is not None else parent_outs
     parent_layerged_as_arg = (
-        argloc_key in target_layer.parent_arg_positions[arg_type]
-        and target_layer.parent_arg_positions[arg_type][argloc_key] in parent_arg_labels
+        argloc_key in target_layer.call.parent_arg_positions[arg_type]
+        and target_layer.call.parent_arg_positions[arg_type][argloc_key] in parent_arg_labels
     )
 
     # Case 1: parent matches the arg value but is NOT logged at this position.
@@ -2113,7 +2114,7 @@ def _foreach_sibling_attributes_slot(
         return False
     if not (isinstance(argloc_key, tuple) and len(argloc_key) == 2):
         return False
-    call_id = getattr(target_layer, "func_call_id", None)
+    call_id = record_member(target_layer, "func_call_id", None)
     if call_id is None:
         return False
     target_label = getattr(target_layer, "label", None) or target_layer.layer_label
@@ -2121,9 +2122,9 @@ def _foreach_sibling_attributes_slot(
         sibling_label = getattr(sibling, "label", None) or sibling.layer_label
         if sibling_label == target_label:
             continue
-        if getattr(sibling, "func_call_id", None) != call_id:
+        if record_member(sibling, "func_call_id", None) != call_id:
             continue
-        sibling_positions = getattr(sibling, "parent_arg_positions", None) or {}
+        sibling_positions = record_member(sibling, "parent_arg_positions", None) or {}
         if (sibling_positions.get(arg_type) or {}).get(argloc_key) is not None:
             return True
     return False
@@ -2168,7 +2169,9 @@ def _check_unattributed_arg_slots(
     # whose payload is trivial (bool mask, all-zero, all-abs-one) and a
     # wrong-parent swap between value-identical producers both fail here
     # instead of validating silently.
-    dropped_edge_positions = tuple(getattr(target_layer, "dropped_edge_tensor_args", ()) or ())
+    dropped_edge_positions = tuple(
+        record_member(target_layer, "dropped_edge_tensor_args", ()) or ()
+    )
     if dropped_edge_positions:
         if verbose:
             print(
@@ -2199,10 +2202,10 @@ def _check_unattributed_arg_slots(
         return ValidationCheckResult.failed_result("dropped_parent_edge_witness")
 
     argtype_sources = (
-        ("args", getattr(target_layer, "saved_args", None)),
-        ("kwargs", getattr(target_layer, "saved_kwargs", None)),
+        ("args", record_member(target_layer, "saved_args", None)),
+        ("kwargs", record_member(target_layer, "saved_kwargs", None)),
     )
-    parent_arg_positions = getattr(target_layer, "parent_arg_positions", None) or {}
+    parent_arg_positions = record_member(target_layer, "parent_arg_positions", None) or {}
     attributed_labels = {
         logged_parent
         for arg_domain in ("args", "kwargs")
@@ -2947,10 +2950,10 @@ def _actual_perturbed_parent_deltas(
     """
 
     deltas: list[torch.Tensor] = []
-    saved_args = tuple(getattr(layer, "saved_args", ()) or ())
-    saved_kwargs = dict(getattr(layer, "saved_kwargs", {}) or {})
+    saved_args = tuple(record_member(layer, "saved_args", ()) or ())
+    saved_kwargs = dict(record_member(layer, "saved_kwargs", {}) or {})
     for arg_domain in ("args", "kwargs"):
-        entries = (getattr(layer, "parent_arg_positions", {}) or {}).get(arg_domain, {})
+        entries = (record_member(layer, "parent_arg_positions", {}) or {}).get(arg_domain, {})
         for key, parent_label in entries.items():
             if parent_label not in layers_to_perturb:
                 continue
@@ -3025,7 +3028,7 @@ def _additive_alpha(layer: Op) -> float:
         Captured alpha value, or ``1.0`` when absent/non-scalar.
     """
 
-    alpha = (getattr(layer, "saved_kwargs", {}) or {}).get("alpha", 1.0)
+    alpha = (record_member(layer, "saved_kwargs", {}) or {}).get("alpha", 1.0)
     if isinstance(alpha, torch.Tensor):
         if alpha.numel() != 1:
             return 1.0
@@ -3186,11 +3189,11 @@ def _prepare_input_args_for_validating_layer(
     Returns:
         Tuple of prepared replay args and an optional unverified reason code.
     """
-    if layer_to_validate_parents_for.saved_args is None:
+    if layer_to_validate_parents_for.call.saved_args is None:
         return None, "missing_saved_args"
     input_args = {
-        "args": list(layer_to_validate_parents_for.saved_args[:]),
-        "kwargs": layer_to_validate_parents_for.saved_kwargs.copy(),
+        "args": list(layer_to_validate_parents_for.call.saved_args[:]),
+        "kwargs": layer_to_validate_parents_for.call.saved_kwargs.copy(),
     }
     input_args = _copy_validation_args(input_args)
     restore_receiver_storage_context(layer_to_validate_parents_for, input_args)
@@ -3202,7 +3205,7 @@ def _prepare_input_args_for_validating_layer(
         for (
             key,
             parent_layer_arg,
-        ) in layer_to_validate_parents_for.parent_arg_positions[arg_type].items():
+        ) in layer_to_validate_parents_for.call.parent_arg_positions[arg_type].items():
             if parent_layer_arg in skip_parent_swap_labels:
                 continue
             parent_layer = _op_for_validation_label(self, parent_layer_arg)
@@ -3725,9 +3728,9 @@ def _one_hot_num_classes(layer: Op) -> int | None:
         Positive class count when captured, otherwise ``None``.
     """
 
-    saved_kwargs = getattr(layer, "saved_kwargs", {}) or {}
+    saved_kwargs = record_member(layer, "saved_kwargs", {}) or {}
     num_classes = saved_kwargs.get("num_classes")
-    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    saved_args = cast(Sequence[Any], record_member(layer, "saved_args", ()) or ())
     if num_classes is None and len(saved_args) > 1:
         num_classes = saved_args[1]
     if isinstance(num_classes, int):

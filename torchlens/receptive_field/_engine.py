@@ -23,6 +23,7 @@ from .._capture.arg_positions import (
     _schema_arg_is_parent_candidate,
 )
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ..backends import TORCH_BACKEND_NAME
 from ._engine_descriptor import _descriptor
 from ._engine_geometry import (
@@ -1600,9 +1601,11 @@ def _geometry_args_snapshot(op: Op) -> tuple[object, ...]:
     """
 
     return (
-        _snapshot_mapping(getattr(op, "func_config", None)),
-        tuple(_snapshot_value(value) for value in getattr(op, "non_tensor_pos_args", ()) or ()),
-        _snapshot_mapping(getattr(op, "non_tensor_kwargs", None)),
+        _snapshot_mapping(record_member(op, "func_config", None)),
+        tuple(
+            _snapshot_value(value) for value in record_member(op, "non_tensor_pos_args", ()) or ()
+        ),
+        _snapshot_mapping(record_member(op, "non_tensor_kwargs", None)),
     )
 
 

@@ -109,7 +109,7 @@ def _drop_diamond_edge(trace) -> None:
     c1_op.parents = [v for v in c1_op.parents if v not in p_labels]
     p_op.children = [v for v in p_op.children if v not in c1_labels]
     for domain in ("args", "kwargs"):
-        positions = c1_op.parent_arg_positions.get(domain, {})
+        positions = c1_op.call.parent_arg_positions.get(domain, {})
         for key in [k for k, v in positions.items() if v in p_labels]:
             del positions[key]
     for holder in (c1_op, p_op):
@@ -317,7 +317,7 @@ def test_w33_arg_map_naming_non_parent_now_fails() -> None:
     add_ops = [op for op in trace._layer_list if op.func_name == "__add__"]
     foreign = add_ops[-1].layer_label
     assert foreign not in relu_op.parents
-    relu_op.parent_arg_positions["args"][1] = foreign
+    relu_op.call.parent_arg_positions["args"][1] = foreign
 
     with pytest.raises(MetadataInvariantError) as exc_info:
         check_metadata_invariants(trace)
@@ -477,7 +477,7 @@ def test_parent_arg_positions_foreign_domain_fails() -> None:
 
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
     relu_op = [op for op in trace._layer_list if op.func_name == "relu"][0]
-    relu_op.parent_arg_positions["nosuchop_9_9"] = {"args": [0]}
+    relu_op.call.parent_arg_positions["nosuchop_9_9"] = {"args": [0]}
 
     with pytest.raises(MetadataInvariantError) as exc_info:
         check_metadata_invariants(trace)
@@ -884,9 +884,9 @@ def test_check_norm_zero_weight_reads_the_real_captured_weight_slot() -> None:
         bn.eval()
         trace, _ = _capture(bn, torch.randn(2, 4, 8, 8))
         op = next(op for op in trace._layer_list if op.func_name == "batch_norm")
-        assert torch.equal(op.saved_args[1], bn.weight.detach())
-        assert torch.equal(op.saved_args[3], bn.running_mean)
-        positions = op.parent_arg_positions["args"]
+        assert torch.equal(op.call.saved_args[1], bn.weight.detach())
+        assert torch.equal(op.call.saved_args[3], bn.running_mean)
+        positions = op.call.parent_arg_positions["args"]
         for position in (0, 3, 4):
             if position in positions:
                 decision = _check_norm_zero_weight_annihilates(op, [positions[position]])
@@ -955,13 +955,15 @@ def test_sdpa_zero_query_decision_scoped_correctly() -> None:
     nonzero_query = torch.randn(1, 2, 1, 8)
 
     layer = _FakeSdpaOp(zero_query)
-    assert _sdpa_zero_query_decision(layer, ["key_label"], layer.saved_args).exempt is True
-    assert _sdpa_zero_query_decision(layer, ["query_label"], layer.saved_args).exempt is False
-    assert _sdpa_zero_query_decision(layer, ["value_label"], layer.saved_args).exempt is False
+    assert _sdpa_zero_query_decision(layer, ["key_label"], layer.call.saved_args).exempt is True
+    assert _sdpa_zero_query_decision(layer, ["query_label"], layer.call.saved_args).exempt is False
+    assert _sdpa_zero_query_decision(layer, ["value_label"], layer.call.saved_args).exempt is False
 
     nonzero_layer = _FakeSdpaOp(nonzero_query)
     assert (
-        _sdpa_zero_query_decision(nonzero_layer, ["key_label"], nonzero_layer.saved_args).exempt
+        _sdpa_zero_query_decision(
+            nonzero_layer, ["key_label"], nonzero_layer.call.saved_args
+        ).exempt
         is False
     )
 
@@ -999,18 +1001,20 @@ def test_linear_zero_input_annihilates_weight_perturbation() -> None:
 
     layer = _FakeLinearOp(zero_input, nonzero_weight)
     assert (
-        _linear_zero_weight_input_decision(layer, ["weight_label"], layer.saved_args).exempt is True
+        _linear_zero_weight_input_decision(layer, ["weight_label"], layer.call.saved_args).exempt
+        is True
     )
     # Perturbing the (zero) input itself is never exempted by this proof.
     assert (
-        _linear_zero_weight_input_decision(layer, ["input_label"], layer.saved_args).exempt is False
+        _linear_zero_weight_input_decision(layer, ["input_label"], layer.call.saved_args).exempt
+        is False
     )
 
     nonzero_input = torch.randn(2, 4)
     nonzero_layer = _FakeLinearOp(nonzero_input, nonzero_weight)
     assert (
         _linear_zero_weight_input_decision(
-            nonzero_layer, ["weight_label"], nonzero_layer.saved_args
+            nonzero_layer, ["weight_label"], nonzero_layer.call.saved_args
         ).exempt
         is False
     )

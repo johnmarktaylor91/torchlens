@@ -10,6 +10,8 @@ renamed computational op still fails every check it failed before.
 
 from typing import Any
 
+from .._utils._record_group_table import record_member
+
 #: The ``func_name`` and layer type of a closure-constant source op.
 CONSTANT_FUNC_NAME = "constant"
 
@@ -34,6 +36,6 @@ def is_closure_constant_source(layer: Any) -> bool:
         and getattr(layer, "type", CONSTANT_FUNC_NAME) == CONSTANT_FUNC_NAME
         and bool(getattr(layer, "is_internal_source", False))
         and getattr(layer, "func", None) is None
-        and getattr(layer, "func_call_id", None) is None
+        and record_member(layer, "func_call_id", None) is None
         and not tuple(getattr(layer, "parents", ()) or ())
     )

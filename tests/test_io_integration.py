@@ -191,14 +191,14 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     nested_blob_layer = next(
         layer
         for layer in lazy_log._layer_list
-        if layer.saved_args is not None and _contains_blob_ref(layer.saved_args)
+        if layer.call.saved_args is not None and _contains_blob_ref(layer.call.saved_args)
     )
     assert nested_blob_layer.out_ref is not None
-    assert _contains_blob_ref(nested_blob_layer.saved_args)
+    assert _contains_blob_ref(nested_blob_layer.call.saved_args)
 
     materialize_nested(lazy_log)
 
-    assert not _contains_blob_ref(nested_blob_layer.saved_args)
+    assert not _contains_blob_ref(nested_blob_layer.call.saved_args)
     lazy_log.save(resaved_path, include_saved_args=True)
     restored = load(resaved_path, lazy=False)
 
@@ -210,8 +210,8 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     assert restored.source.class_name == live_log.source.class_name
     assert len(restored._layer_list) == len(live_log._layer_list)
     assert any(
-        layer.saved_args is not None
-        and any(isinstance(arg, torch.Tensor) for arg in layer.saved_args)
+        layer.call.saved_args is not None
+        and any(isinstance(arg, torch.Tensor) for arg in layer.call.saved_args)
         for layer in restored._layer_list
     )
 

@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import FacadeTeachingError
+from torchlens._errors import FacadeTeachingError, InvalidArgumentError
 from torchlens._utils._record_group_table import (
     ACTIVE_GROUPS,
     LAYER_MEMBER_MOVES,
@@ -48,7 +48,7 @@ def trace() -> Iterator[tl.Trace]:
 def test_cost_group_is_applied() -> None:
     """The cost rows are live in the refusal tables of both records."""
 
-    assert {"cost", "control_flow"} <= ACTIVE_GROUPS
+    assert {"cost", "control_flow", "call"} <= ACTIVE_GROUPS
     assert len(_OP_COST_ROWS) == 16
     assert len(_LAYER_COST_ROWS) == 17
     assert {old for old, _, _ in _OP_COST_ROWS} <= set(OP_MOVED_MEMBERS)
@@ -64,6 +64,8 @@ def test_group_classes_are_the_public_types(trace: tl.Trace) -> None:
     assert type(layer.cost) is tl.types.LayerCost
     assert type(op.control_flow) is tl.types.OpControlFlow
     assert type(layer.control_flow) is tl.types.LayerControlFlow
+    assert type(op.call) is tl.types.OpCall
+    assert type(layer.call) is tl.types.LayerCall
     assert "flops_forward" in dir(op.cost)
     assert "total_flops_forward" in dir(layer.cost)
     assert "OpCost" in repr(op.cost)
@@ -148,11 +150,11 @@ def test_groups_survive_a_pickle_round_trip(trace: tl.Trace) -> None:
         assert layer.cost.flops_forward == trace.layers["linear_1"].cost.flops_forward
         assert layer.cost.activation_memory == trace.layers["linear_1"].cost.activation_memory
         with pytest.raises(FacadeTeachingError):
-            layer.flops_forward
+            _ = layer.flops_forward
         with pytest.raises(FacadeTeachingError):
-            loaded.ops["linear_1_1"].flops_forward
+            _ = loaded.ops["linear_1_1"].flops_forward
         with pytest.raises(FacadeTeachingError):
-            loaded.ops["linear_1_1"].conditional_depth
+            _ = loaded.ops["linear_1_1"].conditional_depth
     finally:
         loaded.cleanup()
 
@@ -202,11 +204,57 @@ def test_control_flow_group_reads_the_branch() -> None:
         assert flow.is_in_conditional_evaluation is True
         assert flow.depth == 1
         layer = captured.layers[bools[0].layer_label]
-        assert layer.control_flow.terminal_bool_for == bools[0].control_flow.terminal_bool_for
+        assert layer.control_flow.terminal_bool_for == layer.__dict__["terminal_bool_for"]
+        assert layer.control_flow.branch_stack == bools[0].control_flow.branch_stack
         body = [op for op in captured.ops if op.control_flow.is_in_conditional_body]
         assert body
         assert all(op.control_flow.is_in_conditional for op in body)
         with pytest.raises(FacadeTeachingError):
-            bools[0].is_terminal_bool
+            _ = bools[0].is_terminal_bool
+    finally:
+        captured.cleanup()
+
+
+def test_call_group_reads_the_call(trace: tl.Trace) -> None:
+    """The call group serves the stored call facts and the Layer's single-pass members."""
+
+    op = trace.ops["linear_1_1"]
+    layer = trace.layers["linear_1"]
+    assert op.call.num_pos_args == op._call_num_pos_args
+    assert isinstance(op.call.call_id, int)
+    assert op.call.config == op._call_config
+    assert layer.call.num_pos_args == op.call.num_pos_args
+    assert layer.call.rng_states == op.call.rng_states
+    assert layer.call.call_id == op.call.call_id
+    assert set(layer.call.parent_arg_positions) <= {"args", "kwargs"}
+    with pytest.raises(FacadeTeachingError):
+        _ = op.func_call_id
+    with pytest.raises(FacadeTeachingError):
+        _ = layer.saved_args
+
+
+class _Twice(nn.Module):
+    """One module called twice, so its layer has two passes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.fc(self.fc(x))
+
+
+def test_multi_pass_layer_group_refuses_per_pass_members() -> None:
+    """A two-pass Layer refuses a per-pass group member as ambiguous, naming the Op spelling."""
+
+    torch.manual_seed(0)
+    captured = tl.trace(_Twice(), torch.ones(1, 3))
+    try:
+        layer = next(lay for lay in captured.layers if lay.num_passes > 1)
+        assert layer.num_passes == 2
+        with pytest.raises(InvalidArgumentError, match=r"\.call\.call_id"):
+            _ = layer.call.call_id
+        with pytest.raises(InvalidArgumentError, match=r"\.call\.rng_states"):
+            _ = layer.call.rng_states
     finally:
         captured.cleanup()

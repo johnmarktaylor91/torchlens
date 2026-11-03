@@ -41,6 +41,7 @@ from ..._postprocess._selective_save import (
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._utils._record_group_table import record_member
 from ...backends.registry import get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording.types import CaptureSpec
@@ -1595,7 +1596,9 @@ class TinygradBackend:
                 final_to_raw[layer_label] = raw_label
         graph_positions = {
             position: (final_to_raw.get(label, label) if isinstance(label, str) else label)
-            for position, label in getattr(op, "parent_arg_positions", {}).get("args", {}).items()
+            for position, label in record_member(op, "parent_arg_positions", {})
+            .get("args", {})
+            .items()
         }
         parent_labels = tuple(
             final_to_raw.get(label, label) if isinstance(label, str) else label
@@ -2924,7 +2927,7 @@ def _parent_perturbations_change_output(
             final_to_raw[layer_label] = raw_label
     graph_positions = {
         position: (final_to_raw.get(label, label) if isinstance(label, str) else label)
-        for position, label in getattr(op, "parent_arg_positions", {}).get("args", {}).items()
+        for position, label in record_member(op, "parent_arg_positions", {}).get("args", {}).items()
     }
     if not graph_positions:
         return True

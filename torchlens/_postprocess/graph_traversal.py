@@ -18,6 +18,7 @@ from .._data_classes.op import Op, _dtype_or_none, _memory_or_none, _shape_or_no
 from .._ir._output_occurrences import output_container_path_meta
 from .._ir.op_record import amend_late_buffer_output_parent
 from .._quantities import Bytes, Duration
+from .._utils._record_group_table import record_member
 from .._utils.display import identity
 from .._utils.introspection import _get_code_context
 from .._utils.rng import log_current_rng_states
@@ -331,16 +332,16 @@ def _add_output_layers(
         )
         new_output_node.var_names = []
         new_output_node._cost_duration = Duration(0)
-        new_output_node.func_rng_states = (
+        new_output_node._call_rng_states = (
             log_current_rng_states(torch_only=True) if self._options_save_rng else {}
         )
-        new_output_node.arg_names = ()
-        new_output_node.num_args_total = 0
-        new_output_node.num_pos_args = 0
-        new_output_node.num_kwargs = 0
-        new_output_node.non_tensor_pos_args = []
-        new_output_node.non_tensor_kwargs = {}
-        new_output_node.func_non_tensor_args = []
+        new_output_node._call_arg_names = ()
+        new_output_node._call_num_args_total = 0
+        new_output_node._call_num_pos_args = 0
+        new_output_node._call_num_kwargs = 0
+        new_output_node._call_non_tensor_pos_args = []
+        new_output_node._call_non_tensor_kwargs = {}
+        new_output_node._call_non_tensor_args = []
         new_output_node.grad_fn_class_name = None
         new_output_node._cost_autograd_memory = None
         new_output_node.num_autograd_tensors = None
@@ -383,7 +384,7 @@ def _add_output_layers(
         new_output_node.children = []
         new_output_node.has_children = False
         new_output_node.parents = [output_node._label_raw]
-        new_output_node.parent_arg_positions = {
+        new_output_node._call_parent_arg_positions = {
             "args": {0: output_node._label_raw},
             "kwargs": {},
         }
@@ -420,16 +421,16 @@ def _add_output_layers(
         new_output_node.annotations = {}
 
         # Clear func_config on synthetic output nodes:
-        new_output_node.func_config = {}
-        new_output_node.is_transform = False
-        new_output_node.transform_kind = None
-        new_output_node.transform_chain = ()
-        new_output_node.transform_config = {}
-        new_output_node.transform_fn_name = None
-        new_output_node.transform_fn_qualname = None
-        new_output_node.transform_fn_source = None
-        new_output_node.unattributed_tensor_args = ()
-        new_output_node.dropped_edge_tensor_args = ()
+        new_output_node._call_config = {}
+        new_output_node._call_is_func_transform = False
+        new_output_node._call_func_transform_kind = None
+        new_output_node._call_func_transform_chain = ()
+        new_output_node._call_func_transform_config = {}
+        new_output_node._call_func_transform_fn_name = None
+        new_output_node._call_func_transform_fn_qualname = None
+        new_output_node._call_func_transform_fn_source = None
+        new_output_node._call_unattributed_tensor_args = ()
+        new_output_node._call_dropped_edge_tensor_args = ()
 
         # Fix layer equivalence information:
         new_output_node.pass_number = 1
@@ -652,7 +653,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
         func_call_id
         for label in orphan_nodes
         for func_call_id in (
-            getattr(self._raw_graph_ws.raw_layer_dict[label], "func_call_id", None),
+            record_member(self._raw_graph_ws.raw_layer_dict[label], "func_call_id", None),
         )
         if isinstance(func_call_id, int)
     }
@@ -691,10 +692,10 @@ def _child_edge_totally_overwrites(self: "Trace", walked_label: str, child_label
     op = self._raw_graph_ws.raw_layer_dict.get(child_label)
     if op is None:
         return False
-    func_id = getattr(op, "func_id", None)
+    func_id = record_member(op, "func_id", None)
     namespace = getattr(func_id, "namespace", None)
     qualname = getattr(func_id, "qualname", None)
-    arg_locs = getattr(op, "parent_arg_positions", None)
+    arg_locs = record_member(op, "parent_arg_positions", None)
     args_locs = arg_locs.get("args", {}) if isinstance(arg_locs, dict) else {}
     kwargs_locs = arg_locs.get("kwargs", {}) if isinstance(arg_locs, dict) else {}
     if (
@@ -761,7 +762,7 @@ def _orphan_is_uninit_alloc_source(self: "Trace", op: Any) -> bool:
         qualname_is_uninitialized_alloc,
     )
 
-    func_id = getattr(op, "func_id", None)
+    func_id = record_member(op, "func_id", None)
     namespace = getattr(func_id, "namespace", None)
     qualname = getattr(func_id, "qualname", None)
     is_factory = qualname_is_uninitialized_alloc(namespace, qualname)
@@ -790,7 +791,7 @@ def _orphan_is_uninit_alloc_source(self: "Trace", op: Any) -> bool:
     out_numel = _numel(getattr(op, "shape", None))
     if is_factory:
         return out_numel is None or out_numel > 0
-    arg_locs = getattr(op, "parent_arg_positions", None)
+    arg_locs = record_member(op, "parent_arg_positions", None)
     args_locs = arg_locs.get("args", {}) if isinstance(arg_locs, dict) else {}
     receiver = self._raw_graph_ws.raw_layer_dict.get(args_locs.get(0, ""))
     pre_numel = _numel(getattr(receiver, "shape", None)) if receiver is not None else None
@@ -823,7 +824,7 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
         op = self._raw_graph_ws.raw_layer_dict.get(label)
         if op is None:
             continue
-        func_id = getattr(op, "func_id", None)
+        func_id = record_member(op, "func_id", None)
         if func_id is None:
             continue
         if not aten_qualname_is_seeded_rng(
@@ -856,7 +857,7 @@ def _record_pruned_source_less_witness(self: "Trace", orphan_nodes: set[str]) ->
         if label not in orphan_nodes:
             continue
         op = self._raw_graph_ws.raw_layer_dict[label]
-        positions = tuple(getattr(op, "unattributed_tensor_args", ()) or ())
+        positions = tuple(record_member(op, "unattributed_tensor_args", ()) or ())
         if not positions:
             continue
         if escape_sources is None:
@@ -916,7 +917,9 @@ def _expand_seen_nodes_to_complete_func_call_groups(
 
     func_groups: dict[int, set[str]] = {}
     for raw_label in self._raw_graph_ws.raw_layer_labels_list:
-        func_call_id = getattr(self._raw_graph_ws.raw_layer_dict[raw_label], "func_call_id", None)
+        func_call_id = record_member(
+            self._raw_graph_ws.raw_layer_dict[raw_label], "func_call_id", None
+        )
         if func_call_id is not None:
             func_groups.setdefault(func_call_id, set()).add(raw_label)
 

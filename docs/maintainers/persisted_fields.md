@@ -595,7 +595,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `activation_memory` | interned | required: every level | keep | fact | `Op.cost.activation_memory` (field) |
 | `address` | interned | required: every level | keep | fact | `Op.address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Op.annotations` (field) |
-| `arg_names` | interned | required: every level | keep | fact | `Op.arg_names` (field) |
+| `arg_names` | interned | required: every level | keep | fact | `Op.call.arg_names` (field) |
 | `atomic_module_call` | interned | required: every level | keep | fact | `Op.atomic_module_call` (field) |
 | `autograd_memory` | interned | required: every level | keep | fact | `Op.cost.autograd_memory` (field) |
 | `backend_address` | interned | required: every level | keep | fact | `Op.backend_address` (field) |
@@ -623,7 +623,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `container_spec` | interned | required: every level | keep | fact | `Op.container_spec` (field) |
 | `detach_saved_activations` | interned | required: every level | keep | fact | `Op.detach_saved_activations` (field) |
 | `device_ref` | interned | required: every level | keep | fact | `Op.device_ref` (field) |
-| `dropped_edge_tensor_args` | interned | required: every level | keep | fact | `Op.dropped_edge_tensor_args` (field) |
+| `dropped_edge_tensor_args` | interned | required: every level | keep | fact | `Op.call.dropped_edge_tensor_args` (field) |
 | `dtype` | interned | required: every level | keep | fact | `Op.dtype` (field) |
 | `dtype_ref` | interned | required: every level | keep | fact | `Op.dtype_ref` (field) |
 | `edge_replacement_stamps` | scalar | required: every level | keep | fact | `Op.edge_replacement_stamps` (field) |
@@ -634,15 +634,15 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `equivalent_ops` | group | required: every level | keep | fact | `Op.equivalent_ops` (field) |
 | `flops_backward` | interned | required: every level | keep | fact | `Op.cost.flops_backward` (field) |
 | `flops_forward` | interned | required: every level | keep | fact | `Op.cost.flops_forward` (field) |
-| `func_autocast_state` | scalar | required: every level | keep | enrichment | `Op.func_autocast_state` (field) |
-| `func_call_id` | interned | required: every level | keep | fact | `Op.func_call_id` (field) |
-| `func_config` | scalar | required: every level | blob_recursive | enrichment | `Op.func_config` (field) |
+| `func_autocast_state` | scalar | required: every level | keep | enrichment | `Op.call.autocast_state` (field) |
+| `func_call_id` | interned | required: every level | keep | fact | `Op.call.call_id` (field) |
+| `func_config` | scalar | required: every level | blob_recursive | enrichment | `Op.call.config` (field) |
 | `func_duration` | interned | required: every level | keep | fact | `Op.cost.duration` (field) |
-| `func_id` | interned | required: every level | keep | fact | `Op.func_id` (field) |
+| `func_id` | interned | required: every level | keep | fact | `Op.call.func_id` (field) |
 | `func_name` | interned | required: every level | keep | fact | `Op.func_name` (field) |
-| `func_non_tensor_args` | scalar | required: every level | keep | fact | `Op.func_non_tensor_args` (field) |
+| `func_non_tensor_args` | scalar | required: every level | keep | fact | `Op.call.non_tensor_args` (field) |
 | `func_qualname` | interned | required: every level | keep | fact | `Op.func_qualname` (field) |
-| `func_rng_states` | scalar | optional: `include_rng_states` (executable_with_callables) | blob_recursive | fact | `Op.func_rng_states` (field) |
+| `func_rng_states` | scalar | optional: `include_rng_states` (executable_with_callables) | blob_recursive | fact | `Op.call.rng_states` (field) |
 | `fx_call_index` | interned | required: every level | keep | fact | `Op.fx_call_index` (field) |
 | `fx_qualpath` | interned | required: every level | keep | fact | `Op.fx_qualpath` (field) |
 | `grad` | payload | optional: `include_grads` (executable_with_callables, portable) | blob | fact | `Op.grad` (field) |
@@ -659,10 +659,10 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `has_out_variations` | interned | required: every level | keep | fact | `Op.has_out_variations` (field) |
 | `has_output_descendant` | interned | required: every level | keep | fact | `Op.has_output_descendant` (field) |
 | `has_saved_activation` | interned | required: every level | keep | fact | `Op.has_saved_activation` (field) |
-| `has_saved_args` | interned | required: every level | keep | fact | `Op.has_saved_args` (field) |
+| `has_saved_args` | interned | required: every level | keep | fact | `Op.call.has_saved_args` (field) |
 | `in_conditionals` | interned | required: every level | keep | fact | `Op.control_flow.in_conditionals` (field) |
 | `in_multi_output` | interned | required: every level | keep | fact | `Op.in_multi_output` (field) |
-| `injection_provenance` | scalar | required: every level | keep | fact | `Op.injection_provenance` (field) |
+| `injection_provenance` | scalar | required: every level | keep | fact | `Op.call.injection_provenance` (field) |
 | `input_ancestors` | edge | required: every level | keep | derived | `Op.input_ancestors` (field) |
 | `input_to_module_calls` | interned | required: every level | keep | fact | `Op.input_to_module_calls` (field) |
 | `input_was_parameter` | interned | required: every level | keep | fact | `Op.input_was_parameter` (field) |
@@ -684,7 +684,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `is_scalar_bool` | interned | required: every level | keep | fact | `Op.control_flow.is_scalar_bool` (field) |
 | `is_terminal_bool` | interned | required: every level | keep | fact | `Op.control_flow.is_terminal_bool` (field) |
 | `is_terminal_conditional_bool` | interned | required: every level | keep | fact | `Op.control_flow.is_terminal_conditional_bool` (field) |
-| `is_transform` | interned | required: every level | keep | fact | `Op.is_transform` (field) |
+| `is_transform` | interned | required: every level | keep | fact | `Op.call.is_func_transform` (field) |
 | `label` | interned | required: every level | keep | fact | `Op.label` (field) |
 | `layer_label` | interned | required: every level | keep | fact | `Op.layer_label` (field) |
 | `lookup_keys` | scalar | required: every level | keep | derived | `Op.lookup_keys` (field) |
@@ -698,16 +698,16 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `modules` | edge | required: every level | keep | fact | `Op.modules` (field) |
 | `multi_output_index` | interned | required: every level | keep | fact | `Op.multi_output_index` (field) |
 | `multi_output_name` | interned | required: every level | keep | fact | `Op.multi_output_name` (field) |
-| `non_tensor_kwargs` | scalar | required: every level | keep | fact | `Op.non_tensor_kwargs` (field) |
-| `non_tensor_pos_args` | scalar | required: every level | keep | fact | `Op.non_tensor_pos_args` (field) |
-| `num_args_total` | interned | required: every level | keep | fact | `Op.num_args_total` (field) |
+| `non_tensor_kwargs` | scalar | required: every level | keep | fact | `Op.call.non_tensor_kwargs` (field) |
+| `non_tensor_pos_args` | scalar | required: every level | keep | fact | `Op.call.non_tensor_pos_args` (field) |
+| `num_args_total` | interned | required: every level | keep | fact | `Op.call.num_args_total` (field) |
 | `num_autograd_tensors` | interned | required: every level | keep | fact | `Op.num_autograd_tensors` (field) |
-| `num_kwargs` | interned | required: every level | keep | fact | `Op.num_kwargs` (field) |
+| `num_kwargs` | interned | required: every level | keep | fact | `Op.call.num_kwargs` (field) |
 | `num_params` | interned | required: every level | keep | fact | `Op.num_params` (field) |
 | `num_params_frozen` | interned | required: every level | keep | fact | `Op.num_params_frozen` (field) |
 | `num_params_trainable` | interned | required: every level | keep | fact | `Op.num_params_trainable` (field) |
 | `num_passes` | interned | required: every level | keep | fact | `Op.num_passes` (field) |
-| `num_pos_args` | interned | required: every level | keep | fact | `Op.num_pos_args` (field) |
+| `num_pos_args` | interned | required: every level | keep | fact | `Op.call.num_pos_args` (field) |
 | `ordinal_index` | interned | required: every level | keep | fact | `Op.ordinal_index` (field) |
 | `out` | payload | optional: `include_outs` (executable_with_callables, portable) | blob | fact | `Op.out` (field) |
 | `out_versions_by_child` | payload | optional: `include_saved_args` (executable_with_callables) | blob_recursive | fact | `Op.out_versions_by_child` (field) |
@@ -717,7 +717,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `output_of_modules` | edge | required: every level | keep | fact | `Op.output_of_modules` (field) |
 | `param_memory` | interned | required: every level | keep | fact | `Op.cost.param_memory` (field) |
 | `param_shapes` | scalar | required: every level | keep | fact | `Op.param_shapes` (field) |
-| `parent_arg_positions` | scalar | required: every level | keep | fact | `Op.parent_arg_positions` (field) |
+| `parent_arg_positions` | scalar | required: every level | keep | fact | `Op.call.parent_arg_positions` (field) |
 | `parent_param_ops` | scalar | required: every level | keep | fact | `Op.parent_param_ops` (field) |
 | `parent_params` | edge | required: every level | keep | fact | `Op.parent_params` (field) |
 | `parents` | edge | required: every level | keep | fact | `Op.parents` (field) |
@@ -727,8 +727,8 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `resolver_status` | interned | required: every level | keep | fact | `Op.resolver_status` (field) |
 | `root_ancestors` | bitset | required: every level | keep | derived | `Op.root_ancestors` (field) |
 | `save_grads` | interned | required: every level | keep | fact | `Op.save_grads` (field) |
-| `saved_args` | payload | optional: `include_saved_args` (executable_with_callables) | blob_recursive | fact | `Op.saved_args` (field) |
-| `saved_kwargs` | payload | optional: `include_saved_args` (executable_with_callables) | blob_recursive | fact | `Op.saved_kwargs` (field) |
+| `saved_args` | payload | optional: `include_saved_args` (executable_with_callables) | blob_recursive | fact | `Op.call.saved_args` (field) |
+| `saved_kwargs` | payload | optional: `include_saved_args` (executable_with_callables) | blob_recursive | fact | `Op.call.saved_kwargs` (field) |
 | `shape` | interned | required: every level | keep | fact | `Op.shape` (field) |
 | `short_label` | interned | required: every level | keep | derived | `Op.short_label` (field) |
 | `short_layer_label` | interned | required: every level | keep | derived | `Op.short_layer_label` (field) |
@@ -736,13 +736,13 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `step_index` | interned | required: every level | keep | fact | `Op.step_index` (field) |
 | `terminal_bool_for` | interned | required: every level | keep | fact | `Op.control_flow.terminal_bool_for` (field) |
 | `terminal_conditional_id` | interned | required: every level | keep | fact | `Op.terminal_conditional_id` (field) |
-| `tl_authored_root` | interned | required: every level | keep | fact | `Op.tl_authored_root` (field) |
-| `transform_chain` | interned | required: every level | keep | fact | `Op.transform_chain` (field) |
-| `transform_config` | scalar | required: every level | keep | fact | `Op.transform_config` (field) |
-| `transform_fn_name` | interned | required: every level | keep | fact | `Op.transform_fn_name` (field) |
-| `transform_fn_qualname` | interned | required: every level | keep | fact | `Op.transform_fn_qualname` (field) |
-| `transform_fn_source` | interned | required: every level | keep | fact | `Op.transform_fn_source` (field) |
-| `transform_kind` | interned | required: every level | keep | fact | `Op.transform_kind` (field) |
+| `tl_authored_root` | interned | required: every level | keep | fact | `Op.call.tl_authored_root` (field) |
+| `transform_chain` | interned | required: every level | keep | fact | `Op.call.func_transform_chain` (field) |
+| `transform_config` | scalar | required: every level | keep | fact | `Op.call.func_transform_config` (field) |
+| `transform_fn_name` | interned | required: every level | keep | fact | `Op.call.func_transform_fn_name` (field) |
+| `transform_fn_qualname` | interned | required: every level | keep | fact | `Op.call.func_transform_fn_qualname` (field) |
+| `transform_fn_source` | interned | required: every level | keep | fact | `Op.call.func_transform_fn_source` (field) |
+| `transform_kind` | interned | required: every level | keep | fact | `Op.call.func_transform_kind` (field) |
 | `transformed_activation_memory` | interned | required: every level | keep | fact | `Op.cost.transformed_activation_memory` (field) |
 | `transformed_grad` | payload | optional: `include_grads` (executable_with_callables, portable) | blob | fact | `Op.transformed_grad` (field) |
 | `transformed_grad_dtype` | interned | required: every level | keep | fact | `Op.transformed_grad_dtype` (field) |
@@ -753,7 +753,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `transformed_out_shape` | interned | required: every level | keep | fact | `Op.transformed_out_shape` (field) |
 | `type` | interned | required: every level | keep | fact | `Op.type` (field) |
 | `type_index` | interned | required: every level | keep | fact | `Op.type_index` (field) |
-| `unattributed_tensor_args` | interned | required: every level | keep | fact | `Op.unattributed_tensor_args` (field) |
+| `unattributed_tensor_args` | interned | required: every level | keep | fact | `Op.call.unattributed_tensor_args` (field) |
 | `var_names` | scalar | required: every level | keep | fact | `Op.var_names` (field) |
 | `visualizer_path` | interned | required: every level | keep | fact | `Op.visualizer_path` (field) |
 
@@ -770,7 +770,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `activation_memory` | scalar | required: every level | keep | fact | `Layer.cost.activation_memory` (field) |
 | `address` | scalar | required: every level | keep | fact | `Layer.address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Layer.annotations` (field) |
-| `arg_names` | scalar | required: every level | keep | fact | `Layer.arg_names` (field) |
+| `arg_names` | scalar | required: every level | keep | fact | `Layer.call.arg_names` (field) |
 | `autograd_memory` | scalar | required: every level | keep | fact | `Layer.cost.autograd_memory` (field) |
 | `backend_address` | scalar | required: every level | keep | fact | `Layer.backend_address` (field) |
 | `bool_value` | scalar | required: every level | keep | fact | `Layer.control_flow.bool_value` (field) |
@@ -796,7 +796,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `equivalent_ops` | group | required: every level | keep | fact | `Layer.equivalent_ops` (field) |
 | `flops_backward` | scalar | required: every level | keep | fact | `Layer.cost.flops_backward` (field) |
 | `flops_forward` | scalar | required: every level | keep | fact | `Layer.cost.flops_forward` (field) |
-| `func_config` | scalar | required: every level | blob_recursive | fact | `Layer.func_config` (field) |
+| `func_config` | scalar | required: every level | blob_recursive | fact | `Layer.call.config` (field) |
 | `func_name` | scalar | required: every level | keep | fact | `Layer.func_name` (field) |
 | `func_qualname` | scalar | required: every level | keep | fact | `Layer.func_qualname` (field) |
 | `grad_fn_class_name` | scalar | required: every level | keep | fact | `Layer.grad_fn_class_name` (field) |
@@ -824,14 +824,14 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `modules` | edge | required: every level | keep | fact | `Layer.modules` (field) |
 | `multi_output_index` | scalar | required: every level | keep | fact | `Layer.multi_output_index` (field) |
 | `multi_output_name` | scalar | required: every level | keep | fact | `Layer.multi_output_name` (field) |
-| `num_args_total` | scalar | required: every level | keep | fact | `Layer.num_args_total` (field) |
+| `num_args_total` | scalar | required: every level | keep | fact | `Layer.call.num_args_total` (field) |
 | `num_autograd_tensors` | scalar | required: every level | keep | fact | `Layer.num_autograd_tensors` (field) |
-| `num_kwargs` | scalar | required: every level | keep | fact | `Layer.num_kwargs` (field) |
+| `num_kwargs` | scalar | required: every level | keep | fact | `Layer.call.num_kwargs` (field) |
 | `num_params` | scalar | required: every level | keep | fact | `Layer.num_params` (field) |
 | `num_params_frozen` | scalar | required: every level | keep | fact | `Layer.num_params_frozen` (field) |
 | `num_params_trainable` | scalar | required: every level | keep | fact | `Layer.num_params_trainable` (field) |
 | `num_passes` | scalar | required: every level | keep | fact | `Layer.num_passes` (field) |
-| `num_pos_args` | scalar | required: every level | keep | fact | `Layer.num_pos_args` (field) |
+| `num_pos_args` | scalar | required: every level | keep | fact | `Layer.call.num_pos_args` (field) |
 | `ops` | edge | required: every level | keep | fact | `Layer.ops` (field) |
 | `ordinal_index` | scalar | required: every level | keep | fact | `Layer.ordinal_index` (field) |
 | `output_device` | scalar | required: every level | keep | fact | `Layer.output_device` (field) |

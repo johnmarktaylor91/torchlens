@@ -24,6 +24,7 @@ from typing import Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensError
 from ._errors import refuse
 from ._records import AttentionView, GqaInfo, MaskInfo, TokenAxis
@@ -99,8 +100,8 @@ def _mask_from_sdpa(module: Any, n_dst: int, n_src: int, batch_index: int) -> Ma
     op = find_sdpa_op(module)
     if op is None:
         return None
-    kwargs = dict(getattr(op, "saved_kwargs", {}) or {})
-    args = list(getattr(op, "saved_args", ()) or ())
+    kwargs = dict(record_member(op, "saved_kwargs", {}) or {})
+    args = list(record_member(op, "saved_args", ()) or ())
     attn_mask = kwargs.get("attn_mask", args[3] if len(args) > 3 else None)
     if isinstance(attn_mask, torch.Tensor):
         masked = _masked_positions(attn_mask, n_dst, n_src, batch_index)

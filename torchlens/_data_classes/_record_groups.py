@@ -15,33 +15,11 @@ from .._quantities import Bytes, Duration, Flops, Macs
 from .._utils.facade import refuse_removed_member
 from . import _doors, _op_cost
 from ._layer_views import layer_total_macs_forward
+from ._record_group_base import _LayerGroup, _RecordGroup
 
 if TYPE_CHECKING:
     from .layer import Layer
     from .op import Op
-
-
-class _RecordGroup:
-    """Base for the read-only concern groups of one ``Op`` or ``Layer``."""
-
-    __slots__ = ("_record",)
-
-    def __init__(self, record: Any) -> None:
-        """Bind the group to ``record``."""
-
-        self._record = record
-
-    def __repr__(self) -> str:
-        """Name the group and its record."""
-
-        record = self._record
-        label = getattr(record, "label", None)
-        return f"<{type(self).__name__} of {type(record).__name__} {label!r}>"
-
-    def __dir__(self) -> list[str]:
-        """List the group's public members."""
-
-        return sorted(n for n in dir(type(self)) if not n.startswith("_"))
 
 
 class MovedMemberField:
@@ -202,7 +180,7 @@ class OpCost(_RecordGroup):
         return _op_cost.arithmetic_intensity(self._record)
 
 
-class LayerCost(_RecordGroup):
+class LayerCost(_LayerGroup):
     """Compute, memory and timing facts of one Layer.
 
     Single-value members describe the representative (first) pass; the
@@ -219,6 +197,7 @@ class LayerCost(_RecordGroup):
 
     __slots__ = ()
     _record: Layer
+    _GROUP = "cost"
 
     @property
     def activation_memory(self) -> Bytes | None:
@@ -455,7 +434,7 @@ class OpControlFlow(_RecordGroup):
         return any(role.role == "evaluation" for role in self.in_conditionals or [])
 
 
-class LayerControlFlow(_RecordGroup):
+class LayerControlFlow(_LayerGroup):
     """Conditional and branch facts of one Layer.
 
     Examples
@@ -468,6 +447,7 @@ class LayerControlFlow(_RecordGroup):
 
     __slots__ = ()
     _record: Layer
+    _GROUP = "control_flow"
 
     @property
     def arm_children(self) -> Any:

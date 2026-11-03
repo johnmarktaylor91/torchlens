@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from .._utils._record_group_table import record_member
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ._replay_cone import _disclosure_label
 from ._replay_context import _replay_site_key
@@ -217,7 +218,7 @@ def _is_unseeded_single_draw(representative: Op, replay_group: Sequence[Op]) -> 
     func_name = str(getattr(representative, "func_name", "") or "").rstrip("_")
     if func_name not in _STOCHASTIC_FUNC_NAMES:
         return False
-    if getattr(representative, "func_rng_states", None):
+    if record_member(representative, "func_rng_states", None):
         return False
     if len(replay_group) != 1 or tuple(representative.container_path or ()):
         return False

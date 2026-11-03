@@ -21,6 +21,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._capture._run_setup as capture_run_setup
+from torchlens._utils._record_group_table import record_member
 from torchlens.intervention.errors import BindingPreflightError
 from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
@@ -148,14 +149,18 @@ def _injected_rows(state):
     """Injected op rows of a pickled artifact state."""
 
     return [
-        op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is not None
+        op
+        for op in state["_layer_list"]
+        if record_member(op, "injection_provenance", None) is not None
     ]
 
 
 def _model_rows(state):
     """Model op rows of a pickled artifact state."""
 
-    return [op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is None]
+    return [
+        op for op in state["_layer_list"] if record_member(op, "injection_provenance", None) is None
+    ]
 
 
 # ---------------------------------------------------------------------------

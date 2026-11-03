@@ -35,7 +35,7 @@ from ..._ir.op_record import (
     amend_raw_hook_intervention,
 )
 from ..._quantities import Bytes
-from ..._utils._record_group_table import op_attr
+from ..._utils._record_group_table import op_attr, record_member
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import (
     _get_code_context,
@@ -1345,7 +1345,7 @@ def _note_replacement_event(
             timestamp=time.time(),
             run_token=events.run_nonce,
             target_seq=int(getattr(target_event, "seq", 0) or 0),
-            target_func_call_id=getattr(target_event, "func_call_id", None),
+            target_func_call_id=record_member(target_event, "func_call_id", None),
         )
     )
 

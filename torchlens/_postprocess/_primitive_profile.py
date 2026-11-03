@@ -15,6 +15,7 @@ from .._data_classes.aten_op import (
 )
 from .._ir.events import _AtenCallEvent, _ModePausedInteriorEvent
 from .._trace_core.record_rows import adopt_records, adopt_rows
+from .._utils._record_group_table import record_member
 
 
 def _op_refs_by_func_call_id(trace: Any) -> dict[int, tuple[OpRef, ...]]:
@@ -33,7 +34,7 @@ def _op_refs_by_func_call_id(trace: Any) -> dict[int, tuple[OpRef, ...]]:
 
     grouped: dict[int, list[OpRef]] = defaultdict(list)
     for row_index, op in enumerate(trace._layer_list):
-        func_call_id = getattr(op, "func_call_id", None)
+        func_call_id = record_member(op, "func_call_id", None)
         label = getattr(op, "layer_label", None)
         if isinstance(func_call_id, int) and isinstance(label, str):
             grouped[func_call_id].append(

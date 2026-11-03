@@ -23,6 +23,7 @@ from torchlens._runnable import (
 )
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens._utils._foreign_data_replay import foreigndata
+from torchlens._utils._record_group_table import record_member
 from torchlens._utils.display import identity
 from torchlens.errors import RunnablePreflightError
 from torchlens.intervention._resolver_registry import function_registry_key_from_callable
@@ -398,7 +399,7 @@ def _legacy_ctor_labels(trace: Any) -> list[str]:
     """Return the pass-qualified labels of the legacy-constructor ops."""
 
     ops = trace.ops.values() if hasattr(trace.ops, "values") else trace.ops
-    return [str(op.label) for op in ops if getattr(op, "func_id", None) == _LEGACY_CTOR_KEY]
+    return [str(op.label) for op in ops if record_member(op, "func_id", None) == _LEGACY_CTOR_KEY]
 
 
 @pytest.mark.smoke

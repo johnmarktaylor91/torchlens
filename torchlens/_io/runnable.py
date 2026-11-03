@@ -84,7 +84,7 @@ from .._runnable import (
 )
 from .._runnable.state import runnable_tensor_byte_digest
 from .._utils._callable_safety import _STORAGE_UNSAFE_NAMES
-from .._utils._record_group_table import record_member
+from .._utils._record_group_table import op_attr, record_member
 from ..backends.registry import BackendRegistryError, get_backend_spec
 from ..errors import RunnablePreflightError
 from ..errors.runnable import SparseCorePayloadError
@@ -162,7 +162,7 @@ def _call_execution_context(representative: Any) -> CallExecutionContext | None:
     defaulted.
     """
 
-    state = getattr(representative, "func_autocast_state", None)
+    state = record_member(representative, "func_autocast_state", None)
     if not isinstance(state, Mapping):
         return None
     execution = state.get("__execution__")
@@ -407,7 +407,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     for call_number, call_ops in grouped_ops:
         representative = call_ops[0]
         call_id = f"call:{call_number}"
-        func_id = getattr(representative, "func_id", None)
+        func_id = record_member(representative, "func_id", None)
         if not isinstance(func_id, FunctionRegistryKey):
             diagnostics.append(
                 _diagnostic(
@@ -450,7 +450,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             )
             continue
 
-        template = getattr(representative, "args_template", None)
+        template = record_member(representative, "args_template", None)
         if not isinstance(template, CapturedArgTemplate):
             diagnostics.append(
                 _diagnostic(
@@ -509,10 +509,10 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
                 registry_id=registry_id,
                 dispatch_kind=func_id.dispatch_kind,
                 argument_names=tuple(
-                    str(name) for name in getattr(representative, "arg_names", ())
+                    str(name) for name in record_member(representative, "arg_names", ())
                 ),
-                num_positional_args=int(getattr(representative, "num_pos_args", 0)),
-                num_keyword_args=int(getattr(representative, "num_kwargs", 0)),
+                num_positional_args=int(record_member(representative, "num_pos_args", 0)),
+                num_keyword_args=int(record_member(representative, "num_kwargs", 0)),
                 tensor_arguments=tuple(tensor_args),
                 literal_arguments=tuple(literal_args),
                 output_slot_ids=output_slot_ids,
@@ -851,8 +851,9 @@ def _normalize_trace_numpy_scalar_metadata(trace: Any) -> None:
             "args_template",
             "kwargs_template",
         ):
-            if hasattr(op, field_name):
-                setattr(op, field_name, _normalize_numpy_scalars(getattr(op, field_name)))
+            attr = op_attr(field_name)
+            if hasattr(op, attr):
+                setattr(op, attr, _normalize_numpy_scalars(getattr(op, attr)))
     leaves = trace._runnable.input_nontensor_leaves
     if leaves is not None:
         trace._runnable.input_nontensor_leaves = _normalize_numpy_scalars(leaves)
@@ -1689,7 +1690,7 @@ def _build_call_arguments(
     literal_args: list[LiteralArgumentRef] = []
     is_record = isinstance(op, (_op_mod.Op, _layer_mod.Layer))
     parameter_candidates = list((op._param_logs if is_record else ()) or ())
-    non_tensor_positional = iter(getattr(op, "non_tensor_pos_args", ()) or ())
+    non_tensor_positional = iter(record_member(op, "non_tensor_pos_args", ()) or ())
     has_unmodelled_host_write = False
     append_component = partial(
         _append_argument_component,
@@ -1735,7 +1736,7 @@ def _build_call_arguments(
         if not _component_contains_tensor(component):
             override = next(non_tensor_positional, _NO_OVERRIDE)
         append_component(component, path=path, literal_override=override)
-    non_tensor_kwargs = getattr(op, "non_tensor_kwargs", {}) or {}
+    non_tensor_kwargs = record_member(op, "non_tensor_kwargs", {}) or {}
     for key, component in template.kwargs:
         path = ("kwargs", str(key))
         override = non_tensor_kwargs.get(key, _NO_OVERRIDE)
@@ -2227,7 +2228,7 @@ def _match_parameter(
     identity_matches = [param for param in matches if _same_tensor_identity(tensor, param)]
     if len(identity_matches) == 1:
         return identity_matches[0]
-    argument_names = tuple(getattr(op, "arg_names", ()) or ())
+    argument_names = tuple(record_member(op, "arg_names", ()) or ())
     top_index = path[1] if len(path) > 1 and isinstance(path[1], int) else None
     argument_name = (
         str(argument_names[top_index])
@@ -2320,7 +2321,7 @@ def _group_computational_ops(ops: Sequence[Any]) -> list[tuple[int, list[Any]]]:
     groups: dict[int, list[Any]] = defaultdict(list)
     first_index: dict[int, int] = {}
     for index, op in enumerate(ops):
-        call_number = getattr(op, "func_call_id", None)
+        call_number = record_member(op, "func_call_id", None)
         if call_number is None or bool(getattr(op, "is_input", False)):
             continue
         if bool(getattr(op, "is_buffer", False)) or bool(getattr(op, "is_output", False)):
@@ -2510,7 +2511,7 @@ def _build_control_witnesses(
             if context_kind == "while"
             else ControlWitnessKind.SCALAR_BOOL
         )
-        call_number = getattr(op, "func_call_id", None)
+        call_number = record_member(op, "func_call_id", None)
         call_id = None if call_number is None else f"call:{call_number}"
         if call_id is None or call_id not in known_call_ids:
             # No surviving owner record can anchor this predicate: fail closed as an
@@ -4797,9 +4798,9 @@ def _runtime_fingerprint(
             "version": func_id.version,
             "import_path": func_id.import_path,
         },
-        "argument_names": list(getattr(op, "arg_names", ()) or ()),
-        "num_positional_args": int(getattr(op, "num_pos_args", 0)),
-        "num_keyword_args": int(getattr(op, "num_kwargs", 0)),
+        "argument_names": list(record_member(op, "arg_names", ()) or ()),
+        "num_positional_args": int(record_member(op, "num_pos_args", 0)),
+        "num_keyword_args": int(record_member(op, "num_kwargs", 0)),
         "outputs": [
             {"shape": list(_shape_tuple(item.shape) or ()), "dtype": _dtype_name(item)}
             for item in call_ops

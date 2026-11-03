@@ -730,7 +730,7 @@
   analysis-only); `"health_facts"` and `"capture_advisories"` are reserved annotation
   families with their validation rows; and three ENTRY-DARK slots are declared with
   fail-closed load validation so their Phase-3 writers need no further bump:
-  `Op.injection_provenance` (F01 log_injections), `Trace.source.snapshots` (F30),
+  `Op.call.injection_provenance` (F01 log_injections), `Trace.source.snapshots` (F30),
   `Trace.graph.structure_evidence` (F33). Contract of record:
   `torchlens/schemas/writer_contract_v10.json` (the v9 and v8 contracts left with the 2.x readers);
   the C07-adjudicated field-intent census is maintained privately. The C07X
@@ -755,7 +755,7 @@
   entry-dark slots with fail-closed validation: `Trace.provenance.root_entry_point` (the closed
   `module_call|bound_method|function_call` root descriptor, written UNCONDITIONALLY on
   every capture; joined to the rerun identity gate FAIL-CLOSED — the F41 bullet above),
-  `Op.episode_step` (F-EPISODE writes), `Op.tl_authored_root` (F41 writes it on
+  `Op.episode_step` (F-EPISODE writes), `Op.call.tl_authored_root` (F41 writes it on
   bound-method captures, live). The Bundle-side ledger rows
   join (foldB s4.4 item 12) SPLIT OFF per the review proviso: the C07 ledger shape stays
   unresolved pre-F03 and must not hold the amendment past V9-FREEZE.
@@ -1711,7 +1711,10 @@
   (`tl.types.LayerCost`) hold compute, memory and timing facts (`op.cost.flops_forward`,
   `op.cost.duration`, `layer.cost.total_flops_forward`), and `op.control_flow`
   (`tl.types.OpControlFlow`) and `layer.control_flow` (`tl.types.LayerControlFlow`) hold
-  conditional-branch facts (`op.control_flow.is_terminal_bool`, `layer.control_flow.depth`); a former
+  conditional-branch facts (`op.control_flow.is_terminal_bool`, `layer.control_flow.depth`), and
+  `op.call` (`tl.types.OpCall`) and `layer.call` (`tl.types.LayerCall`) hold how the function was
+  called (`op.call.call_id`, `op.call.saved_args`, `layer.call.num_pos_args`); a Layer group reads an
+  Op-only member of its group through the single pass (`layer.control_flow.branch_stack`); a former
   flat spelling such as `op.flops_forward` refuses typed (`facade_redirect`) and names the new one. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:

@@ -3512,7 +3512,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
     autocast_facts: list[dict[str, Any]] = []
     seen_autocast: set[str] = set()
     for op in trace._layer_list:
-        state = getattr(op, "func_autocast_state", None)
+        state = record_member(op, "func_autocast_state", None)
         if not isinstance(state, Mapping) or not state:
             continue
         normalized = _json_ready_provenance_value(state)

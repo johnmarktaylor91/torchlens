@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from .._errors import CaptureGapError
+from .._utils._record_group_table import record_member
 from .registry import BackendUnsupportedError
 
 __tl_layer__ = "L2"
@@ -423,9 +424,9 @@ def is_literal_producer_op(op: Any) -> bool:
         return False
     if tuple(getattr(op, "parents", ()) or ()):
         return False
-    if tuple(getattr(op, "unattributed_tensor_args", ()) or ()):
+    if tuple(record_member(op, "unattributed_tensor_args", ()) or ()):
         return False
-    if tuple(getattr(op, "dropped_edge_tensor_args", ()) or ()):
+    if tuple(record_member(op, "dropped_edge_tensor_args", ()) or ()):
         return False
     return not is_rng_producer_name(getattr(op, "func_name", None))
 

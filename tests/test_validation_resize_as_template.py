@@ -84,11 +84,11 @@ def test_resize_as_exempts_only_the_template_slot(by_keyword: bool) -> None:
     trace, _ = _capture(_ResizeAsTemplate(by_keyword), torch.rand(4))
     try:
         op = _op(trace, "resize_as_")
-        receiver = op.parent_arg_positions["args"][0]
+        receiver = op.call.parent_arg_positions["args"][0]
         if by_keyword:
-            template = op.parent_arg_positions["kwargs"]["the_template"]
+            template = op.call.parent_arg_positions["kwargs"]["the_template"]
         else:
-            template = op.parent_arg_positions["args"][1]
+            template = op.call.parent_arg_positions["args"][1]
         assert receiver != template
         assert _check_perturbation_exemptions(trace, op, [template]) is True
         assert _check_perturbation_exemptions(trace, op, [receiver]) is False
@@ -102,7 +102,7 @@ def test_same_parent_in_receiver_and_template_slot_is_not_exempt() -> None:
     trace, _ = _capture(_ResizeAsSelf(), torch.rand(4))
     try:
         op = _op(trace, "resize_as_")
-        (receiver,) = set(op.parent_arg_positions["args"].values())
+        (receiver,) = set(op.call.parent_arg_positions["args"].values())
         assert _check_perturbation_exemptions(trace, op, [receiver]) is False
     finally:
         trace.cleanup()
@@ -114,7 +114,7 @@ def test_resize_receiver_gets_no_exemption() -> None:
     trace, _ = _capture(_ResizeShrink(), torch.rand(4))
     try:
         op = _op(trace, "resize_")
-        receiver = op.parent_arg_positions["args"][0]
+        receiver = op.call.parent_arg_positions["args"][0]
         assert _check_perturbation_exemptions(trace, op, [receiver]) is False
     finally:
         trace.cleanup()
@@ -145,7 +145,7 @@ def test_receiver_blind_resize_still_fails_perturbation(
     trace, ground_truth = _capture(model_cls(), torch.rand(4))
     try:
         op = _op(trace, func_name)
-        receiver_label = op.parent_arg_positions["args"][0]
+        receiver_label = op.call.parent_arg_positions["args"][0]
         frozen = op.out.detach().clone()
 
         def receiver_blind(receiver: torch.Tensor, *args: object, **kwargs: object):

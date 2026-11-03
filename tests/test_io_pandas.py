@@ -395,7 +395,7 @@ def test_trace_to_pandas_func_config_and_conditional_values() -> None:
         assert "conditional_then_children" in model_df.columns
 
         conv_row = model_df[model_df["layer_label"] == "conv2d_1_1"].iloc[0]
-        assert conv_row["func_config"] == log["conv2d_1_1"].func_config
+        assert conv_row["func_config"] == log["conv2d_1_1"].call.config
         assert conv_row["func_config"]["stride"] == (2, 2)
         assert conv_row["conditional_then_children"] == ("relu_1_4",)
 

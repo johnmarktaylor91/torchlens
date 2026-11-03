@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn
 
+from .._utils._record_group_table import record_member
 from .forgery_validation import _is_digest, _is_int, _is_sequence, _refuse, _trace_ops
 
 if TYPE_CHECKING:
@@ -231,7 +232,7 @@ def _validate_edge_entry(op: Any, key: Any, entry: Any, stamp: Any, anchors: _Ed
     """Corroborate ONE carrier entry of ``op`` (address shape, digest, occurrence) and its stamp."""
 
     label = str(getattr(op, "label", "<unknown>"))
-    func_call_id = getattr(op, "func_call_id", None)
+    func_call_id = record_member(op, "func_call_id", None)
     if not (
         isinstance(key, tuple)
         and len(key) == 2

@@ -495,7 +495,7 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
                 name,
                 f"Buffer '{address}' version '{label}' replay source is not a parent",
             )
-        parent_args = getattr(version, "parent_arg_positions", {}) or {}
+        parent_args = record_member(version, "parent_arg_positions", {}) or {}
         arg_positions = parent_args.get("args", {}) if isinstance(parent_args, Mapping) else {}
         resolved_arg0 = _resolve_trace_label(ml, arg_positions.get(0, ""))
         if resolved_arg0 != resolved_source:
@@ -503,7 +503,7 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
                 name,
                 f"Buffer '{address}' version '{label}' replay source is not args[0]",
             )
-        if not getattr(version, "saved_args", None):
+        if not record_member(version, "saved_args", None):
             raise MetadataInvariantError(
                 name,
                 f"Buffer '{address}' version '{label}' claims replay validation without "
@@ -522,6 +522,7 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
 from ._invariants_entry import (  # noqa: E402
     _module_claim_address,
     _module_claims,

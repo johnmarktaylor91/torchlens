@@ -10,6 +10,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
+from torchlens._utils._record_group_table import record_member
 from torchlens._utils.introspection import get_vars_of_type_from_obj
 from torchlens.backends.torch._tl import (
     TensorMeta,
@@ -106,8 +107,8 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     for layer in log._layer_list:
         _assert_tensor_tree_clean(layer.out)
         _assert_tensor_tree_clean(getattr(layer, "transformed_out", None))
-        _assert_tensor_tree_clean(getattr(layer, "saved_args", None))
-        _assert_tensor_tree_clean(getattr(layer, "saved_kwargs", None))
+        _assert_tensor_tree_clean(record_member(layer, "saved_args", None))
+        _assert_tensor_tree_clean(record_member(layer, "saved_kwargs", None))
 
 
 def test_successful_capture_cleans_deeply_nested_saved_args() -> None:
@@ -123,7 +124,7 @@ def test_successful_capture_cleans_deeply_nested_saved_args() -> None:
     foreach_ops = [op for op in trace.ops if op.func_name == "_foreach_add"]
     assert foreach_ops
     for op in foreach_ops:
-        _assert_tensor_tree_clean(op.saved_args)
+        _assert_tensor_tree_clean(op.call.saved_args)
 
 
 def test_failed_capture_cleans_partial_outputs_buffers_and_params() -> None:

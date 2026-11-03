@@ -4,6 +4,7 @@
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr
+from .._utils._record_group_table import record_member
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
@@ -1530,7 +1531,7 @@ def _render_edge_occurrences(
             )
 
     occurrences: list[tuple[tuple[Any, ...], str | None]] = []
-    positions = getattr(child_node, "parent_arg_positions", None)
+    positions = record_member(child_node, "parent_arg_positions", None)
     if isinstance(positions, Mapping):
         for arg_type in ("args", "kwargs"):
             arg_positions = positions.get(arg_type, {})

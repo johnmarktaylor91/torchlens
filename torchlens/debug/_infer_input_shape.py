@@ -16,6 +16,7 @@ from torchlens._errors import ShapeInferenceError
 from torchlens.debug._infer_failure_classify import classify_nongeometric_failure
 
 from .._debug_report import FoundReport
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
@@ -1303,7 +1304,7 @@ def _shape_op_config_int(op: Any, key: str) -> int | None:
         Integer value when present.
     """
 
-    config = getattr(op, "func_config", {}) or {}
+    config = record_member(op, "func_config", {}) or {}
     value = config.get(key)
     return int(value) if value is not None else None
 

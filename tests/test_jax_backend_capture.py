@@ -893,9 +893,9 @@ def test_jax_validation_fails_when_parent_edge_is_rewired_wrong() -> None:
         ),
     )
     add_op = _jax_equation_op(trace, "add")
-    wrong_parent = add_op.parent_arg_positions["args"][0]
+    wrong_parent = add_op.call.parent_arg_positions["args"][0]
 
-    add_op.parent_arg_positions["args"][1] = wrong_parent
+    add_op.call.parent_arg_positions["args"][1] = wrong_parent
     add_op.parents = [wrong_parent]
 
     assert trace.validate_forward_pass([], validate_metadata=False) is False
@@ -949,8 +949,8 @@ def test_jax_synthetic_control_parent_is_not_a_value_replay_parent() -> None:
                 arg_kind="positional",
                 arg_path=(),
                 view_or_copy="unknown",
-                parent_func_call_id=control_parent.func_call_id,
-                child_func_call_id=cast(int, mul_op.func_call_id),
+                parent_func_call_id=control_parent.call.call_id,
+                child_func_call_id=cast(int, mul_op.call.call_id),
                 edge_use="control",
             ),
         ],

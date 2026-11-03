@@ -15,6 +15,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 
+from .._utils._record_group_table import record_member
 from . import ArtifactError
 from ._forgery_identity_facts import _validate_identity_facts
 
@@ -1772,7 +1773,7 @@ def _validate_injection_provenance(trace: Trace) -> None:
     """
 
     for op in _trace_ops(trace):
-        record = getattr(op, "injection_provenance", None)
+        record = record_member(op, "injection_provenance", None)
         if record is None:
             continue
         check_injection_provenance_row(record, getattr(op, "label", "<unknown>"))

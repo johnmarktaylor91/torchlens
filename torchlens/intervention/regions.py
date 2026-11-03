@@ -241,11 +241,11 @@ def _resolve_boundary_edge(
 
     parent_op = graph.ops[parent_label]
     child_op = graph.ops[child_label]
-    candidates = by_call.get(child_op.func_call_id, [])
+    candidates = by_call.get(child_op.call.call_id, [])
     matches = []
     for record in candidates:
         if record.parent_func_call_id is not None:
-            if record.parent_func_call_id == parent_op.func_call_id:
+            if record.parent_func_call_id == parent_op.call.call_id:
                 matches.append(record)
         elif record.parent_label == parent_op.layer_label:
             matches.append(record)
@@ -914,7 +914,7 @@ def _commit_region_occurrence(
     fire_record = build_fire_record(
         target_label=child_op.layer_label,
         call_label=child_op.label,
-        func_call_id=child_op.func_call_id,
+        func_call_id=child_op.call.call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
         edit=None,

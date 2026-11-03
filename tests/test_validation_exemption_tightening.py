@@ -246,7 +246,7 @@ def test_dead_embedding_index_edge_now_fails() -> None:
 
     trace = _capture(_EmbeddingModel(), torch.randint(0, 7, (3, 5)))
     op = _op_with_func_name(trace, "embedding")
-    index_parent = op.parent_arg_positions["args"][1]
+    index_parent = op.call.parent_arg_positions["args"][1]
     _assert_edge_sensitivity_verified(trace, op, index_parent)
     _freeze_op_replay(op)
     _assert_edge_now_fails(trace, op, index_parent)
@@ -257,7 +257,7 @@ def test_dead_gather_index_edge_now_fails() -> None:
 
     trace = _capture(_GatherModel(), torch.randn(4, 5))
     op = _op_with_func_name(trace, "gather")
-    index_parent = op.parent_arg_positions["args"][2]
+    index_parent = op.call.parent_arg_positions["args"][2]
     _assert_edge_sensitivity_verified(trace, op, index_parent)
     _freeze_op_replay(op)
     _assert_edge_now_fails(trace, op, index_parent)
@@ -268,7 +268,7 @@ def test_dead_cross_entropy_target_edge_now_fails() -> None:
 
     trace = _capture(_CrossEntropyModel(), torch.randn(3, 4))
     op = _op_with_func_name(trace, "cross_entropy")
-    target_parent = op.parent_arg_positions["args"][1]
+    target_parent = op.call.parent_arg_positions["args"][1]
     _assert_edge_sensitivity_verified(trace, op, target_parent)
     _freeze_op_replay(op)
     _assert_edge_now_fails(trace, op, target_parent)
@@ -279,7 +279,7 @@ def test_dead_scatter_index_edge_now_fails() -> None:
 
     trace = _capture(_ScatterIndexModel(), torch.randn(4, 6))
     op = _op_with_func_name(trace, "scatter")
-    index_parent = op.parent_arg_positions["kwargs"]["index"]
+    index_parent = op.call.parent_arg_positions["kwargs"]["index"]
     _assert_edge_sensitivity_verified(trace, op, index_parent)
     _freeze_op_replay(op)
     _assert_edge_now_fails(trace, op, index_parent)
@@ -290,7 +290,7 @@ def test_dead_masked_fill_mask_edge_now_fails() -> None:
 
     trace = _capture(_MaskedFillMaskModel(), torch.randn(4, 4))
     op = _op_with_func_name(trace, "masked_fill")
-    mask_parent = op.parent_arg_positions["args"][1]
+    mask_parent = op.call.parent_arg_positions["args"][1]
     _assert_edge_sensitivity_verified(trace, op, mask_parent)
     _freeze_op_replay(op)
     _assert_edge_now_fails(trace, op, mask_parent)
@@ -306,7 +306,7 @@ def test_dead_full_like_fill_value_edge_now_fails() -> None:
 
     trace = _capture(_FullLikeTensorFillModel(), torch.randn(3, 4))
     op = _op_with_func_name(trace, "full_like")
-    fill_parent = op.parent_arg_positions["args"][1]
+    fill_parent = op.call.parent_arg_positions["args"][1]
     _assert_edge_sensitivity_verified(trace, op, fill_parent)
     _freeze_op_replay(op)
     _assert_edge_now_fails(trace, op, fill_parent)
@@ -353,7 +353,7 @@ def test_degenerate_embedding_domain_is_exempt_not_failed() -> None:
 
     trace = _capture(model, x)
     op = _op_with_func_name(trace, "embedding")
-    index_parent = op.parent_arg_positions["args"][1]
+    index_parent = op.call.parent_arg_positions["args"][1]
     assert _check_index_domain_degenerate(trace, op, [index_parent]) is True
     result = _check_whether_func_on_saved_parents_yields_saved_tensor(
         trace, op.label, perturb=True, layers_to_perturb=[index_parent]
@@ -373,7 +373,7 @@ def test_uniform_embedding_rows_are_proved_irrelevant_not_failed() -> None:
 
     trace = _capture(model, x)
     op = _op_with_func_name(trace, "embedding")
-    index_parent = op.parent_arg_positions["args"][1]
+    index_parent = op.call.parent_arg_positions["args"][1]
     result = _check_whether_func_on_saved_parents_yields_saved_tensor(
         trace, op.label, perturb=True, layers_to_perturb=[index_parent]
     )
@@ -408,7 +408,7 @@ def test_masked_fill_input_equal_to_value_is_proved_irrelevant() -> None:
 
     trace = _capture(_NoOpMaskedFill(), torch.randn(4, 4))
     op = _op_with_func_name(trace, "masked_fill")
-    mask_parent = op.parent_arg_positions["args"][1]
+    mask_parent = op.call.parent_arg_positions["args"][1]
     assert _check_masked_fill_exempt(trace, op, [mask_parent]) is True
 
 
@@ -427,11 +427,13 @@ def test_full_like_template_parent_stays_structurally_exempt() -> None:
         dtype=torch.float32,
     )
     template_decision = _posthoc_structural_output_decision(
-        layer, layer.saved_args, ["template_parent"]
+        layer, layer.call.saved_args, ["template_parent"]
     )
     assert template_decision.exempt
     assert template_decision.reason == "structural_output_template"
-    fill_decision = _posthoc_structural_output_decision(layer, layer.saved_args, ["fill_parent"])
+    fill_decision = _posthoc_structural_output_decision(
+        layer, layer.call.saved_args, ["fill_parent"]
+    )
     assert not fill_decision.exempt
 
 
@@ -715,7 +717,7 @@ def test_meshgrid_own_value_edge_is_perturbation_tested() -> None:
     trace = _capture(_MeshgridModel(), [torch.randn(3), torch.randn(4)])
     for index in (0, 1):
         op = _zipped_op_for_index(trace, ("meshgrid",), index)
-        own_parent = op.parent_arg_positions["args"][(0, index)]
+        own_parent = op.call.parent_arg_positions["args"][(0, index)]
         result = _check_whether_func_on_saved_parents_yields_saved_tensor(
             trace, op.label, perturb=True, layers_to_perturb=[own_parent]
         )
@@ -732,7 +734,7 @@ def test_meshgrid_dead_own_edge_now_fails_perturbation() -> None:
 
     trace = _capture(_MeshgridModel(), [torch.randn(3), torch.randn(4)])
     op = _zipped_op_for_index(trace, ("meshgrid",), 0)
-    own_parent = op.parent_arg_positions["args"][(0, 0)]
+    own_parent = op.call.parent_arg_positions["args"][(0, 0)]
     _freeze_op_replay(op)
     _assert_edge_now_fails(trace, op, own_parent)
 
@@ -742,7 +744,7 @@ def test_meshgrid_cross_member_perturbation_stays_exempt() -> None:
 
     trace = _capture(_MeshgridModel(), [torch.randn(3), torch.randn(4)])
     op = _zipped_op_for_index(trace, ("meshgrid",), 0)
-    sibling_parent = op.parent_arg_positions["args"][(0, 1)]
+    sibling_parent = op.call.parent_arg_positions["args"][(0, 1)]
     result = _check_whether_func_on_saved_parents_yields_saved_tensor(
         trace, op.label, perturb=True, layers_to_perturb=[sibling_parent]
     )
@@ -760,12 +762,12 @@ def test_broadcast_tensors_own_value_edge_is_perturbation_tested() -> None:
     trace = _capture(_BroadcastModel(), [torch.randn(3), torch.randn(4)])
     for index in (0, 1):
         op = _zipped_op_for_index(trace, ("broadcasttensors", "broadcast_tensors"), index)
-        own_parent = op.parent_arg_positions["args"][(0, index)]
+        own_parent = op.call.parent_arg_positions["args"][(0, index)]
         result = _check_whether_func_on_saved_parents_yields_saved_tensor(
             trace, op.label, perturb=True, layers_to_perturb=[own_parent]
         )
         assert result.decision == "validated", (index, result.decision, result.reason)
-        sibling_parent = op.parent_arg_positions["args"][(0, 1 - index)]
+        sibling_parent = op.call.parent_arg_positions["args"][(0, 1 - index)]
         sibling_result = _check_whether_func_on_saved_parents_yields_saved_tensor(
             trace, op.label, perturb=True, layers_to_perturb=[sibling_parent]
         )

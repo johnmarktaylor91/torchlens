@@ -85,7 +85,7 @@ def test_root_fact_stays_module_call_on_module_roots() -> None:
         "module_call:torch.nn.modules.container.Sequential.forward"
     )
     for op in log._layer_list:
-        assert op.tl_authored_root is None
+        assert op.call.tl_authored_root is None
 
 
 def test_tl_authored_root_marker_lands_on_root_op_record() -> None:
@@ -93,10 +93,10 @@ def test_tl_authored_root_marker_lands_on_root_op_record() -> None:
     log = tl.trace(model.forward, torch.randn(2, 4))
     for output_label in log.output_layers:
         for op in log[output_label].ops:
-            assert op.tl_authored_root is True
+            assert op.call.tl_authored_root is True
     # The marker discloses the ROOT record only, never interior ops.
     interior = [op for op in log._layer_list if op.label.split(":")[0] not in log.output_layers]
-    assert all(op.tl_authored_root is None for op in interior)
+    assert all(op.call.tl_authored_root is None for op in interior)
 
 
 def test_bound_method_called_exactly_once() -> None:
@@ -210,7 +210,7 @@ def test_bound_capture_save_load_persists_fact_and_marker(tmp_path) -> None:
     loaded = tl.load(target)
     assert loaded.provenance.root_entry_point == log.provenance.root_entry_point
     out_op = loaded[loaded.output_layers[0]].ops[0]
-    assert out_op.tl_authored_root is True
+    assert out_op.call.tl_authored_root is True
     with pytest.raises(ModelMismatchError) as excinfo:
         loaded._validate_supplied_model_matches_capture(model)
     assert excinfo.value.fields["code"] == "rerun_entry_point_unsupported"
@@ -286,4 +286,4 @@ def test_return_shapes_capture_instead_of_refusing(method_name: str, expected_ou
     # Trace-level bound_method fact remains the TL-authorship disclosure.
     for output_label in log.output_layers:
         for op in log[output_label].ops:
-            assert op.tl_authored_root is True
+            assert op.call.tl_authored_root is True

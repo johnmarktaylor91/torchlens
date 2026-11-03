@@ -322,7 +322,7 @@ def _check_capture_edge_survival(trace: Trace) -> None:
             continue
         if getattr(op, "edits", None):
             continue
-        positions = getattr(op, "parent_arg_positions", None) or {}
+        positions = record_member(op, "parent_arg_positions", None) or {}
         recorded = set(op.parents or ())
         recorded.update(
             label
@@ -605,7 +605,7 @@ def _check_graph_topology(ml: Trace) -> None:
         # only those two, so a foreign top-level key (e.g. a label used as a
         # domain, the B3R7-R05-2 plant shape) would otherwise never be
         # examined at all -- an unguarded domain on relation metadata.
-        foreign_domains = set(lpl.parent_arg_positions) - {"args", "kwargs"}
+        foreign_domains = set(lpl.call.parent_arg_positions) - {"args", "kwargs"}
         if foreign_domains:
             raise MetadataInvariantError(
                 name,
@@ -614,7 +614,9 @@ def _check_graph_topology(ml: Trace) -> None:
                 f"'args' and 'kwargs'",
             )
         for arg_domain in ("args", "kwargs"):
-            for position, attributed_label in lpl.parent_arg_positions.get(arg_domain, {}).items():
+            for position, attributed_label in lpl.call.parent_arg_positions.get(
+                arg_domain, {}
+            ).items():
                 try:
                     attributed_entry = ml[attributed_label]
                 except (KeyError, ValueError):
@@ -741,6 +743,7 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
 from .invariants import (  # noqa: E402
     _SPECIAL_LIST_FLAG_PAIRS,
     MetadataInvariantError,

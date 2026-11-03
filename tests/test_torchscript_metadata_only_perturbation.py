@@ -275,7 +275,7 @@ def test_parent_in_a_metadata_slot_and_a_value_slot_gets_no_proof() -> None:
     trace, result = _trace_and_validate(_TwoArgModel(same=True), torch.randn(3, 4))
     assert result is True
     op = _boundary_op(trace)
-    slots = op.parent_arg_positions["args"]
+    slots = op.call.parent_arg_positions["args"]
     parent = slots[0]
     assert slots[1] == parent
     assert script_metadata_only_proof(op, [parent]) is None
@@ -288,7 +288,7 @@ def test_distinct_parents_split_into_proven_and_tested() -> None:
     trace, result = _trace_and_validate(_TwoArgModel(same=False), torch.randn(3, 4))
     assert result is True
     op = _boundary_op(trace)
-    size_parent, value_parent = (op.parent_arg_positions["args"][pos] for pos in (0, 1))
+    size_parent, value_parent = (op.call.parent_arg_positions["args"][pos] for pos in (0, 1))
     assert script_metadata_only_proof(op, [size_parent]) is not None
     assert script_metadata_only_proof(op, [value_parent]) is None
     (decision,) = _metadata_decisions(trace)
@@ -517,7 +517,7 @@ def _slot_label(op, slot: int | str | tuple) -> str:
     """Return the parent label capture recorded at a slot (``(i, j)`` for a container member)."""
 
     head = slot[0] if isinstance(slot, tuple) else slot
-    return op.parent_arg_positions["kwargs" if isinstance(head, str) else "args"][slot]
+    return op.call.parent_arg_positions["kwargs" if isinstance(head, str) else "args"][slot]
 
 
 @pytest.mark.parametrize(

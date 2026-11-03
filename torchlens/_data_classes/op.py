@@ -127,6 +127,7 @@ from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch imp
     validate_train_mode_transform_output,
 )
 from ._record_groups import OpControlFlow, OpCost
+from ._record_groups_call import OpCall
 from ._state_adapter import state_items, state_restore
 from .container import (
     container_from_op,
@@ -1270,11 +1271,11 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         edits: Any
         is_edited: Any
         detach_saved_activations: Any
-        has_saved_args: Any
-        saved_args: Any
-        saved_kwargs: Any
-        args_template: Any
-        kwargs_template: Any
+        _call_has_saved_args: Any
+        _call_saved_args: Any
+        _call_saved_kwargs: Any
+        _call_args_template: Any
+        _call_kwargs_template: Any
         shape: Any
         transformed_out_shape: Any
         dtype: Any
@@ -1291,18 +1292,18 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         grad_dtype: Any
         transformed_grad_dtype: Any
         func: Any
-        func_call_id: Any
+        _call_call_id: Any
         func_name: Any
         func_qualname: Any
-        func_rng_states: Any
-        func_autocast_state: Any
-        arg_names: Any
-        num_args_total: Any
-        num_pos_args: Any
-        num_kwargs: Any
-        non_tensor_pos_args: Any
-        non_tensor_kwargs: Any
-        func_non_tensor_args: Any
+        _call_rng_states: Any
+        _call_autocast_state: Any
+        _call_arg_names: Any
+        _call_num_args_total: Any
+        _call_num_pos_args: Any
+        _call_num_kwargs: Any
+        _call_non_tensor_pos_args: Any
+        _call_non_tensor_kwargs: Any
+        _call_non_tensor_args: Any
         is_inplace: Any
         grad_fn_class_name: Any
         grad_fn_class_qualname: Any
@@ -1314,15 +1315,15 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         multi_output_name: Any
         container_path: Any
         container_spec: Any
-        is_transform: Any
-        transform_kind: Any
-        transform_chain: Any
-        transform_config: Any
-        transform_fn_name: Any
-        transform_fn_qualname: Any
-        transform_fn_source: Any
-        unattributed_tensor_args: Any
-        dropped_edge_tensor_args: Any
+        _call_is_func_transform: Any
+        _call_func_transform_kind: Any
+        _call_func_transform_chain: Any
+        _call_func_transform_config: Any
+        _call_func_transform_fn_name: Any
+        _call_func_transform_fn_qualname: Any
+        _call_func_transform_fn_source: Any
+        _call_unattributed_tensor_args: Any
+        _call_dropped_edge_tensor_args: Any
         parent_params: Any
         parent_param_ops: Any
         param_shapes: Any
@@ -1337,7 +1338,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         episode_step: int | None
         tl_authored_root: bool | None
         parents: Any
-        parent_arg_positions: Any
+        _call_parent_arg_positions: Any
         _edge_uses: Any
         edge_substitutions: dict[Any, Any]
         edge_replacement_stamps: dict[Any, Any]
@@ -1371,22 +1372,22 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         internal_source_parents: Any
         internal_source_ancestors: Any
         is_internal_sink: Any
-        is_terminal_bool: Any
-        is_terminal_conditional_bool: Any
-        conditional_context_kind: Any
-        conditional_wrapper_kind: Any
+        _control_flow_is_terminal_bool: Any
+        _control_flow_is_terminal_conditional_bool: Any
+        _control_flow_context_kind: Any
+        _control_flow_wrapper_kind: Any
         terminal_conditional_id: Any
-        is_scalar_bool: Any
-        bool_value: Any
-        in_conditionals: Any
-        terminal_bool_for: Any
-        conditional_branch_stack: Any
-        conditional_branch_depth: Any
-        conditional_entry_children: Any
-        conditional_then_children: Any
-        conditional_elif_children: Any
-        conditional_else_children: Any
-        conditional_arm_children: Any
+        _control_flow_is_scalar_bool: Any
+        _control_flow_bool_value: Any
+        _control_flow_in_conditionals: Any
+        _control_flow_terminal_bool_for: Any
+        _control_flow_branch_stack: Any
+        _control_flow_branch_depth: Any
+        _control_flow_entry_children: Any
+        _control_flow_then_children: Any
+        _control_flow_elif_children: Any
+        _control_flow_else_children: Any
+        _control_flow_arm_children: Any
         module: Any
         _address_normalized: Any
         modules: Any
@@ -1398,7 +1399,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         is_module_output: Any
         is_atomic_module: Any
         atomic_module_call: Any
-        func_config: Any
+        _call_config: Any
         _source_trace_ref: Any
         _facets_cache: Any
         _receptive_field_cache: Any
@@ -1963,6 +1964,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return OpControlFlow(self)
 
     @property
+    def call(self) -> OpCall:
+        """How this Op's function was called (``op.call.config``)."""
+
+        return OpCall(self)
+
+    @property
     def macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None``."""
 
@@ -2167,7 +2174,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         positional-argument information was captured.
         """
 
-        return _summarize_call_args(self.saved_args, self.non_tensor_pos_args)
+        return _summarize_call_args(self.call.saved_args, self.call.non_tensor_pos_args)
 
     @property
     def kwargs_summary(self) -> str | None:
@@ -2177,7 +2184,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         keyword-argument information was captured.
         """
 
-        return _summarize_call_kwargs(self.saved_kwargs, self.non_tensor_kwargs)
+        return _summarize_call_kwargs(self.call.saved_kwargs, self.call.non_tensor_kwargs)
 
     @property
     def multi_output_type(self) -> type | str | None:
@@ -2897,7 +2904,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             pass
 
     @property
-    def is_internally_initialized(self) -> bool:
+    def _call_is_internally_initialized(self) -> bool:
         """Return whether this op is an internally initialized source op.
 
         Returns
@@ -2908,8 +2915,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
 
         return bool(self.is_internal_source)
 
-    @is_internally_initialized.setter
-    def is_internally_initialized(self, value: Any) -> None:
+    @_call_is_internally_initialized.setter
+    def _call_is_internally_initialized(self, value: Any) -> None:
         """Accept compatibility writes for the computed internal-source alias."""
 
         if value is not None and bool(value) != bool(self.is_internal_source):
@@ -2961,7 +2968,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Store copies of the call's tensor args and kwargs, or clear them."""
 
         if save_args:
-            self.has_saved_args = True
+            self._call_has_saved_args = True
             self._internal_set("saved_args", [copy_arg_tree(arg) for arg in t_args])
             self._internal_set(
                 "saved_kwargs",

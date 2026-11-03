@@ -508,7 +508,7 @@ def _check_graph_connectivity(ml: Trace) -> None:
                 f"Layer '{label}' is marked is_internal_source but consumed "
                 f"unattributed tensor data "
                 f"(unattributed_tensor_args="
-                f"{tuple(getattr(lpl, 'unattributed_tensor_args', ()) or ())}); "
+                f"{tuple(record_member(lpl, 'unattributed_tensor_args', ()) or ())}); "
                 f"a tensor consumer with no recorded parents is a dangling "
                 f"computational node (silent capture drop), not a graph source",
             )
@@ -836,6 +836,7 @@ def _metadata_invariant_applies(
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists. The contracts tuple is read
 # through the hub module at call time: it is built after the hub imports this module.
+from .._utils._record_group_table import record_member  # noqa: E402
 from . import invariants as _invariants_hub  # noqa: E402
 from ._invariants_topology import (  # noqa: E402
     _retained_orphan_layer_labels,

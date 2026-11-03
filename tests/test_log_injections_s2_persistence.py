@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.intervention.injection import (
     InjectedOp,
     attest_injected_ops,
@@ -99,7 +100,7 @@ def test_round_trip_preserves_identity_payloads_and_query_split(chain, tmp_path)
     assert [op.label for op in loaded.model_ops] == [op.label for op in logged.model_ops]
     assert [op.label for op in loaded.model_ops] == [op.label for op in loaded._layer_list]
     assert not any(
-        getattr(op, "injection_provenance", None) is not None for op in loaded._layer_list
+        record_member(op, "injection_provenance", None) is not None for op in loaded._layer_list
     )
     from torchlens._errors import InvalidArgumentError
 

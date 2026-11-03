@@ -247,6 +247,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.config": {},
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "add_1_1:1"
     ],
@@ -349,7 +367,6 @@
     "func_config": {},
     "func_name": "add_",
     "func_qualname": "TensorBase.add_",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_add__0",
     "fx_qualpath": "bn.add_",
@@ -445,12 +462,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "buffer_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_1\"": [
       1
@@ -470,8 +481,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "add_1:1",
@@ -542,6 +551,35 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "batchnorm_1_2:1"
     ],
@@ -661,7 +699,6 @@
     },
     "func_name": "batch_norm",
     "func_qualname": "_VariableFunctionsClass.batch_norm",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_batch_norm_0",
     "fx_qualpath": "bn.batch_norm",
@@ -781,14 +818,6 @@
      ]
     ],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "input_1",
-      "3": "buffer_3",
-      "4": "buffer_4"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_3\"": [
       1
@@ -818,8 +847,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -874,6 +901,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_1:1"
     ],
@@ -977,7 +1017,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_none_0",
     "fx_qualpath": "bn.none",
@@ -1074,10 +1113,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -1089,8 +1124,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_1:1",
@@ -1140,6 +1173,21 @@
     "buffer_source_func_name": "add_",
     "buffer_value_changed": true,
     "buffer_write_kind": "inplace",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_2:1"
     ],
@@ -1235,7 +1283,6 @@
     "func_config": {},
     "func_name": "identity",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_identity_0",
     "fx_qualpath": "bn.identity",
@@ -1332,12 +1379,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "add_1_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"add_1_1\"": [
       1
@@ -1357,8 +1398,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_2:1",
@@ -1408,6 +1447,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_3:1"
     ],
@@ -1514,7 +1566,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 1,
     "fx_label": "bn_none_1",
     "fx_qualpath": "bn.none",
@@ -1613,10 +1664,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -1628,8 +1675,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -1681,6 +1726,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_4:1"
     ],
@@ -1787,7 +1845,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 2,
     "fx_label": "bn_none_2",
     "fx_qualpath": "bn.none",
@@ -1886,10 +1943,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -1901,8 +1954,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -1954,6 +2005,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_5:1"
     ],
@@ -2053,7 +2119,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 3,
     "fx_label": "bn_none_3",
     "fx_qualpath": "bn.none",
@@ -2152,12 +2217,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -2177,8 +2236,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -2233,6 +2290,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_6:1"
     ],
@@ -2332,7 +2404,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 4,
     "fx_label": "bn_none_4",
     "fx_qualpath": "bn.none",
@@ -2431,12 +2502,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -2456,8 +2521,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -2512,6 +2575,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "input_1:1"
     ],
@@ -2604,7 +2680,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -2703,10 +2778,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -2718,8 +2789,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -2774,6 +2843,34 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": [
+     {
+      "__tensor__": true,
+      "dtype": "torch.float32",
+      "requires_grad": true,
+      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
+      "shape": [
+       2,
+       2,
+       4,
+       4
+      ]
+     }
+    ],
+    "call.saved_kwargs": {},
     "call_labels": [
      "output_1:1"
     ],
@@ -2855,7 +2952,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -2954,12 +3050,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "relu_1_3"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"relu_1_3\"": [
       1
@@ -2979,21 +3069,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": [
-     {
-      "__tensor__": true,
-      "dtype": "torch.float32",
-      "requires_grad": true,
-      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
-      "shape": [
-       2,
-       2,
-       4,
-       4
-      ]
-     }
-    ],
-    "saved_kwargs": {},
     "shape": [
      2,
      2,
@@ -3051,6 +3126,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.config": {},
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "relu_1_3:1"
     ],
@@ -3149,7 +3242,6 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -3247,12 +3339,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -3272,8 +3358,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -4133,6 +4217,66 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 1,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     1
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     1
+    ],
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "buffer_2"
     ],
@@ -4548,6 +4692,83 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 6,
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "relu_1_3",
      "buffer_5",
@@ -5016,6 +5237,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "add_1_1"
     ],
@@ -5359,6 +5616,44 @@
     "buffer_write_kind": "inplace",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -5718,6 +6013,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -6070,6 +6401,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -6426,6 +6793,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_3_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -6814,6 +7223,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_4_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -7198,6 +7649,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -7545,6 +8032,70 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {},
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": [
+     {
+      "__tensor__": true,
+      "dtype": "torch.float32",
+      "requires_grad": true,
+      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
+      "shape": [
+       2,
+       2,
+       4,
+       4
+      ]
+     }
+    ],
+    "call.saved_kwargs": {},
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [],
@@ -7940,6 +8491,62 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "output_1"
     ],
@@ -10076,6 +10683,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.config": {},
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "add_1_1:1"
     ],
@@ -10178,7 +10803,6 @@
     "func_config": {},
     "func_name": "add_",
     "func_qualname": "TensorBase.add_",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_add__0",
     "fx_qualpath": "bn.add_",
@@ -10274,12 +10898,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "buffer_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_1\"": [
       1
@@ -10299,8 +10917,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "add_1:1",
@@ -10371,6 +10987,35 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "batchnorm_1_2:1"
     ],
@@ -10490,7 +11135,6 @@
     },
     "func_name": "batch_norm",
     "func_qualname": "_VariableFunctionsClass.batch_norm",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_batch_norm_0",
     "fx_qualpath": "bn.batch_norm",
@@ -10610,14 +11254,6 @@
      ]
     ],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "input_1",
-      "3": "buffer_3",
-      "4": "buffer_4"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_3\"": [
       1
@@ -10647,8 +11283,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -10703,6 +11337,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_1:1"
     ],
@@ -10806,7 +11453,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_none_0",
     "fx_qualpath": "bn.none",
@@ -10903,10 +11549,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -10918,8 +11560,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_1:1",
@@ -10969,6 +11609,21 @@
     "buffer_source_func_name": "add_",
     "buffer_value_changed": true,
     "buffer_write_kind": "inplace",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_2:1"
     ],
@@ -11064,7 +11719,6 @@
     "func_config": {},
     "func_name": "identity",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_identity_0",
     "fx_qualpath": "bn.identity",
@@ -11161,12 +11815,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "add_1_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"add_1_1\"": [
       1
@@ -11186,8 +11834,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_2:1",
@@ -11237,6 +11883,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_3:1"
     ],
@@ -11343,7 +12002,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 1,
     "fx_label": "bn_none_1",
     "fx_qualpath": "bn.none",
@@ -11442,10 +12100,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -11457,8 +12111,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -11510,6 +12162,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_4:1"
     ],
@@ -11616,7 +12281,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 2,
     "fx_label": "bn_none_2",
     "fx_qualpath": "bn.none",
@@ -11715,10 +12379,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -11730,8 +12390,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -11783,6 +12441,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_5:1"
     ],
@@ -11882,7 +12555,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 3,
     "fx_label": "bn_none_3",
     "fx_qualpath": "bn.none",
@@ -11981,12 +12653,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -12006,8 +12672,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -12062,6 +12726,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_6:1"
     ],
@@ -12161,7 +12840,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 4,
     "fx_label": "bn_none_4",
     "fx_qualpath": "bn.none",
@@ -12260,12 +12938,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -12285,8 +12957,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -12341,6 +13011,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "input_1:1"
     ],
@@ -12433,7 +13116,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -12532,10 +13214,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -12547,8 +13225,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -12603,6 +13279,34 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": [
+     {
+      "__tensor__": true,
+      "dtype": "torch.float32",
+      "requires_grad": true,
+      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
+      "shape": [
+       2,
+       2,
+       4,
+       4
+      ]
+     }
+    ],
+    "call.saved_kwargs": {},
     "call_labels": [
      "output_1:1"
     ],
@@ -12684,7 +13388,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -12783,12 +13486,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "relu_1_3"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"relu_1_3\"": [
       1
@@ -12808,21 +13505,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": [
-     {
-      "__tensor__": true,
-      "dtype": "torch.float32",
-      "requires_grad": true,
-      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
-      "shape": [
-       2,
-       2,
-       4,
-       4
-      ]
-     }
-    ],
-    "saved_kwargs": {},
     "shape": [
      2,
      2,
@@ -12880,6 +13562,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.config": {},
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "relu_1_3:1"
     ],
@@ -12978,7 +13678,6 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -13076,12 +13775,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -13101,8 +13794,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -13962,6 +14653,66 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 1,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     1
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     1
+    ],
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "buffer_2"
     ],
@@ -14377,6 +15128,83 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 6,
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "relu_1_3",
      "buffer_5",
@@ -14845,6 +15673,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "add_1_1"
     ],
@@ -15188,6 +16052,44 @@
     "buffer_write_kind": "inplace",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -15547,6 +16449,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -15899,6 +16837,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -16255,6 +17229,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_3_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -16643,6 +17659,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_4_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -17027,6 +18085,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -17374,6 +18468,70 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {},
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": [
+     {
+      "__tensor__": true,
+      "dtype": "torch.float32",
+      "requires_grad": true,
+      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
+      "shape": [
+       2,
+       2,
+       4,
+       4
+      ]
+     }
+    ],
+    "call.saved_kwargs": {},
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [],
@@ -17769,6 +18927,62 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "output_1"
     ],
@@ -19892,6 +21106,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.config": {},
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "add_1_1:1"
     ],
@@ -19994,7 +21226,6 @@
     "func_config": {},
     "func_name": "add_",
     "func_qualname": "TensorBase.add_",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_add__0",
     "fx_qualpath": "bn.add_",
@@ -20090,12 +21321,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "buffer_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_1\"": [
       1
@@ -20115,8 +21340,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "add_1:1",
@@ -20187,6 +21410,35 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "batchnorm_1_2:1"
     ],
@@ -20306,7 +21558,6 @@
     },
     "func_name": "batch_norm",
     "func_qualname": "_VariableFunctionsClass.batch_norm",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_batch_norm_0",
     "fx_qualpath": "bn.batch_norm",
@@ -20426,14 +21677,6 @@
      ]
     ],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "input_1",
-      "3": "buffer_3",
-      "4": "buffer_4"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_3\"": [
       1
@@ -20463,8 +21706,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -20519,6 +21760,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_1:1"
     ],
@@ -20622,7 +21876,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_none_0",
     "fx_qualpath": "bn.none",
@@ -20719,10 +21972,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -20734,8 +21983,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_1:1",
@@ -20785,6 +22032,21 @@
     "buffer_source_func_name": "add_",
     "buffer_value_changed": true,
     "buffer_write_kind": "inplace",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_2:1"
     ],
@@ -20880,7 +22142,6 @@
     "func_config": {},
     "func_name": "identity",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_identity_0",
     "fx_qualpath": "bn.identity",
@@ -20977,12 +22238,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "add_1_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"add_1_1\"": [
       1
@@ -21002,8 +22257,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_2:1",
@@ -21053,6 +22306,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_3:1"
     ],
@@ -21159,7 +22425,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 1,
     "fx_label": "bn_none_1",
     "fx_qualpath": "bn.none",
@@ -21258,10 +22523,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -21273,8 +22534,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -21326,6 +22585,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_4:1"
     ],
@@ -21432,7 +22704,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 2,
     "fx_label": "bn_none_2",
     "fx_qualpath": "bn.none",
@@ -21531,10 +22802,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -21546,8 +22813,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -21599,6 +22864,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_5:1"
     ],
@@ -21698,7 +22978,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 3,
     "fx_label": "bn_none_3",
     "fx_qualpath": "bn.none",
@@ -21797,12 +23076,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -21822,8 +23095,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -21878,6 +23149,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_6:1"
     ],
@@ -21977,7 +23263,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 4,
     "fx_label": "bn_none_4",
     "fx_qualpath": "bn.none",
@@ -22076,12 +23361,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -22101,8 +23380,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -22157,6 +23434,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "input_1:1"
     ],
@@ -22249,7 +23539,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -22348,10 +23637,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -22363,8 +23648,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -22419,6 +23702,34 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": [
+     {
+      "__tensor__": true,
+      "dtype": "torch.float32",
+      "requires_grad": true,
+      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
+      "shape": [
+       2,
+       2,
+       4,
+       4
+      ]
+     }
+    ],
+    "call.saved_kwargs": {},
     "call_labels": [
      "output_1:1"
     ],
@@ -22500,7 +23811,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -22599,12 +23909,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "relu_1_3"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"relu_1_3\"": [
       1
@@ -22624,21 +23928,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": [
-     {
-      "__tensor__": true,
-      "dtype": "torch.float32",
-      "requires_grad": true,
-      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
-      "shape": [
-       2,
-       2,
-       4,
-       4
-      ]
-     }
-    ],
-    "saved_kwargs": {},
     "shape": [
      2,
      2,
@@ -22696,6 +23985,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.config": {},
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "relu_1_3:1"
     ],
@@ -22794,7 +24101,6 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -22892,12 +24198,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -22917,8 +24217,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -23778,6 +25076,66 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 1,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     1
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     1
+    ],
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "buffer_2"
     ],
@@ -24193,6 +25551,83 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 6,
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "relu_1_3",
      "buffer_5",
@@ -24661,6 +26096,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "add_1_1"
     ],
@@ -25004,6 +26475,44 @@
     "buffer_write_kind": "inplace",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -25363,6 +26872,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -25715,6 +27260,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -26071,6 +27652,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_3_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -26459,6 +28082,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_4_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -26843,6 +28508,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -27190,6 +28891,70 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {},
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": [
+     {
+      "__tensor__": true,
+      "dtype": "torch.float32",
+      "requires_grad": true,
+      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
+      "shape": [
+       2,
+       2,
+       4,
+       4
+      ]
+     }
+    ],
+    "call.saved_kwargs": {},
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [],
@@ -27585,6 +29350,62 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "output_1"
     ],
@@ -29661,6 +31482,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.config": {},
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "add_1_1:1"
     ],
@@ -29763,7 +31602,6 @@
     "func_config": {},
     "func_name": "add_",
     "func_qualname": "TensorBase.add_",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_add__0",
     "fx_qualpath": "bn.add_",
@@ -29859,12 +31697,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "buffer_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_1\"": [
       1
@@ -29884,8 +31716,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "add_1:1",
@@ -29956,6 +31786,35 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "batchnorm_1_2:1"
     ],
@@ -30075,7 +31934,6 @@
     },
     "func_name": "batch_norm",
     "func_qualname": "_VariableFunctionsClass.batch_norm",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_batch_norm_0",
     "fx_qualpath": "bn.batch_norm",
@@ -30195,14 +32053,6 @@
      ]
     ],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "input_1",
-      "3": "buffer_3",
-      "4": "buffer_4"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_3\"": [
       1
@@ -30232,8 +32082,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -30288,6 +32136,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_1:1"
     ],
@@ -30391,7 +32252,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_none_0",
     "fx_qualpath": "bn.none",
@@ -30488,10 +32348,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -30503,8 +32359,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_1:1",
@@ -30554,6 +32408,21 @@
     "buffer_source_func_name": "add_",
     "buffer_value_changed": true,
     "buffer_write_kind": "inplace",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_2:1"
     ],
@@ -30649,7 +32518,6 @@
     "func_config": {},
     "func_name": "identity",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_identity_0",
     "fx_qualpath": "bn.identity",
@@ -30746,12 +32614,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "add_1_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"add_1_1\"": [
       1
@@ -30771,8 +32633,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_2:1",
@@ -30822,6 +32682,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_3:1"
     ],
@@ -30928,7 +32801,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 1,
     "fx_label": "bn_none_1",
     "fx_qualpath": "bn.none",
@@ -31027,10 +32899,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -31042,8 +32910,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -31095,6 +32961,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_4:1"
     ],
@@ -31201,7 +33080,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 2,
     "fx_label": "bn_none_2",
     "fx_qualpath": "bn.none",
@@ -31300,10 +33178,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -31315,8 +33189,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -31368,6 +33240,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_5:1"
     ],
@@ -31467,7 +33354,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 3,
     "fx_label": "bn_none_3",
     "fx_qualpath": "bn.none",
@@ -31566,12 +33452,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -31591,8 +33471,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -31647,6 +33525,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_6:1"
     ],
@@ -31746,7 +33639,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 4,
     "fx_label": "bn_none_4",
     "fx_qualpath": "bn.none",
@@ -31845,12 +33737,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -31870,8 +33756,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -31926,6 +33810,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "input_1:1"
     ],
@@ -32018,7 +33915,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -32117,10 +34013,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -32132,8 +34024,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -32188,6 +34078,34 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": [
+     {
+      "__tensor__": true,
+      "dtype": "torch.float32",
+      "requires_grad": true,
+      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
+      "shape": [
+       2,
+       2,
+       4,
+       4
+      ]
+     }
+    ],
+    "call.saved_kwargs": {},
     "call_labels": [
      "output_1:1"
     ],
@@ -32269,7 +34187,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -32368,12 +34285,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "relu_1_3"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"relu_1_3\"": [
       1
@@ -32393,21 +34304,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": [
-     {
-      "__tensor__": true,
-      "dtype": "torch.float32",
-      "requires_grad": true,
-      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
-      "shape": [
-       2,
-       2,
-       4,
-       4
-      ]
-     }
-    ],
-    "saved_kwargs": {},
     "shape": [
      2,
      2,
@@ -32465,6 +34361,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.config": {},
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "relu_1_3:1"
     ],
@@ -32563,7 +34477,6 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -32661,12 +34574,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -32686,8 +34593,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -33547,6 +35452,66 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 1,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     1
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     1
+    ],
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "buffer_2"
     ],
@@ -33962,6 +35927,83 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 6,
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "relu_1_3",
      "buffer_5",
@@ -34430,6 +36472,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "add_1_1"
     ],
@@ -34773,6 +36851,44 @@
     "buffer_write_kind": "inplace",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -35132,6 +37248,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -35484,6 +37636,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -35840,6 +38028,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_3_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -36228,6 +38458,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_4_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -36612,6 +38884,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -36959,6 +39267,70 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {},
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": [
+     {
+      "__tensor__": true,
+      "dtype": "torch.float32",
+      "requires_grad": true,
+      "sha256": "c908ae778754512b626c49a04c54a8ab1fad3eb600a99407635b7ddddd3691a1",
+      "shape": [
+       2,
+       2,
+       4,
+       4
+      ]
+     }
+    ],
+    "call.saved_kwargs": {},
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [],
@@ -37354,6 +39726,62 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "output_1"
     ],
@@ -39487,6 +41915,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.config": {},
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "add_1_1:1"
     ],
@@ -39589,7 +42035,6 @@
     "func_config": {},
     "func_name": "add_",
     "func_qualname": "TensorBase.add_",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_add__0",
     "fx_qualpath": "bn.add_",
@@ -39685,12 +42130,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "buffer_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_1\"": [
       1
@@ -39710,8 +42149,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "add_1:1",
@@ -39782,6 +42219,35 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "batchnorm_1_2:1"
     ],
@@ -39901,7 +42367,6 @@
     },
     "func_name": "batch_norm",
     "func_qualname": "_VariableFunctionsClass.batch_norm",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_batch_norm_0",
     "fx_qualpath": "bn.batch_norm",
@@ -40021,14 +42486,6 @@
      ]
     ],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "input_1",
-      "3": "buffer_3",
-      "4": "buffer_4"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"buffer_3\"": [
       1
@@ -40058,8 +42515,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -40114,6 +42569,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_1:1"
     ],
@@ -40217,7 +42685,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_none_0",
     "fx_qualpath": "bn.none",
@@ -40314,10 +42781,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -40329,8 +42792,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_1:1",
@@ -40380,6 +42841,21 @@
     "buffer_source_func_name": "add_",
     "buffer_value_changed": true,
     "buffer_write_kind": "inplace",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_2:1"
     ],
@@ -40475,7 +42951,6 @@
     "func_config": {},
     "func_name": "identity",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": "bn_identity_0",
     "fx_qualpath": "bn.identity",
@@ -40572,12 +43047,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "add_1_1"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"add_1_1\"": [
       1
@@ -40597,8 +43066,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [],
     "shape_summary": null,
     "short_label": "buffer_2:1",
@@ -40648,6 +43115,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_3:1"
     ],
@@ -40754,7 +43234,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 1,
     "fx_label": "bn_none_1",
     "fx_qualpath": "bn.none",
@@ -40853,10 +43332,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -40868,8 +43343,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -40921,6 +43394,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_4:1"
     ],
@@ -41027,7 +43513,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 2,
     "fx_label": "bn_none_2",
     "fx_qualpath": "bn.none",
@@ -41126,10 +43611,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -41141,8 +43622,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -41194,6 +43673,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_5:1"
     ],
@@ -41293,7 +43787,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 3,
     "fx_label": "bn_none_3",
     "fx_qualpath": "bn.none",
@@ -41392,12 +43885,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -41417,8 +43904,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -41473,6 +43958,21 @@
     "buffer_source_func_name": "batch_norm",
     "buffer_value_changed": true,
     "buffer_write_kind": "fused",
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "buffer_6:1"
     ],
@@ -41572,7 +44072,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 4,
     "fx_label": "bn_none_4",
     "fx_qualpath": "bn.none",
@@ -41671,12 +44170,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -41696,8 +44189,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2
     ],
@@ -41752,6 +44243,19 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "input_1:1"
     ],
@@ -41844,7 +44348,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -41943,10 +44446,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {},
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {},
     "parents": [],
     "parents_per_pass": {
@@ -41958,8 +44457,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -42014,6 +44511,21 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [],
+    "call.config": {},
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "output_1:1"
     ],
@@ -42095,7 +44607,6 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -42194,12 +44705,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "relu_1_3"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"relu_1_3\"": [
       1
@@ -42219,8 +44724,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -42278,6 +44781,24 @@
     "buffer_source_func_name": null,
     "buffer_value_changed": null,
     "buffer_write_kind": null,
+    "call": "<torchlens._data_classes._record_groups_call.LayerCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.config": {},
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
     "call_labels": [
      "relu_1_3:1"
     ],
@@ -42376,7 +44897,6 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "func_rng_states": "<measured>",
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
@@ -42474,12 +44994,6 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_arg_positions": {
-     "\"args\"": {
-      "0": "batchnorm_1_2"
-     },
-     "\"kwargs\"": {}
-    },
     "parent_ops_per_layer": {
      "\"batchnorm_1_2\"": [
       1
@@ -42499,8 +45013,6 @@
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "resolver_status": "resolved",
     "save_grads": false,
-    "saved_args": null,
-    "saved_kwargs": null,
     "shape": [
      2,
      2,
@@ -43358,6 +45870,66 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "other",
+     "alpha"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 1,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     1
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     1
+    ],
+    "call.num_args_total": 2,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 2,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "buffer_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "buffer_2"
     ],
@@ -43748,6 +46320,83 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "running_mean",
+     "running_var",
+     "weight",
+     "bias",
+     "training",
+     "momentum",
+     "eps"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 6,
+    "call.config": {
+     "\"eps\"": "1e-05",
+     "\"momentum\"": "0.1"
+    },
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [
+     true,
+     "0.1",
+     "1e-05",
+     true
+    ],
+    "call.num_args_total": 9,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 9,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "input_1",
+      "3": "buffer_3",
+      "4": "buffer_4"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "relu_1_3",
      "buffer_5",
@@ -44174,6 +46823,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "add_1_1"
     ],
@@ -44514,6 +47199,44 @@
     "buffer_write_kind": "inplace",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "add_1_1"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -44858,6 +47581,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -45207,6 +47966,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": true,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -45560,6 +48355,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_3_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -45928,6 +48765,48 @@
     "buffer_write_kind": "fused",
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {
+      "\"dedup_reference_label\"": "buffer_4_raw",
+      "\"dedup_source_id\"": "<measured>",
+      "\"dedup_source_version\"": 1
+     }
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [
@@ -46292,6 +49171,42 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {},
+    "call.call_id": null,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {},
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "batchnorm_1_2"
     ],
@@ -46636,6 +49551,57 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {},
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 0,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 0,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "relu_1_3"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [],
     "co_parents": [],
     "code_context": [],
@@ -46996,6 +49962,62 @@
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
     "bytes_peak_at_call": "<measured>",
+    "call": "<torchlens._data_classes._record_groups_call.OpCall>",
+    "call.arg_names": [
+     "input",
+     "inplace"
+    ],
+    "call.args_template": null,
+    "call.autocast_state": {
+     "\"__execution__\"": {
+      "\"dtype\"": null,
+      "\"enabled\"": false,
+      "\"grad_enabled\"": true,
+      "\"inference_mode\"": false
+     },
+     "\"cpu\"": {
+      "\"dtype\"": "torch.bfloat16",
+      "\"enabled\"": false
+     },
+     "\"cuda\"": {
+      "\"dtype\"": "torch.float16",
+      "\"enabled\"": false
+     }
+    },
+    "call.call_id": 29,
+    "call.config": {},
+    "call.dropped_edge_tensor_args": [],
+    "call.func_id": null,
+    "call.func_transform_chain": [],
+    "call.func_transform_config": {
+     "\"_tl_annotations\"": {}
+    },
+    "call.func_transform_fn_name": null,
+    "call.func_transform_fn_qualname": null,
+    "call.func_transform_fn_source": null,
+    "call.func_transform_kind": null,
+    "call.has_saved_args": false,
+    "call.injection_provenance": null,
+    "call.is_func_transform": false,
+    "call.is_internally_initialized": false,
+    "call.kwargs_template": null,
+    "call.non_tensor_args": [],
+    "call.non_tensor_kwargs": {},
+    "call.non_tensor_pos_args": [],
+    "call.num_args_total": 1,
+    "call.num_kwargs": 0,
+    "call.num_pos_args": 1,
+    "call.parent_arg_positions": {
+     "\"args\"": {
+      "0": "batchnorm_1_2"
+     },
+     "\"kwargs\"": {}
+    },
+    "call.rng_states": "<measured>",
+    "call.saved_args": null,
+    "call.saved_kwargs": null,
+    "call.tl_authored_root": null,
+    "call.unattributed_tensor_args": [],
     "children": [
      "output_1"
     ],

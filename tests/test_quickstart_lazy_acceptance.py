@@ -20,6 +20,7 @@ from torch import nn
 from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.validation import check_metadata_invariants
 
 
@@ -90,7 +91,7 @@ class TestFourClauseAcceptance:
         for op in log:
             out = getattr(op, "out", None)
             assert not isinstance(out, UninitializedParameter)
-            for arg in getattr(op, "saved_args", None) or ():
+            for arg in record_member(op, "saved_args", None) or ():
                 assert not isinstance(arg, UninitializedParameter)
 
 

@@ -635,7 +635,7 @@ def test_schema_corrected_unary_specs_capture_all_tensor_parents(
 
     op = next(op for op in trace.ops if op.type == expected_type)
 
-    assert expected_arg_positions <= set(op.parent_arg_positions["args"])
+    assert expected_arg_positions <= set(op.call.parent_arg_positions["args"])
     assert len(op.parents) == expected_parent_count
     assert op.is_internal_source is False
     assert all(trace[parent_label].has_output_descendant for parent_label in op.parents)

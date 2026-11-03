@@ -28,7 +28,7 @@ import torch
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._trace_core.groups import GroupRef
 from .._utils._cuda_probe import _is_cuda_available
-from .._utils._record_group_table import op_attr, record_member
+from .._utils._record_group_table import op_attr, record_member, record_storage_attr
 from .._utils.collections import remove_entry_from_list
 from .._utils.display import cleanup_trace_visualizer_dir
 from .._utils.tensor_utils import capture_touched_cuda
@@ -221,7 +221,7 @@ def _clear_entry_attributes(log_entry: Op) -> None:
     if row_store is not None:
         mark_op_row_released(row_store, row)
     for attr, _ in list(state_items(log_entry)):
-        delattr(log_entry, op_attr(attr))
+        delattr(log_entry, record_storage_attr(log_entry, attr))
     # Rebind the emptied facade to a detached row so a user-held husk cannot
     # pin the trace's shared columnar store (slot-era husks pinned nothing).
     _detach_op_husk(log_entry)
@@ -690,11 +690,11 @@ def _scrub_intervention_fields_after_removal(
             if edge.parent_label not in labels_to_remove
             and edge.child_label not in labels_to_remove
         ]
-        layer_entry.args_template = _replace_removed_parent_refs(
-            getattr(layer_entry, "args_template", None), labels_to_remove
+        layer_entry._call_args_template = _replace_removed_parent_refs(
+            record_member(layer_entry, "args_template", None), labels_to_remove
         )
-        layer_entry.kwargs_template = _replace_removed_parent_refs(
-            getattr(layer_entry, "kwargs_template", None), labels_to_remove
+        layer_entry._call_kwargs_template = _replace_removed_parent_refs(
+            record_member(layer_entry, "kwargs_template", None), labels_to_remove
         )
         interventions = [
             record
@@ -1020,7 +1020,7 @@ def _scrub_parent_arg_positions(op: "Op", labels_to_remove: set[str]) -> None:
         Raw labels that no longer have a materialized operation record.
     """
 
-    parent_arg_positions = getattr(op, "parent_arg_positions", None)
+    parent_arg_positions = record_member(op, "parent_arg_positions", None)
     if not parent_arg_positions:
         return
     for arg_type in ("args", "kwargs"):

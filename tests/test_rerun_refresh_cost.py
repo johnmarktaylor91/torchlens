@@ -22,6 +22,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
+from torchlens._utils._record_group_table import record_member
 from torchlens.intervention.errors import ReplayPreconditionError
 from torchlens.intervention.types import (
     CapturedArgTemplate,
@@ -95,7 +96,7 @@ def _push(trace: Trace, label: str, *, allow: bool = False) -> torch.Tensor:
 def _param_literals(trace: Trace) -> list[torch.Tensor]:
     literals = []
     for op in trace._layer_list:
-        template = getattr(op, "args_template", None)
+        template = record_member(op, "args_template", None)
         if template is None:
             continue
         literals.extend(comp.value for comp in template.args if isinstance(comp, LiteralTensor))
