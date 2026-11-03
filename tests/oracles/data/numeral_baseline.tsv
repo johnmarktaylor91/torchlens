@@ -1156,7 +1156,7 @@ docs-md	docs/maintainers/where.md	1266
 docs-md	docs/maintainers/where.md	127
 docs-md	docs/maintainers/where.md	128
 docs-md	docs/maintainers/where.md	1283
-docs-md	docs/maintainers/where.md	1288
+docs-md	docs/maintainers/where.md	1285
 docs-md	docs/maintainers/where.md	129
 docs-md	docs/maintainers/where.md	1291
 docs-md	docs/maintainers/where.md	1293
@@ -1189,6 +1189,7 @@ docs-md	docs/maintainers/where.md	14
 docs-md	docs/maintainers/where.md	14,
 docs-md	docs/maintainers/where.md	140
 docs-md	docs/maintainers/where.md	1400
+docs-md	docs/maintainers/where.md	1403
 docs-md	docs/maintainers/where.md	1404
 docs-md	docs/maintainers/where.md	1405
 docs-md	docs/maintainers/where.md	141
@@ -1269,8 +1270,8 @@ docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1825
 docs-md	docs/maintainers/where.md	1827
 docs-md	docs/maintainers/where.md	183
+docs-md	docs/maintainers/where.md	1834
 docs-md	docs/maintainers/where.md	184
-docs-md	docs/maintainers/where.md	1842
 docs-md	docs/maintainers/where.md	1843
 docs-md	docs/maintainers/where.md	1847
 docs-md	docs/maintainers/where.md	185
@@ -1320,7 +1321,7 @@ docs-md	docs/maintainers/where.md	2064
 docs-md	docs/maintainers/where.md	207
 docs-md	docs/maintainers/where.md	208
 docs-md	docs/maintainers/where.md	209
-docs-md	docs/maintainers/where.md	2098
+docs-md	docs/maintainers/where.md	2095
 docs-md	docs/maintainers/where.md	21
 docs-md	docs/maintainers/where.md	210
 docs-md	docs/maintainers/where.md	211
@@ -1558,6 +1559,7 @@ docs-md	docs/maintainers/where.md	405
 docs-md	docs/maintainers/where.md	407
 docs-md	docs/maintainers/where.md	408
 docs-md	docs/maintainers/where.md	4084
+docs-md	docs/maintainers/where.md	409
 docs-md	docs/maintainers/where.md	4092
 docs-md	docs/maintainers/where.md	41
 docs-md	docs/maintainers/where.md	410
@@ -1587,6 +1589,7 @@ docs-md	docs/maintainers/where.md	435
 docs-md	docs/maintainers/where.md	436
 docs-md	docs/maintainers/where.md	4369
 docs-md	docs/maintainers/where.md	437
+docs-md	docs/maintainers/where.md	43727
 docs-md	docs/maintainers/where.md	438
 docs-md	docs/maintainers/where.md	44
 docs-md	docs/maintainers/where.md	440
@@ -1653,7 +1656,6 @@ docs-md	docs/maintainers/where.md	508
 docs-md	docs/maintainers/where.md	509
 docs-md	docs/maintainers/where.md	51
 docs-md	docs/maintainers/where.md	510
-docs-md	docs/maintainers/where.md	512
 docs-md	docs/maintainers/where.md	514
 docs-md	docs/maintainers/where.md	515
 docs-md	docs/maintainers/where.md	516
@@ -1740,7 +1742,6 @@ docs-md	docs/maintainers/where.md	613
 docs-md	docs/maintainers/where.md	614
 docs-md	docs/maintainers/where.md	615
 docs-md	docs/maintainers/where.md	618
-docs-md	docs/maintainers/where.md	619
 docs-md	docs/maintainers/where.md	62
 docs-md	docs/maintainers/where.md	620
 docs-md	docs/maintainers/where.md	621
@@ -1751,6 +1752,7 @@ docs-md	docs/maintainers/where.md	628
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	630394
+docs-md	docs/maintainers/where.md	630739
 docs-md	docs/maintainers/where.md	6316
 docs-md	docs/maintainers/where.md	633
 docs-md	docs/maintainers/where.md	634
@@ -1806,6 +1808,7 @@ docs-md	docs/maintainers/where.md	699
 docs-md	docs/maintainers/where.md	70
 docs-md	docs/maintainers/where.md	700
 docs-md	docs/maintainers/where.md	703
+docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	710
 docs-md	docs/maintainers/where.md	712
@@ -1861,6 +1864,7 @@ docs-md	docs/maintainers/where.md	790
 docs-md	docs/maintainers/where.md	793
 docs-md	docs/maintainers/where.md	794
 docs-md	docs/maintainers/where.md	795
+docs-md	docs/maintainers/where.md	7957
 docs-md	docs/maintainers/where.md	797
 docs-md	docs/maintainers/where.md	798
 docs-md	docs/maintainers/where.md	799
@@ -2768,6 +2772,7 @@ docs-md	docs/reference/collapse.md	100.
 docs-md	docs/reference/collapse.md	11
 docs-md	docs/reference/collapse.md	12
 docs-md	docs/reference/collapse.md	18
+docs-md	docs/reference/collapse.md	18,
 docs-md	docs/reference/collapse.md	20
 docs-md	docs/reference/collapse.md	2000
 docs-md	docs/reference/collapse.md	25.
@@ -5286,6 +5291,7 @@ package-docstrings	torchlens/_visualization/_encoding.py	2.4
 package-docstrings	torchlens/_visualization/_encoding.py	3..4
 package-docstrings	torchlens/_visualization/_encoding.py	3.1
 package-docstrings	torchlens/_visualization/_encoding.py	3.2
+package-docstrings	torchlens/_visualization/_encoding_size_layout.py	0.75
 package-docstrings	torchlens/_visualization/_fonts.py	1.1,
 package-docstrings	torchlens/_visualization/_fonts.py	2.1.5
 package-docstrings	torchlens/_visualization/_fonts.py	29
