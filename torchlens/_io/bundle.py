@@ -71,6 +71,7 @@ from ._durability import (
     fsync_dir,
     fsync_tree,
 )
+from ._extra_files import _warn_extra_files
 from ._pickle_prescan import OpcodeCeilingExceeded
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
@@ -3618,9 +3619,8 @@ def _check_unknown_blob_entries(manifest: Manifest, blobs_path: Path) -> None:
         )
 
     if extra_names:
-        warnings.warn(
+        _warn_extra_files(
             f"Bundle contains unreferenced extra files in blobs/: {', '.join(extra_names)}.",
-            TorchLensWarning,
             stacklevel=2,
         )
 
