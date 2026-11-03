@@ -19,15 +19,12 @@ import threading
 import weakref
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
+from functools import cache
 from math import prod
 from typing import Any, Literal, cast, get_args
 
 import torch
 
-# ``_state`` is the package's import leaf (it imports nothing from torchlens
-# but the ``errors._base`` leaf), so a module-level import cannot cycle; the
-# per-call paths below read it on every wrapped call.
-from .. import _state
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
 from ._sparse_parts import sparse_component_tensors
 from ._torch_compat import (
@@ -37,6 +34,16 @@ from ._torch_compat import (
 )
 from ._torch_symbols import torch_attr
 from .env_flags import closed_bool_env
+
+
+@cache
+def _state_module() -> Any:
+    """Return ``torchlens._state`` imported once (it is above ``_utils``: never at module top)."""
+
+    from .. import _state
+
+    return _state
+
 
 SaveMode = Literal["copy", "reference", "view", "cpu_async"]
 
@@ -515,8 +522,6 @@ def tensor_nanequal(
     Returns:
         True if the tensors are considered equal.
     """
-    from .._state import pause_logging
-
     if is_functorch_wrapped_tensor(tensor_a) or is_functorch_wrapped_tensor(tensor_b):
         return False
 
@@ -533,7 +538,7 @@ def tensor_nanequal(
     if tensor_a.is_meta or tensor_b.is_meta:
         return tensor_a.is_meta and tensor_b.is_meta
 
-    with pause_logging():
+    with _state_module().pause_logging():
         if tensor_a.device != tensor_b.device:
             # Equality is device-independent: an output_device capture keeps
             # saved payloads off the op's device, so compare exact host copies.
@@ -686,10 +691,8 @@ def safe_to(obj: Any, device: str) -> Any:
     Returns:
         The tensor on the target device, or the original object if not a tensor.
     """
-    from .._state import pause_logging
-
     if isinstance(obj, torch.Tensor):
-        with pause_logging():
+        with _state_module().pause_logging():
             return obj.to(device)
     else:
         return obj
@@ -709,6 +712,7 @@ def _unwrapped_tensor_size_method(method: _TensorSizeMethod) -> _TensorSizeMetho
         Original method when TorchLens has decorated it, otherwise ``method``.
     """
 
+    _state = _state_module()
     return cast(_TensorSizeMethod, _state._decorated_to_orig.get(id(method), method))
 
 
@@ -814,9 +818,7 @@ def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.
         Tensor containing ``left`` followed by ``right`` on dimension 0.
     """
 
-    from .._state import pause_logging
-
-    with pause_logging():
+    with _state_module().pause_logging():
         return torch.cat([left, right], dim=0)
 
 
@@ -1009,10 +1011,9 @@ def _paused_internal_reads() -> Iterator[None]:
     must run under ``pause_logging`` plus ``internal_scalar_read`` or they
     would register as user raw-pointer escapes on witness-armed captures.
     """
-    from .._state import pause_logging
     from ..backends.torch._internal_read import internal_scalar_read
 
-    with pause_logging(), internal_scalar_read():
+    with _state_module().pause_logging(), internal_scalar_read():
         yield
 
 
@@ -1198,6 +1199,7 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
     global _DEFER_BUSY
     if not _DEFER_PENDING or _DEFER_BUSY:
         return
+    _state = _state_module()
     if (
         _state._active_trace is not None
         and _state._active_owner_thread_id is not None
@@ -1664,9 +1666,7 @@ def _clone_tensor_payload(
         Tensor payload with TorchLens raw label preserved, or a rewrapped
         parameter payload for parameter inputs.
     """
-    from .._state import pause_logging
-
-    with pause_logging():
+    with _state_module().pause_logging():
         if save_mode not in SAVE_MODES:
             raise ValueError(
                 "save_mode must be one of " + ", ".join(repr(m) for m in sorted(SAVE_MODES))
@@ -1835,10 +1835,8 @@ def print_override(t: torch.Tensor, func_name: str) -> str:
     Returns:
         Human-readable string representation of the tensor.
     """
-    from .._state import pause_logging
-
     try:
-        with pause_logging():
+        with _state_module().pause_logging():
             cpu_data = t.data.cpu()
             # numpy() doesn't support bfloat16 — upcast first.
             if cpu_data.dtype == torch.bfloat16:
