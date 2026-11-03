@@ -25,6 +25,7 @@ from .._capture_honesty import (
     refuse_presenter_subject,
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._data_classes._value_repr import _payload_state as _payload_state
 from .._json_safe import json_safe
 from ._explain import _safe_len
 from ._factcore import _memory
@@ -288,40 +289,6 @@ def _health_summary(log: Any) -> dict[str, Any]:
         "unexamined": facts.num_unexamined_ops,
         "unchecked": facts.num_unchecked_ops,
     }
-
-
-def _payload_state(op: Any) -> str:
-    """Return the op's CURRENT payload state: present | lazy | unsaved.
-
-    Capture-time ``saved`` used to mean two different things (agent memo P0
-    part 4): "a payload is resident" and "a lazy ref could materialize one".
-    This is the resident-now answer, read through the private slot accessor
-    so the probe itself never triggers a materializing ``op.out`` read. A
-    row with ``saved=true`` and ``payload_state="unsaved"`` is a
-    payload-stripped artifact -- saved at capture, no bytes here.
-
-    Parameters
-    ----------
-    op:
-        Operation record.
-
-    Returns
-    -------
-    str
-        ``"present"`` (resident tensor), ``"lazy"`` (materializable blob
-        ref), or ``"unsaved"`` (no payload here).
-    """
-
-    slot = getattr(op, "_slot", None)
-    if callable(slot):
-        if slot("out") is not None:
-            return "present"
-        if slot("out_ref") is not None:
-            return "lazy"
-        return "unsaved"
-    if getattr(op, "out_ref", None) is not None:
-        return "lazy"
-    return "present" if getattr(op, "has_saved_activation", False) else "unsaved"
 
 
 def _site_key_or_none(op: Any) -> str | None:

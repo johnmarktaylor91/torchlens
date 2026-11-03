@@ -39,15 +39,13 @@ replay still checks the empty output itself.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
 from ._destination_coverage import _scatter_index_fully_overwrites_dim
+from ._posthoc_decision import PosthocPerturbDecision
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
-
-if TYPE_CHECKING:
-    from .exemptions import PosthocPerturbDecision
 
 _GRID_SAMPLER_FUNC_NAMES = frozenset(
     {"grid_sampler", "grid_sample", "grid_sampler_2d", "grid_sampler_3d"}
@@ -406,8 +404,6 @@ def operand_value_proof_decision(
     PosthocPerturbDecision
         Exempt decision for a proved case, otherwise non-exempt.
     """
-
-    from .exemptions import PosthocPerturbDecision  # deferred: cycle validation
 
     proofs = (
         (

@@ -74,6 +74,20 @@ CHECK_RETRACE_MISMATCH = "retrace_mismatch"
 #: ``parameter_grad_mismatch``). Before this the backward path only warned, so
 #: ``last_validation_failure()`` was None after a False backward verdict.
 CHECK_BACKWARD = "backward"
+#: Replay finished with no failed decision but could not verify every node
+#: (status ``unverified``: an op replay could not check, or no node replayed).
+#: Such a run returns ``False``; ``_non_pass_record.finish_validation_status``
+#: records this check with the first unverified op so the ``False`` is typed.
+CHECK_REPLAY_UNVERIFIED = "replay_unverified"
+#: Diagnostic (never a failure by itself): a perturbed replay raised on every
+#: attempt, so the edge stayed unverified. Carries the exception text per attempt.
+CHECK_PERTURBATION_EXCEPTION = "perturbation_execution_exception"
+#: A perturbation check failed on a degenerate forward: every saved output element
+#: of the op is non-finite, or an in-forward ``autograd.grad`` gradient is
+#: identically zero, so no perturbation could move it and the edge cannot be
+#: checked. Recorded in place of ``CHECK_PERTURBATION`` by
+#: ``_degenerate_forward.perturbation_insensitive_failure``; the run still fails.
+CHECK_DEGENERATE_FORWARD = "degenerate_forward"
 
 
 @dataclass
