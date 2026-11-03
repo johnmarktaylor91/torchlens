@@ -18,7 +18,7 @@ import threading as _threading_module
 import time as _time_module
 import uuid as _uuid_module
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from types import CodeType, FrameType
 from typing import Any, cast
 
@@ -1121,10 +1121,8 @@ class host_nondeterminism_monitor:
         # graph behind a finder (pytest's assertion rewriter) exhausted the budget.
         # Higher layers register their warm-ups (monitor_state.register_warmup); none is imported here.
         for warm in (warm_lazy_torch_imports, *monitor_state._WARMUPS):  # torch's own first
-            try:
+            with suppress(Exception):
                 warm()
-            except Exception:
-                pass
         try:
             for step_name, step in self._install_steps():
                 try:

@@ -28,14 +28,16 @@ def register_capability_snapshot_provider(provider: Callable[[], dict[str, bool]
 
 
 def _capability_snapshot() -> dict[str, bool]:
-    """Return the registered full snapshot, or the torch-only snapshot before registration."""
+    """Return the registered snapshot; empty before ``torchlens.report`` registers its provider.
+
+    This module is layer 0 and imports nothing from the package, so the probe
+    lives in the report layer and reaches here through the registration slot.
+    """
 
     provider = _CAPABILITY_SNAPSHOT_PROVIDER
-    if provider is not None:
-        return provider()
-    from ._utils._torch_compat import get_torch_capability_snapshot
-
-    return get_torch_capability_snapshot()
+    if provider is None:
+        return {}
+    return provider()
 
 
 Status = Literal["pass", "known_broken", "scope", "not_tested"]

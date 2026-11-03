@@ -1059,6 +1059,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_io/tlspec.py", "__all__"),
         ("torchlens/_model_wrappers.py", "__all__"),
         ("torchlens/_registry/__init__.py", "__all__"),
+        ("torchlens/_registry/_facet_snapshot.py", "__all__"),
         ("torchlens/_runnable/execution.py", "__all__"),
         ("torchlens/_runnable/seam.py", "__all__"),
         ("torchlens/_runnable/state.py", "__all__"),

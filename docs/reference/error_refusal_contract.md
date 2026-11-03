@@ -911,6 +911,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `release_during_active_capture` | `tl.release_model()` while a capture is still active | Let the capture finish before releasing the model |
 | `recording_option_duplicate` | Recording option was specified twice | Pass each option exactly once |
 | `recording_option_type_invalid` | Recording option has an unsupported type | Pass the documented type for that option |
+| `facet_snapshot_provider_missing` | Per-trace facet recipes reached the capture engine before any facet snapshot provider was registered (`RegistryError`; `torchlens` registers the provider on import, so this is internal) | Import `torchlens` through its public entry before capturing with `facets=` |
 | `registry_capabilities_missing` | A registration reached a typed registry door without capability rows (`RegistryError`; registration is refused, never accepted blind) | Declare `capabilities={...}` stating what the provider can and cannot do |
 | `registry_capability_key_invalid` | A capability row key is not a non-empty string (`RegistryError`) | Use non-empty string capability names |
 | `registry_capability_value_invalid` | A capability row value is not a portable scalar (bool/int/float/str or tuple-of-str) (`RegistryError`) | Use portable scalar capability values |
