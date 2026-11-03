@@ -67,6 +67,9 @@ def _apply_family(node: Mapping[str, Any], value: Any, at: str) -> None:
         Complete record, row, column and nested item path.
     """
 
+    # Essential interpreter complexity: keep the closed node instructions together;
+    # family-specific callbacks would duplicate these structural checks.
+
     if "family" in node:
         node = {**FAMILIES[node["family"]], **node}
     guard = node.get("when_attribute_present")
@@ -123,6 +126,9 @@ def _family_scalar(node: Mapping[str, Any], value: Any, at: str, code: str) -> N
         Schema node, candidate scalar, diagnostic path and inherited refusal code.
     """
 
+    # Essential interpreter complexity: keep the closed node instructions together;
+    # family-specific callbacks would duplicate these structural checks.
+
     types: dict[str, Any] = {"str": str, "int": int, "bool": bool, "number": (int, float)}
     declared = node.get("type", ())
     declared = (declared,) if isinstance(declared, str) else declared
@@ -172,6 +178,32 @@ def _family_object(node: Mapping[str, Any], value: Any, at: str, code: str) -> N
         Schema node, candidate object, diagnostic path and inherited refusal code.
     """
 
+    value = _family_mapping(node, value, at, code)
+    keys = node.get("keys", {})
+    for key, item in value.items():
+        if "key" in node:
+            _apply_family({"code": code, **node["key"]}, key, f"{at}<key {key!r}>")
+        child = keys.get(key, node.get("values"))
+        if child is not None:
+            _apply_family({"code": code, **child}, item, f"{at}.{key}")
+    if "discriminator" in node:
+        variant = value.get(node["discriminator"])
+        selected = next((case for name, case in node["cases"].items() if variant == name), None)
+        if selected is None:
+            raise cell_error(at, f"unknown family variant {variant!r}", code=code)
+        _apply_family({"code": code, **selected}, value, at)
+    _family_constraints(node, value, at, code)
+
+
+def _family_mapping(node: Mapping[str, Any], value: Any, at: str, code: str) -> Mapping[str, Any]:
+    """Normalize an object representation and check its declared field set.
+
+    Parameters
+    ----------
+    node, value, at, code:
+        Schema node, candidate object, diagnostic path and inherited refusal code.
+    """
+
     keys = node.get("keys", {})
     if node.get("attributes") and not isinstance(value, Mapping):
         if isinstance(value, PendingRecord):
@@ -185,18 +217,23 @@ def _family_object(node: Mapping[str, Any], value: Any, at: str, code: str) -> N
         "keys" in node and not node.get("open") and set(value) - set(keys)
     ):
         raise cell_error(at, f"family fields differ from {sorted(keys)}", code=code)
-    for key, item in value.items():
-        if "key" in node:
-            _apply_family({"code": code, **node["key"]}, key, f"{at}<key {key!r}>")
-        child = keys.get(key, node.get("values"))
-        if child is not None:
-            _apply_family({"code": code, **child}, item, f"{at}.{key}")
-    if "discriminator" in node:
-        variant = value.get(node["discriminator"])
-        selected = next((case for name, case in node["cases"].items() if variant == name), None)
-        if selected is None:
-            raise cell_error(at, f"unknown family variant {variant!r}", code=code)
-        _apply_family({"code": code, **selected}, value, at)
+    return value
+
+
+def _family_constraints(
+    node: Mapping[str, Any], value: Mapping[str, Any], at: str, code: str
+) -> None:
+    """Apply the declared coherence rules inside one object cell.
+
+    Parameters
+    ----------
+    node, value, at, code:
+        Schema node, validated mapping, diagnostic path and inherited refusal code.
+    """
+
+    # Essential interpreter complexity: keep the closed node instructions together;
+    # family-specific callbacks would duplicate these structural checks.
+
     for rule in node.get("rules", ()):
         if all(_family_condition(value.get(key), test) for key, test in rule["when"].items()):
             _apply_family(
@@ -284,6 +321,9 @@ def _family_sequence(node: Mapping[str, Any], value: Any, at: str, code: str) ->
     node, value, at, code:
         Schema node, candidate sequence, diagnostic path and inherited refusal code.
     """
+
+    # Essential interpreter complexity: keep the closed node instructions together;
+    # family-specific callbacks would duplicate these structural checks.
 
     allowed = isinstance(value, Sequence) and not isinstance(value, (str, bytes))
     if node.get("kind") == "tuple":
