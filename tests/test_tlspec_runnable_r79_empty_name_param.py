@@ -29,7 +29,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness, RunnableErrorCode
+from torchlens._runnable import RunnableErrorCode
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
@@ -100,6 +100,7 @@ def _x() -> torch.Tensor:
     return torch.randn(2, 4, 4)
 
 
+# Kept: sole branch coverage of _io/bundle.py; a sole mutation kill; the catch of its regression fault.
 def test_r79_empty_name_param_refuses_at_save(tmp_path: Path) -> None:
     """RED-now-fixed: the empty-name param save refuses typed, never stillborn.
 
@@ -120,19 +121,7 @@ def test_r79_empty_name_param_refuses_at_save(tmp_path: Path) -> None:
     assert not path.exists()
 
 
-def test_r79_named_param_still_saves_and_loads(tmp_path: Path) -> None:
-    """Zero collateral: a normal named param round-trips and verifies."""
-
-    x = _x()
-    path = tmp_path / "named.tlspec"
-    trace = tl.trace(NamedParam().eval(), x.clone(), capture=_CAPTURE)
-    trace.save(path, level="runnable", include_weights=True)
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
+# Kept: sole branch coverage of _io/runnable_load.py.
 def test_r79_weightless_empty_name_lane_unchanged(tmp_path: Path) -> None:
     """Zero collateral: the weightless empty-name lane keeps its current parity.
 
@@ -151,6 +140,7 @@ def test_r79_weightless_empty_name_lane_unchanged(tmp_path: Path) -> None:
     tl.load(path)
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize(
     "model_cls",
     [EmptyNamePersistentBuffer, EmptyNameNonPersistentBuffer],

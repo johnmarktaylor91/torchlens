@@ -368,7 +368,6 @@ tests/test_data_substrate_transforms.py,39,0.61,0.02,smoke
 tests/test_dataset_extraction_resume.py,11,9.02,3.50,heavy
 tests/test_dead_config_debloat.py,17,0.26,0.02,unmarked
 tests/test_debug_analysis.py,13,1.51,0.33,unmarked
-tests/test_debug_bisect_precision.py,5,1.61,0.52,smoke
 tests/test_debug_cost_audit_behaviors.py,5,0.29,0.15,slow
 tests/test_debug_utils.py,13,1.74,0.33,unmarked
 tests/test_decoration.py,89,35.94,3.42,heavy

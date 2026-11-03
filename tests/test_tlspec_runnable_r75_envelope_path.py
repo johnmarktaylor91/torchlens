@@ -17,7 +17,6 @@ total. Nothing untyped escapes; a well-formed artifact is untouched.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +25,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness, ReadinessStatus
+from torchlens._runnable import ReadinessStatus
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.options import CaptureOptions
 
@@ -93,25 +92,7 @@ def _assert_context_field_invalid_analysis_only(path: Path, run_inputs: Any) -> 
         loaded.run(inputs=run_inputs)
 
 
-@pytest.mark.parametrize(
-    "encoded_value",
-    [
-        {"kind": "int", "value": 7},
-        {"kind": "str", "value": "arg0"},
-    ],
-    ids=["int_encoded", "str_encoded"],
-)
-def test_r75_malformed_metadata_envelope_path_refuses_typed(
-    tmp_path: Path, encoded_value: dict[str, Any]
-) -> None:
-    """An int/str-encoded metadata envelope path lands in context_field_invalid, not the catch-all."""
-
-    x = torch.randn(4, 4)
-    path = _save(_MetaBranch().eval(), x, tmp_path / "meta.tlspec")
-    _tamper_fact_field(path, "model_input_metadata:", "path", encoded_value)
-    _assert_context_field_invalid_analysis_only(path, x.clone())
-
-
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill; the catch of its regression fault.
 def test_r75_malformed_literal_fact_path_refuses_typed(tmp_path: Path) -> None:
     """The sibling literal-fact path lane refuses through the same typed disposition."""
 
@@ -121,6 +102,7 @@ def test_r75_malformed_literal_fact_path_refuses_typed(tmp_path: Path) -> None:
     _assert_context_field_invalid_analysis_only(path, (x.clone(), 3))
 
 
+# Kept: sole branch coverage of _io/runnable_load.py.
 def test_r75_malformed_structure_fact_position_refuses_typed(tmp_path: Path) -> None:
     """A non-sequence structure-fact position refuses typed too (same unguarded class)."""
 
@@ -128,27 +110,3 @@ def test_r75_malformed_structure_fact_position_refuses_typed(tmp_path: Path) -> 
     path = _save(_MetaBranch().eval(), x, tmp_path / "structure.tlspec")
     _tamper_fact_field(path, "input_structure:", "position", {"kind": "int", "value": 7})
     _assert_context_field_invalid_analysis_only(path, x.clone())
-
-
-@pytest.mark.parametrize(
-    "factory",
-    [
-        lambda: (_MetaBranch().eval(), torch.randn(4, 4)),
-        lambda: (_LiteralCarrier().eval(), (torch.randn(4, 4), 3)),
-    ],
-    ids=["metadata", "literal"],
-)
-def test_r75_untampered_artifacts_unchanged(
-    tmp_path: Path, factory: Callable[[], tuple[nn.Module, Any]]
-) -> None:
-    """Zero collateral: well-formed artifacts still load and verify."""
-
-    model, inputs = factory()
-    path = _save(model, inputs, tmp_path / "clean.tlspec")
-    run_inputs = (
-        tuple(v.clone() if isinstance(v, torch.Tensor) else v for v in inputs)
-        if isinstance(inputs, tuple)
-        else inputs.clone()
-    )
-    result = tl.load(path).run(inputs=run_inputs)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

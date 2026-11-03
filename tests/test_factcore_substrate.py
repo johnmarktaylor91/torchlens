@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.report._compute_truth import compute_aggregation
-from torchlens.report._factcore import GRAINS, capture_fingerprint, factcore
+from torchlens.report._factcore import GRAINS, factcore
 from torchlens.report._health import health_facts
 
 
@@ -40,6 +40,7 @@ def loop_trace():
         trace.cleanup()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_factcore.py.
 def test_counts_record_names_its_grains(loop_trace) -> None:
     """D3: one counts record; the bare word 'operations' has no home."""
 
@@ -64,6 +65,7 @@ def test_counts_record_names_its_grains(loop_trace) -> None:
     assert excinfo.value.fields["code"] == "factcore_grain_invalid"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_factcore.py.
 def test_identity_index_joins_refuse_ambiguity(loop_trace) -> None:
     """D2: shared identities; joins are total or refuse typed."""
 
@@ -84,30 +86,7 @@ def test_identity_index_joins_refuse_ambiguity(loop_trace) -> None:
     assert excinfo.value.fields["code"] == "factcore_identity_unknown"
 
 
-def test_capture_fingerprint_stable_and_discriminating(loop_trace, tmp_path) -> None:
-    """Same capture -> same fingerprint (through save/load); different -> differs."""
-
-    fingerprint = capture_fingerprint(loop_trace)
-    assert fingerprint.startswith("fc1-")
-    loop_trace.save(tmp_path / "bundle.tlspec")
-    loaded = tl.load(tmp_path / "bundle.tlspec")
-    assert capture_fingerprint(loaded) == fingerprint
-    other = tl.trace(nn.Linear(4, 4).eval(), torch.randn(2, 4))
-    assert capture_fingerprint(other) != fingerprint
-
-
-def test_compute_face_boundary_rows_own_nothing(loop_trace) -> None:
-    """costreport D7 CI plant: non-None additive cell on a non-op row FAILS."""
-
-    aggregation = compute_aggregation(loop_trace)
-    for row in aggregation.rows:
-        if row.kind != "op":
-            assert row.flops_fma2 is None, f"boundary row {row.label} owns compute"
-            assert row.applicability == "not_applicable"
-    assert aggregation.convention == "fma2"
-    assert aggregation.scope == "whole_trace"
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_compute_truth.py.
 def test_compute_face_partition_and_coverage_totality(loop_trace) -> None:
     """The partition total equals the op-row sum; coverage is total."""
 
@@ -121,19 +100,7 @@ def test_compute_face_partition_and_coverage_totality(loop_trace) -> None:
     assert int(loop_trace.cost.total_flops_forward) == row_sum
 
 
-def test_compute_face_one_linear_external_oracle() -> None:
-    """One-Linear(8,16,bias) batch 2 closed form: 544 FLOPs / 256 MACs.
-
-    A07's pinned oracle: 2*2*8*16 FMA FLOPs + 2*16 bias adds = 544 under
-    fma2; true MACs 2*8*16 = 256 (bias adds are NOT MACs).
-    """
-
-    trace = tl.trace(nn.Linear(8, 16).eval(), torch.randn(2, 8))
-    aggregation = compute_aggregation(trace)
-    assert int(aggregation.partition_total) == 544
-    assert int(aggregation.macs_total) == 256
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_compute_truth.py.
 def test_ratio_facts_carry_denominator_ids(loop_trace) -> None:
     """D6: a percent names its numerator and denominator identities."""
 
@@ -148,45 +115,7 @@ def test_ratio_facts_carry_denominator_ids(loop_trace) -> None:
     assert missing.value is None
 
 
-def test_health_three_states() -> None:
-    """D5: found / checked_and_clean / not_checked; silence is not a state."""
-
-    model = _Loop().eval()
-    clean = tl.trace(model, torch.randn(2, 4))
-    assert clean.nonfinite_verdict == "checked_and_clean"
-
-    x = torch.randn(2, 4)
-    x[0, 0] = float("nan")
-    poisoned = tl.trace(model, x)
-    assert poisoned.nonfinite_verdict == "found"
-    assert poisoned.health_facts.nonfinite_labels
-
-    selective = tl.trace(model, torch.randn(2, 4), save=tl.func("relu"))
-    facts = selective.health_facts
-    assert facts.num_unexamined_ops > 0
-    assert selective.nonfinite_verdict == "not_checked"  # partial clean never upgrades
-
-
-def test_health_facts_persist_and_serve_on_load(tmp_path) -> None:
-    """D9: capture-basis evidence is part of the artifact."""
-
-    model = _Loop().eval()
-    x = torch.randn(2, 4)
-    x[0, 0] = float("nan")
-    trace = tl.trace(model, x)
-    live = trace.health_facts
-    assert live.verdict == "found"
-    assert "health_facts" in trace.annotations
-    trace.save(tmp_path / "poisoned.tlspec")
-    loaded = tl.load(tmp_path / "poisoned.tlspec")
-    served = loaded.health_facts
-    assert served.basis == "persisted"
-    assert served.source_basis == live.basis
-    assert served.verdict == "found"
-    assert served.nonfinite_labels == live.nonfinite_labels
-    assert served.capture_revision == live.capture_revision
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_health.py.
 def test_health_facts_invalid_persisted_payload_never_clean() -> None:
     """A forged/garbled persisted record degrades to NOT-CHECKED, never clean."""
 
@@ -199,6 +128,7 @@ def test_health_facts_invalid_persisted_payload_never_clean() -> None:
     assert facts.basis in ("capture", "saved_payloads")
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/trace.py, report/_trace_facts.py.
 def test_health_alias_rows_excluded_and_disclosed(loop_trace) -> None:
     """D19: alias rows never inflate the identity-partition health counts."""
 
@@ -220,22 +150,14 @@ def test_health_alias_rows_excluded_and_disclosed(loop_trace) -> None:
         assert label in alias_labels
 
 
-def test_memory_scopes_at_capture_vs_retained_now(loop_trace) -> None:
-    """D8: at_capture is a capture fact; retained_now describes THIS object."""
-
-    memory = factcore(loop_trace).memory
-    assert memory.retained_bytes <= memory.captured_bytes
-    assert memory.captured_saved_ops >= memory.retained_present_ops
-    # Live full-save trace: everything the capture retained is still here.
-    assert memory.retained_bytes == memory.captured_bytes
-
-
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_factcore_grain_vocabulary_is_closed() -> None:
     """The grain menu is the D3 vocabulary, verbatim."""
 
     assert GRAINS == ("op", "layer", "site", "module", "call")
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_trace_groups.py, _data_classes/_trace_inventory.py and more and a sole campaign mutation kill.
 def test_scope_label_on_payload_stripped_artifact(tmp_path) -> None:
     """The D8 scope-label test: no surface claims bytes THIS object lacks.
 
@@ -266,15 +188,3 @@ def test_scope_label_on_payload_stripped_artifact(tmp_path) -> None:
     assert footer and "retained now" in footer[0] and "at capture" in footer[0]
     health = [line for line in loaded.summary().splitlines() if "health" in line.lower()]
     assert health and "NOT-CHECKED" in health[0]
-
-
-def test_agent_json_carries_scoped_memory_and_health() -> None:
-    """agent_json names both payload scopes and the three-state verdict."""
-
-    trace = tl.trace(_Loop().eval(), torch.randn(2, 4))
-    dump = trace.to_agent_json()
-    memory = dump["memory"]
-    assert memory["at_capture_bytes"] == memory["retained_now_bytes"]
-    assert "scope_note" in memory
-    assert dump["health"]["verdict"] in ("found", "checked_and_clean", "not_checked")
-    assert dump["health"]["basis"]

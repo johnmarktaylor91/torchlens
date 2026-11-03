@@ -147,9 +147,9 @@ def _pytestmark(body: list[ast.stmt]) -> set[str]:
     for statement in body:
         if isinstance(statement, ast.Assign | ast.AnnAssign):
             targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
-            if any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in targets):
-                if statement.value is not None:
-                    names |= _mark_names(statement.value)
+            is_pytestmark = any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in targets)
+            if is_pytestmark and statement.value is not None:
+                names |= _mark_names(statement.value)
     return names
 
 

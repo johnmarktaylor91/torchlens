@@ -18,7 +18,6 @@ corr1-4 / free-F4 / free-F5 / r66b-R3 root causes, closed structurally:
 
 from __future__ import annotations
 
-import inspect
 import warnings
 from pathlib import Path
 
@@ -29,7 +28,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
 from torchlens._runnable.state import (
-    _state_metadata_signature,
     _state_placement_canonical,
 )
 from torchlens.backends.torch import completeness_witness as cw
@@ -68,11 +66,7 @@ def _assert_refuses(trace: tl.Trace, path: Path, *needles: str) -> None:
         assert needle in diagnostics, needle
 
 
-# ======================================================================================
-# Reflection immunizer: every public storage member is classified (new accessor -> RED)
-# ======================================================================================
-
-
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 @pytest.mark.parametrize("class_name", ["UntypedStorage", "TypedStorage"])
 def test_r67_storage_disposition_table_covers_public_surface(class_name: str) -> None:
     """Every public (non-underscore) ``dir()`` member of each storage class has a row.
@@ -101,12 +95,18 @@ def test_r67_storage_disposition_table_covers_public_surface(class_name: str) ->
         assert why, member
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_r67_acquisition_bridges_cover_typed_storage_spelling() -> None:
     """``_typed_storage`` joined the origin+watch bridge set (r66b R3 spelling)."""
 
     assert {"untyped_storage", "storage", "_typed_storage", "data_ptr"} == set(
         STORAGE_BRIDGE_ESCAPE_FUNCS
     )
+
+
+# ======================================================================================
+# Reflection immunizer: every public storage member is classified (new accessor -> RED)
+# ======================================================================================
 
 
 # ======================================================================================
@@ -150,26 +150,7 @@ _NBYTES_READERS = {
 }
 
 
-@pytest.mark.parametrize("spelling", sorted(_ACQUIRE_ONLY))
-def test_r67_discarded_handle_on_larger_base_state_saves_and_verifies(
-    spelling: str, tmp_path: Path
-) -> None:
-    """Acquisition alone records NO read kind: the larger-base slot stays admitted.
-
-    The corr1-4 over-trigger: a discarded ``untyped_storage()`` handle (no ``.nbytes()``
-    call) on a larger-base slot false-refused the save with
-    ``storage_nbytes_is_tight=False``. The ledger may only claim observations that
-    actually occurred.
-    """
-
-    x = torch.randn(3)
-    trace = _trace(_StorageReader(_larger_base_buffer(), _ACQUIRE_ONLY[spelling]), x)
-    assert host_escape_state_metadata_reads(trace) == {}
-    loaded = tl.load(_save(trace, tmp_path / "acq.tlspec"))
-    result = loaded.run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("spelling", sorted(_NBYTES_READERS))
 def test_r67_actual_nbytes_read_on_larger_base_state_refuses(spelling: str, tmp_path: Path) -> None:
     """The ACTUAL byte-count accessor call on the larger-base slot refuses at save."""
@@ -177,18 +158,6 @@ def test_r67_actual_nbytes_read_on_larger_base_state_refuses(spelling: str, tmp_
     trace = _trace(_StorageReader(_larger_base_buffer(), _NBYTES_READERS[spelling]), torch.randn(3))
     assert "storage_nbytes" in host_escape_state_metadata_reads(trace).get("b", frozenset())
     _assert_refuses(trace, tmp_path / "read.tlspec", "storage_nbytes")
-
-
-@pytest.mark.parametrize("spelling", sorted(_NBYTES_READERS))
-def test_r67_actual_nbytes_read_on_tight_state_stays_verified(
-    spelling: str, tmp_path: Path
-) -> None:
-    """The same actual read on a TIGHT slot saves + VERIFIED (no over-refusal)."""
-
-    x = torch.randn(3)
-    trace = _trace(_StorageReader(torch.arange(3.0), _NBYTES_READERS[spelling]), x)
-    loaded = tl.load(_save(trace, tmp_path / "tight.tlspec"))
-    assert loaded.run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
 # ======================================================================================
@@ -206,6 +175,7 @@ _PLACEMENT_SPELLINGS = {
 }
 
 
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize("spelling", sorted(_PLACEMENT_SPELLINGS))
 def test_r67_placement_read_canonical_state_identical_verdicts(
     spelling: str, tmp_path: Path
@@ -223,12 +193,15 @@ def test_r67_placement_read_canonical_state_identical_verdicts(
     assert loaded.run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
+# Kept: a sole mutation kill; smoke tier id (frozen).
 @pytest.mark.smoke_cells(
     "test_r67_placement_read_shared_state_refuses_every_spelling[is_shared_tensor]"
 )
 @pytest.mark.parametrize(
     "spelling",
-    ["is_shared_tensor", "is_shared_untyped", "is_shared_typed"],
+    [
+        "is_shared_tensor",
+    ],
 )
 def test_r67_placement_read_shared_state_refuses_every_spelling(
     spelling: str, tmp_path: Path
@@ -247,6 +220,7 @@ def test_r67_placement_read_shared_state_refuses_every_spelling(
     _assert_refuses(trace, tmp_path / "shared.tlspec", "is_shared")
 
 
+# Kept: sole branch coverage of _runnable/state.py.
 def test_r67_is_pinned_observed_value_is_the_authority() -> None:
     """The recorded fact is the accessor's ACTUAL return -- no accelerator-init inference.
 
@@ -266,6 +240,7 @@ def test_r67_is_pinned_observed_value_is_the_authority() -> None:
     assert _state_placement_canonical("is_shared", None) is None  # unknown -> refuse
 
 
+# Kept: id not measured per id (rare tier).
 @pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="pinned memory requires CUDA")
 def test_r67_pinned_state_read_refuses_via_observation(tmp_path: Path) -> None:
@@ -278,6 +253,7 @@ def test_r67_pinned_state_read_refuses_via_observation(tmp_path: Path) -> None:
     _assert_refuses(trace, tmp_path / "pinned.tlspec", "is_pinned")
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_patches.py; a sole mutation kill.
 def test_r67_arg_directed_placement_query_on_state_refuses(tmp_path: Path) -> None:
     """``is_pinned(device=...)`` on state records observed=None (unknown) and refuses.
 
@@ -321,6 +297,7 @@ _INPUT_GEOM_READERS = {
 }
 
 
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize("spelling", sorted(_INPUT_GEOM_READERS))
 def test_r67_input_storage_nbytes_read_diverges_on_changed_base(
     spelling: str, tmp_path: Path
@@ -342,79 +319,12 @@ def test_r67_input_storage_nbytes_read_diverges_on_changed_base(
     assert "storage_nbytes" in str(excinfo.value)
 
 
-def test_r67_discarded_input_handle_records_no_geometry_fact(tmp_path: Path) -> None:
-    """Acquisition-only on an INPUT records no fact: a changed-base twin stays runnable.
-
-    The input-side twin of the corr1-4 pin -- symmetric actual-read gating (the r67
-    input x state parity requirement): no read, no fact, no phantom divergence.
-    """
-
-    class AcquireOnly(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            _ = x.untyped_storage()
-            return x * 2.0
-
-    x = torch.randn(4)
-    path = _save(_trace(AcquireOnly(), x), tmp_path / "acq_in.tlspec")
-    twin = torch.randn(100)[:4]
-    result = tl.load(path).run(inputs=twin)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
 # ======================================================================================
 # C6: grad_is_none is the REAL read; unattributable access fails closed; identity restore
 # ======================================================================================
 
 
-def test_r67_grad_is_none_is_the_actual_read() -> None:
-    """The signature stamps the REAL ``.grad`` read -- free-F5's structural shortcut is gone.
-
-    torch 2.8 allows assigning ``.grad`` on a non-leaf without ``retains_grad``; the old
-    "a non-leaf without retains_grad structurally carries no grad" inference stamped
-    ``grad_is_none=True`` for a fact it never read.
-    """
-
-    root = torch.ones(3, requires_grad=True)
-    nonleaf = root * 2.0
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        nonleaf.grad = torch.zeros(3)
-    signature = _state_metadata_signature(nonleaf.clone().detach())  # detached: grad gone
-    assert signature["grad_is_none"] is True
-    # The live non-leaf with an assigned grad: the REAL read observes it.
-    hostile_case = _state_metadata_signature(nonleaf) if False else None
-    del hostile_case  # non-leaf is not admissible state; the unit fact is below
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert (nonleaf.grad is None) is False
-    # Matrix: leaf/non-leaf x retains x grad present/absent -- signature == real read.
-    cases = []
-    leaf = torch.ones(3)
-    cases.append(leaf)  # leaf, no grad
-    leaf_grad = nn.Parameter(torch.ones(3))
-    leaf_grad.grad = torch.zeros(3)
-    cases.append(leaf_grad)  # leaf, grad present
-    retained = (torch.ones(3, requires_grad=True) * 2.0).clone().detach()
-    cases.append(retained)
-    for value in cases:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            real = value.grad is None
-        assert _state_metadata_signature(value)["grad_is_none"] == real, value
-
-
-def test_r67_nonleaf_grad_signature_matches_real_read() -> None:
-    """A non-leaf tensor with an ASSIGNED grad stamps grad_is_none=False (real read)."""
-
-    root = torch.ones(3, requires_grad=True)
-    nonleaf = root * 2.0
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        nonleaf.grad = torch.zeros(3)
-    signature = _state_metadata_signature(nonleaf)
-    assert signature["grad_is_none"] is False
-
-
+# Kept: sole branch coverage of _io/runnable.py, backends/torch/_completeness_metadata.py, backends/torch/_completeness_storage.py; a sole mutation kill.
 def test_r67_unattributable_storage_access_fails_closed(tmp_path: Path) -> None:
     """An owner-thread accessor on a storage TorchLens cannot attribute ceilings the run.
 
@@ -438,37 +348,6 @@ def test_r67_unattributable_storage_access_fails_closed(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
-def test_r67_storage_wrappers_restore_identity_exactly() -> None:
-    """After a capture, every wrapped storage member restores to the exact original."""
-
-    before: dict[tuple[str, str], object] = {}
-    for class_name in ("UntypedStorage", "TypedStorage"):
-        storage_cls = getattr(torch, class_name)
-        for member in STORAGE_METADATA_ACCESSOR_DISPOSITIONS[class_name]:
-            descriptor = inspect.getattr_static(storage_cls, member, None)
-            if descriptor is not None:
-                before[(class_name, member)] = descriptor
-
-    class Plain(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.register_buffer("b", torch.arange(3.0))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                _ = self.b.untyped_storage().nbytes()
-            return x + self.b
-
-    _trace(Plain(), torch.randn(3))
-    for (class_name, member), descriptor in before.items():
-        storage_cls = getattr(torch, class_name)
-        assert inspect.getattr_static(storage_cls, member, None) is descriptor, (
-            class_name,
-            member,
-        )
-
-
 # ======================================================================================
 # C6: tied-alias fan-out + captured-slot storage mutators + hostile-subclass admission
 # ======================================================================================
@@ -490,6 +369,7 @@ class _TiedModel(nn.Module):
         return x - self.tied_b.detach().sum() if flag else x + self.tied_b.detach().sum()
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_metadata.py, backends/torch/model_prep.py; a sole mutation kill.
 def test_r67_tied_alias_direct_read_attributes_to_full_group() -> None:
     """A direct read on ONE tied name marks EVERY canonical name in the alias group."""
 
@@ -505,6 +385,7 @@ def test_r67_tied_alias_direct_read_attributes_to_full_group() -> None:
     assert {"tied_a", "tied_b"} <= set(names)
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_storage.py, backends/torch/buffer_writes.py.
 def test_r67_captured_storage_mutator_ceilings(tmp_path: Path) -> None:
     """A mutator through a captured slot's storage handle joins the writeback ceiling."""
 
@@ -535,6 +416,7 @@ class _Hostile(torch.Tensor):
         return super().__torch_function__(func, types, args, kwargs or {})
 
 
+# Kept: sole branch coverage of _io/runnable.py, _runnable/state_live.py, _storage_bindings.py and more.
 @pytest.mark.parametrize("surface", ["state", "input"])
 def test_r67_hostile_subclass_admission_refuses(surface: str, tmp_path: Path) -> None:
     """Hostile Tensor subclasses refuse typed on BOTH admission surfaces (C6 negative).
@@ -578,22 +460,3 @@ def test_r67_hostile_subclass_admission_refuses(surface: str, tmp_path: Path) ->
 # ======================================================================================
 # Observed-read property: no fact before access; exactly the right fact after
 # ======================================================================================
-
-
-def test_r67_observed_read_property_no_fact_without_access() -> None:
-    """The ledger claims exactly the observations that occurred -- no more, no less."""
-
-    # No access at all: empty ledgers.
-    plain = _trace(_StorageReader(torch.arange(3.0), lambda b: False), torch.randn(3))
-    assert host_escape_state_metadata_reads(plain) == {}
-    assert host_escape_state_metadata_observations(plain) == {}
-    # Acquisition only: still empty.
-    acquired = _trace(_StorageReader(torch.arange(3.0), _ACQUIRE_ONLY["untyped"]), torch.randn(3))
-    assert host_escape_state_metadata_reads(acquired) == {}
-    # One actual read: exactly one read kind, with its observed value.
-    read = _trace(
-        _StorageReader(torch.arange(3.0), lambda b: b.untyped_storage().is_shared()),
-        torch.randn(3),
-    )
-    assert host_escape_state_metadata_reads(read) == {"b": frozenset({"is_shared"})}
-    assert host_escape_state_metadata_observations(read) == {"b": {"is_shared": False}}

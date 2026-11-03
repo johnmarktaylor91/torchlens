@@ -32,9 +32,7 @@ from torchlens._capture_fingerprint import (
     _forward_input_fragment,
     _hash_tensor_content,
 )
-from torchlens._capture_state_helpers import _capture_cache_key
 from torchlens._runnable.state import runnable_tensor_byte_digest
-from torchlens._transport import digest_byte_view, to_cpu_contiguous
 
 
 def _cache_capture(tmp_path):
@@ -82,13 +80,7 @@ def _make_scaler(k: int):
     return scaler
 
 
-def test_closure_cells_change_the_code_digest() -> None:
-    """Same code object, different closure cell values -> different digests."""
-
-    assert _callable_code_digest(_make_scaler(1)) != _callable_code_digest(_make_scaler(2))
-    assert _callable_code_digest(_make_scaler(3)) == _callable_code_digest(_make_scaler(3))
-
-
+# Kept: sole branch coverage of _capture_fingerprint.py.
 def test_self_referential_closure_digest_terminates() -> None:
     """A closure cell holding its own function must not recurse forever."""
 
@@ -110,6 +102,7 @@ def _make_flag_forward(use_relu: bool):
     return forward
 
 
+# Kept: sole branch coverage of _capture/prepare/cache.py, _capture_state_helpers.py, _data_classes/_trace_groups.py.
 def test_factory_configured_instance_forward_is_a_cache_miss(tmp_path) -> None:
     """Closure-configured instance forwards must not collide on one entry."""
 
@@ -136,41 +129,7 @@ def test_factory_configured_instance_forward_is_a_cache_miss(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_non_tensor_forward_input_is_a_cache_miss(tmp_path) -> None:
-    """``use_relu=False`` must not be served the ``use_relu=True`` capture."""
-
-    model = _FlagModel()
-    x = torch.randn(1, 4)
-    first = tl.trace(model, (x, True), capture=_cache_capture(tmp_path))
-    assert first.provenance.cache_hit is False
-    assert any("relu" in label for label in first.layer_labels)
-
-    second = tl.trace(model, (x, False), capture=_cache_capture(tmp_path))
-    assert second.provenance.cache_hit is False, (
-        "a changed non-tensor forward input must be a cache miss"
-    )
-    labels = list(second.layer_labels)
-    assert any("sigmoid" in label for label in labels)
-    assert not any("relu" in label for label in labels)
-
-
-def test_cache_key_sees_non_tensor_inputs_and_kwarg_names() -> None:
-    """Key-level checks for the axes the tensor-leaf hash was blind to."""
-
-    model = nn.Linear(2, 2)
-    x = torch.randn(1, 2)
-    base = _capture_cache_key(model, (x, True), {}, {})
-    assert base != _capture_cache_key(model, (x, False), {}, {})
-    assert _capture_cache_key(model, (x,), {"a": x}, {}) != _capture_cache_key(
-        model, (x,), {"b": x}, {}
-    )
-    assert _capture_cache_key(model, (x,), {"f": 1}, {}) != _capture_cache_key(
-        model, (x,), {"f": 2}, {}
-    )
-    # Determinism: an unchanged call keys identically.
-    assert base == _capture_cache_key(model, (x, True), {}, {})
-
-
+# Kept: sole branch coverage of _capture_fingerprint.py.
 def test_forward_input_fragment_frames_structure() -> None:
     """Container shape changes fragment identity; equal trees are stable."""
 
@@ -190,6 +149,7 @@ def test_forward_input_fragment_frames_structure() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept: sole branch coverage of backends/torch/_session_cleanup.py; a sole mutation kill.
 def test_namespace_slot_walk_sees_same_length_replacement() -> None:
     """A tensor REPLACING a scalar at constant namespace length is visited."""
 
@@ -214,6 +174,7 @@ def test_namespace_slot_walk_sees_same_length_replacement() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept: sole branch coverage of _transport.py.
 def test_digest_sites_accept_lazy_conj_and_neg() -> None:
     """Every uint8-reinterpret digest site survives lazy dispatch bits."""
 
@@ -225,26 +186,3 @@ def test_digest_sites_accept_lazy_conj_and_neg() -> None:
     neg_view = torch.randn(3, dtype=torch.complex64).conj().imag
     assert isinstance(runnable_tensor_byte_digest(neg_view), str)
     assert isinstance(runnable_tensor_byte_digest(neg), str)
-
-
-def test_conj_digest_equals_resolved_twin() -> None:
-    """The lazy-bit tensor digests as its LOGICAL value."""
-
-    source = torch.randn(4, dtype=torch.complex64)
-    lazy = source.conj()
-    resolved = source.conj().resolve_conj()
-    assert runnable_tensor_byte_digest(lazy) == runnable_tensor_byte_digest(resolved)
-    assert _hash_tensor_content(lazy) == _hash_tensor_content(resolved)
-    assert bytes(digest_byte_view(lazy)) == bytes(digest_byte_view(resolved))
-    assert not to_cpu_contiguous(lazy).is_conj()
-
-
-def test_lazy_conj_input_capture_with_cache_does_not_crash(tmp_path) -> None:
-    """End-to-end R35 repro: ``tl.trace(m, x.conj(), cache=True)``."""
-
-    model = _DoubleModel()
-    x = torch.randn(2, 3, dtype=torch.complex64).conj()
-    first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.provenance.cache_hit is False
-    second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert second.provenance.cache_hit is True

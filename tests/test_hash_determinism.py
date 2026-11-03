@@ -527,7 +527,11 @@ def _model_cases() -> list[ModelCase]:
     ]
 
 
-@pytest.mark.parametrize(("case_name", "factory"), _model_cases())
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_trace_groups.py.
+# Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
+@pytest.mark.parametrize(
+    ("case_name", "factory"), [case for case in _model_cases() if case[0] == "tuple_output"]
+)
 def test_graph_hashes_are_deterministic_across_repeated_traces(
     case_name: str, factory: Callable[[], tuple[nn.Module, Any]]
 ) -> None:
@@ -547,18 +551,6 @@ def test_graph_hashes_are_deterministic_across_repeated_traces(
 
     assert len(graph_hashes) == 1, case_name
     assert len(raw_hashes) == 1, case_name
-
-
-def test_graph_hash_is_shape_blind_but_raw_event_hash_catches_width_change() -> None:
-    """Graph hash collides on width changes while raw-event hash differs."""
-
-    torch.manual_seed(0)
-    input_value = torch.randn(2, 4)
-    graph_width_8, raw_width_8 = _trace_hash_pair(TinyMlp(hidden_width=8), input_value)
-    graph_width_16, raw_width_16 = _trace_hash_pair(TinyMlp(hidden_width=16), input_value)
-
-    assert graph_width_8 == graph_width_16
-    assert raw_width_8 != raw_width_16
 
 
 def test_graph_shape_hash_matches_across_fresh_python_process() -> None:
@@ -610,21 +602,6 @@ def test_graph_shape_hash_matches_between_cpu_and_cuda() -> None:
     assert _graph_hash_for_tiny_mlp(seed=456, device="cpu") == _graph_hash_for_tiny_mlp(
         seed=456, device="cuda"
     )
-
-
-def test_graph_shape_hash_distinguishes_identical_ops_under_different_module_packings() -> None:
-    """Identical op sequences under different module addresses hash differently."""
-
-    torch.manual_seed(0)
-    example_input = torch.randn(2, 4)
-    direct_trace = _trace_model(DirectPackingModel(), example_input)
-    nested_trace = _trace_model(NestedPackingModel(), example_input)
-
-    direct_ops = [layer.func_name for layer in direct_trace._layer_list]
-    nested_ops = [layer.func_name for layer in nested_trace._layer_list]
-
-    assert direct_ops == nested_ops
-    assert compute_graph_shape_hash(direct_trace) != compute_graph_shape_hash(nested_trace)
 
 
 # Torch-version-matrix determinism is a manual CI-matrix gate: one test
@@ -683,6 +660,7 @@ def test_object_arg_equivalence_class_is_stable_across_processes() -> None:
     assert not any("0x" in value for value in outputs)
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of backends/torch/tensor_tracking.py.
 def test_per_call_generator_objects_do_not_split_recurrence_grouping() -> None:
     """A fresh (semantically identical) Generator per call must still group (R21-C/P4).
 

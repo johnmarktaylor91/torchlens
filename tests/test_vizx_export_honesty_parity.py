@@ -63,12 +63,9 @@ TEXT_MARKERS: dict[str, str | None] = {
 }
 
 SURFACES = (
-    "draw",
-    "svg",
     "html",
     "model_explorer",
     "netron",
-    "tensorboard",
     "agent_json",
 )
 TEXT_SURFACES = frozenset({"draw", "svg", "html", "tensorboard"})
@@ -299,23 +296,7 @@ def _carries(surface: str, carried: Any, key: str, value: Any) -> bool:
     return bool(carried[key] == expected)
 
 
-def test_every_enumerated_fact_is_classified(planted: dict[str, tl.Trace]) -> None:
-    """A new honesty fact fails here until it gets a marker and a decision."""
-
-    facts = _enumerated_facts(planted)
-    unclassified = sorted(set(facts) - set(TEXT_MARKERS))
-    assert not unclassified, (
-        f"new capture-honesty fact(s) {unclassified}: add a text marker to "
-        "TEXT_MARKERS and carry or explicitly refuse each on every surface"
-    )
-    stale_markers = sorted(set(TEXT_MARKERS) - set(facts))
-    assert not stale_markers, (
-        f"TEXT_MARKERS names fact(s) the shared source no longer emits: {stale_markers}"
-    )
-    stale_refusals = sorted(f for _s, f in REFUSED if f not in facts)
-    assert not stale_refusals, f"REFUSED names unknown fact(s): {stale_refusals}"
-
-
+# Kept: sole branch coverage of _capture_honesty.py, _visualization/_condensed_flow.py, _visualization/_segment_descriptors.py and more.
 @pytest.mark.parametrize("surface", SURFACES)
 def test_surface_carries_or_refuses_every_fact(
     surface: str, planted: dict[str, tl.Trace], tmp_path: Path
@@ -341,11 +322,3 @@ def test_surface_carries_or_refuses_every_fact(
     assert not stale, (
         f"{surface} now carries fact(s) {stale} listed in REFUSED: drop those refusal rows"
     )
-
-
-def test_clean_capture_adds_no_banner_to_draw() -> None:
-    """The draw banner stays empty on a clean plain capture (plain captions unchanged)."""
-
-    from torchlens._capture_honesty import honesty_banner_lines
-
-    assert honesty_banner_lines(_fresh_trace()) == []

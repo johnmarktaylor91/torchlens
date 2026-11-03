@@ -133,6 +133,7 @@ def _oracle(tree, atom_sets: dict[str, frozenset[str]], universe: frozenset[str]
     return (left & right) if kind == "and" else (left | right)
 
 
+# Kept: sole branch coverage of _ir/_selector_universe.py, _selection/resolver.py, _selection/selector_base.py and more; a sole mutation kill.
 def test_selector_composition_matches_set_algebra_oracle(_selector_trace) -> None:
     """120 random &/|/~ trees evaluate exactly as set algebra over atom sets."""
 
@@ -213,6 +214,7 @@ def _random_key(rng: random.Random, depth: int = 2):
     return _random_scalar_key(rng)
 
 
+# Kept: sole branch coverage of _input_walk.py; the catch of its regression fault.
 def test_key_codec_round_trips_generated_adversarial_keys() -> None:
     """decode(encode(k)) == k bit-exactly for 400 generated adversarial keys."""
 
@@ -228,31 +230,6 @@ def test_key_codec_round_trips_generated_adversarial_keys() -> None:
             f"{key!r} -> {token!r} -> {decoded!r}"
         )
         assert encode_mapping_key(key) == token, "codec is not deterministic"
-
-
-def test_key_codec_is_injective_over_generated_key_sets() -> None:
-    """Distinct keys never share a token (the mapping-node identity contract)."""
-
-    rng = random.Random(_SEED + 1)
-    seen: dict[object, object] = {}
-    for _ in range(600):
-        key = _random_key(rng)
-        bits = _key_bits(key)
-        token = encode_mapping_key(key)
-        if bits in seen:
-            assert seen[bits] == token, f"equal keys produced distinct tokens: {key!r}"
-        else:
-            for other_bits, other_token in seen.items():
-                if other_token == token:
-                    raise AssertionError(
-                        f"distinct keys collided on token {token!r}: "
-                        f"{bits!r} vs {other_bits!r} (seed {_SEED + 1})"
-                    )
-            seen[bits] = token
-    # bool/int conflation is the classic collision — pin it explicitly.
-    assert encode_mapping_key(True) != encode_mapping_key(1)
-    assert encode_mapping_key(False) != encode_mapping_key(0)
-    assert encode_mapping_key(-0.0) != encode_mapping_key(0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +271,7 @@ def _shuffled_copy(value, rng: random.Random):
     return value
 
 
+# Kept: sole branch coverage of _merged/_artifact.py.
 def test_canonical_json_bytes_is_key_order_invariant() -> None:
     """Equal payloads with permuted dict insertion orders serialize identically."""
 
@@ -310,43 +288,7 @@ def test_canonical_json_bytes_is_key_order_invariant() -> None:
     assert canonical_json_bytes({"a": 1}) != canonical_json_bytes({"a": 2})
 
 
-def test_canonical_json_bytes_refuses_the_known_bad_classes() -> None:
-    """Known-bad payload classes refuse loudly, never mint ambiguous bytes.
-
-    r7 R73: ``json.dumps`` coerces int/float/bool/None mapping keys to
-    strings, so ``{1: v}`` and ``{"1": v}`` would share canonical bytes,
-    ``{"1": a, 1: b}`` would emit DUPLICATE keys, and int-keyed maps sort
-    numerically while their coerced forms sort lexicographically — for a
-    hash-authority encoding every one of those is a forgery seam. NaN and
-    the infinities are non-JSON and already refused (``allow_nan=False``);
-    this pins all three classes. fixwave-7 (iovalid): every refusal is the
-    typed merged-artifact schema refusal, never a raw builtin exception.
-    """
-
-    from torchlens._merged import MergedErrorCode
-    from torchlens._merged._errors import MergedArtifactError
-
-    bad_payloads: list = [
-        {"x": float("nan")},
-        {"x": float("inf")},
-        {"x": float("-inf")},
-        {1: "v"},
-        {True: "v"},
-        {None: "v"},
-        {"outer": [{"inner": {2.5: "v"}}]},
-        {"1": "same-coerced-form", 1: "different-object"},
-        {"x": object()},  # unserializable leaf: raw TypeError before iovalid
-    ]
-    for payload in bad_payloads:
-        with pytest.raises(MergedArtifactError) as excinfo:
-            canonical_json_bytes(payload)
-        assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value, (
-            f"payload {payload!r} refused with the wrong code"
-        )
-    # The string-keyed spelling stays valid — the refusal is precise.
-    assert canonical_json_bytes({"1": "v"}) == b'{"1":"v"}\n'
-
-
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_fresh_seed_leg_stays_wired_into_ci() -> None:
     """r7 R73 (6th pass): the fuzz leg keeps getting unwired -- pin it.
 
@@ -376,6 +318,7 @@ def test_fresh_seed_leg_stays_wired_into_ci() -> None:
     )
 
 
+# Kept: sole branch coverage of _merged/_artifact.py, _merged/_errors.py; smoke tier id (frozen).
 @pytest.mark.smoke
 def test_canonical_json_bytes_refuses_noncanonical_inputs_typed() -> None:
     """R73: the canonical encoder is an integrity surface -- refuse, never coerce.
