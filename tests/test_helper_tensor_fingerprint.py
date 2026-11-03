@@ -59,6 +59,9 @@ def _truth(model: nn.Module, x: torch.Tensor, direction: torch.Tensor) -> torch.
         handle.remove()
 
 
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
+
 def _steer(direction: torch.Tensor) -> Any:
     """Return an additive steer along ``direction``."""
 
@@ -71,7 +74,7 @@ def _staged_trace(model: nn.Module, x: torch.Tensor, direction: torch.Tensor, do
     if door == "intervene_module":
         return tl.trace(model, x, intervene=tl.when(tl.module("fc1"), _steer(direction)))
     trace = tl.trace(model, x)
-    trace.attach_hooks(tl.module("fc1"), _steer(direction), confirm_mutation=True)
+    trace.do({tl.module("fc1"): _steer(direction)}, intervention=_STAGE)
     return trace
 
 
@@ -82,7 +85,7 @@ _EDITS: dict[str, Callable[[torch.Tensor], None]] = {
 
 
 @pytest.mark.parametrize("edit", sorted(_EDITS))
-@pytest.mark.parametrize("door", ["intervene_module", "attach_hooks"])
+@pytest.mark.parametrize("door", ["intervene_module", "stage"])
 def test_rerun_refuses_a_changed_helper_tensor(setup, door: str, edit: str) -> None:
     """An edited steer tensor refuses the rerun typed and leaves the trace unchanged."""
 
@@ -117,7 +120,7 @@ def test_func_predicate_rerun_refuses_a_changed_helper_tensor(setup) -> None:
     assert excinfo.value.fields["code"] == _CODE
 
 
-@pytest.mark.parametrize("door", ["intervene_module", "attach_hooks"])
+@pytest.mark.parametrize("door", ["intervene_module", "stage"])
 def test_unchanged_helper_tensor_reruns_silently_and_exactly(setup, door: str) -> None:
     """An untouched tensor reruns exactly, every time, under warnings-as-errors."""
 
@@ -134,11 +137,11 @@ def test_learning_loop_that_restages_each_step_keeps_working(setup) -> None:
 
     model, x, direction = setup
     trace = tl.trace(model, x)
-    handle = trace.attach_hooks(tl.module("fc1"), _steer(direction), confirm_mutation=True)
+    trace.do({tl.module("fc1"): _steer(direction)}, intervention=_STAGE)
     for _ in range(3):
         direction.add_(0.25)
-        handle.remove()
-        handle = trace.attach_hooks(tl.module("fc1"), _steer(direction), confirm_mutation=True)
+        trace.clear_edits(tl.module("fc1"), confirm_mutation=True)
+        trace.do({tl.module("fc1"): _steer(direction)}, intervention=_STAGE)
         trace.run(model, x)
         torch.testing.assert_close(trace.output_ops[0].out, _truth(model, x, direction))
 

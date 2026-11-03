@@ -312,12 +312,15 @@ def test_catalog_severity_policy_examples(name: str, expected: str) -> None:
 
 
 def test_axis_a_public_verbs_success_paths() -> None:
-    """Public set, attach_hooks, do, replay, rerun, fork, and append smoke paths work."""
+    """Public set, do (replay and set-only), rerun, fork, and append smoke paths work."""
 
     log = _capture()
     log.set(tl.func("relu"), torch.zeros(1, 3), confirm_mutation=True)
-    log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
-    replay_result = log.push()
+    replay_result = log.do(
+        tl.func("relu"),
+        _zero_hook,
+        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+    )
     assert replay_result is log
     assert log.state is TraceState.REPLAY_PROPAGATED
 
@@ -355,8 +358,14 @@ def test_axis_a_public_verbs_success_paths() -> None:
             terrors.SiteResolutionError,
         ),
         (
-            "attach_hooks",
-            lambda log: log.attach_hooks(tl.func("missing"), _zero_hook, confirm_mutation=True),
+            "stage",
+            lambda log: log.do(
+                tl.func("missing"),
+                _zero_hook,
+                intervention=tl.options.InterventionOptions(
+                    engine="set_only", confirm_mutation=True
+                ),
+            ),
             terrors.SiteResolutionError,
         ),
         (
@@ -369,7 +378,15 @@ def test_axis_a_public_verbs_success_paths() -> None:
             ),
             terrors.EngineDispatchError,
         ),
-        ("replay", lambda log: log.push(), terrors.ReplayPreconditionError),
+        (
+            "replay",
+            lambda log: log.do(
+                tl.func("relu"),
+                _zero_hook,
+                intervention=tl.options.InterventionOptions(confirm_mutation=True),
+            ),
+            terrors.ReplayPreconditionError,
+        ),
         # NOTE (untyped-error finding, follow-up): ``log.run(model)`` with no forward input
         # raises a bare ``ValueError`` instead of a typed catalog error. Pinned to the real
         # type so a wrong-exception mutation still fails; product raise is unchanged here.
@@ -392,7 +409,8 @@ def test_axis_a_public_verbs_failure_paths(
 
     log = _capture()
     if verb == "replay":
-        log._intervention_spec.clear()
+        # A capture without replay metadata: the replay engine refuses before any edit runs.
+        log = tl.trace(_ReluAdd(), torch.tensor([[-1.0, 2.0, 3.0]]))
     with pytest.raises(expected_exc) as excinfo:
         operation(log)
     assert str(excinfo.value)
@@ -405,9 +423,10 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     replay_log = _capture(_ReluAdd(), x)
     rerun_log = _capture(_ReluAdd(), x)
 
-    replay_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
-    rerun_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
-    replay_log.push()
+    confirm = tl.options.InterventionOptions(confirm_mutation=True)
+    stage = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+    replay_log.do(tl.func("relu"), _zero_hook, intervention=confirm)
+    rerun_log.do({tl.func("relu"): _zero_hook}, intervention=stage)
     rerun_log.run(_ReluAdd(), x)
 
     replay_output = replay_log[replay_log.output_layers[0]].out
@@ -504,7 +523,10 @@ def test_graph_shape_mismatch_error_raised_for_executable_spec(
 
     x = torch.randn(1, 3)
     log = _capture(_ReluAdd(), x)
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log.do(
+        {tl.func("relu"): tl.zero_ablate()},
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     path = tmp_path / "graph_shape_mismatch.tlspec"
     log.save_intervention(path, level="portable")
     spec = load_intervention_spec(path)

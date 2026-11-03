@@ -347,7 +347,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "using": "appliance door: returns what a registered factory builds; it writes nothing "
     "on the trace (each appliance's own reads are its owner's to sweep)",
     "add_node_overlay": "mutates the overlay table consumed by draw",
-    "attach_hooks": "mutates the live model's hook registry",
     "clear_hooks": "mutates the live model's hook registry",
     "clear_edits": "mutates the live model's hook registry",
     "disarm_triggers": "mutates armed trigger state",
@@ -357,9 +356,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "cleanup": "destructive teardown of the trace",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
-    "remove": "removal scrub (mutates the graph)",
-    "push": "replay/push engine; execution, not presentation",
-    "push_from": "replay/push engine; execution, not presentation",
     "save_new_outs": "fast re-capture engine; execution, not presentation",
     "replace_state_from": "state mutator (cross-trace state transplant)",
     "run": "sparse/live execution engine",
@@ -375,14 +371,12 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
 }
 
 _OP_METHOD_EXCLUSIONS: dict[str, str] = {
-    "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
     "save_activation": "capture-internal payload writer",
 }
 
 _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
-    "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
 }
