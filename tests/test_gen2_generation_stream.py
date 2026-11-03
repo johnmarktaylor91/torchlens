@@ -392,8 +392,9 @@ def test_past_forwards_release_their_inputs_and_logits() -> None:
     )
     heads, head_dim = model.config.n_head, WIDTH // model.config.n_head
     # Decode step s takes the cache of prompt + s - 1 positions as its input; the recording
-    # keeps none of them, and generate() returns none, so every cache length is gone.
-    cache_shapes = [(1, heads, PROMPT.shape[1] + s, head_dim) for s in range(n_new)]
+    # keeps none of them (the newest pass's inputs stay with the recording's live state, as
+    # in a plain recording), and generate() returns none, so every older length is gone.
+    cache_shapes = [(1, heads, PROMPT.shape[1] + s, head_dim) for s in range(n_new - 1)]
     assert {shape: live[shape] for shape in cache_shapes if live[shape]} == {}
     # The logits of every pass but the newest are released too.
     assert live[(1, 1, model.config.vocab_size)] <= 1
