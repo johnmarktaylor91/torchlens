@@ -398,6 +398,8 @@ pages:
     section: reference
   - path: reference/collapse.md
     section: reference
+  - path: reference/compat_matrix.md
+    section: reference
   - path: reference/composition_matrix.md
     section: reference
   - path: reference/debug.md
