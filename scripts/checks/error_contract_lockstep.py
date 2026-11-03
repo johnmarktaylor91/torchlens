@@ -50,11 +50,11 @@ _DOC_ROW_PATTERN = re.compile(r"^\| `([a-z0-9_]+)` \| (.*?) \| (.*?) \|$")
 # enrolled here AND documented in the contract's constant-spelled table.
 _CONSTANT_SPELLED_CODES: dict[str, tuple[str, str]] = {
     "ambiguous_group_lifetime": (
-        "torchlens/distributed/_lifecycle.py",
+        "torchlens/_distributed/_lifecycle.py",
         "AMBIGUOUS_GROUP_LIFETIME",
     ),
     "uncaptured_collective_op": (
-        "torchlens/distributed/_recognizer.py",
+        "torchlens/_distributed/_recognizer.py",
         "UNCAPTURED_COLLECTIVE_OP",
     ),
     "wildcard_recv_unsupported": (

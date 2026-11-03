@@ -244,7 +244,6 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "_constants",
         "_data_classes",
         "debug",
-        "distributed",
         "_distributed",
         "errors",
         "recording",

@@ -1647,6 +1647,20 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   programs; SPMD processes may arm lazily at capture entry). Sharded state (DTensor,
   tensor/pipeline parallel) still refuses typed at capture entry.
 
+**tl.distributed.ArmingRecord**
+: What `arm()` established, stamped on every boundary record. Fields:
+  `ArmingRecord.install_epoch` (the `InstallEpoch` the arming installed under),
+  `ArmingRecord.recognizer_snapshot` (the recognizer snapshot id the arming derived) and
+  `ArmingRecord.source` (how arming happened: explicit or lazy at capture entry).
+
+**tl.distributed.GroupIdentity**
+: The resolved lifetime identity of one process group on this rank. Fields:
+  `GroupIdentity.membership_digest`, `GroupIdentity.lifetime_ordinal` (which lifetime of
+  that membership this group is), `GroupIdentity.ordinal_source` (where the ordinal came
+  from), `GroupIdentity.global_ranks` (the member ranks) and `GroupIdentity.backend`; the
+  `GroupIdentity.group_uid` property is the exactly-two-field correlation group identity
+  (membership digest, lifetime ordinal).
+
 **Collective boundary op**
 : A captured op whose portable `annotations["collective"]` carries the
   `collective_boundary_v1` payload: correlation key, role-indexed dual geometry, event
