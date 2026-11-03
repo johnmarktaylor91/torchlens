@@ -103,7 +103,8 @@ def test_end_to_end_replayed_count_excludes_ground_truth_phase() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     status = validation_core.validate_saved_outs(trace, [ground_truth])
     assert bool(status)

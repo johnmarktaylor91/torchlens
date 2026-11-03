@@ -108,7 +108,7 @@ def test_reuse_rung_prints_only_paid_for_facts() -> None:
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
         narrate=NarrationOptions(sites=True, sink=sink_armed, value_stats="reuse"),
-        capture=tl.options.CaptureOptions(track_nonfinite=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="track"),
     )
     armed_lines = [line for line in sink_armed.getvalue().split("\n") if "relu" in line]
     assert armed_lines and "| finite" in armed_lines[0]
@@ -204,13 +204,13 @@ def test_two_stage_tripwire_verdict_identity(case: str) -> None:
                 tl.trace(
                     Emitter(),
                     torch.randn(1),
-                    capture=tl.options.CaptureOptions(raise_on_nan=True),
+                    capture=tl.options.CaptureOptions(on_nonfinite="raise"),
                 )
         else:
             log = tl.trace(
                 Emitter(),
                 torch.randn(1),
-                capture=tl.options.CaptureOptions(raise_on_nan=True),
+                capture=tl.options.CaptureOptions(on_nonfinite="raise"),
             )
             assert log is not None
 

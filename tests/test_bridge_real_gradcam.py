@@ -48,7 +48,7 @@ def resnet() -> Iterator[tuple[torch.nn.Module, torch.Tensor, Any]]:
     torch.manual_seed(0)
     model = torchvision.models.resnet18(weights=None).eval()
     x = torch.randn(2, 3, 64, 64)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     try:
         yield model, x, log
     finally:

@@ -42,7 +42,7 @@ def test_h10_direct_writes_caption_renders(tmp_path):
     trace._has_direct_writes = True
     out = str(tmp_path / "h10")
     # Must not raise GraphvizRenderError.
-    src = trace.draw(vis_save_only=True, file_format="svg", path=out)
+    src = trace.draw(file_format="svg", path=out).dot
     assert isinstance(src, str)
     # The FONT element must be properly closed and the direct-writes line present.
     assert "</FONT>" in src
@@ -53,7 +53,7 @@ def test_h10_direct_writes_caption_renders(tmp_path):
 def test_h10_caption_no_direct_writes_still_closes_font(tmp_path):
     trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
     out = str(tmp_path / "h10b")
-    src = trace.draw(vis_save_only=True, file_format="svg", path=out)
+    src = trace.draw(file_format="svg", path=out).dot
     assert "</FONT>" in src
     assert "Direct writes detected" not in src
 
@@ -240,10 +240,9 @@ def test_m7_rank_engine_emits_legend(tmp_path):
     src = trace.draw(
         path=str(tmp_path / "m7rank"),
         file_format="svg",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        layout="rank",
         show_legend=True,
-    )
+    ).dot
     # The key rides in the header label, as on the dot path; no legend node.
     assert 'ID="tl_key"' in src
     assert "tl_legend" not in src
@@ -256,10 +255,9 @@ def test_m7_rank_engine_no_legend_by_default(tmp_path):
     src = trace.draw(
         path=str(tmp_path / "m7rank_off"),
         file_format="svg",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        layout="rank",
         show_legend=False,
-    )
+    ).dot
     assert "tl_legend" not in src and "tl_key" not in src
 
 
@@ -271,11 +269,10 @@ def test_m10_rank_engine_applies_dpi_and_overrides(tmp_path):
     src = trace.draw(
         path=str(tmp_path / "m10rank"),
         file_format="png",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        layout="rank",
         dpi=123,
-        vis_graph_overrides={"bgcolor": "lightyellow"},
-    )
+        graph_overrides={"bgcolor": "lightyellow"},
+    ).dot
     # dpi applies on the raster target (png)...
     assert "dpi=123" in src
     assert "bgcolor=" in src and "lightyellow" in src
@@ -283,10 +280,9 @@ def test_m10_rank_engine_applies_dpi_and_overrides(tmp_path):
     src_svg = trace.draw(
         path=str(tmp_path / "m10rank_svg"),
         file_format="svg",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        layout="rank",
         dpi=123,
-    )
+    ).dot
     assert "dpi=123" not in src_svg
 
 
@@ -310,8 +306,7 @@ def test_rank_engine_creates_missing_output_directory(tmp_path):
     trace.draw(
         path=str(outdir / "graph"),
         file_format="svg",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        layout="rank",
     )
     # The intermediate .dot source is removed after a successful render
     # (render_rank_layout: `if render_succeeded and os.path.exists(source_path):

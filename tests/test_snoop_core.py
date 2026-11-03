@@ -159,7 +159,7 @@ def test_followed_by_releases_are_marked_late() -> None:
         narrate=NarrationOptions(
             sites=tl.func("linear") & tl.followed_by(tl.func("relu")), sink=sink
         ),
-        lookback=4,
+        capture=tl.options.CaptureOptions(lookback=4),
     )
     lines = _transcript(sink)
     released = [line for line in lines if "linear_1" in line]

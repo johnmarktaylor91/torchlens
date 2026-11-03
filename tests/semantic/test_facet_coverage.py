@@ -58,9 +58,7 @@ def test_facet_coverage_classifies_and_inventories_unclassified() -> None:
 
     torch.manual_seed(0)
     model = Model().eval()
-    log = tl.trace(
-        model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(2, 3, 8), save="all")
     report = coverage(log)
 
     by_address = {row.address: row for row in report.rows}
@@ -117,9 +115,7 @@ def test_facet_coverage_reports_typed_absences() -> None:
             return self.nopre(self.block(x))
 
     model = TwoBlocks().eval()
-    log = tl.trace(
-        model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(2, 3, 8), save="all")
     report = coverage(log)
 
     nopre_row = next(row for row in report.rows if row.address == "nopre")
@@ -151,9 +147,7 @@ def test_facet_coverage_discloses_multi_call_modules() -> None:
             return self.norm(self.norm(x))
 
     model = Reuser().eval()
-    log = tl.trace(
-        model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(2, 3, 8), save="all")
     report = coverage(log)
 
     norm_row = next(row for row in report.rows if row.address == "norm")
@@ -168,9 +162,7 @@ def test_facet_coverage_markdown_lists_candidates() -> None:
 
     torch.manual_seed(0)
     model = Model().eval()
-    log = tl.trace(
-        model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(2, 3, 8), save="all")
     text = coverage(log).to_markdown()
 
     assert "classified:" in text

@@ -225,7 +225,8 @@ def test_w32_genuine_intervene_capture_keeps_exemption() -> None:
         model,
         x,
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     replaced_ops = [op for op in trace._layer_list if getattr(op, "is_edited", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
@@ -272,7 +273,8 @@ def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
         trace = tl.trace(
             model,
             torch.randn(3, 4),
-            capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+            capture=tl.options.CaptureOptions(save_args=True),
+            save="all",
         )
     finally:
         handle.remove()
@@ -517,7 +519,8 @@ def test_w34_dropped_aten_op_trace_method_now_fails(monkeypatch: pytest.MonkeyPa
         trace = tl.trace(
             model,
             x,
-            capture=CaptureOptions(layers_to_save="all", save_args=True),
+            capture=CaptureOptions(save_args=True),
+            save="all",
         )
     assert "relu_1_1" in trace.layer_labels and len(trace.layer_labels) == 3
 

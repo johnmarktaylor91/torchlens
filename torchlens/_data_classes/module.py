@@ -54,6 +54,7 @@ from ._call_tree import (
     _resolve_call_ops,
     _sum_call_ops_field,
 )
+from ._module_facade_fields import _MODULE_CALL_STORED_FIELDS, _MODULE_STORED_FIELDS
 from ._runtime_handles import runtime_handle_from_trace
 from .attribute_write import AttributeWrite
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -64,6 +65,7 @@ if TYPE_CHECKING:
 
     from .._ir.container import ContainerSpec
     from ..receptive_field._view import ReceptiveFieldView
+    from ..viz._drawing import Drawing
     from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
     from .op import Op
@@ -2396,7 +2398,7 @@ class Module:
             return iter(self.layer_labels)
         return iter(self._source_trace[label] for label in self.layer_labels)
 
-    def draw(self, **kwargs: Any) -> str:
+    def draw(self, **kwargs: Any) -> "Drawing":
         """Render this module's focused graph.
 
         Parameters
@@ -2406,8 +2408,8 @@ class Module:
 
         Returns
         -------
-        str
-            Graphviz DOT source string.
+        Drawing
+            The picture, as ``Trace.draw(module=self, ...)`` returns it.
 
         Raises
         ------
@@ -2422,7 +2424,7 @@ class Module:
                 code="record_not_bound",
                 remedy="keep the owning Trace alive and read records through it",
             )
-        return cast(str, trace.draw(module=self, **kwargs))
+        return trace.draw(module=self, **kwargs)
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this module's layers as a pandas DataFrame.
@@ -2613,96 +2615,6 @@ class ModuleAccessor(Accessor["Module"]):
                 f"{len(ml.layer_labels):>7} {ml.num_calls:>7}"
             )
         return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# The M8 facades: declared stored fields become row-cell descriptors; the
-# instance dict keeps the store binding, user extras, and the handful of
-# names whose access paths hardcode ``__dict__`` (the template/source-trace/
-# facets slots poked directly by their properties).
-# ---------------------------------------------------------------------------
-
-_MODULE_CALL_STORED_FIELDS: tuple[str, ...] = (
-    "address",
-    "all_addresses",
-    "cls",
-    "class_name",
-    "class_qualname",
-    "call_index",
-    "label",
-    "ordinal_index",
-    "ops",
-    "input_layers",
-    "output_layers",
-    "input_ops",
-    "output_ops",
-    "output_structure",
-    "output_paths",
-    "forward_args",
-    "forward_kwargs",
-    "inputs_before_pre_hooks",
-    "inputs_after_pre_hooks",
-    "forward_pre_hook_effects",
-    "forward_arg_names",
-    "num_forward_pos_args",
-    "num_forward_kwargs",
-    "num_forward_args_total",
-    "forward_args_summary",
-    "forward_kwargs_summary",
-    "forward_duration",
-    "code_context",
-    "module_call_stack",
-    "call_parent",
-    "call_children",
-)
-
-_MODULE_STORED_FIELDS: tuple[str, ...] = (
-    "address",
-    "all_addresses",
-    "cls",
-    "class_name",
-    "class_qualname",
-    "class_source_file",
-    "class_source_line",
-    "init_source_file",
-    "init_source_line",
-    "forward_source_file",
-    "forward_source_line",
-    "class_docstring",
-    "init_signature",
-    "init_docstring",
-    "forward_signature",
-    "forward_docstring",
-    "address_parent",
-    "address_children",
-    "address_depth",
-    "call_parent",
-    "call_children",
-    "call_depth",
-    "num_calls",
-    "ops",
-    "call_labels",
-    "layer_labels",
-    "input_ops",
-    "input_layers",
-    "output_ops",
-    "output_layers",
-    "params",
-    "num_params",
-    "num_params_trainable",
-    "num_params_frozen",
-    "buffer_layers",
-    "_buffer_accessor",
-    "training",
-    "forward_pre_hooks",
-    "forward_hooks",
-    "backward_pre_hooks",
-    "backward_hooks",
-    "full_backward_pre_hooks",
-    "full_backward_hooks",
-    "custom_attributes",
-    "custom_methods",
-)
 
 
 def _install_module_facades() -> None:

@@ -53,8 +53,7 @@ def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
     return tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 
@@ -193,8 +192,7 @@ def test_sdpa_feature_axis_upper_bound_contains_query_gradients() -> None:
     trace = tl.trace(
         _DistinctAttention(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = _op(trace, "scaled_dot_product_attention")
     descriptor = target.receptive_field._descriptor(trace.input_ops[0])
@@ -227,8 +225,7 @@ def test_sdpa_grouped_query_attention_widens_key_value_heads() -> None:
     trace = tl.trace(
         _GroupedQueryAttention(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = _op(trace, "scaled_dot_product_attention")
     key_value_inputs = list(trace.input_ops)[1:]
@@ -261,8 +258,7 @@ def test_sdpa_broadcast_widens_key_value_batch_and_head_axes() -> None:
     trace = tl.trace(
         _DistinctAttention(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = _op(trace, "scaled_dot_product_attention")
     key_value_inputs = list(trace.input_ops)[1:]
