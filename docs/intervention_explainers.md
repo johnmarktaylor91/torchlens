@@ -381,7 +381,9 @@ A `.tlspec/` directory contains:
 - `spec.json`: serialized selector, hook, helper, function-registry, append, and target-manifest
   metadata.
 - `manifest.json`: tensor sidecar manifest with hashes and storage metadata.
-- `tensors/`: tensor payloads stored separately from JSON.
+- `tensors/`: tensor payloads stored separately from JSON, one blob per tensor object however
+  many places the spec references it (a sticky hook's `hook` and `helper` entries and its fire
+  records share one blob).
 - `README.md`: a generated human-readable summary.
 
 Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture with
