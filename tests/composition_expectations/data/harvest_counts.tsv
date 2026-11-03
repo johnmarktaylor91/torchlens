@@ -5,4 +5,6 @@
 metric	count
 harvest_doc_files	180
 harvest_python_fences	508
+harvest_doc_files	185
+harvest_python_fences	514
 harvest_claim_strings	287

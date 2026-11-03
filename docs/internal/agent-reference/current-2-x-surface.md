@@ -1501,7 +1501,11 @@
   recipe never anchors `verified`); a PIL image whose model resolves no authority
   refuses `preprocessing_unresolved` (the ImageNet recipe is never applied
   silently; its explicit opt-in is
-  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
+  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`;
+  the same code refuses a modality dict whose HF model loads no `AutoProcessor`,
+  the multimodal auto-route claiming on `name_or_path` alone and resolving the
+  processor itself, and a dict with an attached `model.processor` is coerced
+  into keyword inputs); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
   closed authority standing (authoritative/unverified_fallback/unknown); a
   `CaptureOptions(input_transform=)` capture whose transform IS a recognized authority (the object

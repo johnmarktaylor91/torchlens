@@ -40,9 +40,9 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	172
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	119
 torchlens/_capture/prepare/door.py	1121
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
-torchlens/_capture/projections.py	1574
+torchlens/_capture/projections.py	1566
 torchlens/_capture/projections.py::_build_record_context	81
-torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
+torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	66
 torchlens/_capture/projections.py::_record_from_record_context	104
 torchlens/_capture/projections.py::_sparse_freeze_values	68
 torchlens/_capture/projections.py::sync_recording_grad_records_from_sidecar	62
@@ -132,7 +132,7 @@ torchlens/_extraction/engine.py::_consume_skipped_with_replay	63
 torchlens/_extraction/engine.py::_correct_envelope_positions	71
 torchlens/_extraction/engine.py::_layer_metadata	74
 torchlens/_extraction/engine.py::_process_one_batch	80
-torchlens/_extraction/engine.py::_store_batch	76
+torchlens/_extraction/engine.py::_store_batch	72
 torchlens/_extraction/engine.py::run_to_disk	90
 torchlens/_extraction/envelope.py::coerce_envelope	100
 torchlens/_extraction/envelope.py::resolve_tokenizer_once	72
@@ -1004,7 +1004,6 @@ torchlens/bridge/pytorch_grad_cam.py::cam	81
 torchlens/bridge/sae.py::_next_token_metrics	68
 torchlens/bridge/sae.py::splice	125
 torchlens/bridge/shap.py::explain	67
-torchlens/bridge/transformers.py	801
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	61
 torchlens/bridge/transformers.py::trace_text	66
 torchlens/bundle/__init__.py	1410
@@ -1313,9 +1312,9 @@ torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
 torchlens/recording/_record_one_shot.py::record	146
-torchlens/recording/_recorder.py	842
+torchlens/recording/_recorder.py	841
 torchlens/recording/_recorder.py::Recorder.__init__	162
-torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
+torchlens/recording/_recorder.py::Recorder._run_unified_capture	148
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172
 torchlens/recording/recover.py::_load_from_index	70
