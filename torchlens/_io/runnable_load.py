@@ -89,6 +89,7 @@ from .._runnable import (
     derive_required_witness_members,
     derived_witness_completeness,
 )
+from .._runnable.seam import carries_intervened_values
 from .._runnable.state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
 from .._utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
@@ -98,7 +99,6 @@ from .._utils._callable_safety import (
 from .._utils._torch_compat import resolve_runnable_torch_alias
 from ..backends import TORCH_BACKEND_NAME
 from ..errors._base import TorchLensError
-from ..intervention._intervened_rerun_guard import carries_intervened_values
 from ..intervention.types import FunctionRegistryKey
 from ._runnable_synthetic import TORCHLENS_SYNTHETIC_CALLABLES
 from ._torch_symbols import torch_attr

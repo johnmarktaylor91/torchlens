@@ -201,3 +201,32 @@ __all__ = [
     "normalize_runnable_trace_state",
     "runnable_trace_state",
 ]
+
+
+# Audit rows that record an edit which changed no recorded value (an armed
+# gradient edit changes no forward value; its settle row says what fired).
+_VALUE_NEUTRAL_AUDIT_STATUSES = frozenset({"no_fire", "error", "armed"})
+
+
+def carries_intervened_values(trace: Any) -> bool:
+    """Return whether persisted evidence says recorded values were intervened.
+
+    Parameters
+    ----------
+    trace:
+        Trace to inspect.
+
+    Returns
+    -------
+    bool
+        True when an op was replaced or fired, or a ``do()`` audit row records
+        a fired edit (attempts that failed or fired nowhere changed nothing).
+    """
+
+    for layer in trace._layer_list or ():
+        if getattr(layer, "is_edited", False) or getattr(layer, "edits", None):
+            return True
+    return any(
+        isinstance(row, dict) and row.get("status") not in _VALUE_NEUTRAL_AUDIT_STATUSES
+        for row in getattr(trace, "intervention_audit", None) or ()
+    )
