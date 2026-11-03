@@ -1124,7 +1124,7 @@ torchlens/export/_netron_module.py::_assemble_functions	68
 torchlens/export/_netron_records.py::project_rolled	65
 torchlens/export/_registry.py::register_target	63
 torchlens/export/_report.py::write_report	98
-torchlens/export/_trace_tables.py::to_pandas	91
+torchlens/stats/_trace_tables.py::to_pandas	91
 torchlens/export/_trackers.py::mlflow	84
 torchlens/features.py::as_matrix	61
 torchlens/fingerprint.py::_update_content_digest	114
