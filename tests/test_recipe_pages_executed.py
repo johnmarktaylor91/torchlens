@@ -56,7 +56,6 @@ PAGES: dict[str, str] = {
     "docs/gallery/causal_tracing.md": "transformers",
     "docs/gallery/cnn_fields.md": "torchvision",
     "docs/gallery/neuro_rdms.md": "torchvision",
-    "docs/gallery/jacobian_lens.md": "transformers",
     "docs/gallery/ioi_circuit.md": "transformers",
 }
 
