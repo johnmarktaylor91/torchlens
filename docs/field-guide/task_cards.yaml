@@ -1,0 +1,457 @@
+# Task cards: one source for the agent index, llms.txt, the capabilities list and the
+# first-call tests (tools/agent_evals/first_call.py).
+#
+# Regenerate the outputs after any edit:  python tools/docs/build_agent_index.py
+# tests/test_agent_index.py fails when an output is stale or a card names a call that
+# does not resolve.
+#
+# Card fields
+#   id          stable slug; `related` names other ids
+#   task        what the reader wants, in their words
+#   one_liner   one sentence
+#   canonical   the call to reach for first; its first TorchLens call is what the
+#               first-call test grades. "none" means TorchLens is the wrong tool.
+#   avoid       the wrong turn agents take, in one sentence
+#   tier        core | kit | advanced
+#   doors       subset of mechinterp, neuroai, vision, agents
+#   related     other card ids
+#   page        the docs page that shows the task (repository-relative)
+#   prompt      the first-call test prompt: the task in a user's words, naming no TorchLens API
+#   fixture     vision | lm | none: the setup the prompt describes
+#   accept      optional: further first calls the docs teach as equally right
+#   avoid_calls optional: first calls graded as choosing the `avoid` path
+#   hard_fail   optional: choosing an avoid call fails the whole run
+
+rules:
+  - "Steering or patching many forwards, or through `generate()`: build the edit once and bind it, `tl.when(site, edit).bind(model)`. Never run `tl.trace` per step: a capture per step costs far more than a hook."
+  - "Address sites with selectors: `tl.module(\"layer3\")` is a module's output, `tl.func(\"relu\")` every relu op, `tl.in_module(\"layer3\")` the ops inside a module. Op labels such as `\"relu_1_2\"` exist only after a capture."
+  - "Edit a captured trace with `trace.fork().do(site, edit, model=model, inputs=x)`; edit during capture with `tl.trace(model, x, intervene=tl.when(site, edit))`."
+  - "Hand results on as a saved path (`trace.save(\"run.tlspec\")`, reopened with `tl.load`), not printed tensors. Open your own or a trusted file with `tl.load` directly; inspect an untrusted one with the read-only tools, manifest first."
+  - "Errors are typed: branch on `exc.fields['code']` and follow `exc.fields['remedy']`, never the message text."
+  - "Trace the eager module, never a `torch.compile`, TorchScript or exported artifact, and never run captures from several threads at once."
+
+cards:
+  - id: capture
+    task: 'Capture a forward pass and read an activation'
+    one_liner: 'One call records every operation, its shapes and its activations, checked by replay.'
+    canonical: 'trace = tl.trace(model, x)'
+    avoid: 'Hand-written forward hooks, which miss functional calls such as torch.relu.'
+    tier: core
+    doors: [mechinterp, neuroai, vision]
+    related: [select-save, draw]
+    page: docs/field-guide/see_and_inspect.md
+    fixture: vision
+    prompt: 'Run the model on x once and print the shape of every intermediate activation, including ones produced by plain function calls inside forward, not only module outputs.'
+    avoid_calls: []
+
+  - id: select-save
+    task: 'Keep only the activations you need'
+    one_liner: 'A selector passed to save= keeps chosen sites and records the rest as structure only.'
+    canonical: 'trace = tl.trace(model, x, save=tl.func("relu"))'
+    avoid: 'Saving every activation of a large model and filtering afterwards.'
+    tier: core
+    doors: [mechinterp, neuroai, vision]
+    related: [capture, extract-layers]
+    page: docs/field-guide/see_and_inspect.md
+    fixture: vision
+    prompt: 'The model is large, so memory matters. Run it on x and keep only the outputs of the ReLU operations, then print the mean of each.'
+    avoid_calls: []
+
+  - id: extract-layers
+    task: 'Get named layers'' outputs as tensors'
+    one_liner: 'Returns a dict of the named modules'' outputs for one input.'
+    canonical: 'features = tl.extract(model, x, ["layer3", "avgpool"])'
+    avoid: 'Hand-written hooks and a dict.'
+    tier: core
+    doors: [neuroai, vision]
+    related: [extract-dataset, select-save]
+    page: docs/field-guide/extract_features.md
+    fixture: vision
+    prompt: 'I just need the outputs of the modules named layer3 and avgpool for the input x, as a plain dict of tensors keyed by module name.'
+    avoid_calls: []
+
+  - id: extract-dataset
+    task: 'Extract features over a whole dataset'
+    one_liner: 'Streams chosen layers'' activations for every stimulus, in order, with a manifest of what produced them.'
+    canonical: 'tl.extract_dataset(model, stimuli, ["layer3", "avgpool"], path="features")'
+    avoid: 'tl.trace once per batch in a loop.'
+    tier: core
+    doors: [neuroai, vision]
+    related: [extract-layers, probe, train-sae]
+    page: docs/field-guide/extract_features.md
+    fixture: vision
+    prompt: 'The tensor stimuli holds 5,000 images. Compute layer3 and avgpool features for every image, batched, and write them to a directory called features so I can load them later for an encoding-model analysis.'
+    avoid_calls: [tl.trace]
+
+  - id: steer-generate
+    task: 'Steer a language model during generation'
+    one_liner: 'Binds one edit to the model so every forward, including generate(), applies it at about hook cost.'
+    canonical: 'tl.when(tl.module("model.layers.6"), tl.steer(direction, strength=4.0)).bind(lm)'
+    avoid: 'tl.trace at every generation step.'
+    tier: core
+    doors: [mechinterp]
+    related: [steer-once, record-generation]
+    page: docs/guides/fast_paths.md
+    fixture: lm
+    prompt: 'Add the steering vector direction to the output of the decoder layer model.layers.6 on every forward pass, then generate 40 new tokens from ids with greedy decoding and print the text.'
+    avoid_calls: [tl.trace]
+    hard_fail: true
+
+  - id: steer-once
+    task: 'Add a direction to one site and capture the result'
+    one_liner: 'A capture-time edit steers one site and records the steered run.'
+    canonical: 'steered = tl.trace(model, x, intervene=tl.when(tl.module("layer3"), tl.steer(direction, strength=4.0, dim=1)))'
+    avoid: 'Editing the model''s forward code or weights.'
+    tier: kit
+    doors: [mechinterp, vision]
+    related: [steer-generate, ablate]
+    page: docs/field-guide/intervene.md
+    fixture: vision
+    prompt: 'Push the output of layer3 along the channel direction vector direction with strength 4, run x once, and keep a full record of the steered run so I can compare it with an unsteered one.'
+    avoid_calls: []
+
+  - id: ablate
+    task: 'Ablate a component and measure the effect'
+    one_liner: 'Fork a captured trace and replay it with the site zeroed, leaving the model untouched.'
+    canonical: 'ablated = tl.trace(model, x).fork().do(tl.module("layer3"), tl.zero_ablate(), model=model, inputs=x)'
+    avoid: 'Editing the model''s weights or forward code.'
+    tier: core
+    doors: [mechinterp, vision]
+    related: [patch, sweep]
+    page: docs/field-guide/intervene.md
+    fixture: vision
+    prompt: 'Zero out the output of layer3 and report how much the model''s output on x changes, without modifying the model''s weights or code.'
+    avoid_calls: []
+
+  - id: patch
+    task: 'Patch activations from one input into another'
+    one_liner: 'Replay the corrupted run with one site''s activation taken from the clean run.'
+    canonical: 'patched = tl.trace(model, x_corrupt).fork().do(tl.module("layer3"), tl.patch_from(tl.trace(model, x_clean)), model=model, inputs=x_corrupt)'
+    avoid: 'Copying tensors between two hook runs by hand.'
+    tier: kit
+    doors: [mechinterp]
+    related: [ablate, compare-runs]
+    page: docs/field-guide/intervene.md
+    fixture: vision
+    prompt: 'Activation patching. Run x_clean and x_corrupt, then rerun the corrupted input with the layer3 output replaced by its value from the clean run, and print how far the output moves back toward the clean output.'
+    avoid_calls: []
+
+  - id: sweep
+    task: 'Sweep edits over one site'
+    one_liner: 'Captures one intervened trace per value and returns them as a Bundle.'
+    canonical: 'runs = tl.sweep(model, x, tl.module("layer3"), [tl.scale(s) for s in (0.0, 0.5, 2.0)], include_baseline=True)'
+    avoid: 'A hand-written loop of separate captures with no shared baseline.'
+    tier: kit
+    doors: [mechinterp, vision]
+    related: [ablate, compare-runs]
+    page: docs/intervention_api.md
+    fixture: vision
+    prompt: 'Scale the output of layer3 by 0.0, 0.5 and 2.0 in turn, keep every run together in one collection with an untouched baseline, and print the output norm of each.'
+    avoid_calls: []
+
+  - id: compare-runs
+    task: 'Compare two runs site by site'
+    one_liner: 'A Bundle holds named traces and compares them at any site against a baseline.'
+    canonical: 'bundle = tl.Bundle({"clean": tl.trace(model, x), "ablated": ablated}, baseline="clean")'
+    avoid: 'Diffing two printed summaries by eye.'
+    tier: kit
+    doors: [mechinterp]
+    related: [patch, sweep]
+    page: docs/intervention_api.md
+    fixture: vision
+    prompt: 'The variable ablated already holds a TorchLens trace of an ablated run of the model on x. Put it next to a clean run of the same model and input and show, at relu_1_2, how the two runs differ.'
+    accept: [tl.trace]
+    avoid_calls: []
+
+  - id: draw
+    task: 'Draw the computational graph'
+    one_liner: 'One call renders the graph with modules collapsed for readability.'
+    canonical: 'tl.draw(model, x)'
+    avoid: 'Exporting to ONNX or torch.fx to look at it.'
+    tier: core
+    doors: [mechinterp, neuroai, vision]
+    related: [capture, export-html]
+    page: docs/quickstart.md
+    fixture: vision
+    prompt: 'Make me a picture of this model''s computational graph for the input x, saved as a file I can open.'
+    accept: [tl.trace]
+    avoid_calls: []
+
+  - id: summary
+    task: 'Print a summary of the model'
+    one_liner: 'A module table with operation counts, shapes and parameter totals.'
+    canonical: 'print(tl.summary(model, x))'
+    avoid: 'Counting parameters by hand from model.parameters().'
+    tier: kit
+    doors: [vision, neuroai]
+    related: [capture, draw]
+    page: docs/reference/summary.md
+    fixture: vision
+    prompt: 'Print a table summarising this model on input x, one row per module with output shapes and parameter counts.'
+    accept: [tl.trace]
+    avoid_calls: []
+
+  - id: save-load
+    task: 'Reopen a saved trace'
+    one_liner: 'Loads a .tlspec artifact back into a Trace with its activations and provenance.'
+    canonical: 'trace = tl.load("run.tlspec")'
+    avoid: 'Opening the file with pickle or torch.load.'
+    tier: core
+    doors: [mechinterp, neuroai, vision, agents]
+    related: [to-disk, agent-inspect]
+    page: docs/internal/agent-reference/package/key-concepts.md
+    fixture: none
+    prompt: 'A colleague I trust sent me run.tlspec, a saved TorchLens capture. Open it in Python and print the label and shape of every saved activation.'
+    avoid_calls: []
+
+  - id: to-disk
+    task: 'Stream a large capture to disk'
+    one_liner: 'storage= writes payloads to a directory during capture instead of holding them in memory.'
+    canonical: 'trace = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))'
+    avoid: 'Capturing everything in memory, then saving.'
+    tier: kit
+    doors: [neuroai, vision]
+    related: [save-load, select-save]
+    page: docs/intervention_api.md
+    fixture: vision
+    prompt: 'The activations inside the encoder module will not fit in RAM. Capture them for one run on x, writing them straight to disk at run.tlspec as the forward pass proceeds.'
+    avoid_calls: []
+
+  - id: gradients
+    task: 'Get gradients of intermediate activations'
+    one_liner: 'Capture with gradient saving on, then run the backward pass through the trace.'
+    canonical: 'trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))'
+    avoid: 'Reading .grad on intermediate tensors, which autograd does not keep.'
+    tier: kit
+    doors: [mechinterp, vision]
+    related: [attribution, capture]
+    page: docs/backward.md
+    fixture: vision
+    prompt: 'Compute the gradient of the sum of the model''s output on x with respect to every intermediate activation, and print each gradient''s norm.'
+    avoid_calls: []
+
+  - id: validate
+    task: 'Check that a capture is faithful'
+    one_liner: 'Replays the captured graph and compares every value with the real forward.'
+    canonical: 'tl.validate(model, x)'
+    avoid: 'Trusting a capture of custom kernels unchecked.'
+    tier: kit
+    doors: [mechinterp, neuroai, vision]
+    related: [capture, doctor]
+    page: README.md
+    fixture: vision
+    prompt: 'Before I trust TorchLens on this model, check that its record of the forward pass on x reproduces the model''s real outputs.'
+    avoid_calls: []
+
+  - id: record-many
+    task: 'Record a few sites over many forwards cheaply'
+    one_liner: 'A sparse recording keeps chosen sites without building the full graph.'
+    canonical: 'recording = tl.record(model, x, save=tl.func("relu"))'
+    avoid: 'A full tl.trace per forward when only a few sites are needed.'
+    tier: kit
+    doors: [mechinterp, neuroai]
+    related: [select-save, record-generation]
+    page: docs/performance.md
+    fixture: vision
+    prompt: 'Inside a loop over 1,000 batches I only need the ReLU outputs of each forward pass, not the graph structure. What is the cheapest way to record them for one batch x? Write that for one batch.'
+    avoid_calls: [tl.trace]
+
+  - id: record-generation
+    task: 'Record activations across a whole generation'
+    one_liner: 'One recording spans every step of generate(), with the KV cache on.'
+    canonical: 'recording = tl.record(lm, ids, save=tl.module("model.layers.6"), generate_kwargs={"max_new_tokens": 16, "do_sample": False})'
+    avoid: 'A separate tl.trace per generated token.'
+    tier: advanced
+    doors: [mechinterp]
+    related: [steer-generate, record-many]
+    page: docs/internal/agent-reference/common-patterns.md
+    fixture: lm
+    prompt: 'Generate 16 tokens greedily from ids and keep the output of model.layers.6 at every generation step.'
+    avoid_calls: [tl.trace]
+
+  - id: attribution
+    task: 'Compute an input attribution map'
+    one_liner: 'Saliency, integrated gradients and Grad-CAM run as one call each.'
+    canonical: 'cam = tl.attribution.grad_cam(model, x, target=3)'
+    avoid: 'Hand-rolled hooks and gradients.'
+    tier: kit
+    doors: [vision]
+    related: [gradients]
+    page: docs/reference/attribution.md
+    fixture: vision
+    prompt: 'Produce a Grad-CAM heatmap showing which parts of the image x drive the model''s score for class 3.'
+    avoid_calls: []
+
+  - id: probe
+    task: 'Collect features to train a linear probe'
+    one_liner: 'Extract one layer over labelled stimuli, then fit any classifier on the saved features.'
+    canonical: 'tl.extract_dataset(model, stimuli, ["layer4"], path="probe_features")'
+    avoid: 'Calling tl.trace per batch to gather probe features.'
+    tier: kit
+    doors: [neuroai, mechinterp, vision]
+    related: [extract-dataset]
+    page: docs/field-guide/extract_features.md
+    fixture: vision
+    prompt: 'I want to train a logistic-regression probe on layer4 of the model over the images in stimuli (labels in labels). Get the layer4 features for every image saved to disk first, then fit the probe with scikit-learn.'
+    avoid_calls: [tl.trace]
+
+  - id: train-sae
+    task: 'Gather activations to train a sparse autoencoder'
+    one_liner: 'Write one layer''s activations over a dataset, then hand them to an SAE trainer.'
+    canonical: 'tl.extract_dataset(model, stimuli, ["layer4"], batch_size=64, path="sae_acts")'
+    avoid: 'Calling tl.trace per batch to build an SAE training set.'
+    tier: advanced
+    doors: [mechinterp]
+    related: [extract-dataset, probe]
+    page: docs/field-guide/sae_trainers.md
+    fixture: vision
+    prompt: 'I am going to train a sparse autoencoder with an external trainer on the layer4 activations of the model over all images in stimuli. Write the step that produces that training set on disk.'
+    avoid_calls: [tl.trace]
+
+  - id: rdm
+    task: 'Build a representational dissimilarity matrix'
+    one_liner: 'One call turns stimulus-by-feature activations into an RDM.'
+    canonical: 'rdm = tl.repgeom.rdm(features)'
+    avoid: 'A hand-written pairwise distance loop.'
+    tier: advanced
+    doors: [neuroai]
+    related: [extract-dataset, neuro-compare]
+    page: docs/semantic_io.md
+    fixture: none
+    prompt: 'The tensor features (one row per stimulus) holds activations I already extracted. Compute their representational dissimilarity matrix with TorchLens.'
+    avoid_calls: []
+
+  - id: neuro-compare
+    task: 'Compare model features with brain data'
+    one_liner: 'Runs RSA, ridge encoding and CKA between a trace and neural recordings.'
+    canonical: 'result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"))'
+    avoid: 'Re-implementing RSA and ridge scoring by hand.'
+    tier: advanced
+    doors: [neuroai]
+    related: [rdm, extract-dataset]
+    page: docs/reference/neuro.md
+    fixture: none
+    prompt: 'The variable trace holds a TorchLens trace of a vision model over my stimuli, and brain holds neural recordings for the same stimuli. Score how well the model''s representations match the recordings with RSA, ridge encoding and CKA.'
+    avoid_calls: []
+
+  - id: stats-dataset
+    task: 'Stream summary statistics over a dataset'
+    one_liner: 'Aggregates means, norms or quantiles at chosen sites without keeping activations.'
+    canonical: 'stats = tl.stats.aggregate(model, batches, metrics={"relu_1_2": tl.stats.Aggregator(tl.stats.Mean())})'
+    avoid: 'Saving all activations of every batch to average later.'
+    tier: advanced
+    doors: [neuroai, mechinterp]
+    related: [extract-dataset, record-many]
+    page: docs/reference/stats.md
+    fixture: vision
+    prompt: 'Over all batches in the iterable batches, compute the running mean of the activation at relu_1_2 without storing the activations themselves.'
+    avoid_calls: []
+
+  - id: export-html
+    task: 'Open an interactive viewer of a trace'
+    one_liner: 'Writes a self-contained HTML page of the graph and its operations.'
+    canonical: 'tl.export.html(tl.trace(model, x), "trace.html")'
+    avoid: 'Screenshots of a static graph.'
+    tier: kit
+    doors: [mechinterp, vision]
+    related: [draw]
+    page: docs/reference/export.md
+    fixture: vision
+    prompt: 'Write a single self-contained HTML file, trace.html, that lets me click through this model''s operations on input x in a browser.'
+    accept: [tl.trace]
+    avoid_calls: []
+
+  - id: fingerprint
+    task: 'Fail a test when the architecture changes'
+    one_liner: 'Hashes the traced structure and raises when it no longer matches the pinned value.'
+    canonical: 'tl.fingerprint.assert_unchanged(model, x, expected=None)'
+    avoid: 'Comparing str(model), which misses changes inside forward.'
+    tier: advanced
+    doors: [agents]
+    related: [validate]
+    page: docs/reference/hash.md
+    fixture: vision
+    prompt: 'Write a unit-test helper that pins the structure of this model''s forward pass on x and fails later if the computation graph changes, even when str(model) stays the same.'
+    avoid_calls: []
+
+  - id: doctor
+    task: 'Diagnose a capture problem'
+    one_liner: 'Checks the environment and the model wrapper and reports versioned rows.'
+    canonical: 'print(tl.report.doctor(model=model, inputs=x).to_markdown())'
+    avoid: 'Guessing before reading the report.'
+    tier: kit
+    doors: [agents]
+    related: [validate]
+    page: docs/internal/agent-reference/common-patterns.md
+    fixture: vision
+    prompt: 'TorchLens fails on this model with an error I do not understand. Before changing anything, produce TorchLens''s own diagnostic report of the environment and how it sees the model on x.'
+    avoid_calls: []
+
+  - id: agent-inspect
+    task: 'Inspect an untrusted artifact'
+    one_liner: 'The read-only tools read the manifest first and never unpickle until asked.'
+    canonical: 'overview = tl.agent.call_tool("torchlens_overview", {"path": "run.tlspec", "mode": "manifest"})'
+    avoid: 'Calling tl.load on an untrusted artifact before reading its manifest.'
+    tier: kit
+    doors: [agents]
+    related: [save-load]
+    page: docs/for-ai-agents.md
+    fixture: none
+    prompt: 'Someone I do not know posted run.tlspec, a TorchLens artifact. Look at what it contains without unpickling anything from it.'
+    accept: [tl.agent.call_tool_envelope]
+    avoid_calls: [tl.load]
+
+  - id: serving-scale
+    task: 'Monitor activations on a production inference server'
+    one_liner: 'TorchLens captures research forwards in one process; it is not a serving-time monitor.'
+    canonical: none
+    avoid: 'Wrapping a server''s forward in a capture.'
+    tier: advanced
+    doors: [agents]
+    related: [record-many]
+    page: docs/migration/cross_engine.md
+    fixture: none
+    prompt: 'We serve a language model behind a high-throughput inference server handling thousands of concurrent requests. Stream a probe score from layer 12 of every request in production.'
+    avoid_calls: [tl.trace, tl.record, tl.when]
+
+capabilities:
+  # Silico capability names (https://docs.goodfire.com/concepts/capabilities/, read 3 Nov 2026)
+  # mapped to the cards above. `note` is shown when no card covers the capability.
+  - {name: Activation harvesting, cards: [capture, select-save, extract-layers, extract-dataset, record-many, to-disk]}
+  - {name: Featurizer training, cards: [train-sae], note: "TorchLens supplies the activations; the trainer is external."}
+  - {name: Probing, cards: [probe]}
+  - {name: Activation monitoring, cards: [], note: "Not built in."}
+  - {name: Automated interpretation, cards: [], note: "Not built in."}
+  - {name: Steering, cards: [steer-generate, steer-once]}
+  - {name: Causal analysis, cards: [ablate, patch, sweep, compare-runs]}
+  - {name: Parameter decomposition, cards: [], note: "Not built in."}
+  - {name: J-lens, cards: [], note: "A planned Reproduction Gallery entry; not built yet."}
+  - {name: Dimension reduction, cards: [rdm]}
+  - {name: Model-difference amplification, cards: [], note: "Not built in; compare-runs shows site-by-site differences between two runs."}
+  - {name: Post-training debugging, cards: [], note: "Not built in."}
+  - {name: Architecture diagrams, cards: [draw, export-html, summary]}
+  - {name: Feature explorers, cards: [], note: "Not built in."}
+  - {name: Guardrail monitor, cards: [serving-scale], note: "Outside TorchLens: it is not a serving-time monitor."}
+  - {name: Interactive data viewer, cards: [], note: "Outside TorchLens."}
+  - {name: Dataset inspection, cards: [], note: "Outside TorchLens."}
+  - {name: Data attribution, cards: [], note: "Training-data attribution is outside TorchLens; input attribution is the attribution card."}
+  - {name: Synthetic data generation, cards: [], note: "Outside TorchLens."}
+  - {name: Training pipeline, cards: [], note: "Outside TorchLens."}
+  - {name: Interpretability in training, cards: [], note: "Not built in."}
+  - {name: Serving, cards: [serving-scale], note: "Outside TorchLens."}
+  - {name: Evaluations, cards: [], note: "Outside TorchLens."}
+  - {name: Biological foundation models, cards: [], note: "Not built in; capture works on any PyTorch model."}
+  - {name: Bioinformatics, cards: [], note: "Outside TorchLens."}
+  - {name: Biological database selection, cards: [], note: "Outside TorchLens."}
+  - {name: Biological model comparison, cards: [], note: "Not built in; neuro-compare compares a model with neural recordings."}
+  - {name: Causal behaviors for biological models, cards: [], note: "Outside TorchLens."}
+  - {name: Research design, cards: [], note: "Outside TorchLens."}
+  - {name: Access verification, cards: [doctor]}
+  - {name: Paper replication, cards: [], note: "See the Reproduction Gallery (docs/gallery)."}
+  - {name: Interactive HTML, cards: [export-html], note: "A trace viewer, not a research-thread report."}
+  - {name: LaTeX, cards: [], note: "Outside TorchLens."}
+  - {name: Results publication, cards: [], note: "Outside TorchLens."}
+  - {name: Figures, cards: [], note: "Outside TorchLens."}
+  - {name: Job orchestration, cards: [], note: "Outside TorchLens."}
+  - {name: GPU job checklist, cards: [], note: "Outside TorchLens."}
+  - {name: Environment builds, cards: [], note: "Outside TorchLens."}

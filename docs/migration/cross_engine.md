@@ -14,6 +14,8 @@ extension points:
 - SGLang: <https://docs.sglang.ai>
 - TensorRT-LLM: <https://nvidia.github.io/TensorRT-LLM/>
 
+Capture libraries that run inside these engines, on remote GPUs or across devices are
+listed in [where to go instead](where_to_go_instead.md#capture-at-serving-scale-on-remote-gpus-or-across-devices).
 TorchLens has no integration with these engines and makes no claim about which sites
 their hooks expose or what tensors those hooks return. Serving engines run fused kernels,
 so a hook named like a TransformerLens or nnterp site may read a different tensor than

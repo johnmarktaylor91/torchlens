@@ -66,8 +66,8 @@ optional dependency.
   `tokens=` the first output shaped `tokens.shape + (vocab,)` is the logits:
   `ce_loss_clean`/`_spliced`/`_zero_ablated`, `ce_loss_recovered`,
   `kl_divergence`; without it they are `None` with a reason. Metric math lives
-  in `_sae_metrics.py`. Recipes: `docs/recipes/pretrained_saes.md`; an SAE latent
-  as a feature-visualisation objective, `docs/recipes/feature_visualisation.md`.
+  in `_sae_metrics.py`. Recipes: `docs/field-guide/pretrained_saes.md`; an SAE latent
+  as a feature-visualisation objective, `docs/field-guide/feature_visualisation.md`.
   `log_latents=True` (live-model door only) captures the model again with the SAE
   run inside it (`_sae_latents.logged_splice_trace`: a forward hook on the module
   `module_for_site` names, and the reconstruction module a temporary child of the
@@ -90,7 +90,7 @@ optional dependency.
   `UnitTopK`; neither package is imported (json and safetensors only). The layouts copy
   the consumers' own writers (cited in the docstrings); ranking is `tl.stats.TopK`'s.
   The real loaders run in `tests/test_bridge_real_sae_export.py` (peer-leg pins).
-  Recipe: `docs/recipes/sae_latent_export.md`.
+  Recipe: `docs/field-guide/sae_latent_export.md`.
 - `lit/`: `model(net, tokenizer, *, task=, sites=, ...)` wraps a LIVE model as
   a real `lit_nlp.api.model.Model` (classification + causal LM); `dataset()`,
   `layout()` (extra: `torchlens[lit]`; import-inert, call-time gate; site

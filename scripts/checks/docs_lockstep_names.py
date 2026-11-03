@@ -18,11 +18,11 @@ PUBLIC_SURFACE_SIZE = 85
 #: Docs carrying a parseable ``__all__`` count claim. AGENTS.md and torchlens/AGENTS.md
 #: no longer carry this prose directly (2026-10-01 docs move: "docs: move agent
 #: reference material out of startup instructions" / "docs: reserve nested instruction
-#: budget for module rules") -- the claim now lives in their docs/agent-reference/
+#: budget for module rules") -- the claim now lives in their docs/internal/agent-reference/
 #: pointer targets below.
 PUBLIC_SURFACE_DOCS = (
-    "docs/agent-reference/current-2-x-surface.md",
-    "docs/agent-reference/package/public-surface.md",
+    "docs/internal/agent-reference/current-2-x-surface.md",
+    "docs/internal/agent-reference/package/public-surface.md",
     "docs/for-ai-agents.md",
     "docs/migration/v2.0_api_changes.md",
 )
@@ -343,7 +343,7 @@ CURATED_NAMESPACE_DOCS = {
     "torchlens._semantic": ("docs/facets.md",),
     "torchlens.debug": ("docs/reference/debug.md",),
 }
-#: ``docs/agent-reference/current-2-x-surface.md`` carries the "Current 2.x Surface"
+#: ``docs/internal/agent-reference/current-2-x-surface.md`` carries the "Current 2.x Surface"
 #: prose that used to live directly in AGENTS.md (2026-10-01 docs move: "docs: move
 #: agent reference material out of startup instructions"), e.g. the
 #: ``tl.debug.graph_breaks()`` mention -- its doc-of-record row stays
@@ -351,7 +351,7 @@ CURATED_NAMESPACE_DOCS = {
 CURATED_COMMON_VENUES = (
     "docs/reference/glossary.md",
     "AGENTS.md",
-    "docs/agent-reference/current-2-x-surface.md",
+    "docs/internal/agent-reference/current-2-x-surface.md",
 )
 
 

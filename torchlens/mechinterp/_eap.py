@@ -186,7 +186,7 @@ def _norm_output_label(trace: Any, receiver: ComponentReceiver) -> str:
             code="mi_edge_selection_unresolvable",
             message=f"Norm {receiver.norm_address!r} of receiver {receiver.name!r} has "
             f"{len(outputs)} output ops; one is needed to read the receiver's gradient.",
-            remedy="capture with default options (layers_to_save='all')",
+            remedy="capture with default options (save='all')",
             receiver=receiver.name,
         )
     return str(trace.ops[str(outputs[0])].label)
@@ -228,7 +228,7 @@ def _output_cotangent(trace: Any, metric: Callable[..., Any]) -> Any:
         refuse(
             code="mi_payload_missing",
             message=f"The unembedding output {label!r} was not saved.",
-            remedy="capture with default options (layers_to_save='all')",
+            remedy="capture with default options (save='all')",
             analysis="edge_scores",
         )
     leaf = logits.detach().clone().requires_grad_(True)

@@ -8,7 +8,7 @@
 sg_id	disposition	node	owner	title
 SG#1	regression-node	tests/test_persist_honesty_runnable_random.py	A08	runnable no-weights load runs random-init silently
 SG#2	regression-node	tests/test_capopts_truth_save_grads.py	A06	save_grads discards selector predicates
-SG#3	regression-node	tests/test_capopts_truth_module_filter.py	A06	module_filter doc-invisible third save gate
+SG#3	regression-node	tests/test_capopts_truth_module_filter.py	A06	save= selector algebra vs predicate (former module_filter) save gate
 SG#4	ledgered-open		A06	silent .out None on legacy selective capture
 SG#5	regression-node	tests/composition_expectations/test_proofnet_m1_product_verb.py	A09	presenters served hollow explain/agent_json answers
 SG#6	ledgered-open		A09	poisoned/diverged traces render clean

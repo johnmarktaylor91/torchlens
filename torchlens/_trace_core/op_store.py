@@ -34,6 +34,13 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
+from ._fork_copy import (
+    _COW_ATOMIC,
+    _contains_mutable_container,
+    _eager_copy,
+    _needs_eager_isolation,
+    cow_copy_value,
+)
 from .groups import GroupRef, MembershipGroups
 
 #: Unset-cell sentinel; distinct from None (a real storable value).
@@ -588,6 +595,43 @@ class OpRowStore:
             column.clear(row)
         return True
 
+    def release_row(self, row: int) -> None:
+        """Delete every set cell of one row (op removal husking).
+
+        Exactly ``cell_del`` for every field id in layout order, without the
+        facade: no descriptor dispatch and no read of the cell values, so a
+        ``PooledCell`` (or a shared-fact / CSR sentinel) is dropped as stored
+        instead of being hydrated first only to be deleted. The audited twins
+        inherit this method unchanged: their ``cell_del`` never records a
+        delete on a row already marked released, which is every caller's
+        precondition (``mark_op_row_released`` runs first).
+        """
+
+        rows = self._rows
+        if rows is not None:
+            row_cells = rows[row]
+            row_cells[:] = [_MISSING] * len(row_cells)
+            return
+        overlay = self._overlay
+        columns = self._columns
+        assert columns is not None
+        cow_shared = self._cow_shared
+        key = row * self.layout.n_fields
+        for column in columns:
+            value = overlay.get(key, _NO_OVERLAY) if overlay else _NO_OVERLAY
+            if value is _NO_OVERLAY:
+                present = column.present
+                is_set = present is None or bool(present[row])
+            else:
+                is_set = value is not _MISSING
+            if is_set:
+                if column.packed or cow_shared:
+                    overlay[key] = _MISSING
+                else:
+                    overlay.pop(key, None)
+                    column.clear(row)
+            key += 1
+
     def register_compacted_singleton(self, row: int, fid: int, element: str) -> None:
         """Record one singleton-label compaction (freeze-seam pass only)."""
 
@@ -744,38 +788,6 @@ def _freeze_column(column_values: list[Any]) -> _FrozenColumn:
     return _FrozenColumn(object_values, present, False)
 
 
-def _contains_mutable_container(value: Any) -> bool:
-    """Return whether a tuple/frozenset transitively nests a dict/list/set."""
-
-    for item in value:
-        cls = item.__class__
-        if cls is dict or cls is list or cls is set:
-            return True
-        if (cls is tuple or cls is frozenset) and _contains_mutable_container(item):
-            return True
-    return False
-
-
-def _needs_eager_isolation(value: Any) -> bool:
-    """Return whether a cell value must be copied at fork time.
-
-    This is the minimal leak-closure set for the parent->fork direction:
-    exact builtin mutable containers (a parent in-place mutation after the
-    fork would otherwise be visible through the fork's copy-on-first-read
-    window) and exact immutable containers transitively nesting one. Every
-    other translation concern (record facades, ``GroupRef`` cells, interned
-    immutable views of atomics) stays lazy on first read — translation is
-    not mutation, so deferring it cannot leak parent state.
-    """
-
-    cls = value.__class__
-    if cls is dict or cls is list or cls is set:
-        return True
-    if cls is tuple or cls is frozenset:
-        return _contains_mutable_container(value)
-    return False
-
-
 def _build_mutable_key_index(store: OpRowStore) -> dict[int, Any]:
     """Scan a sealed base store once for its fork-isolation candidate cells.
 
@@ -876,59 +888,6 @@ def _build_sweep_plan(store: OpRowStore) -> tuple[Any, ...]:
             elif (cls is tuple or cls is frozenset) and _contains_mutable_container(value):
                 copy_entries.append((row * n_fields + fid, value, True))
     return (tuple(alloc_entries), tuple(copy_entries))
-
-
-def _eager_copy(value: Any, translate: Callable[[Any], Any] | None) -> Any:
-    """Copy one mutable container for the eager fork sweep.
-
-    Same result as ``cow_copy_value``, restructured for the sweep's value
-    population: empty containers and containers of exact atomics copy at C
-    speed (the overwhelmingly common case — the F8 census counts ~11 empty
-    plus ~16 small flat containers per op), atomic members skip the
-    per-item call entirely, and nested mutable containers recurse through
-    the same fast paths. Only tuples/frozensets and non-container members
-    fall through to the generic translating copier (which owns the
-    identity-sharing rules).
-    """
-
-    atomic = _COW_ATOMIC
-    cls = value.__class__
-    if cls is dict:
-        for key, item in value.items():
-            if key.__class__ not in atomic or item.__class__ not in atomic:
-                return {
-                    (key if key.__class__ in atomic else _eager_item(key, translate)): (
-                        item if item.__class__ in atomic else _eager_item(item, translate)
-                    )
-                    for key, item in value.items()
-                }
-        return value.copy()
-    if cls is list:
-        for item in value:
-            if item.__class__ not in atomic:
-                return [
-                    item if item.__class__ in atomic else _eager_item(item, translate)
-                    for item in value
-                ]
-        return value.copy()
-    if cls is set:
-        for item in value:
-            if item.__class__ not in atomic:
-                return {
-                    item if item.__class__ in atomic else _eager_item(item, translate)
-                    for item in value
-                }
-        return value.copy()
-    return cow_copy_value(value, translate)
-
-
-def _eager_item(item: Any, translate: Callable[[Any], Any] | None) -> Any:
-    """Copy one non-atomic container member for ``_eager_copy``."""
-
-    cls = item.__class__
-    if cls is dict or cls is list or cls is set:
-        return _eager_copy(item, translate)
-    return cow_copy_value(item, translate)
 
 
 class PooledCell:
@@ -1046,6 +1005,25 @@ class _SealedRowMajorOpRowStore(OpRowStore):
                 if fid_rows is not None and row in fid_rows:
                     self._sweep_plan = None
         return result
+
+    def release_row(self, row: int) -> None:
+        """Clear one row in place, dropping the cached sweep plan if it changed.
+
+        The per-cell ``cell_del`` drops the plan only for a deleted cell the
+        fork-isolation index lists; the facade husk it replaces also hydrated
+        pooled containers through ``cell_set`` first, which drops the plan for
+        any container. Dropping the plan whenever a set cell is cleared covers
+        both (the plan is a cache rebuilt from the maintained index on the
+        next fork).
+        """
+
+        rows = self._rows
+        assert rows is not None
+        row_cells = rows[row]
+        had_cells = any(value is not _MISSING for value in row_cells)
+        row_cells[:] = [_MISSING] * len(row_cells)
+        if had_cells:
+            self._sweep_plan = None
 
 
 #: Live write-audit collectors keyed by audited store id (M10 step
@@ -1520,6 +1498,12 @@ class DetachedOpStore:
         cells[fid] = _MISSING
         return True
 
+    def release_row(self, row: int) -> None:
+        """Delete every set cell of the single row (op removal husking)."""
+
+        cells = self._cells
+        cells[:] = [_MISSING] * len(cells)
+
     def items(self, row: int) -> Iterator[tuple[str, Any]]:
         """Yield ``(field_name, value)`` for every set cell in layout order."""
 
@@ -1548,65 +1532,6 @@ class DetachedOpStore:
 
 
 #: Exact types returned uncopied (and untranslated) by the COW copier.
-_COW_ATOMIC = frozenset({str, int, float, bool, bytes, complex, type(None)})
-
-
-def cow_copy_value(value: Any, translate: Callable[[Any], Any] | None) -> Any:
-    """Structurally copy one COW-read value for fork-side isolation.
-
-    Exact builtin containers are rebuilt (so fork-side in-place mutation can
-    never reach the shared base); ``translate`` maps parent record facades to
-    their fork facades (returning ``None`` for non-records); every other
-    object — tensors, callables, interned immutables, quantity subclasses —
-    is returned by identity, preserving the fork's payload-sharing contract.
-    All-identity tuples/frozensets return the original object so interned
-    immutable views stay shared.
-    """
-
-    # Essential complexity (hot path): every fork reads its parent's cells
-    # through here, so the per-member atomic checks stay inline; moving each
-    # container branch into a helper would add one call per container copied.
-    atomic = _COW_ATOMIC
-    cls = value.__class__
-    if cls in atomic:
-        return value
-    # Atomic members are returned by identity either way, so they skip the
-    # per-member call (the ``_eager_copy`` idiom).
-    if cls is dict:
-        return {
-            (key if key.__class__ in atomic else cow_copy_value(key, translate)): (
-                item if item.__class__ in atomic else cow_copy_value(item, translate)
-            )
-            for key, item in value.items()
-        }
-    if cls is list:
-        return [
-            item if item.__class__ in atomic else cow_copy_value(item, translate) for item in value
-        ]
-    if cls is set:
-        return {
-            item if item.__class__ in atomic else cow_copy_value(item, translate) for item in value
-        }
-    if cls is tuple or cls is frozenset:
-        # Rebuild only once a member copy differs; an all-identity container
-        # (the common all-atomic case) returns itself without a list.
-        copied: list[Any] | None = None
-        for index, item in enumerate(value):
-            if item.__class__ in atomic:
-                continue
-            item_copy = cow_copy_value(item, translate)
-            if item_copy is not item:
-                if copied is None:
-                    copied = list(value)
-                copied[index] = item_copy
-        return value if copied is None else cls(copied)
-    if translate is not None:
-        mapped = translate(value)
-        if mapped is not None:
-            return mapped
-    return value
-
-
 class _ViewFactBlocks:
     """Fact-block adapter isolating hydrated containers for one fork view."""
 
@@ -1866,6 +1791,18 @@ class OpStoreView:
             return False
         self._overlay[row * self.base.layout.n_fields + fid] = _MISSING
         return True
+
+    def release_row(self, row: int) -> None:
+        """Tombstone every set cell of one row through ``cell_del``.
+
+        Fork views keep the per-cell path (its presence probe runs the
+        fork-side isolation, whose group and record translation caches the
+        facade husk always populated); only the facade dispatch is skipped.
+        """
+
+        cell_del = self.cell_del
+        for fid in range(self.base.layout.n_fields):
+            cell_del(row, fid)
 
     def compacted_singleton(self, row: int, fid: int, value: Any) -> bool:
         """Delegate to the base registry (identity keeps view writes exact).

@@ -1,7 +1,7 @@
 """Page-content checks for the feature-visualisation recipe page (inputs optimised for sites).
 
 The page's fences run in ``tests/test_recipe_pages_executed.py``, whose ``PAGES``
-registry lists ``docs/recipes/feature_visualisation.md``; this module keeps the
+registry lists ``docs/field-guide/feature_visualisation.md``; this module keeps the
 page-content checks.
 """
 
@@ -26,7 +26,7 @@ assert _RUNNER_SPEC is not None and _RUNNER_SPEC.loader is not None
 recipes = importlib.util.module_from_spec(_RUNNER_SPEC)
 _RUNNER_SPEC.loader.exec_module(recipes)
 
-PAGE = "docs/recipes/feature_visualisation.md"
+PAGE = "docs/field-guide/feature_visualisation.md"
 _BLOCK_RE = re.compile(r"```(?P<kind>python|text)\n(?P<body>.*?)\n```", re.DOTALL)
 
 
