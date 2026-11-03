@@ -57,6 +57,7 @@ from ._replay_sites import (
     _is_source_record,
     _keeps_captured_draw,
     _no_func_message,
+    _require_hook_origins,
     _unmet_log_precondition,
 )
 from ._replay_values import (
@@ -191,9 +192,8 @@ def push(
     _refuse_armed_gradient_rules(trace, replay_options.hooks)
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
-    origins = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
-    if not origins:
-        raise ReplayPreconditionError("push requires at least one hook target")
+    found = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
+    origins = _require_hook_origins(found)
     with changed_param_scope(replay_options.allow_changed_params):
         if replay_options.differentiable:
             return _run_differentiable_replay(

@@ -33,9 +33,10 @@ from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ._param_fingerprint import changed_param_scope
 from ._replay_context import journal_replay_state, restore_replay_state
+from ._replay_sites import _require_hook_origins
 from .audit import build_fire_record
 from .edge_substitution import apply_edge_substitution_do
-from .errors import EngineDispatchError, ReplayPreconditionError
+from .errors import EngineDispatchError
 from .hooks import _normalize_sticky_hook_specs, make_hook_context
 from .param_substitution import apply_param_substitution_do, buffer_operand_selection
 from .replay import (
@@ -550,9 +551,7 @@ def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) 
         origin_entries = _normalize_sticky_hook_specs(
             own_specs, allow_replay_only_site_targets=True
         )
-    origins = _origin_sites_for_hooks(trace, origin_entries, strict=strict)
-    if not origins:
-        raise ReplayPreconditionError("push requires at least one hook target")
+    origins = _require_hook_origins(_origin_sites_for_hooks(trace, origin_entries, strict=strict))
     with changed_param_scope(False):
         return _run_replay(
             trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False

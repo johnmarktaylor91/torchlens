@@ -16,6 +16,7 @@ import torch
 
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ._replay_context import _replay_site_key
+from .errors import ReplayPreconditionError
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -92,6 +93,30 @@ def _unmet_log_precondition(log: Trace) -> str | None:
     if not getattr(log, "is_replayable", False):
         return "replay requires replayable=True capture metadata"
     return None
+
+
+def _require_hook_origins(origins: list[Op]) -> list[Op]:
+    """Return a push's resolved origin sites, refusing an empty set.
+
+    Parameters
+    ----------
+    origins:
+        Hook target sites resolved for one push, in execution order.
+
+    Returns
+    -------
+    list[Op]
+        ``origins`` unchanged.
+
+    Raises
+    ------
+    ReplayPreconditionError
+        When no hook resolved to a site, so the push has nothing to replay from.
+    """
+
+    if not origins:
+        raise ReplayPreconditionError("push requires at least one hook target")
+    return origins
 
 
 def _keeps_captured_draw(
