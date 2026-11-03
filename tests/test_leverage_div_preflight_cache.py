@@ -62,10 +62,22 @@ def test_cone_preflight_discloses_engine_assumptions():
     assert "never numeric change" in notes
 
 
-def test_cone_preflight_unarmed_capture_reports_not_replay_ready():
+def test_cone_preflight_default_capture_reports_replay_ready():
+    """A default capture records argument templates, so it is replay-ready."""
+
     torch.manual_seed(0)
     model = ReusedReluNet()
     trace = tl.trace(model, torch.rand(1, 2, 3, 3))
+    plan = cone_preflight(trace, trace["relu_1_2"].ops)
+    assert plan["replay_ready"] is True
+
+
+def test_cone_preflight_predicate_recording_reports_not_replay_ready():
+    """A predicate recording keeps no argument templates, so it is not replay-ready."""
+
+    torch.manual_seed(0)
+    model = ReusedReluNet()
+    trace = tl.record(model, torch.rand(1, 2, 3, 3), save=tl.func("relu")).to_trace()
     plan = cone_preflight(trace, trace["relu_1_2"].ops)
     assert plan["replay_ready"] is False
 

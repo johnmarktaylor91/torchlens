@@ -103,7 +103,7 @@ def test_fork_edit_on_loaded_trace_refuses_naming_the_loaded_condition(tmp_path)
     message = str(info.value)
     assert "linear_1_1" in message
     assert "loaded from a saved file" in message
-    assert "replayable=True" in message
+    assert "tl.trace(model, inputs)" in message
     assert "trace.run(model, inputs)" in message
     assert info.value.fields["code"] == "replay_loaded_trace_has_no_callables"
     assert message.endswith(info.value.fields["remedy"])

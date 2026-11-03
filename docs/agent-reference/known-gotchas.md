@@ -256,7 +256,9 @@
   only when RNG states were saved). A trace loaded from a
   saved file carries no callables at any level, so every replay edit on it refuses
   `ReplayPreconditionError` naming that condition (remedy: re-capture in-process with
-  `replayable=True`, or `trace.run(model, inputs)`). A torch failure inside a replayed
+  `tl.trace(model, inputs)`, or `trace.run(model, inputs)`). An in-process capture replays
+  without any capture option: every eager capture records the per-op argument templates
+  replay needs (`trace.options.save_arg_templates`); a structure-only capture records none. A torch failure inside a replayed
   callable (an edit that drives an index lookup past its table) is re-raised as
   `ReplayPreconditionError` naming the op that raised and the edit origins, the torch error
   chained as `__cause__`, with nothing committed. Pinned in

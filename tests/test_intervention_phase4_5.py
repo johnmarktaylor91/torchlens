@@ -84,8 +84,12 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     assert log.output_layers == ["output_1"]
     assert log.saved_ops
     assert all(layer.out is not None for layer in log._layer_list)
-    assert all(layer.args_template is None for layer in log._layer_list)
-    assert all(layer.kwargs_template is None for layer in log._layer_list)
+    # Every eager capture records per-op argument templates (saved-graph replay needs
+    # nothing more), while is_replayable stays False: no runnable apparatus.
+    compute_layers = [layer for layer in log._layer_list if layer.func is not None]
+    assert compute_layers
+    assert all(layer.args_template is not None for layer in compute_layers)
+    assert log.options.save_arg_templates is True
     edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:

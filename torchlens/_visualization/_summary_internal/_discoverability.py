@@ -571,8 +571,11 @@ def _next_operation_hint(trace: Trace) -> str:
         return "direct writes present; replay() or rerun() will overlay recipe state"
     if getattr(trace, "_spec_revision", 0) != getattr(trace, "_out_recipe_revision", 0):
         return "spec stale; call replay() or rerun() to propagate"
-    if not getattr(trace, "is_replayable", False):
-        return "not intervention-ready; recapture with replayable=True for replay templates"
+    if not (
+        getattr(trace, "is_replayable", False)
+        or getattr(trace, "_options_save_arg_templates", False)
+    ):
+        return "not intervention-ready; no replay templates (pass model= and inputs= to do())"
     return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"
 
 

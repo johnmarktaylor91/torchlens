@@ -4317,7 +4317,7 @@ The sections above describe each surface in depth.
 | `TensorSpec.from_tensor` | Build a spec from a tensor (alternate constructor) |
 | `Trace.armed_edits` | Read-only tuple of the gradient rules in the trace's recipe |
 | `Trace.input` | The original user input before `input_transform` was applied (was `raw_input`) |
-| `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `replayable=True`) |
+| `Trace.is_replayable` | Whether the capture ran with `replayable=True` (the runnable apparatus: runnable save, edge provenance). Saved-graph replay (`do()` without `model=`, `push`) needs only the per-op argument templates every `tl.trace` capture records (`trace.options.save_arg_templates`), so it does not need this flag |
 | `Trace.is_stopped` | Whether the capture stopped early (`until=`/`stop_after=`); a stopped trace is partial (was `halted`) |
 | `Trace.options.seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`) |
