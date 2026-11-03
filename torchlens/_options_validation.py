@@ -288,8 +288,7 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
     Raises
     ------
     ValueError
-        If ``jax_control_flow`` or ``jax_max_control_flow_unroll`` holds an
-        unsupported value.
+        If ``jax_control_flow`` or ``jax_max_control_flow_unroll`` holds an unsupported value.
     TypeError
         If ``jax_max_control_flow_unroll`` is not an integer.
     """
@@ -349,6 +348,25 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
             remedy="pass structure_only=True or structure_only=False",
             argument="structure_only",
             received_type=type(values["structure_only"]).__name__,
+        )
+    _validate_transformed_output_request(values)
+
+
+def _validate_transformed_output_request(values: Mapping[str, Any]) -> None:
+    """Refuse ``save_transformed_output=True`` with no ``output_transform``.
+
+    The flag asks to keep the transformed output, yet nothing transforms it:
+    refuse before the capture instead of silently saving nothing (names.10).
+    """
+
+    if values["save_transformed_output"] is True and values["output_transform"] is None:
+        raise InvalidArgumentError(
+            "Capture option save_transformed_output=True needs an output_transform; "
+            "without one there is no transformed output to save",
+            code="save_transformed_output_without_output_transform",
+            remedy="pass output_transform=<callable> alongside save_transformed_output=True, "
+            "or drop save_transformed_output",
+            argument="save_transformed_output",
         )
 
 
