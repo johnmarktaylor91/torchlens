@@ -250,6 +250,7 @@ def _canonicalize_param_links(
     An unknown barcode stays distinct and still reaches the writer's strict refusal.
     """
 
+    # Essential complexity: bind all copied edges before the same pass changes their join keys.
     canonical = {param.barcode: param for param in params if isinstance(param.barcode, str)}
     for record in records:
         references = getattr(record, "_param_logs", None)
