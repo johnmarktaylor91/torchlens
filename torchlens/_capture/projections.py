@@ -75,10 +75,7 @@ def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
 
     if options.streaming is None or options.streaming.path is None:
         return StorageIntent(in_ram=True, on_disk=False)
-    return StorageIntent(
-        in_ram=options.streaming.retain_in_memory,
-        on_disk=True,
-    )
+    return StorageIntent(in_ram=options.streaming.retain_in_memory, on_disk=True)
 
 
 def _empty_recording(options: RecordingOptions) -> Recording:
@@ -133,10 +130,8 @@ class RecordingState:
     step_index: int = 0
     no_tensor_capture: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
-    #: Op contexts by raw label, the latest label wins (the same answer as a scan
-    #: of ``all_contexts``): the module-exit re-evaluation of a ``tl.module`` save
-    #: looks its output ops up here in constant time, so a long multi-pass session
-    #: (a generation) no longer rescans every context at every module exit.
+    #: Op contexts by raw label (latest wins, as a scan of ``all_contexts`` answers): the
+    #: module-exit re-evaluation of a ``tl.module`` save reads it instead of rescanning.
     op_contexts_by_label: dict[str, RecordContext] = field(default_factory=dict)
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
@@ -1289,10 +1284,7 @@ def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
 
     if save_mode != "reference" or not isinstance(payload, torch.Tensor):
         return {}
-    return {
-        "save_mode": "reference",
-        "saved_out_version": tensor_version_or_none(payload),
-    }
+    return {"save_mode": "reference", "saved_out_version": tensor_version_or_none(payload)}
 
 
 class LiveOpView:
