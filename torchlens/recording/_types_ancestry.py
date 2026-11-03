@@ -6,8 +6,6 @@ __tl_layer__ = "L1"
 
 from typing import Any
 
-from .._ir.op_record import AncestryFacet, OpRecord
-
 
 def _backfill_cooked_ancestry(events: Any) -> None:
     """Derive the per-op ancestry closures the sparse recorder never tracked.
@@ -52,6 +50,8 @@ def _backfill_cooked_op_records(events: Any) -> None:
         Cook-owned working projection whose op lane and fold cache are updated.
     """
     from dataclasses import replace as _dc_replace
+
+    from .._ir.op_record import AncestryFacet, OpRecord
 
     folded = events.amended_op_records()
     closures: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
