@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1450 modules, 647711 lines, 0 modules without a docstring.
+83 packages, 1450 modules, 647723 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -38,7 +38,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4188 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 45 | 16724 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 45 | 16736 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 76 | 44459 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
@@ -796,7 +796,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (13 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (45 modules, 16724 lines)
+Shared helpers used by two or more TorchLens packages. (45 modules, 16736 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -804,7 +804,7 @@ Shared helpers used by two or more TorchLens packages. (45 modules, 16724 lines)
 | `_call_site` | Call-site keys for layer grouping (step 7, ''detector="callsite_v1"''). | 234 |
 | `_callable_safety` | Security gate deciding which resolved callables are pure forward/tensor ops. | 1562 |
 | `_cuda_probe` | CUDA availability and initialization probes, cached once per process. | 69 |
-| `_display_bounded` | Bounded printouts for collections and private records (house style v1). | 115 |
+| `_display_bounded` | Bounded printouts for collections and private records (house style v1). | 127 |
 | `_display_card` | Card and one-line layout shared by every printout (house style v1). | 118 |
 | `_display_keys` | Display keys for ops and layers (house style v1, rule A5). | 55 |
 | `_display_numbers` | Number and unit spellings shared by every printout (house style v1). | 94 |
