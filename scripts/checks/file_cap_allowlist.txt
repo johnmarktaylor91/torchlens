@@ -1259,7 +1259,7 @@ torchlens/neuro/_rdms.py::_matrix_mode	95
 torchlens/neuro/_rdms.py::_source_mode	114
 torchlens/neuro/_rdms.py::_validated_matrix	77
 torchlens/neuro/_rdms.py::rdms	127
-torchlens/options.py	1771
+torchlens/options.py	1774
 torchlens/options.py::CaptureOptions.__init__	75
 torchlens/options.py::VisualizationOptions.__init__	130
 torchlens/options.py::_merge_grouped_options	74
