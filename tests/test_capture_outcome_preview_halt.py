@@ -58,7 +58,7 @@ def test_preview_stamp_still_settles_complete_when_not_halted() -> None:
     assert outcome.frontier_labels is None
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py, _io/bundle.py, _io/scrub.py ....
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_payload.py, _capture/outcome.py, _io/bundle.py ....
 def test_preview_halted_stamp_is_coherent_and_survives_save_load(tmp_path) -> None:
     """The degradation chain is closed: no UNKNOWN, no N1/N2 refusal.
 

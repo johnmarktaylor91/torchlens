@@ -66,6 +66,14 @@ def test_every_registered_backend_supplies_a_protocol_object(backend: str) -> No
     assert tuple(candidate.trace_options()) == tuple(spec.capabilities.trace_options)
 
 
+def test_torch_is_the_stable_reference_and_previews_are_preview() -> None:
+    """Maturity labels match the launch decision: torch stable, the rest preview."""
+
+    assert get_backend_spec("torch").maturity == "stable"
+    for backend in ALL_BACKENDS[1:]:
+        assert get_backend_spec(backend).maturity == "preview"
+
+
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_framework_requirement_is_internally_consistent(backend: str) -> None:
     """Range, tested version and pin agree; the extra names the pyproject extra."""

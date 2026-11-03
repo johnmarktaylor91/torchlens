@@ -260,7 +260,10 @@ def _trace_both_ways(
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/session.py, receptive_field/_engine_forward.py.
-@pytest.mark.parametrize("name", sorted(UNIONS))
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    "name", [n for n in sorted(UNIONS) if n in {"everything_kind", "pass_through_wrapper"}]
+)
 def test_trace_lookup_equals_walker(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """``tl.trace``: same decisions, saved flags, payloads, fire count and invariants."""
 

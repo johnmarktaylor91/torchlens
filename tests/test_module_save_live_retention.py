@@ -243,6 +243,14 @@ INTERSECTIONS = {
 }
 
 
+# Row kept by shrink-r4: its coverage is import-only, so the per-id rule cannot clear it.
+@pytest.mark.parametrize(("selector", "expected"), [(None, None)])
+def test_module_exit_bound_addresses_classification(selector, expected):
+    """A selector settles at module exit when module outputs cover all its matches."""
+
+    assert selector_eval.module_exit_bound_addresses(selector) == expected
+
+
 class _ViewMutate(nn.Module):
     """The output op's tensor is mutated through a view before the module returns."""
 

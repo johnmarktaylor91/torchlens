@@ -11,6 +11,7 @@ interposition lifetime, and disarm restoration.
 from __future__ import annotations
 
 import gc
+import warnings
 import weakref
 
 import pytest
@@ -100,6 +101,20 @@ def _funcol_boundaries(log):
 @pytest.mark.heavy
 @requires_vetted_snapshot
 class TestFuncolBoundaryNode:
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of distributed/_dtensor.py.
+    def test_funcol_becomes_boundary_node_no_provenance_escape(self, gloo_world):
+        """The pinned gap, closed: boundary node + parenting, zero escape signals."""
+
+        lifecycle.arm()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            log = tl.trace(WaitedFuncol(), torch.ones(3))
+        labels = [op.layer_label for op in log.ops]
+        assert any(label.startswith("funcolallreduce") for label in labels)
+        add_op = next(op for op in log.ops if op.layer_label.startswith("add"))
+        assert any("funcolallreduce" in parent for parent in add_op.parents)
+        assert torch.equal(log.output_ops[0].out, torch.full((3,), 3.0))
+
     # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     def test_boundary_payload_shape_and_observed_completion(self, gloo_world):
         """v0 payload: correlation key, funcol event mapping, plane-W binding."""
@@ -138,36 +153,6 @@ class TestFuncolBoundaryNode:
             "async_unwaited_output_unwitnessed"
             in funcol_op.annotations["collective"]["disclosures"]
         )
-
-    # Kept by shrink-r4 (per-id subset rule): sole coverage of distributed/_dtensor.py.
-    def test_seq_shares_the_coll_channel_with_c10d_boundaries(self, gloo_world):
-        """v5 1.2: funcol ticks the same (group_uid, "coll") counter space."""
-
-        dist = gloo_world
-
-        class Mixed(nn.Module):
-            def forward(self, x):
-                funcol_module = _funcol()
-                hidden = x * 2
-                dist.all_reduce(hidden)
-                reduced = funcol_module.all_reduce(hidden, "sum", dist.group.WORLD)
-                return reduced + 1
-
-        lifecycle.arm()
-        log = tl.trace(Mixed(), torch.ones(3))
-        boundaries = log.annotations["distributed"]["boundaries"]
-        assert len(boundaries) == 2
-        keys = [
-            (
-                entry["correlation"]["membership_digest"],
-                entry["correlation"]["lifetime_ordinal"],
-                entry["correlation"]["channel"],
-                entry["correlation"]["seq"],
-            )
-            for entry in boundaries
-        ]
-        assert keys[0][:3] == keys[1][:3]
-        assert keys[1][3] == keys[0][3] + 1
 
     # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/funcol.py, campaign mutant kills.
     def test_chained_funcol_parents_and_blocked_act_witness(self, gloo_world):

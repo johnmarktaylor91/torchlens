@@ -370,6 +370,25 @@ def test_no_binary_factory_argspec_key_collision() -> None:
     assert set(_BINARY_FUNCS) & set(_FACTORY_FUNCS) == set()
 
 
+@pytest.mark.parametrize(
+    "dunder,expected",
+    [
+        ("__rsub__", "rsub"),
+        ("__rtruediv__", "rtruediv"),
+        ("__rfloordiv__", "rfloordiv"),
+        ("__rmod__", "rmod"),
+        ("__rpow__", "rpow"),
+        ("__rmatmul__", "rmatmul"),
+        ("__rlshift__", "rlshift"),
+        ("__rrshift__", "rrshift"),
+    ],
+)
+def test_noncommutative_reflected_dunders_keep_reflected_name(dunder: str, expected: str) -> None:
+    """NON-commutative reflected dunders keep their r-prefixed name (``other <op> self``: operands
+    are swapped, so the ``r`` is meaningful -- e.g. ``rsub`` matches the real ``torch.rsub``)."""
+    assert _normalize_func_name(dunder) == expected
+
+
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/flops.py.
 @pytest.mark.parametrize(
     ("case_name", "expected_type", "expected_arg_positions", "expected_parent_count"),

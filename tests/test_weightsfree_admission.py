@@ -95,7 +95,7 @@ def test_summary_and_record_paths_gate_meta_consistently() -> None:
     )
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _user_public_impls.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _user_public_impls.py, validation/consolidated.py.
 def test_validate_path_gates_meta_closed() -> None:
     """tl.validate (backward gate site) keeps the historical refusal."""
 

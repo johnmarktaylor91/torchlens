@@ -423,3 +423,41 @@ def test_crossing_declarations_are_validated() -> None:
             _prompt(),
             episode=EpisodeOptions(stepped_module=model, num_steps=2, crossings=(5,)),
         )
+
+
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py.
+def test_forced_feed_joins_still_measure() -> None:
+    """Teacher forcing is non-verifying, but its joins are measured facts."""
+
+    model = TinyLM()
+
+    class ForcedRunner(nn.Module):
+        def __init__(self, inner: nn.Module, forced: tuple[int, ...]):
+            super().__init__()
+            self.inner = inner
+            self.forced = forced
+
+        def forward(self, ids: torch.Tensor) -> torch.Tensor:
+            emitted = []
+            current = ids
+            for token in self.forced:
+                self.inner(current)
+                forced_token = torch.tensor([[token]])
+                emitted.append(forced_token)
+                current = torch.cat([current, forced_token], dim=1)
+            return torch.cat(emitted, dim=1)
+
+    log = tl.trace(
+        ForcedRunner(model, (5, 6, 7)),
+        _prompt(),
+        episode=EpisodeOptions(stepped_module=model, num_steps=3, forced_tokens=(5, 6, 7)),
+    )
+    envelope = _envelope(log)
+    assert envelope["claim"] == "measured"
+    # The forced feed appends the DECLARED token; the join is graded against
+    # the declaration (W051, audit 3.4), never against the evidence column --
+    # this fixture's root happens to return the forced tokens, which made the
+    # historical `continuous` grade degenerate.
+    assert envelope["grades"] == [None, "forced", "forced"]
+    assert envelope["basis"] == {"1": "forced_tokens", "2": "forced_tokens"}
+    assert log.annotations["episode"]["header"]["token_feed"] == "forced"

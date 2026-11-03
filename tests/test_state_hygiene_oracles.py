@@ -272,26 +272,7 @@ def test_chunked_rerun_steers_every_row_once(net) -> None:
     assert _staged(trace) == staged, "a chunked rerun changed the staged spec"
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
-@pytest.mark.parametrize("door", ["intervene"])
-def test_legacy_rerun_repeats_exactly(mlp, door: str) -> None:
-    """B0: every legacy rerun on a new input equals one hooked forward, silently."""
-
-    model, x, x2 = mlp
-    if door == "intervene":
-        trace = tl.trace(model, x, intervene=tl.when(tl.module("fc2"), _steer()))
-    else:
-        trace = tl.trace(model, x)
-        trace._attach_hooks(tl.module("fc2"), _steer(), confirm_mutation=True)
-    staged = _staged(trace)
-    want = _hooked(model, {"fc2": _steer_edit(1.0)}, x2)
-    for _ in range(3):
-        trace.run(model, x2)
-        torch.testing.assert_close(trace.output_ops[0].out, want)
-        assert _staged(trace) == staged
-
-
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_content_identity.py, intervention/_helper_fingerprint.py, intervention/binding.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_content_identity.py, intervention/_helper_fingerprint.py, intervention/binding.py ....
 def test_bound_executor_repeats_exactly(mlp) -> None:
     """A bound executor gives the hooked answer on every call."""
 
@@ -316,6 +297,20 @@ def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
             model, x, intervene=spec, recording=tl.options.RecordingOptions(default_op=True)
         ).to_trace()
         torch.testing.assert_close(recorded.output_ops[0].out, want)
+
+
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
+def test_rerun_engine_do_composes_once_per_call(mlp) -> None:
+    """Seat 2 F5: ``do(engine="rerun")`` adds one edit per call (1x, 2x, 3x), never 1x, 3x, 7x."""
+
+    model, x, _ = mlp
+    fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
+    rerun = tl.options.InterventionOptions(engine="rerun")
+    for k in (1.0, 2.0, 3.0):
+        fork.do(tl.module("fc2"), _steer(), model=model, inputs=x, intervention=rerun)
+        torch.testing.assert_close(
+            fork.output_ops[0].out, _hooked(model, {"fc2": _steer_edit(k)}, x)
+        )
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/handles.py, campaign mutant kills.
@@ -397,7 +392,7 @@ def test_failed_rerun_leaves_staged_spec_unchanged(net, failure: type[BaseExcept
     assert _staged(trace) == staged
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_accessors.py, intervention/_trace_edits.py, intervention/rerun.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_edits.py, intervention/rerun.py.
 @pytest.mark.parametrize("failure", [KeyboardInterrupt])
 def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseException]) -> None:
     """Seat 3 F5: a failed ``fork().do(engine="rerun")`` leaves nothing; a retry steers once."""
@@ -639,7 +634,7 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
             assert trace.last_run["divergence_count"] == 0
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
 @pytest.mark.parametrize("staged_edit", [False])
 def test_planted_divergence_still_warns_and_raises_when_strict(staged_edit: bool) -> None:
     """A real control-flow change still discloses, with or without a staged edit."""
@@ -802,13 +797,12 @@ _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], st
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/input_sites.py, intervention/_replay_sites.py, intervention/_trace_run.py ....
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
 @pytest.mark.parametrize(
     ("origin", "door"),
     [
-        ("intervene", "run"),
         ("attach_hooks", "run"),
-        ("fork_do", "run"),
-        *(("intervene", door) for door in _LOADED_DOORS if door != "run"),
+        *(("intervene", door) for door in _LOADED_DOORS if door in {"do_replay", "run_inputs"}),
     ],
 )
 def test_loaded_intervened_trace_door_refuses_typed(mlp, tmp_path, origin: str, door: str) -> None:

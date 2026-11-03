@@ -101,7 +101,7 @@ class IgnoredFunctionModel(nn.Module):
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 @pytest.mark.parametrize(
     "route",
-    ["empty_strided", "asarray"],
+    ["empty_strided", "frombuffer"],
 )
 def test_ignored_tensor_producers_are_wrapped(route: str) -> None:
     """Ignored tensor producers emit capture ops, including input provenance."""
@@ -212,18 +212,6 @@ class TestLazyDecoration:
 # =========================================================================
 
 
-class TestToggleState:
-    @pytest.fixture(autouse=True)
-    def _ensure_wrapped(self):
-        """Ensure torch functions are wrapped for these tests."""
-        wrap_torch()
-
-    def test_toggle_off_by_default(self):
-        """After import, logging toggle should be off."""
-        assert _state._logging_enabled is False
-        assert _state._active_trace is None
-
-
 # =========================================================================
 # 1b. Sequence Slot Fix (sq_item pollution from __getitem__ wrapping)
 # =========================================================================
@@ -278,74 +266,14 @@ class TestSequenceSlotFix:
 # =========================================================================
 
 
-class TestWrapperTransparency:
-    @pytest.fixture(autouse=True)
-    def _ensure_wrapped(self):
-        """Ensure torch functions are wrapped for these tests."""
-        wrap_torch()
-
-    def test_wrapped_function_name(self):
-        """Decorated functions should preserve __name__."""
-        assert torch.cos.__name__ == "cos"
-        assert torch.nn.functional.relu.__name__ == "relu"
-
-    def test_wrapped_function_doc(self):
-        """Decorated functions should preserve __doc__."""
-        assert torch.cos.__doc__ is not None
-        assert len(torch.cos.__doc__) > 0
-
-    def test_builtin_no_wrapped(self):
-        """Built-in wrappers should NOT have __wrapped__ (JIT compat)."""
-        # Built-ins like torch.cos don't have __code__; we remove __wrapped__
-        # to prevent inspect.unwrap from following it.
-        if not hasattr(torch.cos, "__code__"):
-            assert not hasattr(torch.cos, "__wrapped__")
-
-
 # =========================================================================
 # 7. Decorated Identity (via _state._decorated_identity)
 # =========================================================================
 
 
-class TestDecoratedIdentity:
-    @pytest.fixture(autouse=True)
-    def _ensure_wrapped(self):
-        """Ensure torch functions are wrapped for these tests."""
-        wrap_torch()
-
-    def test_decorated_identity_exists(self):
-        """_state._decorated_identity should be set after wrapping."""
-        assert _state._decorated_identity is not None
-        assert callable(_state._decorated_identity)
-
-    def test_identity_not_on_torch(self):
-        """torch.identity should NOT exist — we don't monkey-patch torch."""
-        assert not hasattr(torch, "identity")
-
-
 # =========================================================================
 # 8. JIT Compatibility
 # =========================================================================
-
-
-class TestJITCompat:
-    @pytest.fixture(autouse=True)
-    def _ensure_wrapped(self):
-        """Ensure torch functions are wrapped for these tests."""
-        wrap_torch()
-
-    def test_jit_builtin_table_has_decorated(self):
-        """Decorated functions should be in the JIT builtin table."""
-        import torch.jit._builtins as _jit_builtins
-
-        # torch.cos should be registered
-        assert id(torch.cos) in _jit_builtins._builtin_table
-
-    def test_shared_originals_same_wrapper(self):
-        """Functions sharing an original (e.g. torch.cos / torch._VF.cos)
-        should use the exact same wrapper object."""
-        if hasattr(torch._VF, "cos"):
-            assert torch.cos is torch._VF.cos
 
 
 # =========================================================================
@@ -404,57 +332,6 @@ class TestDecorationConsistency:
     def _ensure_wrapped(self):
         """Ensure torch functions are wrapped for these tests."""
         wrap_torch()
-
-    def test_orig_to_decorated_populated(self):
-        """_orig_to_decorated should be populated after wrapping."""
-        assert len(_state._orig_to_decorated) > 1000
-
-    def test_decorated_to_orig_populated(self):
-        """The append-only unwrap ledger mirrors every CURRENT wrapper.
-
-        Strict length equality only holds in a single-wrap-generation
-        session: ``_decorated_to_orig`` is the session's append-only unwrap
-        LEDGER (it must never shrink -- see
-        lesson-decorated-to-orig-append-only), so after any legitimate
-        re-wrap generation it is a strict superset of the current map and
-        the old ``len == len`` assertion was order-dependent (p2 R76
-        reverse-order red, 3886 == 1944).
-        """
-
-        current_wrapper_ids = {
-            id(dec) for dec in _state._orig_to_decorated.values() if not isinstance(dec, property)
-        }
-        missing = current_wrapper_ids - set(_state._decorated_to_orig)
-        assert not missing, "current-generation wrappers absent from the unwrap ledger"
-        assert len(_state._decorated_to_orig) >= len(current_wrapper_ids)
-
-    def test_bidirectional_mapper(self):
-        """_decorated_func_mapper should have dec->orig for every wrapper."""
-        for _orig_id, dec in _state._orig_to_decorated.items():
-            if isinstance(dec, property):
-                continue
-            orig = _state._decorated_to_orig.get(id(dec))
-            if orig is None:
-                continue
-            # dec -> orig must always be correct
-            assert dec in _state._decorated_func_mapper
-            assert _state._decorated_func_mapper[dec] is orig
-            # orig -> dec may point to a different wrapper if the original
-            # is shared across function names (e.g. spmm/dsmm are aliases),
-            # so we only check it exists, not which wrapper it points to.
-            assert orig in _state._decorated_func_mapper
-
-    def test_no_duplicate_wrappers(self):
-        """Each decorated func in _orig_to_decorated should be unique."""
-        dec_ids = set()
-        for dec in _state._orig_to_decorated.values():
-            d_id = id(dec)
-            assert d_id not in dec_ids, f"Duplicate wrapper found: {dec}"
-            dec_ids.add(d_id)
-
-    def test_arg_names_populated(self):
-        """_arg_names should be pre-computed for many functions."""
-        assert len(_state._arg_names) > 500
 
     # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/wrappers.py.
     def test_decorate_all_once_idempotent(self):

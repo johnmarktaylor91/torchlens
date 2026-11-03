@@ -60,6 +60,15 @@ def stable_label_problems(backend: str, card: PreviewScorecard | None) -> list[s
     return problems
 
 
+def test_torch_is_the_registered_stable_reference() -> None:
+    """Torch is registered stable and every preview is registered preview."""
+
+    labels = {spec.name: spec.maturity for spec in _registered_specs()}
+    assert labels["torch"] == "stable"
+    previews = {name for name in ("tf", "jax", "mlx", "paddle", "tinygrad") if name in labels}
+    assert {labels[name] for name in previews} <= {"preview"}
+
+
 @pytest.mark.xfail(
     strict=True,
     reason=(

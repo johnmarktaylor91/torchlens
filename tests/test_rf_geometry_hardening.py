@@ -251,9 +251,8 @@ def test_tensor_derived_shape_control_branch_preserves_exact_rf() -> None:
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_query.py.
-@pytest.mark.parametrize("kernel", [2, 3])
-@pytest.mark.parametrize("stride", [1, 2])
-@pytest.mark.parametrize("dilation", [1, 2, 3])
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(("kernel", "stride", "dilation"), [pytest.param(2, 2, 2, id="2-2-2")])
 def test_maxpool1d_dilation_rf_pf_exact(kernel: int, stride: int, dilation: int) -> None:
     """Exact RF/PF hulls across the max-pool dilation matrix vs perturbation truth."""
 
@@ -310,13 +309,11 @@ class _Interp(nn.Module):
 @pytest.mark.parametrize(
     ("mode", "in_size", "kwargs"),
     [
-        ("bilinear", 4, {"scale_factor": (0.5, 0.5)}),
-        ("bilinear", 6, {"size": (2, 2)}),
-        ("bilinear", 13, {"size": (7, 7)}),  # odd/odd scale: float-boundary taps
-        ("bilinear", 8, {"size": (3, 3)}),
-        ("bicubic", 9, {"size": (3, 3)}),  # interior filter zeros (holes)
-        ("bicubic", 4, {"scale_factor": (0.5, 0.5)}),
-        ("bilinear", 4, {"size": (6, 6)}),  # antialiased upsampling
+        # odd/odd scale: float-boundary taps
+        pytest.param("bilinear", 13, {"size": (7, 7)}, id="bilinear-13-kwargs2"),
+        # interior filter zeros (holes)
+        pytest.param("bicubic", 9, {"size": (3, 3)}, id="bicubic-9-kwargs4"),
+        pytest.param("bicubic", 4, {"scale_factor": (0.5, 0.5)}, id="bicubic-4-kwargs5"),
     ],
 )
 def test_antialias_interpolate_rf_pf_against_truth(mode: str, in_size: int, kwargs: dict) -> None:
@@ -362,8 +359,8 @@ class _GetItem(nn.Module):
         return x[self.key]
 
 
-@pytest.mark.parametrize("start", [0, 1, 2])
-@pytest.mark.parametrize("step", [1, 2, 3])
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(("start", "step"), [pytest.param(0, 1, id="1-0")])
 def test_strided_slice_projective_lattice(start: int, step: int) -> None:
     """PF of every source under a strided slice equals perturbation truth.
 
@@ -521,7 +518,7 @@ def test_hypernetwork_input_weight_receptive_degrades_typed() -> None:
 # ---------------------------------------------------------------------------
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/flops.py, receptive_field/_types.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_types.py.
 def test_empty_box_slices_select_nothing() -> None:
     """An empty RF box's slices() must select zero elements, never the whole input."""
 

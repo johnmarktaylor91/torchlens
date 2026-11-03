@@ -550,7 +550,7 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert any(op.type == "maskedfill" and "vmap_1_1" in op.parents for op in log.ops)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_transform_wrappers.py, campaign mutant kills.
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_grad_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented grad emits one boundary node with the input as parent."""
