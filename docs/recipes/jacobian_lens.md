@@ -12,8 +12,9 @@ lens_l(h) = unembed( final_norm( J_l @ h ) ),    J_l = E[ d h_final / d h_l ]
 ```
 
 The logit lens is the special case `J_l = I`. TorchLens ships no fitted lenses
-and no Jacobian-lens API; this page fits one with public TorchLens primitives
-and plugs it into `logit_lens(lens=...)`. Every spelling here is
+and no Jacobian-lens API; this page fits one with public TorchLens primitives:
+a trace that keeps the live residual stream, `torch.autograd.grad`, and the
+model's own final norm and unembedding. Every spelling here is
 DOCUMENTED-UNSTABLE.
 
 The page runs on a small randomly initialized GPT-2 built from a config, with
@@ -29,14 +30,10 @@ pip install torchlens transformers
 
 ```python
 # recipe-test: tool=transformers expected=(3, 64, ['transformer.h.0', 'transformer.h.1', 'transformer.h.2'])
-import functools
-import operator
-
 import torch
 from transformers import GPT2Config, GPT2LMHeadModel
 
 import torchlens as tl
-from torchlens._semantic import logit_lens
 
 torch.manual_seed(0)
 config = GPT2Config(n_layer=3, n_head=2, n_embd=64, vocab_size=512, n_positions=64, use_cache=False)
@@ -48,46 +45,38 @@ RESULT = (len(corpus), config.n_embd, blocks)
 
 ## Keep the live residual stream and fit the lens
 
-A trace copies what it saves, so a saved activation cannot be differentiated
-after the forward. A hook callable bound with `tl.when(...).bind(model)` runs
-inside the forward and sees the live tensor; returning it unchanged keeps the
-block's output attached to the autograd graph. One forward per prompt then
-yields every block's residual stream, and `torch.autograd.grad` with batched
-cotangents (one per output dimension) gives the Jacobian rows. The estimator
-follows the reference method: every valid target position is differentiated at
-once, the gradient at a source position sums over the later targets, and the
-rows are averaged over valid source positions and prompts. The first positions
-are skipped (`skip_first`) and the last position has no later target.
+A trace in the default `save_mode="copy"` clones what it saves, so a saved
+activation stays on the autograd graph as a side branch: you can backpropagate
+from it to the parameters, but the model's output cannot be differentiated with
+respect to it. `save_mode="view"` stores the live tensor itself, the one the
+next block consumed, so `trace[address].out` is a valid input for
+`torch.autograd.grad` against anything downstream. One trace per prompt then
+yields every block's residual stream, and batched cotangents (one per output
+dimension) give the Jacobian rows. The estimator follows the reference method:
+every valid target position is differentiated at once, the gradient at a source
+position sums over the later targets, and the rows are averaged over valid
+source positions and prompts. The first positions are skipped (`skip_first`)
+and the last position has no later target.
 
 ```python
-# recipe-test: tool=transformers expected=(['transformer.h.0', 'transformer.h.1'], (64, 64))
+# recipe-test: tool=transformers expected=(2, (64, 64))
 d_model, skip_first, chunk = config.n_embd, 4, 32
 
 
 def residual_states(ids):
-    """Run one forward and return each block's live output, in block order."""
-    states = {}
-
-    def keep(address):
-        def hook(activation, *, ctx):
-            states[address] = activation
-            return activation
-
-        return hook
-
-    spec = functools.reduce(operator.and_, [tl.when(tl.module(a), keep(a)) for a in blocks])
-    spec.bind(model)(ids)
-    return [states[address] for address in blocks]
+    """Run one traced forward and return each block's live output, in block order."""
+    trace = tl.trace(model, ids, save_mode="view")
+    return [trace[address].out for address in blocks]
 
 
 def jacobian_lens(prompts):
     """Return the corpus-average Jacobian of the last block's residual w.r.t. each earlier block's."""
-    total = {address: torch.zeros(d_model, d_model) for address in blocks[:-1]}
+    total = [torch.zeros(d_model, d_model) for _ in blocks[:-1]]
     for ids in prompts:
         states = residual_states(ids[None])
         valid = torch.arange(skip_first, ids.shape[0] - 1)
         target = states[-1][0, valid].sum(0)
-        rows = {address: [] for address in blocks[:-1]}
+        rows = [[] for _ in blocks[:-1]]
         for cotangents in torch.eye(d_model).split(chunk):
             grads = torch.autograd.grad(
                 target,
@@ -96,42 +85,52 @@ def jacobian_lens(prompts):
                 is_grads_batched=True,
                 retain_graph=True,
             )
-            for address, grad in zip(blocks[:-1], grads):
-                rows[address].append(grad[:, 0, valid].sum(1) / len(valid))
-        for address in blocks[:-1]:
-            total[address] += torch.cat(rows[address])
-    return {address: matrix / len(prompts) for address, matrix in total.items()}
+            for row, grad in zip(rows, grads):
+                row.append(grad[:, 0, valid].sum(1) / len(valid))
+        for index, row in enumerate(rows):
+            total[index] += torch.cat(row)
+    return [matrix / len(prompts) for matrix in total]
 
 
 lenses = jacobian_lens(corpus)
-RESULT = (list(lenses), tuple(lenses[blocks[0]].shape))
+RESULT = (len(lenses), tuple(lenses[0].shape))
 ```
 
 `chunk` trades memory for speed: each chunk of cotangents is one batched
 backward pass. GPT-2 small (`d_model = 768`) fits in about ten seconds per
 12-token prompt on two CPU threads at `chunk=96`.
 
-## Read the lens out through `logit_lens`
+## Read the lens out
 
-`logit_lens(lens=...)` takes a mapping from block address to a callable that
-turns a residual state into logits; the default identity lens is the logit
-lens. The lens callable applies the Jacobian, then the model's own final norm
-and unembedding, so the two lenses differ only in the transport step.
+The readout is the lens formula applied to the same door: index the residual
+states of a traced forward, transport each through its `J_l`, and decode with
+the model's own final norm and unembedding. With `J_l = I` the same line is the
+logit lens.
+
+```python
+# recipe-test: tool=transformers expected=(2, (512,))
+final_norm, unembed = model.transformer.ln_f, model.lm_head
+with torch.no_grad():
+    states = residual_states(corpus[:1])
+    readout = [unembed(final_norm(h[0, -1] @ J.T)) for h, J in zip(states, lenses)]
+RESULT = (len(readout), tuple(readout[-1].shape))
+```
+
+`readout[i].topk(5).indices` are block `i`'s top tokens at the last position.
+The logit-lens tooling takes the same lenses: `logit_lens(trace, lens=...)`
+accepts a mapping from block address to a callable from residual state to
+logits, and its entries carry `top_k()` and a `summary()` that names the lens
+source (`lens=user`).
 
 ```python
 # recipe-test: tool=transformers expected=(['transformer.h.0', 'transformer.h.1'], (1, 16, 512))
-final_norm, unembed = model.transformer.ln_f, model.lm_head
-lens = {address: (lambda h, J=J: unembed(final_norm(h @ J.T))) for address, J in lenses.items()}
+from torchlens._semantic import logit_lens
+
+lens = {address: (lambda h, J=J: unembed(final_norm(h @ J.T))) for address, J in zip(blocks, lenses)}
 trace = tl.trace(model, corpus[:1], capture=tl.options.CaptureOptions(layers_to_save="all"))
 result = logit_lens(trace, lens=lens, layers=list(lens), verify=False)
 RESULT = ([entry.address for entry in result.entries], tuple(result.entries[-1].logits.shape))
 ```
-
-`result.entries[i].top_k(5)` lists the lens's top tokens per position and
-`result.summary()` names the lens source (`lens=user`). The plain logit lens of
-the same trace is `logit_lens(trace)`; on the pretrained checkpoint the two
-disagree most in the early blocks, where the residual basis is far from the
-final one.
 
 ## Check the fit against `torch.func.jacrev`
 
@@ -178,7 +177,7 @@ def model_jacobian(index, ids):
 def rel_error(index, ids):
     """Relative Frobenius error of the fitted lens against the whole-model Jacobian."""
     reference = model_jacobian(index, ids)
-    return float((jacobian_lens(ids)[blocks[index]] - reference).norm() / reference.norm())
+    return float((jacobian_lens(ids)[index] - reference).norm() / reference.norm())
 
 
 RESULT = max(rel_error(index, corpus[:1]) for index in range(config.n_layer - 1)) < 1e-4
@@ -196,8 +195,14 @@ RESULT = max(rel_error(index, corpus[:1]) for index in range(config.n_layer - 1)
   one full forward stays alive until the prompt's rows are done. Sequences
   longer than a few hundred tokens on large models need the forward split or
   `chunk` lowered.
-- The hook callable door runs with gradients enabled only when the caller does;
-  do not wrap the fit in `torch.no_grad()`.
+- `save_mode="view"` stores live aliases: a model that writes its residual
+  stream in place after a block would change the saved state under you.
+  GPT-2 does not; for a model that might, `save_mode="reference"` keeps the
+  same live tensor and raises `MutatedReferenceError` on a read after an
+  in-place write (it warns once per process that it does so).
+- A trace captured under `torch.no_grad()` has no graph to differentiate; the
+  fit runs with gradients enabled and only the readout is wrapped in
+  `torch.no_grad()`.
 - `logit_lens(lens=...)` applies the lens to the saved `resid_post` facet of a
   separate, ordinary trace; the lens callable must accept a `(batch, seq,
   d_model)` tensor and return `(batch, seq, vocab)` logits.
