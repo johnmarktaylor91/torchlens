@@ -406,22 +406,40 @@ def attribution_patch_attention_heads(
         _ensure_matching_modules(corrupted_log, modules, facet_name=facet_name)
         if not modules:
             raise ValueError(f"No modules expose facet {facet_name!r}.")
-        n_heads = _num_heads(clean_log.modules[modules[0]], facet_name=facet_name)
-        result = torch.empty(
-            (len(modules), n_heads), dtype=corrupted_metric.dtype, device=corrupted_metric.device
+        return _attribution_patch_heads(
+            clean_log, corrupted_log, modules, facet_name=facet_name, like=corrupted_metric
         )
-        for layer_index, address in enumerate(modules):
-            for head_index in range(n_heads):
-                clean_value = _facet_tensor(
-                    clean_log.modules[address].facets.head(head_index)[facet_name]
-                )
-                corrupted_facet = corrupted_log.modules[address].facets.head(head_index)[facet_name]
-                corrupted_value = _facet_tensor(corrupted_facet)
-                grad = _facet_grad_tensor(corrupted_facet, address=address, facet_name=facet_name)
-                result[layer_index, head_index] = (grad * (clean_value - corrupted_value)).sum()
-        return result
     finally:
         _teardown(guard, clean_log, corrupted_log)
+
+
+def _attribution_patch_heads(
+    clean_log: Any,
+    corrupted_log: Any,
+    modules: Sequence[str],
+    *,
+    facet_name: str,
+    like: torch.Tensor,
+) -> torch.Tensor:
+    """Return the ``[layer, head]`` gradient-times-difference grid for ``facet_name``.
+
+    Each cell is ``(grad * (clean - corrupted)).sum()`` over one head's facet
+    slice at one module, with the corrupted run's gradient; the grid takes
+    ``like``'s dtype and device.
+    """
+
+    n_heads = _num_heads(clean_log.modules[modules[0]], facet_name=facet_name)
+    result = torch.empty((len(modules), n_heads), dtype=like.dtype, device=like.device)
+    for layer_index, address in enumerate(modules):
+        for head_index in range(n_heads):
+            clean_value = _facet_tensor(
+                clean_log.modules[address].facets.head(head_index)[facet_name]
+            )
+            corrupted_facet = corrupted_log.modules[address].facets.head(head_index)[facet_name]
+            corrupted_value = _facet_tensor(corrupted_facet)
+            grad = _facet_grad_tensor(corrupted_facet, address=address, facet_name=facet_name)
+            result[layer_index, head_index] = (grad * (clean_value - corrupted_value)).sum()
+    return result
 
 
 def _baseline_traces(
