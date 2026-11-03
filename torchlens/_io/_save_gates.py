@@ -231,7 +231,7 @@ def _validated_descriptor_for_resave(trace: Any) -> SparseRunDescriptor | None:
     """
 
     descriptor = trace._runnable.descriptor
-    if descriptor is None or not getattr(trace, "_loaded_from_bundle", False):
+    if descriptor is None or not trace.__dict__.get("_loaded_from_bundle", False):
         return None
     if any(getattr(op, "args_template", None) is not None for op in trace._layer_list):
         return None

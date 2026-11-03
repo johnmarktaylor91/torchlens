@@ -512,13 +512,10 @@ class BundleStreamWriter:
 
         trace = self._staged_trace() if self._staged_trace is not None else None
         self._staged_trace = None
-        if trace is None or getattr(trace, "_source_bundle_path", None) != self.final_path:
+        # Runtime bindings finalization installs on a published trace (DROP fields).
+        if trace is None or trace.__dict__.get("_source_bundle_path") != self.final_path:
             return
-        setattr(
-            trace,
-            "_source_bundle_manifest_sha256",
-            sha256_file(self.final_path / "manifest.json"),
-        )
+        trace._source_bundle_manifest_sha256 = sha256_file(self.final_path / "manifest.json")
 
     def publish_staged(self, outcome_payload: dict[str, Any] | None) -> Path:
         """Publish the staged bundle with its settled capture-outcome attestation.

@@ -8,6 +8,7 @@ schema v2 backend fields a non-torch or sparse runnable trace adds.
 
 from __future__ import annotations
 
+import importlib.metadata
 from collections.abc import Mapping
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any
@@ -250,7 +251,7 @@ def _backend_v2_fields(
         "schema_version": 2,
         "backend": backend_name,
         "backend_runtime": _backend_runtime(source, backend_name=backend_name),
-        "torch_version": torch.__version__ if backend_name == TORCH_BACKEND_NAME else None,
+        "torch_version": torch.__version__,
         "model_fingerprint": _backend_model_fingerprint(source, backend_name=backend_name),
         "body_format": spec.serialization_policy.body_format,
         "backward_summary": None,
@@ -284,6 +285,10 @@ def _backend_runtime(source: Any, *, backend_name: str) -> dict[str, Any]:
     if not isinstance(device_summary, dict):
         device_summary = {}
     runtime_version = source._provenance_backend_version
+    if runtime_version is None and backend_name != TORCH_BACKEND_NAME:
+        # Format 3 requires a version string on every non-torch runtime stamp; a backend
+        # that does not stamp one records the installed distribution's version.
+        runtime_version = _installed_version(runtime_name)
     return {
         "name": runtime_name,
         "version": None if runtime_version is None else str(runtime_version),
@@ -291,6 +296,16 @@ def _backend_runtime(source: Any, *, backend_name: str) -> dict[str, Any]:
         "device_summary": device_summary,
         "compat_policy": {"policy": "metadata-only"},
     }
+
+
+def _installed_version(distribution: str) -> str:
+    """The installed version of ``distribution``, or ``""`` when no such distribution is
+    installed (a runtime-registered backend need not be a package)."""
+
+    try:
+        return importlib.metadata.version(distribution)
+    except importlib.metadata.PackageNotFoundError:
+        return ""
 
 
 def _payload_policy(

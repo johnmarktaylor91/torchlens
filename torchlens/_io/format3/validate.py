@@ -369,12 +369,26 @@ def _disclosure_errors(disclosures: Any) -> list[str]:
     return ["disclosures must be {count: positive int, first: [<=16 strings]}"]
 
 
+def _is_known_backend(name: str) -> bool:
+    """Whether ``name`` is a contract backend or a backend registered in this runtime now.
+
+    A runtime-registered backend (a third-party spec) saves and loads under its own name;
+    an unregistered unknown name keeps the typed refusal.
+    """
+
+    if name in contract.BACKENDS:
+        return True
+    from ...backends.registry import registered_backend_specs
+
+    return any(spec.name == name for spec in registered_backend_specs())
+
+
 def _backend_errors(manifest: Mapping[str, Any]) -> list[str]:
     """The artifact backend (absent means torch) and its ``backend_runtime`` stamp, which an
     array artifact carries and which must name the same backend wherever it appears."""
 
     backend = manifest.get("backend", contract.DEFAULT_BACKEND)
-    if not isinstance(backend, str) or backend not in contract.BACKENDS:
+    if not isinstance(backend, str) or not _is_known_backend(backend):
         return [f"unknown backend {backend!r}; the artifact backend is one of {contract.BACKENDS}"]
     runtime = manifest.get("backend_runtime")
     if runtime is None and backend == contract.DEFAULT_BACKEND:

@@ -150,7 +150,7 @@ def settle_live_side(trace: Any) -> None:
         Live trace about to be saved.
     """
 
-    for op in list(getattr(trace, "_layer_list", None) or ()):
+    for op in list(trace._layer_list or ()):
         for key in _EMPTY_MAP_OP_KEYS:
             if getattr(op, key, None) is None:
                 setattr(op, key, {})

@@ -43,6 +43,7 @@ from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.errors import (
     AmbiguousBackendError,
+    ArtifactError,
     BackendMismatchError,
     BackendUnsupportedError,
     UnknownBackendError,
@@ -1023,6 +1024,21 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
         assert check_metadata_invariants(loaded) is True
     finally:
         tl.backends.unregister("fake")
+
+
+def test_unregistered_backend_artifact_refuses_at_load(tmp_path: Path) -> None:
+    """A backend name that is neither a contract backend nor registered now refuses."""
+
+    _register_fake_backend()
+    try:
+        trace = tl.trace(_FakeModel(), object(), backend="fake")
+        path = tmp_path / "fake.tlspec"
+        trace.save(path, level="audit")
+    finally:
+        tl.backends.unregister("fake")
+
+    with pytest.raises(ArtifactError, match="unknown backend 'fake'"):
+        tl.load(path)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_invariants_entry.py.
