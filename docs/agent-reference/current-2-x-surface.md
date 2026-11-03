@@ -850,6 +850,12 @@
   `SelectionError` with `selection_unresolvable` + a closed reason set.
   Producers: `tl.units(site, indices)`, `tl.param(name, mask=None)`,
   `tl.random_like(like=, within=, seed=)` (seeded size-matched control).
+  Unit-level influence: `view.of(units, within=None, method="geometric",
+  probe_budget=256)` on a `receptive_field` / `projective_field` view is the
+  many-unit form of `.at()`: the units `tl.units` takes, a trace-bound Selection
+  back, one region per `within=` site (default model outputs / model inputs),
+  `provenance.basis` and `provenance.field_status` stated; refusals
+  `influence_geometry_unavailable` and `influence_probe_budget`.
   VALUE + STATISTICAL PRODUCERS (producer wave; DOCUMENTED-UNSTABLE):
   `tl.top_k(within, k, by=, largest=)` / `tl.top_fraction(within, fraction)`
   (global deterministic ranking over the population; too-few rankable
