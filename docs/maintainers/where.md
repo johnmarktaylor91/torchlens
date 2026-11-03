@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1412 modules, 631774 lines, 0 modules without a docstring.
+83 packages, 1413 modules, 631790 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -33,7 +33,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1959 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14761 |
-| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 19 | 9900 |
+| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 20 | 9916 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 11 | 6718 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2118 |
@@ -689,11 +689,12 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14
 
 ### `torchlens._selection`
 
-Selection: naming sites and resolving them on a trace. (19 modules, 9900 lines)
+Selection: naming sites and resolving them on a trace. (20 modules, 9916 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Selection: naming sites and resolving them on a trace. | 17 |
+| `_module_facet_fold` | ''module(address) & facet'': folding a module scope into a facet selector (RC-252). | 50 |
 | `_site_record` | ''Site.record'': the record a selection row names, through a weak trace link. | 105 |
 | `_site_refusals` | Site-query refusals: the argument checks, the fan-out bound, and the no-match and multi-pass refusals. | 162 |
 | `align` | Cross-run selection alignment (L6 stage 4a). | 269 |
@@ -706,7 +707,7 @@ Selection: naming sites and resolving them on a trace. (19 modules, 9900 lines)
 | `provenance` | Per-entry provenance disclosure for :mod:'torchlens._selection.selection'. | 126 |
 | `resolver` | Resolve TorchLens intervention selectors against model logs. | 1033 |
 | `selection` | Selection / intervention algebra: the dual selection types (L6 stage 1). | 1665 |
-| `selector_base` | The selector base class, its composites and the address-universe classification. | 801 |
+| `selector_base` | The selector base class, its composites and the address-universe classification. | 767 |
 | `selectors` | Typed selectors for TorchLens intervention site resolution. | 1666 |
 | `subspace` | Subspace selection producer: directions in activation space (L6 producer wave). | 336 |
 | `target` | Portable target specs: the saved form of a selector plus its slice. | 162 |
