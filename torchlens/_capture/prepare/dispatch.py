@@ -273,7 +273,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
             "storage": kwargs["storage"],
             "inference_only": kwargs.get("inference_only", MISSING),
             "cache": kwargs.get("cache", MISSING),
-            "stop_after": kwargs.get("stop_after", MISSING),
             "on_nonfinite": (
                 kwargs["capture"].on_nonfinite if kwargs.get("capture") is not None else "ignore"
             ),
@@ -360,8 +359,22 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         grad_options=kwargs["grad_options"],
         verbose=kwargs.get("verbose", MISSING),
         intervene=kwargs["intervene"],
-        halt=kwargs["halt"],
+        halt=_preview_stop_directive(kwargs),
     )
+
+
+def _preview_stop_directive(kwargs: dict[str, Any]) -> Any:
+    """Return the stop predicate a preview capture runs as its halt selector.
+
+    ``stop_after=`` is the one public stop directive (the door no longer takes
+    ``halt=`` and passes it as ``None``), so a preview backend that halts on a
+    selector receives ``stop_after`` in that role.
+    """
+
+    stop_after = kwargs.get("stop_after", MISSING)
+    if stop_after is MISSING or stop_after is None:
+        return kwargs.get("halt")
+    return stop_after
 
 
 def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]) -> bool:

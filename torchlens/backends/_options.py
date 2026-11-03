@@ -320,7 +320,7 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_message=(
         "MLX backend preview does not support: {names}. Static-label save= "
         "selectors, static-label trace(intervene=tl.when(...)), and static-label "
-        "trace(halt=...) are supported; streaming/storage and value-dependent "
+        "trace(stop_after=...) are supported; streaming/storage and value-dependent "
         "predicates need predicate-time concrete values or replay semantics that "
         "MLX lazy evaluation does not expose through a stable TorchLens surface. "
         "Use an unfiltered tl.trace(..., backend='mlx') call or the PyTorch "

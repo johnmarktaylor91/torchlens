@@ -2,7 +2,7 @@
 
 Paddle dygraph is eager: the capture wrapper holds the concrete output of every
 wrapped call before the caller sees it, so ``trace(intervene=...)`` and
-``trace(halt=...)`` apply live with real predicate-time values. The runtime is
+``trace(stop_after=...)`` apply live with real predicate-time values. The runtime is
 deliberately fail-closed: unsupported helper specs, non-forward directions,
 isolation requests, and non-tensor replacements refuse typed instead of
 silently not intervening.
@@ -85,7 +85,7 @@ class PaddleInterventionRuntime:
         intervene
             Public ``trace(intervene=...)`` predicate, or ``None``.
         halt
-            Public ``trace(halt=...)`` predicate, or ``None``.
+            Public ``trace(stop_after=...)`` predicate, or ``None``.
         """
 
         if intervene is not None and not callable(intervene):
@@ -98,7 +98,7 @@ class PaddleInterventionRuntime:
             )
         if halt is not None and not callable(halt):
             raise BackendUnsupportedError(
-                "paddle backend trace(halt=...) requires a callable predicate "
+                "paddle backend trace(stop_after=...) requires a callable predicate "
                 f"returning bool; got {type(halt).__name__!s}.",
                 code=PADDLE_REFUSAL_OPTION,
                 option="halt",

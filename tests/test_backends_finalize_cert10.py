@@ -86,12 +86,14 @@ def test_mlx_finalize_flips_per_op_tracing_finished_and_types_param_memory() -> 
 
     Uses ``save=`` matching nothing so ``op.out is None`` and ``str()``/``repr()``
     skip the (separately torch-only, out-of-scope) tensor-content display path
-    -- isolating exactly the two behaviors this fix owns.
+    -- isolating exactly the two behaviors this fix owns. The capture warns that
+    the predicate matched nothing; that is the intended zero-match notice.
     """
 
     model = _MlxMlp()
     x = mx.random.normal((2, 4))
-    log = tl.trace(model, x, save=tl.func("__never_matches__"))
+    with pytest.warns(UserWarning, match="predicate matched zero operations"):
+        log = tl.trace(model, x, save=tl.func("__never_matches__"))
 
     assert log._num_ops > 0
     sampled = 0
@@ -144,7 +146,8 @@ def test_tinygrad_finalize_flips_per_op_tracing_finished() -> None:
         return (x * 2).relu()
 
     x = TinygradTensor.randn(2, 4)
-    log = tl.trace(_fn, x, backend="tinygrad", save=tl.func("__never_matches__"))
+    with pytest.warns(UserWarning, match="predicate matched zero operations"):
+        log = tl.trace(_fn, x, backend="tinygrad", save=tl.func("__never_matches__"))
 
     assert log._num_ops > 0
     for op_label in log.op_labels:
