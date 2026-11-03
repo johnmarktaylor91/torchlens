@@ -362,9 +362,13 @@ def _verdict(
     killers = sorted(failures - control_failures)
     if killers:
         return "KILLED", killers
-    if run.returncode != 0:
-        return "ERROR", []
-    return "SURVIVED", []
+    if run.returncode == 0 and not control_failures:
+        return "SURVIVED", []
+    # A tolerated red control makes every run exit 1; the mutant survived when
+    # the run reproduced exactly the control's reds and nothing else.
+    if run.returncode == 1 and failures == control_failures and failures:
+        return "SURVIVED", []
+    return "ERROR", []
 
 
 def main() -> None:

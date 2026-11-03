@@ -15,6 +15,7 @@ from __future__ import annotations
 import importlib.util
 import py_compile
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -27,9 +28,13 @@ def _load_preview_module():
     """Import the preview camp as a module (its import has no side effects)."""
 
     path = _REPO_ROOT / "tests" / "support" / "mutation_preview.py"
+    if "_mutation_preview_gov" in sys.modules:
+        return sys.modules["_mutation_preview_gov"]
     spec = importlib.util.spec_from_file_location("_mutation_preview_gov", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    # dataclasses resolve annotations through sys.modules[cls.__module__].
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
