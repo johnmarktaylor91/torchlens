@@ -260,7 +260,8 @@ def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
     """Return ``capture_spec`` with its finalized exact labels readdressed for a live rerun.
 
     Staged entries addressed by a finalized label (``do(label, ...)`` on the
-    ``set_only`` engine, ``do(tl.label(...), ...)``) are translated to the raw capture
+    ``set_only`` engine, ``do(tl.label(...), ...)``, and each pass label of the
+    ``|`` a multi-pass Layer door stages) are translated to the raw capture
     labels of the ops they name, the same translation a mixed gradient plan's
     activation half already uses, so the edit fires on the rerun instead of
     being refused. An exact label that names several ops, a substring or regex
@@ -280,29 +281,10 @@ def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
         A new spec when any entry was translated, else ``capture_spec`` itself.
     """
 
-    from .._ir.selector_eval import looks_like_finalized_label
-
     def lower(entry: Any) -> Any:
-        """Return ``entry`` with a finalized label target lowered to its one raw live label."""
-        target = entry.site_target
-        value = target.selector_value
-        if (
-            target.selector_kind != "label"
-            or not isinstance(value, str)
-            or not looks_like_finalized_label(value)
-        ):
-            return entry
-        names = raw_live_labels(trace, value)
-        if names is None or len(names) != 1:
-            return entry
-        lowered = TargetSpec(
-            selector_kind="label",
-            selector_value=names[0],
-            strict=target.strict,
-            slice_spec=target.slice_spec,
-            metadata=dict(target.metadata),
-        )
-        return replace(entry, site_target=lowered)
+        """Return ``entry`` with its finalized label leaves lowered to raw live labels."""
+        target = _lower_final_label_target(trace, entry.site_target)
+        return entry if target is entry.site_target else replace(entry, site_target=target)
 
     values = [lower(entry) for entry in getattr(capture_spec, "target_value_specs", None) or ()]
     hooks = [lower(entry) for entry in getattr(capture_spec, "hook_specs", None) or ()]
@@ -311,6 +293,75 @@ def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
     ):
         return capture_spec
     return replace(capture_spec, target_value_specs=values, hook_specs=hooks)
+
+
+def _lower_final_label_target(trace: Any, target: Any) -> Any:
+    """Return ``target`` with each finalized exact-label leaf lowered to its one raw live label.
+
+    A stored composite target (kind ``"and"``, ``"or"`` or ``"not"``, operands in
+    ``selector_value``) is lowered leaf by leaf: a Layer door on a multi-pass layer
+    stages the ``|`` of its pass-qualified labels, and each pass lowers exactly as it
+    would staged alone through ``trace.do``. A leaf that names several ops or none
+    stays as staged.
+
+    Parameters
+    ----------
+    trace:
+        Trace about to rerun (it still holds the source graph).
+    target:
+        Stored site target of one staged entry.
+
+    Returns
+    -------
+    Any
+        A new target when any leaf was lowered, else ``target`` itself.
+    """
+
+    operands = _stored_operands(target)
+    if operands is None:
+        return _lower_final_label_leaf(trace, target)
+    lowered = tuple(_lower_final_label_target(trace, child) for child in operands)
+    if all(new is old for new, old in zip(lowered, operands, strict=True)):
+        return target
+    is_not = target.selector_kind == "not"
+    return replace(target, selector_value=lowered[0] if is_not else lowered)
+
+
+def _stored_operands(target: Any) -> tuple[Any, ...] | None:
+    """Return the operands of a stored ``and``/``or``/``not`` target, else ``None``."""
+
+    if not isinstance(target, TargetSpec):
+        return None
+    value = target.selector_value
+    if target.selector_kind == "not" and value is not None:
+        return (value,)
+    if target.selector_kind in ("and", "or") and isinstance(value, (tuple, list)):
+        return tuple(value)
+    return None
+
+
+def _lower_final_label_leaf(trace: Any, target: Any) -> Any:
+    """Return one ``label`` leaf readdressed to its single raw live label, else ``target``."""
+
+    from .._ir.selector_eval import looks_like_finalized_label
+
+    value = getattr(target, "selector_value", None)
+    if (
+        getattr(target, "selector_kind", None) != "label"
+        or not isinstance(value, str)
+        or not looks_like_finalized_label(value)
+    ):
+        return target
+    names = raw_live_labels(trace, value)
+    if names is None or len(names) != 1:
+        return target
+    return TargetSpec(
+        selector_kind="label",
+        selector_value=names[0],
+        strict=target.strict,
+        slice_spec=target.slice_spec,
+        metadata=dict(target.metadata),
+    )
 
 
 def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any], bool]:
