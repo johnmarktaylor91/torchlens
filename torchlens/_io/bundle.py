@@ -34,7 +34,6 @@ from safetensors.torch import load_file
 
 from torchlens.backends.registry import BackendPayloadUnsupportedError
 
-from .. import __version__ as TORCHLENS_VERSION
 from .._capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
 from .._data_classes._state_adapter import state_items
 from .._data_classes._trace_missing_attrs import is_live_trace
@@ -48,6 +47,7 @@ from .._runnable.state import (
 )
 from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
+from .._vocab._package_version import __version__ as TORCHLENS_VERSION
 from ..backends.registry import BackendSpec, get_backend_spec
 from ..errors import RunnablePreflightError, TorchLensWarning
 from . import (
@@ -71,6 +71,7 @@ from ._durability import (
     fsync_dir,
     fsync_tree,
 )
+from ._extra_files import _warn_extra_files
 from ._pickle_prescan import OpcodeCeilingExceeded
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
@@ -84,6 +85,7 @@ from ._save_gates import (
     _save_bundle_via_container_door,
     _stamped_descriptor,
 )
+from ._skipped_blobs import _apply_skipped_blobs_to_scrubbed_state
 from .format3 import (
     contract as format3_contract,
     reader as format3_reader,
@@ -99,7 +101,8 @@ from .format3.payloads import (
     tensor_reference,
 )
 from .format3.recipe import write_trace_recipe
-from .format3.route import is_format3_root, load_format3
+from .format3.restore import loaded_persistent_buffer_universe, true_up_record
+from .format3.route import Format3LoadRequest, is_format3_root, load_format3
 from .format3.writer import (
     EnvelopeSpec,
     TraceTables,
@@ -1018,13 +1021,20 @@ def _finish_format3_trace(
         resolved_blobs_dir=blobs_dir,
         trace=artifact.objects["trace"][0],
     )
+    # The rehydrate path re-runs the trace state hook; put back what its fill changed.
+    true_up_record(trace, artifact.tables["trace"][0], "trace")
     reanchor_loaded_episode_evidence(trace)
     _reanchor_visualizer_paths(trace, root)
     trace._loaded_from_bundle = True
     trace._source_bundle_manifest_sha256 = sha256_file(root / format3_contract.MANIFEST_FILE)
     trace._source_bundle_path = root
     trace._source_bundle_created_at = manifest["created_at"]
-    trace._source_bundle_provenance = manifest.get("provenance")
+    # The certificate rides as a ``Provenance`` so a plain resave carries the capture-time
+    # facts (default dtype, RNG digests) forward instead of re-deriving them weaker.
+    raw_provenance = manifest.get("provenance")
+    trace._source_bundle_provenance = (
+        Provenance.from_dict(raw_provenance) if isinstance(raw_provenance, dict) else None
+    )
     # Contract section 7: the runnable component (descriptor and families under ``runnable/``,
     # listed in ``manifest["runnable"]``); an analysis artifact attaches analysis-only readiness.
     runnable_bind.attach_runnable(
@@ -1034,6 +1044,12 @@ def _finish_format3_trace(
         manifest.get("files") or {},
         map_location=map_location,
     )
+    # A runnable resave declares its persistent-buffer slots from the capture-time universe;
+    # without a live model the validated descriptor is that universe's source.
+    if trace._runnable.persistent_buffer_universe is None:
+        trace._runnable.persistent_buffer_universe = loaded_persistent_buffer_universe(
+            trace._runnable.descriptor
+        )
     if manifest.get("disclosures") is not None:
         format3_reader.attach_disclosure_advisory(trace, manifest["disclosures"])
     if manifest.get("intervention") is not None:
@@ -1276,11 +1292,13 @@ def load(
             # 3.0 saved format: record tables plus safetensors chunks, never the pickle path.
             return load_format3(
                 bundle_path,
-                lazy,
-                map_location,
-                materialize_nested,
-                payload_hints,
-                unknown_relations=unknown_relations,
+                Format3LoadRequest(
+                    lazy=lazy,
+                    map_location=map_location,
+                    materialize_nested=materialize_nested,
+                    payload_hints=payload_hints,
+                    unknown_relations=unknown_relations,
+                ),
             )
 
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
@@ -3332,88 +3350,6 @@ def _validate_activation_transform_outputs(
             )
 
 
-def _apply_skipped_blobs_to_scrubbed_state(
-    scrubbed_state: dict[str, Any],
-    skipped_blob_ids: set[str],
-) -> None:
-    """Replace skipped blob refs with ``None`` in scrubbed metadata.
-
-    Parameters
-    ----------
-    scrubbed_state:
-        Scrubbed metadata dict produced by ``scrub_for_save``.
-    skipped_blob_ids:
-        Blob ids skipped under ``strict=False``.
-    """
-
-    for field_name, field_value in list(scrubbed_state.items()):
-        scrubbed_state[field_name] = _replace_skipped_blob_refs(field_value, skipped_blob_ids)
-
-    layer_list = scrubbed_state.get("_layer_list")
-    if isinstance(layer_list, list):
-        grad_labels = [
-            layer.layer_label for layer in layer_list if bool(getattr(layer, "has_grad", False))
-        ]
-        scrubbed_state["_num_saved_ops"] = sum(
-            1 for layer in layer_list if bool(getattr(layer, "has_saved_activation", False))
-        )
-        scrubbed_state["_cost_saved_activation_memory"] = sum(
-            int(getattr(layer, "activation_memory", 0) or 0)
-            for layer in layer_list
-            if bool(getattr(layer, "has_saved_activation", False))
-        )
-        scrubbed_state["_autograd_has_grads"] = bool(grad_labels)
-
-
-def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
-    """Walk a scrubbed object graph and null out selected blob refs.
-
-    Parameters
-    ----------
-    value:
-        Scrubbed value to inspect.
-    skipped_blob_ids:
-        Blob ids skipped under ``strict=False``.
-
-    Returns
-    -------
-    Any
-        Value with matching ``BlobRef`` instances replaced by ``None``.
-    """
-
-    if isinstance(value, BlobRef):
-        if value.blob_id in skipped_blob_ids:
-            return None
-        return value
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            value[index] = _replace_skipped_blob_refs(item, skipped_blob_ids)
-        return value
-    if isinstance(value, tuple):
-        return tuple(_replace_skipped_blob_refs(item, skipped_blob_ids) for item in value)
-    if isinstance(value, dict):
-        for key, item in list(value.items()):
-            value[key] = _replace_skipped_blob_refs(item, skipped_blob_ids)
-        return value
-
-    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
-    if spec is None:
-        return value
-
-    for field_name, field_value in list(state_items(value)):
-        replaced_value = _replace_skipped_blob_refs(field_value, skipped_blob_ids)
-        setattr(value, field_name, replaced_value)
-        if (
-            field_name == "out"
-            and replaced_value is None
-            and hasattr(value, "has_saved_activation")
-        ):
-            value.has_saved_activation = False
-        if field_name == "grad" and replaced_value is None and hasattr(value, "has_grad"):
-            value.has_grad = False
-    return value
-
-
 def _raise_for_unmaterialized_nested_blob_refs(
     value: Any,
     *,
@@ -3608,9 +3544,8 @@ def _check_unknown_blob_entries(manifest: Manifest, blobs_path: Path) -> None:
         )
 
     if extra_names:
-        warnings.warn(
+        _warn_extra_files(
             f"Bundle contains unreferenced extra files in blobs/: {', '.join(extra_names)}.",
-            TorchLensWarning,
             stacklevel=2,
         )
 

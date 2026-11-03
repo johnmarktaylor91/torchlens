@@ -119,7 +119,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 5350 -> 5200 (2026-10-05 rung-1 ratchet settle): the completeness
     # backstop census split to validation/_completeness_backstop.py; re-keyed
     # down to the next 50-line step above the measured 5188 (R43-F2).
-    "torchlens/validation/core.py": 4200,
+    # 4200 -> 3800: the live-parameter replay restore split to
+    # validation/_replay_live_params.py and cohesive helper groups moved to
+    # sibling modules; re-keyed to the next 50-line step above the
+    # merged-tree measurement 3795.
+    "torchlens/validation/core.py": 3800,
     # 5250 -> 5100 (2026-08-27 C07 fix cycle): the user-transform apply +
     # validation helpers split to _op_transforms.py under R43 (the v9
     # injection_provenance rows nudged op.py over); re-keyed down to the
@@ -183,7 +187,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # are unchanged. Harness bundles phase 2 moved the bundle-container
     # loaders to _io/bundle_container.py and re-keyed the row back down to
     # the 4450 baseline (4700 -> 4450).
-    "torchlens/_io/bundle.py": 3950,
+    "torchlens/_io/bundle.py": 3910,
     "torchlens/_io/runnable_load.py": 3850,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
@@ -226,7 +230,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measure_host_peak_memory DROP knob and the KEEP backward_peak_memory_reason
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
-    "torchlens/_data_classes/trace.py": 3750,
+    # 3750 -> 3600: the record-s2 fold plus the c2-rulings Trace port measure 3566 (slack rule).
+    "torchlens/_data_classes/trace.py": 3600,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
@@ -398,7 +403,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # post-split measurement (2750; ~2760 with the F10 union). Supersedes the
     # F10-side 2950 -> 3000 raise (dropped at the T74b reconcile merge) --
     # the bounce froze this ceiling, so the split is the fix, not the raise.
-    "torchlens/_data_classes/module.py": 2800,
+    # 2800 -> 2650: the ModuleCall/Module facade stored-field tables split to
+    # _data_classes/_module_facade_fields.py (2635 measured); the ceiling follows down.
+    "torchlens/_data_classes/module.py": 2650,
     # 2100 -> 2150 (2026-08-29 F11 T74b fix): +9 lines documenting the
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
@@ -501,8 +508,8 @@ _MAX_LEDGER_SLACK = 100
 _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_validation.py": 8750,
     "tests/example_models.py": 5500,
-    "tests/test_real_world_models.py": 5200,
-    "tests/test_toy_models.py": 4500,
+    "tests/test_real_world_models.py": 5100,
+    "tests/test_toy_models.py": 4400,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
     # 2400 -> 2650 (2026-10-01 ci-fix ratchet settle): the M1 raise-arm
@@ -512,7 +519,7 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     # measures 2608. Next 50-line step above it -- this file's purpose is
     # exactly this kind of targeted regression addition, so the growth is
     # the campaign's reviewed product, not drift.
-    "tests/validation_goldens/test_validation_exemption_hardening.py": 2650,
+    "tests/validation_goldens/test_validation_exemption_hardening.py": 2550,
     "tests/test_conditional_branches.py": 2150,
     # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
     # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051

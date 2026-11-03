@@ -45,7 +45,7 @@ def _capture(builder_name: str):
     model = getattr(families, builder_name)("eager")
     torch.manual_seed(8)
     x = torch.randint(0, 500, (2, 7))
-    return model, tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return model, tl.trace(model, x, save="all")
 
 
 @pytest.fixture(scope="module")

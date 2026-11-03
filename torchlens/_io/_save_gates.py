@@ -4,7 +4,8 @@ Three entry-time guards that run before (or instead of) the per-trace save
 pipeline: the two PERMANENT erasure-prevention invariants (edge-substitution
 carriers and the shard-local disclosure, both keyed on the ACTIVE SCHEMA so a
 regression re-fires them), and the Bundle container-door delegation that
-routes ``bundle.save(path, ...)`` through ``Bundle.save`` (foldB D8/D9). Split
+routes ``bundle.save(path, ...)`` through ``Bundle.save`` (foldB D8/D9); plus
+the blob-loop refusal of a tensor a strict (portable) save cannot write. Split
 out of ``torchlens/_io/bundle.py`` to respect its size ceiling (R43
 split-never-raise); ``bundle.py`` re-exports these names, so the monkeypatch
 surface ``torchlens._io.bundle._refuse_*`` is unchanged.
@@ -14,11 +15,20 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import torch
 
+from .._runnable import (
+    ActivationPayloadMember,
+    RunnableErrorCode,
+    SlotByteDigest,
+    StateByteDigest,
+)
+from .._runnable.input_aliases import build_input_attestation_fingerprint
+from .._runnable.state import runnable_tensor_byte_digest
 from ..errors._base import TorchLensWarning
 from ..errors.runnable import RunnablePreflightError
 from .format_errors import ArtifactError
@@ -26,15 +36,11 @@ from .scrub import BlobSpec
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .._runnable import (
-        ActivationPayloadMember,
-        SlotByteDigest,
-        SparseRunDescriptor,
-        StateByteDigest,
-    )
+    from .._runnable import SparseRunDescriptor
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION, PayloadLayerDescriptor
 from .format3.runnable import _WriteContext
 from .runnable import (
     require_sparse_run_descriptor,
@@ -213,6 +219,35 @@ def _save_bundle_via_container_door(
     bundle.save(path, level=level, overwrite=overwrite)
 
 
+def _validated_descriptor_for_resave(trace: Any) -> SparseRunDescriptor | None:
+    """Return the descriptor a loaded trace resaves from, or ``None`` when the producer must run.
+
+    ``Op.args_template`` is runtime-only and never persists, so a trace loaded from an
+    artifact cannot re-cook its call recipe; the descriptor the load validated is that
+    recipe, carried through exactly. Its optional payload layers reset to absent so the
+    save stamps only what it writes. A trace whose ops carry a cooked template (a live
+    capture, or a loaded trace refreshed by a rerun) builds afresh, and a trace with neither
+    still runs the producer and takes its typed refusal: the recipe is never optional.
+    """
+
+    descriptor = trace._runnable.descriptor
+    if descriptor is None or not getattr(trace, "_loaded_from_bundle", False):
+        return None
+    if any(getattr(op, "args_template", None) is not None for op in trace._layer_list):
+        return None
+    layers = descriptor.payload_layers
+    return replace(
+        descriptor,
+        payload_layers=replace(
+            layers,
+            weights=replace(layers.weights, present=False),
+            activations=PayloadLayerDescriptor(
+                present=False, schema=RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
+            ),
+        ),
+    )
+
+
 def _stamped_descriptor(
     trace: Any, *, include_weights: bool, include_activations: bool
 ) -> tuple[Any, list[Any], list[Any], list[Any]]:
@@ -221,7 +256,7 @@ def _stamped_descriptor(
     Returns the descriptor and the buffer, weight and activation blob specs.
     """
 
-    descriptor = require_sparse_run_descriptor(trace)
+    descriptor = _validated_descriptor_for_resave(trace) or require_sparse_run_descriptor(trace)
     buffer_specs = _capture_nonpersistent_buffer_blob_specs(trace, descriptor)
     if buffer_specs:
         _warn_nonpersistent_buffer_disclosure_once()
@@ -292,8 +327,6 @@ def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) 
     RunnablePreflightError
         Typed save refusal for any label the load door would refuse.
     """
-
-    from .._runnable import RunnableErrorCode
 
     for name in names:
         if not isinstance(name, str) or name == "":
@@ -409,6 +442,19 @@ def _capture_nonpersistent_buffer_blob_specs(
     ]
 
 
+def _captured_input_attestation(slot_id: str, out: torch.Tensor) -> tuple[SlotByteDigest, Any]:
+    """Build the original-input digest and physical fingerprint from the retained value."""
+
+    digest = runnable_tensor_byte_digest(out)
+    # The live retained input seeded the forward; serialized payloads lose strides.
+    # The run side fingerprints its executed clone on this same basis.
+    return (
+        SlotByteDigest(slot_id=slot_id, byte_digest=digest),
+        build_input_attestation_fingerprint(slot_id, out, byte_digest=digest),
+    )
+
+
+# Complexity: keep activation archive membership and slot witnesses in one preflight.
 def _capture_activation_blob_specs(
     trace: Trace,
     descriptor: SparseRunDescriptor,
@@ -440,10 +486,6 @@ def _capture_activation_blob_specs(
         If a selected payload is unavailable or is not a dense torch tensor.
     """
 
-    from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
-    from .._runnable.input_aliases import build_input_attestation_fingerprint
-    from .._runnable.state import runnable_tensor_byte_digest
-
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
     call_id_by_label = {
         op_label: call.call_id for call in descriptor.calls for op_label in call.op_labels
@@ -459,15 +501,9 @@ def _capture_activation_blob_specs(
             continue
         out = _physical_op_payload(op, "out")
         if bool(getattr(op, "is_input", False)) and isinstance(out, torch.Tensor):
-            digest = runnable_tensor_byte_digest(out)
-            input_digests.append(SlotByteDigest(slot_id=slot_id, byte_digest=digest))
-            # hon1_3 (H-a): the physical fingerprint is built from the LIVE retained
-            # in-memory input value that seeded the captured forward (never from the
-            # serialized payload, which contiguifies strides). The run side
-            # fingerprints the executed clone on the same basis.
-            input_fingerprints.append(
-                build_input_attestation_fingerprint(slot_id, out, byte_digest=digest)
-            )
+            evidence, fingerprint = _captured_input_attestation(slot_id, out)
+            input_digests.append(evidence)
+            input_fingerprints.append(fingerprint)
         if not bool(getattr(op, "has_saved_activation", False)):
             continue
         found_payload = False
@@ -480,7 +516,8 @@ def _capture_activation_blob_specs(
                 raise ArtifactError(
                     "include_activations=True requires every selected out/transformed_out "
                     f"payload to be a dense torch.Tensor; {op_label}.{field_name} is "
-                    f"{type(payload).__name__}."
+                    f"{type(payload).__name__}.",
+                    code="artifact_tensor_unsupported",
                 )
             blob_id = f"runnable_activation_{len(blob_specs):05d}"
             digest = runnable_tensor_byte_digest(payload)
@@ -506,7 +543,8 @@ def _capture_activation_blob_specs(
         if not found_payload:
             raise ArtifactError(
                 "include_activations=True found a capture-selected activation without a "
-                f"materialized out/transformed_out payload at {op_label!r}."
+                f"materialized out/transformed_out payload at {op_label!r}.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
             )
 
     state = _capture_source_state(trace, option_name="include_activations")
@@ -551,7 +589,8 @@ def _capture_source_state(trace: Trace, *, option_name: str) -> Mapping[str, tor
     ):
         raise ArtifactError(
             f"{option_name}=True requires a tensor-only capture-time state snapshot. "
-            "This Trace cannot embed state as embedded_capture_state."
+            "This Trace cannot embed state as embedded_capture_state.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
         )
     return cast(Mapping[str, torch.Tensor], state)
 
@@ -616,4 +655,32 @@ def _warn_unattestable_activation_archive_once() -> None:
         "selected activations if byte-exact attestation is wanted.",
         TorchLensWarning,
         stacklevel=3,
+    )
+
+
+def _refuse_unsupported_tensor(error_text: str, blob_spec: Any, reason: str) -> NoReturn:
+    """Refuse a torch tensor the strict (portable) save cannot write.
+
+    Parameters
+    ----------
+    error_text:
+        Refusal text naming the blob's label, kind and the codec's reason.
+    blob_spec:
+        The refused blob (its ``label`` and ``kind`` ride on the error).
+    reason:
+        The payload codec's refusal reason.
+
+    Raises
+    ------
+    ArtifactError
+        With ``fields["code"] == "artifact_tensor_unsupported"``.
+    """
+
+    raise ArtifactError(
+        error_text,
+        code="artifact_tensor_unsupported",
+        remedy="save at level='audit', or make the tensor dense and strided",
+        label=blob_spec.label,
+        kind=blob_spec.kind,
+        reason=reason,
     )

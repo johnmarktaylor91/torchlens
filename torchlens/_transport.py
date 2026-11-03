@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import torch
 
+from ._utils.tensor_leaves import flat_byte_view
+
 
 def to_cpu_contiguous(tensor: torch.Tensor) -> torch.Tensor:
     """Return a detached, CPU-resident, contiguous view or copy of ``tensor``.
@@ -77,10 +79,10 @@ def digest_byte_view(tensor: torch.Tensor) -> memoryview:
     (``to_cpu_contiguous(t).reshape(-1).view(torch.uint8).numpy().data``),
     folded into ONE authority next to the transport so a digest site can
     never reintroduce the unresolved-conj/neg crash by hand-rolling the
-    view. ``reshape(-1)`` first: ``view(torch.uint8)`` refuses 0-dim
-    tensors. The returned memoryview keeps the backing ndarray (and thus
-    the transport tensor's storage) alive; no whole-payload byte copy is
-    made.
+    view. The flat view comes from ``_utils.tensor_leaves.flat_byte_view``
+    (stride-safe for one-element tensors). The returned memoryview keeps the
+    backing ndarray (and thus the transport tensor's storage) alive; no
+    whole-payload byte copy is made.
 
     Parameters
     ----------
@@ -93,5 +95,4 @@ def digest_byte_view(tensor: torch.Tensor) -> memoryview:
         Read-through byte view of the CPU-contiguous logical payload.
     """
 
-    cpu = to_cpu_contiguous(tensor)
-    return cpu.reshape(-1).view(torch.uint8).numpy().data
+    return flat_byte_view(to_cpu_contiguous(tensor)).numpy().data

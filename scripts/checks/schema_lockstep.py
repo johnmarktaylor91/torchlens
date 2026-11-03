@@ -269,6 +269,7 @@ PRIVATE_ORDERED_DROP_FIELDS: dict[str, dict[str, str]] = {
         "_distributed_plane_p": "session-time plane-P dispatch journal for armed captures (merge-ranks C2 census evidence)",
         "_transform": "capture-time input transform callable; opaque, session-only",
         "_output_transform": "capture-time output transform callable; opaque, session-only",
+        "_output_slot": "exact live forward return; memory only, never serialized",
         "_visualizer_dir": "per-session visualizer scratch directory path",
         "_out_dedup_mode": "session dedup strategy for retained activation payloads",
         "_out_identity_cache": "session identity cache backing out dedup",
@@ -586,12 +587,18 @@ def _render_schema_bindings() -> str:
     return _render(_collect())
 
 
-def _render_trace_schema_bindings() -> str:
-    """Return the generated companion containing the complete Trace binding group."""
+def _render_schema_bindings_trace() -> str:
+    """Return a fresh rendering of the split-out ``trace`` storage-bindings module.
 
-    from tools.generate_record_schema import _collect, _format_trace_bindings, _render
+    Returns
+    -------
+    str
+        Generated source text.
+    """
 
-    return _format_trace_bindings(_render({"trace": _collect()["trace"]}, split_trace=False))
+    from tools.generate_record_schema import _collect, _render_split
+
+    return _render_split(_collect())
 
 
 def _render_op_record_manifest() -> str:
@@ -827,7 +834,7 @@ GENERATED_ARTIFACTS: tuple[GeneratedArtifact, ...] = (
     ),
     GeneratedArtifact(
         "torchlens/_data_classes/_schema_bindings_trace.py",
-        _render_trace_schema_bindings,
+        _render_schema_bindings_trace,
         "python tools/generate_record_schema.py",
     ),
     GeneratedArtifact(

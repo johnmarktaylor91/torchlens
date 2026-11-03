@@ -367,7 +367,7 @@ def attach_runnable(
 
 
 def _family_disposition(trace: Any, present: bool) -> str:
-    """Return ``bind``, ``skip`` or ``error`` for one family (the r39 corr2_3 rule)."""
+    """Return ``bind``, ``skip`` or ``error`` for one family."""
 
     if trace._sparse_run_descriptor is not None:
         return "bind"
@@ -435,6 +435,7 @@ def bind_runnable_families(trace: Any, families: Mapping[str, Mapping[str, torch
         When a value violates its slot contract.
     """
 
+    # Essential complexity: presence, schema and slot binding form one closed family contract.
     expected_schema = {
         "state_dict": "state_dict_v1",
         "nonpersistent_buffers": "runnable_nonpersistent_buffer_v1",
@@ -486,7 +487,8 @@ def _bind_activations(trace: Any, declared: Any, values: Mapping[str, torch.Tens
         if _binders().byte_digest(tensor) != member.byte_digest:
             _refuse(
                 "record_file_corrupt",
-                f"The archived activation {member.blob_id!r} does not match its byte digest.",
+                f"byte-digest mismatch: the archived activation {member.blob_id!r} does not hash "
+                "to its recorded digest.",
                 "save the trace again; the runnable component was altered",
             )
         archive_key = f"{member.slot_id}:{member.field}"

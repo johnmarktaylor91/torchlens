@@ -10,7 +10,10 @@ fails.
 ``check_contracts`` runs import-linter over ``.importlinter``. The ``dev``
 extra declares import-linter, so every environment built from it (CI's
 repository-checks job, ``scripts/smoke_ci_parity.py``) reports OK or FAIL; the
-skip remains only for a bare environment without the tool.
+skip remains only for a bare environment without the tool. ``lint-imports`` is
+looked up beside the running interpreter before ``PATH``, so a venv's python
+invoked by path (venv not activated) still runs the contracts; an importable
+``importlinter`` with no executable anywhere is a FAIL, never a skip.
 """
 
 from __future__ import annotations
@@ -59,16 +62,41 @@ def check(repo: Path) -> Outcome:
     return ratchet("layering", measure(repo), load_baselines(repo)["layering"])
 
 
+_LINT_IMPORTS_NAMES = ("lint-imports", "lint-imports.exe")
+
+
+def _lint_imports_executable() -> str | None:
+    """Return the ``lint-imports`` path: the running interpreter's bin dir, then ``PATH``.
+
+    ``sys.executable`` is not resolved: in a venv it is the venv's own
+    ``bin/python``, whose directory holds the console scripts even when the
+    venv was never activated.
+    """
+
+    bin_dir = Path(sys.executable).parent
+    for name in _LINT_IMPORTS_NAMES:
+        candidate = bin_dir / name
+        if candidate.is_file():
+            return str(candidate)
+    return shutil.which("lint-imports")
+
+
 def check_contracts(repo: Path) -> Outcome:
     """Run ``lint-imports`` over ``.importlinter``; skip only without import-linter."""
 
     config = repo / ".importlinter"
     if not config.is_file():
         return Outcome(SKIP, "import-contracts: no .importlinter config")
-    executable = shutil.which("lint-imports")
-    if executable is None or importlib.util.find_spec("importlinter") is None:
+    if importlib.util.find_spec("importlinter") is None:
         return Outcome(
             SKIP, 'import-contracts: import-linter not installed (pip install -e ".[dev]")'
+        )
+    executable = _lint_imports_executable()
+    if executable is None:
+        return Outcome(
+            FAIL,
+            "import-contracts: importlinter is importable but no lint-imports executable "
+            f"was found beside {sys.executable} or on PATH; reinstall the dev extra",
         )
     proc = subprocess.run(
         [executable, "--config", str(config), "--no-cache"],

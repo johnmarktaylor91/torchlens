@@ -181,7 +181,7 @@ def test_loaded_artifact_saved_without_the_switch_refuses(tmp_path: Path) -> Non
 
 
 def test_refresh_inherits_the_switch_and_fast_run_refuses() -> None:
-    """``run()`` refreshes keep the recording, the fast live tier included."""
+    """``run()`` refreshes keep the recording; the fast tier's result fork keeps it too."""
 
     torch.manual_seed(0)
     model = _TwoOpModel()
@@ -192,13 +192,15 @@ def test_refresh_inherits_the_switch_and_fast_run_refuses() -> None:
     assert refreshed.has_aten_ops is True
     assert _row_keys(refreshed) == before
 
-    # The fast live tier refreshes the SAME live Trace in place (its result
-    # trace is this trace), so the capture's recording stays, held to the
-    # recorded path by the fast static guard.
+    # The fast live tier returns a new Trace and leaves the source untouched;
+    # the result fork inherits the capture's recording, held to the recorded
+    # path by the fast static guard.
     fast = trace.run(inputs=torch.ones(2) * 3, fast=True)
-    assert fast.trace is trace
+    assert fast.trace is not trace
     assert fast.trace.has_aten_ops is True
     assert _row_keys(fast.trace) == before
+    assert trace.has_aten_ops is True
+    assert _row_keys(trace) == before
 
 
 def test_intervention_capture_with_the_switch_passes_invariants() -> None:
@@ -225,8 +227,9 @@ def test_backward_rows_join_trace_aten_ops_in_order() -> None:
     trace = tl.trace(
         _TwoOpModel(),
         torch.ones(2, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, aten_ops=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, aten_ops=True, save_mode="reference"
+        ),
     )
     forward_count = len(trace.aten_ops)
     trace.log_backward(trace.output_ops[0].out.sum())
@@ -271,7 +274,8 @@ def test_classics_smoke_model_records_and_validates() -> None:
         inputs,
         # save_args keeps the replay arguments; without it the per-op replay
         # reports the whole model as a region it cannot replay, switch or not.
-        capture=tl.options.CaptureOptions(aten_ops=True, layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(aten_ops=True, save_args=True),
+        save="all",
     )
     assert trace.has_aten_ops is True
     assert trace.aten_ops

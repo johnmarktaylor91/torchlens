@@ -133,6 +133,7 @@ def _blob_digests(manifest: dict[str, Any]) -> dict[str, str]:
     return {k: v["sha256"] for k, v in manifest["files"].items() if k.startswith(prefix)}
 
 
+# Complexity: one recursive comparison keeps row identity and exact resave diffs together.
 def record_table_diffs(left: Path, right: Path, *, limit: int = 40) -> list[str]:
     """Cell-level differences between two artifacts' record tables and blob chunks.
 

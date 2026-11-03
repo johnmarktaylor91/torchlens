@@ -137,9 +137,9 @@ def _captured_log(*, replayable: bool = False) -> tl.Trace:
         torch.randn(2, 3),
         capture=CaptureOptions(
             replayable=replayable,
-            layers_to_save="all",
             seed=0,
         ),
+        save="all",
     )
 
 
@@ -508,7 +508,8 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     trace = tl.trace(
         nn.Linear(3, 3),
         torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+        save="all",
     )
     source_op = next(
         op for op in trace.ops if isinstance(op.out, torch.Tensor) and op.out.requires_grad
@@ -811,8 +812,9 @@ def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
     manifest["backward_summary"]["gradient_blob_kinds"] = ["grad", "legacy_grad"]
     (path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="gradient_blob_kinds"):
+    with pytest.raises(ArtifactError, match="gradient_blob_kinds") as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 @pytest.mark.parametrize("invalid_identity", ["", None, 7])
@@ -837,7 +839,7 @@ def test_validate_tlspec_rejects_unknown_nested_schema_fields(
     tmp_path: Path,
     field_name: str,
 ) -> None:
-    """Nested ``additionalProperties: false`` declarations reject bogus keys."""
+    """The closed summary shapes refuse keys outside their contract tables."""
 
     path = tmp_path / f"bad_{field_name}_extra.tlspec"
     _captured_log().save(path)
@@ -847,8 +849,9 @@ def test_validate_tlspec_rejects_unknown_nested_schema_fields(
     nested["bogus_round5_field"] = True
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match="unsupported fields"):
+    with pytest.raises(ArtifactError, match="unsupported fields") as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 def test_shipped_tlspec_schema_keywords_are_all_walker_supported() -> None:
@@ -1044,7 +1047,7 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
             lambda manifest: manifest.__setitem__("backward_summary", {"has_backward_pass": True}),
             "backward_summary",
         ),
-        (lambda manifest: manifest.__setitem__("torch_version", "2.0.0"), "torch_version=null"),
+        (lambda manifest: manifest.__setitem__("torch_version", None), "torch_version"),
     ],
 )
 def test_schema_v2_non_torch_corruptions_fail_closed(
@@ -1052,16 +1055,19 @@ def test_schema_v2_non_torch_corruptions_fail_closed(
     mutation: Callable[[dict[str, Any]], Any],
     match: str,
 ) -> None:
-    """Schema v2 backend-conditional fields reject malformed non-torch manifests."""
+    """Current array artifacts retain closed backend/runtime and summary validation."""
 
     path = tmp_path / "bad_v2.tlspec"
     _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
+    manifest = _mlx_materialized_schema_v2_manifest(path)
+    _write_manifest(path, manifest)
+    validate_tlspec(path)
     mutation(manifest)
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match=match):
+    with pytest.raises(ArtifactError, match=match) as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 def test_schema_v1_rejects_schema_v2_body_uses(tmp_path: Path) -> None:

@@ -47,9 +47,10 @@ def saved(tmp_path_factory):
 
 @pytest.fixture
 def built_counter(monkeypatch):
-    """Count record objects allocated by the reader (none may exist after a refusal)."""
+    """Observe real reader allocations; a refusal must precede Trace allocation."""
 
     import torchlens._data_classes._state_adapter as adapter
+    import torchlens._io.format3.reader as reader
 
     calls = []
     original = adapter.state_new
@@ -59,6 +60,7 @@ def built_counter(monkeypatch):
         return original(cls)
 
     monkeypatch.setattr(adapter, "state_new", counting)
+    monkeypatch.setattr(reader, "state_new", counting)
     return calls
 
 
@@ -69,19 +71,69 @@ def _load(root):
 
 
 def _expect_refusal_or_roundtrip(root, original, built_counter):
-    """Load the mutated ``root``: a typed refusal, or a load that resaves equal to ``original``."""
+    """Load the mutated ``root``: a typed refusal, or a load whose resave equals what it loaded.
 
+    ``original`` names the save level. A mutation the reader accepts is a value change (a
+    free-text cell swapped for another string), so fidelity is measured against ``root``, the
+    artifact that was loaded, never against the pristine copy.
+    """
+
+    allocated_before = len(built_counter)
     try:
         loaded = _load(root)
     except ArtifactError as exc:
         assert exc.fields.get("code") in KNOWN_CODES, exc
-        assert not any(cls.__name__ == "Trace" for cls in built_counter), "a Trace was built"
+        assert not any(cls.__name__ == "Trace" for cls in built_counter[allocated_before:]), (
+            "a Trace was built"
+        )
         return "refused"
     again = resave(
         loaded, root.parent / (root.name + "-again"), read_manifest(original)["save_level"]
     )
-    assert record_table_diffs(original, again) == []
+    assert record_table_diffs(root, again) == []
+    before_records = read_manifest(root)["records"]
+    after_records = read_manifest(again)["records"]
+    assert before_records.keys() == after_records.keys()
+    for kind, entry in before_records.items():
+        assert (root / entry["path"]).read_bytes() == (
+            again / after_records[kind]["path"]
+        ).read_bytes(), kind
     return "roundtrip"
+
+
+def _expect_manifest_refusal(root, key, built_counter, *, code="manifest_schema_invalid"):
+    """A rejected manifest mutation names its field and one exact refusal code."""
+
+    allocated_before = len(built_counter)
+    with pytest.raises(ArtifactError) as info:
+        _load(root)
+    assert info.value.fields.get("code") == code, key
+    details = "; ".join(info.value.fields.get("errors", ())) or str(info.value)
+    assert key in details, (key, details)
+    assert not any(cls.__name__ == "Trace" for cls in built_counter[allocated_before:]), (
+        "a Trace was built"
+    )
+
+
+# Essential complexity: one exact refusal oracle covers the closed manifest mutation grammar.
+def _manifest_swap_code(key, value):
+    """Pin the contract's format-window, level and record-coherence refusal doors."""
+
+    if key == "format":
+        return "artifact_version_below_floor"
+    if key == "tlspec_version" and type(value) is int and value < contract.RECORD_CONTRACT_FLOOR:
+        return "artifact_version_below_floor"
+    if key in ("format_version", "tlspec_version") and type(value) is int and value >= 0:
+        floor = contract.FORMAT_MAJOR if key == "format_version" else contract.RECORD_CONTRACT_FLOOR
+        if value < floor:
+            return "artifact_version_below_floor"
+        if value > floor:
+            return "artifact_version_above_runtime"
+    if key == "save_level":
+        return "artifact_save_level_invalid"
+    if (key == "payload_policy" and value == {}) or (key == "codecs" and value == []):
+        return "record_schema_invalid"
+    return "manifest_schema_invalid"
 
 
 def _mutable_files(root):
@@ -93,6 +145,22 @@ def test_unmodified_copy_round_trips(saved, tmp_path, built_counter):
     root, _ = saved
     copy = copy_artifact(root, tmp_path / "copy")
     assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "roundtrip"
+    assert any(cls.__name__ == "Trace" for cls in built_counter), "allocation observer was idle"
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_valid_trace_self_reference_survives_validation(tmp_path, wrapped):
+    """Trace identity settles after validation, including inside a pending value record."""
+
+    from torchlens.intervention.types import LiteralValue
+
+    trace = save_tiny(tmp_path / "source", "portable")
+    trace.annotations["self"] = LiteralValue(trace) if wrapped else trace
+    root = tmp_path / "self-reference"
+    trace.save(root)
+    loaded = _load(root)
+    value = loaded.annotations["self"]
+    assert (value.value if wrapped else value) is loaded
 
 
 @pytest.mark.parametrize("offset", [0, 7, 64, 257, 1031, -3])
@@ -121,12 +189,19 @@ def test_each_dropped_manifest_key_refuses(saved, tmp_path, built_counter):
         trimmed = dict(manifest)
         del trimmed[key]
         write_manifest(copy, trimmed)
-        verdict = _expect_refusal_or_roundtrip(copy, root, built_counter)
         if key in contract.MANIFEST_REQUIRED_FIELDS:
-            assert verdict == "refused", key
+            code = "artifact_version_below_floor" if key == "format" else "manifest_schema_invalid"
+            _expect_manifest_refusal(copy, key, built_counter, code=code)
+        else:
+            _expect_refusal_or_roundtrip(copy, root, built_counter)
 
 
 SWAPS = [None, True, 0, -1, 2**53 + 1, 1.5, "", "x", [], {}, {"$tl": "pickle"}]
+#: Manifest version stamps; a non-empty string that is not PEP 440 refuses by field and code.
+VERSION_STAMPS = ("torchlens_version", "python_version", "torch_version")
+#: Free-text writer identity (non-empty by grammar): another non-empty string is a value the
+#: format cannot tell from an honest one, so the load may accept it and resave equal.
+FREE_TEXT_STAMPS = ("platform", "created_at")
 
 
 @pytest.mark.parametrize("value", SWAPS, ids=lambda v: json.dumps(v))
@@ -140,7 +215,10 @@ def test_swapped_manifest_field_types_refuse(saved, tmp_path, built_counter, val
         swapped = dict(manifest)
         swapped[key] = value
         write_manifest(copy, swapped)
-        assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "refused", key
+        if key in FREE_TEXT_STAMPS and isinstance(value, str) and value:
+            assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "roundtrip", key
+            continue
+        _expect_manifest_refusal(copy, key, built_counter, code=_manifest_swap_code(key, value))
 
 
 @pytest.mark.parametrize("value", SWAPS, ids=lambda v: json.dumps(v))

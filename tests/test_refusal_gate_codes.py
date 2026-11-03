@@ -16,6 +16,13 @@ from typing import Any
 
 import pytest
 
+from tests.conformance import _refusal_cases
+from tests.conformance._refusal_cases import (
+    CAPABILITY_REQUESTS,
+    TRACE_OPTION_COMPANIONS,
+    TRACE_OPTION_PROBES,
+    CapabilityRequest,
+)
 from torchlens.backends._backend_protocol import (
     REFUSABLE_CAPABILITY_FLAGS,
     REFUSAL_CODES,
@@ -29,13 +36,6 @@ from torchlens.backends._options import (
     reject_unsupported_trace_options,
 )
 from torchlens.backends.registry import BackendCapabilities, BackendUnsupportedError
-from torchlens.conformance import _refusal_cases
-from torchlens.conformance._refusal_cases import (
-    CAPABILITY_REQUESTS,
-    TRACE_OPTION_COMPANIONS,
-    TRACE_OPTION_PROBES,
-    CapabilityRequest,
-)
 
 _OPTION_CODE = "trace_option_unsupported"
 
@@ -109,7 +109,9 @@ def test_default_backend_early_refusal_is_coded() -> None:
             return v * 2.0
 
     with pytest.raises(BackendUnsupportedError) as excinfo:
-        tl.trace(_Counts(), torch.ones(2), jax_static_argnums=(0,))
+        tl.trace(
+            _Counts(), torch.ones(2), capture=tl.options.CaptureOptions(jax_static_argnums=(0,))
+        )
     _assert_code(excinfo.value, _OPTION_CODE)
     assert not calls
 
@@ -340,7 +342,7 @@ def test_capture_option_probe_marks_only_its_own_fields(flag: str) -> None:
     explicit = {
         field.name
         for field in dataclass_fields(CaptureOptions)
-        if not field.name.startswith("_") and capture.is_field_explicit(field.name)
+        if not field.name.startswith("_") and capture._is_field_explicit(field.name)
     }
     assert explicit == {str(request.option)}, explicit
 

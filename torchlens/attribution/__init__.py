@@ -38,7 +38,6 @@ from torchlens.attribution._randomization import (
 from torchlens.attribution._road import road_curve
 from torchlens.attribution._site import SiteTarget
 from torchlens.attribution._text import TokenAttribution, TokenAttributionPayload, text
-from torchlens.attribution._viz import overlay
 from torchlens.attribution.graph import AttributionGraph, GraphNode, build_graph
 from torchlens.attribution.onebackward import (
     ReadRow,
@@ -78,7 +77,6 @@ __all__ = [
     "noise_tunnel",
     "occlusion",
     "occlusion_map",
-    "overlay",
     "randomization_test",
     "RandomizationTest",
     "RandomizationStep",

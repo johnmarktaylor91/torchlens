@@ -73,7 +73,7 @@ tl.summary(model, input_args=None, input_kwargs=None,
     view="overview",          # overview | compute | stats (column bundles; stats = per-site payload statistics)
     depth="auto",             # auto | all | int
     columns=None,             # bundle name, exact list, or +name/-name deltas
-    filter=None,              # regex or callable; totals stay whole-model
+    where=None,               # regex or callable; totals stay whole-model
     buffers="summary",        # summary | hide
     fold_repeats="auto", max_rows=48,
     flop_convention="fma2",   # fma2 | fma1 (refuses typed if underivable)
@@ -130,7 +130,7 @@ beside `fwd flops`).
 |---|---|---|
 | `name` | `name (type)` | attribute name and class, indented by depth; `[never ran]`, `[pruned]`, and `*` (tied) tags |
 | `input` | `input` | shapes of the distinct tensors entering the row |
-| `output` | `output` | every member shape of the row's output in return order (an LSTM row shows `output`, `h_n`, `c_n`) |
+| `output` | `output` | every member shape of the row's output in return order (an LSTM row shows `output`, `h_n`, `c_n`); past 60 characters identical runs print once as `shape ×N` (a GPT-2 row with a key/value cache shows `(1, 5, 768), (1, 12, 5, 64) ×24`), and a list still too long ends in `... +K more` |
 | `kernel_size` | `kernel` | kernel size of the row's own conv or pooling op |
 | `groups` | `groups` | conv groups of the row's own conv op |
 | `params` | `params` | parameters per module path |

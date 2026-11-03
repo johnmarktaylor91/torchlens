@@ -9,8 +9,8 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
 - `TinygradBackend.capture_trace()` is the standalone entry: it runs the
   callable under `_observe_tensor_ops` (Tensor-API observation building
   `TinygradUOpCapture` records from pre-realization UOp lineage) and
-  `_reject_mid_capture_execution` (typed refusal of mid-capture realization
-  that would truncate lazy UOp lineage).
+  `_reject_mid_capture_execution` (in `_execution_guard.py`; typed refusal of
+  mid-capture realization that would truncate lazy UOp lineage).
 - `GradOptions` (re-exported from `__init__.py`) drives derived gradients
   including intermediates (`TinygradIntermediateCandidate`,
   `intermediate_derived_grads=True`).
@@ -28,13 +28,13 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
   `transform` / `module_filter` / `activation_transform` are unsupported.
 
 ## capabilities.py
-- Registry-backed re-exports only. Per the registry: `interventions=False`,
+- Registry-backed re-exports only. Per the registry: `can_intervene=False`,
   `intermediate_derived_grads=True`, backward capture / fastlog / rng replay /
   streaming all False, `validation_replay=True`,
   `payload_policy="array_payloads"`.
 
 ## Local Invariants
-- `intervene=` / `halt=` are NOT supported on tinygrad (unlike the tf/mlx/
+- `intervene=` / `stop_after=` are NOT supported on tinygrad (unlike the tf/mlx/
   paddle previews); unsupported trace options refuse typed through the
   `.._options` TINYGRAD policies, never silently no-op.
 - Capture correctness depends on unrealized UOp lineage: anything that forces

@@ -118,7 +118,7 @@ def test_mlx_halt_returns_partial_trace_at_frontier() -> None:
     """halt= stops the forward at the matched op; the partial trace ends there."""
 
     model = _TwoLayerMLP()
-    trace = tl.trace(model, _input(), backend="mlx", halt=tl.func("relu"))
+    trace = tl.trace(model, _input(), backend="mlx", stop_after=tl.func("relu"))
 
     assert trace.is_stopped is True
     assert str(trace.stop_reason).startswith("relu")
@@ -238,7 +238,7 @@ def test_mlx_halt_non_selector_refuses_typed() -> None:
     """Value-dependent halt predicates keep the typed refusal."""
 
     with pytest.raises(BackendUnsupportedError, match="static-label"):
-        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", halt=lambda ctx: True)
+        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", stop_after=lambda ctx: True)
 
 
 def test_mlx_grad_options_with_intervene_refuses_typed() -> None:
@@ -264,7 +264,7 @@ def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
     spec = tl.backends.spec("mlx")
     object.__setattr__(spec.capabilities, "can_intervene", False)
     try:
-        with pytest.raises(BackendUnsupportedError, match="interventions=False"):
+        with pytest.raises(BackendUnsupportedError, match="can_intervene=False"):
             tl.trace(
                 _TwoLayerMLP(),
                 _input(),

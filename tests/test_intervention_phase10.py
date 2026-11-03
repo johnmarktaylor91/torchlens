@@ -151,9 +151,17 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
 
 
 def _saved_fire_records(trace: Any) -> list[Any]:
-    """Return the FireRecords a trace carries per op (``Op.edits``)."""
+    """Read forward op edits and backward call fires from their persisted record fields."""
 
-    return [record for op in trace.ops for record in (op.edits or ())]
+    records = [record for op in trace.ops for record in (op.edits or ())]
+    for call in trace.autograd.grad_fn_calls:
+        fire = call.fire_record
+        if fire is None:
+            continue
+        values = fire if isinstance(fire, tuple) else (fire,)
+        assert all(isinstance(record, FireRecord) for record in values)
+        records.extend(values)
+    return records
 
 
 def test_live_forward_records_persist_in_saved_trace(tmp_path: Path) -> None:
@@ -467,7 +475,7 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
 
 @pytest.mark.smoke
 def test_live_backward_records_persist_in_saved_trace(tmp_path: Path) -> None:
-    """Live backward hook records survive trace save/load on the ops that fired."""
+    """Backward call fires survive with the exact live call and transaction metadata."""
 
     x = torch.randn(2, 3, requires_grad=True)
     log = tl.trace(
@@ -478,6 +486,8 @@ def test_live_backward_records_persist_in_saved_trace(tmp_path: Path) -> None:
     log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
+    before = [record for record in _saved_fire_records(log) if record.signal == "backward"]
+    assert before
 
     log.save(path, level="portable")
     loaded = tl.load(path)
@@ -488,6 +498,20 @@ def test_live_backward_records_persist_in_saved_trace(tmp_path: Path) -> None:
     assert backward_records
     assert backward_records[0].backward_pass_number == 1
     assert backward_records[0].call_index == 1
+    fields = (
+        "signal",
+        "target_label",
+        "call_label",
+        "backward_pass_number",
+        "call_index",
+        "grad_kind",
+        "tuple_index",
+        "edit_name",
+        "timestamp",
+    )
+    assert [tuple(getattr(record, name) for name in fields) for record in backward_records] == [
+        tuple(getattr(record, name) for name in fields) for record in before
+    ]
 
 
 def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) -> None:

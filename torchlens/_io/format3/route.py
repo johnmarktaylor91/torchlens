@@ -6,6 +6,7 @@ reader, so the loader's layering (largest cycle, in-function imports) is unchang
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
@@ -37,14 +38,19 @@ def is_format3_root(bundle_path: Path, tlspec_format: str) -> bool:
     return tlspec_format in _FORMAT3_READER_SHAPES
 
 
+@dataclass(frozen=True, slots=True)
+class Format3LoadRequest:
+    """The load knobs one ``tl.load`` call carries to the format3 reader doors."""
+
+    lazy: bool
+    map_location: str | torch.device
+    materialize_nested: bool
+    payload_hints: PayloadLoadHints | None
+    unknown_relations: Literal["opaque", "refuse"] = "opaque"
+
+
 def load_format3(
-    bundle_path: Path,
-    lazy: bool,
-    map_location: str | torch.device,
-    materialize_nested: bool,
-    payload_hints: PayloadLoadHints | None,
-    *,
-    unknown_relations: Literal["opaque", "refuse"] = "opaque",
+    bundle_path: Path, request: Format3LoadRequest
 ) -> Trace | Bundle | InterventionSpec:
     """Dispatch a 3.0 artifact to the format3 reader door its manifest ``kind`` names
     (``unknown_relations`` reaches the bundle door only)."""
@@ -54,13 +60,13 @@ def load_format3(
         if kind == "intervention":
             return cast("InterventionSpec", reader.load_intervention_recipe(bundle_path))
         options: dict[str, Any] = {
-            "lazy": lazy,
-            "map_location": map_location,
-            "materialize_nested": materialize_nested,
-            "payload_hints": payload_hints,
+            "lazy": request.lazy,
+            "map_location": request.map_location,
+            "materialize_nested": request.materialize_nested,
+            "payload_hints": request.payload_hints,
         }
         if kind == "bundle":
-            options["unknown_relations"] = unknown_relations
+            options["unknown_relations"] = request.unknown_relations
         door = reader.load_bundle if kind == "bundle" else reader.load_trace
         loaded = door(bundle_path, **options)
     except RecursionError as exc:

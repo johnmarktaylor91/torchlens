@@ -84,12 +84,12 @@ def test_override_pattern_unregister_then_register_replacement() -> None:
         tl._autoroute.input.register(name="hf_text", priority=10)(replacement)
 
         model = _NoForwardModel()
-        result = tl.trace(model, "hello", capture=tl.options.CaptureOptions(layers_to_save="none"))
+        result = tl.trace(model, "hello", save="none")
 
     assert result is sentinel
     assert calls[0][0] is model
     assert calls[0][1] == "hello"
-    assert calls[0][2]["capture"].layers_to_save == "none"
+    assert calls[0][2]["capture"]._layers_to_save == "none"
 
 
 def test_list_and_list_glob() -> None:

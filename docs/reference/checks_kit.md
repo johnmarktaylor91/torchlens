@@ -1,7 +1,7 @@
 # Training sanity checks (the checks kit)
 
 > Every spelling on this page is DOCUMENTED-UNSTABLE pending naming-session
-> ratification. The import spelling is `import torchlens.checks`; the one-shot
+> ratification. The public names live on `tl.debug` (`tl.debug.ChecksSession`, `tl.debug.RangeProbe`, and so on); the one-shot
 > parameter audit is also served as `tl.debug.param_health`. The kit is
 > STANDALONE and CAPTURE-FREE: it constructs and runs with TorchLens capture
 > entirely off, and the step-check family runs on `torch.compile`'d models.
@@ -20,13 +20,13 @@ semantics (see "What the measurements broke" below).
 
 | torcheck | Checks kit | Notes |
 | --- | --- | --- |
-| `torcheck.register(optimizer)` | `session = checks.ChecksSession(model, optimizer)`, then `with session:` (or `session.attach()`) | Hooks install on attach, not on construction. |
+| `torcheck.register(optimizer)` | `session = tl.debug.ChecksSession(model, optimizer)`, then `with session:` (or `session.attach()`) | Hooks install on attach, not on construction. |
 | `add_module_changing_check(module)` | `session.register_change_check(within=[...parameter names])` | Detects parameters that stop receiving gradient over a window of steps. |
 | `add_tensor_changing_check(tensor)` | `session.register_change_check(within=["name"])` | Name the parameter. |
 | `add_module_unchanging_check(module)` | `session.register_frozen_check([...parameter names])` | Declared-frozen parameters; the default evidence keeps exact snapshots and shows the delta. |
 | `add_tensor_unchanging_check(tensor)` | `session.register_frozen_check(["name"])` | |
-| `add_module_output_range_check(module, output_range=(low, high))` | `checks.RangeProbe({site: (low, high)})`, passed to a trace as `capture=tl.options.CaptureOptions(hooks=probe.hook_plan())` | Sites are TorchLens selectors such as `tl.func("softmax")`. |
-| `add_module_nan_check(module)` | `session.register_nonfinite_param_check()` and `session.register_nonfinite_grad_check()`; for activations, `tl.trace(..., capture=tl.options.CaptureOptions(raise_on_nan=True))` | Parameters, gradients and activations are checked at the points where the evidence is exact. |
+| `add_module_output_range_check(module, output_range=(low, high))` | `tl.debug.RangeProbe({site: (low, high)})`, passed to a trace as `capture=tl.options.CaptureOptions(hooks=probe.hook_plan())` | Sites are TorchLens selectors such as `tl.func("softmax")`. |
+| `add_module_nan_check(module)` | `session.register_nonfinite_param_check()` and `session.register_nonfinite_grad_check()`; for activations, `tl.trace(..., capture=tl.options.CaptureOptions(on_nonfinite='raise'))` | Parameters, gradients and activations are checked at the points where the evidence is exact. |
 | `add_module_inf_check(module)` | The same three checks | They cover NaN and Inf together. |
 | `add_tensor_nan_check(tensor)` | `session.register_nonfinite_param_check()` | Scans every parameter and, by default, every buffer. |
 | `add_tensor_inf_check(tensor)` | `session.register_nonfinite_param_check()` | |
@@ -47,13 +47,13 @@ strings point back at it.
 ```python
 import torch
 import torch.nn as nn
-import torchlens.checks as checks
+import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4))
 optimizer = torch.optim.AdamW(model.parameters())
 
-session = checks.ChecksSession(model, optimizer, scaler=None)
+session = tl.debug.ChecksSession(model, optimizer, scaler=None)
 session.register_change_check()            # gradient-fact detector, M-of-N warn
 session.register_nonfinite_grad_check()  # collect at S-A, raise at S-B pre-write
 session.register_update_ratio_check()      # raw + lr-normalized columns, collect
@@ -66,7 +66,7 @@ with session:                               # attach() installs the hooks; detac
         optimizer.step()
 
 report = session.report()
-print(report)                               # house-style summary (matches TraceAudit)
+print(report)                               # house-style summary (matches HealthReport)
 ```
 
 Construction is silent and does no device work: no hooks, no syncs, no stdout.
@@ -82,7 +82,7 @@ handle when there is one, so skip accounting can read scale decrements.
 | S-A | per-parameter post-accumulate-grad hooks | every backward INCLUDING scaler-skipped attempts; values SCALED, PRE-clip |
 | S-B | optimizer step pre-hook | accepted steps only; values already UNSCALED, POST-clip; the last moment before weights change |
 | S-C | optimizer step post-hook | after the write: exact deltas, ratios, scheduled scans |
-| S-D | the shipped activation path | `raise_on_nan`, `track_nonfinite`, `capture.hooks` |
+| S-D | the shipped activation path | `on_nonfinite='raise'`, `on_nonfinite='track'`, `capture.hooks` |
 
 Two standing laws fall out of this table. Gradients at S-B are already
 unscaled -- dividing by `scaler.get_scale()` there under-reports by exactly the
@@ -140,7 +140,7 @@ retrospective method stays silent forever.
 ## Boundary mode (one `with` line per optimizer attempt)
 
 ```python
-session2 = checks.ChecksSession(model, optimizer, scaler=None)
+session2 = tl.debug.ChecksSession(model, optimizer, scaler=None)
 session2.register_change_check()
 with session2:
     for step_idx in range(2):
@@ -162,7 +162,6 @@ or inferred evidence never produces an exact pass.
 
 ```python
 import torchlens as tl
-import torchlens.checks as checks
 
 audit = tl.debug.param_health(model)          # also: tl.debug.param_health(model)
 print(audit)                                # notebook-style summary
@@ -227,7 +226,7 @@ as the seam's conformance test.
 ```python
 import torchlens as tl
 
-probe = checks.RangeProbe({tl.func("relu"): (0.0, 6.0)})
+probe = tl.debug.RangeProbe({tl.func("relu"): (0.0, 6.0)})
 trace = tl.trace(model, torch.randn(4, 8),
                  capture=tl.options.CaptureOptions(hooks=probe.hook_plan()))
 print([f.code for f in probe.findings])    # activation_range_violated rows, if any
@@ -242,7 +241,7 @@ running-max STATISTICS only -- its findings never contain the word "dead":
 # Recipe: dead-unit triage. The liveness statistic tells you WHERE to point
 # tl.dead; tl.dead keeps the only dead-unit VERDICT (>=2 samples, upper-bound
 # epistemics -- one batch can never prove a unit dead).
-liveness = checks.LivenessProbe([tl.func("relu")])
+liveness = tl.debug.LivenessProbe([tl.func("relu")])
 t1 = tl.trace(model, torch.randn(4, 8),
               capture=tl.options.CaptureOptions(hooks=liveness.hook_plan()))
 t2 = tl.trace(model, torch.randn(4, 8), save=tl.func("relu"))

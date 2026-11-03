@@ -78,6 +78,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_io.lazy": "L3",
     "_io.runnable": "L3",
     "_io.runnable_load": "L3",
+    # The runnable binder sits with bundle and the state binders it is installed by.
+    "_io._format3_runnable_bind": "L3",
     "_io.accessor_rebuild": "L3",
     "_io.forgery_validation": "L3",
     # W051-IO: the AUD-CODE 3.0 load validators split out of forgery_validation
@@ -151,10 +153,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "dataset_extraction": "L5",
     "_extraction": "L5",
     "debug": "L5",
-    "checks": "L5",
     # -- L6 APPLIANCES ---------------------------------------------------------
     "_semantic": "L6",
-    "_notebook": "L6",
     "neuro": "L6",
     # -- L7 PRESENT --------------------------------------------------------------
     "_visualization": "L7",

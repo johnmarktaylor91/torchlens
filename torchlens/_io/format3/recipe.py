@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final, NamedTuple
@@ -251,6 +252,8 @@ class _RecipeEncoder(ValueEncoder):
         placeholder at its argument path.
         """
 
+        if isinstance(value, CallablePlaceholder):
+            return tagged("callable_placeholder", **value._asdict())
         if not _is_edit(value) or isinstance(value, type):
             return super()._encode(value, at, depth)
         if value.portability != "builtin":
@@ -448,6 +451,7 @@ def write_recipe(root: Path, recipe: Mapping[str, Any]) -> dict[str, Any]:
 _BOUND_CONTAINER_TAGS: Final = frozenset({"tuple", "set", "frozenset", "dict", "record"})
 
 
+# Complexity: one recursive recipe visitor binds the closed edit and captured-argument tags.
 def _bind(data: Any, root: Path, at: str) -> Any:
     """Decode recipe data, reading tensors and keeping placeholders typed."""
 
@@ -466,19 +470,26 @@ def _bind(data: Any, root: Path, at: str) -> Any:
         return torch.view_as_complex(tensor) if data.get("complex") else tensor
     if tag not in _BOUND_CONTAINER_TAGS:
         return decode_value(data, at=at)
-    decode_value(data, at=at)  # structural refusals first; then bind the tensors inside
+    decoded = decode_value(data, at=at)  # structural refusals first; then bind tensors
     if tag == "record":
         fields = {name: _bind(item, root, f"{at}.{name}") for name, item in data["fields"].items()}
         if data["type"] == _EDIT_CLASS_PATH:
             return NestedEdit(fields)
         return build_record(str(data["type"]), fields, at=at)
     if tag == "dict":
-        return {
+        bound = {
             _bind(key, root, f"{at}<key {i}>"): _bind(item, root, f"{at}[{i}]")
             for i, (key, item) in enumerate(data["items"])
         }
+        return (
+            defaultdict(decoded.default_factory, bound)
+            if isinstance(decoded, defaultdict)
+            else bound
+        )
     items = [_bind(item, root, f"{at}[{i}]") for i, item in enumerate(data["items"])]
-    return {"tuple": tuple, "set": set, "frozenset": frozenset}[tag](items)
+    if tag == "tuple":
+        return type(decoded)(items)
+    return {"set": set, "frozenset": frozenset}[tag](items)
 
 
 def read_recipe(root: str | Path) -> dict[str, Any]:
@@ -578,6 +589,7 @@ def _recipe_shape_problem(data: Mapping[str, Any]) -> tuple[str, str] | None:
     return None
 
 
+# Complexity: the closed capture-rule grammar checks selector and edit portability together.
 def _capture_rules_problem(rules: Any) -> str | None:
     """Check the closed capture-rule schema before decoding any member."""
 

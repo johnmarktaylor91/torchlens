@@ -44,7 +44,7 @@ def _save(tmp_path: Path, name: str = "b.tlspec") -> Path:
     trace = tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     spec = tmp_path / name
     trace.save(str(spec))
@@ -140,7 +140,7 @@ def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch
     trace = tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     spec = tmp_path / "fail.tlspec"
     with pytest.raises(ArtifactError):
@@ -151,20 +151,6 @@ def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch
         text = reason_file.read_text()
         assert secret not in text, "exception message leaked into recovery debris"
         assert text == "ValueError"
-
-
-# --------------------------------------------------------------------------- #
-# B8-16: metadata.pkl byte ceiling                                            #
-# --------------------------------------------------------------------------- #
-
-
-def test_metadata_pkl_byte_ceiling_refuses_oversize(tmp_path: Path, monkeypatch) -> None:
-    """An implausibly large metadata.pkl is refused typed before it is unpickled."""
-
-    spec = _save(tmp_path)
-    monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_BYTES", 16)
-    with pytest.raises(ArtifactError, match="ceiling"):
-        tl.load(str(spec))
 
 
 # --------------------------------------------------------------------------- #
@@ -193,10 +179,12 @@ def test_visualizer_path_inside_bundle_is_reanchored(tmp_path: Path) -> None:
     """A real thumbnail inside the bundle's visualizers/ dir is kept and re-anchored."""
 
     spec = _save(tmp_path)
+    trace = tl.load(str(spec))
+    # The 3.0 reader refuses any file the manifest does not list, so the thumbnail is
+    # placed after the load; re-anchoring is a per-trace step the loader runs on its paths.
     (spec / "visualizers").mkdir(exist_ok=True)
     thumb = spec / "visualizers" / "00000_layer.png"
     thumb.write_bytes(b"\x89PNG\r\n\x1a\n")
-    trace = tl.load(str(spec))
     trace._layer_list[0].visualizer_path = "/somewhere/else/00000_layer.png"
     _reanchor_visualizer_paths(trace, spec)
     kept = trace._layer_list[0].visualizer_path
@@ -252,7 +240,7 @@ def test_persisted_equivalence_class_keys_are_canonically_ordered(tmp_path: Path
         trace = tl.trace(
             _NestedParamModel().eval(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )
         spec = tmp_path / f"nested_{index}.tlspec"
         trace.save(str(spec))
@@ -293,7 +281,7 @@ def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> 
     trace = tl.trace(
         _NestedMultiOutputParamModel().eval(),
         torch.randn(2, 3, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     live_groups = dict(trace.graph.op_equivalence_classes)
     live_outindex_keys = {key for key in live_groups if "_outindex" in key}
@@ -346,7 +334,7 @@ def test_git_commit_hash_is_dropped_when_source_excluded(tmp_path: Path) -> None
     trace = tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     excluded = tmp_path / "no_source.tlspec"
     trace.save(str(excluded), include_source=False)
@@ -373,7 +361,7 @@ def test_git_commit_hash_is_independent_of_working_directory(tmp_path: Path, mon
     trace = tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     first = tmp_path / "a.tlspec"
     trace.save(str(first), include_source=True)

@@ -21,16 +21,19 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
-from collections import deque
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-import torch
-
 from ..._data_classes._state_adapter import state_items
 from .. import _json
+from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_errors import ArtifactError
+from ..prerelease import (
+    PRERELEASE_STATE_KEY,
+    prerelease_fields_active,
+    registered_prerelease_fields,
+)
 from ..writer_contract import writer_contract_digest
 from . import reader as _reader
 from .contract import (
@@ -45,7 +48,7 @@ from .decode import decode_value
 from .payloads import PayloadStore
 from .recipe import RecipeHeader, build_recipe, write_recipe
 from .schema import LiveCells, level_columns, record_kind_of, record_schema
-from .values import ValueEncoder, object_state, record_type_table, tagged
+from .values import ValueEncoder, record_type_table, tagged
 
 #: Root files the digest table leaves out: the manifest itself and the
 #: staging sentinel that comes off right before publish.
@@ -58,6 +61,7 @@ _SEED_KEYS: tuple[tuple[str, str], ...] = (
     ("_layer_list", "op"),
     ("_layer_logs", "layer"),
     ("_module_logs", "module"),
+    ("_io_module_accessor_state", "module"),
     ("_param_logs", "param"),
     ("_grad_fn_logs", "grad_fn"),
     ("_backward_pass_logs", "backward_pass"),
@@ -67,8 +71,6 @@ _DISCLOSURE_PATHS_SHOWN = 16
 #: Op keys whose absent map is written as an empty object (contract page,
 #: "Values settled on the live side"); the live op is settled the same way.
 _EMPTY_MAP_OP_KEYS = ("edge_substitutions", "edge_replacement_stamps")
-#: Values the discovery walk never descends into.
-_LEAF_TYPES = (str, bytes, bytearray, int, float, complex, bool, type(None), torch.Tensor)
 
 
 def _container_items(value: Any) -> list[Any]:
@@ -108,42 +110,17 @@ class RecordTables:
         return row
 
     def discover(self) -> None:
-        """Seed the live containers, then register every record reachable by reference."""
+        """Seed canonical containers; encoding discovers the remaining persisted edges.
+
+        Walking arbitrary runtime state also reaches stale copies of parameter records
+        after a fork. Only cells the format actually writes may add records beyond these
+        canonical seeds; ``_encode_record_rows`` already follows those cells to a fixed point.
+        """
 
         for key, kind in _SEED_KEYS:
             for item in _container_items(self.state.get(key)):
                 if record_kind_of(item) == kind:
                     self.add(item, kind)
-        pending: deque[Any] = deque(self.state.values())
-        for rows in self.rows.values():
-            pending.extend(rows)
-        seen: set[int] = set()
-        while pending:
-            value = pending.popleft()
-            if isinstance(value, _LEAF_TYPES) or id(value) in seen:
-                continue
-            seen.add(id(value))
-            pending.extend(self._children(value))
-
-    def _children(self, value: Any) -> list[Any]:
-        """Register ``value`` if it is a record; return the values it holds."""
-
-        kind = record_kind_of(value)
-        if kind == "trace":
-            return []
-        if kind is not None:
-            self.add(value, kind)
-            return [item for _, item in state_items(value)]
-        if isinstance(value, Mapping):
-            return [*value.keys(), *value.values()]
-        if isinstance(value, (list, tuple, set, frozenset)):
-            return list(value)
-        if type(value).__module__.startswith("torchlens") and not isinstance(value, type):
-            try:
-                return list(object_state(value).values())
-            except (AttributeError, TypeError, ValueError):
-                return []
-        return []
 
     def reference(self, value: Any) -> dict[str, Any] | None:
         """Return the ``ref`` cell of a record object, or ``None`` for other values."""
@@ -177,6 +154,19 @@ def settle_live_side(trace: Any) -> None:
         for key in _EMPTY_MAP_OP_KEYS:
             if getattr(op, key, None) is None:
                 setattr(op, key, {})
+
+
+def _write_columns(record: str, payload_policy: Mapping[str, bool]) -> list[str]:
+    """Add only switch-activated registrar fields to the normal persisted columns."""
+
+    names = level_columns(record, payload_policy)
+    if not prerelease_fields_active():
+        return names
+    owner = RECORD_CONTRACT_CLASSES[record][1]
+    extra = list(registered_prerelease_fields().get(owner, ()))
+    if record == "trace":
+        extra.append(PRERELEASE_STATE_KEY)
+    return [*names, *(name for name in extra if name not in names)]
 
 
 def encode_tables(
@@ -215,9 +205,9 @@ def encode_tables(
         name: encoder.encode(
             cells.cell("trace", state, state, name),
             f"trace.{name}",
-            payload=schema[name].storage == "payload",
+            payload=name in schema and schema[name].storage == "payload",
         )
-        for name in level_columns("trace", payload_policy)
+        for name in _write_columns("trace", payload_policy)
     }
     files: dict[str, dict[str, Any]] = {
         "trace": {"record": "trace", "tlspec_version": RECORD_CONTRACT_VERSION, "fields": fields}
@@ -234,6 +224,7 @@ def encode_tables(
     return files, encoder.disclosures
 
 
+# Complexity: fixed-point row discovery must encode newly referenced rows before the same pass ends.
 def _encode_record_rows(
     tables: RecordTables,
     encoder: ValueEncoder,
@@ -247,7 +238,7 @@ def _encode_record_rows(
     rows appear.
     """
 
-    names = {kind: level_columns(kind, payload_policy) for kind, _, _ in RECORD_INDEX}
+    names = {kind: _write_columns(kind, payload_policy) for kind, _, _ in RECORD_INDEX}
     columns: dict[str, dict[str, list[Any]]] = {
         kind: {name: [] for name in names[kind]} for kind in names
     }
@@ -268,7 +259,7 @@ def _encode_record_rows(
                         encoder.encode(
                             cells.cell(kind, record, state, name),
                             f"{kind}[{row}].{name}",
-                            payload=schema[name].storage == "payload",
+                            payload=name in schema and schema[name].storage == "payload",
                         )
                     )
                 done[kind] += 1

@@ -139,7 +139,7 @@ def test_lazy_linear_traces_and_finalizes_inventory() -> None:
     """nn.LazyLinear materializes during the ONE captured forward (A9)."""
 
     model = nn.Sequential(nn.LazyLinear(16), nn.ReLU())
-    log = tl.trace(model, torch.randn(2, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = tl.trace(model, torch.randn(2, 8), save=None)
     try:
         shapes = {pl.address: tuple(pl.shape) for pl in log._param_logs}
         assert shapes == {"0.weight": (16, 8), "0.bias": (16,)}
@@ -164,7 +164,7 @@ def test_lazy_linear_graph_stays_clean() -> None:
     log = tl.trace(
         nn.Sequential(nn.LazyLinear(16), nn.ReLU()),
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     try:
         assert log._num_ops == 2
@@ -178,7 +178,7 @@ def test_never_materialized_lazy_param_tolerated() -> None:
     """A declared-but-never-run lazy param stays zero-geometry, no crash (A9)."""
 
     model = _LazyUnused()
-    log = tl.trace(model, torch.randn(2, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = tl.trace(model, torch.randn(2, 8), save=None)
     try:
         by_address = {pl.address: pl for pl in log._param_logs}
         assert by_address["used.weight"].num_params == 64

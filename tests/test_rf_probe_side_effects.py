@@ -25,8 +25,7 @@ def _conv_trace() -> tuple[nn.Conv2d, object, object, object]:
     trace = tl.trace(
         model,
         inputs,
-        capture=capture,
-        save_mode="reference",
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
     )
     target = next(op for op in trace._layer_list if op.func_name == "conv2d")
     input_op = next(op for op in trace._layer_list if op.is_input)

@@ -13,16 +13,12 @@ backend's pinned CI leg), never hand-edited; a backend with no record reads
 
 from __future__ import annotations
 
-from dataclasses import fields as dataclass_fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from .._doctor_types import DoctorCheck, Severity, Status
 from .._io import _json
 from .registry import registered_backend_specs
-
-if TYPE_CHECKING:
-    from ..conformance._scorecard import PreviewScorecard
 
 __tl_layer__ = "L2"
 
@@ -58,43 +54,6 @@ def read_shipped_scorecard(backend: str) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return record if isinstance(record, dict) else None
-
-
-def scorecard_from_record(record: dict[str, Any]) -> PreviewScorecard:
-    """Rebuild a ``PreviewScorecard`` from a shipped record.
-
-    Only fields the dataclass declares are passed, so a record written by a
-    later scorecard version (extra keys) still loads; cells become
-    ``ScorecardCell`` rows.
-    """
-
-    from ..conformance._scorecard import PreviewScorecard, ScorecardCell
-
-    known = {field.name for field in dataclass_fields(PreviewScorecard)}
-    payload = {key: value for key, value in record.items() if key in known}
-    cell_fields = {field.name for field in dataclass_fields(ScorecardCell)}
-    payload["cells"] = tuple(
-        ScorecardCell(**{key: value for key, value in cell.items() if key in cell_fields})
-        for cell in record.get("cells", ())
-        if isinstance(cell, dict)
-    )
-    payload.setdefault("counts", {})
-    payload.setdefault("highest_tier", "")
-    for name in ("scorecard_version", "backend", "framework_version", "suite_version"):
-        payload.setdefault(name, "")
-    payload.setdefault("torchlens_version", "")
-    return PreviewScorecard(**payload)
-
-
-def backend_scorecards() -> tuple[PreviewScorecard, ...]:
-    """The shipped records of every registered backend that has one."""
-
-    cards = []
-    for spec in registered_backend_specs():
-        record = read_shipped_scorecard(spec.name)
-        if record is not None:
-            cards.append(scorecard_from_record(record))
-    return tuple(cards)
 
 
 def backend_scorecard_rows() -> tuple[DoctorCheck, ...]:
@@ -243,5 +202,5 @@ def _suggestion(
                 detail = str(cell.get("detail") or "")[:120]
                 return f"first failed cell: {cell.get('case_id')}{where}: {detail}".rstrip(": ")
     if record is None:
-        return f"run python -m torchlens.conformance.scorecard --backend {backend} --write on the pinned leg"
+        return f"run python -m tests.conformance.scorecard --backend {backend} --write on the pinned leg"
     return ""
