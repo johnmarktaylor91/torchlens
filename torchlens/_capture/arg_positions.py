@@ -1524,14 +1524,12 @@ FUNC_ARG_SPECS["layernorm"] = ArgSpec(
     positions=(0, 2, 3), tensor_kwargs=("input", "weight", "bias")
 )
 
-# group_norm: F.group_norm(input, num_groups, weight, bias, ...)
-# weight at pos 2, bias at pos 3
+# group_norm: F.group_norm(input, num_groups, weight, bias, ...); weight at pos 2, bias at pos 3
 FUNC_ARG_SPECS["groupnorm"] = ArgSpec(
     positions=(0, 2, 3), tensor_kwargs=("input", "weight", "bias")
 )
 
-# Loss functions: (input, target, weight=None, ...)
-# weight can be positional (pos 2) or kwarg
+# Loss functions: (input, target, weight=None, ...); weight can be positional (pos 2) or kwarg
 _LOSS_WITH_WEIGHT = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "target", "weight"))
 for _name in ["nllloss", "crossentropy", "nllloss2d"]:
     FUNC_ARG_SPECS[_name] = _LOSS_WITH_WEIGHT
@@ -1621,6 +1619,8 @@ FUNC_ARG_SPECS["autogradgrad"] = ArgSpec(
 FUNC_ARG_SPECS["autogradbackward"] = ArgSpec(
     positions=(0, 1, 2, 3), tensor_kwargs=("accumulate_into", "tensors", "grad_tensors", "inputs")
 )
+# Tensor.backward(self, gradient, retain_graph, create_graph, inputs); its grads are the ops above.
+FUNC_ARG_SPECS["backward"] = ArgSpec(positions=(0, 1, 4), tensor_kwargs=("gradient", "inputs"))
 FUNC_ARG_SPECS["where"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
 )
