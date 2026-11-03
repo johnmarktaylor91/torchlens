@@ -904,10 +904,11 @@ jobs:
       - name: Install the ${{ matrix.backend }} conformance extra
         # Nightly-only extras (pyproject conformance-*): the libraries the
         # ecosystem roster rows load their pretrained checkpoints through.
-        # Installed after the framework so the framework pin above wins.
+        # Resolved together with the framework install line so the framework
+        # pin holds (mlx-lm alone would pull the newest mlx over the 0.26.3 pin).
         if: ${{ matrix.conformance_extra }}
         run: |
-          uv pip install --system -e ".[${{ matrix.conformance_extra }}]"
+          uv pip install --system ${{ matrix.install }} -e ".[${{ matrix.conformance_extra }}]"
 
       - name: Verify the ${{ matrix.backend }} runtime imports
         # A missing or import-broken framework must fail the leg here, not

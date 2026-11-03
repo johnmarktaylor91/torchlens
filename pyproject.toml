@@ -159,7 +159,7 @@ tensorflow = ["torchlens[tf]"]
 # of the pin. mlx-lm stays at 0.26.x because later releases require
 # mlx>=0.29, outside the mlx extra's band.
 conformance-mlx = ["mlx-lm==0.26.4"]
-conformance-tf = ["keras-hub==0.32.0"]
+conformance-tf = ["keras-hub==0.32.0; python_version >= '3.11'"]
 # tensorboard backs the tl.export.tensorboard exporter (SummaryWriter comes
 # from torch.utils.tensorboard, which requires the `tensorboard` dist at call
 # time). The extra gives the exporter a declared install path, so its test
