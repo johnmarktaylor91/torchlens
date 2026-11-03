@@ -36,6 +36,7 @@ or mark the cell to make it pass (the validation-integrity rule in
 | `test_matrix.py` | the cell universe, one test per oracle, and the pins that tie the feature axis to `tests/interaction_matrix.json` |
 | `conftest.py` | the per-cell result cache and the xdist grouping |
 | `test_cell_tmp.py` | pins that a cell removes its temp directory when it ends |
+| `test_f7_intervention_persistence.py` | the saved intervention recipe (io.1), one cell per promise: a built-in edit recipe reruns to the live activations, loads equal to the live recipe, a user callable saves as a disclosed placeholder, every rerun door refuses it, and both saves and loads run their validators |
 
 ## The cell universe
 

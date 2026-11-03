@@ -344,8 +344,8 @@ with its own version line and its own loader; a column would couple the two vers
 - `Trace.save_intervention` stays the separate-recipe door: it writes the same
   `intervention.json` content as a one-file artifact with `kind: intervention`
   (`manifest.json` plus `intervention.json`), replacing today's bare `spec.json`.
-- `tests/behaviour/_fill_intervention.py` asserts `RECIPE_PERSISTS = False` until the writer
-  flips it.
+- The behaviour net asserts the persisted recipe: `tests/behaviour/_fill_intervention.py` (the
+  matrix check) and `tests/behaviour/test_f7_intervention_persistence.py` (one cell per promise).
 
 ## 9. Validation: schema-directed decode plus cross-record invariants (late.21)
 
@@ -614,7 +614,7 @@ and live-side keys, io.2 settle-at-save, `PHASE_TIMING_KEY_SOURCE`, the 2.x refu
 1. Writer stream: `schema.py`, `values.py`, `payloads.py`, then `writer.py` behind a private
    flag; the reload check uses a minimal decoder in `values.py` until the reader lands.
    Regenerates the bindings page when it adds the io.2 and backends.2 columns (bumps
-   `tlspec_version`). Flips `RECIPE_PERSISTS`.
+   `tlspec_version`). The behaviour net's F7 cells assert the persisted recipe.
 2. Reader stream: `reader.py`, `validate.py` (moving the two lists of section 9), then
    switches `tl.load` and deletes section 10's modules and tests in the same change set that
    reads the regenerated goldens.
