@@ -88,7 +88,11 @@ def load_by_root_manifest(bundle_path: Path) -> Any:
         return NOT_ROUTED
     # One refusal for every saved format: a file an earlier major
     # release wrote is never read (no compatibility reader is carried).
-    raise_if_saved_by_older_major(candidate.get("torchlens_version"), str(bundle_path))
+    from .. import __version__ as _running_version
+
+    raise_if_saved_by_older_major(
+        candidate.get("torchlens_version"), str(bundle_path), running_version=_running_version
+    )
     if candidate.get("bundle_format") == "merged-directory":
         from .._merged._artifact import load_merged
 

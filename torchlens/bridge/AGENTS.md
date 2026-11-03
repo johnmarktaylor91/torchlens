@@ -156,8 +156,9 @@ optional dependency.
   over SAVED `.tlspec` artifacts + environment: `torchlens_doctor`,
   `torchlens_api_map`, `torchlens_overview`, `torchlens_dump`,
   `torchlens_explain`, `torchlens_query_sites`, `torchlens_payload_stats`,
-  `torchlens_compare`, `torchlens_schema`, and the F03 ledger family
-  (`torchlens_ledger_overview`/`_entry`/`_evidence`). The removed
+  `torchlens_compare`, `torchlens_schema`. The F03 ledger family
+  (`torchlens_ledger_overview`/`_entry`/`_evidence`) was removed with the
+  experiment ledger on 1 Nov 2026 (`docs/reference/deprecations.md`). The removed
   `torchlens_load_overview`/`torchlens_agent_dump` spellings were renamed to
   `torchlens_overview`/`torchlens_dump` (F29 remove-and-rename, no aliases).
   The pure layer (`TOOL_SPECS`/`call_tool`) has NO mcp

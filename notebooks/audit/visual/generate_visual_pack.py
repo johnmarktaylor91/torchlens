@@ -376,14 +376,6 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
         _container_trace("tuple_output"),
     ),
     VacuousDemoGuard(
-        "show_containers:cluster",
-        "nested_containers",
-        {},
-        {"show_containers": "cluster"},
-        "nested-cluster",
-        _container_trace("nested_containers"),
-    ),
-    VacuousDemoGuard(
         "show_containers:nodes",
         "nested_containers",
         {},
@@ -394,8 +386,8 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
     VacuousDemoGuard(
         "container_max_inline",
         "tuple_output",
-        {"show_containers": "auto", "container_max_inline": 12},
-        {"show_containers": "auto", "container_max_inline": 2},
+        {"show_containers": "collapsed", "container_max_inline": 12},
+        {"show_containers": "collapsed", "container_max_inline": 2},
         "tuple-inline",
         _container_trace("tuple_output"),
     ),
@@ -622,9 +614,7 @@ AXES: dict[str, str] = {
     "buffers:meaningful": "show_buffers='meaningful' (default)",
     "buffers:always": "show_buffers='always'",
     "containers:labels": "show_containers='labels'",
-    "containers:cluster": "show_containers='cluster' (single-owner required; falls back to labels)",
     "containers:collapsed": "show_containers='collapsed' homogeneous-container merge",
-    "containers:auto": "show_containers='auto'",
     "containers:nodes": "show_containers='nodes' container overlay nodes (renderer-internal)",
     "container_max_inline": "container_max_inline threshold",
     "module_focus": "module= submodule focus with boundary stubs",
@@ -997,18 +987,17 @@ SECTIONS: list[Section] = [
         [
             Page(
                 label="c1_containers",
-                title="show_containers: labels / collapsed / nodes (and the cluster fallback)",
+                title="show_containers: labels / collapsed / nodes",
                 caption=(
                     "Container structure (dict/tuple inputs and outputs) is captured when the trace enables "
                     "it (replayable=True for final-output structure, capture_container_structure="
                     "True for the full registry). 'labels' annotates edges into container leaves with their "
-                    "key/index. 'collapsed' merges a HOMOGENEOUS container bigger than container_max_inline "
-                    "into one dashed summary node ('tuple x4'). 'nodes' (renderer-internal mode, not yet in "
-                    "the public option list -- FINDINGS F4) draws explicit container overlay nodes "
-                    "('dict[2] (model input)', 'dict[2] (call output)') tied to their members by dashed, "
-                    "non-constraining edges. 'cluster' requires all leaves to share one module owner and "
-                    "otherwise FALLS BACK to labels -- no known model currently produces a cluster box "
-                    "(FINDINGS F3), so the fallback is what you will actually see.\n"
+                    "key/index. 'collapsed' adds the HOMOGENEOUS-container merge: a container bigger than "
+                    "container_max_inline folds into one dashed summary node ('tuple x4'). 'nodes' adds "
+                    "explicit container overlay nodes ('dict[2] (model input)', 'dict[2] (call output)') "
+                    "tied to their members by dashed, non-constraining edges, plus a dotted box around an "
+                    "op-returned tuple whose leaves share one module owner (none of these models has one, "
+                    "so no box appears here; the GPT-2 split tuple is the known case).\n"
                     "CHECK: dict keys ('a'/'b', 'payload.a'/'payload.b') and tuple indices are correct; dashed "
                     "container ties must not be mistaken for data flow (no arrowheads, no layout pull)."
                 ),
@@ -1042,16 +1031,15 @@ SECTIONS: list[Section] = [
                         trace_builder=_structure_trace("nested_containers"),
                     ),
                     Panel(
-                        "dict output -- 'cluster' (falls back to labels)",
+                        "dict output -- 'nodes' (no single module owner, so no dotted box)",
                         "dict_output",
-                        kwargs={"show_containers": "cluster"},
+                        kwargs={"show_containers": "nodes"},
                         trace_variant="container",
                         trace_builder=_container_trace("dict_output"),
                     ),
                 ],
                 covers=[
                     "containers:labels",
-                    "containers:cluster",
                     "containers:collapsed",
                     "containers:nodes",
                     "node:container",
@@ -1061,9 +1049,9 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="c2_container_max_inline",
-                title="container_max_inline: when 'auto' stops inlining",
+                title="container_max_inline: when 'collapsed' stops inlining",
                 caption=(
-                    "With show_containers='auto' (or 'collapsed'), homogeneous containers with at most "
+                    "With show_containers='collapsed' (or 'nodes'), homogeneous containers with at most "
                     "container_max_inline leaves stay inline; larger ones merge into a dashed summary node. "
                     "LEFT: default threshold (12) keeps the 4-tuple's leaves inline with index labels. "
                     "RIGHT: threshold 2 forces the same 4-tuple to merge.\n"
@@ -1074,19 +1062,19 @@ SECTIONS: list[Section] = [
                     Panel(
                         "container_max_inline=12 (default) -- inline",
                         "tuple_output",
-                        kwargs={"show_containers": "auto", "container_max_inline": 12},
+                        kwargs={"show_containers": "collapsed", "container_max_inline": 12},
                         trace_variant="container",
                         trace_builder=_container_trace("tuple_output"),
                     ),
                     Panel(
                         "container_max_inline=2 -- merged",
                         "tuple_output",
-                        kwargs={"show_containers": "auto", "container_max_inline": 2},
+                        kwargs={"show_containers": "collapsed", "container_max_inline": 2},
                         trace_variant="container",
                         trace_builder=_container_trace("tuple_output"),
                     ),
                 ],
-                covers=["container_max_inline", "containers:auto"],
+                covers=["container_max_inline"],
             ),
             Page(
                 label="c3_module_focus",

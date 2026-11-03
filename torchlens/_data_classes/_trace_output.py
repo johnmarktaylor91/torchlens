@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._output_slot import read_output
+
 
 class TraceOutputMixin:
     """Expose the forward's exact return object, held in memory only.
@@ -34,7 +36,5 @@ class TraceOutputMixin:
             live forward; ``output_capture_stopped`` when ``stop_after=``
             ended the capture before the model returned.
         """
-
-        from ..recording.types import read_output
 
         return read_output(self._output_slot, owner="Trace")

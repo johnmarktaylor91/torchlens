@@ -132,7 +132,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # dedup split to _op_dedup.py (T77) lands on the merged tree alongside
     # the F10 deletions; re-keyed down to the next 50-line step above the
     # merged measurement (4794).
-    "torchlens/_data_classes/op.py": 4700,
+    # 4700 -> 3650 (2026-11-01 record rebuild, lane E): Op logic bodies moved
+    # verbatim to _op_save.py, _op_relations.py, _op_cost.py, _labels.py,
+    # intervention/_op_edits.py and receptive_field/_op_fields.py; re-keyed
+    # down to the next 50-line step above the measurement (3635).
+    "torchlens/_data_classes/op.py": 3650,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -180,7 +184,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # are unchanged. Harness bundles phase 2 moved the bundle-container
     # loaders to _io/bundle_container.py and re-keyed the row back down to
     # the 4450 baseline (4700 -> 4450).
-    "torchlens/_io/bundle.py": 4450,
+    "torchlens/_io/bundle.py": 4350,
     "torchlens/_io/runnable_load.py": 3850,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
@@ -314,7 +318,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # capability warning stay here); measured 4968. Debloat target: 3450.
     # 5000 -> 4700 (compat table): the attribute-only capability probes moved
     # to declarative rows in _utils/_torch_compat_table.py; measured 4676.
-    "torchlens/_utils/_torch_compat.py": 4700,
+    "torchlens/_utils/_torch_compat.py": 4600,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
@@ -400,7 +404,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
     "torchlens/_visualization/auto_collapse.py": 2150,
-    "torchlens/validation/exemptions.py": 3000,
+    "torchlens/validation/exemptions.py": 2850,
     # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
     # conditional relabel epilogue plus intervention/halt predicate
@@ -421,16 +425,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # (measured 2338). Re-keyed 2350 -> 2050 at the Bundle split: label
     # heuristics and member coercion moved to bundle/_labels.py and
     # bundle/_members.py, the helper table went (measured 2008).
-    # Re-keyed 2400 -> 2100 at the F16/T60 fix cycle (2026-08-29): the file
-    # crossed its ceiling (2406), so OpAccessor/LayerAccessor split to
-    # _layer_accessors.py (the _layer_spec.py precedent); layer.py re-exports
-    # both names. 2097 measured, next 50-line step.
-    # 2100 -> 2150 (2026-08-29 F10 re-reconcile): merge union -- the F16
-    # accessor-split base measured 2097 and the F10 lovely Layer card
-    # (__str__/__repr__/_detached_from_trace; the accessor delta re-landed
-    # in _layer_accessors.py) adds +36; the union measures 2133. Next
-    # 50-line step, conscious raise, not silent regrowth.
-    "torchlens/_data_classes/layer.py": 2150,
     # Re-keyed 2750 -> 2500 at the F03 T69 fix microlane (2026-08-29): the
     # module-level delta/compare helper seam (delta_map/norm_delta/
     # output_delta/compare/aligned_pairs/show_diff + shared metric

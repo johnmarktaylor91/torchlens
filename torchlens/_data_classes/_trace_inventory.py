@@ -11,8 +11,12 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from .._quantities import Bytes
+from ._site_key import parse_site_key
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     import pandas as pd
 
     from .trace import Trace
@@ -62,8 +66,6 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
         (legacy pre-site-key artifact) — consistent with the L1 accessors,
         never a silently empty table.
     """
-
-    from ._site_key import parse_site_key
 
     pd = _require_pandas()
     ops = list(trace._layer_list)
@@ -132,7 +134,33 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
     )
 
 
-def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
+def _capture_section(
+    trace: Trace, poison_facts: Mapping[str, Any], advisories: Any
+) -> dict[str, Any]:
+    """Return the ``capture`` section of the bill of materials."""
+
+    outcome = getattr(trace, "outcome", None)
+    return {
+        "backend": trace._provenance_backend,
+        "model_class_name": trace._source_class_name,
+        "outcome_status": getattr(getattr(outcome, "status", None), "value", None),
+        "capture_verified": trace._provenance_verified,
+        "structure_only": trace._options_structure_only,
+        "grouping": trace._options_grouping,
+        "save_mode": trace._options_save_mode,
+        "capture_duration": trace._provenance_duration,
+        **poison_facts,
+        "advisories": advisories,
+    }
+
+
+def build_bill_of_materials(
+    trace: Trace,
+    *,
+    core: Any,
+    poison_facts: Mapping[str, Any],
+    advisories: Any,
+) -> dict[str, Any]:
     """Build the inventory of what one trace actually contains.
 
     Every figure is read from fields the trace already carries; sections
@@ -143,6 +171,12 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
     ----------
     trace:
         Completed trace.
+    core:
+        The trace's FactCore (``report._factcore.factcore(trace)``).
+    poison_facts:
+        Capture-honesty poison facts for the ``capture`` section.
+    advisories:
+        Capture advisories for the ``capture`` section.
 
     Returns
     -------
@@ -151,33 +185,16 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
         ``buffers``, ``activations``, ``backward``, and ``annotations``.
     """
 
-    from .._quantities import Bytes
-
-    outcome = getattr(trace, "outcome", None)
-    capture_duration = trace._provenance_duration
-    from .._capture_honesty import capture_advisories, poison_facts
-    from ..report._factcore import factcore
-
     # BOM is a THIN PROJECTION of FactCore (sumfam item 14 / D16): its
     # counts and parameter facts read the one numbers substrate; its
     # payload figures keep the D8 retained_now scope. It mints nothing.
-    core = factcore(trace)
+    # ``core``, ``poison_facts`` and ``advisories`` arrive from the caller
+    # (``report._trace_facts``) so this L1 module imports nothing above itself.
     memory_facts = core.memory
 
     logged_values = (getattr(trace, "annotations", {}) or {}).get("logged_values", {})
     return {
-        "capture": {
-            "backend": trace._provenance_backend,
-            "model_class_name": trace._source_class_name,
-            "outcome_status": getattr(getattr(outcome, "status", None), "value", None),
-            "capture_verified": trace._provenance_verified,
-            "structure_only": trace._options_structure_only,
-            "grouping": trace._options_grouping,
-            "save_mode": trace._options_save_mode,
-            "capture_duration": capture_duration,
-            **poison_facts(trace),
-            "advisories": capture_advisories(trace),
-        },
+        "capture": _capture_section(trace, poison_facts, advisories),
         "graph": {
             # The explicit counts vocabulary (sumfam D3): both grains print
             # under their names, never a bare "operations".

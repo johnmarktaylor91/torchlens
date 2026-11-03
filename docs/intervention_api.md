@@ -21,6 +21,7 @@ Selectors resolve against completed `Trace.layers` records.
 | `tl.module` | `module(address: str)` | Match a module output boundary. |
 | `tl.label_contains` | `label_contains(substring: str)` | Case-insensitive label substring search. |
 | `tl.label_matches` | `label_matches(pattern: str)` | Case-sensitive `re.search` over labels. |
+| `tl.all_sites` | `all_sites()` | Every site; the named form of `tl.label_matches(".*")`. `tl.all_sites() - region` is the complement of `region` in the whole trace. |
 | `tl.where` | `where(predicate, *, name_hint=None)` | Predicate over layer pass records; non-portable. |
 | `tl.in_module` | `in_module(address: str)` | Match sites contained in a module address. |
 | `tl.grad_fn` | `grad_fn(name=None, *, label=None, is_custom=None)` | Backward grad_fn by autograd class name, label substring or custom flag (backward sites only). |

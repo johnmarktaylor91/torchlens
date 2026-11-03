@@ -109,3 +109,64 @@ def test_validate_forward_returns_the_callers_streams() -> None:
     _seed_all(11)
     assert tl.validate(model, x, scope="forward", seed=0)
     assert _draw() == expected
+
+
+def _noisy() -> nn.Module:
+    """A train-mode dropout model: its forward draws from the torch stream on every run."""
+    return nn.Sequential(nn.Linear(4, 8), nn.Dropout(0.5), nn.Linear(8, 2)).train()
+
+
+def test_validate_of_a_model_that_draws_returns_the_callers_streams() -> None:
+    """A validation whose ground-truth and replay runs themselves draw random numbers
+    (train-mode dropout) still hands the caller's streams back unchanged."""
+    model = _noisy()
+    x = torch.randn(2, 4)
+    _seed_all(11)
+    expected = _draw()
+    _seed_all(11)
+    assert tl.validate(model, x, scope="forward", seed=0)
+    assert _draw() == expected
+
+
+def test_lower_level_forward_entry_returns_the_callers_streams() -> None:
+    """``torchlens.validation.validate_forward_pass`` goes through the same door."""
+    from torchlens.validation import validate_forward_pass
+
+    model = _noisy()
+    x = torch.randn(2, 4)
+    _seed_all(11)
+    expected = _draw()
+    _seed_all(11)
+    assert validate_forward_pass(model, x, seed=0)
+    assert _draw() == expected
+
+
+def test_lower_level_backward_entry_returns_the_callers_streams() -> None:
+    """``torchlens.validation.validate_backward_pass`` goes through the same door."""
+    from torchlens.validation import validate_backward_pass
+
+    model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
+    x = torch.randn(2, 4)
+    _seed_all(11)
+    expected = _draw()
+    _seed_all(11)
+    assert validate_backward_pass(model, x, seed=0)
+    assert _draw() == expected
+
+
+def test_trace_method_validation_returns_the_callers_streams() -> None:
+    """``Trace.validate_forward_pass`` replays every op under its recorded RNG state and
+    leaves the caller's streams where they were."""
+    model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
+    x = torch.randn(2, 4)
+    # Replay needs the saved activations and arguments; a default capture
+    # keeps neither and reports an unverified status instead of a verdict.
+    trace = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
+    )
+    ground_truth = model(x).detach().clone()
+    _seed_all(11)
+    expected = _draw()
+    _seed_all(11)
+    assert trace.validate_forward_pass([ground_truth]) is True
+    assert _draw() == expected

@@ -11,6 +11,7 @@ from torch import nn
 
 from torchlens.backends.registry import BackendUnsupportedError
 
+from ..._output_slot import stopped
 from ...backends.registry import (
     CaptureBackend,
     get_backend_spec,
@@ -572,7 +573,6 @@ def _finalize_halted_trace(
     self.stop_reason = halt_exc.reason
     self._graph_stop_frontier = halt_exc.reason
     self.transformed_output = None
-    from ...recording.types import stopped
 
     self._output_slot = stopped(halt_exc.reason)
     if not postprocess:

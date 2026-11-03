@@ -338,7 +338,7 @@
   and key (member lists only where members differ), and `trace.draw(graph="backward", theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
-  naming-session ratification; doc of record `docs/reference/experiment_ledger.md`):
+  naming-session ratification; doc of record `docs/reference/experiments.md`):
   the Bundle is the MATERIAL record — persisted random `bundle_id` (never a
   content hash), per-member `member_construction` origin anchors (closed
   constructed/added/forked/varied/swept/loaded vocabulary), and the
@@ -366,19 +366,22 @@
   per-candidate `member_effect_table_v1` (released/refused/failed included)
   persists and `bundle.effects()` serves it; `bundle.map(fn)` keys released candidates as `"unmeasured"` (member-axis
   `rank_changes`, explicit session-only tier-c `.to_selection()`).
+  `torchlens.experiment.sweep_grid(baseline, axes=, metric=, retain=, edit=)`
+  runs the SAME engine over named axes (`axes={"layer": {...}, "position":
+  {...}}`, sites or at most one axis of edits, cells named by comma-joined
+  value names) and returns a `SweepGrid`: float64 `values` shaped by the axes
+  with NaN for refused or failed cells, one `tl.experiment.GridCell` per cell
+  (`candidate_id`, `coords`, `status`, `value`, `error`, `member_name`); a zero-site or undeclared multi-site
+  cell is a REFUSED cell (`grid_cell_unresolved` / `grid_cell_multi_site`)
+  while the rest run, axis-shape mistakes refuse the whole grid, the axes
+  ride in the operation's params and `bundle.effects().to_grid()` rebuilds
+  the grid after load (ruled 1 Nov 2026).
   `head_ablation_candidates` is the module-scoped v-facet sugar (GQA/MQA
-  refuses typed; hand-written-hook oracle beside it). The experiment LEDGER
-  (`torchlens.experiment.ledger(path, hypothesis=, metric=)`) is the opt-in
-  SEMANTIC record: ContextVar-armed, single-writer, append-only hash-chained
-  JSONL with per-event fsync (kill -9 recovers exactly k events, torn tail
-  disclosed, interior tamper refuses), three-layer honesty (actor-stamped
-  interpretive fields, `declared_at_seq`, verdict basis or "asserted; no
-  recorded basis", closed supports/refutes/inconclusive/not_assessed
-  vocabulary, lint-never-block), ONE material step per top-level operation,
-  quarantine-not-raise on post-material write failure (the material result
-  returns unharmed; `on_record_error="raise"` opts out), and read-only
-  reading via `tl.experiment.read_ledger(path)` (`.overview`, `.entry(id)`,
-  `.evidence(id, index)`; MCP: `torchlens_ledger_*`) over the mid-experiment-fresh artifact.
+  refuses typed; hand-written-hook oracle beside it). The experiment ledger
+  (the opt-in SEMANTIC record and its three MCP reader tools) was REMOVED on
+  1 Nov 2026: the Bundle is the record, and each old ledger spelling raises
+  the typed `facade_redirect` refusal (`docs/reference/deprecations.md`,
+  "Experiment Ledger").
 - CHECKPOINT LIVE-REF GUARD (A-CKPT; spellings DOCUMENTED-UNSTABLE): parameter reads resolve
   through LIVE model handles (or nothing after deserialization), never capture-time bytes, so
   EVERY cross-member parameter value/difference/trajectory read on a Bundle (`SuperParam` views
@@ -937,8 +940,11 @@
   the seed family) and `tl.between(sources, sinks)` (the executed sub-DAG on
   at least one directed source-to-sink path, endpoints included; operands
   accept lists; no path = EMPTY selection, disclosure not error) select by
-  STRUCTURAL POSITION — whole-site masks, `relation="exact"`, element masks
-  never shrink a graph region (family semantics), PARAM/EDGE operands refuse
+  STRUCTURAL POSITION — whole-site masks, `relation="exact"`, a partial
+  element mask never shrinks a graph region while a site whose mask is EMPTY
+  (left by `-` or `~`) seeds nothing (so `tl.neighborhood(tl.all_sites() -
+  region, ...)` grows from the sites outside `region`; `trace.subgraph` takes
+  the same member set), PARAM/EDGE operands refuse
   `selection_kind_incompatible`. Both are pure functions over the ONE
   executed-DAG substrate (`selection_graph._TraceGraph`, adjacency shared
   verbatim with the influence-geometry path machinery) — a future graph-

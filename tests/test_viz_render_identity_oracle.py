@@ -374,7 +374,7 @@ def _cases() -> tuple[OracleCase, ...]:
             {
                 "module": "encoder",
                 "depth": 1,
-                "show_containers": "cluster",
+                "show_containers": "labels",
                 "container_max_inline": 1,
                 "show_input_transform_summary": True,
                 "theme": "paper",

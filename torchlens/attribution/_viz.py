@@ -8,7 +8,7 @@ from typing import Any, Literal, TypeAlias
 import torch
 from torch import Tensor
 
-from torchlens.attribution._core import Attribution, AttributionError
+from torchlens.attribution._result import Attribution, AttributionError
 
 _OverlayReduce: TypeAlias = Literal["abs_sum", "abs_mean", "sum", "max"]
 _DOCS_POINTER = "See docs/reference/attribution.md, section Attribution graphs."

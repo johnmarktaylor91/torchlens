@@ -1577,48 +1577,48 @@ recorded: 2026-11-01T11:30:18.495655+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: C2 options restructure: the trace.output door and its _output_slot store join the Trace surface
+reason: the fused attention fast-path hold records a fused_attention_fastpath_held_off capture advisory on attention models (sfm-capture, carried by the frozen-grad stack)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 96bb8706926faeeced0670d504a174c615b895bf (dirty)
-recorded: 2026-11-02T00:45:02.567164+00:00
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (dirty)
+recorded: 2026-11-02T09:21:43.227877+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: C2 options restructure: the trace.output door and its _output_slot store join the Trace surface
+reason: the fused attention fast-path hold records a fused_attention_fastpath_held_off capture advisory on attention models (sfm-capture, carried by the frozen-grad stack)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 96bb8706926faeeced0670d504a174c615b895bf (dirty)
-recorded: 2026-11-02T00:45:02.591896+00:00
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (dirty)
+recorded: 2026-11-02T09:21:43.467544+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: C2 options restructure: the trace.output door and its _output_slot store join the Trace surface
+reason: the fused attention fast-path hold records a fused_attention_fastpath_held_off capture advisory on attention models (sfm-capture, carried by the frozen-grad stack)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 96bb8706926faeeced0670d504a174c615b895bf (dirty)
-recorded: 2026-11-02T00:45:02.616420+00:00
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (dirty)
+recorded: 2026-11-02T09:21:43.686708+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: C2 options restructure: the trace.output door and its _output_slot store join the Trace surface
+reason: the fused attention fast-path hold records a fused_attention_fastpath_held_off capture advisory on attention models (sfm-capture, carried by the frozen-grad stack)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 96bb8706926faeeced0670d504a174c615b895bf (dirty)
-recorded: 2026-11-02T00:45:02.640834+00:00
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (dirty)
+recorded: 2026-11-02T09:21:43.920178+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: C2 options restructure: the trace.output door and its _output_slot store join the Trace surface
+reason: the fused attention fast-path hold records a fused_attention_fastpath_held_off capture advisory on attention models (sfm-capture, carried by the frozen-grad stack)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 96bb8706926faeeced0670d504a174c615b895bf (dirty)
-recorded: 2026-11-02T00:45:02.664556+00:00
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (dirty)
+recorded: 2026-11-02T09:21:44.156643+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: C2 options restructure: the trace.output door and its _output_slot store join the Trace surface
+reason: the fused attention fast-path hold records a fused_attention_fastpath_held_off capture advisory on attention models (sfm-capture, carried by the frozen-grad stack)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 96bb8706926faeeced0670d504a174c615b895bf (dirty)
-recorded: 2026-11-02T00:45:02.691098+00:00
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (dirty)
+recorded: 2026-11-02T09:21:44.399468+00:00

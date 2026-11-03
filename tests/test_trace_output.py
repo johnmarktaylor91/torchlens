@@ -136,7 +136,7 @@ def test_truncated_live_run_has_no_forward_return(fast: bool) -> None:
         torch.ones(1, 3),
         capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
-    site = next(op.label for op in trace.ops if op.type == "linear")
+    site = next(layer.layer_label for layer in trace.layers if layer.layer_type == "linear")
     result = trace.run(inputs=torch.full((1, 3), 2.0), fast=fast, until=site)
     with pytest.raises(PayloadUnavailableError) as exc_info:
         _ = result.trace.output

@@ -39,6 +39,7 @@ from ..._ir.predicate import _DEFERRED_VALUE, RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import RawGraphWorkspace
+from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
@@ -982,11 +983,11 @@ class MLXBackend:
             intervention_plan, halt_selector = resolve(intervene, halt, self.mx)
             if grad_options is not None:
                 raise BackendUnsupportedError(
-                    "MLX backend cannot combine grad_options with intervene=/halt=: "
-                    "the derived-gradient replay re-runs the model without the "
-                    "intervention surface, so its output-divergence oracle would "
-                    "always refuse. Capture the intervened trace and the derived "
-                    "gradients in separate calls."
+                    "MLX backend cannot combine grad_options with intervene=/halt=: the "
+                    "derived-gradient replay re-runs the model without the intervention "
+                    "surface, so its output-divergence oracle would always refuse. Capture "
+                    "the intervened trace and the derived gradients in separate calls.",
+                    code="intervention_with_derived_grads_unsupported",
                 )
         transform_type = _mlx_traced_transform_type(self.mx)
         if transform_type is not None and type(model) is transform_type:
@@ -994,7 +995,8 @@ class MLXBackend:
                 "MLX capture entry is an mx.compile/mx.grad/mx.vmap traced-transform "
                 "wrapper. Traced replays bypass the eager capture surface, so logging "
                 "them would silently under-capture. Trace the eager mlx.nn.Module or "
-                "plain Python callable instead of its compiled/transformed wrapper."
+                "plain Python callable instead of its compiled/transformed wrapper.",
+                code="traced_transform_entry_unsupported",
             )
         compiled_attribute_paths = _find_mlx_compiled_attributes(model, transform_type)
         module_tree = discover_mlx_module_tree(model)
@@ -1072,11 +1074,10 @@ class MLXBackend:
         trace._pre_forward_rng_states = None
         trace._options_seed = cast(int, seed) if seed is not None else random.randint(1, 4294967294)
         self.tensor_store.clear()
-        # R07: the try owns the wrap call itself -- a raise anywhere between
-        # wrapper install and the forward (session prep, input normalization,
-        # source labeling) used to strand the process-global MLX wrappers
-        # because the unwrap-owning finally had not been entered yet.
-        # ``unwrap`` on a partially-installed (or empty) registry is safe.
+        # R07: the try owns the wrap call itself -- a raise anywhere between wrapper
+        # install and the forward (session prep, input normalization, source labeling)
+        # used to strand the process-global MLX wrappers because the unwrap-owning
+        # finally had not been entered yet. ``unwrap`` on a partial registry is safe.
         try:
             self.wrap(model, module_tree if use_object_module else None)
             self.prepare_model_session(trace, model)
@@ -1117,7 +1118,6 @@ class MLXBackend:
                     stacklevel=2,
                 )
             trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
-            from ...recording.types import returned, stopped
 
             if halt_signal is not None:
                 trace._output_slot = stopped(halt_signal.reason)
@@ -1334,7 +1334,7 @@ class MLXBackend:
                     )
                 )
             if grad_options.intermediate_grads and tap_observer is not None:
-                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+                from ..._data_classes.derived_grad import set_intermediate_derived_grads
 
                 set_intermediate_derived_grads(
                     trace,
@@ -1791,17 +1791,17 @@ class MLXBackend:
         if not self.is_tensor(replacement):
             raise BackendUnsupportedError(
                 f"MLX intervention {plan.applier.identity!r} returned "
-                f"{type(replacement).__name__}; hooks must return an mx.array."
+                f"{type(replacement).__name__}; hooks must return an mx.array.",
+                code="intervention_result_invalid",
             )
-        if self._shape(replacement) != self._shape(leaf) or self._dtype(replacement) != self._dtype(
-            leaf
-        ):
+        same_shape = self._shape(replacement) == self._shape(leaf)
+        if not same_shape or self._dtype(replacement) != self._dtype(leaf):
             raise BackendUnsupportedError(
                 f"MLX intervention {plan.applier.identity!r} changed the output "
                 f"from shape={self._shape(leaf)} dtype={self._dtype(leaf)} to "
                 f"shape={self._shape(replacement)} dtype={self._dtype(replacement)}; "
-                "the MLX preview supports shape- and dtype-preserving "
-                "interventions only."
+                "the MLX preview supports shape- and dtype-preserving interventions only.",
+                code="intervention_result_invalid",
             )
         return replacement
 

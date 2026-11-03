@@ -29,6 +29,11 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureNotActiveError, original_exception
+from .._output_slot import (
+    forward_failed as output_forward_failed,
+    returned as output_returned,
+    stopped as output_stopped,
+)
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
@@ -48,14 +53,7 @@ from .options import (
     _RecordingConfig,
     _resolve_recording_config,
 )
-from .types import (
-    CaptureSpec,
-    Recording,
-    _mark_recording_halted,
-    forward_failed as output_forward_failed,
-    returned as output_returned,
-    stopped as output_stopped,
-)
+from .types import CaptureSpec, Recording, _mark_recording_halted
 
 
 def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
@@ -573,6 +571,9 @@ class Recorder:
             partial_build_failed = False
             try:
                 partial = self._mark_recording_failed(trace, original_exception(exc))
+                object.__setattr__(
+                    partial, "_output", output_forward_failed(safe_exception_str(exc))
+                )
                 self._failed = True
                 self._recording = partial
                 if forward_disposition == "attach_partial":

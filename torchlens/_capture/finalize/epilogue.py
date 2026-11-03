@@ -25,6 +25,7 @@ from ..._data_classes.trace import (
 )
 from ..._errors import InvalidArgumentError
 from ..._utils.display import _vprint, ensure_trace_visualizer_dir
+from ...errors import TorchLensWarning
 from .._episode_ledger import (
     EPISODE_ANNOTATIONS_KEY,
     EpisodeLedger,
@@ -241,8 +242,6 @@ def _check_stop_after_fired(trace: Trace, facts: dict[str, Any]) -> None:
         stop_annotations.setdefault("unmatched_capture_selectors", []).append(
             {"slot": "stop_after", "selector": site_repr}
         )
-    from ...errors import TorchLensWarning
-
     warnings.warn(
         TorchLensWarning(
             f"stop_after={site_repr} never fired; the capture ran the full "
@@ -259,7 +258,6 @@ def _warn_once_nonfinite_detected(trace: Trace) -> None:
     """Emit the one ``on_nonfinite="warn"`` warning when any op went non-finite."""
 
     from ..._data_classes._nonfinite import nonfinite_op_labels
-    from ...errors import TorchLensWarning
 
     labels = nonfinite_op_labels(trace)
     if not labels:
@@ -284,10 +282,8 @@ def _warn_module_filter_zero_saved(trace: Trace, module_filter: Any) -> None:
         and module_filter_suppressed > 0
         and int(trace._num_saved_ops or 0) == 0
     ):
-        from ...errors import TorchLensWarning as _TorchLensWarning
-
         warnings.warn(
-            _TorchLensWarning(
+            TorchLensWarning(
                 f"module_filter suppressed every selected payload "
                 f"({module_filter_suppressed} ops): the returned trace has full "
                 "metadata but ZERO saved activations. module_filter is a third "
@@ -368,8 +364,6 @@ def attach_failed_episode_ledger(exc: BaseException, resolved: ResolvedEpisode) 
         ledger = EpisodeLedger(header, rows)
         trace.annotations[EPISODE_ANNOTATIONS_KEY] = ledger.to_payload()
     except Exception as attach_exc:  # noqa: BLE001 - never mask the user's failure
-        from ...errors import TorchLensWarning
-
         warnings.warn(
             "episode ledger could not be attached to the failed partial "
             f"product: {type(attach_exc).__name__}: {attach_exc}",
