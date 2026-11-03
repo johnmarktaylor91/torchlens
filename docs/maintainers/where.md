@@ -5,14 +5,14 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1411 modules, 632545 lines, 0 modules without a docstring.
+83 packages, 1411 modules, 632548 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
 | `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 72 | 31983 |
-| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1243 |
+| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1246 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25089 |
@@ -178,12 +178,12 @@ TorchLens - extract outs and metadata from PyTorch models. (72 modules, 31983 li
 
 ### `torchlens._autoroute`
 
-TorchLens auto-routing registries. (6 modules, 1243 lines)
+TorchLens auto-routing registries. (6 modules, 1246 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens auto-routing registries. | 7 |
-| `_builtin_input` | Built-in input auto-route detectors. | 57 |
+| `_builtin_input` | Built-in input auto-route detectors. | 60 |
 | `_builtin_output` | Built-in output auto-route detectors and decoders. | 741 |
 | `_decode_heads` | Torch-only helpers of the output decoders. | 192 |
 | `_decode_spellings` | Public spellings of the read-time output decode, declared once. | 30 |
