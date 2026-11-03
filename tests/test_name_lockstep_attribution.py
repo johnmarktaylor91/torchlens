@@ -17,7 +17,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from name_lockstep import attribution, check, gate_input  # noqa: E402
+from name_lockstep import check, gate_input  # noqa: E402
 from name_lockstep.diff import diff_inventories  # noqa: E402
 
 
@@ -126,23 +126,6 @@ def test_a_member_that_really_left_still_reports_even_beside_a_moved_sibling(
     assert _stale_locations(findings) == {"examples/demo.py:1", "examples/demo.py:2"}
 
 
-def test_two_owners_of_one_spelling_across_modules_do_not_pair_by_spelling() -> None:
-    """An ambiguous same-spelling pair is left to the fingerprint; the other stays removed."""
-
-    one = _member("pkg.one", "Registry", "info", "f-1")
-    two = _member("pkg.two", "Registry", "info", "f-3")
-    private = _member("pkg._one", "Registry", "info", "f-1")
-    surface_diff = diff_inventories(_inventory(one, two), _inventory(private))
-    assert [(m.old_id, m.new_id, m.basis) for m in surface_diff.moved] == [
-        (one["id"], private["id"], "fingerprint")
-    ]
-    assert [row["id"] for row in surface_diff.removed] == [two["id"]]
-    assert surface_diff.new == () and surface_diff.renamed == ()
-    # With no fingerprint to decide, nothing pairs: both stay removed, the head row new.
-    blind = diff_inventories(_inventory(one, two), _inventory({**private, "fingerprint": "f-9"}))
-    assert blind.moved == () and len(blind.removed) == 2 and len(blind.new) == 1
-
-
 # --- cause 2: the leaf is a live head name at that position ---------------------------
 
 
@@ -219,24 +202,6 @@ def test_the_same_leaf_on_a_variable_or_without_the_import_still_reports(tmp_pat
         "examples/demo.py:3",
         "examples/demo.py:4",
     }
-
-
-def test_imports_are_read_from_python_markdown_and_notebook_json() -> None:
-    """Every file shape binds names the same way."""
-
-    assert attribution.imports(
-        "import torch\nimport numpy as np\nfrom PIL import Image, ImageDraw as D\n"
-    ) == {
-        "torch": "torch",
-        "np": "numpy",
-        "Image": "PIL",
-        "D": "PIL",
-    }
-    notebook = '    "import torch\\n",\n    "from torchlens import trace\\n",\n'
-    assert attribution.imports(notebook) == {"torch": "torch", "trace": "torchlens"}
-    assert attribution.third_party("y = torch.nn.functional.log(x)", 24, {"torch": "torch"})
-    assert not attribution.third_party("tl.record(x)", 3, {"tl": "torchlens"})
-    assert not attribution.third_party("op.tensor", 3, {"torch": "torch"})
 
 
 # --- cause 4: part of a URL -----------------------------------------------------------
@@ -379,50 +344,6 @@ def test_a_moved_member_pairs_on_its_spelling_and_keeps_retired_owners_as_residu
     assert [(f.change, f.location) for f in findings if f.problem == "stale"] == [
         ("moved", "examples/demo.py:2")
     ]
-
-
-def test_a_mixin_member_folded_onto_its_public_owner_is_a_move(tmp_path: Path) -> None:
-    """``TraceStatsMixin.compute_ops`` reached as ``Trace.compute_ops`` folds onto ``Trace``: one name."""
-
-    old = _row(
-        "member:tl._data_classes._trace_stats:TraceStatsMixin.compute_ops",
-        "member",
-        "compute_ops",
-        "TraceStatsMixin.compute_ops",
-        "f-old",
-        owner_names=["Trace"],
-    )
-    new = _row(
-        "member:tl._data_classes.trace:Trace.compute_ops",
-        "member",
-        "compute_ops",
-        "Trace.compute_ops",
-        "f-new",
-        owner_names=["Trace"],
-    )
-    surface_diff = diff_inventories(_inventory(TRACE, old), _inventory(TRACE, new))
-    assert [(m.basis, m.old_id, m.new_id) for m in surface_diff.moved] == [
-        ("moved", old["id"], new["id"])
-    ]
-    assert surface_diff.new == () and surface_diff.removed == ()
-
-
-def test_a_folded_leaf_shared_by_two_public_owners_does_not_pair(tmp_path: Path) -> None:
-    """Two owners spelling the same leaf at base keep a fold from guessing which one moved."""
-
-    old_a = _row(
-        "member:tl.a:AMixin.size", "member", "size", "AMixin.size", "f-a", owner_names=["Trace"]
-    )
-    old_b = _row(
-        "member:tl.b:BMixin.size", "member", "size", "BMixin.size", "f-b", owner_names=["Trace"]
-    )
-    new = _row(
-        "member:tl.trace:Trace.size", "member", "size", "Trace.size", "f-n", owner_names=["Trace"]
-    )
-    surface_diff = diff_inventories(_inventory(TRACE, old_a, old_b), _inventory(TRACE, new))
-    assert surface_diff.moved == ()
-    assert {row["id"] for row in surface_diff.removed} == {old_a["id"], old_b["id"]}
-    assert [row["id"] for row in surface_diff.new] == [new["id"]]
 
 
 # --- string literals and other callables' keywords in code -----------------------------

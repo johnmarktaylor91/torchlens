@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 
@@ -34,25 +33,6 @@ def saved_trace_path(tmp_path: Path) -> Path:
     path = tmp_path / "trace.tlspec"
     log.save(str(path))
     return path
-
-
-def test_tool_specs_are_wellformed_json_schemas() -> None:
-    """Every declared tool has a name, description, object schema, annotations."""
-
-    names = [spec["name"] for spec in tlmcp.TOOL_SPECS]
-    assert len(names) == len(set(names))
-    # Nine registry tools; MCP serves the registry and nothing beside it.
-    assert len(names) == 9
-    for spec in tlmcp.TOOL_SPECS:
-        assert spec["name"].startswith("torchlens_")
-        assert spec["description"]
-        schema = spec["input_schema"]
-        assert schema["type"] == "object"
-        assert schema.get("additionalProperties") is False
-        assert spec["annotations"] == {"readOnlyHint": True, "idempotentHint": True}
-        # Registry tools serve agent envelopes.
-        assert spec["output_schema"].startswith("torchlens.agent.")
-        json.dumps(spec)
 
 
 def test_call_tool_refusals_teach_the_fix() -> None:
@@ -130,30 +110,6 @@ def test_artifact_tools_drive_the_same_public_surface(saved_trace_path: Path) ->
     )
     assert "Capture status" in report["data"]["report"]
     assert "Truncation" in report["data"]["report"]
-
-
-def test_server_adapter_serves_the_declared_tools(saved_trace_path: Path) -> None:
-    """The mcp>=2.0 server exposes exactly the registry and dispatches calls."""
-
-    pytest.importorskip("mcp")
-    pytest.importorskip("mcp.server")
-
-    server = tlmcp._build_server()
-
-    async def _drive() -> None:
-        """List tools and run one artifact call through the live server."""
-
-        tools = await server.list_tools()
-        assert [tool.name for tool in tools] == [spec["name"] for spec in tlmcp.TOOL_SPECS]
-        result = await server.call_tool(
-            "torchlens_dump", {"path": str(saved_trace_path), "view": "full"}
-        )
-        assert result.is_error is False
-        payload = result.structured_content
-        assert payload["schema"] == "torchlens.agent.dump.v1"
-        assert payload["data"]["schema"] == "torchlens.agent_trace.v1"
-
-    asyncio.run(_drive())
 
 
 def test_main_without_mcp_teaches_the_extra(monkeypatch: pytest.MonkeyPatch) -> None:

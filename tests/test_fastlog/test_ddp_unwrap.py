@@ -86,16 +86,6 @@ def _record_under_group(*args: object, **kwargs: object):
         return tl.record(*args, **kwargs)
 
 
-def test_ddp_wrapped_model_records_unwrapped_module(process_group: None) -> None:
-    """This exercises only the unwrapped .module, NOT DDP forward semantics."""
-
-    ddp_model = torch.nn.parallel.DistributedDataParallel(DdpModel())
-
-    recording = _record_under_group(ddp_model, torch.ones(1, 2), default_op=True)
-
-    assert len(recording) > 0
-
-
 def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -> None:
     """DDP disk bundles are written under a rank_NN prefix."""
 

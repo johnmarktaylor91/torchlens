@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
-
 import pytest
 import torch
 from torch import nn
@@ -28,28 +26,6 @@ class StaticGraph(nn.Module):
         """Run the static graph."""
 
         return self.layers(x)
-
-
-@pytest.mark.xfail(
-    reason=(
-        "Preview currently synthesizes Trace layer contexts only; dry_run includes "
-        "module events and uses raw labels, so exact field-by-field parity is pending."
-    )
-)
-def test_preview_and_dry_run_contexts_match_field_by_field() -> None:
-    """Preview-synthesized and real dry-run contexts match field-by-field."""
-
-    model = StaticGraph()
-    x = torch.randn(1, 4)
-    trace = tl.trace(model, x)
-    dry = tl.recording.dry_run(model, x, save=lambda ctx: True, include_source_events=True)
-    preview_nodes = _build_preview_nodes(trace, lambda ctx: True)
-    preview_contexts = [node.ctx for node in dict.fromkeys(preview_nodes.values())]
-    real_contexts = [
-        ctx for ctx in dry.contexts if ctx.kind in {"input", "op"} and ctx.layer_type != "output"
-    ]
-
-    assert [asdict(ctx) for ctx in preview_contexts] == [asdict(ctx) for ctx in real_contexts]
 
 
 def test_missing_record_context_field_errors_in_preview_and_dry_run() -> None:

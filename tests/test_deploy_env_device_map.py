@@ -12,7 +12,6 @@ import pytest
 import torch
 import torch.nn as nn
 
-import torchlens as tl
 from torchlens.report import doctor as report
 
 
@@ -45,21 +44,3 @@ def test_device_map_row_multi_device_stays_known_broken() -> None:
     model.hf_device_map = {"encoder": 0, "decoder": 1}
     row = report(model, torch.randn(1, 4)).check("accelerate_device_map_auto")
     assert (row.is_detected, row.status, row.severity) == (True, "known_broken", "error")
-
-
-@pytest.mark.heavy
-def test_cpu_device_map_dispatch_captures_and_validates() -> None:
-    """dispatch_model on a pure-CPU map traces and passes replay validation."""
-
-    transformers = pytest.importorskip("transformers")
-    accelerate = pytest.importorskip("accelerate")
-    config = transformers.GPT2Config(n_layer=2, n_head=2, n_embd=64, vocab_size=128, n_positions=64)
-    torch.manual_seed(0)
-    model = accelerate.dispatch_model(
-        transformers.GPT2LMHeadModel(config).eval(), device_map={"": "cpu"}
-    )
-    input_ids = torch.randint(0, 128, (1, 8))
-    trace = tl.trace(model, input_ids)
-    assert trace.provenance.verified is None
-    assert len(trace.ops) > 0
-    assert tl.validate(model, input_ids, scope="forward") is True

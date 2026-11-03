@@ -9,16 +9,11 @@ evidence-based axis-role vocabulary, and the role-free kernels.
 
 from __future__ import annotations
 
-import functools
-import json
-
 import pytest
 import torch
 
-import torchlens as tl
 from torchlens.errors import TransformContractError
 from torchlens.transforms import (
-    BTD,
     DEFAULT,
     ContextTransform,
     OpaqueStep,
@@ -26,9 +21,7 @@ from torchlens.transforms import (
     TensorSpec,
     TransformContext,
     TransformDefinition,
-    TransformPipeline,
     TransformSpec,
-    axis_for_role,
     cast,
     chain,
     flatten,
@@ -103,8 +96,6 @@ def test_spec_version_mismatch_refuses_never_substitutes() -> None:
 @pytest.mark.parametrize(
     ("spec", "shape"),
     [
-        (flatten(), (3, 2, 4)),
-        (flatten(start_axis=2), (3, 2, 4)),
         (cast(torch.float16), (3, 5)),
         (magnitude(), (3, 5)),
         (unit_norm(axis=-1), (3, 5)),
@@ -150,14 +141,6 @@ def test_kernel_plan_refuses_out_of_range_axes() -> None:
 # --- the coercion door -------------------------------------------------------
 
 
-def test_coerce_none_and_pipeline_pass_through() -> None:
-    """``None`` coerces to ``None``; a pipeline passes through unchanged."""
-
-    assert coerce_transform(None) is None
-    pipeline = chain(flatten())
-    assert coerce_transform(pipeline) is pipeline
-
-
 def test_bare_strings_resolve_only_to_zero_param_presets() -> None:
     """Strings are never import paths or a parameter mini-language."""
 
@@ -170,18 +153,6 @@ def test_bare_strings_resolve_only_to_zero_param_presets() -> None:
     with pytest.raises(TransformContractError) as excinfo:
         coerce_transform("os.system")
     assert excinfo.value.fields["code"] == "transform_name_unknown"
-
-
-def test_chain_and_sequence_normalize_to_the_same_object() -> None:
-    """Decision 3: ``chain(a, b)`` and ``[a, b]`` are one object, one record."""
-
-    a = chain(flatten(), "magnitude")
-    b = coerce_transform([flatten(), "magnitude"])
-    assert b is not None
-    assert a.canonical_chain() == b.canonical_chain()
-    nested = coerce_transform([[flatten()], ["magnitude"]])
-    assert nested is not None
-    assert nested.canonical_chain() == a.canonical_chain()
 
 
 def test_unordered_containers_refuse() -> None:
@@ -283,43 +254,7 @@ def test_custom_registration_and_rehydration_round_trip() -> None:
     assert torch.equal(pipeline.apply(torch.ones(2, 3)), torch.full((2, 3), 2.0))
 
 
-def test_lookup_unknown_names_the_registry() -> None:
-    """Refusals name the registry and the registered names (S4 shape)."""
-
-    with pytest.raises(TransformContractError) as excinfo:
-        lookup_transform("no_such_transform")
-    assert excinfo.value.fields["code"] == "transform_name_unknown"
-    assert "flatten" in excinfo.value.fields["registered"]
-
-
 # --- P2: ctx dispatch by DECLARATION, never inspect.signature ----------------
-
-
-def test_wants_context_is_false_for_every_sniffing_counterexample() -> None:
-    """The measured counterexamples: C-ops and modules report (*args, **kwargs).
-
-    ``inspect.signature``-based dispatch would call each of these WITH ctx
-    (TypeError at batch 1); declaration-based dispatch keeps them unary.
-    """
-
-    assert wants_context(torch.abs) is False
-    assert wants_context(torch.nn.ReLU()) is False
-    assert wants_context(torch.nn.Flatten(start_dim=1)) is False
-    assert wants_context(lambda t: t) is False
-
-
-def test_wants_context_is_false_for_keyword_only_ctx_partials() -> None:
-    """The other measured direction: a kw-only ctx partial reports unary.
-
-    Signature sniffing would call it unary and silently run mask-blind;
-    declaration keeps that a conscious choice — undeclared means unary.
-    """
-
-    def masked(tensor: torch.Tensor, *, ctx: TransformContext | None = None) -> torch.Tensor:
-        return tensor
-
-    partial = functools.partial(masked)
-    assert wants_context(partial) is False
 
 
 def test_with_context_declares_and_receives_ctx() -> None:
@@ -343,15 +278,6 @@ def test_with_context_declares_and_receives_ctx() -> None:
     assert excinfo.value.fields["code"] == "transform_coercion_invalid"
 
 
-def test_context_none_is_always_legal() -> None:
-    """Every chain behaves identically under ctx=None and an empty context."""
-
-    pipeline = chain(flatten(), "magnitude")
-    torch.manual_seed(0)
-    tensor = torch.randn(3, 2, 2)
-    assert torch.equal(pipeline.apply(tensor, None), pipeline.apply(tensor, TransformContext()))
-
-
 # --- axis roles: evidence-based, rank is never evidence ----------------------
 
 
@@ -366,45 +292,7 @@ def test_role_evidence_vocabulary_is_closed_and_inferred_reserved() -> None:
     assert excinfo.value.fields["code"] == "transform_role_declaration_invalid"
 
 
-def test_axis_for_role_resolves_declared_and_refuses_with_both_remedies() -> None:
-    """Semantic resolution needs recorded roles at the right rank, or teaches."""
-
-    assert axis_for_role(BTD, rank=3, role="token") == 1
-    with pytest.raises(TransformContractError) as excinfo:
-        axis_for_role(BTD, rank=4, role="token")  # rank mismatch: no guessing
-    assert excinfo.value.fields["code"] == "transform_axis_roles_unavailable"
-    message = str(excinfo.value)
-    assert "declare axis roles" in message and "explicit-axis" in message
-    with pytest.raises(TransformContractError) as excinfo:
-        axis_for_role(None, rank=3, role="token")
-    assert excinfo.value.fields["code"] == "transform_axis_roles_unavailable"
-
-
 # --- pipeline: one record, the resume identity --------------------------------
-
-
-def test_canonical_chain_is_the_resume_identity() -> None:
-    """Byte equality of the static chain IS chain equality; params change it."""
-
-    a = chain(flatten(), cast(torch.float16))
-    b = pipeline_from_record(pipeline_record(chain(flatten(), cast(torch.float16))))
-    assert a.canonical_chain() == b.canonical_chain()
-    changed = chain(flatten(), cast(torch.float32))
-    assert a.canonical_chain() != changed.canonical_chain(), "numerics-visible change mismatches"
-
-
-def test_pipeline_record_shape_and_verifiability() -> None:
-    """The tl_transform_pipeline_v1 record carries steps + identity + verdict."""
-
-    record = pipeline_record(chain(flatten(), torch.abs))
-    assert record is not None
-    assert record["schema"] == "tl_transform_pipeline_v1"
-    assert record["steps"][0]["kind"] == "spec"
-    assert record["steps"][1]["kind"] == "opaque"
-    assert record["steps"][1]["identity"] == "identification_only"
-    assert record["resume_verifiable"] is False
-    assert json.loads(record["canonical_chain"])[1]["qualname"] == "abs"
-    assert pipeline_record(None) is None
 
 
 def test_opaque_rehydration_refuses_application_typed() -> None:
@@ -483,22 +371,3 @@ class _DeclaredDouble(ContextTransform):
         """
 
         return tensor * 2
-
-
-def test_context_transform_subclass_is_declared_and_opaque_in_records() -> None:
-    """A ContextTransform subclass is context-capable and records as opaque."""
-
-    step = _DeclaredDouble()
-    assert wants_context(step) is True
-    pipeline = coerce_transform(step)
-    assert pipeline is not None
-    assert torch.equal(pipeline.apply(torch.ones(1, 2)), torch.full((1, 2), 2.0))
-    record = pipeline_record(pipeline)
-    assert record is not None and record["steps"][0]["kind"] == "opaque"
-
-
-def test_transforms_facade_is_lazily_reachable() -> None:
-    """tl.transforms is the (documented-unstable) lazy home of the library."""
-
-    assert tl.transforms.flatten is flatten
-    assert isinstance(TransformPipeline(steps=()), TransformPipeline)

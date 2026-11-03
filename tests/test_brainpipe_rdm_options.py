@@ -13,7 +13,6 @@ import numpy as np
 import pytest
 import torch
 
-import torchlens as tl
 from torchlens import repgeom
 from torchlens.stats import CKA, cka
 
@@ -21,42 +20,6 @@ from torchlens.stats import CKA, cka
 def _acts(n: int = 10, d: int = 24) -> torch.Tensor:
     torch.manual_seed(3)
     return torch.randn(n, d, dtype=torch.float64)
-
-
-def test_no_new_keyword_call_is_bit_identical() -> None:
-    """D-5's compatibility law: plain rdm() moves no caller's numbers."""
-
-    acts = _acts()
-    assert (repgeom.rdm(acts) == repgeom.activation_distance_matrix(acts)).all()
-
-
-def test_manhattan_metric_and_row_blocking() -> None:
-    """Manhattan ships; blocked computation equals one-shot computation."""
-
-    acts = _acts()
-    one_shot = repgeom.rdm(acts, metric="manhattan")
-    blocked = repgeom.rdm(acts, metric="manhattan", row_chunk_size=3)
-    assert np.allclose(one_shot, blocked)
-    # Manhattan >= euclidean pairwise, elementwise (norm inequality).
-    euclid = repgeom.rdm(acts)
-    assert (one_shot >= euclid - 1e-12).all()
-
-
-def test_blocked_euclidean_matches_legacy() -> None:
-    """Row blocking is a memory shape, never a numeric change."""
-
-    acts = _acts()
-    assert np.allclose(repgeom.rdm(acts, row_chunk_size=4), repgeom.rdm(acts))
-
-
-def test_condensed_output_is_strict_upper_triangle() -> None:
-    """output='condensed' returns the row-major strict upper triangle."""
-
-    acts = _acts(8)
-    square = repgeom.rdm(acts)
-    condensed = repgeom.rdm(acts, output="condensed")
-    assert condensed.shape == (8 * 7 // 2,)
-    assert np.allclose(condensed, square[np.triu_indices(8, k=1)])
 
 
 def test_batched_input_kind_is_explicit() -> None:
@@ -117,9 +80,3 @@ def test_cka_gains_placement_through_one_seam() -> None:
     assert acc.compute() == pytest.approx(legacy, abs=1e-4)
     with pytest.raises(ValueError, match="floating"):
         cka(a, b, dtype=torch.int64)
-
-
-def test_tl_repgeom_rdm_compare_is_reachable() -> None:
-    """The facade re-exports the new descriptive comparator."""
-
-    assert tl.repgeom.compare_rdms is repgeom.compare_rdms

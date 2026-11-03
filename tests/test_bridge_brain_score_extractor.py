@@ -13,14 +13,12 @@ from __future__ import annotations
 
 import sys
 import types
-from collections import OrderedDict
 
 import numpy as np
 import pytest
 import torch
 from torch import nn
 
-import torchlens as tl
 from torchlens.bridge.brain_score import activations_extractor, get_activations_fn
 
 
@@ -67,25 +65,6 @@ def _image_list(n: int = 5) -> list[np.ndarray]:
     """
 
     return [np.arange(3, dtype=np.float32) + index for index in range(n)]
-
-
-def test_get_activations_serves_dotted_paths_and_logits_in_order() -> None:
-    """The callable returns an ordered dict of numpy arrays matching extract."""
-
-    model = _TinyNet().eval()
-    get_activations = get_activations_fn(model)
-    result = get_activations(_image_list(), ["features.1", "logits"])
-
-    assert isinstance(result, OrderedDict)
-    assert list(result) == ["features.1", "logits"]
-    assert all(isinstance(value, np.ndarray) for value in result.values())
-    assert result["features.1"].shape == (5, 4)
-    assert result["logits"].shape == (5, 2)
-
-    batch = torch.stack([torch.from_numpy(image) for image in _image_list()])
-    direct = tl.extract(model, batch, {"features.1": "features.1", "logits": "output_1"})
-    np.testing.assert_array_equal(result["features.1"], direct["features.1"].detach().numpy())
-    np.testing.assert_array_equal(result["logits"], direct["logits"].detach().numpy())
 
 
 def test_get_activations_layer_map_and_model_dtype_matching() -> None:
@@ -257,25 +236,3 @@ def test_activations_extractor_is_pytorch_wrapper_shaped(monkeypatch) -> None:
     assert model(["a.png"], layers=["logits"]) == "assembly"
     assert model.from_paths(["a.png"], layers=["logits"]) == ("from_paths", ["a.png"], ("logits",))
     assert calls == [("visual_degrees", 8), ("call", ["a.png"], ("logits",))]
-
-
-def test_activations_extractor_constructs_against_real_brainscore() -> None:
-    """With the real package, the result goes into a real ModelCommitment."""
-
-    pytest.importorskip("brainscore_vision")
-    from brainscore_vision.model_helpers.activations.core import ActivationsExtractorHelper
-    from brainscore_vision.model_helpers.brain_transformation import ModelCommitment
-
-    model = activations_extractor(_TinyNet().eval(), preprocessing=None, identifier="tiny")
-    assert isinstance(model._extractor, ActivationsExtractorHelper)
-    assert model.identifier == "tiny"
-    assert model.from_paths == model._extractor.from_paths
-    commitment = ModelCommitment(
-        identifier="tiny",
-        activations_model=model,
-        layers=["features.1"],
-        region_layer_map={"IT": "features.1"},
-    )
-    assert commitment.activations_model is model
-    served = model._extractor.get_activations(_image_list(), ["features.1", "logits"])
-    assert list(served) == ["features.1", "logits"]

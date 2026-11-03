@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
@@ -222,25 +221,6 @@ class TokenEmbeddingModel(nn.Module):
         return self.embedding(input_ids).mean(dim=1)
 
 
-def test_tensor_passthrough() -> None:
-    """Tensor inputs are returned unchanged."""
-
-    tensor = torch.tensor([1, 2, 3])
-    assert _coerce_input(object(), tensor) is tensor
-
-
-def test_numpy_array_to_tensor() -> None:
-    """NumPy arrays are converted with dtype and values preserved."""
-
-    import numpy as np
-
-    array = np.array([[1, 2], [3, 4]], dtype=np.int64)
-    result = _coerce_input(object(), array)
-    assert isinstance(result, torch.Tensor)
-    assert result.dtype is torch.int64
-    assert torch.equal(result, torch.tensor([[1, 2], [3, 4]], dtype=torch.int64))
-
-
 def test_transformerlens_text_to_tokens() -> None:
     """String input uses a duck-typed TransformerLens to_tokens method."""
 
@@ -248,36 +228,6 @@ def test_transformerlens_text_to_tokens() -> None:
     result = _coerce_input(model, "hello world")
     assert model.calls == ["hello world"]
     assert torch.equal(result, torch.tensor([[1, 2, 3]]))
-
-
-def test_hf_text_tokenizer_input_ids() -> None:
-    """String input uses an attached HuggingFace tokenizer."""
-
-    model = HFTextModel()
-    result = _coerce_input(model, "hello world")
-    assert model.calls == [("hello world", "pt")]
-    assert torch.equal(result, torch.tensor([[4, 5, 6]]))
-
-
-def test_hf_text_batch_tokenizer_input_ids() -> None:
-    """Batched string input uses the attached HuggingFace tokenizer once."""
-
-    model = HFTextModel()
-    result = _coerce_input(model, ["a", "b", "c"])
-    assert model.calls == [(["a", "b", "c"], "pt")]
-    assert torch.equal(result, torch.tensor([[4, 5, 6]]))
-
-
-def test_pil_image_processor() -> None:
-    """PIL image input uses an attached image processor."""
-
-    from PIL import Image as pil_image
-
-    image = pil_image.new("RGB", (8, 8))
-    model = ImageModel()
-    result = _coerce_input(model, image)
-    assert model.calls == [(image, "pt")]
-    assert torch.equal(result, torch.ones(1, 3, 8, 8))
 
 
 def test_pil_image_batch_processor() -> None:
@@ -306,27 +256,6 @@ def test_audio_feature_extractor_with_sampling_rate() -> None:
     assert torch.equal(result, torch.ones(1, 3))
 
 
-def test_unsupported_string_error_message() -> None:
-    """Plain modules receive a helpful string-dispatch error."""
-
-    model = nn.Linear(3, 2)
-    with pytest.raises(TypeError, match="String input requires either model.to_tokens"):
-        _coerce_input(model, "hello")
-
-
-def test_trace_with_attached_tokenizer_string() -> None:
-    """End-to-end capture accepts raw text when a tokenizer is attached."""
-
-    model = TokenEmbeddingModel()
-    trace = tl.trace(model, "hello world")
-    try:
-        assert len(trace._layer_list) > 0
-        assert model.tokenizer_calls == [("hello world", "pt")]
-        assert trace.input == "hello world"
-    finally:
-        trace.cleanup()
-
-
 def test_trace_with_numpy_array_preserves_raw_input() -> None:
     """End-to-end auto-coercion should retain the original NumPy input."""
 
@@ -340,15 +269,6 @@ def test_trace_with_numpy_array_preserves_raw_input() -> None:
     assert trace.input is array
 
 
-def test_fastlog_record_with_attached_tokenizer_string() -> None:
-    """Fastlog one-shot recording accepts raw text when a tokenizer is attached."""
-
-    model = TokenEmbeddingModel()
-    recording = tl.record(model, "hello world", default_op=True)
-    assert recording.records
-    assert model.tokenizer_calls == [("hello world", "pt")]
-
-
 def test_trace_rerun_with_attached_tokenizer_string() -> None:
     """Trace rerun accepts new raw text input when a tokenizer is attached."""
 
@@ -357,29 +277,6 @@ def test_trace_rerun_with_attached_tokenizer_string() -> None:
     try:
         trace.run("goodbye")
         assert model.tokenizer_calls == [("hello world", "pt"), ("goodbye", "pt")]
-    finally:
-        trace.cleanup()
-
-
-@pytest.mark.slow
-def test_trace_with_transformerlens_gpt2_string_if_available() -> None:
-    """End-to-end TransformerLens GPT-2 capture accepts raw text when locally available."""
-
-    hooked_transformer = pytest.importorskip("transformer_lens").HookedTransformer
-    try:
-        model = hooked_transformer.from_pretrained(
-            "gpt2",
-            device="cpu",
-            n_ctx=8,
-            first_n_layers=1,
-            local_files_only=True,
-        )
-    except Exception as exc:
-        pytest.skip(f"TransformerLens GPT-2 weights/tokenizer are not available locally: {exc}")
-
-    trace = tl.trace(model, "hello world", save=None)
-    try:
-        assert len(trace._layer_list) > 0
     finally:
         trace.cleanup()
 

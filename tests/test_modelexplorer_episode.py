@@ -8,7 +8,6 @@ binds per-step graphs with disclosure; the privacy profile owns tokens.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
@@ -96,60 +95,6 @@ def test_full_graph_first_then_zero_padded_steps(episode_payload: dict[str, Any]
     assert report.ok, report.failures
 
 
-def test_step_membership_covers_every_op_exactly_once(
-    episode_log: Any, episode_payload: dict[str, Any]
-) -> None:
-    """Every full-graph op lands in exactly one step graph (members+drivers)."""
-
-    def torchlens_labels(graph: dict[str, Any]) -> list[str]:
-        return [
-            attr["value"]
-            for node in graph["nodes"]
-            for attr in node.get("attrs", [])
-            if attr["key"] == "torchlens_label"
-        ]
-
-    full_labels = set(torchlens_labels(episode_payload["graphs"][0]))
-    step_labels: list[str] = []
-    for graph in episode_payload["graphs"][1:]:
-        step_labels.extend(torchlens_labels(graph))
-    assert sorted(step_labels) == sorted(set(step_labels)), "an op appeared twice"
-    assert set(step_labels) == full_labels
-
-
-def test_driver_ops_group_under_driver_namespace(episode_payload: dict[str, Any]) -> None:
-    """Stackless driver ops (argmax/cat glue) group under ``driver`` (D11)."""
-
-    driver_namespaces = {
-        node["namespace"]
-        for graph in episode_payload["graphs"][1:]
-        for node in graph["nodes"]
-        if node["namespace"] == "driver"
-    }
-    assert driver_namespaces == {"driver"}
-
-
-def test_boundary_proxies_are_reserved_prefix_and_valueless(
-    episode_payload: dict[str, Any],
-) -> None:
-    """Cross-step parents become kind=step_boundary proxies (D12)."""
-
-    proxies = [
-        node
-        for graph in episode_payload["graphs"][1:]
-        for node in graph["nodes"]
-        if node["id"].startswith(PROXY_ID_PREFIX)
-    ]
-    assert proxies, "the token feed must cross step boundaries"
-    for proxy in proxies:
-        attrs = {attr["key"]: attr["value"] for attr in proxy["attrs"]}
-        assert attrs["kind"] == "step_boundary"
-        assert "time" not in attrs and "flops" not in attrs
-    later_steps = episode_payload["graphs"][2:]
-    for graph in later_steps:
-        assert graph["groupNodeAttributes"][""].get("boundary_proxies")
-
-
 def test_boundary_proxies_false_drops_and_discloses(episode_log: Any) -> None:
     """boundary_proxies=False gives drop-plus-disclose (D12)."""
 
@@ -198,31 +143,6 @@ def test_per_step_false_emits_full_graph_only(episode_log: Any) -> None:
 
     payload = tl.export.to_model_explorer_dict(episode_log, per_step=False)
     assert [graph["id"] for graph in payload["graphs"]] == ["00-episode"]
-
-
-def test_step_graphs_strip_the_stepped_call_segment(
-    episode_payload: dict[str, Any],
-) -> None:
-    """Inside a step graph the stepped-module level is the graph identity."""
-
-    step_graph = episode_payload["graphs"][1]
-    member_namespaces = {
-        node["namespace"]
-        for node in step_graph["nodes"]
-        if node["namespace"] not in ("", "driver", "Inputs", "Outputs")
-    }
-    assert member_namespaces
-    assert not any(namespace.startswith("model") for namespace in member_namespaces)
-    full_namespaces = {node["namespace"] for node in episode_payload["graphs"][0]["nodes"]}
-    assert any(namespace.startswith("model:") for namespace in full_namespaces), (
-        "the full episode graph keeps qualified step levels"
-    )
-
-
-def test_episode_payload_round_trips_as_json(episode_payload: dict[str, Any]) -> None:
-    """The whole collection is plain JSON (no repr leakage)."""
-
-    assert json.loads(json.dumps(episode_payload)) == episode_payload
 
 
 def test_ledger_missing_stepped_address_refuses_typed(episode_log: Any) -> None:

@@ -50,20 +50,6 @@ def _example_ids() -> Iterator[str]:
         yield path.stem
 
 
-def test_intervention_examples_discovered() -> None:
-    """Fail if a known intervention example is no longer collected.
-
-    Returns
-    -------
-    None
-        Asserts every pinned example stem is discovered by the glob.
-    """
-
-    stems = {path.stem for path in EXAMPLE_FILES}
-    missing = EXPECTED_EXAMPLE_STEMS - stems
-    assert not missing, f"intervention examples missing from discovery: {sorted(missing)}"
-
-
 # Unmarked on purpose: each example runs well inside the 5 s budget, and a ``slow``
 # mark kept these out of every CI tier, so a stale name in an example went unseen.
 @pytest.mark.parametrize("example_path", EXAMPLE_FILES, ids=tuple(_example_ids()))

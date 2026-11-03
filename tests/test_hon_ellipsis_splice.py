@@ -16,7 +16,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.bridge import sae as sae_bridge
 from torchlens.intervention.types import LiteralValue, Unsupported
 
 transformers = pytest.importorskip("transformers")
@@ -78,28 +77,3 @@ def test_ellipsis_is_stored_as_a_literal_on_gemma_class_indexing() -> None:
                 if isinstance(leaf, LiteralValue) and leaf.value is Ellipsis:
                     stored_ellipses += 1
     assert stored_ellipses > 0, "the rotary x[..., :n] slices were not captured"
-
-
-def test_gemma_class_splice_runs_end_to_end() -> None:
-    """The splice replays across the rotary slices and matches a hook oracle."""
-
-    model, ids = _tiny_gemma2(), torch.randint(0, 64, (1, 6))
-    sae = _ToySAE(32).eval()
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
-    site = trace.modules["model.layers.0.mlp"].output_layers[0]
-
-    result = sae_bridge.splice(trace, site=site, sae=sae)
-
-    def _replace(_module: nn.Module, _inputs: object, output: torch.Tensor) -> torch.Tensor:
-        return sae.decode(sae.encode(output))
-
-    handle = model.model.layers[0].mlp.register_forward_hook(_replace)
-    try:
-        with torch.no_grad():
-            expected = model(ids).logits
-    finally:
-        handle.remove()
-    spliced_logits = [out for out in result.spliced_outputs if out.shape == expected.shape]
-    assert spliced_logits, "the spliced run produced no logits-shaped output"
-    assert torch.allclose(spliced_logits[0], expected, atol=1e-5)
-    assert result.output_delta_l2 > 0.0

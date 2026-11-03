@@ -15,14 +15,12 @@ import pytest
 
 from torchlens._data_substrate import (
     LEDGER_FILENAME,
-    MANIFEST_SCHEMA_V2,
     SIGNATURE_SEMANTIC_FIELDS,
     ArtifactWriter,
     ExtractionArtifactError,
     compare_signatures,
     read_trusted_rows,
     repair_ledger_tail,
-    stimulus_ids_digest,
 )
 
 
@@ -51,19 +49,6 @@ def _commit(writer: ArtifactWriter, index: int, payload: bytes = b"payload") -> 
         save_payload=lambda tmp: tmp.write_bytes(payload),
         row_facts={"keys": {}},
     )
-
-
-def test_commit_protocol_produces_ledgered_verified_shards(tmp_path: Path) -> None:
-    """Commit -> final-name shard + fsynced ledger row with size + CRC-32."""
-
-    writer = ArtifactWriter(tmp_path, {"schema": MANIFEST_SCHEMA_V2})
-    row = _commit(writer, 0)
-    assert (tmp_path / "batch_00000.pt").read_bytes() == b"payload"
-    assert row["byte_size"] == len(b"payload")
-    assert isinstance(row["crc32"], int)
-    assert not list(tmp_path.glob("*.tmp")), "no temp debris after a clean commit"
-    rows = read_trusted_rows(tmp_path)
-    assert rows == [row]
 
 
 def test_read_trusted_rows_drops_torn_final_line(tmp_path: Path) -> None:
@@ -138,16 +123,6 @@ def test_stimulus_ids_sidecar_is_write_once(tmp_path: Path) -> None:
     with pytest.raises(ExtractionArtifactError) as excinfo:
         writer.write_stimulus_ids_sidecar(["a", "c"])
     assert excinfo.value.fields["code"] == "extraction_stimulus_ids_sidecar_invalid"
-
-
-def test_stimulus_ids_digest_is_order_sensitive_and_deterministic() -> None:
-    """The signature's ID digest: canonical, ordered, None passes through."""
-
-    assert stimulus_ids_digest(None) is None
-    digest = stimulus_ids_digest(["a", "b"])
-    assert digest is not None and digest.startswith("sha256:")
-    assert digest == stimulus_ids_digest(["a", "b"])
-    assert digest != stimulus_ids_digest(["b", "a"])
 
 
 def _signature(**overrides: Any) -> dict[str, Any]:

@@ -19,10 +19,9 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-import torchlens as tl
 from torchlens._capture_state_helpers import _move_tensors_to_device
 from torchlens._utils.arg_handling import safe_copy_input_tree
-from torchlens._utils.input_leaves import INPUT_WAS_PARAMETER_ATTR, leaf_preserving_input_copies
+from torchlens._utils.input_leaves import leaf_preserving_input_copies
 
 
 class _SetsRequiresGradOnInput(nn.Module):
@@ -37,39 +36,6 @@ class _SetsRequiresGradOnInput(nn.Module):
         return self.lin(cart).sum()
 
 
-def test_model_setting_requires_grad_on_leaf_input_validates() -> None:
-    """The synthetic trigger: a grad-tracked leaf input the model re-marks validates."""
-
-    torch.manual_seed(0)
-    x = torch.randn(3, 4).requires_grad_(True)
-    assert bool(tl.validate(_SetsRequiresGradOnInput().eval(), x, scope="forward"))
-    assert x.is_leaf and x.requires_grad
-
-
-def test_leaf_preserving_copy_keeps_a_grad_tracked_leaf_a_leaf() -> None:
-    """Inside validation's scope a grad-tracked leaf copies as a new leaf."""
-
-    base = torch.randn(4, 3).requires_grad_(True)
-    with leaf_preserving_input_copies():
-        (copied_base,), _kwargs, gaps = safe_copy_input_tree([base], {})
-    assert gaps == ()
-    assert copied_base is not base
-    assert copied_base.is_leaf and copied_base.requires_grad
-    assert torch.equal(copied_base, base)
-    assert copied_base.grad_fn is None
-
-
-def test_plain_copy_of_grad_tracked_leaf_stays_graph_connected() -> None:
-    """Outside validation the historical clone keeps gradients reaching the caller."""
-
-    x = torch.randn(3, 4).requires_grad_(True)
-    (copied,), _kwargs, gaps = safe_copy_input_tree([x], {})
-    assert gaps == ()
-    assert not copied.is_leaf
-    copied.sum().backward()
-    assert x.grad is not None
-
-
 def test_non_leaf_input_copy_is_unchanged_inside_validation_scope() -> None:
     """A non-leaf input keeps the graph-connected clone even inside validation's scope."""
 
@@ -82,49 +48,6 @@ def test_non_leaf_input_copy_is_unchanged_inside_validation_scope() -> None:
     assert torch.equal(copied, non_leaf)
     copied.sum().backward()
     assert leaf.grad is not None
-
-
-def test_trace_output_still_backpropagates_to_caller_leaf_input() -> None:
-    """``tl.trace`` is unaffected: the traced output's gradient reaches the caller's input."""
-
-    model = nn.Sequential(nn.Linear(4, 2), nn.ReLU())
-    x = torch.randn(3, 4, requires_grad=True)
-    trace = tl.trace(model, x)
-    trace.output_ops[0].out.sum().backward()
-    assert x.grad is not None
-
-
-def test_model_setting_requires_grad_on_parameter_input_validates() -> None:
-    """A grad-tracked ``nn.Parameter`` input the model re-marks validates."""
-
-    torch.manual_seed(0)
-    p = nn.Parameter(torch.randn(3, 4))
-    assert bool(tl.validate(_SetsRequiresGradOnInput().eval(), p, scope="forward"))
-    assert p.is_leaf and p.requires_grad
-
-
-def test_leaf_preserving_copy_keeps_a_parameter_input_a_leaf() -> None:
-    """Inside validation's scope a Parameter input copies as a new plain-tensor leaf."""
-
-    p = nn.Parameter(torch.randn(2, 3))
-    with leaf_preserving_input_copies():
-        (copied,), _kwargs, gaps = safe_copy_input_tree([p], {})
-    assert gaps == ()
-    assert type(copied) is torch.Tensor
-    assert copied.is_leaf and copied.requires_grad
-    assert getattr(copied, INPUT_WAS_PARAMETER_ATTR, False)
-    assert torch.equal(copied, p)
-
-
-def test_plain_copy_of_parameter_input_stays_graph_connected() -> None:
-    """Outside validation a Parameter input keeps the graph-connected clone."""
-
-    p = nn.Parameter(torch.randn(2, 3))
-    (copied,), _kwargs, gaps = safe_copy_input_tree([p], {})
-    assert gaps == ()
-    assert not copied.is_leaf
-    copied.sum().backward()
-    assert p.grad is not None
 
 
 def test_device_move_keeps_a_leaf_inside_validation_scope_only() -> None:

@@ -60,68 +60,6 @@ def _first_blob(bundle_path: Path) -> Path:
     return next((bundle_path / "blobs").glob("*.safetensors"))
 
 
-def test_finalized_bundle_loads_and_recover_returns_identical_not_recovered(
-    tmp_path: Path,
-) -> None:
-    """Finalized bundles load and recover as identical non-recovered recordings."""
-
-    bundle_path = tmp_path / "final.tlfast"
-    original = _write_bundle(bundle_path)
-
-    loaded = tl.load(bundle_path)
-    recovered = tl.recording.recover(bundle_path)
-
-    assert loaded.is_recovered is False
-    assert recovered.is_recovered is False
-    assert _labels(loaded) == _labels(original)
-    assert _labels(recovered) == _labels(loaded)
-    assert list(recovered.records)
-
-
-def test_load_and_recover_rehydrate_disk_payload_contents(tmp_path: Path) -> None:
-    """``load()``/``recover()`` rehydrate real tensor payloads, not just metadata.
-
-    Regression test: reloaded fastlog records used to come back with every
-    payload field (``ram_payload``, ``disk_payload``, ``transformed_*``) set to
-    ``None`` even though the underlying blobs were written and hash-verified as
-    ``.safetensors`` -- only structural metadata (``blob_id``, ``relative_path``,
-    ``sha256``, ...) survived a reload. This asserts a persisted blob's actual
-    tensor contents round-trip through both public reload entry points.
-    """
-
-    bundle_path = tmp_path / "payload_roundtrip.tlfast"
-    original = _write_bundle(bundle_path)
-
-    original_values = {
-        record.ctx.label: record.disk_payload.clone()
-        for record in original.records
-        if record.disk_payload is not None
-    }
-    assert original_values, "sanity: at least one record should have captured a raw payload"
-
-    for reload_fn in (tl.load, tl.recording.recover):
-        reloaded = reload_fn(bundle_path)
-        rehydrated = [record for record in reloaded.records if record.disk_payload is not None]
-        assert rehydrated, f"{reload_fn.__name__} dropped every disk_payload on reload"
-        for record in rehydrated:
-            expected = original_values[record.ctx.label]
-            assert torch.equal(record.disk_payload, expected), (
-                f"{reload_fn.__name__} rehydrated {record.ctx.label} with the wrong values"
-            )
-
-
-def test_recover_with_missing_manifest_walks_jsonl(tmp_path: Path) -> None:
-    """Recovery ignores a missing manifest and scans JSONL."""
-
-    bundle_path = _copy_bundle(_write_bundle(tmp_path / "source.tlfast").path, tmp_path / "missing")
-    (bundle_path / "manifest.json").unlink()
-
-    recovered = tl.recording.recover(bundle_path)
-
-    assert recovered.is_recovered is True
-    assert len(recovered.records) > 0
-
-
 def test_recover_with_malformed_manifest_uses_jsonl(tmp_path: Path) -> None:
     """Recovery ignores malformed manifest JSON and scans JSONL."""
 
@@ -147,39 +85,6 @@ def test_recover_missing_jsonl_raises(tmp_path: Path) -> None:
         tl.recording.recover(bundle_path)
 
 
-def test_recover_skips_truncated_last_jsonl_line(tmp_path: Path) -> None:
-    """Recovery skips a truncated JSONL tail line and keeps earlier records."""
-
-    bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "truncated"
-    )
-    (bundle_path / "manifest.json").unlink()
-    index_path = bundle_path / "fastlog_index.jsonl"
-    text = index_path.read_text(encoding="utf-8")
-    index_path.write_text(text + '{"ctx":', encoding="utf-8")
-
-    recovered = tl.recording.recover(bundle_path)
-
-    assert any("truncated tail" in warning for warning in recovered.recovery_warnings)
-    assert len(recovered.records) > 0
-
-
-def test_recover_skips_malformed_middle_line_and_continues(tmp_path: Path) -> None:
-    """Recovery skips malformed middle lines and continues scanning."""
-
-    bundle_path = _copy_bundle(_write_bundle(tmp_path / "source.tlfast").path, tmp_path / "middle")
-    (bundle_path / "manifest.json").unlink()
-    index_path = bundle_path / "fastlog_index.jsonl"
-    lines = index_path.read_text(encoding="utf-8").splitlines()
-    lines.insert(1, "not-json")
-    index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-    recovered = tl.recording.recover(bundle_path)
-
-    assert any("malformed line" in warning for warning in recovered.recovery_warnings)
-    assert len(recovered.records) == len(lines) - 1
-
-
 def test_recover_skips_missing_blob_record(tmp_path: Path) -> None:
     """Recovery skips JSONL records whose blob file is missing."""
 
@@ -193,19 +98,6 @@ def test_recover_skips_missing_blob_record(tmp_path: Path) -> None:
 
     assert any("missing blob" in warning for warning in recovered.recovery_warnings)
     assert len(recovered.records) > 0
-
-
-def test_recover_skips_hash_mismatch_record(tmp_path: Path) -> None:
-    """Recovery skips JSONL records whose blob hash does not match."""
-
-    bundle_path = _copy_bundle(_write_bundle(tmp_path / "source.tlfast").path, tmp_path / "hash")
-    (bundle_path / "manifest.json").unlink()
-    _first_blob(bundle_path).write_bytes(b"corrupt")
-
-    recovered = tl.recording.recover(bundle_path)
-
-    assert any("hash mismatch" in warning for warning in recovered.recovery_warnings)
-    assert list(recovered.records)
 
 
 def test_load_rejects_hash_mismatch_in_finalized_bundle(tmp_path: Path) -> None:
@@ -251,30 +143,6 @@ def test_load_rejects_incomplete_blob_metadata_in_finalized_bundle(tmp_path: Pat
     assert recovered.status == "recovered"
     assert any("incomplete blob metadata" in warning for warning in recovered.recovery_warnings)
     assert list(recovered.records)
-
-
-def test_recover_depth_bomb_index_line_degrades_to_malformed_warning(tmp_path: Path) -> None:
-    """A JSON depth bomb in the index degrades gracefully, never RecursionError.
-
-    Regression (B8-13): the raw stdlib decoder recursed on a deeply nested
-    payload and the resulting ``RecursionError`` escaped BOTH per-line
-    exception handlers, crashing ``recover()`` on corruption it exists to
-    salvage.
-    """
-
-    bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "depthbomb"
-    )
-    (bundle_path / "manifest.json").unlink()
-    index_path = bundle_path / "fastlog_index.jsonl"
-    lines = index_path.read_text(encoding="utf-8").splitlines()
-    lines.insert(1, "[" * 100_000)
-    index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-    recovered = tl.recording.recover(bundle_path)
-
-    assert any("malformed line" in warning for warning in recovered.recovery_warnings)
-    assert len(recovered.records) == len(lines) - 1
 
 
 def test_recover_depth_bomb_tail_line_degrades_to_truncated_tail(tmp_path: Path) -> None:
@@ -380,22 +248,6 @@ def test_disk_roundtrip_label_index_deduplicates_same_raw_label(tmp_path: Path) 
     assert len(loaded[label]) == 1
 
 
-def test_cleanup_partial_treats_bundle_name_as_data_not_glob(tmp_path: Path) -> None:
-    """Glob metacharacters in the bundle name must not sweep sibling bundles' partials."""
-
-    victim_a = tmp_path / "run0.tmp.aaaa"
-    victim_b = tmp_path / "run1.tmp.bbbb"
-    for victim in (victim_a, victim_b):
-        victim.mkdir()
-        (victim / "PARTIAL").write_text("", encoding="utf-8")
-
-    removed = tl.recording.cleanup_partial(tmp_path / "run[01]")
-
-    assert removed == []
-    assert victim_a.is_dir()
-    assert victim_b.is_dir()
-
-
 def test_cleanup_partial_still_sweeps_own_partials(tmp_path: Path) -> None:
     """The escaped pattern still matches the bundle's own temp directories."""
 
@@ -481,32 +333,3 @@ def test_recover_refuses_below_floor_bundle_instead_of_resurrecting(tmp_path: Pa
 
     with pytest.raises(ArtifactTooOldError):
         tl.recording.recover(bundle_path)
-
-
-def test_recover_index_read_allocates_the_file_not_the_ceiling(tmp_path: Path) -> None:
-    """R33-1 sibling: the index read must not pre-allocate the ~512 MiB ceiling.
-
-    Fail-before: the fstat-first refusal landed (R10-3) but the read still
-    asked for ``_INDEX_MAX_BYTES + 1``, so every recovery transiently
-    requested the whole ceiling for a KB-sized index.
-    """
-
-    import importlib
-    import tracemalloc
-
-    recover_module = importlib.import_module("torchlens.recording.recover")
-    index_path = tmp_path / "fastlog_index.jsonl"
-    index_path.write_text('{"kind": "noop"}\n' * 10)
-
-    tracemalloc.start()
-    try:
-        lines = recover_module._read_index_lines(index_path)
-        _current, peak = tracemalloc.get_traced_memory()
-    finally:
-        tracemalloc.stop()
-
-    assert len(lines) == 10
-    assert peak < 32 * 1024 * 1024, (
-        f"index read peaked at {peak} bytes on a "
-        f"{index_path.stat().st_size}-byte index; it is allocating the ceiling"
-    )

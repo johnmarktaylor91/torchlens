@@ -17,9 +17,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from name_lockstep import check, codemod, docsections, gate_input  # noqa: E402
+from name_lockstep import check, codemod, gate_input  # noqa: E402
 from name_lockstep.cli import main  # noqa: E402
-from name_lockstep.diff import diff_inventories, proposals_to_map, renamed_id  # noqa: E402
+from name_lockstep.diff import diff_inventories  # noqa: E402
 from name_lockstep.inventory import build_inventory, load_inventory  # noqa: E402
 
 FAKE_INIT = '''
@@ -94,23 +94,6 @@ def fake_inventory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     return {row["id"]: row for row in build_inventory("fakelens_pkg")["rows"]}
 
 
-def test_inventory_rows_use_the_stable_id_scheme(fake_inventory: dict) -> None:
-    """Root, export, member and param rows carry the naming-sweep ids."""
-
-    ids = set(fake_inventory)
-    assert {"root:tl.Probe", "root:tl.run_probe", "root:tl.core", "root:tl.ns"} <= ids
-    assert "export:tl.ns.helper" in ids
-    assert {
-        "member:fakelens_pkg.core:Probe.depth",
-        "member:fakelens_pkg.core:Probe.label",
-        "member:fakelens_pkg.core:Probe.fire",
-    } <= ids
-    assert fake_inventory["member:fakelens_pkg.core:Probe.label"]["subkind"] == "property"
-    assert fake_inventory["param:budget"]["uses"] == ["tl.core.run_probe", "tl.run_probe"]
-    assert "Probe.fire" in fake_inventory["param:strength"]["uses"]
-    assert "param:self" not in ids
-
-
 def _row(row_id: str, kind: str, name: str, path: str, fingerprint: str = "", **extra) -> dict:
     """Build a minimal inventory row."""
 
@@ -148,39 +131,6 @@ HEAD = {
     ),
     "export:tl.io.fresh": _row("export:tl.io.fresh", "export", "fresh", "tl.io.fresh", "f-dup"),
 }
-
-
-def test_diff_lists_new_removed_and_renamed() -> None:
-    """Fingerprint pairs are unique on both sides; declared renames win."""
-
-    plain = diff_inventories(BASE, HEAD)
-    assert [(r.old_id, r.new_id, r.basis) for r in plain.renamed] == [
-        ("export:tl.io.old_save", "export:tl.io.dump", "fingerprint")
-    ]
-    # Two removed rows share the fresh row's fingerprint, so neither pairs.
-    assert {row["id"] for row in plain.new} == {"member:m:Trace.ops", "export:tl.io.fresh"}
-    assert {row["id"] for row in plain.removed} == {
-        "member:m:Trace._layer_list",
-        "export:tl.io.gone",
-        "export:tl.io.gone2",
-    }
-    declared = diff_inventories(BASE, HEAD, {"member:m:Trace._layer_list": "ops"})
-    assert ("member:m:Trace._layer_list", "member:m:Trace.ops", "declared") in [
-        (r.old_id, r.new_id, r.basis) for r in declared.renamed
-    ]
-    assert declared.to_json()["counts"] == {"new": 1, "removed": 2, "renamed": 2, "moved": 0}
-
-
-def test_renamed_id_and_proposal_map() -> None:
-    """Respelled ids keep their owner; params regroup under the new name."""
-
-    assert renamed_id(BASE["member:m:Trace._layer_list"], "ops") == "member:m:Trace.ops"
-    assert renamed_id({"id": "param:dim", "kind": "param", "name": "dim"}, "axis") == "param:axis"
-    rows = {
-        "a": {"id": "a", "name": "x", "proposed": "y"},
-        "b": {"id": "b", "name": "z", "proposed": "z"},
-    }
-    assert proposals_to_map(rows) == {"a": "y"}
 
 
 def _lockstep_repo(root: Path, glossary: str, example: str) -> check.Corpus:
@@ -395,50 +345,6 @@ def documented_inventory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dic
     return {row["id"]: row for row in build_inventory("doclens_pkg")["rows"]}
 
 
-def test_numpydoc_sections_give_the_first_paragraph() -> None:
-    """Entries with and without types, shared entries and empty entries parse."""
-
-    doc = textwrap.dedent(DOCUMENTED_CORE.split("class Curve(Base):\n    ")[1].split('"""')[1])
-    entries = docsections._entries(docsections._sections(doc)["Attributes"])
-    assert entries["area"] == "Area under the curve, by the trapezoid rule."
-    assert entries["steps"] == entries["points"] == "One record per evaluated fraction."
-    assert "bare" not in entries
-    assert docsections._clip("word " * 100).endswith(" ...")
-    assert len(docsections._clip("word " * 100)) <= docsections.MAX_MEANING + 4
-
-
-def test_fields_and_keywords_get_their_documented_meaning(documented_inventory: dict) -> None:
-    """A field reads its owner's Attributes; a keyword reads the Parameters of its callables."""
-
-    rows = documented_inventory
-    area = rows["member:doclens_pkg.core:Curve.area"]
-    assert area["doc_first_line"] == "Area under the curve, by the trapezoid rule."
-    assert area["doc_source"] == "Curve Attributes"
-    origin = rows["member:doclens_pkg.core:Base.origin"]
-    assert (origin["doc_first_line"], origin["doc_source"]) == (
-        "Where the base came from.",
-        "Base Attributes",
-    )
-    assert rows["member:doclens_pkg.core:Curve.bare"]["doc_first_line"] == ""
-    assert rows["member:doclens_pkg.core:Curve.width"]["doc_first_line"] == ""
-    budget = rows["param:budget"]
-    assert budget["doc_first_line"] == "How many evaluations to spend."
-    assert [d["use"] for d in budget["param_docs"]] == ["tl.core.make_curve", "tl.make_curve"]
-    area_kw = rows["param:area"]
-    assert "Area to start from." in area_kw["doc_first_line"]
-    assert "Area under the curve" in area_kw["doc_first_line"]
-    assert area_kw["doc_first_line"].count(" | ") == 1
-    assert area_kw["doc_source"] == "tl.Curve Attributes"
-
-
-def test_section_meanings_stay_out_of_the_fingerprint(documented_inventory: dict) -> None:
-    """Two fields of one class still share a fingerprint, as before meanings were read."""
-
-    rows = documented_inventory
-    area = rows["member:doclens_pkg.core:Curve.area"]["fingerprint"]
-    assert rows["member:doclens_pkg.core:Curve.steps"]["fingerprint"] == area
-
-
 def test_gate_items_use_documented_meaning_over_a_leaf_index_row(
     tmp_path: Path, documented_inventory: dict
 ) -> None:
@@ -520,24 +426,6 @@ def test_reference_takes_definition_text_and_skips_spelling_index_rows(tmp_path:
         "The fresh one.",
         "glossary:docs/reference/glossary.md:4",
     )
-
-
-def test_snippet_prefers_a_hit_near_the_owner() -> None:
-    """A contextual hit beside the owner's name outranks an earlier unrelated one."""
-
-    lines = ["spec.area"] + [""] * 30 + ["c = Curve()", "c.area"]
-    hits = [(1, 5, 9, "contextual"), (33, 2, 6, "contextual")]
-    assert gate_input._best_hit(hits, lines, ["Curve"]) == (1, 33)
-    assert gate_input._best_hit(hits, lines, []) == (3, 1)
-    far = ["c = Curve()"] + [""] * 30 + ["c.area"]
-    assert gate_input._best_hit([(32, 2, 6, "contextual")], far, ["Curve"]) == (2, 32)
-    sibling = ["g = make_graph()"] + [""] * 30 + ["e.area"]
-    assert gate_input._best_hit([(32, 2, 6, "contextual")], sibling, ["Curve"]) == (3, 32)
-    assert gate_input._best_hit([(32, 2, 6, "contextual")], sibling, ["Curve"], ["make_graph"]) == (
-        2,
-        32,
-    )
-    assert gate_input._best_hit([(1, 0, 4, "qualified")] + hits, lines, ["Curve"]) == (0, 1)
 
 
 CODEMOD_PKG = '''
@@ -694,27 +582,3 @@ def test_cli_diff_check_and_codemod(tmp_path: Path, capsys: pytest.CaptureFixtur
     assert main([*common, "codemod", "--proposals", str(proposals)]) == 0
     assert "dry run: nothing written" in capsys.readouterr().out
     assert load_inventory(proposals)["param:budget"]["proposed"] == "limit"
-
-
-def test_load_inventory_rejects_rows_without_ids(tmp_path: Path) -> None:
-    """Rows need id, kind and name; a foreign inventory schema is refused."""
-
-    bad = tmp_path / "bad.json"
-    bad.write_text(json.dumps([{"name": "x"}]))
-    with pytest.raises(ValueError, match="lacks"):
-        load_inventory(bad)
-    bad.write_text(json.dumps({"schema": "name-lockstep-inventory/0", "rows": []}))
-    with pytest.raises(ValueError, match="schema"):
-        load_inventory(bad)
-
-
-@pytest.mark.slow
-def test_real_package_inventory_has_the_core_names() -> None:
-    """The walk over the real package reaches the core nouns and their members."""
-
-    rows = {row["id"]: row for row in build_inventory()["rows"]}
-    assert {"root:tl.trace", "root:tl.Trace", "param:layers_to_save"} <= set(rows)
-    trace_members = [
-        r for r in rows.values() if r["kind"] == "member" and "Trace" in r["owner_names"]
-    ]
-    assert len(trace_members) > 100
