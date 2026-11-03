@@ -71,7 +71,19 @@ _C_COARSE = "#f4e3c1"
 
 @dataclass(frozen=True)
 class SeriesPoint:
-    """One (step-span, block-truth, observation) sample of a series."""
+    """One (step-span, block-truth, observation) sample of a series.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(2):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> [point.step_lo for point in view.series(next(iter(view.sites)))]
+    [0, 1]"""
 
     step_lo: int
     step_hi: int
@@ -87,6 +99,18 @@ class HistoryView:
     Built from a :class:`HistoryReader` (disk artifact) or directly from
     committed blocks (RAM ring). Renderers, iterators, and the pandas
     conversion all read THIS one shape.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = HistoryView.from_collector(session.collector)
+    >>> len(view.series(next(iter(view.sites))))
+    3
     """
 
     run_record: RunRecord
@@ -530,6 +554,18 @@ def render_fan(
     quantiles are outlier-robust by construction and need no
     outlier-rejection knob (D24). Strip height is fixed (``width`` is the
     one geometry knob, matching :func:`render_detail`).
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> tl.viz.quantile_fan(view, next(iter(view.sites))).startswith("<svg")
+    True
     """
 
     height = _FAN_HEIGHT
@@ -648,6 +684,18 @@ def render_waterfall(
     step (their ten averaged columns are the credited contrast). Strip
     height is fixed (``width`` is the one geometry knob, matching
     :func:`render_detail`).
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> tl.viz.histogram_waterfall(view, next(iter(view.sites))).startswith("<svg")
+    True
     """
 
     height = _WATERFALL_HEIGHT
@@ -803,6 +851,18 @@ def render_contact_sheet(
     WatchRenderError
         ``watch_page_out_of_range`` when ``page`` exceeds the deterministic
         page count.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> tl.viz.contact_sheet(view).startswith("<svg")
+    True
     """
 
     ranked = rank_sites(view, stream)
@@ -859,6 +919,18 @@ def render_detail(
     disclosure line (grad scale, estimation, sample size, presence gaps,
     nonfinite events). Optimizer skips and segment boundaries mark every
     row identically, so cross-stream alignment is readable.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> tl.viz.site_detail(view, next(iter(view.sites))).startswith("<svg")
+    True
     """
 
     pairs = view.site_streams(site_id)

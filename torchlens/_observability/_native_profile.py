@@ -57,7 +57,16 @@ def register_join_result(trace: Any, result: KinetoJoinResult) -> None:
 
 @dataclass(frozen=True)
 class KernelProfileReport:
-    """One door call: one execution, one trace, one joined result."""
+    """One door call: one execution, one trace, one joined result.
+
+    Examples
+    --------
+    >>> report = tl.report.kernel_profile(model, x)
+    >>> isinstance(report, KernelProfileReport)
+    True
+    >>> repr(report).startswith("KernelProfileReport(availability=")
+    True
+    """
 
     trace: Any
     join: KinetoJoinResult
@@ -132,6 +141,14 @@ def kernel_profile(
     -------
     KernelProfileReport
         The trace, the joined result, and the session facts.
+
+    Examples
+    --------
+    >>> report = kernel_profile(model, x)
+    >>> type(report.trace).__name__
+    'Trace'
+    >>> report.availability in ("not_requested", "unavailable", "empty", "partial", "joined")
+    True
     """
 
     from .. import _user_funcs as user_funcs
