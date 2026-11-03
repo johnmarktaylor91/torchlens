@@ -1054,8 +1054,8 @@
   `run` or `backward` fires it); `InterventionOptions(differentiable=True)` (replay
   engine only; rerun and set-only ignore it) replays onto a new fork whose outputs
   stay differentiable and returns it. `do` returns the trace, never a handle:
-  `trace.clear_edits(site)` detaches sticky edits. `Trace.set` stays the one-shot
-  staging write. The removed stage, propagate and detach spellings are mapped in
+  `trace.clear_edits(site)` detaches sticky edits; the set-only engine is the
+  one-shot staging write. The removed stage, propagate and detach spellings are mapped in
   `docs/reference/deprecations.md`; `ReplayOptions` carries no hook or
   differentiable field.
 - CHANGED PARAMETERS REFUSE REPLAY (spellings DOCUMENTED-UNSTABLE): a

@@ -7704,6 +7704,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "capture_spec",
+  "file": "torchlens/intervention/_run_staged.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/intervention/_super/super_logs.py",
