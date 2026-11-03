@@ -239,6 +239,23 @@ def test_tf_integer_threshold_compare_is_perturbation_sensitive() -> None:
     assert less and less[0]["decision"] == "validated", less
 
 
+def test_tf_gather_and_slice_are_replayed() -> None:
+    """An embedding lookup (``GatherV2``) and ``tf.slice`` (``Slice``) replay and validate."""
+
+    table = tf.constant(np.arange(20, dtype=np.float32).reshape(5, 4) / 10.0)
+    ids = tf.constant([[3, 0, 4]], dtype=tf.int32)
+
+    def fn(token_ids: Any) -> Any:
+        return tf.slice(tf.gather(table, token_ids), [0, 1, 0], [1, 2, 3])
+
+    trace = tl.trace(fn, ids, backend="tf")
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    decided = {r["func_name"]: r["decision"] for r in status.decisions}
+    assert decided.get("GatherV2") == "validated", status.decisions
+    assert decided.get("Slice") == "validated", status.decisions
+
+
 def test_tf_tampered_payload_fails_naming_the_op_and_reason() -> None:
     """A11: a tampered payload yields ``failed`` naming the op in message and decisions."""
 
