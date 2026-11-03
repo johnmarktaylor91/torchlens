@@ -122,6 +122,9 @@ def grade_relation_params(
     kind: str, members: tuple[str, ...], params: Mapping[str, Any]
 ) -> RelationGrade:
     """The derivation itself, over a validated params mapping (the grader's one input)."""
+    # Complexity above the default is essential: the grade is one decision over
+    # every premise kind (carry mode, item grade, seam locality), kept in one
+    # place so the rule reads as the glossary states it.
 
     envelope = params.get("evidence")
     items: list[Mapping[str, Any]] = list(envelope["items"]) if envelope else []
@@ -152,6 +155,7 @@ def _broken_premises(
     items: list[Mapping[str, Any]], escalating: list[Mapping[str, Any]], *, carry_mode: Any
 ) -> tuple[str, ...]:
     """Return the broken premises that fire, given the non-seam-local divergent items."""
+    # Branches match the two broken premises and their exemptions one to one.
 
     fired: list[str] = []
     checked_origin = [

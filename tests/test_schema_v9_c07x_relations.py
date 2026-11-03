@@ -239,7 +239,7 @@ def test_evidence_over_budget_code_survives_bundle_door(two_member_bundle: Bundl
             {
                 "grade": "disclosed",
                 "basis": "bulk",
-                "class": "harness_record",
+                "class": "member_state",
                 "blob": "x" * RELATION_EVIDENCE_BUDGET_BYTES,
             }
         ]
