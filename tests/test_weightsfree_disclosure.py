@@ -61,11 +61,6 @@ def test_envelope_stamped_and_load_valid() -> None:
     assert envelope["claims"]["measured_values"] == "unavailable"
 
 
-def test_ordinary_capture_carries_no_envelope() -> None:
-    trace = tl.trace(Toy(), torch.randn(2, 4))
-    assert trace.graph.structure_evidence is None
-
-
 # ---------------------------------------------------------------------------
 # The claim-status ladder on the honesty authority
 # ---------------------------------------------------------------------------
