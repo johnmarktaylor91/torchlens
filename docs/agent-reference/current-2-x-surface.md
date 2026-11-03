@@ -329,6 +329,8 @@
   `b.at(site)` takes a label or a selector (a member subset is a bundle of those members); `compare`,
   `rank_changes`, `store_comparison` and `draw(graph="diff")` run the comparison gate on every
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
+  `b.summary()` (the bundle card as text), `b.to_pandas()` (one `member`-keyed table) and
+  `b.to_agent_json()` (`torchlens.agent_bundle.v1`, members keyed by name) read the bundle whole.
   `b.draw("bundle.svg", graph="forward", node_overrides={"relu_1_1": {"fillcolor": "#ffeeaa"}})`
   draws the merged bundle graph (one picture; `Trace.draw` spellings, `combined` for both passes,
   `nodes="members"` for the member relation graph) and returns the DOT source.

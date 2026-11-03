@@ -57,6 +57,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   by `save=` fails explicitly. `tl.record` installs gradient hooks only when `backward_ready=True`,
   `save_grads=` or `default_grad=` is given; without one, `Recording.backward()` refuses with
   code `recording_backward_not_requested`.
+  The Trace-parity verbs `Recording.to_agent_json()`, `Recording.save(path)`, `Recording.fork()`
+  and `Recording.do(site, edit)` cook through `to_trace()` and delegate to the Trace verb, as do
+  `tl.export.xarray(recording)` and `tl.save(recording, path)`; a typed `to_trace` refusal
+  propagates unchanged. `tl.record(..., episode=)` refuses typed
+  (`episode_unsupported_on_record`): episode capture runs on `tl.trace(model, x, episode=...)`.
 
 **Saved-activation autograd history** *(knob spellings documented-unstable)*
 : `CaptureOptions(detach_saved_activations=False)`, the `tl.trace` default, keeps every saved
@@ -3352,7 +3357,9 @@ deprecation shim owed*
   in this release.
 
 **Recording keywords**
-: `tl.record(...)`, `Recorder(...)` and `tl.options.RecordingOptions` take `narrate=` (a
+: `tl.record(...)` and `Recorder(...)` accept `episode=` only to refuse it typed
+  (`episode_unsupported_on_record`, teaching `tl.trace(model, x, episode=...)`). They and
+  `tl.options.RecordingOptions` take `narrate=` (a
   `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
   `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`) and
   `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sites` (`sites=`)
@@ -3724,10 +3731,12 @@ describe each surface in depth.
 | `Recording.add_grad_record` | Append one retained gradient record and update the gradient indexes |
 | `Recording.by_address` | Map from module address to indexes of its retained records |
 | `Recording.by_label` | Map from layer label to `(pass, record)` index pairs of its retained records |
+| `Recording.do` | Cook through `to_trace()` and run `Trace.do` on the cooked trace: the edited, replayed Trace |
 | `Recording.end_times` | Per-pass end timestamps of the recording |
 | `Recording.enrich` | Return a new recording with the requested incremental enrichments, or all feasible ones |
 | `Recording.error_repr` | Repr of the error that ended a failed recording, or `None` |
 | `Recording.error_traceback` | Traceback text of the error that ended a failed recording, or `None` |
+| `Recording.fork` | Cook through `to_trace()` and return `Trace.fork(name)` of the cooked trace |
 | `Recording.from_capture_events` | Build a lazy recording projection from a predicate capture session |
 | `Recording.grad_by_grad_fn_label` | Map from gradient function label to indexes into `grad_records` |
 | `Recording.grad_by_label` | Map from layer label to indexes into `grad_records` |
@@ -3743,8 +3752,10 @@ describe each surface in depth.
 | `Recording.raw_metadata` | Return payload-free raw metadata rows for every captured event, retained or not |
 | `Recording.records` | Retained activation records, in capture order |
 | `Recording.recovery_warnings` | Warnings collected while recovering this recording from disk |
+| `Recording.save` | Cook through `to_trace()` and write the cooked trace with `Trace.save` (same keywords, same artifact) |
 | `Recording.save_grads_repr` | Repr of the gradient-saving selector used at recording time, or `None` |
 | `Recording.start_times` | Per-pass start timestamps of the recording |
+| `Recording.to_agent_json` | Cook through `to_trace()` and return the cooked trace's `Trace.to_agent_json(max_ops=)` dump |
 
 #### `tl.options.RecordingOptions`
 
@@ -4035,6 +4046,9 @@ The sections above describe each surface in depth.
 | `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"` |
 | `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=`. Row keys: a multi-pass op gives one row per pass, keyed by its pass-qualified label (`tanh_1_1:2`); a single-pass op keeps its bare layer label (JMT, Sun 1 Nov 2026) |
 | `Bundle.rank_changes` | Rank sites by their distance from a baseline member; rows keyed like `Bundle.compare` (one row per pass of a multi-pass op) |
+| `Bundle.summary` | The bundle card as text: member count and names, outcome distribution, baseline, relation count, structural consistency |
+| `Bundle.to_pandas` | One stacked table: a leading `member` column, then each member's `Trace.to_pandas()` rows in `names` order with a fresh index; an empty bundle gives an empty frame with the `member` column |
+| `Bundle.to_agent_json` | The `torchlens.agent_bundle.v1` dump: `member_count`, `names`, `baseline_name`, `outcome`, `structurally_consistent` and `members` (each member's `Trace.to_agent_json(max_ops=)`) |
 | `BundleComparisonError.severity` | The error's severity class |
 | `CapabilityRow.is_available` | Whether the capability is available in this environment |
 | `CaptureFacts.is_structure_only` | Whether the capture kept structure only, without payloads |

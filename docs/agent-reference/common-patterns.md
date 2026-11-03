@@ -106,6 +106,9 @@ ablated.run(model, x)
 disk_log = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 full_structure = recording.to_trace()
+# Trace-parity verbs cook through to_trace(): to_agent_json, save, fork and do.
+card = recording.to_agent_json()
+recording.save("sparse.tlspec", overwrite=True)  # same artifact Trace.save writes
 
 # Selection algebra (L6): compose regions, resolve explicitly, edit with do().
 log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
