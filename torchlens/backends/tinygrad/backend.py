@@ -82,18 +82,17 @@ from ._derived_grads import (
     _tree_leaves_with_paths,
 )
 from ._execution_guard import _reject_mid_capture_execution
+from ._realize_once import RealizedCapture, live_tensor_uops, realize_capture, recorded_values
 from ._rules import (
     CONSTANT_KIND_ANNOTATION,
     CONSTANT_UNREALIZABLE_CODE,
-    PER_UOP_PAYLOAD_POLICY,
-    RNG_STATE_IN_GRAPH_CODE,
+    REALIZE_ONCE_PAYLOAD_POLICY,
     ReplayVerdict,
     constant_func_name,
     constant_kind_for_uop,
     refuse_constant_unrealizable,
-    refuse_rng_state_in_graph,
-    rng_state_uops,
 )
+from ._uop_graph import _data_flow_uops, _op_func_name, _unique_uops, _uop_name
 
 _ACTIVE_TINYGRAD_MODULE_STACK: list[TinygradModuleFrame] = []
 
@@ -287,7 +286,7 @@ class TinygradBackend:
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool | MissingType = MISSING,
         lookback: int = 0,
@@ -349,8 +348,8 @@ class TinygradBackend:
             Raw-input render policy.
         output_transform
             Optional metadata transform for final output.
-        save_raw_output
-            Raw-output save policy.
+        save_transformed_output
+            Transformed-output save policy.
         layer_visualizers
             Unsupported for tinygrad in this preview.
         save_visualizations
@@ -396,7 +395,7 @@ class TinygradBackend:
             name=name,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             save_visualizations=save_visualizations,
             module_identity_mode=module_identity_mode,
         )
@@ -414,7 +413,7 @@ class TinygradBackend:
         name = capture_options.name
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_transformed_output
+        save_transformed_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         module_identity_mode = capture_options.module_identity_mode
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
@@ -444,7 +443,7 @@ class TinygradBackend:
         name = _default_if_missing(name, None)
         save_raw_input = _default_if_missing(save_raw_input, "small")
         batch_render = _default_if_missing(batch_render, "auto")
-        save_raw_output = _default_if_missing(save_raw_output, "small")
+        save_transformed_output = _default_if_missing(save_transformed_output, "small")
         save_visualizations = _default_if_missing(save_visualizations, False)
         activation_transform = None if _is_missing(activation_transform) else activation_transform
         save_grads = None if _is_missing(save_grads) else save_grads
@@ -496,11 +495,12 @@ class TinygradBackend:
             save_raw_input=cast(str | bool, save_raw_input),
             batch_render=cast(str, batch_render),
             output_transform=output_transform,
-            save_transformed_output=cast(str | bool, save_raw_output),
+            save_transformed_output=cast(str | bool, save_transformed_output),
         )
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
-        output, observed_ops, observed_module_stacks = self._run_observed_forward(
+        preexisting_uops = live_tensor_uops()  # model state, not forward values
+        output, observed_ops, observed_module_stacks, _pinned_uops = self._run_observed_forward(
             model, args, module_tree if use_object_module else None
         )
         if not (outputs := tuple(self._tensor_leaves(output))):
@@ -511,24 +511,21 @@ class TinygradBackend:
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
 
         trace._output_slot = returned(output)
+        realized = realize_capture(args, outputs, preexisting_uops, self.is_tensor)
         trace.transformed_output = output_transform(output) if callable(output_transform) else None
-        uop_labels = self._emit_input_sources(trace, args)
+        uop_labels = self._emit_input_sources(trace, realized)
+        tree = module_tree if use_object_module else None
         captures = self._emit_uop_graph(
-            trace,
-            outputs,
-            uop_labels,
-            observed_ops,
-            observed_module_stacks,
-            module_tree if use_object_module else None,
+            trace, realized, uop_labels, (observed_ops, observed_module_stacks, tree)
         )
-        self._mark_output_events(trace, outputs, uop_labels, captures)
+        self._mark_output_events(trace, outputs, uop_labels, captures, realized.output_uops)
         _stamp_param_logs(trace, module_tree if use_object_module else None)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
         trace._num_layers_with_params = 0
         self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_uop_captures = captures
-        trace.tinygrad_payload_policy = PER_UOP_PAYLOAD_POLICY
+        trace.tinygrad_payload_policy = REALIZE_ONCE_PAYLOAD_POLICY
         apply_static_label_save_policy(trace, save_predicate, backend_name="tinygrad")
         if grad_options is not None:
             self._attach_derived_grads(
@@ -548,7 +545,7 @@ class TinygradBackend:
         model: Callable[..., Any],
         args: list[Any],
         module_tree: TinygradModuleTree | None,
-    ) -> tuple[Any, dict[int, list[str]], dict[int, tuple[TinygradModuleFrame, ...]]]:
+    ) -> tuple[Any, dict[int, list[str]], dict[int, tuple[TinygradModuleFrame, ...]], list[Any]]:
         """Run the forward once under Tensor API observation and the execution guard.
 
         Parameters
@@ -563,9 +560,10 @@ class TinygradBackend:
 
         Returns
         -------
-        tuple[Any, dict[int, list[str]], dict[int, tuple[TinygradModuleFrame, ...]]]
-            The forward output, the Tensor API names by UOp id, and the
-            first-observed module stacks by UOp id.
+        tuple[Any, dict[int, list[str]], dict[int, tuple[TinygradModuleFrame, ...]], list[Any]]
+            The forward output, the Tensor API names by UOp id, the
+            first-observed module stacks by UOp id, and the observed UOps. The
+            caller holds the UOps until it has read the id-keyed mappings.
 
         Raises
         ------
@@ -575,6 +573,7 @@ class TinygradBackend:
 
         observed_ops: dict[int, list[str]] = {}
         observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] = {}
+        pinned_uops: list[Any] = []
         input_identities = self._input_identities(args)
         module_call_context = (
             scoped_tinygrad_module_calls(module_tree, observed_module_stacks)
@@ -583,7 +582,7 @@ class TinygradBackend:
         )
         with (
             module_call_context,
-            _observe_tensor_ops(observed_ops, observed_module_stacks),
+            _observe_tensor_ops(observed_ops, observed_module_stacks, pinned_uops=pinned_uops),
             _reject_mid_capture_execution(),
         ):
             output = model(*args)
@@ -594,7 +593,7 @@ class TinygradBackend:
                 "tinygrad expression instead.",
                 code="input_mutation_unsupported",
             )
-        return output, observed_ops, observed_module_stacks
+        return output, observed_ops, observed_module_stacks, pinned_uops
 
     def validate_trace(
         self,
@@ -771,15 +770,15 @@ class TinygradBackend:
             compute_input_output_distances=compute_input_output_distances,
         )
 
-    def _emit_input_sources(self, trace: Trace, args: Sequence[Any]) -> dict[int, str]:
+    def _emit_input_sources(self, trace: Trace, capture: RealizedCapture) -> dict[int, str]:
         """Emit source events for positional tinygrad tensor inputs.
 
         Parameters
         ----------
         trace
             Trace receiving events.
-        args
-            Normalized positional call arguments.
+        capture
+            The realized capture; its input leaves and their realized values.
 
         Returns
         -------
@@ -788,15 +787,13 @@ class TinygradBackend:
         """
 
         uop_labels: dict[int, str] = {}
-        for path, value in _tree_leaves_with_paths(tuple(args)):
-            if not self.is_tensor(value):
-                continue
+        for path, value, uop in capture.input_leaves:
             event = self._append_event(
                 trace=trace,
                 kind="source",
                 layer_type="input",
                 func_name="input",
-                output=self._realized_copy(value),
+                output=self._capture_payload(capture, uop),
                 parents=(),
                 parent_arg_positions={"args": {}, "kwargs": {}},
                 module_stack=(),
@@ -807,34 +804,30 @@ class TinygradBackend:
                     "tinygrad_identity": _identity(value),
                 },
             )
-            uop_labels[id(cast(Any, value).uop)] = event.label_raw
+            uop_labels[id(uop)] = event.label_raw
         return uop_labels
 
     def _emit_uop_graph(
         self,
         trace: Trace,
-        outputs: Sequence[Any],
+        capture: RealizedCapture,
         uop_labels: dict[int, str],
-        observed_ops: Mapping[int, list[str]],
-        observed_module_stacks: Mapping[int, tuple[TinygradModuleFrame, ...]],
-        module_tree: TinygradModuleTree | None,
+        observed: tuple[Mapping[int, list[str]], Mapping[int, Any], TinygradModuleTree | None],
     ) -> tuple[TinygradUOpCapture, ...]:
-        """Emit one event for each tensor-shaped UOp reachable from outputs.
+        """Emit one event per recorded UOp, its payload from the one realization.
 
         Parameters
         ----------
         trace
             Trace receiving events.
-        outputs
-            Flat tinygrad output tensors.
+        capture
+            The realized capture (``_realize_once.recorded_values`` order).
         uop_labels
             Existing UOp label mapping seeded with source inputs.
-        observed_ops
-            Tensor API observations keyed by returned UOp id.
-        observed_module_stacks
-            First-observed live module stack keyed by returned UOp id.
-        module_tree
-            Discovered tinygrad module tree for object-module captures, if any.
+        observed
+            ``(observed_ops, observed_module_stacks, module_tree)``: tensor API
+            observations and first-observed module stacks keyed by returned UOp
+            id, and the object-module tree if any.
 
         Returns
         -------
@@ -842,57 +835,64 @@ class TinygradBackend:
             Captures used by live validation.
         """
 
-        captures: list[TinygradUOpCapture] = []
-        uops = _unique_uops(outputs)
-        # Refuse before any payload realization could re-evaluate lazy RNG
-        # state (FORKS F-K interim; realize-once capture lifts this).
-        rng_uops = rng_state_uops(uops)
-        if rng_uops:
-            raise refuse_rng_state_in_graph(rng_uops[0], code=RNG_STATE_IN_GRAPH_CODE)
-        for uop in uops:
-            if id(uop) in uop_labels or not _is_materializable_uop(uop):
-                continue
-            op_name = _uop_name(uop)
-            parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
-                for index, src in enumerate(getattr(uop, "src", ()) or ())
-                if (label := uop_labels.get(id(src))) is not None
-            )
-            parent_positions = {
+        return tuple(
+            self._emit_uop(trace, (uop, tensor, model_uop, owned), uop_labels, observed)
+            for uop, tensor, model_uop, owned in recorded_values(capture)
+        )
+
+    def _emit_uop(
+        self,
+        trace: Trace,
+        value: tuple[Any, Any, Any, bool],
+        uop_labels: dict[int, str],
+        observed: tuple[Mapping[int, list[str]], Mapping[int, Any], TinygradModuleTree | None],
+    ) -> TinygradUOpCapture:
+        """Emit the event for one recorded UOp and return its validation capture.
+
+        ``value`` is ``(uop, tensor, model_uop, owned)`` from
+        :func:`recorded_values`: ``uop`` gives the parent edges, ``tensor`` the
+        realized value (the payload as is when ``owned``, else copied), and
+        ``model_uop`` is the UOp the model, observer and consumers know the
+        value by (it differs only for a realized random-init weight).
+        ``observed`` is ``(observed_ops, observed_module_stacks, module_tree)``;
+        ``uop_labels`` gains both UOps.
+        """
+
+        uop, tensor, model_uop, owned = value
+        observed_ops, observed_module_stacks, module_tree = observed
+        op_name = _uop_name(uop)
+        parents = tuple(
+            ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
+            for index, src in enumerate(getattr(uop, "src", ()) or ())
+            if (label := uop_labels.get(id(src))) is not None
+        )
+        param_refs = _param_refs_for_uop(model_uop, module_tree)
+        constant_kind = constant_kind_for_uop(
+            uop,
+            parent_labels=tuple(edge.parent_label_raw for edge in parents),
+            is_input=False,
+            is_parameter=bool(param_refs),
+        )
+        payload = tensor if owned else self._realized_copy(tensor, uop=uop)
+        names = tuple(observed_ops.get(id(model_uop), ()))
+        event = self._append_event(
+            trace=trace,
+            kind="op",
+            layer_type=constant_func_name(constant_kind, op_name.lower()),
+            func_name=constant_func_name(constant_kind, _op_func_name(names, op_name)),
+            output=payload,
+            parents=parents,
+            parent_arg_positions={
                 "args": {edge.arg_position: edge.parent_label_raw for edge in parents},
                 "kwargs": {},
-            }
-            module_stack = _module_stack_for_uop(uop, observed_module_stacks, module_tree)
-            param_refs = _param_refs_for_uop(uop, module_tree)
-            constant_kind = constant_kind_for_uop(
-                uop,
-                parent_labels=tuple(edge.parent_label_raw for edge in parents),
-                is_input=False,
-                is_parameter=bool(param_refs),
-            )
-            tensor = self._tensor_from_uop(uop)
-            payload = self._realized_copy(tensor, uop=uop)
-            annotations = _uop_annotations(
-                uop, op_name, tensor, tuple(observed_ops.get(id(uop), ())), constant_kind
-            )
-            event = self._append_event(
-                trace=trace,
-                kind="op",
-                layer_type=constant_func_name(constant_kind, op_name.lower()),
-                func_name=constant_func_name(
-                    constant_kind, (observed_ops.get(id(uop)) or [op_name.lower()])[-1]
-                ),
-                output=payload,
-                parents=parents,
-                parent_arg_positions=parent_positions,
-                module_stack=module_stack,
-                params=param_refs,
-                container_path=(),
-                annotations=annotations,
-            )
-            uop_labels[id(uop)] = event.label_raw
-            captures.append(_uop_capture(event.label_raw, uop, op_name, parents, payload))
-        return tuple(captures)
+            },
+            module_stack=_module_stack_for_uop(model_uop, observed_module_stacks, module_tree),
+            params=param_refs,
+            container_path=(),
+            annotations=_uop_annotations(uop, op_name, tensor, names, constant_kind),
+        )
+        uop_labels[id(uop)] = uop_labels[id(model_uop)] = event.label_raw
+        return _uop_capture(event.label_raw, uop, op_name, parents, payload)
 
     def _append_event(
         self,
@@ -1166,7 +1166,8 @@ class TinygradBackend:
         trace: Trace,
         outputs: Sequence[Any],
         uop_labels: Mapping[int, str],
-        captures: Sequence[TinygradUOpCapture] = (),
+        captures: Sequence[TinygradUOpCapture],
+        output_uops: Sequence[Any],
     ) -> None:
         """Mark final output UOps as output parents.
 
@@ -1179,8 +1180,9 @@ class TinygradBackend:
         uop_labels
             Mapping from UOp object id to raw labels.
         captures
-            Captured UOps for structural fallback when tinygrad returns
-            equivalent UOp objects with different Python identities.
+            Captured UOps for structural fallback (equal UOps, other identity).
+        output_uops
+            Output UOps read before realization, parallel to ``outputs``.
 
         Returns
         -------
@@ -1188,17 +1190,14 @@ class TinygradBackend:
             Output-parent flags are updated in place.
         """
 
-        labels_by_signature = {
-            _uop_signature(capture.uop): capture.label_raw for capture in captures
-        }
+        labels_by_signature = {_uop_signature(c.uop): c.label_raw for c in captures}
         output_labels: list[str] = []
-        for output in outputs:
-            output_uop = cast(Any, output).uop
+        for output, output_uop in zip(outputs, output_uops, strict=True):
             label = uop_labels.get(id(output_uop))
             if label is None:
                 label = labels_by_signature.get(_uop_signature(output_uop))
             if label is None:
-                label = _fallback_output_label(output, captures, output_labels)
+                label = _fallback_output_label(output, captures, output_labels, output_uop)
             if label is not None:
                 output_labels.append(label)
         labels = tuple(output_labels)
@@ -1311,7 +1310,7 @@ class TinygradBackend:
             ``trace.autograd.derived_grads`` is populated with input leaf gradient records.
         """
 
-        if getattr(trace, "tinygrad_payload_policy", None) != "dev_python_realized_copy":
+        if getattr(trace, "tinygrad_payload_policy", None) != REALIZE_ONCE_PAYLOAD_POLICY:
             raise BackendUnsupportedError(
                 "tinygrad derived gradients require live DEV=PYTHON realized-copy payloads; "
                 "audit-only traces cannot expose trace.autograd.derived_grads.",
@@ -1423,7 +1422,7 @@ class TinygradBackend:
             selected_ops, getattr(trace, "tinygrad_uop_captures", ())
         )
         live_candidates = _tinygrad_live_intermediate_candidates(
-            backend=self, outputs=outputs, observed_tensors=observed_tensors
+            backend=self, outputs=outputs, observed_tensors=observed_tensors, args=args
         )
         cast(Any, loss).backward()
         if not _tinygrad_outputs_close(self, derived_output, captured_output):
@@ -1687,6 +1686,17 @@ class TinygradBackend:
 
         return Tensor(uop)
 
+    def _capture_payload(self, capture: RealizedCapture, uop: Any) -> Any:
+        """The payload for a value realized by the capture's one realization.
+
+        A buffer the capture created is the payload as is; a value sharing a
+        buffer with a live tensor (an input that was already realized) is
+        copied so later writes to that tensor leave the payload unchanged.
+        """
+
+        tensor = capture.realized[id(uop)]
+        return tensor if id(uop) in capture.owned else self._realized_copy(tensor, uop=uop)
+
     def _realized_copy(self, value: Any, *, uop: Any | None = None) -> Any:
         """Return a sanctioned live payload copy for ``DEV=PYTHON`` tinygrad.
 
@@ -1705,10 +1715,8 @@ class TinygradBackend:
             Realized tinygrad Tensor copy detached from the source UOp lineage.
         """
 
-        from tinygrad import Tensor
-
         try:
-            return Tensor(value.tolist(), dtype=value.dtype, device=value.device).realize()
+            return _host_tensor(value.tolist(), value.dtype, value.device)
         except NotImplementedError as error:
             # ``need copyin``: a host-side source buffer (closure constant) that
             # the forward never realized; refuse typed instead of crashing.
@@ -2285,6 +2293,7 @@ def _fallback_output_label(
     output: Any,
     captures: Sequence[TinygradUOpCapture],
     used_labels: Sequence[str],
+    output_uop: Any,
 ) -> str | None:
     """Return a best-effort captured label for a returned tinygrad output.
 
@@ -2296,6 +2305,8 @@ def _fallback_output_label(
         Captures emitted from output-reachable UOps.
     used_labels
         Output labels already assigned to earlier leaves.
+    output_uop
+        The output's UOp read before realization.
 
     Returns
     -------
@@ -2303,7 +2314,7 @@ def _fallback_output_label(
         Matching raw label, if one can be inferred.
     """
 
-    output_name = _uop_name(output.uop)
+    output_name = _uop_name(output_uop)
     output_shape = tuple(getattr(output, "shape", ()))
     output_dtype = str(getattr(output, "dtype", ""))
     used = set(used_labels)
@@ -2502,6 +2513,7 @@ class _observe_tensor_ops:
         observed_ops: dict[int, list[str]],
         observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] | None = None,
         observed_tensors: dict[int, list[Any]] | None = None,
+        pinned_uops: list[Any] | None = None,
     ) -> None:
         """Initialize the observation context.
 
@@ -2515,11 +2527,17 @@ class _observe_tensor_ops:
         observed_tensors
             Optional mutable mapping receiving live result tensors by returned
             UOp id.
+        pinned_uops
+            Optional list receiving every returned UOp. The mappings above are
+            keyed by ``id()``; a UOp tinygrad drops mid-forward frees its id
+            for a later UOp, which would then inherit the dropped one's names.
+            Holding the returned UOps for the capture keeps every key unique.
         """
 
         self.observed_ops = observed_ops
         self.observed_module_stacks = observed_module_stacks
         self.observed_tensors = observed_tensors
+        self.pinned_uops = pinned_uops
         self.original: Any = None
 
     def __enter__(self) -> _observe_tensor_ops:
@@ -2540,6 +2558,8 @@ class _observe_tensor_ops:
 
             result = self.original(tensor, fxn, *args, **kwargs)
             name = getattr(fxn, "__name__", _uop_name(result.uop).lower())
+            if self.pinned_uops is not None:
+                self.pinned_uops.append(result.uop)
             self.observed_ops.setdefault(id(result.uop), []).append(str(name))
             if self.observed_module_stacks is not None:
                 self.observed_module_stacks.setdefault(
@@ -2575,76 +2595,6 @@ class _observe_tensor_ops:
 
         # Restore the deliberately replaced tinygrad method after preview capture.
         Tensor._apply_uop = self.original
-
-
-def _unique_uops(outputs: Sequence[Any]) -> tuple[Any, ...]:
-    """Return UOps reachable from outputs in topological order.
-
-    Parameters
-    ----------
-    outputs
-        tinygrad output tensors.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Unique UOps in first-seen topological order.
-    """
-
-    seen: set[int] = set()
-    ordered: list[Any] = []
-    for output in outputs:
-        for uop in cast(Any, output).uop.toposort():
-            if id(uop) in seen:
-                continue
-            seen.add(id(uop))
-            ordered.append(uop)
-    return tuple(ordered)
-
-
-def _is_materializable_uop(uop: Any) -> bool:
-    """Return whether a UOp can be saved as a tinygrad Tensor payload.
-
-    Parameters
-    ----------
-    uop
-        Candidate tinygrad UOp.
-
-    Returns
-    -------
-    bool
-        True when tinygrad can expose shape and host payload for ``uop``.
-    """
-
-    try:
-        from tinygrad import Tensor
-
-        tensor = Tensor(uop)
-        tuple(tensor.shape)
-        if getattr(tensor.dtype.base, "fmt", None) is None:
-            return False
-        tensor.tolist()
-    except Exception:
-        return False
-    return True
-
-
-def _uop_name(uop: Any) -> str:
-    """Return a stable tinygrad UOp name.
-
-    Parameters
-    ----------
-    uop
-        tinygrad UOp.
-
-    Returns
-    -------
-    str
-        Operation name without the ``Ops.`` prefix.
-    """
-
-    op = getattr(uop, "op", None)
-    return str(getattr(op, "name", op)).removeprefix("Ops.")
 
 
 def _uop_signature(uop: Any) -> str:
@@ -2743,6 +2693,7 @@ def _tinygrad_live_intermediate_candidates(
     backend: TinygradBackend,
     outputs: Sequence[Any],
     observed_tensors: Mapping[int, list[Any]],
+    args: Sequence[Any],
 ) -> dict[tuple[Any, ...], list[TinygradIntermediateCandidate]]:
     """Group no-realize live tensors by conservative tinygrad T1 signature.
 
@@ -2754,6 +2705,9 @@ def _tinygrad_live_intermediate_candidates(
         Tensor outputs from the no-realize derived pass.
     observed_tensors
         Live tensors retained by the Tensor API observer, keyed by UOp id.
+    args
+        Positional call arguments; their tensors are the sources the capture
+        records as inputs, so the walk numbers the same UOps the trace holds.
 
     Returns
     -------
@@ -2763,8 +2717,12 @@ def _tinygrad_live_intermediate_candidates(
     """
 
     grouped: dict[tuple[Any, ...], list[TinygradIntermediateCandidate]] = defaultdict(list)
-    ordinal = 0
-    for uop in _unique_uops(outputs):
+    source_ids = frozenset(
+        id(cast(Any, leaf).uop)
+        for _path, leaf in _tree_leaves_with_paths(tuple(args))
+        if backend.is_tensor(leaf)
+    )
+    for ordinal, uop in enumerate(_data_flow_uops(_unique_uops(outputs), outputs, source_ids)):
         tensors = observed_tensors.get(id(uop), ())
         for tensor in tensors:
             if not backend.is_tensor(tensor):
@@ -2786,8 +2744,6 @@ def _tinygrad_live_intermediate_candidates(
                     dtype_ref=DtypeRef(backend="tinygrad", name=dtype),
                 )
             )
-        if _is_materializable_uop(uop):
-            ordinal += 1
     return grouped
 
 
@@ -2965,8 +2921,6 @@ def _perturb_candidates(value: Any) -> tuple[Any, ...]:
         Perturbed realized tinygrad tensors with the same dtype and device.
     """
 
-    from tinygrad import Tensor
-
     payload = _payload_list(value)
     dtype_name = str(getattr(value, "dtype", ""))
     candidates: tuple[Any, ...]
@@ -2984,10 +2938,37 @@ def _perturb_candidates(value: Any) -> tuple[Any, ...]:
             _map_payload(payload, lambda item: float(item) - magnitude),
             _map_payload(payload, lambda item: 0.0),
         )
-    return tuple(
-        Tensor(candidate, dtype=value.dtype, device=value.device).realize()
-        for candidate in candidates
-    )
+    return tuple(_host_tensor(candidate, value.dtype, value.device) for candidate in candidates)
+
+
+def _host_tensor(values: Any, dtype: Any, device: Any) -> Any:
+    """A realized tinygrad tensor holding host ``values`` on ``device``.
+
+    The host-only ``NPY`` device stores numpy arrays and cannot copy data in
+    (``need copyin``), so a tensor there is built from a numpy array, which
+    tinygrad places on ``NPY`` directly.
+
+    Parameters
+    ----------
+    values
+        Nested Python values (``Tensor.tolist`` shape).
+    dtype
+        tinygrad dtype of the result.
+    device
+        tinygrad device of the result.
+
+    Returns
+    -------
+    Any
+        The realized tensor.
+    """
+
+    import numpy as np
+    from tinygrad import Tensor
+
+    if str(device).startswith("NPY"):
+        return Tensor(np.asarray(values), dtype=dtype, device=device)
+    return Tensor(values, dtype=dtype, device=device).realize()
 
 
 def _source_matches_payload(source_uop: Any, value: Any) -> bool:

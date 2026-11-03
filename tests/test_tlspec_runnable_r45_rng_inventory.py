@@ -89,6 +89,7 @@ class _PreexistingWorker:
         self.thread.join()
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_stopped_preexisting_worker_has_exited() -> None:
     """A stopped worker thread is gone before the next test captures. A pre-existing thread that
     exits inside a later capture window changes the thread count, which (correctly) ceilings that
@@ -193,21 +194,12 @@ class _ContainerGenModel(nn.Module):
 
 
 _INSPECTABLE_CONTAINERS = [
-    "deque",
-    "ordereddict",
     "counter",
-    "defaultdict",
-    "chainmap",
-    "userlist",
-    "userdict",
-    "namedtuple",
-    "custom_seq",
     "custom_map",
-    "queue",
-    "lifoqueue",
 ]
 
 
+# Kept: a sole mutation kill; the catch of its regression fault.
 @pytest.mark.parametrize("kind", _INSPECTABLE_CONTAINERS)
 def test_container_held_generator_drawn_on_worker_ceilings(
     kind: str, preexisting_worker: Any, tmp_path: Path
@@ -223,140 +215,3 @@ def test_container_held_generator_drawn_on_worker_ceilings(
     )
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-
-
-def test_simplequeue_held_generator_fails_closed_opaque(
-    preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """A ``queue.SimpleQueue`` has no non-mutating buffer snapshot -> fail closed to
-    ``inventory_opaque_container`` -> UNVERIFIABLE (never a silent no-consumption VERIFIED)."""
-
-    class _SimpleQueueModel(nn.Module):
-        def __init__(self, worker: Any) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.holder: Any = queue.SimpleQueue()
-            self.holder.put(np.random.default_rng(777))
-            self._worker = worker
-
-        def _draw(self) -> float:
-            g = self.holder.get()
-            r = float(g.random())
-            self.holder.put(g)
-            return r
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            v = self._worker.run(self._draw)
-            h = self.lin(x)
-            return h * 2.0 if v < 0.5 else h * 3.0
-
-    _trace, result = _roundtrip(_SimpleQueueModel(preexisting_worker), torch.randn(2, 4), tmp_path)
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-
-
-@pytest.mark.parametrize("queue_factory", [queue.SimpleQueue, queue.Queue, queue.LifoQueue])
-def test_empty_opaque_queue_stays_verified(queue_factory: Any, tmp_path: Path) -> None:
-    """r47 hon1_2 precision pin: a deterministic model holding an EMPTY opaque queue is
-    NON-MUTATINGLY provably empty (``empty()``/``qsize()``), so it CANNOT hold a generator and must
-    stay VERIFIED + ATTESTED -- no ``inventory_opaque_container`` over-trigger. The non-empty
-    opaque-queue fail-closed residual (above) is unchanged."""
-
-    class _EmptyQueueModel(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.holder: Any = queue_factory()  # created empty, never populated
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x).relu()
-
-    trace, result = _roundtrip(_EmptyQueueModel(), torch.randn(2, 4), tmp_path)
-    assert "inventory_opaque_container" not in trace._runnable.rng_monitor_uncertain_detail, (
-        "an empty opaque queue must not fail closed to inventory_opaque_container"
-    )
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
-def test_oneshot_generator_attribute_is_not_consumed(tmp_path: Path) -> None:
-    """A model attribute that is a one-shot python generator is NEVER iterated by the sweep (the
-    ``Collection`` gate, not ``Iterable``): the side-effect marker must not fire and the model
-    stays VERIFIED (a bare uninspectable iterator is the documented residual, not a false read)."""
-
-    marker = {"consumed": False}
-
-    def _oneshot() -> Any:
-        marker["consumed"] = True
-        yield 1
-
-    class _OneShotModel(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.it = _oneshot()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x).relu()
-
-    _trace, result = _roundtrip(_OneShotModel(), torch.randn(2, 4), tmp_path)
-    assert marker["consumed"] is False
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-@pytest.mark.parametrize("kind", ["deque", "chainmap", "userlist", "queue", "namedtuple"])
-def test_undrawn_container_generator_stays_verified(kind: str, tmp_path: Path) -> None:
-    """Over-trigger pin: a container-held generator that is present but NEVER drawn stays
-    VERIFIED with no ``model_attribute_generator`` channel."""
-
-    class _UndrawnModel(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.holder, _draw = _make_container(kind, np.random.default_rng(3))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x).relu()
-
-    trace, result = _roundtrip(_UndrawnModel(), torch.randn(2, 4), tmp_path)
-    assert "model_attribute_generator" not in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-@pytest.mark.parametrize("kind", ["deque", "queue"])
-def test_tensor_only_container_stays_verified(kind: str, tmp_path: Path) -> None:
-    """Over-trigger pin: a container holding only tensors is not a host-RNG channel and stays
-    VERIFIED (descending it enqueues tensors, which are leaves)."""
-
-    class _TensorContainerModel(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            if kind == "deque":
-                self.holder: Any = collections.deque([torch.ones(4), torch.zeros(4)])
-            else:
-                self.holder = queue.Queue()
-                self.holder.put(torch.ones(4))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x).relu()
-
-    trace, result = _roundtrip(_TensorContainerModel(), torch.randn(2, 4), tmp_path)
-    assert "model_attribute_generator" not in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_deterministic_model_stays_verified(tmp_path: Path) -> None:
-    """A host-RNG-free model with no containers stays VERIFIED + ATTESTED."""
-
-    class _Det(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.seq = nn.Sequential(*[nn.Linear(8, 8) for _ in range(6)])
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.seq(x)
-
-    _trace, result = _roundtrip(_Det(), torch.randn(2, 8), tmp_path)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED

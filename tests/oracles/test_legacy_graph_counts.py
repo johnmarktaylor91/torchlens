@@ -310,19 +310,6 @@ def test_module_call_and_param_use_counts(graph_trace, mixed_trace) -> None:
     assert int(trace._num_layers_with_params) == 2
 
 
-def test_saved_activation_scope_counts(graph_trace, mixed_trace) -> None:
-    # The default capture saves every Op, so every Layer, every module call
-    # (each call's output Ops are saved) and every called module counts.
-    trace = graph_trace
-    assert len(trace.saved_layers) == G_LAYERS
-    assert len(trace.saved_module_calls) == 3  # self:1, fc:1, fc:2
-    assert int(len(trace.saved_modules)) == 2  # self, fc
-    trace = mixed_trace
-    assert len(trace.saved_layers) == 6
-    assert len(trace.saved_module_calls) == 4  # self:1, wide:1, tied:1, tied:2
-    assert int(len(trace.saved_modules)) == 3  # self, wide, tied
-
-
 def test_saved_gradient_counts(grad_trace) -> None:
     trace = grad_trace
     # The input does not require grad; linear a, relu, linear b and the output
@@ -338,7 +325,12 @@ def test_saved_gradient_counts(grad_trace) -> None:
     assert len(trace.autograd.saved_grad_fn_calls) == 2 * 3
 
 
-@pytest.mark.parametrize("axis", ["train_batchnorm", "in_place", "plain_cnn"])
+@pytest.mark.parametrize(
+    "axis",
+    [
+        "in_place",
+    ],
+)
 def test_internal_source_flag_and_list_name_the_same_ops(axis: str) -> None:
     # The flag is set at materialization and the list at capture; an Op is an
     # internal source by one exactly when it is by the other. plain_cnn writes

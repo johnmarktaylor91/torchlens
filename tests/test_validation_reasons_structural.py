@@ -18,11 +18,13 @@ from torchlens._validation_status import known_validation_reasons
 from torchlens.backends._backend_protocol import VALIDATION_REASONS
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/status.py.
 def test_structural_reasons_are_public_members() -> None:
     assert {"op_unclassified", "capture_inconsistent"} <= VALIDATION_REASONS
     assert {"op_unclassified", "capture_inconsistent"} <= known_validation_reasons()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/tf/_raw_op_replay.py, backends/tf/validation.py.
 @pytest.mark.parametrize(
     ("failure", "reason"),
     [
@@ -57,6 +59,7 @@ def _jax_capture(kind: str) -> SimpleNamespace:
     return SimpleNamespace(kind=kind, primitive=kind)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/jax/backend.py.
 def test_jax_equation_count_mismatch_is_capture_inconsistent() -> None:
     from torchlens.backends.jax._validation_log import _JaxValidationLog
     from torchlens.backends.jax.backend import _jax_captures_consistent
@@ -73,6 +76,7 @@ def test_jax_equation_count_mismatch_is_capture_inconsistent() -> None:
     assert "2 equation ops" in log.decisions[-1]["justification"]
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/jax/backend.py.
 def test_jax_equation_kind_mismatch_is_capture_inconsistent() -> None:
     from torchlens.backends.jax._validation_log import _JaxValidationLog
     from torchlens.backends.jax.backend import _jax_captures_consistent
@@ -91,6 +95,7 @@ def test_jax_equation_kind_mismatch_is_capture_inconsistent() -> None:
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/jax/backend.py.
 def test_jax_consistent_captures_record_nothing() -> None:
     from torchlens.backends.jax._validation_log import _JaxValidationLog
     from torchlens.backends.jax.backend import _jax_captures_consistent

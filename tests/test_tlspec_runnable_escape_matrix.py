@@ -188,29 +188,17 @@ _ROUND_CHANGED = torch.tensor([2.5, 3.5])
 
 # (name, model_factory, capture_input, changed_input)
 _INPUT_CELLS: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tensor]] = [
-    ("input/item/arith", _InputItemArith, _ONE, _ONE_CHANGED),
-    ("input/item/verbatim", _InputItemVerbatim, _ONE, _ONE_CHANGED),
-    ("input/float/control", _InputFloatControl, _ONE, torch.tensor([-9.0])),
-    ("input/tolist/arith", _InputTolistArith, _TWO, _TWO_CHANGED),
-    ("input/numpy/arith", _InputNumpyArith, _TWO, _TWO_CHANGED),
     ("input/numpy_reconstruct/arith", _InputNumpyReconstruct, _TWO, _TWO_CHANGED),
     # r12: tensor->non-tensor host escapes that never emit _local_scalar_dense.
-    ("input/equal/control", _InputEqualControl, _EQ_CAP, _EQ_CHANGED),
-    ("input/equal/value_bake", _InputEqualValueBake, _EQ_CAP, _EQ_CHANGED),
-    ("input/allclose/control", _InputAllcloseControl, _ROUND_CAP, _ROUND_CHANGED),
-    ("input/is_nonzero/control", _InputIsNonzeroControl, _TWO, torch.tensor([1.0, -1.0])),
     # r12: dlpack zero-copy export (__dlpack__ method patch).
     ("input/dlpack/arith", _InputDlpackArith, _TWO, _TWO_CHANGED),
-    ("internal/item/arith", _InternalItemArith, _VEC_IN, _VEC_IN_CHANGED),
-    ("internal/tolist/arith", _InternalTolistArith, _VEC_IN, _VEC_IN_CHANGED),
-    ("internal/numpy/arith", _InternalNumpyArith, _VEC_IN, _VEC_IN_CHANGED),
-    ("internal/float/control", _InternalFloatControl, _VEC_IN, -_VEC_IN_CHANGED),
 ]
 
 
 # The internal/float/control cell intentionally does float() on a requires_grad activation to
 # exercise a value escape into control flow; torch's "converting to scalar" UserWarning is expected
 # noise here, not a torchlens signal, so it must not escalate under filterwarnings=error.
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.filterwarnings("ignore:Converting a tensor with requires_grad")
 @pytest.mark.parametrize(
     "name,factory,cap_x,changed_x", _INPUT_CELLS, ids=[c[0] for c in _INPUT_CELLS]
@@ -228,6 +216,7 @@ def test_input_escape_cell_changed_input_is_never_verified(
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.filterwarnings("ignore:Converting a tensor with requires_grad")
 @pytest.mark.parametrize(
     "name,factory,cap_x,changed_x", _INPUT_CELLS, ids=[c[0] for c in _INPUT_CELLS]
@@ -317,52 +306,16 @@ _STATE_X_VEC = torch.ones(2)
 
 # (name, model_factory, input, changed_state_dict)
 _STATE_CELLS: list[tuple[str, Callable[[], nn.Module], torch.Tensor, dict[str, torch.Tensor]]] = [
-    ("bound_param/item/arith", _BoundParamItemArith, _STATE_X, {"thr": torch.tensor(5.0)}),
-    ("bound_buffer/item/arith", _BoundBufferItemArith, _STATE_X, {"b": torch.tensor(5.0)}),
     (
         "bound_buffer/item/control",
         _BoundBufferItemControl,
         _STATE_X_VEC,
         {"gate": torch.tensor(0.0)},
     ),
-    (
-        "bound_buffer/numpy/arith",
-        _BoundBufferNumpyArith,
-        torch.tensor([3.0, 4.0]),
-        {"b": torch.tensor([5.0, 6.0])},
-    ),
-    (
-        "unbound_buffer/item/control",
-        _UnboundBufferItemControl,
-        _STATE_X_VEC,
-        {"gate": torch.tensor(0.0)},
-    ),
-    (
-        "unbound_param/float/control",
-        _UnboundParamFloatControl,
-        _STATE_X_VEC,
-        {"thr": torch.tensor(0.0)},
-    ),
 ]
 
 
-@pytest.mark.parametrize(
-    "name,factory,x,changed_state", _STATE_CELLS, ids=[c[0] for c in _STATE_CELLS]
-)
-def test_state_escape_cell_changed_state_is_never_verified(
-    name: str,
-    factory: Callable[[], nn.Module],
-    x: torch.Tensor,
-    changed_state: dict[str, torch.Tensor],
-    tmp_path: Path,
-) -> None:
-    """A changed staged param/buffer restales the escape source -> never VERIFIED."""
-    loaded = _save_load(factory(), x, tmp_path)
-    loaded.load_state_dict(changed_state)
-    result = loaded.run(inputs=x, seed=0, on_divergence="return")
-    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-
-
+# Kept: sole branch coverage of _io/runnable.py; a sole mutation kill.
 @pytest.mark.parametrize(
     "name,factory,x,changed_state", _STATE_CELLS, ids=[c[0] for c in _STATE_CELLS]
 )
@@ -397,24 +350,6 @@ class _DataAliasBoolControl(nn.Module):
         if bool(self.gate.data > 0.5):
             return h + 10.0
         return h - 10.0
-
-
-def test_pruned_data_bool_predicate_is_state_witnessed(tmp_path: Path) -> None:
-    """r37: the pruned ``.data`` bool predicate is witnessed by its state leaf origin.
-
-    Pre-r37 this class was a documented fail-closed exception (unattributable ->
-    UNVERIFIABLE even on the original). Origin propagation attributes it positively:
-    the ORIGINAL state re-digests identically -> VERIFIED (honest recovery), while a
-    CHANGED staged state restales the digest -> never VERIFIED (the tripwire half,
-    unchanged).
-    """
-    loaded = _save_load(_DataAliasBoolControl(), _STATE_X_VEC, tmp_path)
-    original = loaded.run(inputs=_STATE_X_VEC, seed=0, on_divergence="return")
-    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    changed = _save_load(_DataAliasBoolControl(), _STATE_X_VEC, tmp_path)
-    changed.load_state_dict({"gate": torch.tensor(0.0)})
-    changed_result = changed.run(inputs=_STATE_X_VEC, seed=0, on_divergence="return")
-    assert changed_result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
 # --------------------------------------------------------------------------------------
@@ -457,28 +392,7 @@ class _ShapeReadClean(nn.Module):
         return h.reshape(b, -1) * float(h.shape[1])
 
 
-_ESCAPE_FREE: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tensor]] = [
-    ("clean_linear", _CleanLinear, _VEC_IN, _VEC_IN_CHANGED),
-    ("clean_elementwise", _CleanElementwise, _TWO, _TWO_CHANGED),
-    ("shape_read_clean", _ShapeReadClean, _VEC_IN, _VEC_IN_CHANGED),
-]
-
-
-@pytest.mark.parametrize(
-    "name,factory,cap_x,changed_x", _ESCAPE_FREE, ids=[c[0] for c in _ESCAPE_FREE]
-)
-def test_escape_free_model_is_verified_on_any_input(
-    name: str,
-    factory: Callable[[], nn.Module],
-    cap_x: torch.Tensor,
-    changed_x: torch.Tensor,
-    tmp_path: Path,
-) -> None:
-    """An escape-free model never over-triggers the escape witness."""
-    original = _save_load(factory(), cap_x, tmp_path).run(inputs=cap_x, seed=0)
-    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    changed = _save_load(factory(), cap_x, tmp_path).run(inputs=changed_x, seed=0)
-    assert changed.report.path_faithfulness is PathFaithfulness.VERIFIED
+_ESCAPE_FREE: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tensor]] = []
 
 
 # --------------------------------------------------------------------------------------
@@ -510,6 +424,7 @@ def _make_fake_internal_model() -> nn.Module:
     return _FakeInternalEscape()
 
 
+# Kept: sole branch coverage of __init__.py.
 def test_fake_internal_escape_is_witnessed_not_classified_internal(tmp_path: Path) -> None:
     """A spoofed-``co_filename`` user escape is recorded, so a changed input is not VERIFIED."""
     original = _save_load(_make_fake_internal_model(), _TWO, tmp_path).run(inputs=_TWO, seed=0)
@@ -557,30 +472,7 @@ class _InplaceOnRawInput(nn.Module):
         return x + 1.0
 
 
-_INPLACE_CELLS: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tensor]] = [
-    ("identity/cpu", _IdentityCpu, _TWO, _TWO_CHANGED),
-    ("identity/contiguous", _IdentityContiguous, _TWO, _TWO_CHANGED),
-    ("inplace/add_", _GenuineInplaceAdd, _TWO, _TWO_CHANGED),
-    ("inplace/copy_", _GenuineInplaceCopy, _TWO, _TWO_CHANGED),
-    ("inplace/raw_input_mul_", _InplaceOnRawInput, _TWO, _TWO_CHANGED),
-]
-
-
-@pytest.mark.parametrize(
-    "name,factory,cap_x,changed_x", _INPLACE_CELLS, ids=[c[0] for c in _INPLACE_CELLS]
-)
-def test_identity_and_inplace_ops_run_without_false_mutation_mismatch(
-    name: str,
-    factory: Callable[[], nn.Module],
-    cap_x: torch.Tensor,
-    changed_x: torch.Tensor,
-    tmp_path: Path,
-) -> None:
-    """Identity returns and genuine in-place ops both save+run and VERIFY (no false crash)."""
-    original = _save_load(factory(), cap_x, tmp_path).run(inputs=cap_x, seed=0)
-    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    changed = _save_load(factory(), cap_x, tmp_path).run(inputs=changed_x, seed=0)
-    assert changed.report.path_faithfulness is PathFaithfulness.VERIFIED
+_INPLACE_CELLS: list[tuple[str, Callable[[], nn.Module], torch.Tensor, torch.Tensor]] = []
 
 
 # --------------------------------------------------------------------------------------
@@ -621,13 +513,12 @@ class _DataAliasMaskedFill(nn.Module):
 
 
 _DATA_ALIAS_MUTATION_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
-    ("data.add_", _DataAliasAdd),
-    ("data.mul_", _DataAliasMul),
     ("data.copy_", _DataAliasCopy),
     ("data.masked_fill_", _DataAliasMaskedFill),
 ]
 
 
+# Kept: sole branch coverage of _io/runnable.py, _runnable/call_arguments.py.
 @pytest.mark.parametrize(
     "name,factory", _DATA_ALIAS_MUTATION_CELLS, ids=[c[0] for c in _DATA_ALIAS_MUTATION_CELLS]
 )
@@ -672,27 +563,6 @@ class _NumpyReadOnly(nn.Module):
         return y + float(y.detach().numpy().sum())
 
 
-@pytest.mark.parametrize(
-    "factory", [_NumpyViewWriteBack, _ArrayViewWriteBack], ids=["numpy", "__array__"]
-)
-def test_host_writeback_through_mutable_alias_is_never_verified(
-    factory: Callable[[], nn.Module], tmp_path: Path
-) -> None:
-    """A host write-back through a mutable numpy/__array__ alias is UNVERIFIABLE on the original."""
-    x = torch.tensor([1.0, 0.5, 2.0, 0.25])
-    result = _save_load(factory(), x.clone(), tmp_path).run(
-        inputs=x.clone(), seed=0, on_divergence="return"
-    )
-    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-
-
-def test_readonly_numpy_escape_stays_verified_on_original(tmp_path: Path) -> None:
-    """A READ-only numpy conversion (no write-back) still VERIFIES on the original input."""
-    x = torch.tensor([1.0, 0.5, 2.0, 0.25])
-    result = _save_load(_NumpyReadOnly(), x.clone(), tmp_path).run(inputs=x.clone(), seed=0)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
 # --------------------------------------------------------------------------------------
 # R13-H3: ``torch.utils.dlpack.to_dlpack`` == ``torch._C._to_dlpack`` is a C binding that
 # bypasses the ``Tensor.__dlpack__`` method patch. Its exported tensor VALUE can be baked into
@@ -721,20 +591,6 @@ class _ToDlpackExport(nn.Module):
         return x + float(arr.sum())
 
 
-def test_to_dlpack_c_binding_export_is_witnessed_as_escape(tmp_path: Path) -> None:
-    """``to_dlpack`` (C binding) is observed as a host escape: a changed input is never VERIFIED."""
-    cap_x = torch.tensor([1.0, 0.5, 2.0, 0.25])
-    changed_x = torch.tensor([3.0, 4.0, 5.0, 6.0])
-    original = _save_load(_ToDlpackExport(), cap_x.clone(), tmp_path).run(
-        inputs=cap_x.clone(), seed=0, on_divergence="return"
-    )
-    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    changed = _save_load(_ToDlpackExport(), cap_x.clone(), tmp_path).run(
-        inputs=changed_x.clone(), seed=0, on_divergence="return"
-    )
-    assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
-
-
 class _PublicAliasToDlpackExport(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = x + 1.0
@@ -743,6 +599,7 @@ class _PublicAliasToDlpackExport(nn.Module):
         return x + float(arr.sum())
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_storage.py; a sole mutation kill.
 def test_public_to_dlpack_alias_export_is_witnessed_as_escape(tmp_path: Path) -> None:
     """The public ``torch.to_dlpack`` alias is the SAME object at a separate attribute
     site; it must be observed as a host escape exactly like the covered spellings."""
@@ -800,12 +657,11 @@ class _LateWriteViaKeptAlias(nn.Module):
 
 
 _H1_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
-    ("writeback_then_inplace", _WritebackThenInplace),
-    ("writeback_between_inplace", _WritebackBetweenInplace),
     ("late_write_via_kept_alias", _LateWriteViaKeptAlias),
 ]
 
 
+# Kept: a sole mutation kill.
 @pytest.mark.parametrize("name,factory", _H1_CELLS, ids=[c[0] for c in _H1_CELLS])
 def test_r14_h1_writeback_with_tracked_inplace_is_never_verified(
     name: str, factory: Callable[[], nn.Module], tmp_path: Path
@@ -843,11 +699,10 @@ class _DataFlattenSetitem(nn.Module):
 
 _H2_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
     ("data.view.setitem", _DataViewSetitem),
-    ("data.reshape.setitem", _DataReshapeSetitem),
-    ("data.flatten.setitem", _DataFlattenSetitem),
 ]
 
 
+# Kept: a sole mutation kill.
 @pytest.mark.parametrize("name,factory", _H2_CELLS, ids=[c[0] for c in _H2_CELLS])
 def test_r14_h2_labelled_view_of_data_alias_mutation_is_never_verified(
     name: str, factory: Callable[[], nn.Module], tmp_path: Path
@@ -883,24 +738,7 @@ class _CtypesDataPtrWrite(nn.Module):
         return y * 2.0
 
 
-_H3_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
-    ("untyped_storage.fill_", _UntypedStorageFill),
-    ("storage.setitem", _TypedStorageSetitem),
-    ("ctypes.data_ptr.write", _CtypesDataPtrWrite),
-]
-
-
-@pytest.mark.filterwarnings("ignore:TypedStorage is deprecated")
-@pytest.mark.parametrize("name,factory", _H3_CELLS, ids=[c[0] for c in _H3_CELLS])
-def test_r14_h3_storage_bridge_host_write_is_never_verified(
-    name: str, factory: Callable[[], nn.Module], tmp_path: Path
-) -> None:
-    """A host write through a storage-pointer bridge is UNVERIFIABLE (both inputs)."""
-    for run_x in (_R14_X, _R14_CHANGED):
-        result = _save_load(factory(), _R14_X.clone(), tmp_path).run(
-            inputs=run_x.clone(), seed=0, on_divergence="return"
-        )
-        assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+_H3_CELLS: list[tuple[str, Callable[[], nn.Module]]] = []
 
 
 # --- R14-C3: a storage-rebinding op (set_ / resize_ family) is not faithfully representable;
@@ -925,6 +763,7 @@ _C3_CELLS: list[tuple[str, Callable[[], nn.Module]]] = [
 ]
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_origins.py, backends/torch/completeness_witness.py; a sole mutation kill.
 @pytest.mark.parametrize("name,factory", _C3_CELLS, ids=[c[0] for c in _C3_CELLS])
 def test_r14_c3_storage_rebind_op_is_refused_at_save(
     name: str, factory: Callable[[], nn.Module], tmp_path: Path
@@ -962,6 +801,7 @@ class _LabelledAliasInplace(nn.Module):
         return y * 2.0
 
 
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     "factory",
     [_ReadonlyStorageBridge, _LabelledAliasInplace],

@@ -62,7 +62,6 @@ def test_no_smoke_test_carries_a_heavier_tier_marker(request: pytest.FixtureRequ
     )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("markers", "callspec_markers", "expected_fragments"),
     [
@@ -95,7 +94,6 @@ def test_tier_combo_policy_is_red_capable(
         assert any(fragment in violation for violation in violations), (fragment, violations)
 
 
-@pytest.mark.smoke
 def test_tier_violations_among_selected_items_fail_the_session_at_collection() -> None:
     """``_tiers_plugin`` refuses a session whose selected items include a violation."""
 
@@ -244,7 +242,6 @@ def _warn_once_declarations(package_root: Path) -> set[tuple[str, str]]:
     return declarations
 
 
-@pytest.mark.smoke
 def test_warn_once_sentinel_census_matches_autouse_reset(
     request: pytest.FixtureRequest,
 ) -> None:
@@ -372,7 +369,6 @@ def _module_trace_fixtures_without_yield(tests_root: Path) -> list[str]:
     return violations
 
 
-@pytest.mark.smoke
 def test_module_scoped_trace_fixtures_have_teardown() -> None:
     """Module-scoped fixtures retaining Traces must yield for explicit cleanup."""
 
@@ -384,7 +380,6 @@ def test_module_scoped_trace_fixtures_have_teardown() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_root_conftest_does_not_inject_repo_into_sys_path() -> None:
     """The suite must not hide an unusable editable install via path mutation."""
 
@@ -925,7 +920,6 @@ def per_test_trace():
 """
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("snippet", "expected"),
     [
@@ -984,7 +978,6 @@ def _lru_cached_functions(package_root: Path) -> dict[tuple[str, str], str]:
     return cached
 
 
-@pytest.mark.smoke
 def test_capability_dependent_caches_are_cleared() -> None:
     """Every probe-derived lru_cache must be in the conftest clear list.
 
@@ -1032,7 +1025,6 @@ def test_capability_dependent_caches_are_cleared() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_capability_dependent_cache_clear_actually_clears() -> None:
     """The conftest clear helper empties every declared probe-derived cache."""
 
@@ -1051,7 +1043,6 @@ def test_capability_dependent_cache_clear_actually_clears() -> None:
         assert function.cache_info().currsize == 0, f"{function} survived the probe restore"
 
 
-@pytest.mark.smoke
 def test_usage_stats_gate_arms_on_documented_backstop_spellings() -> None:
     """Every documented broad tier spelling arms the ArgSpec usage gate.
 
@@ -1088,7 +1079,6 @@ def test_usage_stats_gate_arms_on_documented_backstop_spellings() -> None:
     assert not _is_full_usage_stats_run(config("", args=[str(Path(TESTS_DIR) / "sub")]))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
@@ -1141,7 +1131,6 @@ def _pyproject_declared_markers() -> dict[str, str]:
     return declared
 
 
-@pytest.mark.smoke
 def test_marker_algebra_lockstep_with_pyproject() -> None:
     """Every pyproject marker has exactly one algebra role, and vice versa."""
 
@@ -1157,7 +1146,6 @@ def test_marker_algebra_lockstep_with_pyproject() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_marker_algebra_lockstep_is_red_capable() -> None:
     """A planted undeclared/unroled/unknown-role marker each goes red."""
 
@@ -1180,7 +1168,6 @@ def test_marker_algebra_lockstep_is_red_capable() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_selection_markers_are_orthogonal_to_every_tier() -> None:
     """`compo`/`real_model` combine with any tier without a combo violation.
 
@@ -1233,7 +1220,6 @@ def test_smoke_file_list_never_hides_a_smoke_test(request: pytest.FixtureRequest
     )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("markexpr", "expected"),
     [
@@ -1258,7 +1244,6 @@ def test_smoke_only_session_recognizes_only_smoke_requiring_expressions(
     assert smoke_only_session(config) is expected  # type: ignore[arg-type]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
@@ -1278,7 +1263,6 @@ def test_smoke_file_token_detection(tmp_path: Path, source: str, expected: bool)
     assert source_may_hold_smoke_items(path) is expected
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("item_name", "expected"),
     [
@@ -1350,6 +1334,7 @@ def test_item_collection_records_smoke_items_off_the_file_list(tmp_path: Path) -
     fail_on_off_list_smoke_items([])
 
 
+@pytest.mark.smoke
 def test_smoke_session_skips_test_modules_off_the_file_list(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1471,3 +1456,105 @@ def test_cuda_marker_scanner_is_red_capable() -> None:
         _unmarked_cuda_skip_sites(f"{alias}\n@GPU\n@pytest.mark.cuda\ndef test_b():\n    pass")
         == []
     )
+
+
+def _carries_cuda_mark(nodes: list[ast.expr]) -> bool:
+    """Return whether decorator or ``pytestmark`` expressions include ``pytest.mark.cuda``."""
+
+    return any(
+        isinstance(sub, ast.Attribute)
+        and sub.attr == "cuda"
+        and isinstance(sub.value, ast.Attribute)
+        and sub.value.attr == "mark"
+        for node in nodes
+        for sub in ast.walk(node)
+    )
+
+
+def _pytestmark_values(body: list[ast.stmt]) -> list[ast.expr]:
+    """Return the values a module or class body assigns to ``pytestmark``."""
+
+    return [
+        statement.value
+        for statement in body
+        if isinstance(statement, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in statement.targets)
+    ]
+
+
+def _is_cuda_only_skip(node: ast.AST) -> bool:
+    """Return whether ``node`` is ``if not torch.cuda.is_available(): pytest.skip(...)``."""
+
+    if not isinstance(node, ast.If) or ast.unparse(node.test) != "not torch.cuda.is_available()":
+        return False
+    first = node.body[0]
+    return (
+        isinstance(first, ast.Expr)
+        and isinstance(first.value, ast.Call)
+        and ast.unparse(first.value.func) == "pytest.skip"
+    )
+
+
+def _unmarked_cuda_body_skips(text: str) -> list[int]:
+    """Return 1-based lines of in-body CUDA-only skips in tests lacking the ``cuda`` marker.
+
+    ``if not torch.cuda.is_available(): pytest.skip(...)`` inside a test makes it
+    CUDA-only as surely as the decorator does, so the test, its class or its
+    module ``pytestmark`` must carry ``cuda`` for the GPU leg's ``-m cuda``
+    selection to reach it. A compound condition (one parametrized case needing
+    CUDA) is a per-case gate and is not flagged.
+    """
+
+    tree = ast.parse(text)
+    offenders: list[int] = []
+
+    def visit(body: list[ast.stmt], marked: bool) -> None:
+        for statement in body:
+            if isinstance(statement, ast.ClassDef):
+                class_marks = statement.decorator_list + _pytestmark_values(statement.body)
+                visit(statement.body, marked or _carries_cuda_mark(class_marks))
+            elif isinstance(statement, ast.FunctionDef | ast.AsyncFunctionDef):
+                if not statement.name.startswith("test"):
+                    continue
+                if marked or _carries_cuda_mark(statement.decorator_list):
+                    continue
+                offenders.extend(
+                    node.lineno for node in ast.walk(statement) if _is_cuda_only_skip(node)
+                )
+
+    visit(tree.body, _carries_cuda_mark(_pytestmark_values(tree.body)))
+    return offenders
+
+
+def test_in_body_cuda_only_skips_carry_the_cuda_marker() -> None:
+    """Every in-body CUDA-only skip sits in a test that carries ``cuda`` (GPU leg selection)."""
+
+    tests_dir = Path(__file__).resolve().parent
+    offenders = [
+        f"{path.relative_to(tests_dir.parent)}:{line}"
+        for path in sorted(tests_dir.rglob("test_*.py"))
+        if "cuda.is_available()" in (text := path.read_text(encoding="utf-8"))
+        for line in _unmarked_cuda_body_skips(text)
+    ]
+    assert not offenders, (
+        "add @pytest.mark.cuda to the tests holding these CUDA-only skips:\n  "
+        + ("\n  ".join(offenders))
+    )
+
+
+def test_in_body_cuda_skip_scanner_is_red_capable() -> None:
+    """A planted unmarked in-body CUDA skip is reported; marked or per-case ones are not."""
+
+    body = "    if not torch.cuda.is_available():\n        pytest.skip('x')\n"
+    assert _unmarked_cuda_body_skips(f"def test_a():\n{body}") == [2]
+    assert _unmarked_cuda_body_skips(f"@pytest.mark.cuda\ndef test_a():\n{body}") == []
+    module_marked = f"pytestmark = [pytest.mark.cuda]\ndef test_a():\n{body}"
+    assert _unmarked_cuda_body_skips(module_marked) == []
+    class_marked = "@pytest.mark.cuda\nclass TestA:\n    def test_a(self):\n" + body.replace(
+        "    ", "        "
+    )
+    assert _unmarked_cuda_body_skips(class_marked) == []
+    per_case = (
+        "def test_a(c):\n    if c and not torch.cuda.is_available():\n        pytest.skip('x')\n"
+    )
+    assert _unmarked_cuda_body_skips(per_case) == []

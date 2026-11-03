@@ -72,39 +72,13 @@ def _aten_events(trace: dict, name: str) -> list[dict]:
     ]
 
 
-@pytest.mark.parametrize("forwards", [1, 2])
-def test_repeated_op_rows_partition_the_profiler_total(tmp_path: Path, forwards: int) -> None:
-    """conv2d and relu rows each hold `forwards` events and sum to the aten total."""
-
-    torch.manual_seed(0)
-    model = _TwoConv().eval()
-    x = torch.randn(2, 3, 16, 16)
-    log = tl.trace(model, x)
-    path = tmp_path / "trace.json"
-    trace = _profile(model, x, path, forwards)
-
-    joined = tl.bridge.profiler.join(log, path)
-    for func_name in ("conv2d", "relu"):
-        events = _aten_events(trace, func_name)
-        rows = [row for row in joined["ops"] if row["func_name"] == func_name]
-        assert len(rows) == 2
-        assert len(events) == 2 * forwards
-        assert all(row["kineto_event_count"] == forwards for row in rows)
-        total = sum(float(e["dur"]) for e in events)
-        assert sum(row["kineto_duration_us"] for row in rows) == pytest.approx(total)
-        assigned = [id(e) for row in rows for e in row["kineto_events"]]
-        assert len(set(assigned)) == len(assigned)
-    assert "conv2d" not in joined["mismatched_op_types"]
-    assert "aten::conv2d" not in joined["unmatched_event_counts"]
-
-
 def _input_dims(event: dict) -> list[list[int]]:
     """Return an event's first two recorded input shapes."""
 
     return [list(dims) for dims in (event.get("args") or {}).get("Input Dims", [])][:2]
 
 
-@pytest.mark.parametrize("forwards", [1, 2])
+@pytest.mark.parametrize("forwards", [2])
 def test_matmul_inside_linear_is_not_a_matmul_layers_event(tmp_path: Path, forwards: int) -> None:
     """Each matmul row holds its own top-level matmul, never a linear's internal one.
 

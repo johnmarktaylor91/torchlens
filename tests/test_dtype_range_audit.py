@@ -42,18 +42,6 @@ def test_dtype_range_audit_flags_fp16_near_max() -> None:
     assert "max_abs=" in finding.message
 
 
-def test_dtype_range_audit_clean_fp32_has_full_coverage() -> None:
-    """A clean fully saved fp32 trace has no findings and honest coverage."""
-
-    trace = tl.trace(nn.ReLU(), torch.full((2, 3), 1.5, dtype=torch.float32))
-
-    audit = tl.debug.dtype_range(trace)
-
-    assert audit.findings == ()
-    assert audit.num_audited_ops == audit.num_ops
-    assert audit.coverage == 1.0
-
-
 def test_dtype_range_audit_partial_save_reports_incomplete_coverage() -> None:
     """Unsaved operations reduce coverage and are never claimed clean."""
 

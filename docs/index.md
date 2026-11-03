@@ -40,3 +40,8 @@ holds this page to the core. -->
 
 <!-- One door per community, each a short hand-written page (step 14):
 mech interp | NeuroAI | vision and dynamic models | agent builders. -->
+
+- [Mechanistic interpretability](doors/mechinterp.md)
+- [NeuroAI](doors/neuroai.md)
+- [Vision and dynamic models](doors/vision.md)
+- [Agent builders](doors/agents.md)

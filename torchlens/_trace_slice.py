@@ -64,6 +64,13 @@ class TraceSlice(_SelectionOperand):
     boundary. Never a ``Trace``; offers no save/replay/validate. Lift back
     into the selection algebra with ``__selection__`` (implicit under the
     ``| & - ~`` operators). Session-time only; never persisted.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> relus = trace.subgraph(tl.func("relu"))
+    >>> isinstance(relus, TraceSlice), len(relus)
+    (True, 1)
     """
 
     __slots__ = (

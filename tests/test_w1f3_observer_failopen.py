@@ -199,6 +199,7 @@ def _blocks_with_guards(
                 yield from _blocks_with_guards(statement, guard)
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_every_install_skip_is_fail_closed_or_classified_benign() -> None:
     """Every install-loop ``continue`` marks the trace failed, bar the closed allowlist.
 
@@ -244,6 +245,7 @@ def test_every_install_skip_is_fail_closed_or_classified_benign() -> None:
     )
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_every_scan_family_fails_closed_on_empty_scan() -> None:
     """Each scan-enumerated observer family marks the trace failed on an empty scan.
 
@@ -268,6 +270,7 @@ def test_every_scan_family_fails_closed_on_empty_scan() -> None:
     assert not missing, f"scan families with fail-open empty scans: {sorted(missing)}"
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_every_restore_handler_is_fail_closed() -> None:
     """Every restore exception handler in the ``finally`` marks the trace failed.
 
@@ -297,6 +300,7 @@ def test_every_restore_handler_is_fail_closed() -> None:
         )
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_patches.py; a sole mutation kill.
 def test_absent_observer_member_marks_trace_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     """A version-drift-absent tensor observer member downgrades the capture.
 
@@ -330,6 +334,7 @@ def test_absent_observer_member_marks_trace_failed(monkeypatch: pytest.MonkeyPat
     )
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_patches.py; a sole mutation kill.
 def test_failed_observer_restore_marks_trace_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     """A restore that raises must downgrade the capture, never be swallowed.
 
@@ -371,6 +376,7 @@ def test_failed_observer_restore_marks_trace_failed(monkeypatch: pytest.MonkeyPa
     assert trace in cw._HOST_ESCAPE_OBSERVER_FAILED
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_patches.py.
 def test_mro_inherited_descriptor_observer_installs(monkeypatch: pytest.MonkeyPatch) -> None:
     """A ``torch._C.TensorBase``-inherited descriptor still gets a real observer.
 
@@ -411,6 +417,7 @@ def test_mro_inherited_descriptor_observer_installs(monkeypatch: pytest.MonkeyPa
     assert trace not in cw._HOST_ESCAPE_OBSERVER_FAILED
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_patches.py; a sole mutation kill.
 def test_unwrappable_wrap_required_storage_member_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -446,6 +453,7 @@ def test_unwrappable_wrap_required_storage_member_fails_closed(
     assert trace in cw._HOST_ESCAPE_OBSERVER_FAILED
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_patches.py; a sole mutation kill.
 def test_empty_storage_scan_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     """An empty storage-class scan downgrades the capture like the sibling scans.
 

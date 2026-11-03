@@ -138,7 +138,7 @@ class _DoorState:
     layers_to_save: Any = None
     requested_layers_to_save: Any = None
     save_raw_input_policy: Any = None
-    save_raw_output_policy: Any = None
+    save_transformed_output_policy: Any = None
     save_mode_value: Any = "copy"
     halt: Any = None
     stop_after_site: Any = None
@@ -237,7 +237,7 @@ def _run_plan_policy_rows(state: _DoorState) -> dict[str, Any]:
         "save_raw_input": state.save_raw_input_policy,
         "batch_render": opts.batch_render,
         "output_transform": opts.output_transform,
-        "save_transformed_output": state.save_raw_output_policy,
+        "save_transformed_output": state.save_transformed_output_policy,
         "layer_visualizers": opts.layer_visualizers,
         "save_visualizations": opts.save_visualizations,
         "recipes": state.facet_recipes,

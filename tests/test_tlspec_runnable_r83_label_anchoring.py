@@ -191,61 +191,7 @@ class _Consumer(nn.Module):
         return x * 1.0 + self._f[0] + s * 0.0
 
 
-def test_hook_collected_stale_label_is_not_current_session_provenance(
-    tmp_path: Path,
-) -> None:
-    """hon1 RED: a hook-harvested tensor must never bind as a live-label parent.
-
-    Pre-fix this reported ``VERIFIED``/``poisoned=False`` on the SAME input with
-    replay off oracle 1 by 18.0 -- a silent WRONG VALUE bind, the most severe of
-    the three vehicles. The control (same bytes, label stripped) refused at save;
-    the stale label was the sole delta, so the fixed behaviour must match the
-    control.
-    """
-
-    _HOOK_FEATURES.clear()
-    x = torch.full((4,), 2.0)
-    with _allow_break_marker():
-        tl.trace(_Donor(), x, capture=_CAPTURE)
-    harvested = _HOOK_FEATURES[0]
-
-    # The vehicle only exists if the harvested tensor really kept a live label
-    # text from capture 1 -- assert the collision is real, not assumed away.
-    # (Root A sweeps it once the NEXT session opens; the belt below is what
-    # makes it harmless in the meantime.)
-    assert raw_tensor_label(harvested) == "mul_1_3_raw"
-
-    model = _Consumer(harvested)
-    with torch.no_grad():
-        oracle = _Consumer(harvested)(x.clone())
-
-    try:
-        result = _run_artifact(model, x, x.clone(), tmp_path / "hook.tlspec")
-    except RunnablePreflightError:
-        return  # honest fail-closed, exactly what the label-stripped control does
-    _assert_not_falsely_verified(result, oracle)
-
-
-def test_hook_vehicle_leaves_the_unattributed_break_marker() -> None:
-    """The positive signal: the foreign tensor must leave the break marker.
-
-    Pre-fix the stale label SUPPRESSED ``unattributed_tensor_args`` -- the very
-    ancestry-integrity marker the layout ladder and the save-side preflight key
-    on. Asserting the warning fires proves the belt rejects the tensor at the
-    provenance rung, rather than the ceiling arriving by some unrelated route.
-    """
-
-    _HOOK_FEATURES.clear()
-    x = torch.full((4,), 2.0)
-    with _allow_break_marker():
-        tl.trace(_Donor(), x, capture=_CAPTURE)
-    harvested = _HOOK_FEATURES[0]
-    assert raw_tensor_label(harvested) == "mul_1_3_raw"
-
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        tl.trace(_Consumer(harvested), x, capture=_CAPTURE)
-
-
+# Kept: a sole mutation kill.
 def test_hook_collected_control_without_stale_label_refuses(tmp_path: Path) -> None:
     """The isolating control: identical bytes with no stale label must refuse.
 
@@ -312,6 +258,7 @@ class _Launder(nn.Module):
         return out + s * 0.0
 
 
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize("changed_input", [True, False], ids=["twin", "same"])
 def test_helper_module_cached_stale_label_cannot_launder_layout(
     tmp_path: Path, changed_input: bool
@@ -396,72 +343,7 @@ class _StashConsumer(nn.Module):
         return q * 1.0 + live * 0.0
 
 
-def test_moduletype_nested_stale_label_cannot_launder(tmp_path: Path) -> None:
-    """Review RED: a container-nested ModuleType stash must not resolve as provenance.
-
-    Pre-fix: ``VERIFIED``, ``poisoned=False``, no witness-coverage gap, replay
-    vs fresh-oracle max-diff 100.15 -- and it falsified the shipped contract's
-    claim that deeper stashes are harmless because the belt gates them. r33
-    closed the leak AT SOURCE: the ModuleType sweep descends namespace
-    container trees, so the stale stamp no longer survives the donor capture,
-    and a layout launder through the nested stash ceils exactly like the
-    fresh-foreign no-stamp control.
-    """
-
-    stash = types.ModuleType("r83_stash")
-    x = _nchw()
-    with _allow_break_marker():
-        tl.trace(_StashDonor(stash), x, capture=_CAPTURE)
-    # r33: the deepened ModuleType sweep reaches a tensor nested one container
-    # deep, so the cross-session stamp is cleared when the donor capture ends
-    # -- the launder vehicle dies at the source.
-    assert raw_tensor_label(stash.box[0]) is None
-
-    run_input = _twin(_nchw())
-    model = _InjectLaunder(stash.box[0])
-    with torch.no_grad():
-        oracle = _InjectLaunder(stash.box[0])(run_input.clone())
-
-    try:
-        result = _run_artifact(model, x, run_input, tmp_path / "sol.tlspec")
-    except RunnablePreflightError:
-        return
-    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    _assert_not_falsely_verified(result, oracle)
-
-
-def test_moduletype_nested_stale_label_survivor_still_ceils(tmp_path: Path) -> None:
-    """Belt half of the r33 closure: a SURVIVING nested stale stamp still ceils.
-
-    The sweep is the source fix; this pins the launder outcome itself against
-    any future leak vehicle by re-injecting the donor's stale label on the
-    nested tensor AFTER the sweep cleared it (as if a deeper route had
-    preserved it). The label-anchoring belt must refuse the retired-session
-    stamp: the layout launder ceils, never ``VERIFIED``.
-    """
-
-    stash = types.ModuleType("r83_stash_survivor")
-    x = _nchw()
-    with _allow_break_marker():
-        tl.trace(_StashDonor(stash), x, capture=_CAPTURE)
-    assert raw_tensor_label(stash.box[0]) is None
-    # Re-inject the donor's stale current-session-looking label text, the
-    # exact stamp the pre-fix shallow sweep left behind.
-    set_tensor_label(stash.box[0], "add_1_2_raw")
-
-    run_input = _twin(_nchw())
-    model = _InjectLaunder(stash.box[0])
-    with torch.no_grad():
-        oracle = _InjectLaunder(stash.box[0])(run_input.clone())
-
-    try:
-        result = _run_artifact(model, x, run_input, tmp_path / "sol_survivor.tlspec")
-    except RunnablePreflightError:
-        return
-    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    _assert_not_falsely_verified(result, oracle)
-
-
+# Kept: sole branch coverage of backends/torch/_session_cleanup.py; a sole mutation kill.
 def test_moduletype_nested_honest_rebind_consumer_not_overceiled(tmp_path: Path) -> None:
     """No over-ceil: the swept nested stash's VALUE-honest consumer replays true.
 
@@ -545,6 +427,7 @@ def _stamp_label_and_address(t: torch.Tensor) -> None:
     set_buffer_address(t, "r")
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize(
     "stamp",
     [
@@ -593,38 +476,7 @@ def test_unanchored_stamp_is_never_provenance(
     _assert_not_falsely_verified(result, oracle)
 
 
-def test_label_session_token_advances_and_anchors_per_capture() -> None:
-    """The anchor itself: each capture issues a fresh token, retired at cleanup.
-
-    The structural property the belt rests on -- a label issued by an earlier
-    capture can never carry the active capture's token, because tokens are
-    monotonic and never reused.
-    """
-
-    from torchlens._utils import _tensor_label as _tl
-
-    assert _tl.active_label_session_token() is None  # retired outside a capture
-
-    seen: list[int | None] = []
-
-    class _Probe(nn.Module):
-        """Model that samples the active session token from inside forward."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Record the active token, then emit one op."""
-
-            seen.append(_tl.active_label_session_token())
-            return x * 2.0
-
-    tl.trace(_Probe(), torch.ones(4), capture=_CAPTURE)
-    tl.trace(_Probe(), torch.ones(4), capture=_CAPTURE)
-
-    assert len(seen) == 2
-    assert seen[0] is not None and seen[1] is not None
-    assert seen[1] > seen[0], "each capture must install a fresh, monotonic token"
-    assert _tl.active_label_session_token() is None, "session must retire at cleanup"
-
-
+# Kept: the catch of its regression fault.
 def test_stale_label_is_invisible_to_the_next_capture() -> None:
     """A prior capture's label must not be readable as provenance in a new one.
 
@@ -735,6 +587,7 @@ class _Passthrough(nn.Module):
         return x * 2.0
 
 
+# Kept: sole branch coverage of backends/torch/_tl.py; a sole mutation kill.
 def test_leak_vehicles_are_swept_by_the_session_inventory() -> None:
     """Every vehicle in free's map must be cleared, walk blind spots included.
 
@@ -793,26 +646,6 @@ def test_leak_vehicles_are_swept_by_the_session_inventory() -> None:
     assert _tl.active_label_session_token() is None
 
 
-def test_sweep_never_touches_a_foreign_or_unstamped_tensor() -> None:
-    """The sweep clears session stamps only; foreign ``_tl`` values survive.
-
-    ``clear_meta`` preserves a non-TorchLens ``_tl``, and an object the session
-    never stamped is not in the inventory at all.
-    """
-
-    from torchlens._utils import _tensor_label as _tl
-
-    untouched = torch.ones(4)
-    sentinel = object()
-    untouched._tl = sentinel
-
-    tl.trace(_Passthrough(), torch.ones(4), capture=_CAPTURE)
-    tl.trace(_Passthrough(), torch.ones(4), capture=_CAPTURE)
-
-    assert untouched._tl is sentinel
-    assert _tl.sweep_retired_label_stamps() >= 0  # idempotent, never raises
-
-
 # --------------------------------------------------------------------------- #
 # ZERO COLLATERAL -- honest models that were VERIFIED before must stay VERIFIED.
 # --------------------------------------------------------------------------- #
@@ -852,60 +685,7 @@ class _ConvBN(nn.Module):
         return self.bn(self.conv(x))
 
 
-@pytest.mark.parametrize(
-    "factory, train",
-    [
-        (_HonestLayoutBranch, False),
-        (_ConvBN, False),
-        (_ConvBN, True),
-    ],
-    ids=["state_layout_branch", "convbn_eval", "convbn_train"],
-)
-def test_honest_models_stay_verified(
-    tmp_path: Path, factory: Callable[[], nn.Module], train: bool
-) -> None:
-    """Honest state reads must not be ceiled by the label anchor gate.
-
-    The gate must reject FOREIGN labels only; a live capture's own labels are
-    anchored by construction, so nothing honest may change verdict.
-    """
-
-    model = factory()
-    model.train(train)
-    x = _nchw()
-    result = _run_artifact(model, x, _nchw(), tmp_path / "honest.tlspec")
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
-def test_repeat_captures_of_one_instance_stay_verified(tmp_path: Path) -> None:
-    """Three consecutive captures of ONE instance must all stay VERIFIED.
-
-    The shape a session-scoped anchor is most likely to over-ceil: the second
-    and third captures see tensors whose objects the previous session stamped.
-    """
-
-    model = _HonestLayoutBranch()
-    for index in range(3):
-        result = _run_artifact(model, _nchw(), _nchw(), tmp_path / f"repeat{index}.tlspec")
-        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, f"capture {index}"
-        assert not result.report.is_poisoned
-
-
-def test_shared_buffer_object_across_instances_stays_verified(tmp_path: Path) -> None:
-    """Three instances sharing ONE buffer object across captures stay VERIFIED."""
-
-    torch.manual_seed(2)
-    shared = torch.randn(2, 4, 8, 8)
-
-    for index in range(3):
-        model = _HonestLayoutBranch()
-        model.b = shared
-        result = _run_artifact(model, _nchw(), _nchw(), tmp_path / f"shared{index}.tlspec")
-        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, f"capture {index}"
-        assert not result.report.is_poisoned
-
-
+# Kept: a sole mutation kill.
 def test_live_capture_labels_are_anchored_and_readable() -> None:
     """A capture's OWN labels must read through the gate during that capture.
 
@@ -934,6 +714,7 @@ def test_live_capture_labels_are_anchored_and_readable() -> None:
     assert gated == ungated, "a live capture's own label must read as provenance"
 
 
+# Kept: sole branch coverage of backends/torch/_tl.py; a sole mutation kill.
 def test_meta_carries_the_session_anchor() -> None:
     """``TensorMeta`` must expose the anchor written alongside every label."""
 

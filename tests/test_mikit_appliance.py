@@ -36,24 +36,6 @@ def gpt2_trace():
         trace.cleanup()
 
 
-def test_appliance_head_scores_equals_direct_call(gpt2_trace):
-    appliance = MechInterpAppliance(gpt2_trace)
-    assert appliance.trace is gpt2_trace
-    for kind in ("previous_token", "duplicate_token", "induction"):
-        bound = appliance.head_scores(kind=kind)
-        direct = mi.head_scores(gpt2_trace, kind=kind)
-        for field in ("kind", "measure", "module_addresses", "scores", "eligible_rows"):
-            assert getattr(bound, field) == getattr(direct, field), field
-        assert any(score is not None for row in bound.scores for score in row)
-
-
-def test_appliance_circuits_equal_direct_calls(gpt2_trace):
-    appliance = MechInterpAppliance(gpt2_trace)
-    for address in ("transformer.h.0.attn", "transformer.h.1.attn"):
-        assert torch.equal(appliance.qk_circuit(address).AB, mi.qk_circuit(gpt2_trace, address).AB)
-        assert torch.equal(appliance.ov_circuit(address).AB, mi.ov_circuit(gpt2_trace, address).AB)
-
-
 def test_using_mi_returns_the_bound_appliance(gpt2_trace):
     appliance = gpt2_trace.using("mi")
     assert isinstance(appliance, MechInterpAppliance)

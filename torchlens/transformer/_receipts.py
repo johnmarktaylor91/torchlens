@@ -104,6 +104,21 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
     -------
     CausalReceipt
         The validated per-head (or per-KV-group) receipt for ``layer``.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace as NS
+    >>> grid = NS(
+    ...     axes=("layer", "head"),
+    ...     coordinates={"layer": ["blocks.0.attn"], "head": [0, 1]},
+    ...     values=torch.tensor([[0.5, 0.25]]),
+    ...     receipts={"corrupted_metric": 0.25, "fires": 2, "n_cells": 2},
+    ... )
+    >>> receipt = tl.transformer.receipt_from_patch_grid(
+    ...     grid, layer="blocks.0.attn", negative_control=0.0, positive_control=1.0
+    ... )
+    >>> receipt.heads, receipt.effects
+    ((0, 1), (0.25, 0.0))
     """
 
     if "head" not in grid.axes:
@@ -431,6 +446,21 @@ def render_receipt_grid(
     -------
     Artifact
         The written file plus every rendered disclosure line.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> receipt = tl.transformer.CausalReceipt(
+    ...     module_address="blocks.0.attn", heads=(0, 1), effects=(0.5, -0.25),
+    ...     metric="logit difference", intervention="head contribution zeroed",
+    ...     engine="rerun", disclosure="direct", fires=2,
+    ...     negative_control=0.0, positive_control=1.0, joint_effect=0.1,
+    ... )
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.viz.ablation_grid(receipt, pathlib.Path(tmp) / "grid.png")
+    ...     written = saved.paths[0].exists()
+    >>> written
+    True
     """
 
     rows = [receipts] if isinstance(receipts, CausalReceipt) else list(receipts)

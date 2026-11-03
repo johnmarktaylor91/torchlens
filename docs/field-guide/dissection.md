@@ -20,6 +20,30 @@ pip install torchlens
 pip install "open_clip_torch==3.3.0"  # for real use only; the stand-in needs neither
 ```
 
+## Minimal example on the running model
+
+This page uses [ResNet-18 on one
+image](running_examples.md#resnet-18-on-one-image). Dissection labels the units
+of one layer from their activations; these are the units of `layer4`. The recipe below builds
+its own model for the method.
+
+```python
+# recipe-test: tool=torchlens expected=True
+import torch
+import torchvision
+
+import torchlens as tl
+
+torch.manual_seed(0)
+model = torchvision.models.resnet18(weights=None).eval()
+x = torch.rand(1, 3, 224, 224)
+
+trace = tl.trace(model, x)
+
+units = trace["layer4"].out
+RESULT = tuple(units.shape) == (1, 512, 7, 7)
+```
+
 ## A probe set with planted concepts
 
 Ninety 16 by 16 images: each is tinted red, green or blue, and carries

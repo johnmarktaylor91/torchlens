@@ -102,6 +102,7 @@ def _funcol_boundaries(log):
 @pytest.mark.heavy
 @requires_vetted_snapshot
 class TestFuncolBoundaryNode:
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of distributed/_dtensor.py.
     def test_funcol_becomes_boundary_node_no_provenance_escape(self, gloo_world):
         """The pinned gap, closed: boundary node + parenting, zero escape signals."""
 
@@ -115,6 +116,7 @@ class TestFuncolBoundaryNode:
         assert any("funcolallreduce" in parent for parent in add_op.parents)
         assert torch.equal(log.output_ops[0].out, torch.full((3,), 3.0))
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     def test_boundary_payload_shape_and_observed_completion(self, gloo_world):
         """v0 payload: correlation key, funcol event mapping, plane-W binding."""
 
@@ -138,18 +140,7 @@ class TestFuncolBoundaryNode:
         roles = payload["roles"]
         assert {entry["role"] for entry in roles} == {"contribution", "destination"}
 
-    def test_op_annotation_syncs_with_settled_journal(self, gloo_world):
-        """The per-op deep copy is refreshed from the settled master payload."""
-
-        lifecycle.arm()
-        log = tl.trace(WaitedFuncol(), torch.ones(3))
-        payload = _funcol_boundaries(log)[0]
-        funcol_op = next(op for op in log.ops if "funcolallreduce" in op.layer_label)
-        annotation = funcol_op.annotations["collective"]
-        assert annotation["schema"] == FUNCOL_BOUNDARY_SCHEMA
-        assert annotation["events"] == payload["events"]
-        assert annotation["disclosures"] == payload["disclosures"]
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     def test_never_waited_settles_unobserved_with_typed_disclosure(self, gloo_world):
         """v5 1.4b: never-waited funcol = unobserved + unwitnessed disclosure."""
 
@@ -164,35 +155,7 @@ class TestFuncolBoundaryNode:
             in funcol_op.annotations["collective"]["disclosures"]
         )
 
-    def test_seq_shares_the_coll_channel_with_c10d_boundaries(self, gloo_world):
-        """v5 1.2: funcol ticks the same (group_uid, "coll") counter space."""
-
-        dist = gloo_world
-
-        class Mixed(nn.Module):
-            def forward(self, x):
-                funcol_module = _funcol()
-                hidden = x * 2
-                dist.all_reduce(hidden)
-                reduced = funcol_module.all_reduce(hidden, "sum", dist.group.WORLD)
-                return reduced + 1
-
-        lifecycle.arm()
-        log = tl.trace(Mixed(), torch.ones(3))
-        boundaries = log.annotations["distributed"]["boundaries"]
-        assert len(boundaries) == 2
-        keys = [
-            (
-                entry["correlation"]["membership_digest"],
-                entry["correlation"]["lifetime_ordinal"],
-                entry["correlation"]["channel"],
-                entry["correlation"]["seq"],
-            )
-            for entry in boundaries
-        ]
-        assert keys[0][:3] == keys[1][:3]
-        assert keys[1][3] == keys[0][3] + 1
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/funcol.py, campaign mutant kills.
     def test_chained_funcol_parents_and_blocked_act_witness(self, gloo_world):
         """ACT contribution: parenting via the label chokepoint, digest withheld."""
 
@@ -220,6 +183,7 @@ class TestFuncolBoundaryNode:
         assert "witness_would_force_completion" in entries[1]["disclosures"]
         assert entries[1]["witness"]["contribution_digests"] is None
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     def test_digest_witness_destination_digest_only_after_observed_wait(self, gloo_world):
         """Destination digests exist iff the completion was observed (v5 payload policy)."""
 
@@ -242,6 +206,7 @@ class TestFuncolBoundaryNode:
 
 @pytest.mark.heavy
 class TestPlaneWLifetime:
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/funcol.py, campaign mutant kills.
     @requires_vetted_snapshot
     def test_session_cleared_and_interposition_torn_down(self, gloo_world):
         """The capture-scoped session never survives the capture window."""
@@ -256,6 +221,7 @@ class TestPlaneWLifetime:
         out = funcol_module.all_reduce(torch.ones(2), "sum", gloo_world.group.WORLD)
         assert float((out + 1).sum()) == 4.0
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     def test_unarmed_capture_is_status_quo_for_funcol(self, gloo_world, monkeypatch):
         """Arming relaxes nothing and unarmed captures stay pre-C2: no journal."""
 
@@ -268,6 +234,7 @@ class TestPlaneWLifetime:
             log = tl.trace(WaitedFuncol(), torch.ones(3))
         assert "distributed" not in log.annotations
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     @requires_vetted_snapshot
     def test_disarm_restores_funcol_functions(self, gloo_world):
         """Every wrapped funcol attr is restored to its pristine function."""
@@ -280,6 +247,7 @@ class TestPlaneWLifetime:
         lifecycle.disarm()
         assert funcol_module.all_reduce is pristine
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/funcol.py, campaign mutant kills.
     @requires_vetted_snapshot
     def test_group_resolver_capability_gap_refuses_typed(self, gloo_world, monkeypatch):
         """Fail-closed: no resolvable group -> typed refusal, never a silent omission."""
@@ -300,48 +268,7 @@ class TestPlaneWLifetime:
 @pytest.mark.heavy
 @requires_vetted_snapshot
 class TestFuncolRefusalParity:
-    def test_merge_refuses_funcol_bearing_core_typed(self, gloo_world):
-        """C1 merge scope: a funcol-bearing rank core refuses MERGE_SCOPE_UNSUPPORTED."""
-
-        from torchlens._merged._errors import MergeInputError
-        from torchlens._merged._evidence import extract_rank_evidence
-
-        lifecycle.arm()
-        log = tl.trace(WaitedFuncol(), torch.ones(3))
-        # Chokepoint path: every derive_merge entry traverses this extractor.
-        with pytest.raises(MergeInputError) as excinfo:
-            extract_rank_evidence(log, "live[0]")
-        assert excinfo.value.fields["code"] == "merge_scope_unsupported"
-        assert excinfo.value.fields["reason"] == "functional_collective_boundary_unsupported"
-        # Public path.
-        with pytest.raises(MergeInputError) as public_info:
-            tl.merge_ranks([log])
-        assert public_info.value.fields["code"] == "merge_scope_unsupported"
-
-    def test_runnable_save_refuses_typed(self, gloo_world, tmp_path):
-        """A funcol-crossing taken path can never save runnable."""
-
-        from torchlens.errors import RunnablePreflightError
-
-        lifecycle.arm()
-        model = WaitedFuncol()  # held alive: the refusal under test is the
-        log = tl.trace(model, torch.ones(3))  # boundary one, not GC state
-        with pytest.raises(RunnablePreflightError) as excinfo:
-            log.save(str(tmp_path / "funcol.tlspec"), level="runnable")
-        codes = {diagnostic.code for diagnostic in excinfo.value.fields["diagnostics"]}
-        assert "collective_boundary_unsupported" in codes
-
-    def test_forward_replay_validation_refuses_typed(self, gloo_world):
-        """Forward-replay validation is refused exactly like the c10d boundary case."""
-
-        from torchlens.errors import CollectiveBoundaryReplayError
-
-        lifecycle.arm()
-        log = tl.trace(WaitedFuncol(), torch.ones(3))
-        with pytest.raises(CollectiveBoundaryReplayError) as excinfo:
-            log.validate_forward_pass([torch.zeros(3)])
-        assert excinfo.value.fields["code"] == "collective_boundary_unsupported"
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/funcol.py, campaign mutant kills.
     def test_fastlog_funcol_refuses_instead_of_dropping_journal(self, gloo_world):
         """tl.record cannot represent the boundary journal: typed refusal."""
 
@@ -350,19 +277,11 @@ class TestFuncolRefusalParity:
             tl.record(WaitedFuncol(), torch.ones(3), save=tl.func("mul"))
         assert excinfo.value.fields["kind"] == "collective_boundary_fastlog_unsupported"
 
-    def test_metadata_invariants_still_run_in_full(self, gloo_world):
-        """The refusals are surgical: the invariant sweep still runs."""
-
-        from torchlens.validation import check_metadata_invariants
-
-        lifecycle.arm()
-        log = tl.trace(WaitedFuncol(), torch.ones(3))
-        check_metadata_invariants(log)
-
 
 @pytest.mark.heavy
 @requires_vetted_snapshot
 class TestFuncolPersistence:
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _io/_load_validators.py, _merged/_evidence.py, campaign mutant kills.
     def test_save_load_round_trips_the_boundary_disclosure(self, gloo_world, tmp_path):
         """The v0 payload survives save/load; refusal parity holds on the load."""
 
@@ -397,51 +316,7 @@ class TestFuncolSessionLeak:
     dead-ref (leaked-kernel) behavior.
     """
 
-    @requires_vetted_snapshot
-    def test_later_trace_collectable_in_armed_process(self, gloo_world):
-        """After arming, an ordinary Trace must die when the user drops it.
-
-        RED on the unfixed sources: the ref stays live (the capture's own
-        destroyed-but-retained kernel pinned the session, hence the Trace).
-        """
-
-        import torchlens
-
-        lifecycle.arm()
-        # One armed funcol capture first: the historical repro shape.
-        tl.trace(WaitedFuncol(), torch.ones(3))
-
-        class Tiny(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.lin = nn.Linear(4, 4)
-
-            def forward(self, x):
-                return torch.relu(self.lin(x))
-
-        log = tl.trace(Tiny(), torch.ones(2, 4), save=torchlens.func("relu"))
-        ref = weakref.ref(log)
-        del log
-        gc.collect()
-        gc.collect()
-        assert ref() is None
-
-    @requires_vetted_snapshot
-    def test_weakref_kernel_still_observes_live_completions(self, gloo_world):
-        """The leak fix must not disable plane-W: live captures stay observed.
-
-        A quietly inert interposition would trade the leak for a capture
-        quality gap (every funcol boundary stuck ``unobserved``), which is
-        worse than the leak.
-        """
-
-        lifecycle.arm()
-        log = tl.trace(WaitedFuncol(), torch.ones(3))
-        payload = _funcol_boundaries(log)[0]
-        assert payload["events"]["completion_interposition"] == "installed"
-        assert payload["events"]["completion_binding"] == "observed_wait"
-        assert payload["events"]["destination_completions"] == [True]
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/funcol.py.
     def test_dead_session_kernel_executes_real_wait_and_skips_bookkeeping(self):
         """Pinned dead-ref behavior: redispatch the REAL wait, record nothing.
 

@@ -107,6 +107,13 @@ class WildcardRecvUnsupportedError(CompatibilityError, RuntimeError):
     A wildcard recv has no determinate peer, so no correlation channel exists
     for it; capture refuses rather than recording an uncorrelatable boundary.
     ``fields["kind"]`` is ``"wildcard_recv_unsupported"``.
+
+    Examples
+    --------
+    >>> issubclass(WildcardRecvUnsupportedError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(WildcardRecvUnsupportedError, RuntimeError)
+    True
     """
 
 

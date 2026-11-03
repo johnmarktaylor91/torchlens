@@ -187,6 +187,15 @@ torch: 2.13.0+cpu
 source: 1173a2ed1 (merge preview of the gradient-site packets)
 recorded: 2026-11-01T02:35:31.052658+00:00
 ---
+generator: hand edit (key removal only; no kept value changed)
+flag: none
+reason: test-suite shrink round 4 removed selector_semantics_matrix.json rows whose
+  cells hold no library branch arc that the kept tests miss (per-cell coverage);
+  197 keys dropped with their case-table rows, 99 kept keys byte-identical
+env: py3.10-torch2.13.0
+torch: 2.13.0
+recorded: 2026-11-03
+---
 generator: tests/test_viz_render_identity_oracle.py
 flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
 reason: Okabe-Ito palette renders on the default torchlens and colorblind skins: input, output and weight role fills change in every default-skin golden
@@ -202,3 +211,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 11af67bcbd114266d618e0731bfcd17e489850fb (dirty)
 recorded: 2026-11-03T09:34:20.785790+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: draw-defects: header counts and sums the same nodes, binary size units, thousands separators, module-focus scope line and key, no ancestor frames, frozen weights Okabe-Ito black, module frame key from emitted clusters (AGT-2536/2537/2538, rulings-gap-4)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f59d8ae8d9028bbf736daed02126a5af682a8ae4 (clean)
+recorded: 2026-11-03T15:30:17.900186+00:00

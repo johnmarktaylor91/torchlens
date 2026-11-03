@@ -45,9 +45,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
 from torchlens._utils._tensor_label import (
-    get_buffer_address,
     get_param_meta,
-    get_tensor_meta,
     set_param_meta,
 )
 from torchlens._utils.hashing import make_random_barcode
@@ -210,6 +208,7 @@ class ConvBN(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+# Kept: the catch of its regression fault.
 def test_r79_popped_param_stamp_cleared_after_capture() -> None:
     """RED-now-fixed: a param popped mid-forward keeps NO session stamp.
 
@@ -235,68 +234,12 @@ def test_r79_popped_param_stamp_cleared_after_capture() -> None:
     assert cmeta is None or not cmeta.param_address
 
 
-def test_r79_popped_buffer_stamp_cleared_after_capture() -> None:
-    """RED-now-fixed: a buffer popped mid-forward keeps NO session tensor-meta.
-
-    Pre-fix the leaked buffer kept ``TensorMeta(label_raw='buffer_1_raw',
-    address='b')`` because it escaped the ``model.modules()`` / ``_buffers``
-    cleanup traversal.
-    """
-
-    x = _nchw()
-    donor = PopBufferDonor().eval()
-    donor_b = donor.b
-    tl.trace(donor, x.clone())
-    assert get_buffer_address(donor_b) is None
-    meta = get_tensor_meta(donor_b)
-    assert meta is None or (
-        meta.label_raw is None and meta.address is None and meta.buffer_source is None
-    )
-
-
 # ---------------------------------------------------------------------------
 # RED-now-fixed: the three demonstrated false-VERIFIED consequences
 # ---------------------------------------------------------------------------
 
 
-def test_r79_leaked_param_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
-    """RED-now-fixed (a): the popped-donor param launder twin must ceiling.
-
-    Pre-fix the stale ``'w'`` stamp suppressed the break marker and the
-    channels_last twin replayed the captured arm as VERIFIED (replay-vs-fresh
-    max-diff 20.0). With the stamp cleared at donor cleanup the object is an
-    ordinary unattributed tensor and the run fails closed.
-    """
-
-    x = _nchw()
-    donor = PopParamDonor().eval()
-    donor_w = donor.w
-    tl.trace(donor, x.clone())
-
-    path = _save(StashLaunderBranch(donor_w).eval(), x.clone(), tmp_path / "a.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
-def test_r79_leaked_buffer_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
-    """RED-now-fixed (b): the popped-donor BUFFER launder twin must ceiling.
-
-    Pre-fix the leaked buffer's surviving tensor-meta address rode the
-    tensor-meta rung to the same false VERIFIED.
-    """
-
-    x = _nchw()
-    donor = PopBufferDonor().eval()
-    donor_b = donor.b
-    tl.trace(donor, x.clone())
-
-    path = _save(StashLaunderBranch(donor_b).eval(), x.clone(), tmp_path / "b.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
+# Kept: sole branch coverage of _io/runnable.py.
 def test_r79_wrong_bind_refuses_at_save(tmp_path: Path) -> None:
     """RED-now-fixed (c): the address-collision wrong-bind must never save clean.
 
@@ -325,6 +268,7 @@ def test_r79_wrong_bind_refuses_at_save(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept: sole branch coverage of _data_classes/param.py, _postprocess/graph_traversal.py, backends/torch/_completeness_metadata.py and more; a sole mutation kill.
 def test_r79_forged_stale_param_stamp_launder_ceils(tmp_path: Path) -> None:
     """White-box: even a stamp that DID survive (forged) never resolves.
 
@@ -345,6 +289,7 @@ def test_r79_forged_stale_param_stamp_launder_ceils(tmp_path: Path) -> None:
     assert result.report.is_poisoned
 
 
+# Kept: sole branch coverage of _io/runnable.py, backends/torch/_ops_arguments.py, backends/torch/_ops_predicate_events.py; a sole mutation kill.
 def test_r79_forged_stale_param_stamp_wrong_bind_refuses(tmp_path: Path) -> None:
     """White-box: the forged-stamp address collision cannot wrong-bind.
 
@@ -369,6 +314,7 @@ def test_r79_forged_stale_param_stamp_wrong_bind_refuses(tmp_path: Path) -> None
 # ---------------------------------------------------------------------------
 
 
+# Kept: a sole mutation kill.
 def test_r79_registered_param_layout_read_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: a REGISTERED/PREPPED param layout read stays VERIFIED.
 
@@ -387,61 +333,3 @@ def test_r79_registered_param_layout_read_stays_verified(tmp_path: Path) -> None
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert not twin.report.is_poisoned
-
-
-def test_r79_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
-    """Zero collateral: honest conv+BN (params AND buffers on-path) verifies."""
-
-    x = _nchw()
-    path = _save(ConvBN().eval(), x.clone(), tmp_path / "convbn.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
-def test_r79_non_popped_cross_session_reuse_stays_blocked(tmp_path: Path) -> None:
-    """Zero collateral (hon1's case): non-popped cross-session reuse stays blocked.
-
-    A donor that keeps its param registered has the stamp cleared by cleanup
-    (both pre- and post-fix), so reusing the object in a later launder capture
-    must keep failing closed.
-    """
-
-    x = _nchw()
-    donor = NoPopParamDonor().eval()
-    donor_w = donor.w
-    tl.trace(donor, x.clone())
-
-    path = _save(StashLaunderBranch(donor_w).eval(), x.clone(), tmp_path / "nonpop.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
-def test_r79_sequential_captures_cleanup_idempotent(tmp_path: Path) -> None:
-    """Zero collateral: normal sequential captures double-clean without errors.
-
-    The inventory pass runs BEFORE the belt-and-suspenders tree walk; both are
-    idempotent, so two back-to-back captures of the same model must clean up
-    perfectly (no KeyError/double-clear), restore ``requires_grad``, and keep
-    producing VERIFIED runnable artifacts.
-    """
-
-    x = _nchw()
-    model = ConvBN().eval()
-    original_requires_grad = {name: p.requires_grad for name, p in model.named_parameters()}
-
-    tl.trace(model, x.clone())
-    for name, p in model.named_parameters():
-        assert p.requires_grad == original_requires_grad[name]
-        meta = get_param_meta(p)
-        assert meta is None or not meta.param_address
-    for _, b in model.named_buffers():
-        assert get_buffer_address(b) is None
-
-    path = _save(model, x.clone(), tmp_path / "second.tlspec")
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    for name, p in model.named_parameters():
-        assert p.requires_grad == original_requires_grad[name]

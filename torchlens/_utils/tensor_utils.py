@@ -525,7 +525,6 @@ def tensor_nanequal(
     Returns:
         True if the tensors are considered equal.
     """
-
     if is_functorch_wrapped_tensor(tensor_a) or is_functorch_wrapped_tensor(tensor_b):
         return False
 
@@ -695,7 +694,6 @@ def safe_to(obj: Any, device: str) -> Any:
     Returns:
         The tensor on the target device, or the original object if not a tensor.
     """
-
     if isinstance(obj, torch.Tensor):
         with _state_module().pause_logging():
             return obj.to(device)
@@ -1668,7 +1666,6 @@ def _clone_tensor_payload(
         Tensor payload with TorchLens raw label preserved, or a rewrapped
         parameter payload for parameter inputs.
     """
-
     with pause_logging():
         if save_mode not in SAVE_MODES:
             raise ValueError(
@@ -1838,7 +1835,6 @@ def print_override(t: torch.Tensor, func_name: str) -> str:
     Returns:
         Human-readable string representation of the tensor.
     """
-
     try:
         with _state_module().pause_logging():
             cpu_data = t.data.cpu()

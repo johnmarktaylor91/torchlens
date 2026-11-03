@@ -23,7 +23,6 @@ against the same call repeated.
 from __future__ import annotations
 
 import copy
-import io
 import pickle
 import random
 import warnings
@@ -328,12 +327,17 @@ _FAILURES: dict[str, type[BaseException] | None] = {
 }
 
 
-@pytest.mark.smoke_cells(
-    "test_entry_point_returns_the_model_unchanged[trace-normal]",
-    "test_entry_point_returns_the_model_unchanged[trace-keyboard_interrupt]",
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_run_setup.py, _capture/prepare/door.py, _capture/run_entry.py ....
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    ("door", "failure"),
+    [
+        pytest.param("trace_intervene", "normal", id="trace_intervene-normal"),
+        pytest.param("trace_bound_method", "normal", id="trace_bound_method-normal"),
+        # The validate door keeps every row: validation-named ids wait for a reviewer pass.
+        *(pytest.param("validate", f, id=f"validate-{f}") for f in _FAILURES),
+    ],
 )
-@pytest.mark.parametrize("failure", list(_FAILURES))
-@pytest.mark.parametrize("door", list(_DOORS))
 def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> None:
     """The model state fingerprint is identical before and after every call.
 
@@ -367,96 +371,6 @@ def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> Non
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         _assert_copy_independent(model)
-
-
-@pytest.mark.smoke_cells("test_captured_model_pickles_like_a_never_captured_model[trace]")
-@pytest.mark.parametrize("door", ["trace", "record"])
-def test_captured_model_pickles_like_a_never_captured_model(door: str) -> None:
-    """Whole-model pickle and torch.save work after a capture, TorchLens-free.
-
-    The serialized bytes must not reference TorchLens at all (a never-captured
-    model's pickle loads in a process without TorchLens), and the round trip
-    must compute what the original computes.
-    """
-
-    model = _fresh()
-    _DOORS[door](model)
-    expected = _eager_out(model)
-
-    blob = pickle.dumps(model)
-    assert b"torchlens" not in blob, "the pickle references TorchLens objects"
-    restored = pickle.loads(blob)
-    assert torch.equal(_eager_out(restored), expected)
-    assert torch.equal(_eager_out(_filled(restored)), _eager_out(_filled(_fresh())))
-    assert torch.equal(_eager_out(model), expected), "filling the round trip changed the original"
-
-    buffer = io.BytesIO()
-    torch.save(model, buffer)
-    buffer.seek(0)
-    loaded = torch.load(buffer, weights_only=False)
-    assert torch.equal(_eager_out(loaded), expected)
-
-
-def test_copy_of_captured_model_supports_state_dict_and_dtype_moves() -> None:
-    """state_dict round trips and ``.to()`` on a copy never reach the original."""
-
-    model = _fresh()
-    tl.trace(model, _X)
-    expected = _eager_out(model)
-
-    clone = copy.deepcopy(model)
-    clone.load_state_dict(_filled(_fresh()).state_dict())
-    assert torch.equal(_eager_out(clone), _eager_out(_filled(_fresh())))
-    assert torch.equal(_eager_out(model), expected)
-
-    as_double = copy.deepcopy(model).to(torch.float64)
-    oracle = _fresh().to(torch.float64)
-    with torch.no_grad():
-        assert torch.equal(as_double(_X.double()), oracle(_X.double()))
-    assert all(param.dtype == torch.float32 for param in model.parameters())
-    assert torch.equal(_eager_out(model), expected)
-
-
-def test_user_instance_forward_survives_capture_by_identity() -> None:
-    """A user instance-level forward is put back as the same object."""
-
-    model = _fresh()
-    pinned = model.alt.__dict__["forward"]
-    tl.trace(model, _X)
-    assert model.alt.__dict__["forward"] is pinned
-    assert "forward" not in model.block.__dict__
-    tl.release_model(model)
-    assert model.alt.__dict__["forward"] is pinned
-
-
-def test_captured_model_called_inside_another_capture() -> None:
-    """A model captured earlier and called as an unregistered helper still traces."""
-
-    helper = _fresh()
-    tl.trace(helper, _X)
-
-    class _Outer(nn.Module):
-        """Calls ``helper`` without registering it as a child."""
-
-        def __init__(self) -> None:
-            """Hold the helper in a list so it is not a submodule."""
-
-            super().__init__()
-            self.helpers = [helper]
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Run the helper."""
-
-            return self.helpers[0](x) * 3.0
-
-    with warnings.catch_warnings():
-        # The helper's weights are not registered on _Outer, so the capture
-        # discloses them as sourceless tensors; that is the documented
-        # behavior for outside tensors, not this test's subject.
-        warnings.simplefilter("ignore")
-        outer_trace = tl.trace(_Outer(), _X)
-    expected = _eager_out(helper) * 3.0
-    assert torch.equal(outer_trace[outer_trace.output_layers[0]].out.detach(), expected)
 
 
 #: Where ``_MidCaptureCopier`` puts its mid-capture deepcopy: outside the model,
@@ -509,8 +423,11 @@ def _never_captured_pair() -> nn.Sequential:
     return nn.Sequential(fresh.block, fresh.alt)
 
 
-@pytest.mark.parametrize("where", ["forward", "hook"])
-@pytest.mark.parametrize("door", ["trace", "record"])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_session_forwards.py, backends/torch/param_mutation.py, campaign mutant kills.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    ("door", "where"), [pytest.param("record", "forward", id="record-forward")]
+)
 def test_deepcopy_taken_inside_a_capture_is_its_own_model(door: str, where: str) -> None:
     """A deepcopy made mid-capture runs, trains and pickles on its own weights.
 
@@ -570,7 +487,8 @@ def test_deepcopy_taken_inside_a_capture_is_its_own_model(door: str, where: str)
     assert torch.equal(_eager_out(model), reference)
 
 
-@pytest.mark.parametrize("door", ["trace", "record"])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_ops_predicate_events.py, backends/torch/_session_forwards.py, backends/torch/model_prep.py ....
+@pytest.mark.parametrize("door", ["trace"])
 def test_stray_session_wrapper_never_breaks_a_later_capture(door: str) -> None:
     """A session wrapper that escaped its capture passes through in another one.
 

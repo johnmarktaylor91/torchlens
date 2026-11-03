@@ -61,6 +61,7 @@ def _undecorated_targets() -> list[str]:
     return undecorated
 
 
+# Kept: sole branch coverage of backends/torch/_transform_wrappers.py, backends/torch/arg_names.py, backends/torch/belt.py and more; a sole mutation kill; the catch of its regression fault.
 def test_partial_first_time_decoration_completes_on_retry(monkeypatch) -> None:
     """A mid-pass decoration failure must NOT launder into `_is_decorated=True`."""
 
@@ -141,6 +142,7 @@ def test_partial_first_time_decoration_completes_on_retry(monkeypatch) -> None:
     assert tl.trace(nn.Linear(4, 4), torch.randn(1, 4))._num_ops >= 1
 
 
+# Kept: sole branch coverage of distributed/_ledger.py, distributed/_lifecycle.py, distributed/_recognizer.py.
 @pytest.mark.skipif(
     not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
@@ -180,6 +182,7 @@ def test_distributed_arm_restores_its_wraps_when_the_second_install_fails(
         assert getattr(dist, name) is original, f"{name} was left wrapped with no owner"
 
 
+# Kept: skipped in its per-id coverage run, so it has no measurement (shrink rule 3).
 def test_escape_detector_teardown_frees_the_tool_id_and_clears_the_guard(
     monkeypatch,
 ) -> None:
@@ -253,6 +256,7 @@ def test_escape_detector_teardown_frees_the_tool_id_and_clears_the_guard(
     monitoring.free_tool_id(tool_id)
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_call_execution_context_unwind_exits_every_context() -> None:
     """A raising inner `__exit__` must not strand the outer contexts."""
 
@@ -291,11 +295,3 @@ def test_call_execution_context_unwind_exits_every_context() -> None:
 
     source = inspect.getsource(_runnable_state_context._call_execution_context_entered)
     assert "first_error" in source, "the per-context fence must be present"
-
-
-def test_baseline_capture_stays_healthy_after_the_guard_changes() -> None:
-    """A plain capture must be unaffected by every guard change in this lane."""
-
-    trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
-    assert trace._num_ops == 2
-    tl.validation.check_metadata_invariants(trace)

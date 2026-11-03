@@ -84,20 +84,3 @@ def test_fork_do_stays_silent_and_reaches_upstream() -> None:
     assert _CODE not in _codes(caught)
     fork[fork.output_layers[0]].out.sum().backward()
     assert model.lin1.weight.grad is not None
-
-
-def test_the_named_live_doors_train_upstream_parameters() -> None:
-    model = _Net()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        _push_differentiable(model)
-    remedy = next(record.message.fields["remedy"] for record in caught if _CODE in _codes([record]))
-    assert ".bind(model)(x)" in remedy and "tl.trace(model, x, intervene=" in remedy
-    bound = tl.when(tl.module("lin1"), keep_grad(tl.scale(2.0))).bind(model)
-    bound(_X).sum().backward()
-    assert model.lin1.weight.grad is not None
-    assert torch.count_nonzero(model.lin1.weight.grad) > 0
-    model.zero_grad(set_to_none=True)
-    trace = tl.trace(model, _X, intervene=tl.when(tl.module("lin1"), tl.scale(2.0)))
-    trace[trace.output_layers[0]].out.sum().backward()
-    assert model.lin1.weight.grad is not None

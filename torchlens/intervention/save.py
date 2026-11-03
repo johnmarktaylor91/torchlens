@@ -114,6 +114,17 @@ def save_intervention(
         Whether an existing target directory may be replaced.
     _write_tensor_blob_fn:
         Test injection hook used to simulate tensor-write crashes.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> edited = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True),
+    ...     intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     path = pathlib.Path(d) / "spec.tlspec"
+    ...     tl.io.save_intervention(edited, path, level="audit")
+    ...     print((path / "spec.json").exists())
+    True
     """
 
     # WT1 A-IV item 20 (lane A08): the intervention-spec door had NO settled-

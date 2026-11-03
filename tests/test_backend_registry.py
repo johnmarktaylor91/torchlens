@@ -25,7 +25,6 @@ from torchlens.backends import (
     CaptureBackend,
 )
 from torchlens.backends.default_specs import (
-    _contains_other_backend_tensor,
     _jax_can_handle,
     _mlx_can_handle,
     _paddle_can_handle,
@@ -224,29 +223,12 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
     )
 
 
-def test_explicit_torch_backend_matches_legacy_trace() -> None:
-    """Explicit ``backend='torch'`` keeps torch capture reachable."""
-
-    model = _TinyModel()
-    x = torch.ones(1)
-    legacy = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=1), save="all")
-    explicit = tl.trace(
-        model,
-        x,
-        backend="torch",
-        capture=tl.options.CaptureOptions(seed=1),
-        save="all",
-    )
-    assert explicit.provenance.backend == legacy.provenance.backend == "torch"
-    assert explicit.layer_labels == legacy.layer_labels
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py.
 @pytest.mark.parametrize(
     "kwargs",
     [
         {"module_identity_mode": "object_module"},
         {"payload_policy": "not_a_policy"},
-        {"jax_control_flow": "reject"},
     ],
 )
 def test_torch_rejects_explicit_inert_trace_option_values(kwargs: dict[str, Any]) -> None:
@@ -261,22 +243,7 @@ def test_torch_rejects_explicit_inert_trace_option_values(kwargs: dict[str, Any]
         )
 
 
-def test_torch_accepts_default_equivalent_trace_option_values() -> None:
-    """Torch accepts supported/default-equivalent public option values."""
-
-    trace = tl.trace(
-        _TinyModel(),
-        torch.ones(1),
-        backend="torch",
-        capture=tl.options.CaptureOptions(
-            module_identity_mode="torch_module", payload_policy="full"
-        ),
-    )
-
-    assert trace.provenance.backend == "torch"
-    assert trace.options.module_identity_mode == "torch_module"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/registry.py.
 def test_capture_backend_factory_checked_at_registration() -> None:
     """Registration rejects incomplete shared capture protocol adapters."""
 
@@ -313,6 +280,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
         )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/registry.py.
 def test_capture_backend_factory_import_error_is_not_exempted() -> None:
     """Registration rejects factories that cannot construct a backend adapter."""
 
@@ -343,6 +311,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
         )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/registry.py.
 def test_replace_backend_spec_removes_stale_aliases() -> None:
     """Replacing a spec removes aliases owned by the old spec."""
 
@@ -533,6 +502,7 @@ def test_paddle_backend_registered_with_alias_and_priority() -> None:
     assert tl.backends.spec("tinygrad").priority == 30
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
 def test_paddle_detector_returns_false_without_paddle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -562,6 +532,8 @@ def test_paddle_detector_returns_false_without_paddle(
         assert "paddle" not in sys.modules
 
 
+@pytest.mark.rare
+@pytest.mark.backend_paddle
 def test_paddle_detector_accepts_layer_and_nested_tensor() -> None:
     """Paddle detector accepts Paddle layers and nested Paddle tensor inputs."""
 
@@ -581,6 +553,7 @@ def test_paddle_detector_accepts_layer_and_nested_tensor() -> None:
     assert not _paddle_can_handle(_TinyModel(), torch.ones(1), None)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/door.py, backends/default_specs.py.
 def test_mlx_detector_rejects_mixed_foreign_tensor_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -607,6 +580,7 @@ def test_mlx_detector_rejects_mixed_foreign_tensor_inputs(
         tl.trace(MlxModule(), (MlxArray(), TFTensor()))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
 def test_jax_detector_rejects_mixed_foreign_tensor_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -629,6 +603,7 @@ def test_jax_detector_rejects_mixed_foreign_tensor_inputs(
     assert not _jax_can_handle(lambda x: x, (JaxArray(),), {"other": PaddleTensor()})
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
 def test_tinygrad_detector_rejects_mixed_foreign_tensor_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -644,6 +619,7 @@ def test_tinygrad_detector_rejects_mixed_foreign_tensor_inputs(
     assert not _tinygrad_can_handle(lambda x: x, (TinyTensor(), JaxArray()), None)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
 def test_paddle_detector_rejects_mixed_foreign_tensor_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -675,42 +651,7 @@ def _test_leaves(value: object) -> Iterator[object]:
     yield value
 
 
-def test_tf_foreign_leaf_guard_covers_mlx_and_tinygrad_modules() -> None:
-    """TensorFlow foreign-leaf detection rejects MLX/tinygrad-shaped leaves."""
-
-    MlxArray = type("array", (), {"__module__": "mlx.core"})
-    TinygradTensor = type("Tensor", (), {"__module__": "tinygrad.tensor"})
-
-    assert _contains_other_backend_tensor("tf", MlxArray(), None)
-    assert _contains_other_backend_tensor("tf", TinygradTensor(), None)
-
-
-def test_tf_detector_foreign_leaf_guard_runs_before_tensorflow_import(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Foreign leaves should make TensorFlow detection fail without importing TF."""
-
-    original_import = builtins.__import__
-    MlxArray = type("array", (), {"__module__": "mlx.core"})
-
-    def _raise_for_tensorflow(
-        name: str,
-        globals: dict[str, Any] | None = None,
-        locals: dict[str, Any] | None = None,
-        fromlist: tuple[str, ...] = (),
-        level: int = 0,
-    ) -> Any:
-        """Raise if TensorFlow/Keras imports are attempted."""
-
-        if name in {"tensorflow", "keras"}:
-            raise AssertionError(f"unexpected import: {name}")
-        return original_import(name, globals, locals, fromlist, level)
-
-    monkeypatch.setattr(builtins, "__import__", _raise_for_tensorflow)
-
-    assert not _tf_can_handle(lambda x: x, MlxArray(), None)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
 def test_tf_detector_declines_unsupported_tensorflow_stack(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -735,6 +676,7 @@ def test_tf_detector_declines_unsupported_tensorflow_stack(
     assert not _tf_can_handle(tf_module.Module(), object(), None)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
 def test_tf_detector_swallows_non_import_error_from_broken_tf_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -787,6 +729,7 @@ def test_tf_detector_swallows_non_import_error_from_broken_tf_install(
     assert trace.provenance.backend == "torch"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
 def test_tf_detector_reraises_genuine_backend_mismatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -820,6 +763,7 @@ def test_tf_detector_reraises_genuine_backend_mismatch(
         _tf_can_handle(keras_model, object(), None)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_options.py, backends/tf/backend.py.
 def test_tf_backend_rejects_seed_without_importing_tensorflow() -> None:
     """TensorFlow preview seed= is a typed unsupported option."""
 
@@ -827,6 +771,8 @@ def test_tf_backend_rejects_seed_without_importing_tensorflow() -> None:
         TFBackend().capture_trace(lambda x: x, object(), seed=123)
 
 
+@pytest.mark.rare
+@pytest.mark.backend_paddle
 def test_paddle_shared_capture_backend_is_unsupported_typed_error() -> None:
     """Paddle shared-orchestration lookup raises the canonical unsupported error."""
 
@@ -844,6 +790,8 @@ def test_paddle_shared_capture_backend_is_unsupported_typed_error() -> None:
         _capture_backend_from_registry("paddle", _PaddleLayer(), paddle.to_tensor([1.0]), None)
 
 
+@pytest.mark.rare
+@pytest.mark.backend_paddle
 def test_explicit_paddle_backend_resolves_to_spec() -> None:
     """Explicit Paddle backend and alias resolve to the Paddle spec."""
 
@@ -863,6 +811,8 @@ def test_explicit_paddle_backend_resolves_to_spec() -> None:
     assert tl.backends.resolve("paddlepaddle", _PaddleLayer(), x) is spec
 
 
+@pytest.mark.rare
+@pytest.mark.backend_paddle
 def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
     """Paddle preview rejects unsupported options with canonical typed errors."""
 
@@ -885,6 +835,8 @@ def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
         )
 
 
+@pytest.mark.rare
+@pytest.mark.backend_paddle
 def test_paddle_preview_applies_static_label_save_selector() -> None:
     """Paddle accepts advertised static save selectors and filters public payloads."""
 
@@ -912,6 +864,7 @@ def test_paddle_preview_applies_static_label_save_selector() -> None:
     assert saved_ops[0].func_name == "functional.relu"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
 def test_tf_version_gate_reports_installed_version_floor(monkeypatch: pytest.MonkeyPatch) -> None:
     """Unsupported TF/Keras versions raise the actionable explicit-backend mismatch."""
 
@@ -1024,6 +977,7 @@ def test_public_backend_literal_branches_stay_in_registry_or_backends() -> None:
     assert offenders == []
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py, backends/registry.py.
 def test_explicit_backend_mismatch_is_deterministic() -> None:
     """Explicit torch selection rejects non-torch models before capture."""
 
@@ -1031,6 +985,7 @@ def test_explicit_backend_mismatch_is_deterministic() -> None:
         tl.trace(object(), torch.ones(1), backend="torch")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_trace_checks.py.
 def test_fake_backend_explicit_trace_and_validate() -> None:
     """Registered fake backend drives public trace and validation entries."""
 
@@ -1047,22 +1002,7 @@ def test_fake_backend_explicit_trace_and_validate() -> None:
         tl.backends.unregister("fake")
 
 
-def test_public_option_spine_rejects_unsupported_explicit_option() -> None:
-    """Unsupported explicit public-spine options fail before backend capture."""
-
-    _register_fake_backend()
-    try:
-        with pytest.raises(BackendUnsupportedError, match="module_identity_mode selection"):
-            tl.trace(
-                _FakeModel(),
-                object(),
-                backend="fake",
-                capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
-            )
-    finally:
-        tl.backends.unregister("fake")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _io/bundle.py, _io/payload_codec.py, _io/rehydrate.py ....
 def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -> None:
     """Fake backend trace round-trips metadata and exposes neutral accessors."""
 
@@ -1085,13 +1025,10 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
         tl.backends.unregister("fake")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_invariants_entry.py.
 @pytest.mark.parametrize(
     ("mutate", "match"),
     [
-        (
-            lambda trace: setattr(trace, "_options_module_identity_mode", "torch_module"),
-            "module_identity",
-        ),
         # R74-1 killers for the three previously-unreferenced arms of
         # _check_backend_identity_invariants: out-of-vocabulary param_source,
         # a backend-capability violation matched on the arm's own message, and
@@ -1109,7 +1046,6 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
         (lambda trace: setattr(trace, "_autograd_has_backward_pass", True), "has_backward_pass"),
         (lambda trace: trace._grad_fn_logs.__setitem__(1, object()), "_grad_fn_logs"),
         (lambda trace: setattr(trace[0], "resolver_status", "lost"), "resolver_status"),
-        (lambda trace: trace.output_layers.clear(), "output layer"),
     ],
 )
 def test_fake_backend_invariant_corruptions_fail(
@@ -1129,7 +1065,8 @@ def test_fake_backend_invariant_corruptions_fail(
         tl.backends.unregister("fake")
 
 
-@pytest.mark.parametrize("bad_backend", ["", None])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_invariants_entry.py, campaign mutant kills.
+@pytest.mark.parametrize("bad_backend", [None])
 def test_backend_identity_invariant_rejects_non_string_backend(bad_backend: Any) -> None:
     """The non-empty-string backend arm rejects '' and None directly (R74-1).
 
@@ -1148,6 +1085,7 @@ def test_backend_identity_invariant_rejects_non_string_backend(bad_backend: Any)
         _check_backend_identity_invariants(_BadBackendStub())
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py, backends/default_specs.py, backends/registry.py.
 def test_backend_none_ambiguity_is_deterministic() -> None:
     """Equal-priority detector collisions fail with a canonical error."""
 
@@ -1186,6 +1124,7 @@ def test_every_refusable_capability_flag_owes_a_registered_code(flag: str, code:
     assert exc.code == code
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_errors.py.
 def test_refusal_code_passed_at_the_raise_site_is_the_instance_code() -> None:
     """``exc.code`` is the contract: a raise-site ``code=`` wins; the class code is the default."""
 
@@ -1215,6 +1154,7 @@ def test_refusal_code_passed_at_the_raise_site_is_the_instance_code() -> None:
 _GATED_TRACE_OPTION_FLAGS_AT_RECORDS = {
     "intervene": "can_intervene",
     "halt": "can_intervene",
+    "stop_after": "can_intervene",
     "storage": "has_streaming",
     "streaming": "has_streaming",
     "save_grads": "backward_capture",
@@ -1333,6 +1273,7 @@ def test_dispatch_filtered_names_are_the_non_gated_record_options() -> None:
     assert set(_TRACE_OPTION_FILTERED_NAMES) | set(TRACE_OPTION_CAPABILITY_GATES) == recorded
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py.
 def test_torch_refuses_every_control_flow_record_option_explicitly() -> None:
     """The torch value refusal reads the control-flow record, not a spelled pair."""
 

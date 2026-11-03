@@ -556,6 +556,14 @@ def changed(
     between THESE two captures. PARAM populations refuse
     ``selection_kind_incompatible`` (capture-time weights are not retained on
     Trace records). DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> other = tl.trace(model, x + 1.0)
+    >>> moved = trace[tl.changed(other, "conv2d_1_1")]
+    >>> moved[0].num_selected > 0
+    True
     """
 
     reference = _validate_reference(reference, "changed")
@@ -602,6 +610,14 @@ def top_changed(
     population with fewer than ``k`` rankable elements refuses
     ``population_too_small``. Structure matching, self-comparison, and
     provenance follow :func:`changed` exactly. DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> other = tl.trace(model, x + 1.0)
+    >>> biggest = trace[tl.top_changed(other, "conv2d_2_3", k=5)]
+    >>> sum(site.num_selected for site in biggest)
+    5
     """
 
     reference = _validate_reference(reference, "top_changed")
@@ -877,6 +893,19 @@ def stable_across_passes(
     scopes the claim to THIS capture's passes, complete evidence (the
     ``low_variance`` precedent); the unstable selection is the touched-family
     complement ``~stable_across_passes(...)``. DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> class Twice(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.lin = nn.Linear(4, 4)
+    ...     def forward(self, v):
+    ...         return self.lin(torch.relu(self.lin(v)))
+    >>> trace = tl.trace(Twice(), torch.randn(1, 4))
+    >>> selection = trace[tl.stable_across_passes(tl.func("linear"), atol=1e9)]
+    >>> len(selection), sum(site.num_selected for site in selection)
+    (2, 8)
     """
 
     atol = _validate_real_number(atol, "tol", "stable_across_passes")
@@ -920,6 +949,19 @@ def pass_variance(
     mask placement (every window pass-site), and the ``exact`` provenance
     relation all follow :func:`stable_across_passes`. DOCUMENTED-UNSTABLE
     spelling.
+
+    Examples
+    --------
+    >>> class Twice(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.lin = nn.Linear(4, 4)
+    ...     def forward(self, v):
+    ...         return self.lin(torch.relu(self.lin(v)))
+    >>> trace = tl.trace(Twice(), torch.randn(1, 4))
+    >>> selection = trace[tl.pass_variance(tl.func("linear"), below=1e9)]
+    >>> len(selection), sum(site.num_selected for site in selection)
+    (2, 8)
     """
 
     if above is None and below is None:

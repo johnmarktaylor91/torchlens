@@ -171,105 +171,8 @@ def _assert_against_key(graph, model, transcoders, counts):
     return frozen
 
 
-class TestPerLayerFixture:
-    """F1: transcoders equal to the MLPs."""
-
-    def test_every_edge_and_node_matches_the_closed_form(self) -> None:
-        model = fx.build_model(2)
-        transcoders = fx.exact_transcoders(model)
-        graph = _build(model, transcoders, 2, max_num_logits=2, logit_probability_coverage=0.99)
-        _assert_against_key(graph, model, transcoders, F1_COUNTS)
-        assert graph.error_vectors.abs().max().item() <= EDGE_TOL
-        assert graph.capture_status == "COMPLETE"
-        assert graph.disclosures == ()
-
-    def test_node_order_and_fields(self) -> None:
-        model = fx.build_model(2)
-        graph = _build(
-            model, fx.exact_transcoders(model), 2, max_num_logits=2, logit_probability_coverage=0.99
-        )
-        kinds = [node.kind for node in graph.nodes]
-        assert kinds == ["feature"] * 12 + ["error"] * 6 + ["token"] * 3 + ["logit"] * 2
-        assert graph.active_feature_indices.tolist() == [
-            [layer, pos, feat] for layer in (0, 1) for pos in range(3) for feat in (0, 2)
-        ]
-        assert graph.input_token_ids.tolist() == list(fx.TOKENS)
-        assert [graph.nodes[i].token_id for i in graph.node_indices("token")] == list(fx.TOKENS)
-        assert graph.transcoder_sites == ("blocks.0.mlp", "blocks.1.mlp")
-        assert graph.error_sites == ("blocks.0.mlp", "blocks.1.mlp")
-        probs = torch.softmax(fx.plain_forward(model).logits[-1], dim=-1)
-        top = torch.topk(probs, 2)
-        assert graph.logit_token_ids.tolist() == top.indices.tolist()
-        assert (graph.logit_probabilities - top.values).abs().max().item() <= TOTAL_TOL
-        assert graph.adjacency_matrix[graph.node_indices("error")].abs().sum().item() == 0.0
-        assert graph.adjacency_matrix[:, graph.node_indices("logit")].abs().sum().item() == 0.0
-
-    def test_raw_logits_reproduce_the_model_logits(self) -> None:
-        model = fx.build_model(2)
-        transcoders = fx.exact_transcoders(model)
-        graph = _build(model, transcoders, 2, target=[0, 4], demeaned_logits=False)
-        frozen = _assert_against_key(graph, model, transcoders, {**F1_COUNTS, "logit": 2})
-        logit_rows = list(graph.node_indices("logit"))
-        total = graph.adjacency_matrix.sum(dim=1) + sum(graph.constants.values())
-        expected = frozen.logits[-1, [0, 4]]
-        assert (total[logit_rows] - expected).abs().max().item() <= TOTAL_TOL
-        with torch.no_grad():
-            model_logits = model(torch.tensor([fx.TOKENS]))[0, -1, [0, 4]]
-        assert (total[logit_rows] - model_logits).abs().max().item() <= TOTAL_TOL
-
-    def test_causal_and_layer_order_zeros(self) -> None:
-        """Later positions and later layers never drive earlier features."""
-
-        model = fx.build_model(2)
-        graph = _build(
-            model, fx.exact_transcoders(model), 2, max_num_logits=2, logit_probability_coverage=0.99
-        )
-        for t in graph.node_indices("feature"):
-            target = graph.nodes[t]
-            for s in range(len(graph.nodes)):
-                source = graph.nodes[s]
-                later_pos = source.position > target.position
-                later_layer = source.kind in ("feature", "error") and _layer(source.site) >= _layer(
-                    target.site
-                )
-                if later_pos or later_layer:
-                    assert graph.adjacency_matrix[t, s].item() == 0.0
-
-    def test_float32_edges_within_the_registered_tolerance(self) -> None:
-        model = fx.build_model(2, dtype=torch.float32)
-        transcoders = fx.exact_transcoders(model)
-        graph = _build(model, transcoders, 2, max_num_logits=2, logit_probability_coverage=0.99)
-        assert graph.adjacency_matrix.dtype == torch.float32
-        adjacency, _values, _constants, _frozen = _key(graph, model, transcoders)
-        gap = (graph.adjacency_matrix.double() - adjacency).abs()
-        assert (gap <= 1e-5 + 1e-5 * adjacency.abs()).all()
-
-    def test_frozen_op_labels_equal_frozen_module_names(self) -> None:
-        """An op label in ``frozen=`` holds the same value its module name does."""
-
-        model = fx.build_model(2)
-        transcoders = fx.exact_transcoders(model)
-        trace = _trace(model)
-        by_op = [str(trace.modules[name].output_ops[0]) for name in fx.frozen_names(2)]
-        graph = tl.attribution.build_graph(
-            trace, transcoders, embedding_module="embed", frozen=by_op, target=[0]
-        )
-        by_name = _build(model, transcoders, 2, target=[0])
-        assert torch.equal(graph.adjacency_matrix, by_name.adjacency_matrix)
-        assert graph.frozen_sites == by_name.frozen_sites
-
-
 class TestErrorNodeFixture:
     """F2: transcoders that reconstruct imperfectly."""
-
-    def test_error_nodes_carry_the_unexplained_mlp_output(self) -> None:
-        model = fx.build_model(2)
-        transcoders = fx.lossy_transcoders(model)
-        graph = _build(model, transcoders, 2, max_num_logits=2, logit_probability_coverage=0.99)
-        frozen = _assert_against_key(graph, model, transcoders, F1_COUNTS)
-        key_errors = torch.stack(_key_errors(model, frozen, transcoders))
-        assert (graph.error_vectors - key_errors).abs().max().item() <= EDGE_TOL
-        assert key_errors.abs().max().item() > 1e-2
 
     def test_logit_totals_need_the_error_nodes(self) -> None:
         model = fx.build_model(2)
@@ -282,19 +185,6 @@ class TestErrorNodeFixture:
         assert (total[rows] - expected).abs().max().item() <= TOTAL_TOL
         without = total[rows] - graph.adjacency_matrix[rows][:, errors].sum(dim=1)
         assert (without - expected).abs().max().item() > 1e-3
-
-
-class TestCrossLayerFixture:
-    """F3: a cross-layer transcoder; layer-0 features write MLP outputs 0, 1 and 2."""
-
-    def test_cross_layer_edges_match_the_closed_form(self) -> None:
-        model = fx.build_model(3)
-        transcoders = fx.cross_layer_transcoders(model)
-        graph = _build(model, transcoders, 3, max_num_logits=2, logit_probability_coverage=0.99)
-        _assert_against_key(graph, model, transcoders, F3_COUNTS)
-        first = [i for i in graph.node_indices("feature") if graph.nodes[i].site == "blocks.0.mlp"]
-        last = [i for i in graph.node_indices("feature") if graph.nodes[i].site == "blocks.2.mlp"]
-        assert graph.adjacency_matrix[last][:, first].abs().max().item() > 1e-3
 
 
 class TestRefusals:

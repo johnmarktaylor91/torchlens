@@ -65,6 +65,12 @@ def _aten_row_from_event(event: _AtenCallEvent, *, slot: int) -> AtenOp:
     owner_status = "unresolved" if event.owner_func_call_id is not None else "orphan"
     if event.capture_phase == "backward" and event.parent_grad_fn_call_ref is not None:
         owner_status = "unresolved"
+    cell = event.output_values
+    out = None
+    if cell is not None:
+        # The row becomes the sole owner of the value; the journal cell is emptied
+        # so a retained event lane never keeps a second strong reference.
+        out, cell.payload = cell.payload, None
     return AtenOp(
         label=f"aten_{event.seq}",
         sequence=event.seq,
@@ -98,6 +104,7 @@ def _aten_row_from_event(event: _AtenCallEvent, *, slot: int) -> AtenOp:
         outcome=event.outcome,
         exception_type=event.exception_type,
         execution_context=event.execution_context,
+        out=out,
     )
 
 
@@ -157,6 +164,16 @@ def _materialize_forward_primitive_profile(
     profile._event_owner_evidence = tuple(owner_evidence)
 
 
+def _owner_saved_output(ops: list[Any], refs: tuple[OpRef, ...]) -> bool:
+    """Return whether any final Op of one wrapper call kept its output value."""
+
+    return any(
+        bool(getattr(ops[ref.op_row_index], "has_saved_activation", False))
+        for ref in refs
+        if 0 <= ref.op_row_index < len(ops)
+    )
+
+
 def _finalize_forward_primitive_profile(trace: Any) -> None:
     """Resolve forward Op FKs and adopt primitive rows into the core store.
 
@@ -170,6 +187,7 @@ def _finalize_forward_primitive_profile(trace: Any) -> None:
     if profile is None:
         return
     refs_by_call = _op_refs_by_func_call_id(trace)
+    ops = list(trace._layer_list)
     for row in profile.primitive_ops:
         if row.capture_phase != "forward":
             continue
@@ -179,6 +197,10 @@ def _finalize_forward_primitive_profile(trace: Any) -> None:
         refs = refs_by_call.get(row.owner_func_call_id, ())
         row.parent_op_refs = refs
         row.owner_status = "forward_op" if refs else "orphan"
+        if refs and row.out is not None and not _owner_saved_output(ops, refs):
+            # ``save=`` settled: no Op of the owning call kept its output, so the
+            # speculatively retained ATen value goes with it (same rule as ``Op.out``).
+            row.out = None
     for gap in profile.mode_paused_interior:
         if gap.capture_phase != "forward" or gap.owner_func_call_id is None:
             continue

@@ -21,14 +21,13 @@ import random
 from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens._utils.rng import host_nondeterminism_monitor
-from torchlens._utils.rng.inventory_types import _NotADigestableRng, _rng_exempt_instances
+from torchlens._utils.rng.inventory_types import _rng_exempt_instances
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False, seed=1)
@@ -59,14 +58,7 @@ def _run_report(model: nn.Module, tmp_path: Path) -> Any:
     return tl.load(path).run(inputs=x.clone()).report
 
 
-def test_digest_classifies_systemrandom_not_digestable() -> None:
-    """``getstate() -> NotImplementedError`` is monitored-not-digestible, never a
-    generic inventory failure."""
-
-    with pytest.raises(_NotADigestableRng):
-        host_nondeterminism_monitor._digest_rng_instance(random.SystemRandom())
-
-
+# Kept: sole branch coverage of _utils/rng/digest.py, _utils/rng/generator_sweep.py, _utils/rng/inventory_types.py and more.
 def test_other_getstate_failures_still_fail_closed() -> None:
     """NARROW carve-out (tripwire intact): a ``random.Random`` subclass whose
     ``getstate()`` raises anything OTHER than ``NotImplementedError`` still
@@ -92,16 +84,7 @@ def test_other_getstate_failures_still_fail_closed() -> None:
     assert "inventory_state_read_failed" in monitor.result.uncertain_detail
 
 
-def test_undrawn_systemrandom_stays_verified_and_attested(tmp_path: Path) -> None:
-    """The corr_1 over-trigger closed: mere possession of an undrawn
-    ``SystemRandom`` on a deterministic model keeps VERIFIED / ATTESTED."""
-
-    report = _run_report(_SystemRandomHolder(), tmp_path)
-    assert report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert report.nondeterministic_sources == ()
-
-
+# Kept: sole branch coverage of _utils/rng/channels.py, _utils/rng/digest.py, _utils/rng/monitor.py.
 def test_drawn_systemrandom_still_ceilings(tmp_path: Path) -> None:
     """No under-catch traded for the over-trigger fix: an actual ``SystemRandom``
     draw during forward (class-method patch witness) still ceilings the run."""

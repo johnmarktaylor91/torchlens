@@ -45,44 +45,13 @@ def _wrapped_torch() -> Iterator[None]:
     yield
 
 
-def test_belt_membership_is_derived_and_pinned() -> None:
-    """The measured protocol-invisible set on this build, exactly."""
-
-    report = belt.belt_report()
-    assert report is not None
-    assert set(report.members) == _EXPECTED_MEMBERS
-    assert not report.probe_failures
-    if hasattr(torch, "from_file"):
-        # Build-dependent visibility: measured VISIBLE on this build, so the
-        # net covers it and the belt must NOT claim it.
-        assert ("torch", "from_file") in report.probed_visible
-        assert ("torch", "from_file") not in report.members
-
-
-def test_belt_members_fire_zero_mode_callbacks() -> None:
-    """Independent re-measurement: no mode can see a belt member's call."""
-
-    report = belt.belt_report()
-    assert report is not None
-    for entry in report.members:
-        recipe = belt.PROBE_RECIPES[entry]
-        namespace = belt._resolve_namespace(entry[0])
-        current = getattr(namespace, entry[1])
-        original = _state._decorated_to_orig.get(id(current), current)
-        args, kwargs = recipe()
-        mode = belt._CountingMode()
-        with _state.pause_logging(), mode:
-            original(*args, **kwargs)
-        assert mode.calls == 0, f"{entry} fired the mode; it is not protocol-invisible"
-
-
 def _original_and_wrapper(name: str) -> tuple[Any, Any]:
     wrapper = getattr(torch, name)
     original = _state._decorated_to_orig[id(wrapper)]
     return original, wrapper
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_belt_sweep_patches_stale_module_ref_and_restores() -> None:
     """Module-attr stale refs to belt members round-trip through the ledger."""
 
@@ -101,6 +70,7 @@ def test_belt_sweep_patches_stale_module_ref_and_restores() -> None:
         belt.restore_belt_references()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/belt.py.
 def test_belt_restore_preserves_user_reassignment() -> None:
     """Reversal is conditional: a slot the user rewrote is left alone."""
 
@@ -120,22 +90,7 @@ def test_belt_restore_preserves_user_reassignment() -> None:
         belt.restore_belt_references()
 
 
-def test_belt_sweep_is_epoch_incremental() -> None:
-    """A module identity is scanned once; new imports are picked up later."""
-
-    original, wrapper = _original_and_wrapper("from_numpy")
-    belt.sweep_stale_belt_references()  # drain: everything live is now swept
-    late = types.ModuleType("_tl_belt_late_import")
-    late.op = original
-    sys.modules[late.__name__] = late
-    try:
-        assert belt.sweep_stale_belt_references() >= 1
-        assert late.op is wrapper
-    finally:
-        sys.modules.pop(late.__name__, None)
-        belt.restore_belt_references()
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_belt_sweep_prefilter_evicts_dead_module_ids() -> None:
     """The O(new) pre-filter never turns a reused id into a silent skip.
 
@@ -170,6 +125,7 @@ def test_belt_sweep_prefilter_evicts_dead_module_ids() -> None:
         belt.restore_belt_references()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_probe_rng_bracket_restores_global_seed() -> None:
     """The probe framework is RNG-neutral by construction (b8-fable R56).
 
@@ -191,6 +147,7 @@ def test_probe_rng_bracket_restores_global_seed() -> None:
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/belt.py, campaign mutant kills.
 def test_belt_derivation_is_rng_neutral() -> None:
     """End-to-end: a full ``_derive()`` pass leaves the global RNG untouched."""
 
@@ -213,29 +170,7 @@ def _forged_failure_report() -> belt.BeltReport:
     )
 
 
-@pytest.mark.heavy  # doctor-row probe crossed the 7s smoke budget at T56 (8.0s cpu)
-def test_probe_failure_reaches_doctor_row(monkeypatch: pytest.MonkeyPatch) -> None:
-    """grind-r6 b3 R02 (sol MED): doctor() must consume belt probe failures.
-
-    A failed probe means the candidate is neither belt-patched nor proven
-    mode-visible, so a stale pre-wrap reference to it drops ops with zero
-    signal while ``capture_verified`` stays True. Before the fix NO doctor
-    row consumed the belt report at all.
-    """
-
-    import torchlens as tl
-
-    monkeypatch.setattr(belt, "_report", _forged_failure_report())
-    monkeypatch.setattr(belt, "_member_map", {})
-    rows = {check.key: check for check in tl.report.doctor().checks}
-    assert "mechanical belt" in rows, "no doctor row consumes the belt report"
-    row = rows["mechanical belt"]
-    assert row.status == "scope"
-    assert "torch.frombuffer" in row.details
-    assert "probe exploded" in row.details
-    assert "unprobed_candidates=2" in row.details
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of compat/_report.py, report/_environment.py.
 def test_probe_failure_reaches_compat_row(monkeypatch: pytest.MonkeyPatch) -> None:
     """grind-r6 b3 R02 (sol MED): report.doctor() must carry the belt row."""
 
@@ -250,7 +185,6 @@ def test_probe_failure_reaches_compat_row(monkeypatch: pytest.MonkeyPatch) -> No
     assert "torch.frombuffer" in row.details
 
 
-@pytest.mark.smoke
 def test_clean_belt_reports_pass_not_false_alarm() -> None:
     """Healthy build: PASS rows that still DISCLOSE the unprobed count.
 

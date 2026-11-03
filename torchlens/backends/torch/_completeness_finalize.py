@@ -404,6 +404,7 @@ def _build_witness_state(
         record_escapes=record_escapes,
         ledger=record_escapes,
         record_aten=record_aten,
+        record_aten_values=trace._options_aten_ops == "values",
         plane_p=plane_p,
         aten_events=event_stream,
         capture_phase="forward",
@@ -464,8 +465,9 @@ def _resolve_witness_requests(trace: Any) -> tuple[bool, bool, bool, Any]:
     # by its producing op, keyed on the ESCAPE EVENT. This is a passive observer:
     # it records raw op labels only and never alters a captured op, so goldens are
     # unchanged. The default (non-runnable) capture path installs nothing.
-    # ATen recording is the public ``CaptureOptions(aten_ops=True)`` switch,
-    # stamped on the trace at entry; nothing else arms it.
+    # ATen recording is the public ``CaptureOptions(aten_ops=True)`` switch
+    # (``"values"`` also keeps outputs), stamped on the trace at entry;
+    # nothing else arms it.
     record_escapes = bool(getattr(trace, "is_replayable", False))
     record_aten = bool(trace._options_aten_ops)
     plane_p = _plane_p_requested()

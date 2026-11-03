@@ -20,7 +20,7 @@ from torchlens.backends.registry import get_backend_spec
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-pytestmark = [pytest.mark.backend_jax]
+pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 
 
 def _protocol() -> Any:

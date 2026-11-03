@@ -7,10 +7,10 @@ recorder still call by name.
 import copy
 import dataclasses
 import inspect
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import torch
 from torch import nn
@@ -40,6 +40,7 @@ from .._utils.tensor_utils import SaveMode
 from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
 )
+from ..intervention._zero_fire import capture_rule_fire_ledger
 from ..intervention.predicates import InterventionPredicate
 from ..intervention.site_keys import armed_live_minter, predicate_needs_live_site_keys
 from ..recording.exceptions import PredicateError
@@ -76,6 +77,22 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
         If no forward pass is being captured.
     ValueError
         If either tensor has not been tagged by TorchLens.
+
+    Examples
+    --------
+    >>> class Linked(nn.Module):
+    ...     def forward(self, a):
+    ...         h, y = a.relu(), a.sigmoid()
+    ...         register_tensor_connection(h, y)
+    ...         return y * 2
+    >>> trace = tl.trace(Linked(), x)
+    >>> "relu_1_1" in trace["sigmoid_1_2"].parents
+    True
+    >>> try:
+    ...     register_tensor_connection(x, x)
+    ... except tl.errors.TorchLensError as err:
+    ...     print(type(err).__name__)
+    CaptureNotActiveError
     """
 
     trace = _state._active_trace
@@ -196,7 +213,7 @@ def _run_model_and_save_specified_outs(
     structure_only: bool = False,
     log_injections: bool = False,
     measure_host_peak_memory: bool = False,
-    aten_ops: bool = False,
+    aten_ops: bool | Literal["values"] = False,
     transform: Callable[[Any], Any] | None = None,
     raw_input: Any | None = None,
     save_raw_input: str | bool = "small",
@@ -304,7 +321,7 @@ def _run_model_and_save_specified_outs(
         capture_container_structure: If True, persist input and output container
             structure without enabling intervention replay metadata.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
-            ``Trace.attach_hooks`` and executes during this capture when supplied.
+            ``Trace.do`` and executes during this capture when supplied.
         intervention_spec: Active intervention spec to expose in runtime context.
         normalized_hook_plan: Optional pre-normalized hook entries for internal engines.
             When ``intervention_spec`` is also supplied they must be its normalization:
@@ -341,7 +358,8 @@ def _run_model_and_save_specified_outs(
             knob; never changes control flow).
         log_injections: Record intervention-hook torch calls as injected-op records.
         measure_host_peak_memory: Measure CPU peaks (resets the process ``VmHWM``).
-        aten_ops: Record the ATen operations each logged torch call dispatched to.
+        aten_ops: Record the ATen operations each logged torch call dispatched to
+            (``"values"`` also keeps their output tensors).
         transform: Optional callable used to produce model-ready inputs from raw user input.
         raw_input: Original user input before ``transform`` was applied.
         save_raw_input: Portable save policy for the original raw input.
@@ -377,9 +395,26 @@ def _run_model_and_save_specified_outs(
     -------
         Fully-populated Trace.
     """
-    plan = {k: v for k, v in locals().items() if k not in _REQUEST_POSITIONALS}
+    return _run_keyword_capture(locals())
+
+
+def _run_keyword_capture(arguments: dict[str, Any]) -> Trace:
+    """Build the capture request from the keyword adapter's arguments and run it.
+
+    Args:
+        arguments: ``locals()`` of ``_run_model_and_save_specified_outs`` taken
+            before it binds any name of its own, so exactly its parameters.
+
+    Returns:
+        Fully-populated Trace.
+    """
+
+    plan = {k: v for k, v in arguments.items() if k not in _REQUEST_POSITIONALS}
     request = CaptureRequest(
-        model=model, input_args=input_args, input_kwargs=input_kwargs, plan=plan
+        model=arguments["model"],
+        input_args=arguments["input_args"],
+        input_kwargs=arguments["input_kwargs"],
+        plan=plan,
     )
     return run_capture(request).trace
 
@@ -482,8 +517,14 @@ def _abort_streaming_writer(trace: Trace, exc: BaseException) -> None:
         raise ArtifactError("Streaming out save failed during forward pass.") from exc
 
 
-def _finish_run_entry(trace: Trace, r: SimpleNamespace, echo_session: Any) -> None:
-    """Post-forward tail: root disclosure, echo close, zero-match warnings, events."""
+def _finish_run_entry(
+    trace: Trace, r: SimpleNamespace, echo_session: Any, fired_rule_ids: Collection[str]
+) -> None:
+    """Post-forward tail: root disclosure, echo close, zero-match warnings, events.
+
+    ``fired_rule_ids`` is the capture's fire ledger: the ids of the public-spec
+    ``intervene=`` rules that fired, settled per rule by the event writer.
+    """
 
     if isinstance(r.model, TLBoundMethodRoot):
         # F41 TL-authored-root disclosure (tlspec v9 entry-dark slot, C07X
@@ -519,6 +560,7 @@ def _finish_run_entry(trace: Trace, r: SimpleNamespace, echo_session: Any) -> No
             if r.lowered_intervene_spec is not None
             else r.module_intervene_selector
         ),
+        fired_rule_ids=fired_rule_ids,
     )
 
 
@@ -589,19 +631,20 @@ def _run_resolved_request(r: SimpleNamespace) -> Trace:
     from .._snoop._entry import echo_forward_failure
 
     trace, echo_session = _build_trace_for_run(r, _release_capture_slot)
-    try:
-        _forward_under_minter(trace, r, reservation_token)
-    except BaseException as exc:
-        # Crash tail (snoop D5 tail 2): synchronous flush; note rides PEP 678.
-        echo_forward_failure(echo_session, exc)
-        _abort_streaming_writer(trace, exc)
-        raise
-    finally:
-        _state.reset_capture_runtime_context()
-        _release_capture_slot()
-        if hasattr(trace, "_capture_container_structure"):
-            delattr(trace, "_capture_container_structure")
-    _finish_run_entry(trace, r, echo_session)
+    with capture_rule_fire_ledger() as fired_rule_ids:
+        try:
+            _forward_under_minter(trace, r, reservation_token)
+        except BaseException as exc:
+            # Crash tail (snoop D5 tail 2): synchronous flush; note rides PEP 678.
+            echo_forward_failure(echo_session, exc)
+            _abort_streaming_writer(trace, exc)
+            raise
+        finally:
+            _state.reset_capture_runtime_context()
+            _release_capture_slot()
+            if hasattr(trace, "_capture_container_structure"):
+                delattr(trace, "_capture_container_structure")
+    _finish_run_entry(trace, r, echo_session, frozenset(fired_rule_ids))
     return trace
 
 

@@ -86,6 +86,26 @@ def prediction_trajectory(  # noqa: PLR0913 -- position/batch/tokenizer/target a
     -------
     PredictionTrajectory
         The typed per-layer trajectory record.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace as NS
+    >>> def lens_row(address, provenance):
+    ...     return NS(
+    ...         address=address, provenance=provenance, positions=[0, 1],
+    ...         top_ids=torch.tensor([[[1, 2], [3, 4]]]),
+    ...         top_probs=torch.tensor([[[0.6, 0.2], [0.5, 0.3]]]),
+    ...         token_ids=[1], token_probs=torch.tensor([[[0.6], [0.1]]]),
+    ...         token_ranks=torch.tensor([[[1], [2]]]),
+    ...     )
+    >>> predictions = NS(
+    ...     rows=[lens_row("blocks.0", "projected through final norm/head"),
+    ...           lens_row("logits", "native output")],
+    ...     lens_source="model_head", is_validated=True, tie_convention="ties share the best rank",
+    ... )
+    >>> trajectory = tl.transformer.prediction_trajectory(predictions, target_token_id=1)
+    >>> trajectory.module_addresses, trajectory.target_ranks
+    (('blocks.0', 'logits'), (2, 2))
     """
 
     layers: list[str] = []
@@ -185,6 +205,32 @@ def render_prediction_ribbon(
     -------
     Artifact
         The written file plus rendered disclosure lines.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> from types import SimpleNamespace as NS
+    >>> def lens_row(address, provenance):
+    ...     return NS(
+    ...         address=address, provenance=provenance, positions=[0, 1],
+    ...         top_ids=torch.tensor([[[1, 2], [3, 4]]]),
+    ...         top_probs=torch.tensor([[[0.6, 0.2], [0.5, 0.3]]]),
+    ...         token_ids=[1], token_probs=torch.tensor([[[0.6], [0.1]]]),
+    ...         token_ranks=torch.tensor([[[1], [2]]]),
+    ...     )
+    >>> predictions = NS(
+    ...     rows=[lens_row("blocks.0", "projected through final norm/head"),
+    ...           lens_row("logits", "native output")],
+    ...     lens_source="model_head", is_validated=True, tie_convention="ties share the best rank",
+    ... )
+    >>> trajectory = tl.transformer.prediction_trajectory(predictions)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.transformer.render_prediction_ribbon(
+    ...         trajectory, pathlib.Path(tmp) / "ribbon.png"
+    ...     )
+    ...     written = saved.paths[0].exists()
+    >>> written
+    True
     """
 
     matplotlib = require_matplotlib()
@@ -258,6 +304,32 @@ def render_answer_trajectory(
     -------
     Artifact
         The written file plus rendered disclosure lines.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> from types import SimpleNamespace as NS
+    >>> def lens_row(address, provenance):
+    ...     return NS(
+    ...         address=address, provenance=provenance, positions=[0, 1],
+    ...         top_ids=torch.tensor([[[1, 2], [3, 4]]]),
+    ...         top_probs=torch.tensor([[[0.6, 0.2], [0.5, 0.3]]]),
+    ...         token_ids=[1], token_probs=torch.tensor([[[0.6], [0.1]]]),
+    ...         token_ranks=torch.tensor([[[1], [2]]]),
+    ...     )
+    >>> predictions = NS(
+    ...     rows=[lens_row("blocks.0", "projected through final norm/head"),
+    ...           lens_row("logits", "native output")],
+    ...     lens_source="model_head", is_validated=True, tie_convention="ties share the best rank",
+    ... )
+    >>> trajectory = tl.transformer.prediction_trajectory(predictions, target_token_id=1)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.transformer.render_answer_trajectory(
+    ...         trajectory, pathlib.Path(tmp) / "answer.png"
+    ...     )
+    ...     written = saved.paths[0].exists()
+    >>> written
+    True
     """
 
     if trajectory.target_probs is None or trajectory.target_ranks is None:
@@ -325,6 +397,26 @@ def prediction_table(
     -------
     PredictionTable
         The typed positions x top-k record.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace as NS
+    >>> def lens_row(address, provenance):
+    ...     return NS(
+    ...         address=address, provenance=provenance, positions=[0, 1],
+    ...         top_ids=torch.tensor([[[1, 2], [3, 4]]]),
+    ...         top_probs=torch.tensor([[[0.6, 0.2], [0.5, 0.3]]]),
+    ...         token_ids=[1], token_probs=torch.tensor([[[0.6], [0.1]]]),
+    ...         token_ranks=torch.tensor([[[1], [2]]]),
+    ...     )
+    >>> predictions = NS(
+    ...     rows=[lens_row("blocks.0", "projected through final norm/head"),
+    ...           lens_row("logits", "native output")],
+    ...     lens_source="model_head", is_validated=True, tie_convention="ties share the best rank",
+    ... )
+    >>> table = tl.transformer.prediction_table(predictions)
+    >>> table.positions, table.provenance
+    ((0, 1), 'native output')
     """
 
     native_rows = [row for row in predictions.rows if row.provenance == "native output"]
@@ -357,7 +449,18 @@ def prediction_table(
 
 
 def prediction_table_html(table: PredictionTable) -> str:
-    """Emit the zero-dependency HTML top-k table (inspectus, matched)."""
+    """Emit the zero-dependency HTML top-k table (inspectus, matched).
+
+    Examples
+    --------
+    >>> table = tl.transformer.PredictionTable(
+    ...     positions=(0,), context_tokens=("The",),
+    ...     top_tokens=(("cat", "dog"),), top_probs=((0.6, 0.2),),
+    ... )
+    >>> html = tl.transformer.prediction_table_html(table)
+    >>> html.startswith("<table"), "cat (0.60)" in html
+    (True, True)
+    """
 
     import html as _html
 
@@ -398,6 +501,19 @@ def render_prediction_table(
     -------
     Artifact
         Written pages plus rendered disclosure lines.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> table = tl.transformer.PredictionTable(
+    ...     positions=(0,), context_tokens=("The",),
+    ...     top_tokens=(("cat", "dog"),), top_probs=((0.6, 0.2),),
+    ... )
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.viz.prediction_table(table, pathlib.Path(tmp) / "table.png")
+    ...     n_pages = len(saved.paths)
+    >>> n_pages
+    1
     """
 
     import math as _math

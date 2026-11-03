@@ -343,13 +343,13 @@ def _apply_predicate_mode_interventions_to_outputs(
             decision.hook,
             default_site_target=make_label_selector(ctx.raw_label or ctx.label),
         )
-        from ...intervention.runtime import _apply_live_hooks
+        from ...intervention import _zero_fire, runtime
 
         with active_intervention_context(
             intervention_spec=getattr(trace, "_intervention_spec", None),
             hook_plan=hook_entries,
         ):
-            hooked, fire_results = _apply_live_hooks(
+            hooked, fire_results = runtime._apply_live_hooks(
                 out,
                 site=site,
                 container_path=container_path,
@@ -358,9 +358,7 @@ def _apply_predicate_mode_interventions_to_outputs(
                 call_input_snapshots=call_input_snapshots,
             )
         if fire_results:
-            trace._tl_intervene_selector_fire_count = int(
-                getattr(trace, "_tl_intervene_selector_fire_count", 0)
-            ) + len(fire_results)
+            _zero_fire.note_capture_fire(trace, len(fire_results), decision.rule_id)
             _set_tensor_live_fire_results(hooked, fire_results)
         if hooked is not out:
             replacements[container_path] = hooked
@@ -687,13 +685,13 @@ def _apply_predicate_intervention(
         decision.hook,
         default_site_target=make_label_selector(ctx.raw_label or ctx.label),
     )
-    from ...intervention.runtime import _apply_live_hooks
+    from ...intervention import _zero_fire, runtime
 
     with active_intervention_context(
         intervention_spec=getattr(trace, "_intervention_spec", None),
         hook_plan=hook_entries,
     ):
-        hooked, fire_results = _apply_live_hooks(
+        hooked, fire_results = runtime._apply_live_hooks(
             out,
             site=site,
             container_path=container_path,
@@ -702,9 +700,7 @@ def _apply_predicate_intervention(
             call_input_snapshots=call_input_snapshots,
         )
     if fire_results:
-        trace._tl_intervene_selector_fire_count = int(
-            getattr(trace, "_tl_intervene_selector_fire_count", 0)
-        ) + len(fire_results)
+        _zero_fire.note_capture_fire(trace, len(fire_results), decision.rule_id)
     return hooked, fire_results
 
 

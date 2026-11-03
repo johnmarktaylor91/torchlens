@@ -78,7 +78,7 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
     """
 
     from .._selection.selectors import BaseSelector
-    from ..intervention.hooks import site_universe
+    from ..intervention.predicates import _warn_intervene_fired_nowhere
 
     save_selector = state.options.keep_op
     if isinstance(save_selector, BaseSelector):
@@ -92,18 +92,7 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
                 UserWarning,
                 stacklevel=3,
             )
-    intervene_selector = getattr(state.options.intervene, "selector", None)
-    if (
-        isinstance(intervene_selector, BaseSelector)
-        and site_universe(intervene_selector) == "activation"
-        and state.intervene_selector_fire_count == 0
-    ):
-        warnings.warn(
-            f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
-            "no intervention fired.",
-            UserWarning,
-            stacklevel=3,
-        )
+    _warn_intervene_fired_nowhere(state.options.intervene, state.intervene_selector_fire_count)
 
 
 def _unwrap_ddp_for_fastlog(
@@ -200,7 +189,14 @@ def _settle_recording_outcome(recording: Recording, state: RecordingState) -> No
 
 
 class Recorder:
-    """Context manager for explicitly captured fastlog forwards."""
+    """Context manager for explicitly captured fastlog forwards.
+
+    Examples
+    --------
+    >>> with Recorder(model, save=tl.func("relu")) as recorder:
+    ...     _ = recorder(x)
+    >>> recorder.recording.status, len(recorder.recording.records)
+    ('complete', 1)"""
 
     def __init__(
         self,

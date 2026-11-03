@@ -207,6 +207,15 @@ class FrameworkRequirement:
         dependency).
     excluded:
         Versions inside the range that are refused (broken wheels).
+
+    Examples
+    --------
+    >>> tl.backends.spec("torch").protocol().framework.distributions
+    ('torch',)
+    >>> req = FrameworkRequirement(distributions=("jax",), minimum="0.4", below=None,
+    ...     tested_through="0.4.30", pinned=None, extra="jax")
+    >>> (req.minimum, req.excluded)
+    ('0.4', ())
     """
 
     distributions: tuple[str, ...]
@@ -273,6 +282,14 @@ class BackendProtocol(Protocol):
     Members are the ones every backend already has as functions somewhere;
     the protocol names them once so the conformance suite, the constants rule
     and the realize-once rule can drive any backend the same way.
+
+    Examples
+    --------
+    >>> protocol = tl.backends.spec("torch").protocol()
+    >>> isinstance(protocol, BackendProtocol)
+    True
+    >>> (protocol.name, protocol.is_tensor(x))
+    ('torch', True)
     """
 
     name: str

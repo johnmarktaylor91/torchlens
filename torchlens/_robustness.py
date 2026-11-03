@@ -185,6 +185,13 @@ class VariantScanTruncationWarning(TorchLensWarning):
     receive the typed entry refusal and will instead fail later, mid-capture,
     with a raw error. This category discloses that honestly instead of
     silently narrowing the guarantee.
+
+    Examples
+    --------
+    >>> issubclass(VariantScanTruncationWarning, Warning)
+    True
+    >>> issubclass(VariantScanTruncationWarning, tl.errors.TorchLensWarning)
+    True
     """
 
 
@@ -337,6 +344,13 @@ class UnsupportedTensorVariantError(CompatibilityError, RuntimeError):
     variant class, where ``path`` is the input-tree location of the first
     offending tensor (``"args[0]"``, ``"kwargs['x'].deep"``, ``"model.<param>"``,
     or a mid-forward op label). ``shape`` is ``None`` for shapeless variants.
+
+    Examples
+    --------
+    >>> issubclass(UnsupportedTensorVariantError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(UnsupportedTensorVariantError, tl.errors.TorchLensError)
+    True
     """
 
 

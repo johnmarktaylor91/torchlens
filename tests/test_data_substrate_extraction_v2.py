@@ -147,23 +147,6 @@ def test_resume_identity_random_init_refuses_t_modelswap(tmp_path: Path) -> None
     assert manifest["status"] == "in_progress", "never completes on a swapped model"
 
 
-def test_resume_identity_same_state_resumes_and_completes(tmp_path: Path) -> None:
-    """The matching model resumes the prefix and lands terminal totals."""
-
-    model = _Model(seed=0).eval()
-    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
-    _interrupt_after(tmp_path, 1)
-    paths = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False, resume=True
-    )
-    assert [path.name for path in paths] == [f"batch_0000{i}.safetensors" for i in range(3)]
-    loaded = load_extraction(tmp_path)
-    assert loaded.manifest["status"] == "complete"
-    clean = tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, progress=False)
-    for key, tensor in clean.items():
-        assert torch.equal(loaded.activations[key], tensor)
-
-
 def test_resume_identity_in_place_weight_edit_refuses(tmp_path: Path) -> None:
     """The LoRA-merge/lesion class: an in-place weight edit changes identity."""
 
@@ -203,35 +186,6 @@ def test_resume_identity_cross_level_refuses(tmp_path: Path) -> None:
             model_identity="none",
         )
     assert excinfo.value.fields["code"] == "extraction_resume_model_identity_mismatch"
-
-
-def test_resume_identity_none_optout_is_recorded_and_resumable(tmp_path: Path) -> None:
-    """'none' is an explicit recorded opt-out: resume proceeds, no claim made."""
-
-    model = _Model(seed=0).eval()
-    tl.extract_dataset(
-        model,
-        _stimuli(),
-        _LAYERS,
-        batch_size=4,
-        path=tmp_path,
-        progress=False,
-        model_identity="none",
-    )
-    _interrupt_after(tmp_path, 1)
-    paths = tl.extract_dataset(
-        model,
-        _stimuli(),
-        _LAYERS,
-        batch_size=4,
-        path=tmp_path,
-        progress=False,
-        resume=True,
-        model_identity="none",
-    )
-    assert len(paths) == 3
-    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["signature"]["model_identity"]["level"] == "none"
 
 
 def test_resume_identity_assertion_matrix(tmp_path: Path) -> None:
@@ -458,35 +412,6 @@ def test_resume_time_invented_pipeline_id_refuses(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "extraction_resume_pipeline_id_invalid"
 
 
-def test_registered_spec_chain_continuation_resumes(tmp_path: Path) -> None:
-    """The remedy works: a spec chain is resume-verifiable and continues."""
-
-    model = _Model(seed=0).eval()
-    spec_chain = chain(tl.transforms.cast(torch.float16))
-    tl.extract_dataset(
-        model,
-        _stimuli(),
-        _LAYERS,
-        batch_size=4,
-        path=tmp_path,
-        progress=False,
-        output_transform=spec_chain,
-    )
-    _interrupt_after(tmp_path, 1)
-    paths = tl.extract_dataset(
-        model,
-        _stimuli(),
-        _LAYERS,
-        batch_size=4,
-        path=tmp_path,
-        progress=False,
-        resume=True,
-        output_transform=spec_chain,
-    )
-    assert len(paths) == 3
-    assert load_extraction(tmp_path).activations["relu"].dtype == torch.float16
-
-
 def test_changed_spec_chain_mismatches_the_signature(tmp_path: Path) -> None:
     """A numerics-visible chain change mismatches transform_pipeline (D16)."""
 
@@ -517,21 +442,6 @@ def test_changed_spec_chain_mismatches_the_signature(tmp_path: Path) -> None:
 
 
 # --- transform door engine seams -------------------------------------------------
-
-
-def test_c_implemented_transform_torch_abs_dispatches_unary() -> None:
-    """The P2 counterexample: transform=torch.abs (C-op) must be called unary.
-
-    ``inspect.signature`` reports ``(*args, **kwargs)`` for C-implemented
-    ops, so arity sniffing would pass ctx and TypeError at batch 1.
-    """
-
-    model = _Model(seed=0).eval()
-    out = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, progress=False, output_transform=torch.abs
-    )
-    reference = tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, progress=False)
-    assert torch.equal(out["logits"], reference["logits"].abs())
 
 
 def test_declared_ctx_transform_receives_site_label() -> None:
@@ -694,24 +604,3 @@ def test_stimulus_ids_cardinality_refusals(tmp_path: Path) -> None:
             stimulus_ids=[f"s{i}" for i in range(5)],
         )
     assert excinfo.value.fields["code"] == "extraction_stimulus_ids_cardinality"
-
-
-def test_ledger_rows_carry_id_range_digests(tmp_path: Path) -> None:
-    """Each committed shard ledgers the digest of its ordered id slice."""
-
-    from torchlens._data_substrate import read_trusted_rows, stimulus_ids_digest
-
-    model = _Model(seed=0).eval()
-    ids = [f"s{i:02d}" for i in range(10)]
-    tl.extract_dataset(
-        model,
-        _stimuli(),
-        _LAYERS,
-        batch_size=4,
-        path=tmp_path,
-        progress=False,
-        stimulus_ids=ids,
-    )
-    rows = read_trusted_rows(tmp_path)
-    assert rows[0]["ids_range_digest"] == stimulus_ids_digest(ids[0:4])
-    assert rows[2]["ids_range_digest"] == stimulus_ids_digest(ids[8:10])

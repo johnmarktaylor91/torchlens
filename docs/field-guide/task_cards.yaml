@@ -409,7 +409,7 @@ cards:
     tier: advanced
     doors: [agents]
     related: [record-many]
-    page: docs/non_goals.md
+    page: docs/migration/cross_engine.md
     fixture: none
     prompt: 'We serve a language model behind a high-throughput inference server handling thousands of concurrent requests. Stream a probe score from layer 12 of every request in production.'
     avoid_calls: [tl.trace, tl.record, tl.when]

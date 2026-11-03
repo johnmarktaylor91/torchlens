@@ -207,8 +207,7 @@ log = tl.trace(
     capture=tl.options.CaptureOptions(save_args=True), save="all",
 )
 edited = log.fork("ablated")
-edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())
-edited.run(model, x)
+edited.do(tl.head(3, "q"), tl.zero_ablate(), model=model, inputs=x)
 ```
 
 Static patching uses the same scatter-back path:
@@ -224,7 +223,7 @@ edited.run(model, x)
 facets `q`, `k`, and `v` wherever they are present:
 
 ```python
-edited.attach_hooks(tl.head(3), tl.zero_ablate())
+edited.do(tl.head(3), tl.zero_ablate(), model=model, inputs=x)
 ```
 
 Scatter-back preserves the home tensor dtype, device, shape, and memory format.
@@ -255,7 +254,7 @@ is backed by a real op.
 
 Patching helpers live at `tl.facets.patching`. They run a clean trace and a
 corrupted trace, then reuse the facet intervention path (`fork`,
-`attach_hooks`, `rerun`, and `tl.facet`/`tl.head` selectors) to patch clean
+`do` with `model=`/`inputs=` (a rerun), and `tl.facet`/`tl.head` selectors) to patch clean
 facet activations into the corrupted run.
 
 The metric callable receives the patched `Trace` and must return a scalar
@@ -409,7 +408,9 @@ layer's residual stream, and earlier layers do not use that basis, so early-laye
 weak evidence and often look like noise even when the layer carries the information
 (Belrose et al., 2023, introduced the tuned lens for this reason). Read the lens as a trend
 across depth, compare it with a probe or a tuned lens passed as `lens=`, and do not read one early
-layer's top token as what that layer "thinks".
+layer's top token as what that layer "thinks". A Jacobian lens (the corpus-average Jacobian
+of the final residual with respect to a block's, passed as `lens=`) is fitted from public
+primitives in [the Jacobian lens recipe](field-guide/jacobian_lens.md).
 
 `torchlens._semantic.logit_lens_predictions` is the streaming reduction of the
 same sweep: it projects ONE layer at a time, keeps only per-position top-k
@@ -465,7 +466,7 @@ logits):
   `result.lens_source` is `"contrastive_head"`, each layer's logits are
   `[n_images, n_prompts]`, and the last layer equals CLIP's
   `logits_per_image`. Only vision-tower blocks are projected; passing a
-  text-tower block in `layers=` refuses `logit_lens_layer_outside_head`.
+  text-tower block in `modules=` refuses `logit_lens_layer_outside_head`.
 
 ```text
 classification_head facets          contrastive_image_head facets

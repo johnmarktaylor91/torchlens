@@ -224,6 +224,18 @@ def grad_cam(
         If the target layer fired more than once, no spatial input feeds it,
         several feeding spatial inputs have different grids, a token grid is
         not provable, or no layer can be chosen automatically.
+
+    Examples
+    --------
+    >>> clf = nn.Sequential(
+    ...     nn.Conv2d(3, 4, 3, padding=1), nn.ReLU(), nn.AdaptiveAvgPool2d(1), nn.Flatten(),
+    ...     nn.Linear(4, 3),
+    ... ).eval()
+    >>> result = tl.attribution.grad_cam(clf, x, target=0, layer="0", overlay=False)
+    >>> tuple(result.values.shape)
+    (1, 1, 8, 8)
+    >>> result.extra["layer"]
+    '0'
     """
 
     prepared_inputs = _normalize_model_inputs(

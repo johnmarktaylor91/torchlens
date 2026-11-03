@@ -44,6 +44,7 @@ from ...recording.types import (
     RecordContext,
     StorageIntent,
 )
+from ._aten_capture import _note_aten_owner_verdict
 from ._ops_arguments import _copy_saved_arg_tree, _copy_saved_call_args, _iter_tree_tensors
 from ._ops_payload_stream import _stream_predicate_payloads
 
@@ -437,28 +438,45 @@ def _retain_lookback_candidate(
     ctx: RecordContext,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
-) -> None:
-    """Retain one candidate payload in the bounded retroactive-save window."""
+) -> bool:
+    """Retain one candidate payload in the bounded retroactive-save window.
+
+    Returns
+    -------
+    bool
+        ``True`` when a candidate was appended (its save verdict is deferred to
+        a later retroactive decision or window eviction), ``False`` when the
+        predicate keeps no lookback payload for this op.
+    """
 
     if ctx.raw_label is None:
-        return
+        return False
     lookback = int(getattr(trace, "_predicate_lookback", 0))
     if lookback <= 0:
-        return
+        return False
     policy = str(getattr(trace, "_predicate_lookback_payload_policy", "metadata_only"))
     if policy == "metadata_only":
-        return
+        return False
     candidate_selector = _trace_followed_by_candidate_selector(trace)
     if candidate_selector is None or not candidate_selector(ctx):
-        return
+        return False
     payload = _copy_lookback_payload(trace, fields_dict, tensor, policy)
     candidates = getattr(trace, "_predicate_lookback_candidates", None)
     if candidates is None:
         candidates = deque()
         trace._predicate_lookback_candidates = candidates
-    candidates.append(_RetainedLookbackCandidate(raw_label=ctx.raw_label, payload=payload))
+    candidates.append(
+        _RetainedLookbackCandidate(
+            raw_label=ctx.raw_label,
+            payload=payload,
+            owner_call_id=fields_dict.get("func_call_id"),
+        )
+    )
     while len(candidates) > lookback:
-        candidates.popleft()
+        evicted = candidates.popleft()
+        if not evicted.marked:
+            _settle_aten_values_for_candidate(trace, evicted, "drop")
+    return True
 
 
 def _copy_lookback_payload(
@@ -573,7 +591,27 @@ def _apply_retroactive_decision(
         if candidate.marked:
             continue
         candidate.marked = True
+        _settle_aten_values_for_candidate(trace, candidate, "keep")
         _replace_event_with_retained_payload(trace, raw_label, candidate.payload)
+
+
+def _settle_aten_values_for_candidate(trace: Trace, candidate: Any, verdict: str) -> None:
+    """Pass a lookback candidate's fate to the ATen values its call owns.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    candidate:
+        Retained lookback candidate leaving the deferred state.
+    verdict:
+        ``keep`` when a successor saved it, ``drop`` when the window evicted it.
+    """
+
+    if trace._options_aten_ops != "values":
+        return
+
+    _note_aten_owner_verdict(trace, getattr(candidate, "owner_call_id", None), verdict)
 
 
 def _replace_event_with_retained_payload(

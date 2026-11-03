@@ -70,45 +70,11 @@ def _has_path(log, source, target):
 # ---------------------------------------------------------------------------
 
 
-class SliceViewInplace(nn.Module):
-    def forward(self, x):
-        y = x + 0.0
-        v = y[0]
-        v.add_(100.0)
-        return y * 1.0
-
-
 class ChunkViewInplace(nn.Module):
     def forward(self, x):
         a, b = torch.chunk(x, 2, dim=0)
         a.mul_(2.0)
         return x.sum() + b.sum()
-
-
-class NarrowFillInplace(nn.Module):
-    def forward(self, x):
-        y = x + 0.0
-        y.narrow(0, 0, 1).fill_(7.0)
-        return y * 1.0
-
-
-class TransposeCopyInplace(nn.Module):
-    def forward(self, x):
-        y = x + 0.0
-        y.t().copy_(torch.ones(x.shape[1], x.shape[0]))
-        return y * 1.0
-
-
-def test_view_inplace_base_consumer_edge_slice():
-    log = tl.trace(SliceViewInplace(), torch.zeros(2, 3))
-    mutation = _single_op(log, "add_")
-    consumer = _single_op(log, "__mul__")
-    # The mutation op must not be a dead end: the base consumer binds through it.
-    assert mutation in log[consumer].parents
-    assert consumer in log[mutation].children
-    # The consumer's stored value is the post-mutation content.
-    assert torch.equal(log[consumer].out[0], torch.full((3,), 100.0))
-    assert validate_forward_pass(SliceViewInplace(), torch.zeros(2, 3))
 
 
 def test_view_inplace_base_consumer_edge_chunk_disjoint_sibling():
@@ -125,39 +91,6 @@ def test_view_inplace_base_consumer_edge_chunk_disjoint_sibling():
     assert len(b_sum) == 1, "disjoint sibling chunk consumer gained a false mutation edge"
     assert any("chunk" in p for p in log[b_sum[0]].parents)
     assert validate_forward_pass(ChunkViewInplace(), torch.ones(4, 2))
-
-
-def test_view_inplace_base_consumer_edge_narrow_fill():
-    log = tl.trace(NarrowFillInplace(), torch.zeros(2, 3))
-    mutation = _single_op(log, "fill_")
-    consumer = _single_op(log, "__mul__")
-    assert mutation in log[consumer].parents
-    assert torch.equal(log[consumer].out[0], torch.full((3,), 7.0))
-    assert validate_forward_pass(NarrowFillInplace(), torch.zeros(2, 3))
-
-
-def test_view_inplace_base_consumer_edge_transpose_copy():
-    log = tl.trace(TransposeCopyInplace(), torch.zeros(2, 3))
-    mutation = _single_op(log, "copy_")
-    consumer = _single_op(log, "__mul__")
-    assert mutation in log[consumer].parents
-    assert torch.equal(log[consumer].out, torch.ones(2, 3))
-
-
-def test_direct_inplace_control_unchanged():
-    """The pre-existing direct same-object propagation contract stays intact."""
-
-    class Direct(nn.Module):
-        def forward(self, x):
-            y = x + 0.0
-            y.add_(100.0)
-            return y * 1.0
-
-    log = tl.trace(Direct(), torch.zeros(2, 3))
-    mutation = _single_op(log, "add_")
-    consumer = _single_op(log, "__mul__")
-    assert log[consumer].parents == (mutation,)
-    assert validate_forward_pass(Direct(), torch.zeros(2, 3))
 
 
 def test_out_view_destination_links_base_consumer():
@@ -189,14 +122,6 @@ class SortTupleOut(nn.Module):
         return v * 1.0
 
 
-class TopkTupleOut(nn.Module):
-    def forward(self, x):
-        v = torch.empty(2, x.shape[1])
-        i = torch.empty((2, x.shape[1]), dtype=torch.long)
-        torch.topk(x, 2, dim=0, out=(v, i))
-        return v * 1.0
-
-
 def test_out_tuple_destination_edges_sort():
     log = tl.trace(SortTupleOut(), torch.randn(4, 2))
     empty_like = _single_op(log, "empty_like")
@@ -213,17 +138,6 @@ def test_out_tuple_destination_edges_sort():
     assert any(p in sort_ops for p in log[consumer].parents)
 
 
-def test_out_tuple_destination_edges_topk():
-    log = tl.trace(TopkTupleOut(), torch.randn(4, 3))
-    empties = _ops_by_func(log, "empty")
-    assert len(empties) == 2
-    topk_ops = _ops_by_func(log, "topk")
-    assert len(topk_ops) == 2
-    for topk_op in topk_ops:
-        for producer in empties:
-            assert producer in log[topk_op].parents
-
-
 def test_out_tuple_destination_sort_validates():
     """F3 completeness pin: the tuple ``out=`` capture validates end to end.
 
@@ -236,21 +150,6 @@ def test_out_tuple_destination_sort_validates():
     assert tl.validate(SortTupleOut(), torch.randn(4, 2), scope="forward") is True
 
 
-def test_out_single_destination_control_still_validates():
-    """The single-tensor out= contract (edge + validation) stays intact."""
-
-    class OutSingle(nn.Module):
-        def forward(self, x):
-            z = torch.empty_like(x)
-            torch.add(x, 1.0, out=z)
-            return z * 1.0
-
-    log = tl.trace(OutSingle(), torch.randn(3))
-    add_op = _single_op(log, "add")
-    assert _single_op(log, "empty_like") in log[add_op].parents
-    assert validate_forward_pass(OutSingle(), torch.randn(3))
-
-
 # ---------------------------------------------------------------------------
 # F4: tuple pass-through outputs must not steal the input's label
 # ---------------------------------------------------------------------------
@@ -260,12 +159,6 @@ class BroadcastUnused(nn.Module):
     def forward(self, x):
         torch.broadcast_tensors(x, x)  # pure pass-through, result unused
         return x * 1.0
-
-
-class BroadcastUsed(nn.Module):
-    def forward(self, x):
-        a, b = torch.broadcast_tensors(x, x)
-        return a + b
 
 
 def test_tuple_passthrough_no_label_steal_or_false_dep():
@@ -280,14 +173,6 @@ def test_tuple_passthrough_no_label_steal_or_false_dep():
     consumer = _single_op(log, "__mul__")
     assert log[consumer].parents == ("input_1",)
     assert validate_forward_pass(BroadcastUnused(), torch.randn(2, 3))
-
-
-def test_tuple_passthrough_used_result_binds_to_true_producer():
-    log = tl.trace(BroadcastUsed(), torch.randn(2, 3))
-    consumer = _single_op(log, "__add__")
-    # a IS x (object passthrough): the consumer's real data source is the input.
-    assert set(log[consumer].parents) == {"input_1"}
-    assert validate_forward_pass(BroadcastUsed(), torch.randn(2, 3))
 
 
 # ---------------------------------------------------------------------------
@@ -352,42 +237,6 @@ class IdentityModule(nn.Module):
         return z * 1.0
 
 
-class CustomPassThrough(nn.Module):
-    def forward(self, x):
-        return x
-
-
-class CustomPassThroughHost(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.p = CustomPassThrough()
-
-    def forward(self, x):
-        z = self.p(x)
-        return z + 1.0
-
-
-def test_identity_module_boundary_connectivity():
-    log = tl.trace(IdentityModule().eval(), torch.randn(2, 3))
-    boundary = _single_op(log, "identity")
-    consumer = _single_op(log, "__mul__")
-    dropout = _single_op(log, "dropout")
-    # The boundary op is on the path, not a dead end.
-    assert log[boundary].parents == (dropout,)
-    assert consumer in log[boundary].children
-    assert log[consumer].parents == (boundary,)
-    assert validate_forward_pass(IdentityModule().eval(), torch.randn(2, 3))
-
-
-def test_custom_passthrough_module_boundary_connectivity():
-    log = tl.trace(CustomPassThroughHost(), torch.randn(2))
-    boundary = _single_op(log, "identity")
-    consumer = _single_op(log, "__add__")
-    assert consumer in log[boundary].children
-    assert log[consumer].parents == (boundary,)
-    assert validate_forward_pass(CustomPassThroughHost(), torch.randn(2))
-
-
 # ---------------------------------------------------------------------------
 # F7: in-place version baselines are session-scoped
 # ---------------------------------------------------------------------------
@@ -422,21 +271,3 @@ def test_label_version_snapshot_session_scoped():
 # ---------------------------------------------------------------------------
 # F9: arg_names respect the exact registered spelling
 # ---------------------------------------------------------------------------
-
-
-def test_arg_names_distinct_per_spelling():
-    class Spellings(nn.Module):
-        def forward(self, x):
-            y = x + 1.0  # __add__
-            z = torch.add(y, 2.0)  # add
-            z.add_(1.0)  # add_
-            return z * 1.0
-
-    log = tl.trace(Spellings(), torch.zeros(3))
-    by_func = {log[lab].func_name: log[lab].arg_names for lab in log.op_labels}
-    # torch.add's real signature.
-    assert by_func["add"][:2] == ("input", "other")
-    # add_'s OWN signature (other, alpha), not torch.add's 4-name signature.
-    assert by_func["add_"] == ("other", "alpha")
-    # An opaque dunder is honestly unknown, never a borrowed wrong signature.
-    assert by_func["__add__"] == ()

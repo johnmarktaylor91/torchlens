@@ -5,6 +5,31 @@ median as a line, with shaded bands between percentiles at every step. The
 histograms that `torchlens.trackers.watch` already writes are enough to draw
 it with matplotlib; TorchLens adds no plotting call for it.
 
+## Minimal example on the running model
+
+This page uses [ResNet-18 on one
+image](running_examples.md#resnet-18-on-one-image). A ribbon draws percentiles
+of one site's values at each step; these are the 10th and 90th percentiles of `layer1` on the
+running CNN. The recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=matplotlib expected=True
+import torch
+import torchvision
+
+import torchlens as tl
+
+torch.manual_seed(0)
+model = torchvision.models.resnet18(weights=None).eval()
+x = torch.rand(1, 3, 224, 224)
+
+trace = tl.trace(model, x)
+
+values = trace["layer1"].out.flatten()
+low, high = torch.quantile(values, 0.1), torch.quantile(values, 0.9)
+RESULT = bool(low <= high)
+```
+
 ## 1. Record histograms while training
 
 `hist_every=1` writes one histogram per watched tensor per step. The JSONL

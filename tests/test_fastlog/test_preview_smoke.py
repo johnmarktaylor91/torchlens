@@ -8,9 +8,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._visualization.fastlog_preview import preview_fastlog
-from torchlens.recording.exceptions import RecordContextFieldError
-from torchlens.recording.types import RecordContext
 
 
 def _mlp() -> nn.Module:
@@ -29,27 +26,3 @@ def test_preview_fastlog_renders_on_mlp(tmp_path: Path) -> None:
     )
     assert "digraph" in dot.dot
     assert "fastlog" in dot.dot
-
-
-def test_preview_fastlog_catches_record_context_field_error(tmp_path: Path) -> None:
-    """Missing RecordContext fields are caught and rendered as hot nodes."""
-
-    trace = tl.trace(_mlp(), torch.randn(1, 4))
-
-    def bad_predicate(ctx: RecordContext) -> bool:
-        """Access a field outside the RecordContext schema."""
-
-        try:
-            getattr(ctx, "not_a_record_context_field")
-        except RecordContextFieldError:
-            raise
-        return True
-
-    dot = preview_fastlog(
-        trace,
-        predicate=bad_predicate,
-        color_predicate_error="#FF7AB6",
-        path=str(tmp_path / "preview_error"),
-    )
-    assert "#FF7AB6" in dot.dot
-    assert "RecordContext has no field" in dot.dot

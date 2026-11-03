@@ -32,6 +32,7 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
         "AvgPool",
         "BatchMatMulV2",
         "BiasAdd",
+        "BroadcastTo",
         "Cast",
         "ConcatV2",
         "Conv2D",
@@ -43,6 +44,7 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
         "Exp",
         "ExpandDims",
         "Fill",
+        "GatherV2",
         "Greater",
         "Less",
         "Log",
@@ -61,8 +63,10 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
         "Relu6",
         "Reshape",
         "Rsqrt",
+        "SelectV2",
         "Sigmoid",
         "Sin",
+        "Slice",
         "Softmax",
         "Sqrt",
         "SquaredDifference",
@@ -75,12 +79,11 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
     }
 )
 
-#: Literal producers (SPEC section 2, rule 2): ops whose every input is a host
-#: literal or shape, so the op has no graph parents and its output is a
-#: constant of the forward. ``Fill`` is also a variable-initializer op type;
-#: the classification keeps the initializer-contamination failure for a
-#: ``Fill`` nothing in the forward consumed and admits only a ``Fill`` whose
-#: output feeds a materialized op (``_is_literal_producer``).
+#: Literal producers (SPEC section 2, rule 2): ops whose every input is a host literal or
+#: shape, so the op has no graph parents and its output is a constant of the forward.
+#: ``Fill`` is also a variable-initializer op type; the classification keeps the
+#: initializer-contamination failure for a ``Fill`` nothing in the forward consumed and
+#: admits only a ``Fill`` whose output feeds a materialized op (``_is_literal_producer``).
 _LITERAL_PRODUCER_OPS = frozenset({"Fill"})
 
 #: Validation decision reasons this backend emits. All are members of the
@@ -95,31 +98,7 @@ _REASON_UNCLASSIFIED = "op_unclassified"
 _REASON_INCONSISTENT = "capture_inconsistent"
 _REASON_CONSTANT_LEAF = CONSTANT_PRODUCER_LEAF_REASON
 _REASON_CONSTANT_PERTURB = CONSTANT_PARENT_PAYLOAD_REASON
-_VALUE_OPS = _PURE_REPLAY_ALLOWLIST | frozenset(
-    {
-        "Elu",
-        "Erf",
-        "Exp",
-        "ExpandDims",
-        "GatherV2",
-        "Gelu",
-        "Greater",
-        "Less",
-        "Log",
-        "Maximum",
-        "Minimum",
-        "Pack",
-        "Pad",
-        "Pow",
-        "Prod",
-        "Sigmoid",
-        "Sin",
-        "Slice",
-        "Squeeze",
-        "Sum",
-        "Tile",
-    }
-)
+_VALUE_OPS = _PURE_REPLAY_ALLOWLIST | frozenset({"Gelu", "Pack"})
 _STRUCTURAL_VALUE_OPS = frozenset({"Shape", "Size", "Rank", "StridedSlice"})
 _ANNOTATION_OPS = frozenset({"Identity", "StopGradient"})
 _PURE_RESOURCE_READ_OPS = frozenset({"ReadVariableOp"})
@@ -763,10 +742,9 @@ def _validate_self_consistency(
         op = ops_by_label.get(capture.label_raw)
         if op is None:
             continue
-        # Capture records speak RAW label space. Recurrence grouping rewrites
-        # graph edges to final pass-qualified labels, so parents are resolved
-        # back to raw space before the conservation comparison; an
-        # unresolvable parent keeps its literal label and fails closed.
+        # Capture records speak RAW label space. Recurrence grouping rewrites graph edges to final
+        # pass-qualified labels, so parents are resolved back to raw space before the conservation
+        # comparison; an unresolvable parent keeps its literal label and fails closed.
         graph_parents: set[str] = set()
         for parent in getattr(op, "parents", ()):
             parent_text = str(parent)
@@ -962,7 +940,7 @@ def _perturb_candidates(tf: Any, tensor: Any) -> tuple[Any, ...]:
     if np.issubdtype(array.dtype, np.bool_):
         candidates = (np.logical_not(array),)
     elif np.issubdtype(array.dtype, np.integer):
-        candidates = (array + 1, np.zeros_like(array))
+        candidates = (array + 1, np.zeros_like(array), np.invert(array))  # ~x flips the sign
     elif np.issubdtype(array.dtype, np.floating):
         magnitude = np.max(np.abs(array)).item() + 1.0 if array.size else 1.0
         ramp = np.arange(array.size, dtype=np.float64).reshape(array.shape)
@@ -1000,13 +978,11 @@ def _payloads_close(left: Any, right: Any) -> bool:
         left_array.dtype,
         np.complexfloating,
     ):
-        # equal_nan matches the jax/mlx/paddle sibling oracles and torch's
-        # tensor_nanequal doctrine: an identical NaN pattern is agreement,
-        # NaN-vs-number still fails elementwise. Omitting it false-FAILED
-        # every legitimately NaN-bearing TF payload. Complex payloads take
-        # the same component-eps band as mlx/jax (R17 consistency sweep:
-        # bit-exact complex here false-failed legitimate replay jitter);
-        # ``np.finfo`` reports component precision for complex dtypes.
+        # equal_nan matches the jax/mlx/paddle sibling oracles and torch's tensor_nanequal doctrine:
+        # an identical NaN pattern is agreement, NaN-vs-number still fails elementwise. Omitting it
+        # false-FAILED every legitimately NaN-bearing TF payload. Complex payloads take the same
+        # component-eps band as mlx/jax (R17 consistency sweep: bit-exact complex here false-failed
+        # legitimate replay jitter); ``np.finfo`` reports component precision for complex dtypes.
         rtol, atol = float_replay_tolerances(np.finfo(left_array.dtype))
         return bool(np.allclose(left_array, right_array, rtol=rtol, atol=atol, equal_nan=True))
     return bool(np.array_equal(left_array, right_array))

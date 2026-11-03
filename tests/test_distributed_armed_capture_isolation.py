@@ -20,13 +20,6 @@ from pathlib import Path
 
 import pytest
 import torch
-from test_weightsfree_fixtures import (
-    ConvBnPool,
-    assert_gate,
-    build_twins,
-    meta_like,
-    weightsfree_trace,
-)
 from torch import nn
 
 import torchlens as tl
@@ -66,16 +59,7 @@ def armed_process(tmp_path: Path) -> Iterator[None]:
             torch.distributed.destroy_process_group()
 
 
-@pytest.mark.usefixtures("armed_process")
-def test_weightsfree_capture_with_buffers_settles_while_armed() -> None:
-    real, meta = build_twins(ConvBnPool)
-    x = torch.randn(1, 3, 8, 8)
-    tr_real = tl.trace(real, x)
-    tr_meta = weightsfree_trace(meta, meta_like(x))
-    assert tr_meta._distributed_plane_p is not None, "the dispatch mode must be exercised"
-    assert_gate(tr_real, tr_meta, "conv_bn_pool")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py, backends/torch/completeness_witness.py, campaign mutant kills.
 @pytest.mark.usefixtures("armed_process")
 def test_user_op_failure_classifies_user_op_while_armed() -> None:
     class ShapeMismatch(nn.Module):

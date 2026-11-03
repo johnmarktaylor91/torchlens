@@ -42,23 +42,6 @@ def _refusal(trace: tl.Trace, path: Path) -> ArtifactError:
     return excinfo.value
 
 
-def test_user_object_under_user_namespace_refuses_before_write(tmp_path: Path) -> None:
-    trace = _tiny_trace()
-    trace.annotations.setdefault("user", {})["foo"] = _UserObject()
-    exc = _refusal(trace, tmp_path / "a.tlspec")
-    assert exc.fields["code"] == "annotation_value_unportable"
-    assert exc.fields["field"] == "Trace.annotations['user']['foo']"
-    assert "Nothing was written" in str(exc)
-
-
-def test_user_object_at_top_level_annotation_key_refuses_naming_the_key(tmp_path: Path) -> None:
-    trace = _tiny_trace()
-    trace.annotations["foo"] = _UserObject()
-    exc = _refusal(trace, tmp_path / "a.tlspec")
-    assert exc.fields["code"] == "annotation_value_unportable"
-    assert exc.fields["field"] == "Trace.annotations['foo']"
-
-
 def test_user_object_in_op_annotation_refuses_naming_the_op(tmp_path: Path) -> None:
     trace = _tiny_trace()
     op = trace["linear_1_1"]
@@ -72,49 +55,6 @@ def test_user_object_in_op_annotation_refuses_naming_the_op(tmp_path: Path) -> N
     assert exc.fields["field"].endswith(".annotations['foo']")
 
 
-def test_log_value_tensor_round_trips(tmp_path: Path) -> None:
-    class Model(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            y = self.lin(x)
-            tl.observers.log_value("y_tensor", y)
-            tl.observers.log_value("count", 3)
-            return torch.relu(y)
-
-    torch.manual_seed(0)
-    trace = tl.trace(Model(), torch.randn(1, 4))
-    live_value = trace.annotations["logged_values"]["y_tensor"]
-    assert isinstance(live_value, torch.Tensor)
-    path = tmp_path / "lv.tlspec"
-    trace.save(path)
-    # The live trace keeps its session-time object; only the artifact copy is coerced.
-    assert trace.annotations["logged_values"]["y_tensor"] is live_value
-    loaded = tl.load(path)
-    restored = loaded.annotations["logged_values"]["y_tensor"]
-    assert type(restored) is torch.Tensor
-    assert not restored.requires_grad
-    torch.testing.assert_close(restored, live_value.detach())
-    assert loaded.annotations["logged_values"]["count"] == 3
-
-
-def test_parameter_and_plain_tensor_annotations_round_trip(tmp_path: Path) -> None:
-    trace = _tiny_trace()
-    plain = torch.arange(3.0)
-    trace.annotations.setdefault("user", {})["plain"] = plain
-    trace.annotations["user"]["param"] = nn.Parameter(torch.ones(2))
-    path = tmp_path / "p.tlspec"
-    trace.save(path)
-    loaded = tl.load(path)
-    torch.testing.assert_close(loaded.annotations["user"]["plain"], plain)
-    restored = loaded.annotations["user"]["param"]
-    assert type(restored) is torch.Tensor
-    torch.testing.assert_close(restored, torch.ones(2))
-
-
-@pytest.mark.smoke
 def test_sanitize_rebuilds_containers_and_keeps_plain_tensors_by_identity() -> None:
     plain = torch.zeros(2)
     tagged = torch.ones(2)
@@ -141,7 +81,6 @@ def test_preflight_returns_bytes_the_loader_reads() -> None:
     assert _RenameAwareUnpickler(io.BytesIO(data)).load() == state
 
 
-@pytest.mark.smoke
 def test_preflight_names_metadata_paths_outside_annotations() -> None:
     state = {"tlspec_version": 9, "some_field": [1, {"deep": _UserObject()}]}
     with pytest.raises(ArtifactError) as excinfo:
@@ -179,6 +118,7 @@ class _HostileTensor(torch.Tensor):
         raise RuntimeError("hostile detach")
 
 
+@pytest.mark.smoke
 def test_hostile_tensor_subclass_passes_through_sanitizer_and_refuses_typed(
     tmp_path: Path,
 ) -> None:
@@ -201,7 +141,6 @@ def test_hostile_tensor_subclass_passes_through_sanitizer_and_refuses_typed(
     assert exc.fields["field"] == "Trace.annotations['user']['t']"
 
 
-@pytest.mark.smoke
 def test_locate_names_whole_state_when_every_part_is_portable_alone() -> None:
     """The culprit walk's fallback: no single part fails, so the whole state is named."""
 

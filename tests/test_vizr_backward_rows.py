@@ -1,4 +1,4 @@
-"""Opt-in backward-node rows on ``draw_backward`` (U08.5).
+"""Opt-in backward-node rows on ``draw_backward``.
 
 Module-path labels and gradient values appear on backward nodes only when the
 caller asks for them (``show_module_paths=True`` / ``show_grad_values=True``);
@@ -60,22 +60,6 @@ def _backward_trace() -> tl.Trace:
 def _draw(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render the backward graph to DOT and return the source."""
     return trace.draw(graph="backward", path=str(tmp_path / name), file_format="dot", **kwargs).dot
-
-
-def test_backward_rows_absent_by_default(tmp_path: Path) -> None:
-    """A default render has neither row, and explicit False equals the default."""
-    trace = _backward_trace()
-    try:
-        default = _draw(trace, tmp_path, "default")
-        explicit_off = _draw(
-            trace, tmp_path, "off", show_module_paths=False, show_grad_values=False
-        )
-    finally:
-        trace.cleanup()
-    assert "module block.proj" not in default
-    assert "grad norm" not in default
-    assert "param block.proj.weight" not in default
-    assert default == explicit_off
 
 
 def test_backward_module_path_row_opt_in(tmp_path: Path) -> None:

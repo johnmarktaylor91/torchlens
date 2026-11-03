@@ -303,7 +303,6 @@ def test_release_normalizes_frozenset_members() -> None:
     pickle.dumps(model)
 
 
-@pytest.mark.smoke
 def test_release_set_holding_both_epochs_never_loses_a_member() -> None:
     """A set holding BOTH a pristine original and its wrap-epoch counterpart
     must keep its cardinality: the swap is skipped, never silently merged."""

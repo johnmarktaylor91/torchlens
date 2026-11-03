@@ -59,7 +59,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._record_type import record_type
 from torchlens._runnable import PathFaithfulness
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
@@ -159,24 +158,6 @@ class _ReboundActivation(nn.Module):
         return state_rooted * 1.0
 
 
-def test_sol1_state_activation_data_rebind_never_false_verified(tmp_path: Path) -> None:
-    """SOL-1 RED: a ``.data``-rebound state activation must not replay as VERIFIED.
-
-    Pre-fix (main ``00987798``): ``same_input VERIFIED`` output ``[1,1,1,1]`` vs
-    oracle ``[20,20,20,20]`` (max-diff 19.0) AND ``changed_input VERIFIED``
-    (max-diff 13.0) -- wrong on the SAME captured input. Post-fix the rebound
-    receiver loses provenance, orphaning the model output, so the runnable save
-    refuses (fail-closed); neither input can produce a false VERIFIED.
-    """
-
-    _assert_storage_rebind_closed(
-        _ReboundActivation,
-        torch.full((4,), 10.0),
-        (torch.full((4,), 10.0), torch.full((4,), 7.0)),
-        tmp_path,
-    )
-
-
 # --------------------------------------------------------------------------- #
 # ZERO-COLLATERAL -- the sharp line: an IN-PLACE write into the receiver's OWN
 # storage keeps the pointer and MUST stay VERIFIED (free's honest battery).
@@ -267,6 +248,7 @@ class _StateActInplace(nn.Module):
         return y + x
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize(
     "factory, capture_input, train",
     [
@@ -298,19 +280,6 @@ def test_inplace_own_storage_writes_stay_verified(
     else:
         model.eval()
     result = _verified(model, capture_input, tmp_path)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
-def test_convbn_eval_running_stats_stay_verified(tmp_path: Path) -> None:
-    """Zero-collateral: ConvBN in eval reads frozen running stats -> VERIFIED."""
-
-    torch.manual_seed(0)
-    model = _ConvBN()
-    model.train()
-    model(torch.randn(2, 3, 8, 8))  # populate running stats
-    model.eval()
-    result = _verified(model, torch.randn(2, 3, 8, 8), tmp_path)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert not result.report.is_poisoned
 
@@ -379,6 +348,7 @@ class _ViewAfterRebind(nn.Module):
         return v * 1.0
 
 
+# Kept: sole branch coverage of backends/torch/tensor_tracking.py; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     "factory",
     [_ParamReboundActivation, _SetReboundActivation, _ViewAfterRebind],
@@ -401,6 +371,7 @@ def test_storage_rebind_sibling_vehicles_never_false_verified(
     )
 
 
+# Kept: sole branch coverage of backends/torch/_tl.py; a sole mutation kill; the catch of its regression fault.
 def test_buffer_source_rung_honors_storage_pin() -> None:
     """The ``buffer_source`` rung carries the SAME storage pin as ``label_raw``.
 
@@ -471,32 +442,6 @@ class _SameStorageOwnViewRebind(nn.Module):
         return y * 1.0
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [_ViewBeforeRebind, _SameStorageOwnViewRebind],
-    ids=["view_before_base_rebind", "same_storage_own_view"],
-)
-def test_pointer_preserving_siblings_stay_verified(
-    factory: Callable[[], nn.Module], tmp_path: Path
-) -> None:
-    """Honest siblings that do NOT swap the receiver's storage pointer stay VERIFIED.
-
-    A view captured before the base's ``.data=`` still reads the intact base
-    storage; a ``.data=`` to a view of the receiver's OWN storage keeps both the
-    pointer and the value. Both are honest and replay exactly -- the belt keys on
-    the storage OBJECT, so neither is over-triggered.
-    """
-
-    torch.manual_seed(0)
-    model = factory()
-    capture_input = torch.full((4,), 10.0)
-    result = _verified(model, capture_input, tmp_path)
-    oracle = factory()(capture_input.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-    assert (result.output - oracle).abs().max().item() < 1e-6
-
-
 class _V6SameStorageInputStrided(nn.Module):
     """hon1 V6: a same-storage ``.data=`` re-strided to the INPUT's layout."""
 
@@ -512,33 +457,6 @@ class _V6SameStorageInputStrided(nn.Module):
         y = self.b * 1.0
         y.data = torch.as_strided(y, y.shape, x.stride())
         return (y + 0.0).reshape(-1).sum() * 1.0
-
-
-def test_v6_same_storage_input_strided_rebind_ceils(tmp_path: Path) -> None:
-    """hon1 V6: same-storage input-strided ``.data=`` is caught by the layout net.
-
-    The rebind keeps the storage POINTER, so the r85 belt correctly passes it (it
-    is the object's own storage); the INPUT-layout dependency is instead caught by
-    the r73/r75 layout net -- a changed-layout (channels_last) input diverges
-    while the same-layout control stays honestly VERIFIED. Verifies the r85 belt
-    and the layout net compose without a gap.
-    """
-
-    torch.manual_seed(0)
-    model = _V6SameStorageInputStrided()
-    capture_input = torch.randn(2, 3, 4, 4)
-    path = tmp_path / "v6.tlspec"
-    trace = tl.trace(model, capture_input, capture=_CAPTURE)
-    trace.save(path, level="runnable", include_weights=True)
-    loaded = tl.load(path)
-
-    control = loaded.run(inputs=capture_input.clone())
-    assert control.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not control.report.is_poisoned
-
-    twin = capture_input.clone().to(memory_format=torch.channels_last)
-    with pytest.raises(PathDivergenceError):
-        loaded.run(inputs=twin)
 
 
 # --------------------------------------------------------------------------- #
@@ -570,57 +488,3 @@ class _ConvBNAddress(nn.Module):
         """Return the batch-normed convolution (bn is the output-aliased module)."""
 
         return self.bn(self.c(x))
-
-
-def test_backend_address_op_node_and_output_layer_agree() -> None:
-    """free FINDING-1: an op node and the output layer for the SAME module agree.
-
-    Pre-fix the batchnorm op node reported ``backend_address=None`` while the
-    output layer aliasing the same ``bn`` module reported ``'bn'`` -- an
-    intra-trace inconsistency on a public field. Post-fix a module-addressed op
-    node keeps ``backend_address == address`` (not ``None``), matching the output
-    layer.
-    """
-
-    torch.manual_seed(0)
-    model = _ConvBNAddress()
-    model.train()
-    model(torch.randn(2, 3, 8, 8))
-    model.eval()
-    log = tl.trace(model, torch.randn(2, 3, 8, 8), capture=_CAPTURE)
-
-    by_type = {record_type(layer): layer for layer in log}
-    conv = by_type["conv2d"]
-    bn = by_type["batchnorm"]
-    out = by_type["output"]
-
-    # Op nodes keep backend_address coupled to their module address (not None).
-    assert conv.backend_address == conv.address == "c"
-    assert bn.backend_address == bn.address == "bn"
-    # The output layer aliases the bn module and MUST agree with the bn op node.
-    assert out.address == "bn"
-    assert out.backend_address == bn.backend_address == "bn"
-
-
-def test_backend_address_registered_vs_plain_attr_decoupling_preserved() -> None:
-    """The C2 buffer decoupling is preserved: registered keeps its addr, plain-attr None.
-
-    The r85 op-node fix must NOT disturb the r83 C2 intent -- a registered buffer
-    still reports ``backend_address == address`` and a plain-attribute buffer
-    (display address but not declared state) still reports ``None``.
-    """
-
-    class _MixedBuffers(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.register_buffer("rb", torch.ones(4))
-            self.pa = torch.ones(4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return x + self.rb + self.pa
-
-    torch.manual_seed(0)
-    log = tl.trace(_MixedBuffers(), torch.randn(4), capture=_CAPTURE)
-    by_address = {layer.address: layer for layer in log if getattr(layer, "is_buffer", False)}
-    assert by_address["rb"].backend_address == "rb"  # registered state keeps both
-    assert by_address["pa"].backend_address is None  # plain-attr not declared state

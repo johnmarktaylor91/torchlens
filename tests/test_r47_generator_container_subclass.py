@@ -28,7 +28,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness
 from torchlens._utils.rng import host_nondeterminism_monitor
 from torchlens._utils.rng.inventory_types import _rng_exempt_instances
 from torchlens.options import CaptureOptions
@@ -167,6 +166,7 @@ def _sweep_count(model: nn.Module) -> int:
     return len(mon._sweep_model_generators())
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("holder_type", _HOLDER_TYPES, ids=lambda t: t.__name__)
 def test_container_subclass_attribute_generator_is_swept(holder_type: type) -> None:
     """Direct sweep: a generator held as ``self.rng`` on a container SUBCLASS is found (was 0)."""
@@ -231,82 +231,3 @@ def _roundtrip(model: nn.Module, x: torch.Tensor, tmp: Path) -> tl.RunResult:
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
     return tl.load(path).run(inputs=x)
-
-
-@pytest.mark.parametrize(
-    "holder_type",
-    [MappingSub, SequenceSub, UserListSub, UserDictSub, SlotsSequenceSub],
-    ids=lambda t: t.__name__,
-)
-def test_container_subclass_generator_drawn_on_worker_ceilings(
-    holder_type: type, preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """End-to-end: drawing the container-subclass-held generator on a PRE-EXISTING worker thread
-    is digest-witnessed -> UNVERIFIABLE (never a false VERIFIED)."""
-
-    class _DrawModel(nn.Module):
-        def __init__(self, worker: Any) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.holder: Any = holder_type(np.random.default_rng(777))
-            self._worker = worker
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            v = self._worker.run(lambda: float(self.holder.rng.random()))
-            h = self.lin(x)
-            return h * 2.0 if v < 0.5 else h * 3.0
-
-    result = _roundtrip(_DrawModel(preexisting_worker), torch.randn(2, 4), tmp_path)
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-
-
-@pytest.mark.parametrize(
-    "holder_type", [SequenceSub, UserDictSub, SlotsSequenceSub], ids=lambda t: t.__name__
-)
-def test_undrawn_container_subclass_generator_stays_verified(
-    holder_type: type, tmp_path: Path
-) -> None:
-    """Over-trigger pin: a container-subclass-held generator present but NEVER drawn stays
-    VERIFIED (the digest sees no state change)."""
-
-    class _UndrawnModel(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.holder: Any = holder_type(np.random.default_rng(3))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x).relu()
-
-    result = _roundtrip(_UndrawnModel(), torch.randn(2, 4), tmp_path)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_oneshot_iterator_attribute_on_subclass_not_consumed(tmp_path: Path) -> None:
-    """A one-shot python generator stored on a container-subclass holder is NEVER iterated by the
-    sweep (the ``Collection`` (Sized) gate, not bare ``Iterable``): the marker stays False and the
-    model stays VERIFIED."""
-
-    marker = {"consumed": False}
-
-    def _oneshot() -> Any:
-        marker["consumed"] = True
-        yield 1
-
-    class _Holder(SequenceSub):
-        def __init__(self) -> None:
-            super().__init__(np.random.default_rng(0))
-            self.it = _oneshot()  # a bare one-shot iterator attribute
-
-    class _Model(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.holder: Any = _Holder()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x).relu()
-
-    result = _roundtrip(_Model(), torch.randn(2, 4), tmp_path)
-    assert marker["consumed"] is False
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

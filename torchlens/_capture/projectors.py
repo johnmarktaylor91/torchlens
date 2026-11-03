@@ -44,7 +44,7 @@ _GRAPH_CHANGE_MESSAGE = (
     "random seed). Live-model state mutation across run() calls (for example "
     "BatchNorm running stats, caches, or counters) is another likely cause. "
     "For an explicitly static feature-extraction loop, use run(inputs=..., fast=True); "
-    "otherwise save_new_outs failed. Please "
+    "otherwise the refresh failed. Please "
     "re-run trace with the desired inputs."
 )
 

@@ -15,11 +15,12 @@ import os
 import subprocess
 import sys
 import tempfile
+import weakref  # noqa: F401  (weakref.ref objects arrive through _collapse_source)
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .._errors import CaptureNotActiveError
+from .._errors import ArgumentConflictError, CaptureNotActiveError
 
 __tl_layer__ = "FACADE"
 
@@ -53,6 +54,19 @@ class Drawing:
     trace:
         A retained trace when the caller asked to keep one; ``close()`` (and
         leaving the ``with`` block) releases it.
+    collapse_plan:
+        The collapse plan a forward draw with ``collapse="auto"``, ``"max"`` or
+        a float level rendered from, computed against the drawing's resolved
+        render context (property; refuses typed when the drawing has none).
+    collapse_schedule:
+        The monotone float collapse schedule of the drawn forward graph under
+        the drawing's resolved render context (property).
+
+    Examples
+    --------
+    >>> drawing = Drawing(dot="digraph { a -> b }", file_format="gv")
+    >>> drawing.file_format, drawing.path is None, drawing.num_ops is None
+    ('gv', True, True)
     """
 
     dot: str
@@ -64,6 +78,69 @@ class Drawing:
     num_ops: int | None = None
     policy: dict[str, Any] = field(default_factory=dict)
     trace: Any | None = None
+    _collapse_source: Any = field(default=None, repr=False)
+    _collapse_context: Any = field(default=None, repr=False)
+    _collapse_tools: Any = field(default=None, repr=False)
+
+    @property
+    def collapse_plan(self) -> Any:
+        """Return the collapse plan this forward drawing rendered from.
+
+        The plan's mode is the drawing's ``collapse`` policy (``"auto"``,
+        ``"max"`` or a float level) and its context is the render request the
+        draw resolved, so the plan is the one the picture shows. Refuses typed
+        (``collapse_plan_unavailable``) for a drawing made with
+        ``collapse="none"``, a backward or combined graph, an animation, or
+        once the source trace has been released.
+        """
+
+        trace, context, tools = self._collapse_inputs()
+        mode = self.policy.get("collapse", "none")
+        if mode == "none":
+            raise CaptureNotActiveError(
+                "collapse plan unavailable: this drawing was made with collapse='none'",
+                code="collapse_plan_unavailable",
+                remedy="draw with collapse='auto', 'max' or a float level in [0.0, 1.0]",
+                reason="collapse='none'",
+            )
+        return tools[0](trace, mode, context)
+
+    @property
+    def collapse_schedule(self) -> Any:
+        """Return the monotone float collapse schedule of the drawn forward graph.
+
+        Steps run from ``t=0.0`` (full graph) to ``t=1.0`` (byte-identical to
+        ``collapse="max"``) under the drawing's resolved render context.
+        Refuses typed (``collapse_plan_unavailable``) for backward, combined or
+        animation drawings and once the source trace has been released.
+        """
+
+        trace, context, tools = self._collapse_inputs()
+        return tools[1](trace, context)
+
+    def _collapse_inputs(self) -> tuple[Any, Any, Any]:
+        """Return (trace, render context, collapse functions) or refuse typed."""
+
+        if self._collapse_tools is None or self._collapse_context is None:
+            raise CaptureNotActiveError(
+                "collapse diagnostics unavailable: only a forward graph drawing carries "
+                "a collapse plan and schedule",
+                code="collapse_plan_unavailable",
+                remedy="call trace.draw(graph='forward', ...) and read the members of its result",
+                reason="not a forward drawing",
+            )
+        trace = self.trace
+        if trace is None and self._collapse_source is not None:
+            trace = self._collapse_source()
+        if trace is None:
+            raise CaptureNotActiveError(
+                "collapse diagnostics unavailable: the trace this drawing was made from "
+                "has been released",
+                code="collapse_plan_unavailable",
+                remedy="keep the trace alive while reading collapse_plan or collapse_schedule",
+                reason="trace released",
+            )
+        return trace, self._collapse_context, self._collapse_tools
 
     def save(self, path: str | os.PathLike[str], *, editable: bool = False) -> Path:
         """Write the picture to ``path`` and return the path.
@@ -192,6 +269,94 @@ def _render_dot_source(dot: str, fileformat: str) -> bytes:
                 "choose a supported format such as 'pdf' or 'svg'"
             ),
         ) from error
+
+
+@dataclass
+class DrawTarget:
+    """Where one ``draw`` call renders: the output path, the format and the inline mode.
+
+    Both draw doors (``Trace.draw`` and ``Bundle.draw``) resolve their target
+    with :func:`resolve_draw_target`, so the extension rule and the notebook
+    rule are one rule.
+
+    Attributes
+    ----------
+    path:
+        The path to hand the renderer: the caller's path, a scratch path for an
+        inline render, or ``None`` for a bare call outside a notebook (the
+        caller picks its default file).
+    file_format:
+        The resolved format.
+    stem:
+        ``path`` without its recognised extension (``None`` when ``path`` is).
+    inline:
+        ``True`` for a bare call inside a Jupyter kernel: the picture renders to
+        memory and no file is left behind.
+    """
+
+    path: str | None
+    file_format: str
+    stem: str | None = None
+    inline: bool = False
+    scratch: tempfile.TemporaryDirectory[str] | None = field(default=None, repr=False)
+
+    def finish(self, dot: str, outpath: str, **fields: Any) -> Drawing:
+        """Return the call's :class:`Drawing`; an inline render keeps the bytes, not the file.
+
+        ``outpath`` is the path the renderer was given; ``fields`` are the
+        remaining :class:`Drawing` fields (``num_ops``, ``policy``).
+        """
+
+        stem = self.stem if self.stem is not None else outpath
+        written = Path(f"{stem}.{self.file_format}")
+        if not self.inline:
+            path = written if written.exists() else None
+            return Drawing(dot=dot, file_format=self.file_format, path=path, **fields)
+        data = written.read_bytes() if written.exists() else None
+        if self.scratch is not None:
+            self.scratch.cleanup()
+        return Drawing(dot=dot, file_format=self.file_format, _data=data, **fields)
+
+
+def resolve_draw_target(
+    path: str | os.PathLike[str] | None,
+    file_format: str | None,
+    known_extensions: tuple[str, ...],
+    default_format: str = "pdf",
+) -> DrawTarget:
+    """Resolve a draw call's path and format (the rule both draw doors share).
+
+    The path's extension picks the format when it is one of
+    ``known_extensions``; ``file_format`` applies only to a path without one
+    (and to a bare call); naming a different format than the extension
+    refuses. With no path inside a Jupyter kernel (the detection ``tl.draw``
+    uses) the picture renders inline to a scratch directory and no file is
+    written; elsewhere a bare call leaves ``path`` ``None`` for the caller's
+    default file.
+
+    Raises
+    ------
+    ArgumentConflictError
+        ``draw_format_mismatch``: the extension and ``file_format`` disagree.
+    """
+
+    text = None if path is None else os.fspath(path)
+    stem, _, suffix = (text or "").rpartition(".")
+    extension = suffix.lower() if stem and suffix.lower() in known_extensions else None
+    if extension is not None and file_format is not None and file_format.lower() != extension:
+        raise ArgumentConflictError(
+            f"path {text!r} names the format {extension!r} but file_format={file_format!r}",
+            code="draw_format_mismatch",
+            remedy="drop file_format=, or end the path with the extension of the format you want",
+            argument="file_format",
+        )
+    inline = text is None and _in_notebook()
+    fileformat = extension or file_format or ("svg" if inline else default_format)
+    if not inline:
+        return DrawTarget(text, fileformat, stem=stem if extension is not None else text)
+    scratch = tempfile.TemporaryDirectory(prefix="tl-render-")
+    graph = str(Path(scratch.name) / "graph")
+    return DrawTarget(graph, fileformat, stem=graph, inline=True, scratch=scratch)
 
 
 def _in_notebook() -> bool:

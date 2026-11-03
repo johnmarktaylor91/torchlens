@@ -718,7 +718,7 @@ def _attempt_live_forward(
 
     try:
         with train_mode_norm_writers_eligible():
-            fork.save_new_outs(
+            fork._save_new_outs(
                 model,
                 input_args,
                 input_kwargs=input_kwargs,
@@ -1031,7 +1031,7 @@ def run_live_trace(
     trace:
         Live Trace retaining its source-model weak reference.
     inputs:
-        New forward input accepted by the existing ``save_new_outs`` path.
+        New forward input accepted by the existing ``_save_new_outs`` refresh path.
     seed:
         Optional refresh seed.
     on_divergence:
@@ -1152,7 +1152,7 @@ def _restore_declared_state_or_mark(trace: Any, fork: Any, snapshot: Any) -> Non
 def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch.Tensor] | None:
     """Flatten runtime live-refresh inputs to ordered tensor leaves, or ``None``.
 
-    Mirrors the capture-side flatten (``backend.fetch_label_move_input_tensors``:
+    Mirrors the capture-side flatten (``backend._fetch_label_move_input_tensors``:
     ``get_vars_of_type_from_obj`` per positional arg, then per kwarg value, at
     cycle-safe finite input walk) so leaf ORDER pairs 1:1 with the capture's recorded
     ``input_layers`` ordering. Returns ``None`` on any traversal failure -- the

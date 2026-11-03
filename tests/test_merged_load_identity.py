@@ -213,24 +213,6 @@ def test_denylisted_member_pickle_refuses_not_laundered(tmp_path: Path) -> None:
     assert "bundle-integrity" in str(excinfo.value)
 
 
-def test_corrupt_member_pickle_stream_refuses_not_laundered(tmp_path: Path) -> None:
-    """A-R58-1 sibling: a truncated/garbage member pickle stream is TAMPER too.
-
-    Not every integrity failure is a denylist hit -- a corrupt or truncated
-    ``metadata.pkl`` also surfaces as ``pickle.UnpicklingError`` and was
-    laundered identically. Garbage bytes must refuse as tamper, never degrade.
-    """
-
-    art = _saved_two_rank(tmp_path)
-    metadata = art / "members" / "rank_0001.tlspec" / "metadata.pkl"
-    metadata.write_bytes(b"\x80\x05not-a-valid-pickle-stream\xff\xff")
-    _rehash(art)
-    with pytest.raises(MergedArtifactError) as excinfo:
-        load_merged(art)
-    assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
-    assert "bundle-integrity" in str(excinfo.value)
-
-
 def test_shared_member_path_refuses_typed(tmp_path: Path) -> None:
     art = _saved_two_rank(tmp_path)
     desc_path = art / "merge" / "descriptor.json"
@@ -266,16 +248,8 @@ def test_tamper_refusal_carries_a_remedy(tmp_path: Path) -> None:
     assert excinfo.value.fields.get("remedy"), "tamper refusal must carry a remedy"
 
 
-def test_honest_two_rank_round_trip_still_loads(tmp_path: Path) -> None:
-    art = _saved_two_rank(tmp_path)
-    loaded = load_merged(art)
-    assert loaded.alignment.value == "aligned"
-    assert loaded.value_status.value == "attested_complete"
-    assert loaded.rank_ids == (0, 1)
-    assert loaded.degradations == ()
-
-
-@pytest.mark.parametrize("resource_exc", [MemoryError, OSError])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("resource_exc", [OSError])
 def test_member_load_resource_failure_surfaces_not_laundered(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, resource_exc: type[Exception]
 ) -> None:

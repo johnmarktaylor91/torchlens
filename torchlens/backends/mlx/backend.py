@@ -824,13 +824,6 @@ class MLXBackend:
 
         return value
 
-    def copy_replacement_metadata(self, session: object, src: object, dst: object) -> None:
-        """Copy MLX side-table labels between replacement arrays."""
-
-        label = self.tensor_store.get_label(src)
-        if label is not None:
-            self.tensor_store.set_label(dst, label)
-
     def emit_function_outputs(
         self,
         session: object,

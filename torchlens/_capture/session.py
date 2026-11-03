@@ -688,7 +688,7 @@ class CaptureSession:
                             f"for {op.layer_label!r} (raw index {op.raw_index})."
                         )
                     continue
-                op.save_activation(
+                op._save_activation(
                     payload,
                     (),
                     {},

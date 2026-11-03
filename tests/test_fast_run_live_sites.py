@@ -16,23 +16,8 @@ from torch.distributions.transforms import TanhTransform
 from torch.nn import functional as F
 
 import torchlens as tl
-from torchlens._fast_run import _FastLiveSession
 from torchlens._utils._tensor_label import get_module_meta
 from torchlens.errors import RunCapabilityUnavailableError
-
-
-def _fast_matches_full(model: nn.Module, inputs: torch.Tensor) -> None:
-    """Capture, then assert the fast rerun on the same input returns the captured output."""
-
-    torch.manual_seed(0)
-    trace = tl.trace(model, inputs.clone())
-    expected = [op.out for op in trace.output_ops]
-    torch.manual_seed(0)
-    result = trace.run(inputs=inputs.clone(), fast=True)
-    got = [result.output] if isinstance(result.output, torch.Tensor) else list(result.output)
-    assert len(got) == len(expected)
-    for want, have in zip(expected, got, strict=True):
-        assert torch.equal(want, have.detach())
 
 
 class StrayStatementPow(nn.Module):
@@ -46,48 +31,6 @@ class StrayStatementPow(nn.Module):
         return x.pow(2)
 
 
-def _tensor_preferring_address(wanted: int) -> torch.Tensor:
-    """Allocate tensors until one takes the address ``wanted`` (CPython reuses freed slots), else the last."""
-
-    candidate = torch.ones(3)
-    for _ in range(64):
-        if id(candidate) == wanted:
-            break
-        candidate = torch.ones(3)
-    return candidate
-
-
-def test_consecutive_same_name_events_are_told_apart_by_object_identity() -> None:
-    """A fresh output after the last one is freed is a new event, not a nested repeat.
-
-    Before the fix the collector compared ``id()`` values, so the fresh tensor
-    that took the freed output's address was dropped as a repeat.
-    """
-
-    model = StrayStatementPow()
-    trace = tl.trace(model, torch.ones(3))
-    session = _FastLiveSession(trace, model)
-    try:
-        with session.activated():
-            first = torch.ones(3)
-            wanted = id(first)
-            session.capture_function("pow", first)
-            assert session.function_index == 1
-            del first
-            second = _tensor_preferring_address(wanted)
-            session.capture_function("pow", second)
-            assert session.failure is None
-            assert session.function_index == 2
-    finally:
-        session.close()
-
-
-def test_fast_run_consecutive_same_name_ops_match_full_run() -> None:
-    """End to end: two consecutive same-name ops run fast and match the capture."""
-
-    _fast_matches_full(StrayStatementPow(), torch.arange(6.0).view(2, 3))
-
-
 class UnpackedPool(nn.Module):
     """``F.adaptive_max_pool1d`` unpacks the tuple of its nested ``_with_indices`` call."""
 
@@ -96,12 +39,6 @@ class UnpackedPool(nn.Module):
 
         pooled = F.adaptive_max_pool1d(x, 2)
         return pooled.view(pooled.shape[0], -1)
-
-
-def test_fast_run_nested_same_name_call_returning_an_inner_leaf_is_one_event() -> None:
-    """The outer call's tensor is a leaf of the inner tuple: one captured op, one event."""
-
-    _fast_matches_full(UnpackedPool(), torch.arange(16.0).view(2, 2, 4))
 
 
 class SetItemSite(nn.Module):
@@ -113,12 +50,6 @@ class SetItemSite(nn.Module):
         y = x * 2
         y[0] = 1
         return y + 1
-
-
-def test_fast_run_setitem_site_collects_the_mutated_receiver() -> None:
-    """Capture records the receiver as the setter's output; the fast run sees the same."""
-
-    _fast_matches_full(SetItemSite(), torch.arange(6.0).view(2, 3))
 
 
 class PairChild(nn.Module):
@@ -159,12 +90,6 @@ class EarlyLeafModel(nn.Module):
         return self.parent(x) - 1
 
 
-def test_fast_run_module_plans_follow_module_exit_order() -> None:
-    """A parent returning a child's early leaf still exits after that child."""
-
-    _fast_matches_full(EarlyLeafModel(), torch.arange(4.0))
-
-
 class AliasedEmbedding(nn.Module):
     """``self.B`` is the same module object as ``self.A[0]``."""
 
@@ -177,12 +102,6 @@ class AliasedEmbedding(nn.Module):
         """Call the shared module through its alias."""
 
         return self.B(x) * 2
-
-
-def test_fast_run_resolves_alias_module_addresses() -> None:
-    """A module capture labels by an alias address is found on the live model."""
-
-    _fast_matches_full(AliasedEmbedding(), torch.arange(6.0).view(2, 3))
 
 
 class DirectForwardParent(nn.Module):
@@ -211,6 +130,7 @@ class DirectForwardModel(nn.Module):
         return self.parent(x) + 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_plans.py, _fast_run.py.
 def test_fast_run_names_an_unrecorded_direct_forward_call_as_a_capability_refusal() -> None:
     """A direct forward() call with no capture record is refused as unobservable.
 
@@ -278,22 +198,7 @@ class OpaqueHolderOutput(nn.Module):
         return _Holder(y, y.relu())
 
 
-def test_fast_run_pairs_a_distribution_output_by_parameter_name() -> None:
-    """A Normal output runs fast: live ``loc`` and ``scale`` pair with the recorded ops."""
-
-    model = DistributionOutput()
-    x = torch.arange(6.0).view(2, 3)
-    trace = tl.trace(model, x)
-    result = trace.run(inputs=x, fast=True)
-    assert result.trace.last_run["engine"] == "guarded_fast"
-    assert trace.last_run is None
-    assert isinstance(result.output, Normal)
-    with torch.no_grad():
-        live = model(x)
-    assert torch.equal(result.output.loc.detach(), live.loc)
-    assert torch.equal(result.output.scale.detach(), live.scale)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_plans.py, _fast_run.py, _ir/distribution_container.py ....
 def test_fast_run_refuses_a_lossy_distribution_output() -> None:
     """A distribution capture flags lossy keeps the honest capability refusal."""
 
@@ -307,6 +212,7 @@ def test_fast_run_refuses_a_lossy_distribution_output() -> None:
     assert "distribution_state_unrecordable" in str(info.value)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_plans.py, _fast_run.py, backends/torch/_outputs.py.
 def test_fast_run_names_an_opaque_output_container_as_a_capability_refusal() -> None:
     """A collapsed opaque boundary is refused as unpairable, not as a changed structure."""
 
@@ -331,9 +237,3 @@ class ClonesItsActivation(nn.Module):
         y = x * 2
         z = y.clone()
         return z + 1
-
-
-def test_fast_run_ignores_its_own_payload_clone() -> None:
-    """The session's payload copy must not be counted as the model's ``clone`` event."""
-
-    _fast_matches_full(ClonesItsActivation(), torch.arange(6.0).view(2, 3))

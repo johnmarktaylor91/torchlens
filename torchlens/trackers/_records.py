@@ -97,6 +97,16 @@ def assert_tag_safe(tag: str, *, site: str | None = None) -> str:
     paste back into ``trace[...]`` / ``named_modules()`` verbatim), so the
     only honest behavior is a typed refusal naming the site (D4 majority;
     The review's reversible-escape minority is recorded, not implemented).
+
+    Examples
+    --------
+    >>> assert_tag_safe("gradients/norm/0.weight")
+    'gradients/norm/0.weight'
+    >>> try:
+    ...     assert_tag_safe("gradients//weight")
+    ... except Exception as exc:
+    ...     print(type(exc).__name__)
+    TagGrammarError
     """
 
     bad = sorted({ch for ch in tag if ord(ch) < 0x20 or ord(ch) > 0x7E or ch in _TAG_FORBIDDEN})
@@ -127,7 +137,16 @@ def assert_tag_safe(tag: str, *, site: str | None = None) -> str:
 
 @dataclass(frozen=True)
 class ScalarPoint:
-    """One scalar emission: ``tag`` at ``step`` with ``value``."""
+    """One scalar emission: ``tag`` at ``step`` with ``value``.
+
+    Examples
+    --------
+    >>> point = ScalarPoint("gradients/norm/0.weight", 100, 0.5)
+    >>> (point.tag, point.step, point.value)
+    ('gradients/norm/0.weight', 100, 0.5)
+    >>> point == ScalarPoint("gradients/norm/0.weight", 100, 0.5)
+    True
+    """
 
     tag: str
     step: int
@@ -145,6 +164,14 @@ class HistogramPoint:
     ``summary`` carries the spine fields TB's histogram proto wants
     (min/max/num/sum/sum_squares); every relay destroys them (measured), so
     the same numbers ALSO ship as first-class scalar tags.
+
+    Examples
+    --------
+    >>> point = HistogramPoint("gradients/hist/0.weight", 100, (1, 2, 1), (-1.0, -0.5, 0.5, 1.0))
+    >>> len(point.bin_edges) == len(point.counts) + 1
+    True
+    >>> sum(point.counts)
+    4
     """
 
     tag: str
@@ -156,7 +183,14 @@ class HistogramPoint:
 
 @dataclass(frozen=True)
 class TextPoint:
-    """One text emission (manifests, disclosures)."""
+    """One text emission (manifests, disclosures).
+
+    Examples
+    --------
+    >>> point = TextPoint("torchlens/meta/manifest", 0, "{}")
+    >>> (point.tag, point.step, point.text)
+    ('torchlens/meta/manifest', 0, '{}')
+    """
 
     tag: str
     step: int
@@ -165,7 +199,15 @@ class TextPoint:
 
 @dataclass(frozen=True)
 class StepEmission:
-    """Everything one committed step block emits, in emission order."""
+    """Everything one committed step block emits, in emission order.
+
+    Examples
+    --------
+    >>> scalar = tl.trackers.ScalarPoint("gradients/norm/0.weight", 7, 0.5)
+    >>> emission = StepEmission(step=7, scalars=(scalar,), histograms=())
+    >>> (emission.step, len(emission.scalars), emission.texts)
+    (7, 1, ())
+    """
 
     step: int
     scalars: tuple[ScalarPoint, ...]
@@ -179,6 +221,16 @@ class TagGrammar:
     ``name=`` inserts the multi-model component after the family;
     ``namespace=`` re-roots every tag (the collision remedy the refusal
     names). Both are validated once at construction.
+
+    Examples
+    --------
+    >>> grammar = TagGrammar(name="ema")
+    >>> grammar.data("gradients", "norm", "0.weight")
+    'gradients/ema/norm/0.weight'
+    >>> grammar.run_health("last_step")
+    'torchlens/run/last_step'
+    >>> TagGrammar(namespace="exp1").check("dead_layer")
+    'exp1/torchlens/check/dead_layer'
     """
 
     def __init__(self, *, name: str | None = None, namespace: str | None = None) -> None:
@@ -251,6 +303,16 @@ def running_stats_scalars(running_stats: RunningStatsResult) -> dict[str, float]
     ``std`` comes from the stable Chan moments (``m2 / num_finite``);
     ``norm`` is the L2 norm from ``sum_squares``. Absent floats (empty
     finite population) are simply omitted -- missing is never zero (D6).
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink, watch, running_stats_scalars
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> with watch(net, to=MemorySink(), optimizer=opt, every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> spine = next(o.spine for b in session.collector.ring.blocks for o in b.observations if o.spine is not None)
+    >>> {"count", "mean", "norm"} <= set(running_stats_scalars(spine))
+    True
     """
 
     out: dict[str, float] = {"count": float(running_stats.num_finite)}
@@ -290,6 +352,17 @@ def histogram_points(sketch: HistogramResult) -> tuple[tuple[int, ...], tuple[fl
     and nonfinite counts are deliberately NOT drawn into edge bins (that
     would lie about their magnitude); they ride the scalar series
     (``nonfinite/*`` and the histogram summary) instead.
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink, watch, histogram_points
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> with watch(net, to=MemorySink(), optimizer=opt, every=1, hist_every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> sketch = next(o.sketch for b in session.collector.ring.blocks for o in b.observations if o.sketch is not None)
+    >>> counts, edges = histogram_points(sketch)
+    >>> len(edges) == len(counts) + 1
+    True
     """
 
     magnitude_edges = sketch.descriptor.bucket_edges()
@@ -332,6 +405,17 @@ def emission_from_block(
     the record (D7) and the run-health series carries the scale itself.
     Non-observed presences yield NO points: missing is never zero, and the
     close report (not a fabricated series) is where skips are disclosed.
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink, watch, emission_from_block, TagGrammar
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> with watch(net, to=MemorySink(), optimizer=opt, every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> block = session.collector.ring.blocks[0]
+    >>> emission = emission_from_block(block, session.collector.site_catalog, TagGrammar())
+    >>> (emission.step, any(p.tag.startswith("gradients/norm/") for p in emission.scalars))
+    (0, True)
     """
 
     scalars: list[ScalarPoint] = []
@@ -377,6 +461,16 @@ def architecture_fingerprint(sites: dict[str, SiteRecord]) -> str:
     Site labels are deterministic across runs of one architecture but DO
     shift downstream of an inserted/removed op; two runs whose fingerprints
     differ must not be overlaid as if their series named the same sites.
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink, watch, architecture_fingerprint
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> with watch(net, to=MemorySink(), optimizer=opt, every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> sites = session.collector.site_catalog
+    >>> len(architecture_fingerprint(sites))
+    16
     """
 
     rows = sorted(
@@ -402,6 +496,16 @@ def build_manifest(
     architecture fingerprint, histogram descriptor (the versioned edge
     policy: C06 owns it; an edge-policy change starts a NEW series), and the
     emission schema version.
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink, watch, build_manifest, TagGrammar
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> with watch(net, to=MemorySink(), optimizer=opt, every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> collector = session.collector
+    >>> build_manifest(collector.run, collector.site_catalog, TagGrammar()).tag
+    'torchlens/meta/manifest'
     """
 
     descriptor = to.descriptor

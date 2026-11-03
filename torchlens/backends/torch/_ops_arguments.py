@@ -11,6 +11,7 @@ from ..._ir.container import (
 from ..._save_budget import _retained_storage_identities
 from ..._state import pause_logging
 from ..._storage_bindings import STORAGE_CONTEXT_RECEIVER_FUNCS, copy_with_storage_context
+from ..._utils._internal_read import internal_scalar_read
 from ..._utils._tensor_label import (
     get_live_tensor_label,
     get_param_meta,
@@ -37,7 +38,6 @@ from ...intervention.types import (
     ParentRef,
     Unsupported,
 )
-from ._internal_read import internal_scalar_read
 from ._param_fingerprint import param_fingerprint
 from .buffer_writes import session_validated_buffer_address
 
