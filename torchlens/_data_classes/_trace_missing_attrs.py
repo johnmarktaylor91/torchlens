@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._utils.facade import refuse_removed_member
+from .._utils.facade import refuse_removed_member, removed_set_remedy
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -87,10 +87,7 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "disarm_triggers": (
         "use trace.autograd.disarm() -- Trace.disarm_triggers moved to the autograd group"
     ),
-    "set": (
-        "use trace.do(site, value, intervention=tl.options.InterventionOptions("
-        "engine='set_only')) -- Trace.set was replaced by the set_only engine of do"
-    ),
+    "set": removed_set_remedy("Trace", "trace", "site, value"),
     "animate_ops": "use trace.animate(site) -- Trace.animate_ops was renamed",
     "conditional_then_entry_edges": (
         "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"

@@ -82,7 +82,7 @@ from .._trace_core.relation_views import (
 )
 from .._trace_state import TraceState
 from .._utils.arg_handling import copy_arg_tree
-from .._utils.facade import refuse_removed_member
+from .._utils.facade import refuse_removed_member, removed_set_remedy
 from .._utils.tensor_utils import (
     concatenate_batch_tensors,
     get_memory_amount_from_metadata,
@@ -1091,10 +1091,7 @@ if TYPE_CHECKING:
 #: Public Op members removed by the do fold (remove-and-rename, no alias).
 _REMOVED_OP_MEMBERS: dict[str, str] = {
     "attach_hooks": "use op.do(hook, ...) -- do stages the hook",
-    "set": (
-        "use op.do(value, intervention=tl.options.InterventionOptions("
-        "engine='set_only')) -- Op.set was replaced by the set_only engine of do"
-    ),
+    "set": removed_set_remedy("Op", "op", "value"),
 }
 
 

@@ -29,6 +29,25 @@
   The old `Trace.set` and `Layer.set` refuse with the typed `facade_redirect` error naming the replacement. The
   `intervention_direction_invalid` refusals that only `set(..., direction=)` raised are gone with it; the code still
   covers `Rule(direction=)`.
+- **intervention**: the hook, push and set spellings are removed and fold into `do`; each removal
+  below names its replacement through `do`. The removed `Trace`, `Layer` and `Op` members refuse
+  with the typed `facade_redirect` error naming the replacement:
+  - `Trace.attach_hooks`, `Layer.attach_hooks` and `Op.attach_hooks`: `trace.do(site, hook)` attaches
+    the sticky hook and propagates at once; `trace.do(tl.when(site, hook),
+    intervention=tl.options.InterventionOptions(engine="set_only"))` stages it without running.
+  - `Trace.clear_hooks`: `trace.clear_edits(site)` or `trace.clear_edits(handle=ids)` detaches the
+    sticky hooks `do` staged.
+  - `tl.intervention.HookHandle`: `do` returns the trace, not a handle; pass the staged hook ids to
+    `trace.clear_edits(handle=ids)`.
+  - `prepend=`: hooks staged with `do` run in the order they were staged; to run one first, clear
+    the others with `trace.clear_edits` and stage it before them.
+  - `Trace.push`: `trace.do(site, edit)` applies the edit and propagates it.
+  - `Trace.push_from`: `trace.do(site, value)` sets the value and propagates it.
+  - `Trace.set`, `Layer.set` and `Op.set`: `trace.do(site, value,
+    intervention=tl.options.InterventionOptions(engine="set_only"))` stages a value or tensor. A
+    callable passed that way becomes a sticky hook that stays for every later `do` and `run` until
+    `trace.clear_edits(site)` detaches it, where `set` applied a callable once (walk ruling names.3,
+    3 Nov 2026).
 - **intervention**: `torchlens.intervention.sites` (the `sites()` builder with `SiteCollection` and
   `SiteSpec`) is removed (round-2 walk names.7). Pass selectors to
   `torchlens.experiment.sweep_sites(...)` directly. The old names refuse with the typed
