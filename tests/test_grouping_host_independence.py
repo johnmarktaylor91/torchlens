@@ -98,7 +98,7 @@ _SUBPROCESS_SOURCE = _MODEL_SOURCE + textwrap.dedent(
         seen = {}
         internal = []
         for op in trace._layer_list:
-            if op.is_input or op.is_output or op.is_buffer:
+            if op.is_input or op.is_output or op.graph.is_buffer:
                 continue
             seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
         for op in trace.ops:

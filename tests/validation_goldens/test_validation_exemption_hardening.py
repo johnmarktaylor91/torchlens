@@ -1214,7 +1214,7 @@ def test_forged_placeholder_still_fails_func_call_id_after_save_load(
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
     object.__setattr__(relu_op, "is_edited", True)
-    object.__setattr__(relu_op, "func_call_id", None)
+    object.__setattr__(relu_op, "_call_call_id", None)
 
     with pytest.raises(MetadataInvariantError, match="func_call_id"):
         check_func_call_id_invariant(trace)

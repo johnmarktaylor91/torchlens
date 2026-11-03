@@ -413,7 +413,7 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
         victim = victims[0]
         target.parents = [p for p in target.parents if p != victim]
         for domain in ("args", "kwargs"):
-            positions = target.parent_arg_positions.get(domain, {})
+            positions = target.call.parent_arg_positions.get(domain, {})
             for key in [k for k, v in positions.items() if v == victim]:
                 del positions[key]
         producer = next((o for o in self._layer_list if o.layer_label == victim), None)

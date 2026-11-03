@@ -237,7 +237,7 @@ def test_frozenset_round_trips_recursive_blob_payloads(tmp_path: Path) -> None:
 
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
     target = trace.output_ops[0]
-    target.func_config = {"frozen": frozenset({torch.tensor(3)})}
+    target._call_config = {"frozen": frozenset({torch.tensor(3)})}
     path = tmp_path / "frozenset.tlspec"
     trace.save(path)
 
@@ -254,7 +254,7 @@ def test_tuple_subclasses_preserve_type_across_bundle_round_trip(tmp_path: Path)
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
     target = trace.output_ops[0]
     maximum = torch.max(torch.tensor([1, 3]), dim=0)
-    target.func_config = {"size": torch.Size([2, 3]), "maximum": maximum}
+    target._call_config = {"size": torch.Size([2, 3]), "maximum": maximum}
     path = tmp_path / "tuple-subclasses.tlspec"
     trace.save(path)
 

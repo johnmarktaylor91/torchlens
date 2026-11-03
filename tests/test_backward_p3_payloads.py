@@ -101,7 +101,9 @@ def test_op_grad_is_loud_when_multiple_passes_are_saved() -> None:
     trace = _trace_with_two_backward_passes()
     try:
         op = next(op for op in trace.saved_grad_ops if len(op.autograd.grads) == 2)
-        with pytest.raises(ValueError, match=r"use op\.grads\[\.\.\.\] / op\.grad_for\(bwd=k\)"):
+        with pytest.raises(
+            ValueError, match=r"use op\.autograd\.grads\[\.\.\.\] / op\.autograd\.grad_for\(bwd=k\)"
+        ):
             _ = op.grad
     finally:
         trace.cleanup()

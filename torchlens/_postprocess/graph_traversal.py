@@ -960,7 +960,7 @@ def _log_internally_terminated_tensor(
     (hunt-6 R52-2).
     """
     layer_entry = self[tensor_label]
-    layer_entry._graph_is_internal_sink = True
+    layer_entry.is_internal_sink = True
     if tensor_label not in seen_sink_labels:
         seen_sink_labels.add(tensor_label)
         self.internal_sink_ops.append(tensor_label)

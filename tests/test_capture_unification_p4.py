@@ -307,7 +307,7 @@ def test_nested_container_inplace_arg_snapshot_preserves_pre_call_value() -> Non
     )
 
     foreach = log["foreachadd_1_2"]
-    assert torch.equal(foreach.saved_args[0][0], torch.full((2,), 2.0))
+    assert torch.equal(foreach.call.saved_args[0][0], torch.full((2,), 2.0))
     assert torch.equal(foreach.out, torch.full((2,), 5.0))
 
 

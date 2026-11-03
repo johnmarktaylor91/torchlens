@@ -1666,7 +1666,7 @@ def _buffer_versions_for_layer(layer_log: "Layer") -> tuple[int, ...]:
     """
 
     versions = {
-        int(op.graph.buffer_pass)
+        int(record_member(op, "buffer_pass"))
         for op in layer_log.ops.values()
         if record_member(op, "buffer_pass", None) is not None
     }
@@ -1771,7 +1771,7 @@ def _get_node_address_shape_color(
         elif self._buffer_num_calls[source_node.address] == 1:
             address = source_node.address
         else:
-            address = f"{source_node.address}:{source_node.graph.buffer_pass}"
+            address = f"{source_node.address}:{record_member(source_node, 'buffer_pass')}"
         node_address = "<br/>@" + address
         node_shape = "cylinder"
         node_color = "black"

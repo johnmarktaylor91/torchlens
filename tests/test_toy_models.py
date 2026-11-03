@@ -1727,7 +1727,7 @@ def test_trace_save_arg_values(default_input1):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input and entry.saved_args is not None:
+        if not entry.is_input and entry.call.saved_args is not None:
             found = True
             break
     assert found, "No non-input layer had saved_args populated"

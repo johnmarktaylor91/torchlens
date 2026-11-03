@@ -541,7 +541,7 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert len(vmap_ops) == 1
     assert vmap_ops[0].label == "vmap_1_1:1"
     assert vmap_ops[0].parents == ("input_1",)
-    assert vmap_ops[0].is_transform is True
+    assert vmap_ops[0].call.is_func_transform is True
     assert vmap_ops[0].transform_kind == "vmap"
     assert vmap_ops[0].transform_chain == ("vmap",)
     assert vmap_ops[0].transform_config["in_dims"] == 0
@@ -584,7 +584,7 @@ def test_grad_boundary_node_has_clean_parent_edge() -> None:
 
     assert len(grad_ops) == 1
     assert grad_ops[0].parents == ("input_1",)
-    assert grad_ops[0].is_transform is True
+    assert grad_ops[0].call.is_func_transform is True
     assert grad_ops[0].transform_kind == "grad"
     assert grad_ops[0].transform_chain == ("grad",)
     assert grad_ops[0].transform_config["argnums"] == 0
@@ -664,7 +664,7 @@ def test_autograd_functional_direct_call_boundary(
 
     assert len(transform_ops) == 1
     assert transform_ops[0].parents == ("input_1",)
-    assert transform_ops[0].is_transform is True
+    assert transform_ops[0].call.is_func_transform is True
     assert transform_ops[0].transform_kind == kind
 
 

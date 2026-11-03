@@ -89,7 +89,7 @@ from .._trace_core.relation_views import (
     materialize_dataflow_view,
 )
 from .._trace_state import TraceState
-from .._utils._record_group_table import OP_STORAGE_ATTRS, record_member
+from .._utils._record_group_table import OP_STORAGE_ATTRS, op_attr, record_member
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils.arg_handling import copy_arg_tree
 from .._utils.tensor_utils import (
@@ -1242,7 +1242,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _param_barcodes: list[Any]
         _param_logs: list["Param"]
         _cost_param_memory: Bytes
-        is_orphan: bool
+        _graph_is_orphan: bool
         _source_fx_path: str | None
         _source_fx_call_index: int
         out_ref: "LazyActivationRef" | None
@@ -1329,15 +1329,15 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _call_func_transform_fn_source: Any
         _call_unattributed_tensor_args: Any
         _call_dropped_edge_tensor_args: Any
-        parent_params: Any
-        parent_param_ops: Any
+        _graph_parent_params: Any
+        _graph_parent_param_ops: Any
         param_shapes: Any
         num_params: Any
         num_params_trainable: Any
         num_params_frozen: Any
-        equivalence_class: Any
-        equivalent_ops: Any
-        recurrent_ops: Any
+        _graph_equivalence_class: Any
+        _graph_equivalent_ops: Any
+        _graph_recurrent_ops: Any
         site_key: str | None
         injection_provenance: dict[str, Any] | None
         episode_step: int | None
@@ -1345,37 +1345,37 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         parents: Any
         _call_parent_arg_positions: Any
         _edge_uses: Any
-        edge_substitutions: dict[Any, Any]
+        _graph_edge_substitutions: dict[Any, Any]
         edge_replacement_stamps: dict[Any, Any]
-        root_ancestors: Any
+        _graph_root_ancestors: Any
         children: Any
-        has_children: Any
+        _graph_has_children: Any
         is_input: Any
         input_was_parameter: Any
-        has_input_ancestor: Any
+        _graph_has_input_ancestor: Any
         input_ancestors: Any
-        min_distance_from_input: Any
-        max_distance_from_input: Any
+        _graph_min_distance_from_input: Any
+        _graph_max_distance_from_input: Any
         is_output: Any
-        is_output_parent: Any
-        is_final_output: Any
-        has_output_descendant: Any
+        _graph_is_output_parent: Any
+        _graph_is_final_output: Any
+        _graph_has_output_descendant: Any
         output_descendants: Any
-        io_role: Any
-        min_distance_to_output: Any
-        max_distance_to_output: Any
-        is_buffer: Any
+        _graph_io_role: Any
+        _graph_min_distance_to_output: Any
+        _graph_max_distance_to_output: Any
+        _graph_is_buffer: Any
         address: Any
         buffer_pass: Any
-        buffer_source: Any
+        _graph_buffer_source: Any
         buffer_write_kind: Any
         buffer_value_changed: Any
         buffer_replay_validated: Any
-        buffer_source_func_name: Any
-        is_internal_source: Any
-        has_internal_source_ancestor: Any
-        internal_source_parents: Any
-        internal_source_ancestors: Any
+        _graph_buffer_source_func_name: Any
+        _graph_is_internal_source: Any
+        _graph_has_internal_source_ancestor: Any
+        _graph_internal_source_parents: Any
+        _graph_internal_source_ancestors: Any
         is_internal_sink: Any
         _control_flow_is_terminal_bool: Any
         _control_flow_is_terminal_conditional_bool: Any
@@ -1854,8 +1854,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             Tensor attribute name to concatenate.
         """
 
-        current_value = getattr(self, field_name)
-        other_value = getattr(other, field_name)
+        current_value = getattr(self, op_attr(field_name))
+        other_value = getattr(other, op_attr(field_name))
         if isinstance(current_value, torch.Tensor) and isinstance(other_value, torch.Tensor):
             self._internal_set(field_name, concatenate_batch_tensors(current_value, other_value))
 
@@ -2102,12 +2102,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def _autograd_derived_grad(self) -> Any | None:
         """Return this op's derived intermediate gradient payload, if available."""
 
-        return _doors.intervention()._op_edits.autograd.derived_grad(self)
+        return _doors.intervention()._op_edits.derived_grad(self)
 
     def _autograd_grad_for(self, *, bwd: int) -> torch.Tensor:
         """Return the saved gradient tensor for one backward pass."""
 
-        return _doors.intervention()._op_edits.autograd.grad_for(self, bwd=bwd)
+        return _doors.intervention()._op_edits.grad_for(self, bwd=bwd)
 
     def _record_gradient(
         self,
@@ -2419,13 +2419,13 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Ignore cleanup deletion for derived input memory."""
 
     @property
-    def num_inputs(self) -> int:
+    def _graph_num_inputs(self) -> int:
         """Number of graph-parent input Ops."""
 
         return len(self.parents)
 
-    @num_inputs.deleter
-    def num_inputs(self) -> None:
+    @_graph_num_inputs.deleter
+    def _graph_num_inputs(self) -> None:
         """Ignore cleanup deletion for derived input count."""
 
     @property

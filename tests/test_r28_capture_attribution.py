@@ -279,7 +279,7 @@ def test_m3_foreach_out_of_place_parents_are_zipped_without_duplicates() -> None
     assert len(foreach_ops) == 2
     assert foreach_ops[0].parents == ("input_3", "input_1")
     assert foreach_ops[1].parents == ("input_4", "input_2")
-    assert foreach_ops[0].parent_arg_positions["args"] == {
+    assert foreach_ops[0].call.parent_arg_positions["args"] == {
         (1, 0): "input_3",
         (0, 0): "input_1",
     }
@@ -318,7 +318,7 @@ def test_m3_dropped_zipped_edge_still_fails_validation() -> None:
     member0.parents = [p for p in member0.parents if p != "input_3"]
     member0.parent_arg_positions["args"] = {
         key: label
-        for key, label in member0.parent_arg_positions["args"].items()
+        for key, label in member0.call.parent_arg_positions["args"].items()
         if label != "input_3"
     }
 

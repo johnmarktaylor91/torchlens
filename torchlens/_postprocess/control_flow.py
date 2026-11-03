@@ -1013,7 +1013,7 @@ def _fix_buffer_layers(self: Trace) -> None:
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
         address = layer.address
-        layer._graph_buffer_pass = buffer_counter[address]
+        layer.buffer_pass = buffer_counter[address]
         self._buffer_num_calls[address] = buffer_counter[address]
         buffer_counter[address] += 1
 

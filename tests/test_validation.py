@@ -3298,7 +3298,7 @@ def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
     )
     healthy_copy = next(op for op in healthy_trace._layer_list if op.func_name == "copy_")
 
-    assert set(healthy_copy.parent_arg_positions["args"]) == {0, 1}
+    assert set(healthy_copy.call.parent_arg_positions["args"]) == {0, 1}
     assert (
         healthy_trace.validate_forward_pass(
             [healthy_trace[healthy_trace.output_layers[0]].out.detach().clone()],
@@ -5765,9 +5765,9 @@ def test_buffer_write_version_invariant_rejects_sparse_pass_set() -> None:
         write_version = next(
             layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
-        assert write_version.graph.buffer_pass == 2
+        assert write_version.buffer_pass == 2
 
-        write_version._graph_buffer_pass = 3
+        write_version.buffer_pass = 3
 
         with pytest.raises(MetadataInvariantError, match="dense as a set"):
             check_metadata_invariants(log)
@@ -5822,7 +5822,7 @@ def test_buffer_integrity_preconditions_reach_real_trace() -> None:
         assert buffer.versions
         assert any(version.buffer_write_kind is None for version in buffer.versions)
         assert any(version.buffer_write_kind is not None for version in buffer.versions)
-        assert {version.graph.buffer_pass for version in buffer.versions} == {1, 2}
+        assert {version.buffer_pass for version in buffer.versions} == {1, 2}
         assert any(version.graph.buffer_source is not None for version in buffer.versions)
         assert check_metadata_invariants(log) is True
     finally:
@@ -6092,7 +6092,7 @@ def test_func_call_id_invariant_rejects_missing_id_in_plain_capture() -> None:
         victim = next(
             layer for layer in log._layer_list if not layer.is_input and not layer.is_output
         )
-        assert victim.func_call_id is not None
+        assert victim.call.call_id is not None
 
         victim.func_call_id = None
 
@@ -6361,7 +6361,7 @@ def test_bad_pre_trigger_layer_grad_fn_backpointer_raises() -> None:
             for layer in log._layer_list
             if layer.grad_fn_object_id is not None and layer.autograd.grad_fn is not None
         )
-        victim.grad_fn = None
+        victim._autograd_grad_fn = None
 
         with pytest.raises(MetadataInvariantError, match="missing its GradFn backpointer"):
             check_metadata_invariants(log)
@@ -7248,7 +7248,7 @@ def _corrupt_first_computational_layer_parentless(log) -> "object":
                 parent._graph_has_children = len(parent.children) > 0
             lpl.parents = []
             for arg_domain in ("args", "kwargs"):
-                lpl.parent_arg_positions.get(arg_domain, {}).clear()
+                lpl.call.parent_arg_positions.get(arg_domain, {}).clear()
             # has_parents is a read-only property derived from parents
             #
             # Since the edge-occurrence multiplicity witness (b9-opus R75-1)
@@ -7906,7 +7906,7 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
     # The mask is instead logged as a transform boundary node with a clean parent edge.
     transform_ops = [op for op in log.ops if record_member(op, "is_transform", False)]
     assert [op.type for op in transform_ops] == ["vmap"]
-    assert transform_ops[0].transform_chain == ("vmap", "vmap")
+    assert transform_ops[0].call.func_transform_chain == ("vmap", "vmap")
     assert transform_ops[0].parents
     assert all(parent.startswith("arange_") for parent in transform_ops[0].parents)
     transform_label = transform_ops[0].label.split(":")[0]

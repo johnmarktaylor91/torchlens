@@ -120,7 +120,7 @@ def test_closure_constant_is_a_constant_source_op_and_validates() -> None:
     np.testing.assert_array_equal(constant.out.detach().numpy(), torch_roster.W44)
     (matmul,) = [op for op in trace._layer_list if str(op.func_name) == "matmul"]
     assert constant.layer_label in {str(parent).split(":")[0] for parent in matmul.parents}
-    assert not tuple(matmul.unattributed_tensor_args or ())
+    assert not tuple(matmul.call.unattributed_tensor_args or ())
     status = protocol.validate(trace, reference)
     assert status.state == "passed", status.message
     assert not [d for d in status.decisions if d.get("decision") == "failed"]

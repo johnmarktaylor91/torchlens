@@ -378,20 +378,20 @@ class Layer(_SelectionOperand):
         num_params_frozen: Any
         _cost_total_param_memory: Any
         _call_config: Any
-        equivalence_class: Any
+        _graph_equivalence_class: Any
         is_input: Any
         input_was_parameter: Any
         is_output: Any
-        is_final_output: Any
-        is_buffer: Any
+        _graph_is_final_output: Any
+        _graph_is_buffer: Any
         address: Any
-        buffer_source: Any
+        _graph_buffer_source: Any
         buffer_write_kind: Any
         buffer_value_changed: Any
         buffer_replay_validated: Any
-        buffer_source_func_name: Any
-        is_internal_source: Any
-        is_internal_sink: Any
+        _graph_buffer_source_func_name: Any
+        _graph_is_internal_source: Any
+        _graph_is_internal_sink: Any
         _control_flow_is_terminal_bool: Any
         _control_flow_is_scalar_bool: Any
         _control_flow_bool_value: Any
@@ -403,9 +403,9 @@ class Layer(_SelectionOperand):
         _control_flow_then_children: Any
         _control_flow_elif_children: Any
         _control_flow_else_children: Any
-        has_input_ancestor: Any
-        io_role: Any
-        buffer_pass: Any
+        _graph_has_input_ancestor: Any
+        _graph_io_role: Any
+        _graph_buffer_pass: Any
         _module_context_is_atomic_module: Any
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {

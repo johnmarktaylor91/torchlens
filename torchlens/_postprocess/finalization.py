@@ -45,7 +45,7 @@ from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
-from .._utils._record_group_table import layer_attr, record_member
+from .._utils._record_group_table import layer_attr, op_attr, record_member
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from ..backends.torch._tl import clear_meta
@@ -1705,7 +1705,7 @@ def _reuse_streamed_blob_ids(
             if not isinstance(tensor_blob, BlobRef):
                 setattr(
                     scrubbed_layer,
-                    tensor_field,
+                    op_attr(tensor_field),
                     BlobRef(blob_id=pending_blob_id, kind=tensor_field),
                 )
                 writer.relabel_blob(pending_blob_id, live_layer._streaming_label)

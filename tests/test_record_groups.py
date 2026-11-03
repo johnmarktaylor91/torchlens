@@ -344,7 +344,7 @@ def test_graph_group_reads_the_position(trace: tl.Trace) -> None:
     assert layer.graph.has_parents is True
     assert layer.graph.is_compute is True
     assert layer.graph.is_orphan is False
-    assert layer.graph.min_distance_from_input == op.graph.min_distance_from_input
+    assert layer.graph.io_role == op.graph.io_role
     assert layer.graph.equivalence_class == op.graph.equivalence_class
     with pytest.raises(FacadeTeachingError):
         _ = op.has_parents

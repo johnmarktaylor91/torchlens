@@ -676,7 +676,7 @@ def test_saved_args_populated(small_input):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input and entry.saved_args is not None:
+        if not entry.is_input and entry.call.saved_args is not None:
             found = True
             break
     assert found, "save_args=True should populate saved_args"
@@ -1609,7 +1609,9 @@ def test_corrupt_saved_args(valid_mh_and_ground_truth):
         entry = mh.layers[label].ops[0]
         if entry.is_input:
             continue
-        if entry.saved_args and any(isinstance(a, torch.Tensor) for a in entry.saved_args):
+        if entry.call.saved_args and any(
+            isinstance(a, torch.Tensor) for a in entry.call.saved_args
+        ):
             for i, arg in enumerate(entry.saved_args):
                 if isinstance(arg, torch.Tensor):
                     corrupted_args = list(entry.saved_args)

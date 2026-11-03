@@ -244,7 +244,7 @@ def test_bool_predicate_probe_never_mutates_retained_saved_args() -> None:
 
     trace, _ground_truth = _capture(_InplaceMaskGate(), torch.randn(3, 4))
     target = [op for op in trace._layer_list if op.func_name == "logical_and_"][0]
-    saved_args = list(target.saved_args or ())
+    saved_args = list(target.call.saved_args or ())
     assert saved_args and isinstance(saved_args[0], torch.Tensor)
     snapshots = [
         arg.detach().clone() if isinstance(arg, torch.Tensor) else arg for arg in saved_args

@@ -167,7 +167,7 @@ def _op_dict(op: Any) -> dict[str, Any]:
         "fx_qualpath": op.source.fx_path,
         "is_edited": getattr(op, "is_edited", False),
         "is_atomic_module": op.module_context.is_atomic_module,
-        "is_internal_sink": op.graph.is_internal_sink,
+        "is_internal_sink": op.is_internal_sink,
         "is_internal_source": op.graph.is_internal_source,
         "is_orphan": record_member(op, "is_orphan", False),
         "is_module_output": op.module_context.is_module_output,

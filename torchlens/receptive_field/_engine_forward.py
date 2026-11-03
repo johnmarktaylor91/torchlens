@@ -121,7 +121,7 @@ def _canonical_targets(trace: Trace, target_ops: Iterable[Op | str]) -> tuple[Op
     targets = tuple(
         op for op in trace._layer_list if op.label in resolved and _operation_is_live(op)
     )
-    keys = [target.io_role or target.label for target in targets]
+    keys = [target.graph.io_role or target.label for target in targets]
     if len(keys) != len(set(keys)):
         raise ReceptiveFieldConfigurationError("Projective targets must have distinct result keys.")
     return targets

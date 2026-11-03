@@ -234,7 +234,7 @@ def test_scripted_helper_owns_its_interior_dispatches() -> None:
         if entry["owner_wrapper"] == SCRIPT_FUNCTION_WRAPPER_NAME
     ]
     assert len(rows) == 1
-    assert rows[0]["owner_func_call_id"] == _boundary_ops(trace)[0].func_call_id
+    assert rows[0]["owner_func_call_id"] == _boundary_ops(trace)[0].call.call_id
     assert rows[0]["capture_accounted"] is True
 
 

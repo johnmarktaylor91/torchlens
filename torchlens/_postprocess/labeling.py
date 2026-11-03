@@ -941,7 +941,7 @@ def _add_lookup_keys_for_layer_entry(
     if layer_entry.graph.is_buffer:
         if self._buffer_num_calls.get(layer_entry.address, 1) == 1:
             lookup_keys_for_tensor.append(layer_entry.address)
-        lookup_keys_for_tensor.append(f"{layer_entry.address}:{layer_entry.graph.buffer_pass}")
+        lookup_keys_for_tensor.append(f"{layer_entry.address}:{layer_entry.buffer_pass}")
     elif layer_entry.is_input or layer_entry.is_output:
         lookup_keys_for_tensor.append(layer_entry.graph.io_role)
 

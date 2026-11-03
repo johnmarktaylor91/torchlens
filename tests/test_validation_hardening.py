@@ -1306,7 +1306,7 @@ def test_w35_nonzero_literal_never_exempted() -> None:
     any multiplication spelling.
     """
 
-    class _FakeOp:
+    class _FakeOp(FlatGroups):
         saved_args = None
         out = torch.zeros(3)  # a finite saved output
 
@@ -1341,7 +1341,7 @@ def test_f3_tuple_out_destination_keys_accepted() -> None:
 
     from torchlens.validation.core import _perturbed_parents_only_occupy_out_kwarg
 
-    class _FakeOp:
+    class _FakeOp(FlatGroups):
         def __init__(self, args_map: dict, kwargs_map: dict) -> None:
             self.parent_arg_positions = {"args": args_map, "kwargs": kwargs_map}
 

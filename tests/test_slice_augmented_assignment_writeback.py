@@ -82,7 +82,7 @@ def test_view_written_to_another_region_binds_two_labels() -> None:
     torch.manual_seed(0)
     trace = tl.trace(_ViewWrittenElsewhere().eval(), (torch.randn(3, 4), torch.randn(3, 2)))
     (setitem,) = [op for op in trace.ops if op.func_name == "__setitem__"]
-    base_parent = setitem.parent_arg_positions["args"][0]
+    base_parent = setitem.call.parent_arg_positions["args"][0]
     value_parent = setitem.parent_arg_positions["args"][2]
     assert base_parent.startswith("mul")
     assert value_parent.startswith("add")

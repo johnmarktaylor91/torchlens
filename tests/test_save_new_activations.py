@@ -566,7 +566,7 @@ class TestGraphConsistencyValidation:
             refreshed_sub = next(op for op in log._layer_list if op.type == "sub")
             fresh_sub = next(op for op in fresh_log._layer_list if op.type == "sub")
             assert refreshed_sub.parents == fresh_sub.parents
-            assert refreshed_sub.parent_arg_positions == fresh_sub.parent_arg_positions
+            assert refreshed_sub.call.parent_arg_positions == fresh_sub.call.parent_arg_positions
             assert refreshed_sub.out is not None
             assert fresh_sub.out is not None
             assert torch.allclose(refreshed_sub.out, fresh_sub.out)

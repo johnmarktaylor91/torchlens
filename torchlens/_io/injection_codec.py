@@ -402,7 +402,7 @@ def _validate_one_split_row(
     label = getattr(row, "layer_label", None)
     if not isinstance(label, str) or not label:
         _refuse_codec("an injected-op row carries no layer_label", "record_label")
-    record = row.injection_provenance
+    record = row.call.injection_provenance
     check_injection_provenance_row(record, label)
     durable = (
         record["host_site_key"],
@@ -687,7 +687,7 @@ def finalize_loaded_injected_ops(
     records: list[InjectedOp] = []
     for row in pending:
         envelope = row.annotations[_ENVELOPE_KEY]
-        provenance_record = row.injection_provenance
+        provenance_record = row.call.injection_provenance
         out = row.out
         if isinstance(out, BlobRef):
             out = materialize(out)

@@ -140,7 +140,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # verbatim to _op_save.py, _op_relations.py, _op_cost.py, _labels.py,
     # intervention/_op_edits.py and receptive_field/_op_fields.py; re-keyed
     # down to the next 50-line step above the measurement (3635).
-    "torchlens/_data_classes/op.py": 3650,
+    # 3650 -> 3550 (2026-11-03 record concern groups): the derived graph,
+    # cost and payload members moved to the _record_groups_* modules;
+    # re-keyed down to the next 50-line step above the measurement (3504).
+    "torchlens/_data_classes/op.py": 3550,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -410,7 +413,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 2100 -> 2150 (2026-08-29 F11 T74b fix): +9 lines documenting the
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
-    "torchlens/_visualization/auto_collapse.py": 2150,
+    # 2150 -> 2200 (2026-11-03 record concern groups): +1 import line for the
+    # group-aware record_member read; a spelling move, not code growth.
+    "torchlens/_visualization/auto_collapse.py": 2200,
     "torchlens/validation/exemptions.py": 2850,
     # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
@@ -521,7 +526,10 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     # exactly this kind of targeted regression addition, so the growth is
     # the campaign's reviewed product, not drift.
     "tests/validation_goldens/test_validation_exemption_hardening.py": 2550,
-    "tests/test_conditional_branches.py": 2150,
+    # 2150 -> 2200 (2026-11-03 record concern groups): the control_flow
+    # group spelling rewrapped three asserts over the line limit (+3 lines);
+    # a spelling move, not new coverage.
+    "tests/test_conditional_branches.py": 2200,
     # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
     # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051
     # 2.17) plus the numpy>=2 profile-silent skip -- the c_call receiver half of the

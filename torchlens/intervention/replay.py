@@ -827,7 +827,7 @@ def _boundary_slot_parent_op(
     same_call = [
         candidate
         for candidate in candidates
-        if record_member(candidate, "func_call_id", None) == member.func_call_id
+        if record_member(candidate, "func_call_id", None) == member.call.call_id
     ]
     if len(same_call) != 1:
         raise ReplayPreconditionError(

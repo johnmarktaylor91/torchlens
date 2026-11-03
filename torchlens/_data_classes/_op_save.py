@@ -744,7 +744,7 @@ def _stream_tensor_blob(
 ) -> None:
     """Stream one tensor field when present."""
 
-    tensor = getattr(op, tensor_field)
+    tensor = getattr(op, op_attr(tensor_field))
     if tensor is None:
         return
     if not isinstance(tensor, torch.Tensor):

@@ -693,7 +693,7 @@ class TestNestedTupleArgs:
         stack_entry = None
         for label in log.layer_labels:
             entry = log[label]
-            saved_args = entry.saved_args
+            saved_args = entry.call.saved_args
             if saved_args is not None and len(saved_args) > 0 and isinstance(saved_args[0], list):
                 stack_entry = entry
                 break

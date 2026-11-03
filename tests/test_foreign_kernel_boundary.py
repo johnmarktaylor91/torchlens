@@ -195,7 +195,7 @@ def test_foreign_function_owns_its_interior_dispatches() -> None:
         if entry["owner_wrapper"] == FOREIGN_FUNCTION_WRAPPER_NAME
     ]
     assert len(boundary_rows) == 1
-    assert boundary_rows[0]["owner_func_call_id"] == _boundary_ops(trace)[0].func_call_id
+    assert boundary_rows[0]["owner_func_call_id"] == _boundary_ops(trace)[0].call.call_id
     assert boundary_rows[0]["capture_accounted"] is True
     # The interior detach was re-owned: no owner row of its own survives.
     assert not any(

@@ -23,11 +23,11 @@ tightened standard:
 from __future__ import annotations
 
 import warnings
-from types import SimpleNamespace
 from typing import Any
 
 import torch
 import torch.nn as nn
+from _record_fakes import FlatNamespace
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
@@ -415,7 +415,7 @@ def test_masked_fill_input_equal_to_value_is_proved_irrelevant() -> None:
 def test_full_like_template_parent_stays_structurally_exempt() -> None:
     """The ``*_like`` TEMPLATE parent keeps its structural excuse; others do not."""
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         func_name="full_like",
         saved_args=(torch.zeros(2, 2), torch.tensor(3.0)),
         saved_kwargs={},
@@ -441,7 +441,7 @@ def test_posthoc_check_no_longer_excuses_index_parents_blanketly() -> None:
     """Posthoc exemption for a healthy-domain index parent requires a proof."""
 
     weight = torch.randn(6, 3)
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         func_name="embedding",
         saved_args=(weight, torch.tensor([0, 2, 4]), -1, False, False),
         saved_kwargs={},
@@ -457,7 +457,7 @@ def test_index_domain_rotation_is_valid_and_distinct() -> None:
     """Rotation stays in-domain, differs everywhere in-domain, keeps sentinels."""
 
     weight = torch.randn(5, 3)
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         func_name="cross_entropy",
         saved_args=(torch.randn(4, 5), torch.tensor([0, 4, -100, 2])),
         saved_kwargs={},
@@ -467,7 +467,7 @@ def test_index_domain_rotation_is_valid_and_distinct() -> None:
     assert rotated is not None
     assert rotated.tolist() == [1, 0, -100, 3]
 
-    emb_layer = SimpleNamespace(
+    emb_layer = FlatNamespace(
         func_name="embedding",
         saved_args=(weight, torch.tensor([[0, 1], [4, 3]]), -1, False, False),
         saved_kwargs={},
@@ -580,12 +580,12 @@ def test_uninitialized_by_design_proof_is_fail_closed() -> None:
 
     from torchlens.validation.exemptions import uninitialized_by_design_applies
 
-    healthy = SimpleNamespace(
+    healthy = FlatNamespace(
         func_name="new", parents=("input_1",), non_tensor_kwargs={}, non_tensor_pos_args=[2, 3]
     )
     assert uninitialized_by_design_applies(healthy)
     assert uninitialized_by_design_applies(
-        SimpleNamespace(
+        FlatNamespace(
             func_name="new",
             parents=("input_1",),
             non_tensor_kwargs={},
@@ -594,7 +594,7 @@ def test_uninitialized_by_design_proof_is_fail_closed() -> None:
     )
     # Second tensor parent = value-bearing new(tensor).
     assert not uninitialized_by_design_applies(
-        SimpleNamespace(
+        FlatNamespace(
             func_name="new",
             parents=("input_1", "input_2"),
             non_tensor_kwargs={},
@@ -603,7 +603,7 @@ def test_uninitialized_by_design_proof_is_fail_closed() -> None:
     )
     # Sequence positional arg = legacy DATA constructor.
     assert not uninitialized_by_design_applies(
-        SimpleNamespace(
+        FlatNamespace(
             func_name="new",
             parents=("input_1",),
             non_tensor_kwargs={},
@@ -612,7 +612,7 @@ def test_uninitialized_by_design_proof_is_fail_closed() -> None:
     )
     # Unknown kwargs and bools are not provably sizes.
     assert not uninitialized_by_design_applies(
-        SimpleNamespace(
+        FlatNamespace(
             func_name="new",
             parents=("input_1",),
             non_tensor_kwargs={"weird": 1},
@@ -620,13 +620,13 @@ def test_uninitialized_by_design_proof_is_fail_closed() -> None:
         )
     )
     assert not uninitialized_by_design_applies(
-        SimpleNamespace(
+        FlatNamespace(
             func_name="new", parents=("input_1",), non_tensor_kwargs={}, non_tensor_pos_args=[True]
         )
     )
     # Non-overloaded registry members stay membership-exempt.
     assert uninitialized_by_design_applies(
-        SimpleNamespace(
+        FlatNamespace(
             func_name="empty_like",
             parents=("input_1",),
             non_tensor_kwargs={},

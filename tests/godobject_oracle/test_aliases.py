@@ -219,7 +219,7 @@ def test_multi_output_siblings_share_call_facts_not_identity() -> None:
     assert len(split_ops) >= 2, "split did not produce sibling output ops"
     first, second = split_ops[0], split_ops[1]
     assert first is not second
-    assert first.func_call_id == second.func_call_id
+    assert first.call.call_id == second.call.call_id
     assert first.args_template == second.args_template
     assert first.multi_output_index != second.multi_output_index
     assert first.layer_label != second.layer_label

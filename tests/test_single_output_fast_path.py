@@ -79,7 +79,7 @@ def test_multi_output_keeps_sibling_field_isolation(split_trace: tl.Trace) -> No
     split_layers = [layer for layer in split_trace._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
 
-    first_positions = split_layers[0].parent_arg_positions
+    first_positions = split_layers[0].call.parent_arg_positions
     sibling_positions = split_layers[1].parent_arg_positions
     sibling_positions_before = copy.deepcopy(sibling_positions)
 

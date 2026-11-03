@@ -461,7 +461,7 @@ def test_runnable_preflight_recurses_nested_mixed_mapping_tensor_container() -> 
 
     trace = _capture(CatContainerModel(), torch.randn(2, 3))
     target = next(op for op in trace._layer_list if op.func_name == "cat")
-    original = target.args_template
+    original = target.call.args_template
     assert isinstance(original, CapturedArgTemplate)
     parents = original.args[0]
     assert isinstance(parents, tuple)
@@ -492,7 +492,7 @@ def test_runnable_preflight_keeps_typed_rejection_for_opaque_tensor_container_me
 
     trace = _capture(CatContainerModel(), torch.randn(2, 3))
     target = next(op for op in trace._layer_list if op.func_name == "cat")
-    original = target.args_template
+    original = target.call.args_template
     assert isinstance(original, CapturedArgTemplate)
     parents = original.args[0]
     assert isinstance(parents, tuple)
