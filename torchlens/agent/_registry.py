@@ -255,7 +255,7 @@ def _handle_doctor(args: dict[str, Any]) -> dict[str, Any]:
 def _handle_api_map(args: dict[str, Any]) -> dict[str, Any]:
     """Public-surface index (compact rows or one per-name detail record)."""
 
-    from ._apimap import (
+    from ._apimap import (  # deferred: cycle agent
         API_MAP_SCHEMA,
         capabilities_block,
         compact_rows,
@@ -276,14 +276,14 @@ def _handle_api_map(args: dict[str, Any]) -> dict[str, Any]:
 def _handle_overview(args: dict[str, Any]) -> dict[str, Any]:
     """Manifest-mode (torch-free) or folded-mode structural overview."""
 
-    from ._artifacts import (
+    from ._artifacts import (  # deferred: cycle agent
         artifact_block,
         load_trace,
         read_manifest,
         resolve_artifact_path,
         resolve_digest,
     )
-    from ._overview import (
+    from ._overview import (  # deferred: cycle agent
         OVERVIEW_FOLDED_SCHEMA,
         OVERVIEW_MANIFEST_SCHEMA,
         folded_overview,
@@ -311,7 +311,7 @@ def _handle_dump(args: dict[str, Any]) -> dict[str, Any]:
     """Paged dump views over one loaded trace."""
 
     from ._artifacts import load_trace  # deferred: startup cost
-    from ._overview import DUMP_SCHEMA, dump_view
+    from ._overview import DUMP_SCHEMA, dump_view  # deferred: cycle agent
 
     view = args.get("view", "overview")
     max_rows = _budgets.resolve_limit(
@@ -378,7 +378,7 @@ def _handle_explain(args: dict[str, Any]) -> dict[str, Any]:
     """
 
     from ..report._explain import explain  # deferred: startup cost
-    from ._artifacts import load_trace
+    from ._artifacts import load_trace  # deferred: cycle agent
     from ._overview import honesty_blocks  # deferred: startup cost
 
     log, plan, block = load_trace(args["path"])
@@ -405,7 +405,7 @@ def _handle_query_sites(args: dict[str, Any]) -> dict[str, Any]:
     """Structured site discovery over the full persisted population."""
 
     from ._artifacts import load_trace  # deferred: startup cost
-    from ._query import QUERY_SITES_SCHEMA, query_sites
+    from ._query import QUERY_SITES_SCHEMA, query_sites  # deferred: cycle agent
 
     max_rows = _budgets.resolve_limit(
         args.get("max_rows"), _budgets.DEFAULT_MAX_ROWS, name="max_rows"
@@ -457,7 +457,7 @@ def _handle_payload_stats(args: dict[str, Any]) -> dict[str, Any]:
     """Bounded per-site statistics over saved payloads."""
 
     from ._artifacts import load_trace  # deferred: startup cost
-    from ._stats import PAYLOAD_STATS_SCHEMA, payload_stats_rows
+    from ._stats import PAYLOAD_STATS_SCHEMA, payload_stats_rows  # deferred: cycle agent
 
     max_rows = _budgets.resolve_limit(
         args.get("max_rows"), _budgets.DEFAULT_MAX_ROWS, name="max_rows"
@@ -523,7 +523,7 @@ def _handle_compare(args: dict[str, Any]) -> dict[str, Any]:
     """Two-artifact structural + value comparison."""
 
     from ._artifacts import load_trace  # deferred: startup cost
-    from ._compare import COMPARE_SCHEMA, compare_traces
+    from ._compare import COMPARE_SCHEMA, compare_traces  # deferred: cycle agent
 
     max_rows = _budgets.resolve_limit(
         args.get("max_rows"), _budgets.DEFAULT_MAX_ROWS, name="max_rows"
