@@ -28,7 +28,6 @@ from .._ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
-from .._registry._facet_snapshot import register_facet_snapshot_provider
 from .._selection.selection import _SelectionOperand
 from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 from ._families import family_entries, family_spec
@@ -1595,12 +1594,6 @@ def snapshot(extra_facets: Sequence[RecipeFunc] | None = None) -> FacetRegistryS
         provenance_id=digest.hexdigest()[:16],
         functions=tuple(recipes),
     )
-
-
-# The engine builds every Trace with this snapshot through the basis slot (it never
-# imports this appliance module); registering here replaces the capture door's lazy
-# provider with the direct function once this module is loaded.
-register_facet_snapshot_provider(snapshot)
 
 
 def mark_current_registry_as_builtins() -> None:

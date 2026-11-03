@@ -1119,13 +1119,8 @@ class host_nondeterminism_monitor:
         # resolve on the first wrapped op): an in-window import runs the ``sys.meta_path`` finders'
         # frames, which the frame-reachable inventory walks as roots, so a large
         # graph behind a finder (pytest's assertion rewriter) exhausted the budget.
-        # Higher layers register their own warm-ups (``monitor_state.register_warmup``);
-        # this basis module imports none of them.
-        try:
-            warm_lazy_torch_imports()  # first, so a failed warm below cannot skip it
-        except Exception:
-            pass
-        for warm in tuple(monitor_state._WARMUPS):
+        # Higher layers register their warm-ups (monitor_state.register_warmup); none is imported here.
+        for warm in (warm_lazy_torch_imports, *monitor_state._WARMUPS):  # torch's own first
             try:
                 warm()
             except Exception:
