@@ -594,6 +594,7 @@ def _capture_rules_problem(rules: Any) -> str | None:
         "metadata",
         "selection_recipe",
     }
+    # Keep the closed wire-schema checks together so every refusal is reviewed in one place.
     for index, rule in enumerate(rules):
         if not isinstance(rule, dict) or set(rule) != {"index", "selector", "edit"}:
             return f"capture_rules[{index}] has unknown or missing keys"
@@ -608,6 +609,14 @@ def _capture_rules_problem(rules: Any) -> str | None:
             return f"capture_rules[{index}] has an invalid selector kind"
         if not isinstance(edit, dict) or set(edit) != edit_keys or edit["portability"] != "builtin":
             return f"capture_rules[{index}] requires a built-in edit"
+        if (
+            not isinstance(edit["args"], list)
+            or not isinstance(edit["kwargs"], dict)
+            or not isinstance(edit["metadata"], dict)
+            or type(edit["is_batch_independent"]) is not bool
+            or type(edit["is_compatible_with_append"]) is not bool
+        ):
+            return f"capture_rules[{index}] has invalid edit field types"
     return None
 
 

@@ -329,6 +329,10 @@ def test_forged_capture_rule_schema_refuses(
             recipe["capture_rules"][0]["unknown"] = True
         elif fault == "bad_capture_index":
             recipe["capture_rules"][0]["index"] = True
+        elif fault == "bad_capture_args":
+            recipe["capture_rules"][0]["edit"]["args"] = 1
+        elif fault == "bad_capture_slice":
+            recipe["capture_rules"][0]["selector"]["slice_spec"] = {"unknown": 1}
         else:
             recipe["capture_rules"] = {}
 

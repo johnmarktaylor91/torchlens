@@ -23,6 +23,7 @@ from .._io.format3.recipe import (
     NestedEdit,
     recipe_placeholders,
 )
+from .._io.format_errors import ArtifactError
 from .._ir.selector_eval import normalize_selector_like
 from .errors import ControlFlowDivergenceError, LiveModeLabelError
 from .helpers import rebuild_builtin_helper
@@ -378,13 +379,7 @@ def spec_from_recipe(recipe: Mapping[str, Any]) -> InterventionSpec:
     spec = InterventionSpec(
         metadata={
             "_capture_rules": [
-                (
-                    normalize_selector_like(
-                        _target(rule["selector"]), lifecycle="live"
-                    ).to_target_spec(),
-                    _edit(rule["edit"]),
-                )
-                for rule in recipe.get("capture_rules", ())
+                _capture_rule_from_recipe(rule) for rule in recipe.get("capture_rules", ())
             ]
         }
     )
@@ -407,3 +402,18 @@ def spec_from_recipe(recipe: Mapping[str, Any]) -> InterventionSpec:
             )
         )
     return spec
+
+
+def _capture_rule_from_recipe(rule: Mapping[str, Any]) -> tuple[TargetSpec, Edit]:
+    """Build one original predicate through closed registries, refusing malformed payloads."""
+
+    try:
+        target = normalize_selector_like(_target(rule["selector"]), lifecycle="live")
+        edit = _edit(rule["edit"])
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise ArtifactError(
+            "An original capture rule has malformed selector or edit fields.",
+            code="manifest_schema_invalid",
+            remedy="save the trace again; do not hand-edit its intervention recipe",
+        ) from exc
+    return target.to_target_spec(), edit
