@@ -66,7 +66,7 @@ def test_cone_preflight_unarmed_capture_reports_not_replay_ready():
     torch.manual_seed(0)
     model = ReusedReluNet()
     trace = tl.trace(model, torch.rand(1, 2, 3, 3))
-    plan = cone_preflight(trace, trace["relu_1_2"].ops)
+    plan = cone_preflight(trace, trace.layers["relu_1_2"].ops)
     assert plan["replay_ready"] is False
 
 

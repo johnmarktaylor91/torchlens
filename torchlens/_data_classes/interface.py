@@ -111,11 +111,15 @@ def _names_one_thing(selector: Any) -> bool:
     selector each name one thing; every other selector names a set.
     """
 
+    from .._constants import PASS_TOKEN_ALL, split_pass_token
     from .._selection.selectors import FacetSelector
 
     if isinstance(selector, TargetSpec | FrozenTargetSpec | FacetSelector):
         return True
-    return getattr(selector, "selector_kind", None) == "label"
+    if getattr(selector, "selector_kind", None) != "label":
+        return False
+    token = split_pass_token(str(getattr(selector, "selector_value", "")))
+    return token is None or token[1] != PASS_TOKEN_ALL
 
 
 def _getitem_selector(self: "Trace", ix: Any) -> Any:
@@ -169,21 +173,29 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     Lookup cascade:
     1. slice -> list slice of layer_list
     2. int -> Op by 0-based ordinal position
-    3. string -> ops, module_calls, layers, modules, params, buffers, grad_fns
-    4. alternate Op lookup keys
-    5. case-insensitive exact match against alternate Op lookup keys
-    6. substring match against alternate Op lookup keys
-    7. fallback: KeyError with contextual help message
+    3. string ending in ``:last`` or ``:all`` -> the last pass Op, or the
+       Selection of every pass, through the label selector
+    4. layer label -> its Op (single pass) or the multi-pass teaching refusal
+    5. string -> ops, module_calls, modules, params, buffers, grad_fns
+    6. alternate Op lookup keys
+    7. case-insensitive exact match against alternate Op lookup keys
+    8. substring match against alternate Op lookup keys
+    9. fallback: KeyError with contextual help message
+
+    A string never returns a ``Layer``: ``trace.layers[...]`` is the Layer
+    door, and a bare multi-pass layer label refuses with the spellings that
+    name one pass or every pass.
 
     Args:
         ix: int (ordinal), slice, or str (label/address/substring).
 
     Returns:
-        Op, Layer, Module, or ModuleCall.
+        Op, Selection, Module, ModuleCall, Param, Buffer or GradFn.
 
     Raises:
         KeyError: No match found.
-        ValueError: Ambiguous substring match or invalid index.
+        AmbiguousOpLookupError: Bare multi-pass layer label or ambiguous substring.
+        ValueError: Invalid index.
     """
     from .._selection.selection import Selector
 
@@ -207,8 +219,11 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         from .._trace_selector_helpers import canonical_module_site_key
 
         ix = canonical_module_site_key(self, ix) or ix
+        tokened = _resolve_pass_token(self, ix)
+        if tokened is not None:
+            return tokened
         if ix in self._layer_logs:
-            return self._layer_logs[ix]
+            return _layer_label_op(self, ix)
 
         ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
         if ix in ambiguous_lookup_keys:
@@ -220,7 +235,6 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         for accessor in (
             self.ops,
             self.module_calls,
-            self.layers,
             self.modules,
             self.params,
             self.buffers,
@@ -235,7 +249,6 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         for accessor in (
             self.ops,
             self.module_calls,
-            self.layers,
             self.modules,
             self.params,
             self.buffers,
@@ -286,6 +299,48 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     # Step 7: nothing matched — give a helpful error
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
     raise KeyError(ix)
+
+
+def _resolve_pass_token(self: "Trace", ix: str) -> Any:
+    """Resolve ``label:last`` / ``label:all`` through the label selector, else ``None``.
+
+    ``label:last`` names the final pass of a layer and returns that Op;
+    ``label:all`` names every pass and returns the Selection. A spelling whose
+    base is no layer of this trace returns ``None`` so the ordinary cascade
+    answers (and refuses) as it would for any unknown key.
+    """
+
+    from .._constants import split_pass_token
+    from .._selection.selectors import LabelSelector
+
+    token = split_pass_token(ix)
+    if token is None or not self.ops.resolve_all(token[0]):
+        return None
+    return _getitem_selector(self, LabelSelector(ix))
+
+
+def _layer_label_op(self: "Trace", layer_label: str) -> Any:
+    """Return the Op a layer label names, or refuse a bare multi-pass label.
+
+    Raises
+    ------
+    AmbiguousOpLookupError
+        The layer ran several passes, so the bare label names none of them;
+        the message teaches ``label:N``, ``label:last``, ``label:all`` and
+        ``trace.layers[label]``.
+    """
+
+    from .._selection._site_refusals import multipass_bare_label_message
+
+    ops = self.ops.resolve_all(layer_label)
+    if len(ops) == 1:
+        return ops[0]
+    pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in ops)
+    raise AmbiguousOpLookupError(
+        multipass_bare_label_message(layer_label, pass_indices),
+        layer_label=layer_label,
+        pass_indices=tuple(pass_indices),
+    )
 
 
 #: Elision rungs for the bounded execution log (F10; lovely matrix row):

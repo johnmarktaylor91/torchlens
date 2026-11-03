@@ -21,7 +21,7 @@ import functools
 import sys
 import types
 import warnings
-from typing import TypeGuard
+from typing import Any, TypeGuard
 
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
@@ -1443,3 +1443,49 @@ def get_orig_torch_funcs(*, include_torchvision: bool = True) -> list[tuple[str,
     if not include_torchvision:
         return [*ORIG_TORCH_FUNCS, *_get_torch_submodule_alias_funcs()]
     return [*ORIG_TORCH_FUNCS, *_get_torchvision_funcs(), *_get_torch_submodule_alias_funcs()]
+
+
+#: Pass tokens a label may end in besides a 1-based pass number: ``:last`` names
+#: the final pass of a layer, ``:all`` every pass (a set spelling).
+PASS_TOKEN_LAST = "last"
+PASS_TOKEN_ALL = "all"
+_PASS_TOKENS = (PASS_TOKEN_LAST, PASS_TOKEN_ALL)
+
+
+def split_pass_token(label: str) -> tuple[str, str] | None:
+    """Split ``layer_label:last`` / ``layer_label:all`` into ``(layer_label, token)``.
+
+    Parameters
+    ----------
+    label:
+        Label spelling.
+
+    Returns
+    -------
+    tuple[str, str] | None
+        The base label and token, or ``None`` when the spelling ends in neither token.
+    """
+
+    base, sep, token = label.rpartition(":")
+    if not sep or token not in _PASS_TOKENS or not base:
+        return None
+    return base, token
+
+
+def pass_token_labels(subject: Any) -> tuple[str, ...]:
+    """Return the ``:all`` and ``:last`` spellings a finished op answers to.
+
+    Every pass of a layer answers to ``layer_label:all``; the pass whose number
+    equals the layer's pass count answers to ``layer_label:last`` as well.
+    Subjects without a layer label (grad-fn nodes) answer to neither.
+    """
+
+    layer_label = getattr(subject, "layer_label", None)
+    if not isinstance(layer_label, str):
+        return ()
+    spellings = [f"{layer_label}:{PASS_TOKEN_ALL}"]
+    pass_number = getattr(subject, "pass_number", None) or 1
+    num_passes = getattr(subject, "num_passes", None) or 1
+    if pass_number == num_passes:
+        spellings.append(f"{layer_label}:{PASS_TOKEN_LAST}")
+    return tuple(spellings)

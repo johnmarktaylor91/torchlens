@@ -94,16 +94,67 @@ def test_ops_accessor_returns_op_for_pass_label() -> None:
     assert trace.ops["linear_1_1:1"].label == "linear_1_1:1"
 
 
-def test_trace_getitem_layer_label_always_returns_layer() -> None:
-    """Convenience layer-label lookup is deterministic across pass counts."""
+def test_trace_getitem_never_returns_a_layer() -> None:
+    """``trace[...]`` returns Ops; Layers come only from ``trace.layers[...]`` (walk access RC-260)."""
 
     trace = _strict_trace()
 
-    assert isinstance(trace["mul_1_2"], Layer)
-    assert trace["mul_1_2"] is trace.layers["mul_1_2"]
-    assert isinstance(trace["linear_1_1"], Layer)
-    assert trace["linear_1_1"] is trace.layers["linear_1_1"]
+    assert isinstance(trace["mul_1_2"], Op)
+    assert trace["mul_1_2"] is trace.ops["mul_1_2"]
     assert isinstance(trace["linear_1_1:1"], Op)
+    assert isinstance(trace["MUL_1_2"], Op)
+    for label in trace.layer_labels:
+        if trace.layers[label].num_passes == 1:
+            assert not isinstance(trace[label], Layer)
+    with pytest.raises(AmbiguousOpLookupError) as info:
+        trace["linear_1_1"]
+    message = str(info.value)
+    assert "trace.layers['linear_1_1']" in message
+    assert "'linear_1_1:last'" in message and "'linear_1_1:all'" in message
+    assert "'linear_1_1:1'" in message and "'linear_1_1:2'" in message
+    assert isinstance(trace.layers["linear_1_1"], Layer)
+
+
+def test_last_pass_token_names_the_final_pass() -> None:
+    """``label:last`` resolves to the final pass Op on every door; passes stay 1-based."""
+
+    trace = _strict_trace()
+    last = trace.ops["linear_1_1:2"]
+
+    assert trace["linear_1_1:last"] is last
+    assert trace.ops["linear_1_1:last"] is last
+    assert trace[tl.label("linear_1_1:last")] is last
+    assert trace["mul_1_2:last"] is trace.ops["mul_1_2"]
+    assert trace.layers["linear_1_1:last"] is trace.layers["linear_1_1"]
+    assert "linear_1_1:last" in trace.ops
+    assert trace[tl.label("linear_1_1:last")].pass_number == 2
+    with pytest.raises(KeyError):
+        trace["linear_1_1:-1"]
+    with pytest.raises(KeyError):
+        trace.layers["linear_1_1:0"]
+    with pytest.raises(KeyError):
+        trace["linear_1_1:3"]
+
+
+def test_all_pass_token_selects_every_pass() -> None:
+    """``label:all`` is the set spelling: a Selection of every pass of the layer."""
+
+    trace = _strict_trace()
+
+    every = trace["linear_1_1:all"]
+    assert isinstance(every, tl.Selection)
+    assert every.labels == ("linear_1_1:1", "linear_1_1:2")
+    assert trace[tl.label("linear_1_1:all")].labels == every.labels
+    assert every.labels == trace.layers["linear_1_1"].__selection__().labels
+    single = trace["mul_1_2:all"]
+    assert isinstance(single, tl.Selection)
+    assert single.labels == ("mul_1_2",)
+    assert trace.layers["linear_1_1:all"] is trace.layers["linear_1_1"]
+    assert "linear_1_1:all" not in trace.ops
+    with pytest.raises(KeyError, match="resolve_all"):
+        trace.ops["linear_1_1:all"]
+    with pytest.raises(KeyError):
+        trace["no_such_layer:all"]
 
 
 def test_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:

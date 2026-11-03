@@ -64,8 +64,8 @@ def test_live_door_matches_replay_door() -> None:
     # without the multi-match disclosure warning the suite escalates.
     fork.do(
         [
-            (log["relu_1_2"].__selection__(), tl.patch_from(plan)),
-            (log["relu_2_4"].__selection__(), tl.patch_from(plan)),
+            (log.layers["relu_1_2"].__selection__(), tl.patch_from(plan)),
+            (log.layers["relu_2_4"].__selection__(), tl.patch_from(plan)),
         ]
     )
     replay = _coordinates(fork)

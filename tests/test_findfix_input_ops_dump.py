@@ -31,7 +31,7 @@ from torchlens.agent import call_tool
 def saved_loop(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[str]]:
     with legacy_structural_grouping():
         trace, inputs = _loop_trace()
-    assert trace["input_1"].num_passes == 2, "the fixture must fold its inputs"
+    assert trace.layers["input_1"].num_passes == 2, "the fixture must fold its inputs"
     expected = [f"{trace['input_1'].layer_label}:{index}" for index in (1, 2)]
     for label, value in zip(expected, inputs, strict=True):
         assert torch.equal(trace[label].out, value)

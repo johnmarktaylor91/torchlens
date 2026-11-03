@@ -87,7 +87,7 @@ def test_loop_inputs_fold_into_one_two_pass_layer() -> None:
 
     trace, _ = _loop_trace()
     assert trace.input_layers == ["input_1", "input_1"]
-    assert trace["input_1"].num_passes == 2
+    assert trace.layers["input_1"].num_passes == 2
 
 
 def test_input_ops_lists_each_pass_as_an_op_in_argument_order() -> None:

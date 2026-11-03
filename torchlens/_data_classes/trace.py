@@ -1261,11 +1261,17 @@ class Trace(TraceLike):
         spec, a facet selector) must match exactly one and returns that
         record. During the pass, the raw barcode lookup applies.
 
+        A string never returns a ``Layer``: ``trace.layers[...]`` is the Layer
+        door. A layer label returns its Op when the layer ran once and refuses
+        a bare multi-pass label; ``label:N`` names pass ``N`` (1-based),
+        ``label:last`` the final pass, and ``label:all`` every pass as a
+        ``Selection``.
+
         Args:
             ix: index, slice, label, address, substring or selector.
 
         Returns:
-            Op, Layer, Module, ModuleCall, Param, Buffer, GradFn or Selection.
+            Op, Selection, Module, ModuleCall, Param, Buffer or GradFn.
         """
         if self._tracing_finished:
             return _getitem_after_pass(self, ix)

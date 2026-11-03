@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from .._constants import _is_suffixed_raw_label
+from .._constants import PASS_TOKEN_ALL, _is_suffixed_raw_label, split_pass_token
 from .._errors import AmbiguousOpLookupError
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
@@ -434,7 +434,19 @@ class TraceOpAccessor(Accessor[Op]):
         _refuse_colliding_label(key, getattr(self, "_duplicate_labels", {}).get(key))
         if key in self._dict:
             return self._dict[key]
-        return None
+        token = split_pass_token(key)
+        if token is None:
+            return None
+        passes = [op for op in self._list if token[0] in {op.layer_label, op.short_layer_label}]
+        if not passes:
+            return None
+        if token[1] == PASS_TOKEN_ALL:
+            raise KeyError(
+                f"{key!r} names every pass of {token[0]!r}, which an Op collection cannot "
+                f"return as one record; trace[{key!r}] gives the Selection and "
+                f"trace.ops.resolve_all({token[0]!r}) the list of Ops."
+            )
+        return max(passes, key=lambda op: int(getattr(op, "pass_number", 1) or 1))
 
     def resolve_all(self, key: str) -> list[Op]:
         """Resolve a label to every Op it denotes.
