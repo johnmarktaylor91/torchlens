@@ -905,7 +905,7 @@ torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boun
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	63
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	75
 torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	144
-torchlens/backends/torch/_tl.py	1784
+torchlens/backends/torch/_tl.py	1749
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator	98
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator.wrapped_direct	73
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator	112
@@ -933,7 +933,7 @@ torchlens/backends/torch/backward.py::install_autograd_wrappers	103
 torchlens/backends/torch/backward.py::log_recording_backward	84
 torchlens/backends/torch/belt.py::_derive	72
 torchlens/backends/torch/belt.py::sweep_stale_belt_references	72
-torchlens/backends/torch/buffer_writes.py	1787
+torchlens/backends/torch/buffer_writes.py	1772
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61
