@@ -49,6 +49,27 @@ def join_result_for(trace: Any) -> KinetoJoinResult | None:
         return None
 
 
+def require_join_result(trace: Any, argument: str) -> Any:
+    """Return the trace's Kineto join result or refuse typed (no silent zeros)."""
+
+    result = join_result_for(trace)
+    if result is None:
+        from ._errors import ProfilerSessionError
+
+        raise ProfilerSessionError(
+            f"{argument}='device_time' is unavailable: this trace carries no "
+            "Kineto join (device time exists only for captures run under an "
+            "owned profiler session).",
+            code="device_time_unavailable",
+            remedy=(
+                "capture through torchlens.report.kernel_profile on a "
+                "CUDA host, then draw the returned result.trace"
+            ),
+        )
+    require_availability(result, needs=f"{argument}='device_time'")
+    return result
+
+
 def register_join_result(trace: Any, result: KinetoJoinResult) -> None:
     """Bind one trace's session-time join result (weak, never persisted)."""
 
