@@ -316,6 +316,7 @@ def collapsed_box_scope(
         # Rolled: the surfaced-exit predicate is per layer, so every pass of
         # a surfaced layer renders outside the box; drop the layer base.
         def base(label: str) -> str:
+            """Return the layer label for ``label``, without its pass suffix when rolled."""
             return label.rsplit(":", 1)[0] if rolled else label
 
         surfaced = {
