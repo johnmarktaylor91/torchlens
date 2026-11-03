@@ -24,6 +24,17 @@ class MechInterpError(TorchLensError, RuntimeError):
     Contracted refusals carry a stable ``fields["code"]`` and a structured
     ``fields["remedy"]``; the ``RuntimeError`` lineage keeps kit refusals
     catchable alongside the semantic package's existing error classes.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.mechinterp.residual_decomposition(trace)
+    ... except MechInterpError as err:
+    ...     print(err.fields["code"])
+    mi_target_unresolvable
+    >>> issubclass(MechInterpError, tl.errors.TorchLensError)
+    True
     """
 
 

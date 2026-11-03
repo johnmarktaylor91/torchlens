@@ -43,6 +43,19 @@ def apply_norm_scale(
         ``"component"`` -- the per-component RECOMPUTE mode, which is NOT
         additive: the row-sum identity is skipped, the receipt says so, and
         DLA refuses such stacks. TLens ``apply_ln_to_stack``.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> dec = tl.mechinterp.residual_decomposition(trace)
+    >>> len(tl.mechinterp.apply_norm_scale(trace, dec)) == len(dec)
+    True
     """
 
     if scale not in ("frozen", "component"):
@@ -155,6 +168,18 @@ def stack_facet(trace: Any, name: str) -> ComponentStack:
 
     Rows read the facet per module in module order; the stack has no summing
     claim (``identity_receipt`` says ``gathered_reads``) and no target.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> len(tl.mechinterp.stack_facet(trace, "q"))
+    2
     """
 
     from ._heads import _facet_keys_or_none
@@ -213,6 +238,18 @@ def full_decomposition(
     survive the splice (head summation re-associates), so the identity
     receipt carries the tolerance-checked form; DLA's own identity still
     verifies end-to-end.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> tuple(tl.mechinterp.full_decomposition(trace).sum().shape)
+    (1, 6, 8)
     """
 
     base = residual_decomposition(trace, target, positions=None)
