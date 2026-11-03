@@ -5,6 +5,16 @@ tinygrad preview backend: UOp-snapshot capture of an eager forward. It fills the
 `../_protocols/tinygrad.py` are the capability truth (contract: `../AGENTS.md`). This is the smallest
 preview: `backend.py` plus registry-backed `capabilities.py` only.
 
+## _uop_graph.py
+- The UOp walk helpers `backend.py` uses (file cap). `_data_flow_uops` decides
+  which UOps become ops: only values that reach an output as data, walked from
+  the outputs through materializable UOps and stopped at the capture's input
+  UOps. A movement op's scalar shape `CONST`s and an input's storage `BUFFER`
+  are not data of the forward and are never recorded (an unconsumed constant
+  failed `c1_constant_parents_recorded`). Regenerate the conformance
+  inventories (`tests/conformance/_rosters/_tinygrad_inventories.py` and the
+  probe rows in `tests/conformance/_preview_adapters.py`) when this rule moves.
+
 ## backend.py
 - `TinygradBackend.capture_trace()` is the standalone entry: it runs the
   callable under `_observe_tensor_ops` (Tensor-API observation building
