@@ -48,18 +48,18 @@ class OpAtenMixin:
 
     @property
     def gpu_kernels(self) -> tuple[KernelLaunch, ...]:
-        """Return the deduplicated union of device events for one user Op.
+        """The GPU kernel launches this op's ATen calls made, deduplicated across those calls.
 
-        Parameters
-        ----------
-        op
-            User-level Op facade.
+        The union of ``AtenOp.gpu_kernels`` over the rows in ``aten_ops``: kernels
+        matched to each ATen call by the profiler's correlation id, each launch
+        listed once. When kernel telemetry was off for the trace, the value is one
+        row with ``attribution_status="unavailable"``, never an empty tuple.
+        Reading it needs the optional kernel-telemetry adapter.
 
         Returns
         -------
         tuple[KernelLaunch, ...]
-            Correlated device rows. A single ``unavailable`` disclosure is
-            returned when no telemetry session exists.
+            The matched kernel launches, or one ``unavailable`` row.
         """
 
         telemetry = importlib.import_module(_KERNEL_TELEMETRY_MODULE)
