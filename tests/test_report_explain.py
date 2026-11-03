@@ -251,7 +251,7 @@ def test_explain_surfaces_halted_capture_status() -> None:
 
     from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert trace.outcome.status.value == "stopped"
 
     assert trace.to_agent_json()["capture"]["capture_status"] == "stopped"

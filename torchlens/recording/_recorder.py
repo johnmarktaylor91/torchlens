@@ -23,18 +23,23 @@ from .._capture.projections import (
     _empty_recording,
     active_recording_state,
 )
-from .._capture.stages import InternalCaptureConfig
 from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
-from .._errors import CaptureNotActiveError, KeywordConflictError, original_exception
+from .._errors import CaptureNotActiveError, original_exception
+from .._output_slot import (
+    forward_failed as output_forward_failed,
+    returned as output_returned,
+    stopped as output_stopped,
+)
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
-from ..options import StorageOptions
-from ..types import _ActivationPostfunc, _GradientPostfunc
+from ..options import CaptureOptions, StorageOptions
+from ._capture_door import _unfold_capture_options
 from ._halt import StopSignal
+from ._recorder_config import _configure_predicate_capture
 from ._recorder_streaming import _rank_prefixed_streaming_options
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
@@ -42,10 +47,10 @@ from .options import (
     ForwardErrorMode,
     GradPredicateFn,
     HaltPredicateFn,
-    LookbackPayloadPolicy,
     PredicateErrorMode,
     PredicateFn,
-    merge_recording_options,
+    _RecordingConfig,
+    _resolve_recording_config,
 )
 from .types import CaptureSpec, Recording, _mark_recording_halted
 
@@ -203,26 +208,16 @@ class Recorder:
         default_op: bool | CaptureSpec | MissingType = MISSING,
         default_module: bool | CaptureSpec | MissingType = MISSING,
         history_size: int | MissingType = MISSING,
-        lookback: int | MissingType = MISSING,
-        lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
         include_source_events: bool | MissingType = MISSING,
         intervene: InterventionPredicate | None | MissingType = MISSING,
-        halt: HaltPredicateFn | None | MissingType = MISSING,
+        stop_after: HaltPredicateFn | None | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         on_forward_error: ForwardErrorMode | MissingType = MISSING,
         storage: StorageOptions | None | MissingType = MISSING,
-        streaming: StorageOptions | None | MissingType = MISSING,
-        seed: int | None | MissingType = MISSING,
-        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
-        save_raw_activations: bool | MissingType = MISSING,
-        save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
-        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
-        save_raw_grads: bool | MissingType = MISSING,
-        backward_ready: bool = False,
         narrate: Any | None | MissingType = MISSING,
-        detach_saved_activations: bool | MissingType = MISSING,
+        capture: CaptureOptions | None = None,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -230,46 +225,50 @@ class Recorder:
         ----------
         model:
             PyTorch module to record.
-        save, default_op, default_module, history_size,
-        lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
-        on_predicate_error, storage, streaming, seed:
+        save, default_op, default_module, history_size, include_source_events,
+        max_predicate_failures, on_predicate_error, storage:
             Fastlog recording options.
         on_forward_error:
             Controls failed-forward handling: ``"raise"`` raises the capture's ``TraceCaptureError``;
             ``"attach_partial"`` also hangs the failed partial ``Recording`` on it as
             ``exc.partial_recording`` before re-raising. ``"return_partial"`` returns ``None`` from
             the failed ``log()`` and exposes the failed partial on ``recorder.recording``.
-        halt:
+        stop_after:
             Optional predicate evaluated after each event's save decision. Returning
-            ``True`` stops the active forward pass and marks the recording halted.
-        activation_transform:
-            Optional callable applied to each retained out copy after
-            dtype/device transforms. The callable runs under ``pause_logging``
-            and must return a ``torch.Tensor``. Errors are wrapped in
-            :class:`torchlens.UserTransformError`.
-        save_raw_activations:
-            When ``False`` and ``activation_transform`` is set, only the
-            transformed payload is retained on the record. Defaults to
-            ``True`` to mirror the slow path.
-        backward_ready:
-            If True, omitted defaults are promoted to ``CaptureSpec(save_grad=True)``.
-            Gradient hooks are installed only when ``backward_ready=True``,
-            ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``
-            or ``False`` and ``default_grad=False`` do not count); otherwise
-            ``backward()`` refuses, and a forward under ``torch.no_grad()``
+            ``True`` stops the active forward pass and marks the recording stopped.
+        capture:
+            ``tl.options.CaptureOptions`` carrying the capture-time knobs the recorder
+            reads: ``lookback``, ``lookback_payload_policy``, ``seed``,
+            ``activation_transform``, ``save_raw_activations``, ``save_grads``,
+            ``grad_transform``, ``save_raw_grads``, ``backward_ready`` and
+            ``detach_saved_activations``. Any other explicitly set field refuses.
+            ``activation_transform`` runs under ``pause_logging`` and must return a
+            ``torch.Tensor`` (errors are wrapped in :class:`torchlens.UserTransformError`);
+            ``save_raw_activations=False`` with a transform keeps only the transformed
+            payload. ``backward_ready=True`` promotes omitted defaults to
+            ``CaptureSpec(save_grad=True)``; gradient hooks are installed only when
+            ``backward_ready=True``, ``save_grads=`` or ``default_grad=`` is given
+            (``save_grads=None`` or ``False`` and ``default_grad=False`` do not count),
+            otherwise ``backward()`` refuses and a forward under ``torch.no_grad()``
             or ``torch.inference_mode()`` implies ``inference_only=True``.
-        detach_saved_activations:
-            DOCUMENTED-UNSTABLE. Whether retained activations are detached from
-            the autograd graph. Defaults to ``True`` (detached copies). ``False``
-            keeps graph-connected copies wherever the recorded tensor carries
-            autograd history, so a loss built from them backpropagates into the
-            model; unlike ``CaptureSpec(save_grad=True)`` it does not refuse
-            integer tensors or detached transforms. A spec with
-            ``save_grad=True`` stays attached either way, and disk payloads are
-            always detached. ``backward_ready=True`` refuses an explicit
-            ``True``.
+            ``detach_saved_activations`` (DOCUMENTED-UNSTABLE) defaults to ``True``;
+            ``False`` keeps graph-connected copies wherever the recorded tensor carries
+            autograd history, so a loss built from them backpropagates into the model;
+            a spec with ``save_grad=True`` stays attached either way, disk payloads are
+            always detached, and ``backward_ready=True`` refuses an explicit ``True``.
         """
 
+        flat = _unfold_capture_options(capture, api_name="torchlens.recording.Recorder")
+        lookback = flat["lookback"]
+        lookback_payload_policy = flat["lookback_payload_policy"]
+        seed = flat["seed"]
+        activation_transform = flat["activation_transform"]
+        save_raw_activations = flat["save_raw_activations"]
+        save_grads = flat["save_grads"]
+        grad_transform = flat["grad_transform"]
+        save_raw_grads = flat["save_raw_grads"]
+        backward_ready = flat["backward_ready"]
+        detach_saved_activations = flat["detach_saved_activations"]
         reject_compiled_model(model, api_name="torchlens.recording.Recorder")
         # Deferred: _training_validation sits above fastlog in the layer map.
         from .._training_validation import validate_training_compatibility
@@ -281,16 +280,7 @@ class Recorder:
                 detach_saved_activations if isinstance(detach_saved_activations, bool) else None
             ),
         )
-        storage_supplied = storage is not MISSING and storage is not None
-        streaming_supplied = streaming is not MISSING and streaming is not None
-        if storage_supplied and streaming_supplied:
-            raise KeywordConflictError(
-                "Do not pass both `storage` and `streaming`",
-                code="storage_argument_conflict",
-                remedy="prefer storage=, or remove one of the two arguments",
-            )
-        resolved_streaming = storage if storage_supplied else streaming
-        unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, resolved_streaming)
+        unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, storage)
         default_op = _resolve_train_mode_default(
             field_name="default_op",
             value=default_op,
@@ -317,8 +307,7 @@ class Recorder:
             from .._snoop import normalize_echo
 
             echo_normalized = normalize_echo(narrate)
-        self.options = merge_recording_options(
-            recording=None,
+        self.options: _RecordingConfig = _resolve_recording_config(
             keep_op=save,
             default_op=default_op,
             default_module=default_module,
@@ -327,7 +316,7 @@ class Recorder:
             lookback_payload_policy=lookback_payload_policy,
             include_source_events=include_source_events,
             intervene=intervene,
-            halt=halt,
+            halt=stop_after,
             max_predicate_failures=max_predicate_failures,
             on_predicate_error=on_predicate_error,
             on_forward_error=on_forward_error,
@@ -339,7 +328,7 @@ class Recorder:
             default_grad=default_grad,
             grad_transform=grad_transform,
             save_raw_grads=save_raw_grads,
-            narrate=echo_normalized if echo_normalized is not None else MISSING,
+            echo=echo_normalized,
             detach_saved_activations=detach_saved_activations,
         )
         validate_recording_options(self.options)
@@ -505,14 +494,7 @@ class Recorder:
             inference_only=inference_only,
             inference_only_implied=inference_only,
         )
-        trace._capture_config = InternalCaptureConfig(
-            capture_mode="predicate",
-            layers_to_save=[],
-            grad_layers_to_save=[],
-            random_seed=self.options.seed,
-            postprocess=False,
-            stop=trace._stop_directive,
-        )
+        _configure_predicate_capture(trace, self.options)
         self._reset_state_for_pass(sample_id=sample_id)
         if self._echo_session is not None:
             self._echo_session.reset_pass(self._next_pass_index)
@@ -554,6 +536,7 @@ class Recorder:
             if self._echo_session is not None:
                 # Halted is not failed: no crash tail, one typed disclosure.
                 self._echo_session.note_line("-- echo: capture halted (not failed) --")
+            object.__setattr__(self._state.recording, "_output", output_stopped(halt_exc.reason))
             output = None
             return output
         except Exception as exc:
@@ -575,6 +558,9 @@ class Recorder:
             partial_build_failed = False
             try:
                 partial = self._mark_recording_failed(trace, original_exception(exc))
+                object.__setattr__(
+                    partial, "_output", output_forward_failed(safe_exception_str(exc))
+                )
                 self._failed = True
                 self._recording = partial
                 if forward_disposition == "attach_partial":
@@ -616,6 +602,7 @@ class Recorder:
             "num_ops",
             max(self._state.recording.num_ops, self._next_pass_index),
         )
+        object.__setattr__(self._state.recording, "_output", output_returned(output))
         return output
 
     def _absorb_pass_events(self, trace: Trace) -> None:
@@ -701,8 +688,7 @@ class Recorder:
             # trusted (matching the historical recovery behavior).
             combined_events.concat(failed_events, lanes=("op_events", "pre_hook_events"))
         self._capture_events = combined_events
-        trace.capture_events = combined_events
-        trace._capture_events = combined_events
+        trace.capture_events = trace._capture_events = combined_events
         self._state.runtime_trace = trace
         session = type("_FastlogCaptureSession", (), {})()
         session.capture_events = self._capture_events
@@ -713,6 +699,7 @@ class Recorder:
         session.captured_run_cores = self._captured_run_cores
         recording = Recording.from_capture_events(session)
         self._stamp_failed_recording(recording, exc)
+        object.__setattr__(recording, "_output", output_forward_failed(safe_exception_str(exc)))
         return recording
 
     def _stamp_failed_recording(self, recording: Recording, exc: BaseException) -> None:

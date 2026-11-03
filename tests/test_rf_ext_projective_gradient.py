@@ -47,7 +47,11 @@ def _trace_model(
         save_grads="all" if save_grads else False,
         capture_tensor_grad_hooks=save_grads,
     )
-    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
     source = next(op for op in trace._layer_list if op.is_input)
     target = next(op for op in trace._layer_list if op.is_output)
     return trace, source, target

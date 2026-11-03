@@ -38,8 +38,7 @@ def _backward_trace() -> tl.Trace:
     trace = tl.trace(
         _Tiny(),
         torch.randn(3, 4),
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.backward(trace.output_ops[0].out.sum())
     return trace
@@ -80,8 +79,7 @@ def test_repeat_fires_get_independent_spans_and_monotone_wall_stamps() -> None:
     trace = tl.trace(
         _Tiny(),
         torch.randn(3, 4),
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     loss = trace.output_ops[0].out.sum()
     trace.backward(loss, retain_graph=True)
@@ -107,8 +105,7 @@ def test_higher_order_backward_pairs_lifo_correctly() -> None:
     trace = tl.trace(
         _Tiny(),
         torch.randn(3, 4),
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     loss = trace.output_ops[0].out.pow(2).sum()
     trace.backward(loss, create_graph=True)
@@ -139,8 +136,7 @@ def test_stale_prehook_entry_never_becomes_a_wrong_positive_span() -> None:
     trace = tl.trace(
         _Tiny(),
         torch.randn(3, 4),
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     # Seed retry debris: a stale keyed entry for a call index that will never
     # match, on every node list minted by the walk. The next real fire must
@@ -169,8 +165,7 @@ def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> N
     trace = tl.trace(
         _Tiny(),
         torch.randn(3, 4),
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     original = backward_mod._register_fire_timing_prehook
 

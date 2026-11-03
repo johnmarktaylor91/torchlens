@@ -342,12 +342,11 @@ def _cases() -> tuple[OracleCase, ...]:
     """
 
     return (
-        OracleCase("none_short_circuit", OracleCNN, (1, 1, 8, 8), {"vis_mode": "none"}),
         OracleCase(
             "cnn_rolled_profiling",
             OracleCNN,
             (1, 1, 8, 8),
-            {"vis_mode": "rolled", "node_mode": "profiling"},
+            {"rolled": True, "node_style": "profiling"},
         ),
         OracleCase(
             "cnn_modes_themes_overlays",
@@ -363,9 +362,9 @@ def _cases() -> tuple[OracleCase, ...]:
                 "node_label_fields": ["shape", "memory"],
                 "direction": "leftright",
                 "order_siblings": False,
-                "vis_edge_overrides": {"color": "#123456"},
-                "vis_grad_edge_overrides": {"color": "#654321"},
-                "vis_module_overrides": {"color": "#abcdef"},
+                "edge_overrides": {"color": "#123456"},
+                "grad_edge_overrides": {"color": "#654321"},
+                "module_overrides": {"color": "#abcdef"},
             },
         ),
         OracleCase(
@@ -374,7 +373,7 @@ def _cases() -> tuple[OracleCase, ...]:
             (1, 4),
             {
                 "module": "encoder",
-                "vis_call_depth": 1,
+                "depth": 1,
                 "show_containers": "labels",
                 "container_max_inline": 1,
                 "show_input_transform_summary": True,
@@ -428,7 +427,7 @@ def _cases() -> tuple[OracleCase, ...]:
                 "collapse_fn": _collapse_small_modules,
                 "node_spec_fn": _node_spec,
                 "collapsed_node_spec_fn": _collapsed_spec,
-                "node_mode": "default",
+                "node_style": "default",
             },
             callback_kind="both",
         ),
@@ -437,9 +436,9 @@ def _cases() -> tuple[OracleCase, ...]:
             OracleBranch,
             (1, 4),
             {
-                "vis_node_placement": "rank",
+                "layout": "rank",
                 "direction": "topdown",
-                "vis_show_cone": False,
+                "show_cone": False,
                 "node_spec_fn": _attention_style_spec,
                 "show_containers": "labels",
             },
@@ -450,7 +449,7 @@ def _cases() -> tuple[OracleCase, ...]:
             (1, 4),
             {
                 "module": "encoder",
-                "vis_mode": "rolled",
+                "rolled": True,
                 "collapse_fn": _collapse_encoder_modules,
             },
         ),
@@ -458,14 +457,14 @@ def _cases() -> tuple[OracleCase, ...]:
             "intervention_node_mark",
             OracleCNN,
             (1, 1, 8, 8),
-            {"vis_intervention_mode": "node_mark", "vis_show_cone": True},
+            {"intervention_mode": "node_mark", "show_cone": True},
             intervene=True,
         ),
         OracleCase(
             "intervention_as_node",
             OracleCNN,
             (1, 1, 8, 8),
-            {"vis_intervention_mode": "as_node", "vis_show_cone": False},
+            {"intervention_mode": "as_node", "show_cone": False},
             intervene=True,
         ),
         OracleCase(
@@ -844,9 +843,8 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
         kwargs.update(
             {
                 "path": str(tmp_path / case.name),
-                "vis_save_only": True,
                 "file_format": "svg",
-                "vis_renderer": "graphviz",
+                "renderer": "graphviz",
             }
         )
         node_calls: Counter[int] | None = None
@@ -861,10 +859,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
             )
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=DeprecationWarning, message="node_style=.*")
-            source = trace.draw(**kwargs)
-        if source is None:
-            assert case.name == "none_short_circuit"
-            return {"tags": list(case.tags), "dot": None, "structural": None, "callbacks": {}}
+            source = trace.draw(**kwargs).dot
         assert isinstance(source, str)
         source = _normalize_version_dependent_fn(source)
         if node_calls is not None:
@@ -914,12 +909,12 @@ def _capture_backward_combined(tmp_path: Path) -> dict[str, Any]:
         loss = trace[trace.output_layers[0]].out.sum()
         trace.backward(loss)
         _stabilize_backward_identifiers(trace)
-        backward = trace.draw_backward(
-            path=str(tmp_path / "backward"), vis_save_only=True, file_format="svg"
-        )
-        combined = trace.draw_combined(
-            path=str(tmp_path / "combined"), vis_save_only=True, file_format="svg"
-        )
+        backward = trace.draw(
+            graph="backward", rolled=True, path=str(tmp_path / "backward"), file_format="svg"
+        ).dot
+        combined = trace.draw(
+            graph="combined", path=str(tmp_path / "combined"), file_format="svg"
+        ).dot
         return {
             name: {"dot": dot, "structural": _structural_digest(dot)}
             for name, dot in {

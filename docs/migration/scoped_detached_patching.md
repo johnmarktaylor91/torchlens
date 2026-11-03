@@ -56,7 +56,7 @@ repair stale bindings. Coverage is now:
   (for example an `autograd.grad` boundary is a known no-provenance source); no rescue runs.
 - Ineligible captures skip only the RE-RUN, never the disclosure. Every channel the re-run would
   invoke a second time refuses (fail closed): streaming saves, `streaming.on_save` callbacks, disk grad
-  storage, `halt=` predicates, `intervene=` predicates, pre-attached `hooks=`, and the
+  storage, `stop_after=` predicates, `intervene=` predicates, pre-attached `hooks=`, and the
   `activation_transform`, `grad_transform`, and `output_transform` callables. A live escape
   signal on such a capture still settles `capture_verified=False` with reason
   `"escape_rescue_unrecovered"` (`skipped_reason == "rescue_ineligible"`, `forward_runs == 1`)
@@ -93,7 +93,7 @@ repair stale bindings. Coverage is now:
 ## Shadow detector semantics
 
 `escape_detector="shadow"` observes raw callable execution using exact object/code identity. It
-reports a `TorchLensCaptureGapWarning` with the callable, registered export sites, source callsite,
+reports a `tl.errors.CaptureGapWarning` with the callable, registered export sites, source callsite,
 storage hint, short stack, and remediation. Reports also appear in `trace.escape_diagnostics`, and
 a diagnostic now also TRIGGERS the rescue re-run (the report from the primary run is preserved in
 `trace.rescue_rerun["primary_escape_diagnostics"]`).

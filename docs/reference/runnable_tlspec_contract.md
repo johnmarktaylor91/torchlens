@@ -1058,6 +1058,18 @@ instance-state rules it encodes:
   (`tl.types.register_container(..., state_complete=True)`) before an instance carrying extra
   `__dict__` state may save (`registered_container_instance_state` otherwise); the declaration is
   the trusted statement that `unflatten` restores everything `flatten` observed.
+- `distribution` (a `torch.distributions.Distribution` output) records every instance attribute:
+  each tensor is one output leaf at an attribute path (`.loc`, `.scale`; the family's
+  `arg_constraints` parameters first), each nested distribution is a child container
+  (`.base_dist.loc`), literal state (shapes, flags, counts) and identity aliases
+  (`Categorical._param` is `logits`) ride in `aux_data`. Reconstruction allocates the type through
+  its inert `__new__` and restores that instance dictionary, so no `__init__` and no argument
+  validation run and the rebuilt object holds exactly the recorded tensors. Any other attribute (a
+  transform list, an `nn.Parameter`, a callable) flags the node lossy with the losslessness
+  reason `distribution_state_unrecordable:<Type>.<attribute>`; the recorded attributes stay
+  addressable. The load-time recompute re-derives lossiness from the resolved type (a
+  `Distribution` subclass with an inert `__new__`, no recorded name a data descriptor, no
+  metaclass `__call__`), so a forged `lossy_reconstruction=False` cannot bless it.
 - `opaque` is always a typed save refusal.
 
 ## 6. Resolver protocol

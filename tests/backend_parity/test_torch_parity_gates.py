@@ -168,10 +168,10 @@ def _default_trace() -> Trace:
         model,
         x,
         capture=CaptureOptions(
-            layers_to_save="all",
             seed=1701,
             save_args=True,
         ),
+        save="all",
     )
 
 
@@ -204,11 +204,11 @@ def _backward_ready_trace() -> Trace:
         model,
         x,
         capture=CaptureOptions(
-            layers_to_save="all",
             save_grads="all",
             backward_ready=True,
             seed=1701,
         ),
+        save="all",
     )
     trace.backward(trace[trace.output_layers[0]].out.sum())
     return trace

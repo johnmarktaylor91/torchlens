@@ -794,7 +794,7 @@ class SaveBudget:
             "    - keep per-op statistics only (one Spine per op, no payload): "
             "tl.trace(model, x, save='stats'), read with tl.stats.site_stats(trace)\n"
             "    - keep metadata only: "
-            "capture=tl.options.CaptureOptions(layers_to_save='none') "
+            "save='none' "
             "(the graph is still captured)\n"
             "    - raise or lift the budget deliberately: "
             "capture=tl.options.CaptureOptions(save_budget=<bytes|fraction>), or "
@@ -872,7 +872,7 @@ def _retained_storage_identities(tensor: RetainedPayload) -> list[tuple[tuple[An
     with pause_logging():
         try:
             if tensor.layout is not torch.strided:
-                from ._utils.tensor_utils import sparse_component_tensors
+                from ._utils._sparse_parts import sparse_component_tensors
 
                 device = str(tensor.device)
                 return [

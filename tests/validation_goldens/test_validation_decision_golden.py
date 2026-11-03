@@ -463,13 +463,13 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     torch.manual_seed(11)
     ff = TinyFeedForward().eval()
     x_ff = torch.randn(2, 4)
-    full_capture = CaptureOptions(layers_to_save="all", save_args=True)
-    ff_trace = tl.trace(ff, x_ff, capture=full_capture)
+    full_capture = CaptureOptions(save_args=True)
+    ff_trace = tl.trace(ff, x_ff, capture=full_capture, save="all")
 
     torch.manual_seed(12)
     bn = TinyBatchNorm().eval()
     x_bn = torch.randn(3, 4)
-    bn_trace = tl.trace(bn, x_bn, capture=full_capture)
+    bn_trace = tl.trace(bn, x_bn, capture=full_capture, save="all")
 
     torch.manual_seed(13)
     recurrent = TinyRecurrent().eval()
@@ -478,16 +478,16 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         recurrent,
         x_recurrent,
         capture=CaptureOptions(
-            layers_to_save="all",
             save_args=True,
             seed=13,
         ),
+        save="all",
     )
 
     torch.manual_seed(14)
     intervention = TinyIntervention().eval()
     x_intervention = torch.randn(2, 3)
-    clean = tl.trace(intervention, x_intervention, capture=full_capture)
+    clean = tl.trace(intervention, x_intervention, capture=full_capture, save="all")
     edited = clean.fork("zero_relu")
     relu_pass = next(layer for layer in edited._layer_list if layer.func_name == "relu")
     edited.do(
@@ -500,12 +500,12 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     torch.manual_seed(15)
     empty_like = TinyEmptyLike().eval()
     x_empty = torch.randn(2, 3)
-    empty_trace = tl.trace(empty_like, x_empty, capture=full_capture)
+    empty_trace = tl.trace(empty_like, x_empty, capture=full_capture, save="all")
 
     torch.manual_seed(16)
     corrupted = TinyAddRelu().eval()
     x_corrupted = torch.randn(2, 3)
-    corrupted_trace = tl.trace(corrupted, x_corrupted, capture=full_capture)
+    corrupted_trace = tl.trace(corrupted, x_corrupted, capture=full_capture, save="all")
     _first_op_with_func(corrupted_trace, "__add__").func = _wrong_add
 
     torch.manual_seed(17)
@@ -514,7 +514,8 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     partial_trace = tl.trace(
         partial_save,
         x_partial,
-        capture=CaptureOptions(layers_to_save="all", save_args=False),
+        capture=CaptureOptions(save_args=False),
+        save="all",
     )
 
     torch.manual_seed(19)
@@ -534,6 +535,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         cholesky,
         x_cholesky,
         capture=full_capture,
+        save="all",
     )
 
     torch.manual_seed(22)
@@ -542,6 +544,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         step_invalid,
         [torch.tensor([-2.0, 0.5, 1.5, 2.5]), torch.tensor(0)],
         capture=full_capture,
+        save="all",
     )
 
     torch.manual_seed(20)
@@ -551,6 +554,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         swamped,
         x_swamped,
         capture=full_capture,
+        save="all",
     )
 
     torch.manual_seed(21)
@@ -560,6 +564,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         multiply_zero,
         x_multiply_zero,
         capture=full_capture,
+        save="all",
     )
 
     torch.manual_seed(22)
@@ -569,6 +574,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         int_multiply_zero,
         x_int_multiply_zero,
         capture=full_capture,
+        save="all",
     )
 
     return {

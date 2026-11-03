@@ -29,7 +29,7 @@ metadata + safetensors blobs, directory bundles); log administration delegates t
 ## Gotchas
 
 - Rehydration floor: an artifact older than tlspec_version 11 was saved by
-  torchlens 2.x and refuses with the one `ArtifactTooOldError`; the floor covers
-  Trace rehydration only — legacy 2.16 intervention specs still load.
+  torchlens 2.x and refuses with the one `ArtifactTooOldError`; 2.16 intervention specs
+  (`format_version` 1) and v1 extractions refuse with it too.
 - The `io`/`_io` split is a recorded dual-home (see
   `.project-context/architecture.md`); do not fold one into the other casually.

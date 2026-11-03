@@ -227,6 +227,7 @@
       "output_id2label",
       "output_num_classes",
       "_output_transform",
+      "_output_slot",
       "_options_save_transformed_output",
       "layer_visualizers",
       "save_visualizations",
@@ -237,7 +238,6 @@
       "_options_backward_ready",
       "_options_inference_only",
       "_options_chunk_size",
-      "_module_filter",
       "_options_emit_nvtx",
       "_options_on_nonfinite",
       "annotations",
@@ -1057,13 +1057,13 @@
     ]
   },
   "sha256_chunks": [
-    "f46108d4",
-    "ebcaa474",
-    "1c476d6a",
-    "d660ed16",
-    "6cfa8302",
-    "20a2e97f",
-    "7f586f7b",
-    "0e644e72"
+    "6e7e844a",
+    "d696f317",
+    "66c9ac49",
+    "79f0a404",
+    "86772716",
+    "36ef1bac",
+    "1b5fbf78",
+    "7c84d68e"
   ]
 }

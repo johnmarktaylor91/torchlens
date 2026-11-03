@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import copy
-import itertools
 import warnings
 from collections.abc import Callable, Mapping, Sequence
-from contextlib import ExitStack
 from typing import Any
 
 import torch
 from torch import nn
 
-from .._record_type import record_type
 from .._selection.selectors import facet
 from .._user_funcs import trace
 from ..errors._base import TorchLensError, TorchLensWarning
 from ..options import CaptureOptions
+from ._input_patching import _model_input_home_role, _patch_input_leaf
+from ._state_guard import _CounterfactualStateGuard, _teardown
 from .facets import Facet, MissingGrad
 
 Metric = Callable[[Any], torch.Tensor]
@@ -34,171 +32,6 @@ class PatchApplicationError(TorchLensError, RuntimeError):
     ``patch_ineffective``; the ``RuntimeError`` lineage is preserved for
     existing catch sites.
     """
-
-
-class _CounterfactualStateGuard:
-    """Snapshot and restore model state and global RNG around patching runs.
-
-    Activation and attribution patching run several forward passes (a clean
-    baseline, a corrupted baseline, and one per patched cell) on the SAME live
-    model. Without resetting state between runs, mutable buffers (e.g.
-    BatchNorm running statistics or any buffer written during forward) and the
-    global RNG drift: every counterfactual after the first starts from a
-    different model/RNG state than the clean baseline, so the reported effect is
-    a silently wrong comparison, and the caller's model + global RNG are left
-    mutated when the helper returns.
-
-    Call :meth:`open` before the first run and :meth:`close` in a ``finally``.
-    ``open`` snapshots the model's parameters/buffers and enters
-    ``torch.random.fork_rng`` so the caller's global RNG is restored robustly on
-    ``close`` no matter what the traced forwards do. Call :meth:`reset` before
-    each counterfactual run to return the model and RNG to the captured baseline
-    so every counterfactual is a true comparison. ``close`` restores the model
-    state and releases the forked RNG.
-    """
-
-    def __init__(self, model: nn.Module) -> None:
-        """Snapshot the model's parameters/buffers/grads and the global RNG state."""
-
-        self._tensors: list[tuple[torch.Tensor, torch.Tensor]] = [
-            (tensor, tensor.detach().clone()) for tensor in _stateful_tensors(model)
-        ]
-        self._grads: list[tuple[torch.Tensor, torch.Tensor | None]] = [
-            (tensor, None if tensor.grad is None else tensor.grad.detach().clone())
-            for tensor, _saved in self._tensors
-        ]
-        self._rng: dict[str, Any] = _snapshot_rng()
-        self._fork: Any = None
-
-    def open(self) -> None:
-        """Enter a forked-RNG scope so the caller's global RNG is preserved."""
-
-        self._fork = torch.random.fork_rng(devices=_fork_rng_devices())
-        self._fork.__enter__()
-
-    def close(self) -> None:
-        """Restore the model state and release the forked RNG scope."""
-
-        try:
-            self._restore_model()
-        finally:
-            fork, self._fork = self._fork, None
-            if fork is not None:
-                fork.__exit__(None, None, None)
-
-    def reset(self) -> None:
-        """Reset model state and global RNG to the captured baseline."""
-
-        self._restore_model()
-        _restore_rng(self._rng)
-
-    def _restore_model(self) -> None:
-        """Restore every DRIFTED parameter/buffer value and grad in place.
-
-        The copy is equality-gated on purpose: an unconditional ``copy_``
-        bumps the autograd version counter of every parameter consumed by an
-        earlier captured forward, so the later ``backward`` on the clean
-        and corrupted baselines raised "modified by an inplace operation" on
-        ANY model with parameters (attribution patching was unusable outside
-        zero-parameter toys). A value-equal tensor needs no write and keeps
-        its autograd graphs valid; a genuinely drifted tensor (a mutated
-        buffer, a forward that writes a parameter) is still written back --
-        comparison honesty beats preserving a graph that no longer matches
-        the model state, and autograd's in-place tripwire then fires on a
-        REAL divergence instead of on bookkeeping.
-
-        Grad slots are restored to their snapshot (usually ``None``) so
-        counterfactual runs start from the baseline grad state and the
-        caller's model does not accumulate patching-run gradients. Grad
-        assignment never touches version counters.
-        """
-
-        with torch.no_grad():
-            for tensor, saved in self._tensors:
-                if not torch.equal(tensor, saved):
-                    tensor.copy_(saved)
-        for tensor, saved_grad in self._grads:
-            current = tensor.grad
-            if saved_grad is None:
-                if current is not None:
-                    tensor.grad = None
-            elif current is None or not torch.equal(current, saved_grad):
-                tensor.grad = saved_grad.clone()
-
-
-def _teardown(guard: _CounterfactualStateGuard, *logs: Any) -> None:
-    """Run every teardown step even when an earlier one raises.
-
-    The entry points used to tear down as bare sequential statements, so a
-    raising ``Trace.cleanup()`` skipped ``guard.close()`` and left the USER's
-    model parameters unrestored and the global RNG permanently advanced.
-    ``ExitStack`` callbacks run last-registered-first, so the guard is
-    registered first (closes LAST, after every log cleanup) and each
-    ``logs``-order cleanup still runs even if an earlier one raises.
-    """
-
-    with ExitStack() as stack:
-        stack.callback(guard.close)
-        for log in reversed(logs):
-            if log is not None:
-                stack.callback(log.cleanup)
-
-
-def _stateful_tensors(model: nn.Module) -> list[torch.Tensor]:
-    """Return every distinct parameter and buffer tensor of a model.
-
-    Uses object identity to include non-persistent buffers and to stage tied /
-    double-registered tensors exactly once.
-    """
-
-    seen: set[int] = set()
-    tensors: list[torch.Tensor] = []
-    for _, tensor in itertools.chain(model.named_parameters(), model.named_buffers()):
-        if id(tensor) in seen:
-            continue
-        seen.add(id(tensor))
-        tensors.append(tensor)
-    return tensors
-
-
-def _fork_rng_devices() -> list[int]:
-    """Return the CUDA device ordinals to fork RNG for (empty when CPU-only).
-
-    Gated on ``is_initialized()``, not ``is_available()`` (R36-4): if this
-    process never initialized CUDA, no CUDA generator fed any captured op,
-    and forking RNG for every visible device would allocate the very CUDA
-    contexts (~300-600 MB each) this path does not need -- the exact stale
-    pre-fix gate ``utils/rng.py`` documents.
-    """
-
-    from .._utils._cuda_probe import _is_cuda_initialized
-
-    if _is_cuda_initialized() and torch.cuda.is_available():
-        return list(range(torch.cuda.device_count()))
-    return []
-
-
-def _snapshot_rng() -> dict[str, Any]:
-    """Capture the global CPU (and CUDA, when live) RNG state."""
-
-    from .._utils.rng import _snapshot_cuda_rng_states
-
-    snapshot: dict[str, Any] = {"cpu": torch.get_rng_state()}
-    # Initialized-CUDA-only, latch-guarded (R36-4): returns [] on a
-    # CUDA-less or never-initialized process without touching the driver.
-    cuda_states = _snapshot_cuda_rng_states()
-    if cuda_states:
-        snapshot["cuda"] = cuda_states
-    return snapshot
-
-
-def _restore_rng(snapshot: Mapping[str, Any]) -> None:
-    """Restore the global CPU (and CUDA, when available) RNG state."""
-
-    torch.set_rng_state(snapshot["cpu"])
-    cuda_states = snapshot.get("cuda")
-    if cuda_states is not None and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(cuda_states)
 
 
 def activation_patch_residual_stream(
@@ -412,7 +245,13 @@ def activation_patch_attention_heads(
         Callable receiving a ``Trace`` and returning a scalar tensor metric.
     facet_name:
         Per-head attention output facet. The default ``"result"`` follows the
-        P3 facet convention ``[batch, pos, head, d_model]``.
+        P3 facet convention ``[batch, pos, head, d_model]``. ``result`` is a
+        computed facet (``z_h @ W_O_h``) that no captured op holds, so the
+        patch writes the head's ``z`` instead, which replaces exactly its
+        ``result``. Under fused attention (``attn_implementation="sdpa"``)
+        ``z`` is reconstructed read-only and the helper refuses with the
+        eager-attention remedy; the pre-kernel ``"q"``/``"k"``/``"v"`` facets
+        stay writable there.
     trace_kwargs:
         Extra keyword arguments forwarded to ``tl.trace``.
 
@@ -528,7 +367,13 @@ def attribution_patch_attention_heads(
         Callable receiving a ``Trace`` and returning a scalar tensor metric.
     facet_name:
         Per-head attention output facet. The default ``"result"`` follows the
-        P3 facet convention ``[batch, pos, head, d_model]``.
+        P3 facet convention ``[batch, pos, head, d_model]``. ``result`` is a
+        computed facet (``z_h @ W_O_h``) that no captured op holds, so the
+        patch writes the head's ``z`` instead, which replaces exactly its
+        ``result``. Under fused attention (``attn_implementation="sdpa"``)
+        ``z`` is reconstructed read-only and the helper refuses with the
+        eager-attention remedy; the pre-kernel ``"q"``/``"k"``/``"v"`` facets
+        stay writable there.
     trace_kwargs:
         Extra keyword arguments forwarded to ``tl.trace``. By default this
         helper captures all gradients; an explicit
@@ -561,22 +406,40 @@ def attribution_patch_attention_heads(
         _ensure_matching_modules(corrupted_log, modules, facet_name=facet_name)
         if not modules:
             raise ValueError(f"No modules expose facet {facet_name!r}.")
-        n_heads = _num_heads(clean_log.modules[modules[0]], facet_name=facet_name)
-        result = torch.empty(
-            (len(modules), n_heads), dtype=corrupted_metric.dtype, device=corrupted_metric.device
+        return _attribution_patch_heads(
+            clean_log, corrupted_log, modules, facet_name=facet_name, like=corrupted_metric
         )
-        for layer_index, address in enumerate(modules):
-            for head_index in range(n_heads):
-                clean_value = _facet_tensor(
-                    clean_log.modules[address].facets.head(head_index)[facet_name]
-                )
-                corrupted_facet = corrupted_log.modules[address].facets.head(head_index)[facet_name]
-                corrupted_value = _facet_tensor(corrupted_facet)
-                grad = _facet_grad_tensor(corrupted_facet, address=address, facet_name=facet_name)
-                result[layer_index, head_index] = (grad * (clean_value - corrupted_value)).sum()
-        return result
     finally:
         _teardown(guard, clean_log, corrupted_log)
+
+
+def _attribution_patch_heads(
+    clean_log: Any,
+    corrupted_log: Any,
+    modules: Sequence[str],
+    *,
+    facet_name: str,
+    like: torch.Tensor,
+) -> torch.Tensor:
+    """Return the ``[layer, head]`` gradient-times-difference grid for ``facet_name``.
+
+    Each cell is ``(grad * (clean - corrupted)).sum()`` over one head's facet
+    slice at one module, with the corrupted run's gradient; the grid takes
+    ``like``'s dtype and device.
+    """
+
+    n_heads = _num_heads(clean_log.modules[modules[0]], facet_name=facet_name)
+    result = torch.empty((len(modules), n_heads), dtype=like.dtype, device=like.device)
+    for layer_index, address in enumerate(modules):
+        for head_index in range(n_heads):
+            clean_value = _facet_tensor(
+                clean_log.modules[address].facets.head(head_index)[facet_name]
+            )
+            corrupted_facet = corrupted_log.modules[address].facets.head(head_index)[facet_name]
+            corrupted_value = _facet_tensor(corrupted_facet)
+            grad = _facet_grad_tensor(corrupted_facet, address=address, facet_name=facet_name)
+            result[layer_index, head_index] = (grad * (clean_value - corrupted_value)).sum()
+    return result
 
 
 def _baseline_traces(
@@ -596,11 +459,51 @@ def _baseline_traces(
     """
 
     kwargs = _trace_kwargs(trace_kwargs, save_grads=save_grads)
-    guard.reset()
-    clean_log = trace(model, clean_input, **kwargs)
-    guard.reset()
-    corrupted_log = trace(model, corrupted_input, **kwargs)
+
+    def _capture(inputs: Any) -> Callable[[], Any]:
+        """Return a zero-argument capture that traces ``model`` on ``inputs``."""
+
+        def _run() -> Any:
+            """Reset the model/RNG state to the pristine snapshot and trace once."""
+            guard.reset()
+            return trace(model, inputs, **kwargs)
+
+        return _run
+
+    clean_log = _capture_by_reference(model, guard, _capture(clean_input))
+    try:
+        corrupted_log = _capture_by_reference(model, guard, _capture(corrupted_input))
+    except BaseException:
+        clean_log.cleanup()
+        raise
     return clean_log, corrupted_log
+
+
+def _capture_by_reference(
+    model: nn.Module, guard: _CounterfactualStateGuard, capture: Callable[[], Any]
+) -> Any:
+    """Run one helper capture with the model's parameter arguments kept by reference.
+
+    ``save_args=True`` (required above) used to copy every weight argument into every helper trace;
+    with a clean, a corrupted and a patched trace alive at once that was three extra copies of the
+    weights (GPT-2's tied 50257 x 768 embedding twice per trace: the lookup and ``lm_head``). The
+    helper traces never leave the helper, so a parameter argument is saved as an alias of the
+    parameter's storage instead (see
+    :func:`~torchlens._validation_argument_references.helper_parameter_references`). If the forward
+    wrote a referenced parameter (its version counter moved, or its bytes left the guard's snapshot,
+    which also catches ``param.data`` writes), the aliases no longer hold the call-time values: the
+    trace is dropped and the capture runs again on the copy path. ``capture`` must start from
+    :meth:`_CounterfactualStateGuard.reset` so both attempts run from the same state.
+    """
+
+    from .._validation_argument_references import helper_parameter_references
+
+    with helper_parameter_references(model) as references:
+        log = capture()
+    if references.first_change() is None and not guard.parameters_drifted():
+        return log
+    log.cleanup()
+    return capture()
 
 
 def _trace_kwargs(
@@ -610,7 +513,7 @@ def _trace_kwargs(
 ) -> dict[str, Any]:
     """Return trace keyword arguments with the helper's REQUIRED fields applied.
 
-    The patching helpers cannot work without ``layers_to_save="all"`` (facet
+    The patching helpers cannot work without ``save="all"`` (facet
     values must be readable on every candidate module) and
     ``save_args=True`` (reconstructed facets read saved op args), and
     attribution additionally needs ``save_grads``. These used to be supplied
@@ -619,7 +522,7 @@ def _trace_kwargs(
     partially absent and grids were computed over a silently narrowed module
     set. The required fields now COMPOSE with the user's options: fields the
     user left unspecified are filled in, an explicitly matching value passes,
-    and an explicitly CONFLICTING ``layers_to_save``/``save_arg_values``
+    and an explicitly CONFLICTING ``save``/``save_args``
     refuses with the requirement named (an explicit user ``save_grads``
     predicate is honored as-is -- a too-narrow one fails loudly at the
     gradient read). Flat capture spellings (``layers_to_save=`` etc.) were
@@ -638,17 +541,16 @@ def _trace_kwargs(
             "accepts capture knobs only through the grouped spelling "
             "capture=tl.options.CaptureOptions(...). Move these fields into capture=."
         )
-    if "capture" in kwargs:
-        kwargs["capture"] = _compose_required_capture(kwargs["capture"], save_grads=save_grads)
-        return kwargs
-    capture_fields: dict[str, Any] = {"layers_to_save": "all", "save_args": True}
-    if save_grads is not None:
-        capture_fields["save_grads"] = save_grads
-    kwargs["capture"] = CaptureOptions(**capture_fields)
+    kwargs["capture"] = _compose_required_capture(
+        kwargs.get("capture", CaptureOptions()),
+        save_grads=save_grads,
+        _save=kwargs.get("save", "all"),
+    )
+    kwargs["save"] = "all"
     return kwargs
 
 
-def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
+def _compose_required_capture(capture: Any, *, save_grads: bool | None, _save: Any = "all") -> Any:
     """Merge the patching-required capture fields into user capture options.
 
     Parameters
@@ -673,17 +575,19 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
 
     if not isinstance(capture, CaptureOptions):
         return capture
-    required: dict[str, Any] = {"layers_to_save": "all", "save_arg_values": True}
+    required: dict[str, Any] = {"save_args": True}
     conflicts = [
         field_name
         for field_name, required_value in required.items()
-        if capture.is_field_explicit(field_name) and getattr(capture, field_name) != required_value
+        if capture._is_field_explicit(field_name) and getattr(capture, field_name) != required_value
     ]
+    if not isinstance(_save, str) or _save != "all":
+        conflicts.append("save")
     if conflicts:
         raise ValueError(
-            f"Patching helpers require capture options {required!r}, but the supplied "
-            f"capture= explicitly sets {conflicts!r} to conflicting values. Facet values "
-            "must be readable on every candidate module (layers_to_save='all') and "
+            f"Patching helpers require save='all' and capture options {required!r}, but the supplied "
+            f"trace kwargs explicitly set {conflicts!r} to conflicting values. Facet values "
+            "must be readable on every candidate module (save='all') and "
             "reconstructed facets read saved op args (save_args=True); a narrower "
             "capture silently shrinks or empties the patch table. Drop these fields from "
             "capture= (they are filled in automatically) or set them to the required "
@@ -692,15 +596,15 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
     fills = {
         field_name: required_value
         for field_name, required_value in required.items()
-        if not capture.is_field_explicit(field_name)
+        if not capture._is_field_explicit(field_name)
     }
-    if save_grads is not None and not capture.is_field_explicit("save_grads"):
+    if save_grads is not None and not capture._is_field_explicit("save_grads"):
         fills["save_grads"] = save_grads
     if not fills:
         return capture
     values = capture.as_dict()
     values.update(fills)
-    return CaptureOptions.from_values(
+    return CaptureOptions._from_values(
         values, frozenset(capture._specified_fields) | frozenset(fills)
     )
 
@@ -777,6 +681,7 @@ def _activation_patch_heads(
     _ensure_matching_modules(corrupted_log, modules, facet_name=facet_name)
     if not modules:
         raise ValueError(f"No modules expose facet {facet_name!r}.")
+    facet_name = _head_write_facet(clean_log, modules, facet_name)
     n_heads = _num_heads(clean_log.modules[modules[0]], facet_name=facet_name)
     result = torch.empty(
         (len(modules), n_heads), dtype=metric_template.dtype, device=metric_template.device
@@ -819,6 +724,61 @@ def _activation_patch_heads(
     return result
 
 
+def _head_write_facet(log: Any, modules: Sequence[str], facet_name: str) -> str:
+    """Return the facet the per-head patch writes for ``facet_name``.
+
+    ``result`` (a head's contribution to the attention output,
+    ``z_h @ W_O_h``) is a COMPUTED facet: no captured op holds one head's
+    projected output, so it is never writable, on eager attention too. It is
+    linear in the head's ``z`` with the model's own fixed ``W_O`` slice, and
+    the output bias is added after the heads are summed, so replacing head
+    ``h``'s ``z`` with its clean value replaces exactly its ``result`` with the
+    clean ``result``. The patch therefore writes ``z`` whenever ``result`` is
+    read-only and every module exposes ``z``. Any other facet (and ``result``
+    where it is writable) is written as named; under fused attention ``z`` is
+    itself read-only, and the write refuses with the eager-attention remedy.
+    """
+
+    if facet_name != "result":
+        return facet_name
+    if all(_head_facet_writable(log.modules[address], "result") for address in modules):
+        return facet_name
+    if all(log.modules[address].facets.has("z") for address in modules):
+        return "z"
+    return facet_name
+
+
+def _head_facet_writable(module: Any, facet_name: str) -> bool:
+    """Return whether head 0's ``facet_name`` facet on ``module`` is write-safe."""
+
+    try:
+        value = module.facets.head(0)[facet_name]
+        spec = value.spec if isinstance(value, Facet) else value
+        spec._validate_intervention_safe(alias_policy=None)
+    except (AttributeError, KeyError, RuntimeError, ValueError):
+        return False
+    return True
+
+
+def _counting_hook(
+    hook: Callable[..., torch.Tensor], fire_ledger: dict[str, int]
+) -> Callable[..., torch.Tensor]:
+    """Wrap a patch hook so ``fire_ledger`` counts its fires and value-identical fires."""
+
+    def _tracked_hook(
+        out: torch.Tensor, *, ctx: Any, _inner: Callable[..., torch.Tensor] = hook
+    ) -> torch.Tensor:
+        """Run the patch hook while counting fires and value-identical fires."""
+
+        result = _inner(out, ctx=ctx)
+        fire_ledger["fires"] += 1
+        if _replaced_identical(result, out):
+            fire_ledger["identical"] += 1
+        return result
+
+    return _tracked_hook
+
+
 def _run_patch(
     model: nn.Module,
     corrupted_input: Any,
@@ -835,20 +795,17 @@ def _run_patch(
 ) -> Any:
     """Fork the corrupted trace, attach one facet hook, and rerun.
 
-    The model/RNG state is reset to the pristine snapshot before the rerun so
-    the only difference between the corrupted baseline and this patched run is
-    the injected clean activation. Every hook-path rerun must leave positive
-    fire evidence (at least one ``replaced=True`` fire record); a run without
-    it raises :class:`PatchApplicationError` instead of returning a trace
-    whose metric would silently equal the corrupted baseline. ``where``
-    overrides the refusal's site description (used by the per-head caller,
-    which must not enable the whole-facet input-patch route).
+    The model/RNG state is reset to the pristine snapshot before the rerun so the only difference
+    between the corrupted baseline and this patched run is the injected clean activation. Every
+    hook-path rerun must leave positive fire evidence (at least one ``replaced=True`` fire record);
+    a run without it raises :class:`PatchApplicationError` instead of returning a trace whose metric
+    would silently equal the corrupted baseline. ``where`` overrides the refusal's site description
+    (used by the per-head caller, which must not enable the whole-facet input-patch route).
 
-    Live hooks fire at wrapped-function and module-boundary sites only, so a
-    facet homed on a MODEL INPUT op (e.g. ``resid_pre`` of a first block) has
-    no site where a hook could ever fire. When the caller identifies the facet
-    (``facet_name`` + ``address``) and its home is a model input, the patch is
-    applied to the input tensor itself and the rerun proceeds without a hook —
+    Live hooks fire at wrapped-function and module-boundary sites only, so a facet homed on a MODEL
+    INPUT op (e.g. ``resid_pre`` of a first block) has no site where a hook could ever fire. When
+    the caller identifies the facet (``facet_name`` + ``address``) and its home is a model input,
+    the patch is applied to the input tensor itself and the rerun proceeds without a hook —
     semantically identical to a hook fire at the home site.
     """
 
@@ -877,21 +834,18 @@ def _run_patch(
         _fold_fire_ledger(campaign_ledger, fire_ledger)
         return patched_log
 
-    def _tracked_hook(
-        out: torch.Tensor, *, ctx: Any, _inner: Callable[..., torch.Tensor] = hook
-    ) -> torch.Tensor:
-        """Run the patch hook while counting fires and value-identical fires."""
+    tracked_hook = _counting_hook(hook, fire_ledger)
 
-        result = _inner(out, ctx=ctx)
-        fire_ledger["fires"] += 1
-        if _replaced_identical(result, out):
-            fire_ledger["identical"] += 1
-        return result
+    def _capture() -> Any:
+        """Fork the corrupted trace, attach the counting hook, and rerun from the pristine state."""
+        fire_ledger.update(fires=0, identical=0)
+        log = corrupted_log.fork(name)
+        log.attach_hooks(selector, tracked_hook)
+        guard.reset()
+        log.run(model, corrupted_input)
+        return log
 
-    patched_log = corrupted_log.fork(name)
-    patched_log.attach_hooks(selector, _tracked_hook)
-    guard.reset()
-    patched_log.run(model, corrupted_input)
+    patched_log = _capture_by_reference(model, guard, _capture)
     try:
         _require_effective_patch(patched_log, where=where, fire_ledger=fire_ledger)
     except PatchApplicationError:
@@ -946,10 +900,15 @@ def _run_input_patch(
         return result
 
     patched_input = _patch_input_leaf(corrupted_input, model, input_role, _tracked_input_patch)
-    patched_log = corrupted_log.fork(name)
-    guard.reset()
-    patched_log.run(model, patched_input)
-    return patched_log
+
+    def _capture() -> Any:
+        """Fork the corrupted trace and rerun it on the patched input from the pristine state."""
+        log = corrupted_log.fork(name)
+        guard.reset()
+        log.run(model, patched_input)
+        return log
+
+    return _capture_by_reference(model, guard, _capture)
 
 
 def _warn_if_campaign_all_identical(campaign_ledger: Mapping[str, int], where: str) -> None:
@@ -1046,185 +1005,6 @@ def _require_effective_patch(
         "is a real computation site, or patch an explicit op site via fork.do().",
         code="patch_ineffective",
     )
-
-
-def _model_input_home_role(log: Any, facet_name: str, address: str) -> str | None:
-    """Return the recorded input address when a whole-tensor facet homes on a model input.
-
-    Parameters
-    ----------
-    log:
-        Trace holding the facet.
-    facet_name:
-        Facet to inspect.
-    address:
-        Module address exposing the facet.
-
-    Returns
-    -------
-    str | None
-        The home input op's hierarchical ``io_role`` address (for example
-        ``"input.x.0.nested"``), or ``None`` when the home is a regular op
-        (live hooks handle it) or no facet spec is reachable.
-
-    Raises
-    ------
-    ValueError
-        If a facet homed on a model input is not the identity view of the home
-        tensor (patching the raw input would silently write outside the facet),
-        or if the home input op cannot be bound to a recorded input address --
-        falling back to the hook path would silently run an UNPATCHED
-        counterfactual, because live hooks never fire at input sites.
-    """
-
-    try:
-        spec = log.modules[address].facets[facet_name].spec
-    except (AttributeError, KeyError, RuntimeError, ValueError):
-        return None
-    home = getattr(spec, "home", None)
-    if home is None or record_type(home, None) != "input":
-        return None
-    home_label = str(getattr(home, "label", ""))
-    home_op = next(
-        (op for op in getattr(log, "input_ops", ()) if str(op.label) == home_label),
-        None,
-    )
-    if home_op is None:
-        raise ValueError(
-            f"Facet {facet_name!r} on module {address!r} homes on model input "
-            f"{home_label!r}, which is not among this trace's input ops; the input "
-            "patch cannot be bound and live hooks never fire at input sites."
-        )
-    if tuple(getattr(spec, "transforms", ()) or ()) or not bool(spec.write_mask().all()):
-        raise ValueError(
-            f"Facet {facet_name!r} on module {address!r} is a transformed or sliced view of "
-            f"model input {home_label!r}. Sliced input facets cannot be patched: live hooks "
-            "never fire at input sites, and whole-input replacement would write outside the "
-            "facet."
-        )
-    io_role = getattr(home_op, "io_role", None)
-    if not io_role:
-        raise ValueError(
-            f"Facet {facet_name!r} on module {address!r} homes on model input "
-            f"{home_label!r}, but that op records no io_role input address; the input "
-            "patch cannot be bound and live hooks never fire at input sites."
-        )
-    return str(io_role)
-
-
-def _resolve_input_leaf_by_role(
-    x: Any, model: nn.Module, io_role: str
-) -> tuple[torch.Tensor, list[torch.Tensor]]:
-    """Return the leaf of ``x`` recorded at input address ``io_role``, plus all leaves.
-
-    Mirrors capture-time input flattening exactly (see
-    ``TorchBackend.fetch_label_move_input_tensors``): positional args are
-    normalized against the model's forward signature, each arg's tensors are
-    discovered with the same bounded traversal, addresses are
-    ``input.<argname>[.<path>]``, and a repeated tensor object keeps only its
-    first address -- so the recorded ``io_role`` binds by ADDRESS, never by
-    ordinal position in some other walk order.
-
-    Returns
-    -------
-    tuple[torch.Tensor, list[torch.Tensor]]
-        The target leaf and every distinct tensor leaf of the tree.
-
-    Raises
-    ------
-    ValueError
-        If no leaf of ``x`` sits at the recorded address (fail closed: a
-        silent fallback would rerun an unpatched counterfactual).
-    """
-
-    from .._utils.arg_handling import normalize_input_args
-    from .._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
-    from ..backends.torch.backend import _get_input_arg_names
-
-    args = normalize_input_args(x, model)
-    arg_names = _get_input_arg_names(model, args)
-    target: torch.Tensor | None = None
-    leaves: list[torch.Tensor] = []
-    seen: set[int] = set()
-    for arg, arg_name in zip(args, arg_names):
-        for tensor, addr, _addr_full in get_vars_of_type_from_obj(
-            arg,
-            torch.Tensor,
-            search_depth=INPUT_SEARCH_DEPTH_LIMIT,
-            return_addresses=True,
-        ):
-            if id(tensor) in seen:
-                continue
-            seen.add(id(tensor))
-            leaves.append(tensor)
-            tensor_addr = f"input.{arg_name}" + (f".{addr}" if addr else "")
-            if tensor_addr == io_role:
-                target = tensor
-    if target is None:
-        raise ValueError(
-            f"Input tree has no tensor leaf at recorded input address {io_role!r}; "
-            "the input-homed facet patch cannot be bound to a rerun leaf."
-        )
-    return target, leaves
-
-
-def _patch_input_leaf(
-    x: Any,
-    model: nn.Module,
-    io_role: str,
-    patch: Callable[[torch.Tensor], torch.Tensor],
-) -> Any:
-    """Return the input tree with the leaf at address ``io_role`` patched everywhere.
-
-    The leaf is resolved by the capture-recorded hierarchical input address
-    (``Op.io_role``), never by ordinal position: capture flattens inputs in
-    BFS container order while a naive tree walk visits leaves in DFS order, so
-    ordinal indexing silently patched the WRONG leaf on mixed-nesting inputs.
-    Because capture dedupes a repeated tensor object into ONE input op,
-    patching that op replaces the tensor at EVERY site it appears. Container
-    types (Mapping subclasses, namedtuples, nested objects) are preserved by
-    rebuilding through ``copy.deepcopy`` with every unpatched tensor leaf
-    passed through by identity.
-
-    Parameters
-    ----------
-    x:
-        Model input tree exactly as passed to the baseline trace.
-    model:
-        Model whose forward signature determines positional-arg naming.
-    io_role:
-        Recorded hierarchical input address of the leaf to patch.
-    patch:
-        Callable producing the replacement tensor for the selected leaf.
-
-    Returns
-    -------
-    Any
-        Rebuilt input tree with the addressed leaf replaced at every site.
-
-    Raises
-    ------
-    ValueError
-        If no leaf sits at the recorded address, the patched tensor changes
-        shape, or the tree cannot be rebuilt.
-    """
-
-    target, leaves = _resolve_input_leaf_by_role(x, model, io_role)
-    patched = patch(target)
-    if tuple(patched.shape) != tuple(target.shape):
-        raise ValueError(
-            f"Input patch changed the leaf shape from {tuple(target.shape)} to "
-            f"{tuple(patched.shape)}; input patching must preserve shape."
-        )
-    memo: dict[int, Any] = {id(leaf): leaf for leaf in leaves}
-    memo[id(target)] = patched
-    try:
-        return copy.deepcopy(x, memo)
-    except Exception as exc:
-        raise ValueError(
-            f"Could not rebuild the input tree around patched leaf {io_role!r}: "
-            f"{type(exc).__name__}: {exc}"
-        ) from exc
 
 
 def _modules_with_facet(log: Any, facet_name: str) -> list[str]:

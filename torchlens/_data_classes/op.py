@@ -40,13 +40,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from collections.abc import Callable
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Literal,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 import torch
 
@@ -54,7 +48,6 @@ from .._constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER
 from .._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
-    MutatedReferenceError,
     PayloadUnavailableError,
     RecordBindingError,
 )
@@ -96,7 +89,6 @@ from .._trace_core.relation_views import (
     materialize_dataflow_view,
 )
 from .._trace_state import TraceState
-from .._utils._torch_compat import tensor_version_or_none
 from .._utils.arg_handling import copy_arg_tree
 from .._utils.tensor_utils import (
     concatenate_batch_tensors,
@@ -113,9 +105,25 @@ from . import _doors, _labels, _op_cost, _op_relations, _op_save
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._layer_accessors import OpAccessor
+from ._op_aten import OpAtenMixin
+from ._op_container_census import (  # noqa: F401  (re-exported for the pooling tests)
+    _census_container_cells,
+    _count_container_ids,
+)
 from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
+)
+from ._op_out_read import (
+    _out_read_state,
+    _synthesized_out_read_due,
+    _validate_reference_out_not_mutated,
+)
+from ._op_row_release import (  # noqa: F401  (re-exported for cleanup and backend importers)
+    _ROW_RELEASE_PROPERTIES,
+    bind_op_facade,
+    register_row_release_property,
+    release_op_row,
 )
 from ._op_save import (  # noqa: F401  (re-exported for backends and postprocess importers)
     _dtype_or_none,
@@ -159,6 +167,8 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
 # -> builtins hit -> type attribute resolution) was itself measurable. Bind the
 # unbound slot accessors once at import.
 _object_getattribute = object.__getattribute__
+
+
 _object_setattr = object.__setattr__
 # Fields whose reads go through the lazy-materialization path in
 # ``Op.__getattribute__``; every other name short-circuits straight to the slot.
@@ -598,50 +608,6 @@ def _container_member_key(
     return None
 
 
-def _count_container_ids(
-    value: Any,
-    id_counts: dict[int, int],
-    expanded_ids: set[int],
-    depth: int,
-) -> None:
-    """Count every exact builtin MUTABLE container id reachable from one cell.
-
-    The alias census behind the pooling guard: a container whose id is seen
-    more than once across ALL swept cells is aliased in-store, and replacing
-    any of its cell appearances would break the alias for later in-place
-    mutation, so such cells never pool.
-
-    Only ``dict``/``defaultdict``/``list``/``set`` ids matter (the pool key
-    visits exactly those). Hashability bounds the walk: dict KEYS and
-    ``set``/``frozenset`` members must be hashable, so no exact builtin
-    mutable container can hide below them — dict values, list members, and
-    tuple members are the only recursion edges.
-    """
-
-    cls = value.__class__
-    if cls is dict or cls is defaultdict:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value.values():
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-    elif cls is list:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value:
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-    elif cls is set:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-    elif cls is tuple and depth < 6 and id(value) not in expanded_ids:
-        expanded_ids.add(id(value))
-        for member in value:
-            _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-
-
 def _pool_container_cells(
     stores: list[tuple[Any, Any]], container_pool: dict[Any, PooledCell]
 ) -> None:
@@ -659,47 +625,25 @@ def _pool_container_cells(
         so equal content pools trace-wide.
     """
 
-    # ONE scan over every cell: the alias census recurses only into cells
-    # whose class can hold a container (everything else is skipped by an
-    # inline class test — the vast majority of cells are scalars/None), and
-    # the same scan collects the pool candidates (container-classed cells at
-    # sanctioned fids) and the singleton-compaction sites (kind-table list
-    # cells), so neither later pass re-walks rows x fields.
-    id_counts: dict[int, int] = {}
-    expanded_ids: set[int] = set()
-    cell_sites: list[tuple[Any, int, Any]] = []
-    singleton_sites: list[tuple[Any, int, int, Any, Any]] = []
-    any_swept = False
-    for store, fids in stores:
-        rows = store.rows_building()
-        if rows is None:
-            continue
-        any_swept = True
-        fid_set = None if fids is None else frozenset(fids)
-        for row_idx, row_cells in enumerate(rows):
-            for fid, value in enumerate(row_cells):
-                cls = value.__class__
-                if cls is tuple:
-                    _count_container_ids(value, id_counts, expanded_ids, 0)
-                    continue
-                if not (cls is dict or cls is list or cls is set or cls is defaultdict):
-                    continue
-                _count_container_ids(value, id_counts, expanded_ids, 0)
-                if fid_set is None or fid in fid_set:
-                    cell_sites.append((row_cells, fid, value))
-                if fid_set is None and cls is list:
-                    singleton_sites.append((store, row_idx, fid, row_cells, value))
-    if not any_swept:
+    census = _census_container_cells(stores)
+    if census is None:
         return
+    id_counts, cell_sites, singleton_sites = census
+    # A cell whose own id is aliased is skipped before its key is built: that
+    # id is the first one the key walk visits, so the alias guard would refuse
+    # it anyway. Empty exact dict/list/set cells arrive with their key.
     candidates: list[tuple[Any, int, Any, Any]] = []
     key_counts: dict[Any, int] = {}
-    for row_cells, fid, value in cell_sites:
-        visited_ids: list[int] = []
-        key = _container_pool_key(value, 0, visited_ids)
+    for row_cells, fid, value, key in cell_sites:
+        if id_counts[id(value)] > 1:
+            continue
         if key is None:
-            continue
-        if any(id_counts[oid] > 1 for oid in visited_ids):
-            continue
+            visited_ids: list[int] = []
+            key = _container_pool_key(value, 0, visited_ids)
+            if key is None:
+                continue
+            if any(id_counts[oid] > 1 for oid in visited_ids):
+                continue
         candidates.append((row_cells, fid, value, key))
         key_counts[key] = key_counts.get(key, 0) + 1
     for row_cells, fid, value, key in candidates:
@@ -1147,26 +1091,6 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
     entry._internal_set("transformed_activation_memory", _memory_or_none(entry.transformed_out))
 
 
-def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
-    """Raise if a reference-mode saved output has changed since capture."""
-
-    annotations = state.get("annotations") or {}
-    if annotations.get("save_mode") != "reference":
-        return
-    out = state.get("out")
-    if not isinstance(out, torch.Tensor):
-        return
-    saved_version = annotations.get("saved_out_version")
-    current_version = tensor_version_or_none(out)
-    if saved_version is not None and current_version != saved_version:
-        label = state.get("label") or state.get("layer_label") or state.get("_label_raw")
-        raise MutatedReferenceError(
-            f"saved reference out for op {label!r} was mutated after capture "
-            f"(saved _version={saved_version}, current _version={current_version}). "
-            "Use save_mode='copy' for isolated saved tensors."
-        )
-
-
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -1179,7 +1103,16 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
-class Op(_SelectionOperand):
+def _warn_synthesized_out_read(source_trace: Any) -> None:
+    """Fire the once-per-trace synthesized-value warning for an ``Op.out`` read when due."""
+
+    if _synthesized_out_read_due(source_trace):
+        from .._quickstart._gate import warn_on_raw_read
+
+        warn_on_raw_read(source_trace, site="Op.out")
+
+
+class Op(OpAtenMixin, _SelectionOperand):
     """Metadata for a single tensor operation (one pass of one layer).
 
     Constructed from a dict whose keys must exactly match
@@ -1725,17 +1658,9 @@ class Op(_SelectionOperand):
                 from ..stats._capture_stats import refuse_reduced_payload_read
 
                 refuse_reduced_payload_read(slot, source_trace)
+            _warn_synthesized_out_read(source_trace)
             if not getattr(source_trace, "_postprocessing_active", False):
-                state = {
-                    "out": out,
-                    "annotations": slot("annotations"),
-                    "has_saved_activation": slot("has_saved_activation", False),
-                    "detach_saved_activations": slot("detach_saved_activations"),
-                    "label": slot("label"),
-                    "layer_label": slot("layer_label"),
-                    "_label_raw": slot("_label_raw"),
-                }
-                _validate_reference_out_not_mutated(state)
+                _validate_reference_out_not_mutated(_out_read_state(slot, out))
         return _getattribute(self, name)
 
     def __setattr__(
@@ -3127,7 +3052,7 @@ class Op(_SelectionOperand):
         when the bridge just rendered this object (memo 3.6).
         """
 
-        from .._notebook.cards import op_repr_html
+        from ..report._notebook.cards import op_repr_html
 
         return op_repr_html(self)
 
@@ -3577,6 +3502,13 @@ def _install_op_field_descriptors() -> None:
 
 
 _install_op_field_descriptors()
+
+#: The generated field descriptor classes, for :func:`release_op_row`'s facade
+#: check. No descriptor class overrides ``_OpField.__delete__``.
+_ROW_RELEASE_FIELD_CLASSES = frozenset(
+    {_OpField, _RelationViewField, _GroupViewField, _DataflowField, _FactField}
+)
+bind_op_facade(Op, _OP_SLOT_NAMES, _ROW_RELEASE_FIELD_CLASSES)
 
 
 def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:

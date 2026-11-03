@@ -97,11 +97,10 @@ def varying_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +240,7 @@ def test_varying_recurrence_unrolled_suppresses(varying_log: tl.Trace, tmp_path:
     """Per-pass nodes have their own captured shapes: the equality check
     licenses suppression pass by pass."""
 
-    dot = _draw(varying_log, tmp_path, vis_mode="unrolled")
+    dot = _draw(varying_log, tmp_path, rolled=False)
     assert "out_features" not in dot
 
 
@@ -252,7 +251,7 @@ def test_varying_recurrence_rolled_keeps_args_visible(
     the license cannot be checked, so the arg stays VISIBLE. An honest,
     DELIBERATE cross-mode difference — do not 'fix' it."""
 
-    dot = _draw(varying_log, tmp_path, vis_mode="rolled")
+    dot = _draw(varying_log, tmp_path, rolled=True)
     assert "out_features=4" in dot
 
 

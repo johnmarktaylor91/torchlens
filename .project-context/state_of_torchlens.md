@@ -108,8 +108,8 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/agent/` | Read-only agent inspection surface: registry, envelope, overview, query, stats, compare, torch-free CLI | Agent and MCP tooling |
 | `torchlens/attribution/onebackward/` | One-backward `(node, slot)` attribution reads | Gradient reads over existing op fields |
 | `torchlens/brainpipe.py` | Memory-planned whole-model extraction (plan, table, run, npz) | Large extraction runs under a byte budget |
-| `torchlens/checks/` | Training sanity checks (`audit_params`, gradient-flow audit) | Parameter and gradient health |
-| `torchlens/conformance/` | Capture conformance packs C0-C2 | Third-party conformance testing |
+| `torchlens/debug/_checks/` | Training sanity checks (exposed as `tl.debug.ChecksSession` and friends) (`audit_params`, gradient-flow audit) | Parameter and gradient health |
+| `tests/conformance/` | Capture conformance packs C0-C2 (test-side harness) | Third-party conformance testing |
 | `torchlens/differential.py` | The guarded cross-capture delta projection | Comparing two captures |
 | `torchlens/_ecosystem/` | Provider discovery | Entry-point providers |
 | `torchlens/experiment/` | Multi-run experiments: lineage, sweeps, site sweeps, ledger | Experiment provenance |
@@ -261,7 +261,7 @@ objects yet.
 
 | Appliance | Extra | Docstring intent | Current state |
 |-----------|-------|------------------|---------------|
-| `torchlens._notebook` | `notebook` | IPython/Jupyter notebook integration | Import gate for `IPython` and `jupyter_client`, no public objects |
+| `torchlens.report._notebook` | `notebook` | IPython/Jupyter notebook integration | Import gate for `IPython` and `jupyter_client`, no public objects |
 | `torchlens.neuro` | `neuro` | RDM, CKA, Brain-Score, representation helpers | Import gate for `rsatoolbox` and `brainscore_core`, no public objects |
 
 The earlier empty `viewer`, `paper`, and `llm` stub packages were removed (`chore: remove empty
@@ -285,11 +285,11 @@ Extras in `pyproject.toml` also cover `viz`, `tabular`, `captum`, `sae`, `profil
 | `notebooks/` | Backward, fastlog, and training tutorials |
 
 ## Release Pipeline
-The release path uses semantic-release v9 configured in `pyproject.toml`. Version variables are
-`pyproject.toml:project.version` and `torchlens/__init__.py:__version__`. A custom parser at
-`scripts/no_major_parser.py` plus commit-msg and pre-push hooks prevent accidental major
-releases; keep the 2.x family locked unless release work explicitly says otherwise. See
-`feedback_version_bumps.md` in the maintainer memory path for the incident history if needed.
+A release is a maintainer-pushed `vX.Y.Z` tag on main whose `pyproject.toml:project.version` and
+`torchlens/__init__.py:__version__` already carry that version (`.github/workflows/release.yml`).
+`scripts/check_release_major.py` refuses an unapproved major version before every build, and the
+commit-msg and pre-push hooks (`scripts/check_no_breaking_markers.py`) reject major-bump markers. A
+major version ships only on the maintainer's explicit command, through `.github/MAJOR_RELEASE_APPROVED`.
 
 ## Where To Look For X
 
@@ -315,9 +315,9 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 | Where is bundle diff rendering? | `torchlens/_visualization/bundle_diff.py` |
 | Where is fastlog storage decided? | `torchlens/recording/_storage_resolver.py` |
 | Where are bridge integrations? | `torchlens/bridge/` |
-| Where is compat reporting? | `torchlens/compat/_report.py` |
+| Where is the environment and model report (`tl.report.doctor`)? | `torchlens/report/_doctor.py` (entry point), `torchlens/report/_environment.py` (environment checks), `torchlens/compat/_report.py` (model checks) |
 | Where are observer taps/spans? | `torchlens/observers.py` |
-| Where are release guards? | `scripts/no_major_parser.py`, `scripts/check_no_breaking_markers.py`, `pyproject.toml` |
+| Where are release guards? | `scripts/check_release_major.py`, `scripts/check_no_breaking_markers.py`, `.github/workflows/release.yml` |
 
 ## Pointers To Deeper Docs
 - Root `AGENTS.md` for agent behavior and common workflows (`CLAUDE.md` beside each

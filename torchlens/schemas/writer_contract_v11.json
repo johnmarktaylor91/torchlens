@@ -921,7 +921,6 @@
     "_mlx_saved_payloads": "drop",
     "_module_call_accessor": "drop",
     "_module_capture_ws": "drop",
-    "_module_filter": "drop",
     "_module_logs": "drop",
     "_nonfinite_capture": "drop",
     "_nonfinite_frontier_out": "drop",
@@ -935,6 +934,7 @@
     "_op_accessor_cache": "drop",
     "_optimizer": "drop",
     "_options_activation_transform": "drop",
+    "_options_aten_ops": "drop",
     "_options_backward_ready": "drop",
     "_options_chunk_size": "keep",
     "_options_detach_saved_activations": "keep",
@@ -976,6 +976,7 @@
     "_out_sink": "drop",
     "_out_writer": "drop",
     "_output_container_specs_by_raw_label": "drop",
+    "_output_slot": "drop",
     "_output_tokenizer": "drop",
     "_output_transform": "drop",
     "_paddle_alias_annotations": "drop",
@@ -3370,7 +3371,6 @@
      "_mlx_saved_payloads": "drop",
      "_module_call_accessor": "drop",
      "_module_capture_ws": "drop",
-     "_module_filter": "drop",
      "_module_logs": "drop",
      "_nonfinite_capture": "drop",
      "_nonfinite_frontier_out": "drop",
@@ -3384,6 +3384,7 @@
      "_op_accessor_cache": "drop",
      "_optimizer": "drop",
      "_options_activation_transform": "drop",
+     "_options_aten_ops": "drop",
      "_options_backward_ready": "drop",
      "_options_chunk_size": "keep",
      "_options_detach_saved_activations": "keep",
@@ -3425,6 +3426,7 @@
      "_out_sink": "drop",
      "_out_writer": "drop",
      "_output_container_specs_by_raw_label": "drop",
+     "_output_slot": "drop",
      "_output_tokenizer": "drop",
      "_output_transform": "drop",
      "_paddle_alias_annotations": "drop",
@@ -4006,5 +4008,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "bf712f3e3abf8f25845de30aa2984e051fb0675a76ea23c78be31b26925833ac"
+ "writer_contract_digest": "1e5aa663670a40156e64180ba30bdbf893174e4b8f9589e2eba0d1e14de60e26"
 }

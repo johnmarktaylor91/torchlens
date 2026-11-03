@@ -66,7 +66,7 @@ def test_missing_record_context_field_errors_in_preview_and_dry_run() -> None:
 
     dot = trace.preview_fastlog(predicate=bad_predicate)
 
-    assert "exception" in dot
+    assert "exception" in dot.dot
     with pytest.raises(RecordContextFieldError):
         tl.recording.dry_run(model, x, save=bad_predicate)
 

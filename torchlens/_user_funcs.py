@@ -4,19 +4,18 @@ This module contains every user-facing function:
   - ``trace``  - the main entry point (runs model, returns Trace)
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
-  - ``draw_backward`` - backward grad_fn_handle visualization wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
 **Selective save strategy**:
-Predicate ``save=`` and most string/substring ``layers_to_save`` requests are
+Predicate ``save=`` and most string/substring ``save=`` label requests are
 resolved during the primary forward pass. TorchLens falls back to the two-pass
 discovery/replay path only for selectors that require finalized labels or
 gradient-specific resolution.
 """
 
 import functools
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, cast
 
@@ -32,6 +31,7 @@ from torchlens._capture.prepare.dispatch import (
     _dispatch_trace,
     _refuse_compiled_callable_root,
     _refuse_trace_entry_shapes,
+    _unfold_door_capture_fields,
 )
 from torchlens._capture.run_entry import (
     _run_model_and_save_specified_outs as _run_model_and_save_specified_outs,
@@ -56,8 +56,9 @@ from ._input_coerce import (
     _reject_non_mapping_input_kwargs,
     _reject_unrouted_forward_kwargs,
 )
+from ._registry._facet_snapshot import register_facet_snapshot_provider
 from ._selection.selectors import BaseSelector
-from ._utils.tensor_utils import SaveMode
+from ._trace_selector_helpers import _is_save_label_selection, _route_save_label_selection
 from .backends.registry import (
     BackendName,
 )
@@ -70,11 +71,26 @@ from .intervention.predicates import InterventionPredicate
 from .options import (
     CaptureOptions,
     EpisodeOptions,
-    SaveOptions,
     StorageOptions,
+    merge_capture_options,
 )
-from .recording.options import HaltPredicateFn, PredicateFn
-from .types import _GradientPostfunc
+from .recording.options import PredicateFn
+
+
+def _facet_snapshot_provider(extra_recipes: Any) -> Any:
+    """Build a trace's facet snapshot, loading the facets appliance on first use.
+
+    ``tl.trace(model, x, facets=[fn])`` accepts plain callables, so a capture can carry
+    recipes before anything imported ``torchlens._semantic.facets``; this facade door
+    (Rule F) registers the lazy load so the engine never imports upward itself.
+    """
+
+    from ._semantic import facets as _facets  # deferred: startup cost (facade door)
+
+    return _facets.snapshot(extra_recipes)
+
+
+register_facet_snapshot_provider(_facet_snapshot_provider)
 
 
 def clear_cache(cache_dir: str | Path | None = None) -> int:
@@ -139,56 +155,45 @@ def reset_naming_counter(class_name: str | None = None) -> None:
     _state.reset_naming_counter(class_name)
 
 
-def render(*args: Any, **kwargs: Any) -> Any:
+def draw(*args: Any, **kwargs: Any) -> Any:
     """One-call model picture over the quickstart input ladder (F17 B15).
 
     ONE metadata-only eval/no-grad capture (training flags, RNG, and norm
     buffers restored), rendered with the facade default ``collapse="auto"``
-    (``Trace.draw`` keeps ``"none"``). Detached
-    :class:`torchlens._quickstart.Drawing`; never auto-opens a viewer.
-    See :func:`torchlens._quickstart.render` for the parameters.
+    (``Trace.draw`` keeps ``"none"``). Returns a detached
+    :class:`torchlens.viz.Drawing`; never auto-opens a viewer.
+    See :func:`torchlens._quickstart.draw` for the parameters.
     """
 
-    from ._quickstart._render import render as _render_impl
+    from ._quickstart._render import draw as _draw_impl
 
-    return _render_impl(*args, **kwargs)
+    return _draw_impl(*args, **kwargs)
 
 
 def trace(
     model: nn.Module | Callable[..., Any],
-    input_args: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
+    inputs: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
+    *extra_positional: Any,
     input_kwargs: dict[Any, Any] | None = None,
-    grad_transform: _GradientPostfunc | None | MissingType = MISSING,
-    save_mode: SaveMode | MissingType = MISSING,
-    reconstruction_ready: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
-    save: SaveOptions
-    | PredicateFn
+    save: PredicateFn
     | BaseSelector
     | str
     | list[Any]
     | tuple[Any, ...]
-    | None = None,
+    | None
+    | MissingType = MISSING,
     intervene: InterventionPredicate | None = None,
-    halt: HaltPredicateFn | None = None,
-    lookback: int = 0,
-    lookback_payload_policy: str = "metadata_only",
+    stop_after: Any | None = None,
     storage: StorageOptions | None = None,
-    streaming: StorageOptions | None = None,
-    profile: bool | MissingType = MISSING,
     facets: (
         list[Callable[[Any], dict[str, Any]]]
         | tuple[Callable[[Any], dict[str, Any]], ...]
         | None
         | MissingType
     ) = MISSING,
-    *,
-    grouping: str | MissingType = MISSING,
     narrate: Any | None = None,
-    jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
-    grad_options: Any | None | MissingType = MISSING,
     episode: EpisodeOptions | None = None,
-    chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,
     backend: BackendName | None = None,
     input_shape: Any | None = None,
@@ -235,7 +240,7 @@ def trace(
         F41): ``tl.trace(model.generate, ids, ...)`` resolves the owner via
         ``method.__self__``, wraps it in a TL-authored synthetic root, and
         calls the method exactly once.
-    input_args:
+    inputs:
         Positional args for ``model.forward()``; a single tensor or list.
         The input ladder (memo D2): a real input is the gold rung; omit
         it and pass ``input_shape=``, or omit both to infer -- synthesized
@@ -254,68 +259,43 @@ def trace(
         **Layer selection** above). Accepts ``'all'``, ``'none'``/``None``/``[]``,
         label/module/index/substring lists, predicate selectors
         (``tl.func``, ``tl.in_module``, ``tl.followed_by``, ``tl.when``
-        combinators), or a grouped ``SaveOptions``.
-    grad_transform:
-        Optional function applied to each grad before saving. The raw
-        grad remains in ``layer.grad`` by default, and the transform result is stored
-        in ``layer.transformed_grad``.
-    save_mode:
-        Tensor retention mode for saved activation and gradient payloads.
-        ``"copy"`` is the safe cloning default; ``"reference"`` preserves the
-        captured value through in-place handling; ``"view"`` is a live alias that
-        downstream in-place operations can mutate; and ``"cpu_async"`` clones to CPU.
-    reconstruction_ready:
-        If True, auto-enable the argument and RNG capture
-        prerequisites needed by read-only reconstructed facets such as fused
-        SDPA ``scores``, ``pattern``, and ``z``.
+        combinators) or ``"stats"`` (per-op summaries, no payload). Activation and
+        gradient transforms ride ``CaptureOptions``.
     capture:
         Grouped capture options (``CaptureOptions``). The one spelling for
-        every capture knob (``layers_to_save``, ``random_seed``,
-        ``replayable``, ``verbose``, ``structure_only``, ...); the
-        former flat kwargs are removed.
+        every capture knob (``seed``, ``replayable``, ``verbose``,
+        ``structure_only``, ``save_mode``, ``lookback``, ``chunk_size``,
+        ``grouping``, ...); the former flat kwargs are removed. ``grouping``
+        (UNSTABLE) is the closed-vocabulary grouping policy: ``"structural"``
+        (the default), ``"strict_shapes"`` and ``"fold_sites"`` refuse typed
+        until their designs land; the request is recorded on
+        ``trace.options.grouping`` and the policy that ran on
+        ``trace.options.grouping_policy``.
     intervene:
         Optional predicate returning an intervention decision for
         current-op live mutation.
-    halt:
-        Optional predicate returning ``True`` to stop after the matching
-        source, operation, or module-boundary event and return the partial trace.
-    lookback:
-        Number of recent capture events queryable by predicate-window helpers.
-    lookback_payload_policy:
-        Retention policy for retroactive ``followed_by`` saves.
-        ``"metadata_only"`` keeps the default metadata-only window and cannot
-        retroactively save payloads. Non-default policies retain up to ``lookback``
-        candidate payloads, for a memory cost of roughly ``lookback`` times the
-        candidate payload size.
+    stop_after:
+        One stop directive, a site or a predicate: a module address string
+        (``"encoder.layer.4"``), a function name (``"relu"``), a live selector
+        (``tl.func("relu")``, ``tl.module(...)``) or a callable predicate
+        taking the live op context. Capture halts inclusively after the first
+        match and returns a partial halted trace. A selector-shaped site that
+        never fires refuses typed (``stop_after_never_fired``); a callable that
+        never fires warns (``stop_after_never_fired_callable``). Finalized
+        labels refuse (``stop_after_site_not_live``); an unsupported type
+        refuses (``stop_after_type_invalid``). Cannot combine with
+        ``CaptureOptions(chunk_size=...)``. ``None`` reads the ambient
+        ``tl.experimental.stop_after`` site, if one is active.
     storage:
         Shared storage routing option. ``storage=tl.to_disk(path)``
         streams predicate-selected saves to a disk bundle during the
         forward pass. ``None`` preserves the existing in-RAM behavior.
-    streaming:
-        Grouped streaming-save options (``StorageOptions``).
-    chunk_size:
-        If supplied, split a positional tensor input into forward
-        chunks of this size along dimension 0 and append them into one
-        in-memory ``Trace``. Forward-only and torch-only.
     chunk_paths:
         Optional explicit tensor leaf paths to split when multiple
         batched tensor leaves are present.
-    profile:
-        If True, explicitly marks the returned trace as profiled. Phase timings are
-        always populated on ``trace._phase_timings``.
     facets:
         Per-trace additive facet recipes captured into the immutable
         registry snapshot for the returned trace.
-    grouping:
-        UNSTABLE (no deprecation shim owed). Closed-vocabulary grouping
-        policy: ``"structural"`` (the default -- today's recurrence
-        grouping), ``"strict_shapes"`` (reserved; refuses typed until its
-        own reviewed design lands), ``"fold_sites"`` (the D1 folding axis;
-        refuses typed on plain captures until an affirmative D1 ruling).
-        The requested value is recorded on ``trace.options.grouping`` and the
-        policy that actually ran on ``trace.options.grouping_policy``. Distinct
-        from the display-only ``fold_repeats`` viz knob, which folds
-        repeated module runs at RENDER time and never changes grouping.
     narrate:
         Live narration (DOCUMENTED-UNSTABLE, lane F28): ``True`` narrates
         every completed tensor-output event plus module structure lines;
@@ -323,15 +303,6 @@ def trace(
         stream; ``tl.options.NarrationOptions`` groups the full surface (stats
         rungs, sink, crash tail). Narration is a display of capture
         events -- independent of ``save=`` retention. Torch-only.
-    jax_static_argnums:
-        JAX-only positional argument indexes passed to
-        ``jax.make_jaxpr(..., static_argnums=...)`` when
-        ``backend="jax"``. Non-default values require the explicit JAX
-        backend.
-    grad_options:
-        Backend-specific derived-gradient options for the
-        leaf-level preview. Supported by explicit ``backend="jax"`` and
-        ``backend="tinygrad"`` only.
     episode:
         Torch-only episode capture declaration (``EpisodeOptions``).
     backend:
@@ -347,7 +318,7 @@ def trace(
         ``trace_forward_kwargs_unrouted`` naming the ``input_kwargs=`` routing.
 
     Postfunc behavior:
-        ``save.activation_transform`` and ``grad_transform`` both take a tensor, should return a
+        ``CaptureOptions.activation_transform`` and ``grad_transform`` both take a tensor, should return a
         tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
         raise ``UserTransformError`` with layer/function/tensor context if they fail.
 
@@ -365,36 +336,60 @@ def trace(
         A ``Trace`` containing layer outs (if requested) and full metadata.
     """
     with zero_fire_policy_scope(None if on_zero_fire is MISSING else on_zero_fire):
+        _reject_extra_positional_input(extra_positional)
         _reject_unrouted_forward_kwargs(forward_kwargs)
         del forward_kwargs  # must never ride the ladder's locals() snapshot below
         _reject_non_mapping_input_kwargs(input_kwargs)
         model, intervene = _model_door.resolve_trace_operands(model, intervene)
-        if input_shape is not None or input_args is None:
+        if input_shape is not None or inputs is None:
             model = _reject_non_module_ladder_root(model)
             # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
             # resolve BEFORE any capture machinery, then re-enter trace() as gold.
             ladder_kwargs = locals().copy()
-            for consumed in ("model", "input_args", "input_kwargs", "input_shape"):
+            for consumed in (
+                "model",
+                "inputs",
+                "extra_positional",
+                "input_kwargs",
+                "input_shape",
+            ):
                 ladder_kwargs.pop(consumed)
             from ._quickstart._ladder import _trace_via_ladder
 
-            return _trace_via_ladder(model, input_args, input_kwargs, input_shape, ladder_kwargs)
+            return _trace_via_ladder(model, inputs, input_kwargs, input_shape, ladder_kwargs)
         _refuse_compiled_callable_root(model)
-        _reject_extra_positional_input(grad_transform)
+        if save is MISSING:
+            save = None
+        elif save is None:
+            capture = merge_capture_options(capture=capture, _layers_to_save=None)
+        if _is_save_label_selection(save):
+            save, capture = _route_save_label_selection(
+                save, capture, merge_capture_options(capture=capture), model
+            )
         public_trace_kwargs = locals().copy()
-        # backend= routes below; input_shape= is ladder-consumed (always None
-        # here); on_zero_fire= was settled by the zero_fire_policy_scope above,
-        # never a backend option; grouping= is validated as an entry knob.
-        for consumed in ("backend", "input_shape", "on_zero_fire", "grouping"):
+        # The capture pipeline's internal keyword bundle keeps the slot under ``input_args``.
+        public_trace_kwargs["input_args"] = public_trace_kwargs.pop("inputs")
+        # Consumed above (refused, routed, ladder-consumed or settled); never backend options.
+        for consumed in ("extra_positional", "backend", "input_shape", "on_zero_fire"):
             public_trace_kwargs.pop(consumed)
+        # The capture knobs that used to be door keywords travel inside
+        # ``capture=``; the backend entries still take them flat, so the door
+        # unfolds them here (explicit when the caller set the field, else MISSING
+        # or the door's former default) and the backend kwarg bundle keeps its
+        # shape. ``halt=`` is gone: ``stop_after=`` is the one stop directive.
+        flat_capture_values = _unfold_door_capture_fields(capture)
+        public_trace_kwargs.update(flat_capture_values)
+        public_trace_kwargs["halt"] = None
+        # grouping is validated as an entry knob, never a backend option.
+        grouping = public_trace_kwargs.pop("grouping")
         _refuse_trace_entry_shapes(
             grouping=grouping,
             narrate=narrate,
-            chunk_size=chunk_size,
+            chunk_size=flat_capture_values["chunk_size"],
             chunk_paths=chunk_paths,
             backend=backend,
-            jax_static_argnums=jax_static_argnums,
-            grad_options=grad_options,
+            jax_static_argnums=flat_capture_values["jax_static_argnums"],
+            grad_options=flat_capture_values["grad_options"],
         )
         return _dispatch_trace(
             public_trace_kwargs, backend=backend, grouping=grouping, on_zero_fire=on_zero_fire
@@ -426,11 +421,11 @@ def log_model_metadata(
     return trace(
         model,
         input_args,
-        input_kwargs,
+        input_kwargs=input_kwargs,
         capture=CaptureOptions(
-            layers_to_save=None,
             compute_input_output_distances=True,
         ),
+        save=None,
     )
 
 
@@ -491,18 +486,6 @@ def show_model_graph(*args: Any, **kwargs: Any) -> None:
     return cast(None, _public_impls_module().show_model_graph(*args, **kwargs))
 
 
-def draw_backward(*args: Any, **kwargs: Any) -> str:
-    """Forward to the backward graph rendering implementation."""
-
-    return cast(str, _public_impls_module().draw_backward(*args, **kwargs))
-
-
-def draw_combined(*args: Any, **kwargs: Any) -> str:
-    """Forward to the combined graph rendering implementation."""
-
-    return cast(str, _public_impls_module().draw_combined(*args, **kwargs))
-
-
 def show_bundle_graph(*args: Any, **kwargs: Any) -> str | None:
     """Forward to the bundle graph rendering implementation."""
 
@@ -535,8 +518,6 @@ def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
 
 _PUBLIC_IMPL_WRAPPER_NAMES = (
     "show_model_graph",
-    "draw_backward",
-    "draw_combined",
     "show_bundle_graph",
     "validate_forward_pass",
     "validate_backward_pass",

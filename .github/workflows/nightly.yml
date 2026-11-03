@@ -3,7 +3,7 @@ name: Nightly
 # Everything a pull request does not run, once a night: the supported-version
 # smoke matrix (torch floors to newest admitted, every advertised python), the
 # latest-torch canary, the not-slow tier in the shards test-tiers.json
-# declares, coverage floors, the byte oracles, the preview backends, the
+# declares, the stress matrix's pre-merge subset, coverage floors, the byte oracles, the preview backends, the
 # packaging and wheel gates, the real-dependency bridge legs and the
 # dependency audit.
 on:
@@ -369,6 +369,74 @@ jobs:
               pytest tests/test_generative_properties_r73.py tests/test_tlspec_parse_fuzz.py \
                 -m '' -q --tb=short -p no:randomly
           done
+
+      - name: Upload junit and executed-test floors
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/junit/
+          if-no-files-found: error
+          retention-days: 30
+
+  stress-subset:
+    name: Stress matrix (pre-merge subset)
+    # The cells in tests/stress/subset.json (every axis value at least once),
+    # six oracles each, on the tier's pinned environment. The oracle tests
+    # carry `slow`, so the not-slow tier above never runs them; this is the
+    # nightly leg that does. The full matrix runs weekly (weekly.yml,
+    # stress-full). `--dist loadgroup` keeps a cell's six oracle tests on one
+    # worker so the cell runs once (tests/stress/README.md); `-p no:randomly`
+    # keeps pytest-randomly's reseeding out of the RNG-restoring oracle.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install torch and TorchLens
+        run: |
+          cat > "${{ runner.temp }}/torch-2.13-constraints.txt" <<'EOF2'
+          torch==2.13.0+cpu
+          torchvision==0.28.0+cpu
+          EOF2
+          uv pip install --system -c "${{ runner.temp }}/torch-2.13-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular,viz]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "transformers==5.18.0"
+          uv pip check
+          python -c "import torch, torchvision; assert torch.__version__ == '2.13.0+cpu', torch.__version__; print(torch.__version__, torchvision.__version__)"
+
+      - name: Run the stress subset
+        env:
+          OMP_NUM_THREADS: "1"
+        run: |
+          pytest tests/stress -n 4 --dist loadgroup -p no:randomly --tb=short -rfE \
+            --junitxml="${{ runner.temp }}/junit/stress-subset.xml"
+
+      - name: Declare the executed-test floor
+        # About half of the 941 tests the subset executed on the pinned
+        # environment at the push's head (1,202 collected, 261 not applicable).
+        run: echo "stress-subset.xml 470" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
@@ -854,7 +922,7 @@ jobs:
 
       - name: Restore the ${{ matrix.backend }} ecosystem weights cache
         # Pretrained checkpoints for the ecosystem roster rows
-        # (torchlens/conformance/_rosters/<backend>.py, group `ecosystem`),
+        # (tests/conformance/_rosters/<backend>.py, group `ecosystem`),
         # keyed on the roster file so a changed row refetches its weights.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -863,7 +931,7 @@ jobs:
             ~/.keras
             ~/.cache/paddle
             ~/.cache/tinygrad
-          key: conformance-weights-${{ matrix.backend }}-${{ hashFiles(format('torchlens/conformance/_rosters/{0}.py', matrix.backend)) }}-v1
+          key: conformance-weights-${{ matrix.backend }}-${{ hashFiles(format('tests/conformance/_rosters/{0}.py', matrix.backend)) }}-v1
 
       - name: Run the ${{ matrix.backend }} ecosystem roster
         # The networked conformance run: with TORCHLENS_CONFORMANCE_ECOSYSTEM=1
@@ -878,7 +946,7 @@ jobs:
           BACKEND: ${{ matrix.backend }}
         run: |
           mkdir -p "${{ runner.temp }}/ecosystem"
-          python -m torchlens.conformance.scorecard --backend "$BACKEND" \
+          python -m tests.conformance.scorecard --backend "$BACKEND" \
             > "${{ runner.temp }}/ecosystem/scorecard-$BACKEND.json"
 
       - name: Upload the ${{ matrix.backend }} ecosystem scorecard
@@ -2101,7 +2169,7 @@ jobs:
     # One check for the whole workflow: every test job above declares its
     # legs' floors in a legs.floor file beside its junit; this job checks all
     # of them, so a leg whose suite silently skipped or hollowed out is red.
-    needs: [smoke-matrix, tier, latest-canary, capture-byte-oracle, preview-backends, hf-band-legs, lit-real, bridges-real, peer-recipes, brainscore-live, tlens-oracle-canary, netron-vendor, model-explorer-contract]
+    needs: [smoke-matrix, tier, stress-subset, latest-canary, capture-byte-oracle, preview-backends, hf-band-legs, lit-real, bridges-real, peer-recipes, brainscore-live, tlens-oracle-canary, netron-vendor, model-explorer-contract]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10

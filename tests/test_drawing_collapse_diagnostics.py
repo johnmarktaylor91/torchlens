@@ -8,7 +8,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError, TraceCleanedUpError
-from torchlens._user_funcs import render
 from torchlens._visualization.collapse_plan import CollapsePlan, CollapseSchedule
 
 
@@ -25,14 +24,10 @@ class _Nested(nn.Module):
 
 
 def test_drawing_collapse_plan_and_schedule_read_the_retained_trace(tmp_path) -> None:
-    """A drawing made with return_trace=True answers both diagnostics."""
+    """A ``trace.draw(...)`` result answers both diagnostics from the trace it keeps."""
 
-    drawing = render(
-        _Nested().eval(),
-        torch.randn(1, 4),
-        return_trace=True,
-        file=str(tmp_path / "g.svg"),
-    )
+    trace = tl.trace(_Nested().eval(), torch.randn(1, 4))
+    drawing = trace.draw(str(tmp_path / "g"), file_format="svg")
     with drawing:
         for mode in ("auto", "max", 0.5):
             assert isinstance(drawing.collapse_plan(mode), CollapsePlan)
@@ -46,11 +41,16 @@ def test_drawing_collapse_plan_and_schedule_read_the_retained_trace(tmp_path) ->
 def test_drawing_without_a_retained_trace_refuses_typed(tmp_path) -> None:
     """A detached or closed drawing refuses with the husked-trace error, never a bare failure."""
 
-    detached = render(_Nested().eval(), torch.randn(1, 4), file=str(tmp_path / "g.svg"))
-    for call in (detached.collapse_plan, detached.collapse_schedule):
-        with pytest.raises(TraceCleanedUpError) as excinfo:
-            call()
-        assert "return_trace=True" in str(excinfo.value)
+    detached = tl.draw(_Nested().eval(), torch.randn(1, 4), path=str(tmp_path / "d.svg"))
+    closed = tl.trace(_Nested().eval(), torch.randn(1, 4)).draw(
+        str(tmp_path / "c"), file_format="svg"
+    )
+    closed.close()
+    for drawing in (detached, closed):
+        for call in (drawing.collapse_plan, drawing.collapse_schedule):
+            with pytest.raises(TraceCleanedUpError) as excinfo:
+                call()
+            assert "trace.draw(...)" in str(excinfo.value)
 
 
 def test_trace_no_longer_carries_the_collapse_diagnostics() -> None:

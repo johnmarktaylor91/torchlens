@@ -173,3 +173,21 @@ def test_tensor_content_digest_is_dtype_agnostic_and_byte_exact() -> None:
     assert tensor_content_digest(half) == tensor_content_digest(half.clone())
     assert tensor_content_digest(torch.tensor(3.0)) == tensor_content_digest(torch.tensor(3.0))
     assert tensor_content_digest(torch.empty(0)) == tensor_content_digest(torch.empty(0))
+
+
+def test_tensor_content_digest_accepts_a_strided_one_element_payload() -> None:
+    """A ``(1,)`` slice with a non-unit stride digests like its dense copy.
+
+    ``contiguous()`` leaves such a payload alone (a size-1 dimension is
+    contiguous at any stride), and the byte view used to raise on it: a fork
+    replay over a captured ``(1,)`` row slice crashed in the digest.
+    """
+
+    base = torch.arange(8.0).reshape(2, 4)
+    strided = base[:1, 2]
+    assert strided.shape == (1,) and strided.stride() != (1,)
+    assert tensor_content_digest(strided) == tensor_content_digest(strided.clone())
+    assert tensor_content_digest(strided) == tensor_content_digest(torch.tensor([2.0]))
+    assert tensor_content_digest(strided) != tensor_content_digest(base[:1, 3])
+    scalar_view = base[1:2, 1:2]
+    assert tensor_content_digest(scalar_view) == tensor_content_digest(torch.tensor([[5.0]]))

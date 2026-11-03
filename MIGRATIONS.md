@@ -2,6 +2,17 @@
 
 ## `.tlspec` Compatibility
 
+TorchLens 3 does not load files saved by torchlens 2.x. A saved trace (any
+`tlspec_version` below 11, the format this release writes), a pickled 2.x module
+path, a recording, merged or extraction directory whose manifest names a 2.x
+`torchlens_version`, and the formats below all refuse at `tl.load` with
+`tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message
+names the 2.x origin and the remedy: load the file with torchlens 2.36.x
+(`pip install 'torchlens>=2.36,<3'`), which reads it, or capture the model again with
+this release and save that. Saving the file again with torchlens 2.36.x does not help
+for a trace: 2.36.x writes `tlspec_version` 9. The promise earlier releases made, that
+`.tlspec` files written by torchlens 2.16 would always load, is withdrawn.
+
 TorchLens 2.16.0 wrote two public `.tlspec` directory formats:
 
 - Intervention specs with `spec.json` containing `format_version` (`"1"`, written by
@@ -10,16 +21,38 @@ TorchLens 2.16.0 wrote two public `.tlspec` directory formats:
 
 TorchLens 3 reads neither, and does not migrate them: like every file saved by
 torchlens 2.x, both refuse at `tl.load` and at `tl.validation.validate_tlspec` with
-`tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message
-names the 2.x origin and the remedy. Save the artifact again with torchlens 2.36.x
-(`pip install 'torchlens>=2.36,<3'`), which reads format_version-1 intervention specs, or
-capture the model again with this release. The 2.16 `ModelLog` bundle is the exception
+`tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`). A
+format_version-1 intervention spec saved again with torchlens 2.36.x is written as
+format_version 2, which this release reads. The 2.16 `ModelLog` bundle is the exception
 torchlens 2.36.x cannot read either: only torchlens 2.17.0 does (`pip install
 torchlens==2.17.0` in a separate environment).
 
 Readers dispatch by detected format (`tl.io.detect_tlspec_format`); the detection labels
 keep their 2.16 spellings for current intervention specs, which carry `kind:
 "intervention"` in `manifest.json` beside the 2.16 fields.
+
+### Compatibility window
+
+The intended compatibility window for artifacts written by TorchLens 3.x is five years: a
+`.tlspec` saved by a 3.x release is meant to load in every 3.x release published within five
+years of the one that wrote it. That window is a stated intention, not yet a promise, because
+it rests on three prerequisites and only the first is in place:
+
+1. Typed refusal of unknown fields in both directions: in place. A reader refuses a field it
+   does not know whether the writer was newer or older (`torchlens/_io/state_contract.py`;
+   `tests/test_tlspec_unified.py`), so skew is never absorbed silently.
+2. A state-capable migration protocol that upgrades an older artifact instead of refusing it:
+   not yet built. Today a reader below an artifact's `tlspec_version` refuses with
+   `artifact_version_above_runtime` and the remedy names the release to upgrade to.
+3. A release gate in which an already-published reader loads artifacts written by the current
+   tree: not yet run. The committed goldens prove the reverse direction only (the current
+   reader loading older artifacts).
+
+Until all three are green the promise is the narrower one this page already makes: within 3.x,
+a newer reader loads older 3.x artifacts and refuses, typed, anything it cannot read; a newer
+artifact refuses, typed, in an older reader. The five-year window becomes a promise, and this
+section drops its conditions, when prerequisites 2 and 3 land. Files written by torchlens 2.x
+are outside the window entirely (see above).
 
 ## Visualization Collapse Engine
 

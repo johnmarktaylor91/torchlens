@@ -24,7 +24,7 @@ from torchlens._capture.outcome import (
     CapturePhase,
     CaptureStatus,
 )
-from torchlens.errors import TraceCaptureError
+from torchlens.errors import TorchLensWarning, TraceCaptureError
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -53,8 +53,7 @@ def test_transform_introduced_nan_stays_complete() -> None:
     trace = tl.trace(
         ThreeStageModel(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(raise_on_nan=True),
-        save=tl.options.SaveOptions(activation_transform=poison),
+        capture=tl.options.CaptureOptions(on_nonfinite="raise", activation_transform=poison),
     )
     assert trace.outcome.status is CaptureStatus.COMPLETE
 
@@ -71,8 +70,7 @@ def test_raw_nan_aborts_even_when_transform_sanitizes() -> None:
         tl.trace(
             NaNProducingModel(),
             torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
-            save=tl.options.SaveOptions(activation_transform=sanitize),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise", activation_transform=sanitize),
         )
     outcome = exc_info.value.partial_trace.trace.outcome
     assert outcome.status is CaptureStatus.ABORTED_NONFINITE
@@ -112,7 +110,7 @@ def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
         return False
 
     with pytest.raises(RuntimeError, match="could not identify a tensor frontier") as exc_info:
-        tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=_halt_and_orphan)
+        tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=_halt_and_orphan)
     assert isinstance(exc_info.value.__cause__, StopSignal)
     outcome = captured[0].outcome
     assert outcome is not None
@@ -122,13 +120,18 @@ def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
 
 
 def test_never_fired_halt_predicate_stays_complete() -> None:
-    """A halt predicate that never fires yields an ordinary COMPLETE capture."""
+    """A halt predicate that never fires yields an ordinary COMPLETE capture.
 
-    trace = tl.trace(
-        ThreeStageModel(),
-        torch.ones(1, 3),
-        halt=lambda ctx: ctx.kind == "op" and ctx.func_name == "definitely_absent",
-    )
+    The callable never-fired policy warns (the capture ran the full forward)
+    but the product stays COMPLETE.
+    """
+
+    with pytest.warns(TorchLensWarning, match="never fired"):
+        trace = tl.trace(
+            ThreeStageModel(),
+            torch.ones(1, 3),
+            stop_after=lambda ctx: ctx.kind == "op" and ctx.func_name == "definitely_absent",
+        )
     assert trace.is_stopped is False
     assert trace.outcome.status is CaptureStatus.COMPLETE
 
@@ -143,7 +146,7 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
         ThreeStageModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        halt=halt_on_relu,
+        stop_after=halt_on_relu,
     )
     cooked = recording.to_trace()
     assert cooked.outcome.status is CaptureStatus.STOPPED

@@ -53,7 +53,7 @@ def test_streamed_payloads_still_readable_after_publish(tmp_path):
     trace = tl.trace(_model(), torch.randn(2, 4), storage=tl.to_disk(str(path)))
     # Live streamed traces evict in-memory outs (historical behavior); the
     # attached lazy ref must point at the PUBLISHED bundle.
-    ref = trace["relu_1_2"].ops[0].out_ref
+    ref = trace.layers["relu_1_2"].ops[0].out_ref
     assert ref is not None and ref.source_bundle_path == path
     loaded = tl.load(path)
     assert loaded["relu_1_2"].out.shape == (2, 3)
@@ -68,7 +68,7 @@ def test_streamed_halted_capture_loads_halted(tmp_path):
     trace = tl.trace(
         model,
         torch.randn(2, 4),
-        halt=tl.func("linear"),
+        stop_after=tl.func("linear"),
         storage=tl.to_disk(str(path)),
     )
     assert trace.outcome.status is CaptureStatus.STOPPED

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils.facade import refuse_removed_member
+
 if TYPE_CHECKING:
     from .trace import Trace
 
@@ -55,11 +57,11 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),
     "collapse_plan": (
-        "use tl.render(model, x, return_trace=True).collapse_plan(mode) on the draw result -- "
+        "use trace.draw(path).collapse_plan(mode) on the draw result -- "
         "Trace.collapse_plan moved to the draw result"
     ),
     "collapse_schedule": (
-        "use tl.render(model, x, return_trace=True).collapse_schedule() on the draw result -- "
+        "use trace.draw(path).collapse_schedule() on the draw result -- "
         "Trace.collapse_schedule moved to the draw result"
     ),
     "log_backward": "use trace.backward(loss) -- Trace.log_backward was renamed",
@@ -112,8 +114,6 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
             remedy="re-capture with tl.trace(...); cleanup() permanently empties a Trace",
             attribute=name,
         )
-    from .._utils.facade import refuse_removed_member
-
     refuse_removed_member(type(trace).__name__, name, _REMOVED_TRACE_MEMBERS)
     hint = _MISSING_ATTR_HINTS.get(name)
     if hint is not None:

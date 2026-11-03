@@ -40,11 +40,11 @@ def main() -> None:
         TinyClassifier().eval(),
         inputs,
         capture=CaptureOptions(
-            layers_to_save="all",
             replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
+        save="all",
     )
     with tempfile.TemporaryDirectory() as directory:
         artifact = Path(directory) / "classifier.tlspec"

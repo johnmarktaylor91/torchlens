@@ -8,7 +8,6 @@ import torchlens as tl
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
-from torchlens.options import CaptureOptions
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -51,13 +50,13 @@ class ColonNamedModule(nn.Module):
 @pytest.fixture
 def simple_log():
     model = SimpleModel()
-    return tl.trace(model, torch.randn(1, 5), capture=CaptureOptions(layers_to_save="all"))
+    return tl.trace(model, torch.randn(1, 5), save="all")
 
 
 @pytest.fixture
 def recurrent_log():
     model = RecurrentModel()
-    return tl.trace(model, torch.randn(1, 5), capture=CaptureOptions(layers_to_save="all"))
+    return tl.trace(model, torch.randn(1, 5), save="all")
 
 
 def _assert_layer_labels_are_not_doubled(trace: Trace) -> None:
@@ -126,7 +125,7 @@ class TestLayerLogConstruction:
         model = transformers.DistilBertModel(config)
         model.eval()
         input_ids = torch.randint(0, config.vocab_size, (1, 4))
-        trace = tl.trace(model, input_ids, capture=CaptureOptions(layers_to_save="all"))
+        trace = tl.trace(model, input_ids, save="all")
 
         _assert_layer_labels_are_not_doubled(trace)
 
@@ -256,10 +255,10 @@ class TestMultiPassLayerLog:
                 break
 
     def test_getitem_returns_layer_log_for_multi_pass(self, recurrent_log):
-        """log['label'] returns Layer for multi-pass layers."""
+        """log.layers['label'] returns the Layer for multi-pass layers."""
         for layer_log in recurrent_log._layer_logs.values():
             if layer_log.num_passes > 1:
-                result = recurrent_log[layer_log.layer_label]
+                result = recurrent_log.layers[layer_log.layer_label]
                 assert isinstance(result, Layer)
                 assert result is layer_log
                 break
@@ -401,7 +400,7 @@ def test_colon_named_module_traces_without_postprocess_split_error() -> None:
     trace = tl.trace(
         ColonNamedModule(),
         torch.randn(1, 5),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
     assert "a:b" in trace.modules

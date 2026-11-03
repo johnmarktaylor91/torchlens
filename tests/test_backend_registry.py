@@ -121,7 +121,8 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
         _TinyModel().eval(),
         torch.ones(1),
         backend="torch",
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=1),
+        capture=tl.options.CaptureOptions(seed=1),
+        save="all",
     )
     trace._provenance_backend = "fake"
     trace._options_module_identity_mode = "function_root"
@@ -228,12 +229,13 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
 
     model = _TinyModel()
     x = torch.ones(1)
-    legacy = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all", seed=1))
+    legacy = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=1), save="all")
     explicit = tl.trace(
         model,
         x,
         backend="torch",
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=1),
+        capture=tl.options.CaptureOptions(seed=1),
+        save="all",
     )
     assert explicit.provenance.backend == legacy.provenance.backend == "torch"
     assert explicit.layer_labels == legacy.layer_labels
@@ -244,7 +246,6 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
     [
         {"module_identity_mode": "object_module"},
         {"payload_policy": "not_a_policy"},
-        {"save_preview": True},
         {"jax_control_flow": "reject"},
     ],
 )
@@ -268,7 +269,7 @@ def test_torch_accepts_default_equivalent_trace_option_values() -> None:
         torch.ones(1),
         backend="torch",
         capture=tl.options.CaptureOptions(
-            module_identity_mode="torch_module", payload_policy="full", save_preview=False
+            module_identity_mode="torch_module", payload_policy="full"
         ),
     )
 
@@ -1214,7 +1215,6 @@ def test_refusal_code_passed_at_the_raise_site_is_the_instance_code() -> None:
 _GATED_TRACE_OPTION_FLAGS_AT_RECORDS = {
     "intervene": "can_intervene",
     "halt": "can_intervene",
-    "facets": "can_intervene",
     "storage": "has_streaming",
     "streaming": "has_streaming",
     "save_grads": "backward_capture",
@@ -1228,11 +1228,11 @@ _PUBLIC_OPTION_SPINE_AT_RECORDS = (
     "jax_max_control_flow_unroll",
     "module_identity_mode",
     "payload_policy",
-    "save_preview",
     "capture_container_structure",
     "inference_only",
     "chunk_size",
     "chunk_paths",
+    "facets",
 )
 
 
@@ -1290,6 +1290,7 @@ def test_capability_tables_derive_from_the_records_in_table_order() -> None:
         "jax_control_flow",
         "jax_max_control_flow_unroll",
         "module_identity_mode",
+        "facets",
     )
     for options in (
         registry.MLX_TRACE_OPTIONS,
@@ -1297,7 +1298,7 @@ def test_capability_tables_derive_from_the_records_in_table_order() -> None:
         registry.PADDLE_TRACE_OPTIONS,
         registry.TF_TRACE_OPTIONS,
     ):
-        assert options == ("module_identity_mode", "grad_options")
+        assert options == ("module_identity_mode", "grad_options", "facets")
 
 
 def test_dispatch_filtered_names_are_the_non_gated_record_options() -> None:

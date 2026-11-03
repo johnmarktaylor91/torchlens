@@ -135,9 +135,9 @@ def _captured_log(*, replayable: bool = False) -> tl.Trace:
         torch.randn(2, 3),
         capture=CaptureOptions(
             replayable=replayable,
-            layers_to_save="all",
             seed=0,
         ),
+        save="all",
     )
 
 
@@ -495,7 +495,7 @@ def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
     path = tmp_path / "plain_attribute_buffer.tlspec"
     trace.save(path)
     loaded = tl.load(path)
-    loaded_op = loaded[plain_buffer_op.layer_label].ops[0]
+    loaded_op = loaded.layers[plain_buffer_op.layer_label].ops[0]
 
     assert loaded_op.backend_address is None
     assert loaded[plain_buffer_op.layer_label].backend_address is None
@@ -507,7 +507,8 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     trace = tl.trace(
         nn.Linear(3, 3),
         torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+        save="all",
     )
     source_op = next(
         op for op in trace.ops if isinstance(op.out, torch.Tensor) and op.out.requires_grad
@@ -517,9 +518,9 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     trace.save(path)
     manifest = _read_manifest(path)
     loaded = tl.load(path)
-    loaded_out = loaded[source_op.layer_label].ops[0].out
+    loaded_out = loaded.layers[source_op.layer_label].ops[0].out
     lazy_loaded = tl.load(path, lazy=True)
-    lazy_out = lazy_loaded[source_op.layer_label].ops[0].materialize_out()
+    lazy_out = lazy_loaded.layers[source_op.layer_label].ops[0].materialize_out()
 
     assert any(entry["requires_grad"] is True for entry in manifest["tensors"])
     assert isinstance(loaded_out, torch.Tensor)

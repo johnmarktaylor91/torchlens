@@ -115,7 +115,7 @@ def save_realistic_artifact(directory: Path, *, save_all: bool = False) -> Path:
 
     model = MiniTransformer().eval()
     if save_all:
-        log = tl.trace(model, mini_ids(), capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = tl.trace(model, mini_ids(), save="all")
     else:
         log = tl.trace(model, mini_ids(), save=tl.func("softmax") | tl.func("gelu"))
     path = directory / ("mini_all.tlspec" if save_all else "mini.tlspec")

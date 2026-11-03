@@ -15,7 +15,7 @@ DOCS: dict[str, str] = {
         
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, seed, backward_ready:
+        model, input_args, input_kwargs, save, save_grads, seed, backward_ready:
             Forwarded unchanged to
             :func:`torchlens._capture.trace.save_new_outs`.
         """
@@ -132,7 +132,7 @@ DOCS: dict[str, str] = {
             Unified provider input tree. Supplying this keyword returns a
             transactional :class:`RunResult` and leaves this Trace unchanged.
             A tuple or list spreads as positional arguments, as ``tl.trace``
-            binds ``input_args``, on every provider and with ``fast=True``
+            binds ``inputs``, on every provider and with ``fast=True``
             (on a live trace a one-parameter forward takes a multi-element
             sequence whole); any other value is the single argument, and
             ``{"args": [...], "kwargs": {...}}`` binds both.
@@ -142,9 +142,9 @@ DOCS: dict[str, str] = {
             Explicit stateful static-loop mode. The live provider runs native ``forward``
             with targeted module/function collection and a per-call path/shape guard. The
             loaded provider performs one ordinary verified run, then reuses staged state
-            and compiled argument binders. Unlike the default transactional provider, later
-            fast iterations reuse one result Trace in place. With ``until=`` a live fast
-            run cuts the native forward right after that saved site.
+            and compiled argument binders. Both keep the source Trace untouched; unlike the
+            default transactional provider, later fast iterations refresh one result Trace.
+            With ``until=`` a live fast run cuts the native forward right after that saved site.
         carry_state:
             PROVISIONAL spelling (documented-unstable). Default ``False``: the
             live provider snapshot-restores the model's declared state (named

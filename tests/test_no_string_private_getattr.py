@@ -72,9 +72,14 @@ _TRACE_IDENTIFIERS = frozenset(
     }
 )
 
-#: The Trace group prefixes, one per group view (``TraceCost`` -> ``cost``).
+#: Group views whose private stores keep an older prefix: ``TraceSettings`` (the
+#: options.4 ruling renamed the view, not its ``_options_*`` stores).
+_GROUP_STORE_PREFIXES = {"settings": "options"}
+
+#: The Trace group store prefixes, one per group view (``TraceCost`` -> ``cost``).
 _TRACE_GROUP_PREFIXES = frozenset(
-    cls.__name__.removeprefix("Trace").lower() for cls in _TraceGroup.__subclasses__()
+    _GROUP_STORE_PREFIXES.get(name, name)
+    for name in (cls.__name__.removeprefix("Trace").lower() for cls in _TraceGroup.__subclasses__())
 )
 
 #: The v11-rest private stores: Trace collections and counters whose public
@@ -215,7 +220,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # `peek_buffer_write_tracker`, now reused by six call sites that were
     # each a separate string reach-in before this reconcile, net -7 there
     # alone), discharging all nine new sites plus six pre-existing ones.
-    "backends/torch": 116,
+    # 116 -> 111: merged backend changes discharged five more sites; lowered
+    # to the found count.
+    "backends/torch": 111,
     "bridge": 1,
     "bundle": 1,
     # 20 -> 22 (2026-08-16 l2 episode, f2228f46 S7 suite): the episode
@@ -328,14 +335,18 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # 30 -> 29 (2026-08-17 privprobes reconcile): the l2/l3 row above landed
     # with ONE `_tracing_finished` read in _invariants_primitive_ops.py, not
     # two -- correcting the overcount (profile x3 + tracing_finished x1).
-    "validation": 29,
+    # 29 -> 28: _invariants_payloads.py reads the loaded-bundle flag from the
+    # trace's instance dict instead of a string getattr.
+    "validation": 28,
     # 20 -> 23 (2026-08-14 fixwave-2 reconcile): intended R19/R40 rendering
     # additions (node-overlay names/scores, source-code blob, `_visualizer_dir`
     # consolidation into _render_dot.py) against removed `_raw_layer_dict` /
     # _render_nodes.py sites.
     # 23 -> 22 (2026-08-14 fix-wave reconcile, fix/vizr2 2d1371ac): one
     # reach-in discharged with the imagepath-out-of-saved-DOT rework.
-    "_visualization": 22,
+    # 22 -> 20 (2026-11-01 C2 integration, lane wip/mp-r2-draw-2 c5c1d322d): two
+    # reach-ins discharged with the Trace.draw/Drawing rework.
+    "_visualization": 20,
     # 2 -> 1 (2026-08-14 fixwave-2 reconcile): one reach-in discharged upstream.
     "viz": 1,
 }

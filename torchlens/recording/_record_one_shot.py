@@ -11,8 +11,8 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING, MissingType
-from .._errors import KeywordConflictError
 from .._input_coerce import _coerce_input_args
+from .._output_slot import returned as output_returned
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
     TORCH_BACKEND_NAME,
@@ -21,19 +21,11 @@ from ..backends.registry import (
     require_capability_implementation,
 )
 from ..intervention.predicates import InterventionPredicate
-from ..options import StorageOptions
-from ..types import _ActivationPostfunc, _GradientPostfunc
+from ..options import CaptureOptions, StorageOptions
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
 from ._validation import validate_postprocess
-from .options import (
-    ForwardErrorMode,
-    GradPredicateFn,
-    HaltPredicateFn,
-    LookbackPayloadPolicy,
-    PredicateErrorMode,
-    PredicateFn,
-)
+from .options import ForwardErrorMode, HaltPredicateFn, PredicateErrorMode, PredicateFn
 from .types import CaptureSpec, Recording
 
 
@@ -75,38 +67,27 @@ def _require_torch_fastlog_backend(backend: Any) -> None:
 
 def record(
     model: nn.Module,
-    input_args: Any,
-    input_kwargs: dict[str, Any] | None = None,
+    inputs: Any,
     *,
+    input_kwargs: dict[str, Any] | None = None,
     save: PredicateFn | None = None,
+    intervene: InterventionPredicate | None = None,
+    stop_after: HaltPredicateFn | None = None,
+    storage: StorageOptions | None = None,
+    capture: CaptureOptions | None = None,
     default_op: bool | CaptureSpec | MissingType = MISSING,
     default_module: bool | CaptureSpec | MissingType = MISSING,
     history_size: int = 8,
-    lookback: int = 0,
-    lookback_payload_policy: LookbackPayloadPolicy = "metadata_only",
     include_source_events: bool = False,
-    intervene: InterventionPredicate | None = None,
-    halt: HaltPredicateFn | None = None,
     max_predicate_failures: int = 32,
     on_predicate_error: PredicateErrorMode = "auto",
     on_forward_error: ForwardErrorMode = "raise",
-    storage: StorageOptions | None = None,
-    streaming: StorageOptions | None = None,
-    generate_kwargs: Mapping[str, Any] | None = None,
-    return_output: bool = False,
     postprocess: str = "none",
-    seed: int | None = None,
-    activation_transform: _ActivationPostfunc | None = None,
-    save_raw_activations: bool = True,
-    save_grads: GradPredicateFn | bool | CaptureSpec | None = None,
     default_grad: bool | CaptureSpec | MissingType = MISSING,
-    grad_transform: _GradientPostfunc | None = None,
-    save_raw_grads: bool = True,
-    backward_ready: bool = False,
     narrate: Any | None = None,
     backend: BackendName | None = None,
-    detach_saved_activations: bool | MissingType = MISSING,
-) -> Recording | GenerationRecording | tuple[Any, Recording | GenerationRecording]:
+    generate_kwargs: Mapping[str, Any] | None = None,
+) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
 
     ``record(save=...)`` is the one predicate spelling and matches
@@ -116,52 +97,56 @@ def record(
     ----------
     model:
         PyTorch module to execute.
-    input_args:
+    inputs:
         Tensor, list, or tuple of positional model inputs.
     input_kwargs:
         Optional keyword arguments for the model call.
-    save, default_op, default_module, history_size, lookback,
-    lookback_payload_policy, include_source_events, max_predicate_failures,
-    on_predicate_error, storage, streaming, seed:
+    save:
+        The one predicate spelling (matches ``trace(save=...)``).
+    storage:
+        Grouped storage options (``tl.options.StorageOptions``).
+    capture:
+        ``tl.options.CaptureOptions``. The fields ``record`` reads: ``lookback``,
+        ``lookback_payload_policy``, ``seed``, ``activation_transform``,
+        ``save_raw_activations``, ``save_grads``, ``grad_transform``,
+        ``save_raw_grads``, ``backward_ready`` and ``detach_saved_activations``
+        (meanings below).
+    default_op, default_module, history_size, include_source_events,
+    max_predicate_failures, on_predicate_error:
         Fastlog recording options.
     on_forward_error:
         Controls failed-forward handling: ``"raise"`` raises the capture's
         ``TraceCaptureError``, ``"attach_partial"`` also attaches the failed partial
-        Recording to it as ``partial_recording``, ``"return_partial"`` returns it.
+        Recording to it as ``partial_recording``, ``"return_partial"`` returns it,
+        and its ``output`` refuses with ``output_forward_failed``.
         With ``return_output=True``, the returned output is ``None`` because no
         valid model output exists on failure.
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
-    halt:
+    stop_after:
         Optional predicate evaluated after each event's save decision. Returning
-        ``True`` stops the active forward pass and marks the recording halted.
-    activation_transform:
-        Optional callable applied to each retained out copy after
-        dtype/device transforms. Errors propagate as
-        :class:`torchlens.UserTransformError`.
-    save_raw_activations:
-        When ``False`` and ``activation_transform`` is set, only transformed
-        payloads are retained. Defaults to ``True`` to mirror the slow path.
-    backward_ready:
-        If True, omitted defaults are promoted to keep-grad capture specs.
-    detach_saved_activations:
-        DOCUMENTED-UNSTABLE. Whether retained activations are detached from the
-        autograd graph. Defaults to ``True``. ``False`` keeps graph-connected
-        copies wherever the recorded tensor carries autograd history, so a
-        loss built from ``record.ram_payload`` backpropagates into the model.
-        A spec with ``save_grad=True`` stays attached either way; disk payloads
-        are always detached. ``backward_ready=True`` refuses an explicit
-        ``True``.
-    save_grads, default_grad, grad_transform, save_raw_grads:
-        Gradient capture options for a later ``Recording.backward()``.
-        Gradient hooks are installed only when ``backward_ready=True``,
-        ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``
-        or ``False`` and ``default_grad=False`` do not count); without one,
-        ``backward()`` refuses with code ``recording_backward_not_requested``.
-        With none of them, a record made under ``torch.no_grad()`` or
-        ``torch.inference_mode()`` implies ``inference_only=True``, reported on
-        ``Recording.outcome``, and ``backward()`` refuses with
-        ``recording_backward_inference_only``.
+        ``True`` stops the active forward pass and marks the recording stopped.
+    CaptureOptions fields read by ``record``:
+        ``activation_transform`` is applied to each retained out copy after
+        dtype/device transforms (errors propagate as
+        :class:`torchlens.UserTransformError`); ``save_raw_activations=False``
+        with a transform keeps only transformed payloads. ``backward_ready=True``
+        promotes omitted defaults to keep-grad capture specs.
+        ``detach_saved_activations`` (DOCUMENTED-UNSTABLE; ``record`` default
+        ``True``) detaches retained activations; ``False`` keeps graph-connected
+        copies wherever the recorded tensor carries autograd history (a spec with
+        ``save_grad=True`` stays attached either way; disk payloads are always
+        detached; ``backward_ready=True`` refuses an explicit ``True``).
+        ``save_grads``, ``default_grad`` (a ``record`` keyword),
+        ``grad_transform`` and ``save_raw_grads`` configure a later
+        ``Recording.backward()``: gradient hooks are installed only when
+        ``backward_ready=True``, ``save_grads=`` or ``default_grad=`` is given;
+        without one, ``backward()`` refuses with code
+        ``recording_backward_not_requested``, and a record made under
+        ``torch.no_grad()`` or ``torch.inference_mode()`` implies
+        ``inference_only=True`` (``recording_backward_inference_only``).
+    postprocess:
+        Optional postprocess enrichment preset (``"none"`` by default).
     narrate:
         Live narration scope: ``True``, ``"modules"``, a live selector, or a
         grouped ``tl.options.NarrationOptions``. Narration and retention are fully
@@ -171,7 +156,7 @@ def record(
         non-torch backends raise a canonical unsupported error.
     generate_kwargs:
         DOCUMENTED-UNSTABLE. When given (``{}`` for the model's defaults), run
-        the model's own ``generate(*input_args, **input_kwargs,
+        the model's own ``generate(*inputs, **input_kwargs,
         **generate_kwargs)`` once instead of one forward, and record the
         selected sites at every forward it runs (the prefill, then each decode
         step) while the KV cache is on, so each decode step records only its
@@ -179,39 +164,30 @@ def record(
         position of every forward, the token sequences, the settings that
         decide the tokens). Beam search, more than one return sequence, batched
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
-        ``intervene=``, ``halt=`` and partial forward-error modes refuse with
+        ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
-    return_output:
-        Whether to return ``(model_output, recording)``; with
-        ``generate_kwargs`` the output is ``generate()``'s own return value.
-    postprocess:
-        Optional postprocess enrichment preset.
 
     Returns
     -------
-    Recording | tuple[Any, Recording]
-        Fastlog recording, optionally with the model output.
+    Recording | GenerationRecording
+        The recording (a ``GenerationRecording`` with ``generate_kwargs``). Its
+        ``output`` is the model's return value (``generate()``'s own return value
+        with ``generate_kwargs``), held in memory only.
     """
 
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
-    if storage is not None and streaming is not None:
-        raise KeywordConflictError(
-            "Do not pass both `storage` and `streaming`",
-            code="storage_argument_conflict",
-            remedy="prefer storage=, or remove one of the two arguments",
-        )
     validate_postprocess(postprocess)
-    input_args = _coerce_input_args(model, input_args)
+    inputs = _coerce_input_args(model, inputs)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
     # storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
-    check_model_and_input_variants(model, input_args, input_kwargs)
+    check_model_and_input_variants(model, inputs, input_kwargs)
     if generate_kwargs is not None:
         output, generation = record_generation(
             model,
-            input_args,
+            inputs,
             input_kwargs,
             generate_kwargs,
             {
@@ -219,63 +195,39 @@ def record(
                 "default_op": default_op,
                 "default_module": default_module,
                 "history_size": history_size,
-                "lookback": lookback,
-                "lookback_payload_policy": lookback_payload_policy,
                 "include_source_events": include_source_events,
                 "intervene": intervene,
-                "halt": halt,
+                "stop_after": stop_after,
                 "max_predicate_failures": max_predicate_failures,
                 "on_predicate_error": on_predicate_error,
                 "on_forward_error": on_forward_error,
                 "storage": storage,
-                "streaming": streaming,
-                "seed": seed,
-                "activation_transform": activation_transform,
-                "save_raw_activations": save_raw_activations,
-                "save_grads": save_grads,
                 "default_grad": default_grad,
-                "grad_transform": grad_transform,
-                "save_raw_grads": save_raw_grads,
-                "backward_ready": backward_ready,
                 "narrate": narrate,
-                "detach_saved_activations": detach_saved_activations,
+                "capture": capture,
             },
         )
-        generation = enrich_generation(generation, postprocess)
-        if return_output:
-            return output, generation
-        return generation
+        object.__setattr__(generation.recording, "_output", output_returned(output))
+        return enrich_generation(generation, postprocess)
     with Recorder(
         model,
         save=save,
         default_op=default_op,
         default_module=default_module,
         history_size=history_size,
-        lookback=lookback,
-        lookback_payload_policy=lookback_payload_policy,
         include_source_events=include_source_events,
         intervene=intervene,
-        halt=halt,
+        stop_after=stop_after,
         max_predicate_failures=max_predicate_failures,
         on_predicate_error=on_predicate_error,
         on_forward_error=on_forward_error,
         storage=storage,
-        streaming=streaming,
-        seed=seed,
-        activation_transform=activation_transform,
-        save_raw_activations=save_raw_activations,
-        save_grads=save_grads,
         default_grad=default_grad,
-        grad_transform=grad_transform,
-        save_raw_grads=save_raw_grads,
-        backward_ready=backward_ready,
         narrate=narrate,
-        detach_saved_activations=detach_saved_activations,
+        capture=capture,
     ) as recorder:
-        output = recorder(input_args, input_kwargs)
-    recording = recorder.recording
+        recorder(inputs, input_kwargs)
+    result = recorder.recording
     if postprocess != "none":
-        recording = recording.enrich(postprocess)
-    if return_output:
-        return output, recording
-    return recording
+        result = result.enrich(postprocess)
+    return result

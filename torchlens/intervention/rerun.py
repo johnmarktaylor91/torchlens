@@ -28,8 +28,8 @@ from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_ledger import _build_ledger_record
 from ._rerun_predicate import (
     plan_rerun_spec,
-    refuse_unmatchable_staged_labels,
     settle_predicate_rerun,
+    translate_staged_final_labels,
 )
 from ._zero_fire import (
     current_zero_fire_policy,
@@ -37,6 +37,7 @@ from ._zero_fire import (
     raise_rerun_zero_fire,
     settle_zero_fire,
 )
+from ._zero_fire_doors import rerun_zero_fire_message
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -125,18 +126,18 @@ def run(
     spec = getattr(trace, "_intervention_spec", None)
     refuse_changed_staged_helpers(spec, door="rerun")
     spec_plan = plan_rerun_spec(trace, spec)
-    refuse_unmatchable_staged_labels(spec_plan.capture_spec)
-    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
+    capture_spec = translate_staged_final_labels(trace, spec_plan.capture_spec)
+    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(capture_spec))
     started_at = time.monotonic()
     old_hash = trace._provenance_fingerprint
     old_raw_hash = getattr(trace, "_raw_event_shape_hash", None)
 
-    with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
+    with active_intervention_context(intervention_spec=capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
             trace,
             model,
             inputs,
-            intervention_spec=spec_plan.capture_spec,
+            intervention_spec=capture_spec,
             hook_plan=hook_plan,
             output_transform=output_transform,
             intervene_predicate=spec_plan.intervene_predicate,
@@ -429,17 +430,17 @@ def _append_rerun(
     # predicate-door entries the capture below re-arms instead of planning.
     _validate_append_hook_plan(log, normalize_hooks_from_spec(spec))
     spec_plan = plan_rerun_spec(log, spec)
-    refuse_unmatchable_staged_labels(spec_plan.capture_spec)
-    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
+    capture_spec = translate_staged_final_labels(log, spec_plan.capture_spec)
+    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(capture_spec))
     started_at = time.monotonic()
     old_hash = log._provenance_fingerprint
 
-    with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
+    with active_intervention_context(intervention_spec=capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
             log,
             model,
             x,
-            intervention_spec=spec_plan.capture_spec,
+            intervention_spec=capture_spec,
             hook_plan=hook_plan,
             output_transform=getattr(log, "_output_transform", None),
             intervene_predicate=spec_plan.intervene_predicate,
@@ -1514,20 +1515,17 @@ def _reconcile_rerun_hook_fires(
         # refusals above fire first, whatever the on_zero_fire policy says; the policy settles the
         # rest (default: this coded warning). Under "error" the refusal raises here, before the
         # swap, so the trace is unchanged.
-        message = (
-            "Rerun hook plan entries fired at zero sites on the new inputs: "
-            f"{unfired!r}. The rerun completed, but those interventions were "
-            "no-ops. Remedy: resolve the target sites against the rerun trace "
-            "(trace[selector]) before re-applying, or route the edit "
-            "through the push engine (fork().do(...)), which validates sites "
-            "at plan time"
+        message, reason_fields = rerun_zero_fire_message(
+            new_log, hook_plan, unfired, _hook_plan_identifier
         )
 
         def _warn() -> None:
             """Emit the coded ``rerun_zero_fire`` warning under ``on_zero_fire='warn'``."""
 
             warnings.warn(
-                TorchLensWarning(message, code="rerun_zero_fire", unfired_plan_ids=list(unfired)),
+                TorchLensWarning(
+                    message, code="rerun_zero_fire", unfired_plan_ids=list(unfired), **reason_fields
+                ),
                 stacklevel=external_stacklevel(),
             )
 
@@ -1565,8 +1563,8 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
     labels = list(getattr(source_log, "input_layers", None) or ())
     if not labels or labels != list(getattr(new_log, "input_layers", None) or ()):
         return False
-    source_rows = boundary_label_rows(labels, source_log.__getitem__)
-    new_rows = boundary_label_rows(labels, new_log.__getitem__)
+    source_rows = boundary_label_rows(labels, source_log.layers.__getitem__)
+    new_rows = boundary_label_rows(labels, new_log.layers.__getitem__)
     for source_op, new_op in zip(source_rows, new_rows, strict=True):
         before = getattr(source_op, "out", None)
         after = getattr(new_op, "out", None)

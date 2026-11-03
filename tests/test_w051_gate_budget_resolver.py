@@ -36,7 +36,7 @@ def _step(t: float, visible: int) -> Any:
 def _install_schedule(monkeypatch: Any, *counts: int) -> None:
     ts = [0.0] if len(counts) == 1 else [i / (len(counts) - 1) for i in range(len(counts))]
     schedule = SimpleNamespace(steps=tuple(_step(t, c) for t, c in zip(ts, counts, strict=True)))
-    monkeypatch.setattr(Trace, "collapse_schedule", lambda self, context=None: schedule)
+    monkeypatch.setattr(Trace, "_collapse_schedule", lambda self, context=None: schedule)
 
 
 def _resolve_with_warnings(log: Any) -> tuple[Any, list[str]]:

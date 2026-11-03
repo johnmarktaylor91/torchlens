@@ -111,7 +111,7 @@ def _metadata_log(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
 
 

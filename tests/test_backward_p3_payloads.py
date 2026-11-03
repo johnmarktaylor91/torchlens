@@ -49,9 +49,7 @@ def _trace_with_two_backward_passes() -> tl.Trace:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     loss = trace[trace.output_layers[0]].out
     trace.backward(loss, retain_graph=True)
     trace.backward(loss, retain_graph=True)
@@ -78,9 +76,7 @@ def test_save_grads_is_the_trace_side_public_surface() -> None:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     try:
         assert trace.options.save_grads is True
         assert not hasattr(trace, "save_gradients")
@@ -89,15 +85,13 @@ def test_save_grads_is_the_trace_side_public_surface() -> None:
         trace.cleanup()
 
     with pytest.raises(TypeError):
-        tl.trace(
-            model, x, save_gradients=True, capture=tl.options.CaptureOptions(layers_to_save="all")
-        )  # type: ignore[call-arg]
+        tl.trace(model, x, save_gradients=True, save="all")  # type: ignore[call-arg]
     with pytest.raises(TypeError):
         tl.trace(
             model,
             x,
             gradients_to_save="all",
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )  # type: ignore[call-arg]
 
 
@@ -119,9 +113,7 @@ def test_backward_save_grads_override_widens_and_narrows_payloads() -> None:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=False)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=False), save="all")
     try:
         loss = trace[trace.output_layers[0]].out
         trace.backward(loss, retain_graph=True, save_grads=True)
@@ -152,7 +144,8 @@ def test_save_grads_predicate_can_select_backward_pass() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=tl.in_backward_pass(2)),
+        capture=tl.options.CaptureOptions(save_grads=tl.in_backward_pass(2)),
+        save="all",
     )
     try:
         loss = trace[trace.output_layers[0]].out
@@ -181,8 +174,8 @@ def test_grad_transform_is_projected_per_backward_pass() -> None:
     trace = tl.trace(
         model,
         x,
-        grad_transform=lambda grad: grad.mean(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
+        capture=tl.options.CaptureOptions(save_grads=True, grad_transform=lambda grad: grad.mean()),
+        save="all",
     )
     try:
         loss = trace[trace.output_layers[0]].out
@@ -206,9 +199,12 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
     trace = tl.trace(
         model,
         x,
-        grad_transform=lambda grad: grad.mean(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
-        save=tl.options.SaveOptions(save_raw_grads=False),
+        capture=tl.options.CaptureOptions(
+            save_grads=True,
+            grad_transform=lambda grad: grad.mean(),
+            save_raw_grads=False,
+        ),
+        save="all",
     )
     try:
         loss = trace[trace.output_layers[0]].out
@@ -313,9 +309,7 @@ def test_param_grads_capture_accumulategrad_increments() -> None:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     try:
         loss = trace[trace.output_layers[0]].out
         trace.backward(loss)

@@ -40,7 +40,6 @@ from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
     EngineDispatchError,
-    LiveModeLabelError,
     ReplayPreconditionError,
 )
 
@@ -329,7 +328,7 @@ def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
     want = _hooked(model, {"fc2": _steer_edit(1.0)}, x)
     for _ in range(3):
         torch.testing.assert_close(tl.trace(model, x, intervene=spec).output_ops[0].out, want)
-        recorded = tl.record(model, x, default_op=True, intervene=spec).to_trace()
+        recorded = tl.record(model, x, intervene=spec, default_op=True).to_trace()
         torch.testing.assert_close(recorded.output_ops[0].out, want)
 
 
@@ -470,7 +469,10 @@ def test_middle_module_edit_agrees_on_every_door(mlp) -> None:
     outs = {
         "trace": tl.trace(model, x, intervene=tl.when(tl.module("fc2"), tl.scale(0.5))),
         "record": tl.record(
-            model, x, default_op=True, intervene=tl.when(tl.module("fc2"), tl.scale(0.5))
+            model,
+            x,
+            intervene=tl.when(tl.module("fc2"), tl.scale(0.5)),
+            default_op=True,
         ).to_trace(),
         "fork_do": fork,
         "rerun": rerun,
@@ -649,26 +651,24 @@ def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
     assert len(staged.records) == 0
 
 
-def test_set_label_rerun_refuses_with_a_set_remedy(mlp) -> None:
-    """Seat 2 F7: ``set(label, value)`` + rerun refuses before the forward, naming the ``set_only`` do."""
+def test_set_only_label_rerun_applies_the_set_value_and_leaves_the_source_staged(mlp) -> None:
+    """A ``set_only`` ``do(label, value)`` + rerun applies the value and leaves the spec staged."""
 
     model, x, x2 = mlp
     trace = tl.trace(model, x)
     label = trace.find_sites(tl.module("fc2"))[0].layer_label
+    value = torch.full_like(trace[label].out, 0.3)
     trace.do(
         label,
-        torch.full_like(trace[label].out, 0.3),
+        value,
         intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     staged = _staged(trace)
-    readout = trace.output_ops[0].out.clone()
-    with pytest.raises(LiveModeLabelError) as excinfo:
-        trace.run(model, x2)
-    assert excinfo.value.fields["code"] == "rerun_staged_label_unmatchable"
-    assert "a set_only do()" in str(excinfo.value)
-    assert "tl.module(" in str(excinfo.value)
+    result = trace.run(model, x2)
+    assert result is trace
+    assert result.last_run["engine"] in {"rerun", "guarded_fast"}
+    assert torch.equal(trace[label].out, value)
     assert _staged(trace) == staged
-    assert torch.equal(trace.output_ops[0].out, readout)
 
 
 # ---------------------------------------------------------------------------
@@ -733,7 +733,10 @@ def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None
         lambda: tl.trace(model, x, intervene=tl.when(tl.module("fc2"), interrupt)),
         lambda: tl.when(tl.module("fc2"), interrupt).bind(model)(x),
         lambda: tl.record(
-            model, x, default_op=True, intervene=tl.when(tl.module("fc2"), interrupt)
+            model,
+            x,
+            intervene=tl.when(tl.module("fc2"), interrupt),
+            default_op=True,
         ),
     ):
         with pytest.raises(KeyboardInterrupt):

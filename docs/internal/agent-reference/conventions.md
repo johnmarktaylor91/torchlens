@@ -1,0 +1,96 @@
+## Conventions
+
+- **This repo is PUBLIC; internal notes stay private.** Never commit `.research/` or
+  `.project-context` (except `architecture.md` / `state_of_torchlens.md`) — they are
+  gitignored and a `no-internal-notes` pre-commit hook hard-fails on them. Never `git add -f`
+  to bypass. See AGENTS.md "Internal notes stay PRIVATE (LOCKED)".
+- Conventional commits: prefer `docs(scope):`, `chore(scope):`, `test(scope):` for
+  non-release changes.
+- Major-version bumps happen only on the maintainer's explicit command; commit messages never carry `!` types or BREAKING CHANGE footers; `.github/MAJOR_RELEASE_APPROVED` is created only on that command.
+- TorchLens host-object metadata lives under `obj._tl`; sub-fields are snake_case and
+  new metadata should extend a `TorchLensMeta` subclass rather than adding `tl_*` attrs.
+- `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state
+- FIELD_ORDER constants in `constants.py` define canonical field sets; update both class
+  fields and constants when adding fields
+- NumPy-format docstrings on all functions
+- Type hints on all functions
+- Import order: stdlib -> third-party -> local (enforced by ruff)
+- Line length: 100
+- `tl.receptive_field` is lazy; entity-level `receptive_field` / `projective_field` siblings
+  pair with `Trace.receptive_fields()` / `Trace.projective_fields()` tables.
+- BOUND-METHOD ROOTS (F41, spellings DOCUMENTED-UNSTABLE): `tl.trace`/`tl.validate` accept an
+  `nn.Module` OR a bound method of one (`tl.trace(model.generate, ids, ...)`): owner via
+  `method.__self__`, registered as the `owner` submodule of a TL-authored wrapper root, method
+  called exactly once; identity reads `type(owner).__name__`;
+  `root_entry_point="bound_method:..."` + `tl_authored_root=True` on the root op record persist.
+  `EpisodeOptions.stepped_module` defaults to the owner on bound-method episode captures. The
+  rerun/append identity gate is FAIL-CLOSED on the fact: absent fact refuses
+  `root_entry_point_unavailable`, non-`module_call` roots refuse `rerun_entry_point_unsupported`
+  (interim posture; replay engines unaffected). Other callables refuse `model_type_unsupported`
+  teaching the ruled spelling.
+- EPISODE CAPTURE (torch-only, spellings DOCUMENTED-UNSTABLE): `tl.trace(episode_root, x,
+  episode=tl.options.EpisodeOptions(stepped_module=model, num_steps=N))` captures one wrapped
+  multi-step generation run as ONE product with a per-step status ledger at
+  `trace.annotations["episode"]` (disclosure, never a settlement authority; persists
+  plainly as of the tlspec v8 coordinated bump, load-validated fail-closed). Cross-step
+  joins are MEASURED (F40c): per-row `step_join` grades (continuous/forced/
+  transformed/declared/exogenous/unchecked) in the `episode_step_join_v1` header envelope; a
+  measured break refuses episode-dependent claims (series reads, whole-episode replay,
+  the blessing fold, escalation) while ops/values/graph/per-segment reads stay usable;
+  `EpisodeOptions(feed="closed")` is the strict halt-at-next-entry arm,
+  `on_feed_break="refuse"` the built FORK-4 typed-refusal arm, `crossings=(k,...)` the
+  declared tool-call crossings; envelope-less artifacts read unmeasured, never
+  measured. ATTESTED COUPLING (F42): `episode=` x `intervene=` runs COUPLED —
+  per-row measured `fire_count` (zero and multiple fires first-class), the
+  deterministic header `intervention_digest`, `fidelity_basis="perturbed"` on
+  replacing fires, the step-qualified selector `torchlens.at_step(...)`
+  (live + post hoc via `Op.episode_step` stamps), `trace.episode_coupling`
+  (recompute-and-compare capture-digest binding + per-segment facts that never span a
+  measured break), and the replay law: `run()` on coupled products refuses
+  `episode_coupled_replay_underivable` (both engines) and `do()` edits quarantine
+  inherited episode evidence. DIAGNOSTIC-TIER: cost is superlinear
+  in step count — tens of steps, never hundreds. Bundles carry the optional S6
+  member-relation table (`relations=`, `Bundle.relate`,
+  `Bundle.episode_status`; harness bundles add the `fed_by` content-provenance kind
+  with token-stream-bound spans, automatic `token_spans="auto"` matching and the strict
+  `Bundle.token_pairs` read, the `selected_by` control kind (`chosen`/`candidates`/`evidence`),
+  and the steer-one-call-and-re-run pair `b.add_alternative(second_run, steered=("draft",))`
+  (returns an `AlternativeReport` of `AlternativeCall` rows) and
+  `b.token_divergence("critique", "cf_critique")` (returns a `TokenDivergence`; all three records
+  `from torchlens.bundle import ...`),
+  `docs/reference/harness_bundles.md`). Doc of record:
+  `docs/reference/episode_capture.md`;
+  refusal codes in `docs/reference/error_refusal_contract.md`.
+- Experiments remember (F03; spellings documented-unstable; doc of record
+  `docs/reference/experiments.md`): Bundles carry persisted lineage
+  (random `bundle_id`, `member_construction` origin anchors, hash-chained
+  `operations` chronology; fork carries relations + anchors both ways);
+  `bundle.why(member)` / `bundle.provenance()` are the derived provenance
+  join (exact-or-refused ancestry, four honesty axes, additive wording only
+  on an empty reference suffix); `bundle.vary(mapping)` names one spec or
+  None identity per member with complete-coverage preflight and no-rollback
+  partial disclosure; `tl.sweep(include_baseline=True)` mints the pristine
+  baseline; `torchlens.experiment.sweep_sites` is the serial candidate
+  engine (edit=/metric=/retain= REQUIRED, undeclared multi-site candidates
+  refused, complete effect table persisted incl. released/refused/failed
+  rows, `bundle.effects()` reads, `bundle.map(fn)` keys released candidates `"unmeasured"`);
+  `torchlens.experiment.sweep_grid(baseline, axes=, metric=, retain=)` is
+  the same engine over named axes (plain ordered `axes` mapping, at most one
+  axis of edits, cells named `"L3,t7"`, a hole is a refused cell and the
+  rest run) returning a `SweepGrid` (float64 `values` with NaN, axes recorded
+  in the operation's params, `effects().to_grid()` after load);
+  `head_ablation_candidates` is the module-scoped v-facet sugar (GQA
+  refuses; hand-written-hook oracle in its test file). The experiment
+  ledger (the opt-in semantic record) was removed on 1 Nov 2026: the Bundle
+  is the record, and every old ledger spelling raises the typed redirect
+  (`docs/reference/deprecations.md`, "Experiment Ledger").
+- Checkpoint live-ref guard (spellings documented-unstable): cross-member parameter
+  value/difference/trajectory reads on a Bundle (`SuperParam` views with >= 2 members:
+  `weight_norm_diff`, `compare`, `aggregate`, `out`/`grad`) refuse BEFORE tensor lookup
+  with stable code `checkpoint_series_live_params` — parameter reads resolve through live
+  model handles, never capture-time bytes, so a checkpoint series would otherwise report
+  identical weights (or NaN/empty after load). Claim-keyed, never object identity; guard
+  site is the one `_TensorBearing._tensor_dict` funnel. `Param.value_basis` is the derived
+  read-time disclosure (`live_ref` / `absent(not_persisted)`; `snapshot` only with future
+  R8(b) snapshots, the only basis that passes). `Param.value` keeps its live-handle
+  contract; version-axis relation rows still order members.

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
 
+from ._capture_override import _with_capture_fields
 from ._common import _ordered_ops, _source_line
 
 
@@ -400,7 +401,7 @@ def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) ->
     )
 
 
-def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
+def find_nan(model: Any, inputs: Any, **trace_kwargs: Any) -> FindNanReport:
     """Run a memory-light live capture and return its first NaN or Inf finding.
 
     The capture stops at the first non-finite op output, rather than retaining
@@ -410,11 +411,11 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
     ----------
     model:
         PyTorch model to execute.
-    x:
+    inputs:
         Positional model input accepted by :func:`torchlens.trace`.
     **trace_kwargs:
-        Additional :func:`torchlens.trace` keyword arguments. ``raise_on_nan``
-        is always enabled by this diagnostic.
+        Additional :func:`torchlens.trace` keyword arguments. The capture runs
+        with ``on_nonfinite="raise"`` whatever the caller's ``capture=`` says.
 
     Returns
     -------
@@ -426,18 +427,12 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
     from ..options import CaptureOptions
 
     capture = trace_kwargs.pop("capture", None)
-    trace_kwargs.pop("raise_on_nan", None)
     if capture is not None:
-        explicit_values = {
-            field_name: value
-            for field_name, value in capture.as_dict().items()
-            if capture.is_field_explicit(field_name)
-        }
-        trace_kwargs["capture"] = CaptureOptions(**explicit_values, raise_on_nan=True)
+        trace_kwargs["capture"] = _with_capture_fields(capture, on_nonfinite="raise")
     else:
-        trace_kwargs["capture"] = CaptureOptions(raise_on_nan=True)
+        trace_kwargs["capture"] = CaptureOptions(on_nonfinite="raise")
     try:
-        trace(model, x, **trace_kwargs)
+        trace(model, inputs, **trace_kwargs)
     except CaptureError as exc:
         fields = exc.fields
         if "op" not in fields or "layer" not in fields:
@@ -738,7 +733,7 @@ class NonfiniteReport(Report):
         return "\n".join(lines)
 
 
-def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> NonfiniteReport:
+def nonfinite_origin(subject: Any, inputs: Any = None, **trace_kwargs: Any) -> NonfiniteReport:
     """One-call NaN forensics (torchnative 6.5; placeholder spelling).
 
     Consumes an EXISTING trace's queryable nonfinite record first (free);
@@ -752,7 +747,7 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
     ----------
     subject:
         A completed ``Trace`` (post-hoc, free) or a model (live tripwire).
-    x:
+    inputs:
         Model input, required for the live form.
     **trace_kwargs:
         Extra ``tl.trace`` options for the live form.
@@ -771,7 +766,7 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
         finding = find_nan_in_trace(trace)
         cost_tier = "free (post-hoc on the capture you already ran)"
     else:
-        finding = find_nan(subject, x, **trace_kwargs)
+        finding = find_nan(subject, inputs, **trace_kwargs)
         # The tripwire's evidence lives on the finding itself; there is no
         # completed trace to read a memoized nonfinite record from.
         trace = None

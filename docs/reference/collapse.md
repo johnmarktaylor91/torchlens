@@ -11,6 +11,16 @@ The same ResNet-18 execution is shown at each string mode. `none` preserves the 
 `auto` chooses the first schedule point in the readable band, and `max` applies the strongest
 legal condensation.
 
+`auto` then evens that point out, and only ever condenses further. A small module left expanded
+beside boxed siblings is boxed too, when it hides no more ops than the smallest box beside it
+(convnext's stem and stage-2 downsample), so stray raw ops do not sit between boxes. "Beside"
+means a sibling box or a box one level inside a sibling; a box nested deeper (BERT's
+`encoder.layer.0` next to `embeddings`) leaves its neighbours expanded. A run of
+three or more structurally identical, consecutive sibling boxes folds into one segment (convnext's
+nine stage-2 blocks become `stages.2.blocks.0-8 -- 9 blocks`). The evened plan never shows more
+nodes than the schedule point it started from; the ResNet-18, GPT-2 and BERT auto overviews are
+unchanged.
+
 ![Full ResNet-18 graph](../images/collapse/mode-none.svg)
 
 *`collapse="none"`: every operation is visible, including the repeated residual stages that make
@@ -111,7 +121,7 @@ or total that the hidden content does not support.*
 
 Smart-collapse admission is now gated on the RENDERED UNIVERSE, not raw op count
 (collapse memo D5): the gate variable is `U` — the full plan's rendered node count after
-`module=` focus, `vis_call_depth`, and rolled reductions — tiered by a measured
+`module=` focus, `depth=`, and rolled reductions — tiered by a measured
 `(U, W)` work estimator (`0.0095 * U**1.43 * W**1.02` ms, W = widest rendered sibling
 group). `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) survives as the defensive constant: the
 quality planner is admitted when `U <= 2000` AND the predicted cost fits the budget.
@@ -138,19 +148,19 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
   (`collapse_watchdog_fallback`, with U, W, predicted, and actual).
 
 Context reductions are therefore real remedies for the first time: focusing with
-`module=`, bounding `vis_call_depth`, or rendering rolled genuinely re-admits the
+`module=`, bounding `depth=`, or rendering rolled genuinely re-admits the
 quality planner. The gate is a compute guard, not a correctness limit — the trace
 itself is complete.
 
 The decline is disclosed, never silent. To get a collapsed view of a very large trace, reduce
-the rendered graph first with `module=` focus, `vis_call_depth`, or rolled mode; `fold_repeats`
+the rendered graph first with `module=` focus, `depth=`, or rolled mode; `fold_repeats`
 and `show_containers` styling are unaffected.
 
 ## `collapse_plan()` diagnostics
 
 `Drawing.collapse_plan(mode=...)` exposes the renderer-faithful plan for one requested mode. The
-diagnostics live on the draw result, so render with `return_trace=True` and ask the drawing
-(`tl.render(model, x, return_trace=True).collapse_plan("max")`); a drawing that kept no trace
+diagnostics live on the draw result, so draw the trace and ask the drawing
+(`trace.draw(path).collapse_plan("max")`); a `tl.draw` picture or a closed drawing keeps no trace and
 refuses with the typed `trace_cleaned_up` error.
 `Drawing.collapse_schedule()` exposes its ordered float steps, targets, visible counts, and collapsed
 module addresses. Use these diagnostics to inspect a rendering decision rather than inferring it

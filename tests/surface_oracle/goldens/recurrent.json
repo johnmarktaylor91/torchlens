@@ -1938,6 +1938,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.0",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -2271,6 +2272,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -2681,6 +2683,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -3091,6 +3094,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -3479,6 +3483,7 @@
     "args_summary": "Tensor(2x4, float32)",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -3830,6 +3835,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -4196,6 +4202,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -4562,6 +4569,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -5683,7 +5691,6 @@
     "6": 7,
     "7": 8
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 6,
@@ -5735,6 +5742,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": null,
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": "<callable ReferenceType>",
@@ -5932,6 +5940,8 @@
    },
    "archived_activations": {},
    "armed_edits": [],
+   "aten_gaps": "<raises AtenOpsUnavailableError>",
+   "aten_ops": "<raises AtenOpsUnavailableError>",
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
    "backend_runtime_device_summary": null,
    "backward_events": [],
@@ -5970,6 +5980,7 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "grad_fn_site_summary": {},
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "has_aten_ops": false,
    "has_frozen_params": false,
    "has_trainable_params": true,
    "health": "<torchlens._data_classes._trace_groups_capture.TraceHealth>",
@@ -6079,8 +6090,9 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": "<raises PayloadUnavailableError>",
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -8063,6 +8075,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.0",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -8396,6 +8409,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -8806,6 +8820,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -9216,6 +9231,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -9604,6 +9620,7 @@
     "args_summary": "Tensor(2x4, float32)",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -9955,6 +9972,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -10321,6 +10339,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -10687,6 +10706,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -11808,7 +11828,6 @@
     "6": 7,
     "7": 8
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 6,
@@ -11860,6 +11879,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": "<torchlens._output_slot.OutputSlot>",
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
@@ -12045,6 +12065,8 @@
    "annotations": {},
    "archived_activations": {},
    "armed_edits": [],
+   "aten_gaps": "<raises AtenOpsUnavailableError>",
+   "aten_ops": "<raises AtenOpsUnavailableError>",
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
    "backend_runtime_device_summary": null,
    "backward_events": [],
@@ -12083,6 +12105,7 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "grad_fn_site_summary": {},
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "has_aten_ops": false,
    "has_frozen_params": false,
    "has_trainable_params": true,
    "health": "<torchlens._data_classes._trace_groups_capture.TraceHealth>",
@@ -12200,8 +12223,18 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": {
+    "__tensor__": true,
+    "dtype": "torch.float32",
+    "requires_grad": true,
+    "sha256": "f9608ea44282e0450ccf493f24b31431b403b1bf43d2c961785e9ebc2ee48f22",
+    "shape": [
+     2,
+     4
+    ]
+   },
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -14187,6 +14220,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.0",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -14520,6 +14554,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -14930,6 +14965,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -15340,6 +15376,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -15728,6 +15765,7 @@
     "args_summary": "Tensor(2x4, float32)",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -16079,6 +16117,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -16445,6 +16484,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -16811,6 +16851,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -17876,7 +17917,6 @@
     "6": 7,
     "7": 8
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 6,
@@ -17928,6 +17968,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": null,
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
@@ -18125,6 +18166,8 @@
    },
    "archived_activations": {},
    "armed_edits": [],
+   "aten_gaps": "<raises AtenOpsUnavailableError>",
+   "aten_ops": "<raises AtenOpsUnavailableError>",
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
    "backend_runtime_device_summary": null,
    "backward_events": [],
@@ -18163,6 +18206,7 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "grad_fn_site_summary": {},
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "has_aten_ops": false,
    "has_frozen_params": false,
    "has_trainable_params": true,
    "health": "<torchlens._data_classes._trace_groups_capture.TraceHealth>",
@@ -18272,8 +18316,9 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": "<raises PayloadUnavailableError>",
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -20250,6 +20295,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.0",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -20583,6 +20629,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -20993,6 +21040,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -21403,6 +21451,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.5",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -21791,6 +21840,7 @@
     "args_summary": "Tensor(2x4, float32)",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -22142,6 +22192,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -22508,6 +22559,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -22874,6 +22926,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": "0.75",
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -23995,7 +24048,6 @@
     "6": 7,
     "7": 8
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 6,
@@ -24047,6 +24099,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": "<torchlens._output_slot.OutputSlot>",
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": "<callable ReferenceType>",
@@ -24244,6 +24297,8 @@
    },
    "archived_activations": {},
    "armed_edits": [],
+   "aten_gaps": "<raises AtenOpsUnavailableError>",
+   "aten_ops": "<raises AtenOpsUnavailableError>",
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
    "backend_runtime_device_summary": null,
    "backward_events": [],
@@ -24282,6 +24337,7 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "grad_fn_site_summary": {},
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "has_aten_ops": false,
    "has_frozen_params": false,
    "has_trainable_params": true,
    "health": "<torchlens._data_classes._trace_groups_capture.TraceHealth>",
@@ -24391,8 +24447,18 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": {
+    "__tensor__": true,
+    "dtype": "torch.float32",
+    "requires_grad": true,
+    "sha256": "f9608ea44282e0450ccf493f24b31431b403b1bf43d2c961785e9ebc2ee48f22",
+    "shape": [
+     2,
+     4
+    ]
+   },
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -26372,6 +26438,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -26698,6 +26765,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -27086,6 +27154,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -27474,6 +27543,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
      "__ref__": "Module",
      "label": "cell"
@@ -27844,6 +27914,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -28164,6 +28235,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -28510,6 +28582,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -28856,6 +28929,7 @@
     "args_summary": "",
     "args_template": null,
     "arithmetic_intensity": null,
+    "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -29903,7 +29977,6 @@
     "6": 7,
     "7": 8
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 6,
@@ -29955,6 +30028,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": null,
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
@@ -30152,6 +30226,8 @@
    },
    "archived_activations": {},
    "armed_edits": [],
+   "aten_gaps": "<raises AtenOpsUnavailableError>",
+   "aten_ops": "<raises AtenOpsUnavailableError>",
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
    "backend_runtime_device_summary": null,
    "backward_events": [],
@@ -30184,6 +30260,7 @@
    "factcore": "<torchlens.report._factcore.FactCore>",
    "grad_fn_site_summary": {},
    "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "has_aten_ops": false,
    "has_frozen_params": false,
    "has_trainable_params": true,
    "health": "<torchlens._data_classes._trace_groups_capture.TraceHealth>",
@@ -30293,8 +30370,9 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": "<raises PayloadUnavailableError>",
    "output_id2label": null,
    "output_layers": [
     "output_1"

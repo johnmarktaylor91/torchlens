@@ -36,18 +36,12 @@ from torchlens import _autoroute as autoroute
 AUTOROUTE_EXEMPT_PARAMS = {
     # the dispatch subjects themselves
     "model",
-    "input_args",
+    "inputs",
     "input_kwargs",
     # autoroute only runs when backend is None
     "backend",
-    # chunked forwards skip autoroute (chunk_size gate; chunk_paths without
-    # chunk_size raises before the branch)
-    "chunk_size",
+    # chunk_paths without CaptureOptions(chunk_size=) raises before the branch
     "chunk_paths",
-    # explicit backend-only options: raise before autoroute when backend is
-    # None
-    "jax_static_argnums",
-    "grad_options",
     # quickstart input ladder (F17): any non-None input_size returns via
     # _trace_via_ladder before the autoroute branch, so autoroute only ever
     # runs with input_shape=None (the ladder re-enters trace() with a real
@@ -114,7 +108,7 @@ class _Identity(nn.Module):
 
 @pytest.mark.smoke
 def test_detectors_receive_the_once_dropped_kwargs() -> None:
-    """A registered detector sees structure_only/episode/grouping in kwargs."""
+    """A registered detector sees capture/episode/stop_after in kwargs."""
 
     received: dict[str, object] = {}
 
@@ -126,11 +120,9 @@ def test_detectors_receive_the_once_dropped_kwargs() -> None:
 
     with autoroute.input.snapshot():
         autoroute.input.register(name="test_recorder", priority=-1000)(recorder)
-        log = tl.trace(
-            _Identity(), torch.ones(2), capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
+        log = tl.trace(_Identity(), torch.ones(2), save="none")
     assert log is not None
-    for key in ("capture", "episode", "grouping"):
+    for key in ("capture", "episode", "stop_after"):
         assert key in received, (
             f"autoroute detectors no longer receive {key!r}: it is being "
             f"silently dropped on the autoroute dispatch path again"

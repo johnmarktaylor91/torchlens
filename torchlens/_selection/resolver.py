@@ -18,8 +18,12 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     walk_selector,
 )
+from ._site_refusals import (
+    check_site_query_arguments,
+    refuse_excess_fanout,
+    refuse_unmatched_plan,
+)
 from .errors import (
-    AmbiguousSiteError,
     MultiMatchWarning,
     SelectorCompositionError,
     SiteResolutionError,
@@ -185,7 +189,9 @@ class _SiteTable:
         """
 
         if not self._sites:
-            raise SiteResolutionError("_SiteTable is empty; no first site is available.")
+            raise SiteResolutionError(
+                "_SiteTable is empty; no first site is available.", code="site_table_empty"
+            )
         return self._sites[0]
 
     def labels(self) -> tuple[str, ...]:
@@ -243,71 +249,6 @@ class _SiteTable:
         return pd.DataFrame(rows)
 
 
-def multipass_bare_label_message(layer_label: str, pass_indices: Sequence[int]) -> str:
-    """Return the teaching refusal message for a bare multi-pass layer label.
-
-    Parameters
-    ----------
-    layer_label:
-        Bare layer label the caller supplied.
-    pass_indices:
-        Pass indices recorded for the layer, in execution order.
-
-    Returns
-    -------
-    str
-        Message naming the layer, its pass count, and every pass-qualified
-        spelling the caller can address instead.
-    """
-
-    spellings = ", ".join(f"'{layer_label}:{index}'" for index in pass_indices)
-    return (
-        f"bare label {layer_label!r} is ambiguous on this trace: layer "
-        f"{layer_label!r} ran {len(pass_indices)} passes, and each pass is a "
-        "distinct op with its own activation. Bare layer labels address only "
-        "single-pass layers. Remedy: address one pass with a pass-qualified "
-        f"label ({spellings}), or select every pass explicitly with the Layer "
-        f"selection (log[{layer_label!r}].__selection__())."
-    )
-
-
-def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]) -> None:
-    """Refuse an exact-label query that spans several passes of one layer.
-
-    A label selector addresses ONE op; when its spelling is layer-wide on a
-    multi-pass (recurrence-grouped) layer it matches every pass, and any
-    single-op consumer would have to guess a pass — the exact silent
-    wrong-pass corruption the replay engine refuses. Predicate selectors
-    (``tl.func``, module selectors, ...) keep their fan-out semantics.
-
-    Raises
-    ------
-    AmbiguousSiteError
-        With ``fields["code"] == "multipass_bare_label_ambiguous"``.
-    """
-
-    selector_kind = getattr(selector, "selector_kind", None)
-    if len(matched) <= 1 or selector_kind not in ("label", "contains"):
-        return
-    layer_labels = {getattr(site, "layer_label", None) for site in matched}
-    if len(layer_labels) != 1:
-        return
-    layer_label = next(iter(layer_labels))
-    if not isinstance(layer_label, str):
-        return
-    if selector_kind == "contains" and getattr(selector, "selector_value", None) != layer_label:
-        # A genuine substring pattern keeps its documented fan-out semantics;
-        # only the exact bare layer label is the pass-ambiguous address.
-        return
-    pass_indices = sorted(int(getattr(site, "pass_number", 1) or 1) for site in matched)
-    raise AmbiguousSiteError(
-        multipass_bare_label_message(layer_label, pass_indices),
-        code="multipass_bare_label_ambiguous",
-        layer_label=layer_label,
-        pass_indices=tuple(pass_indices),
-    )
-
-
 def _resolve_sites(
     trace: Trace,
     selector: SelectorInput,
@@ -341,25 +282,13 @@ def _resolve_sites(
         If no site resolves or the query shape is unsupported.
     """
 
-    if max_fanout is None:
-        raise SiteResolutionError("max_fanout=None is not supported; pass an explicit integer.")
-    if max_fanout < 1:
-        raise AmbiguousSiteError("max_fanout must be at least 1.")
-    if strict and isinstance(selector, str):
-        raise SiteResolutionError(
-            "Bare strings are non-portable in strict mode; use tl.label(...), "
-            "tl.func(...), or another typed selector."
-        )
+    check_site_query_arguments(selector, strict=strict, max_fanout=max_fanout)
 
     selector = _normalize_query(selector)
     plan = resolve_site_plan(trace, selector, strict=strict)
     matched = tuple(site for branch in plan for site in branch.sites)
     signals = tuple(branch.signal for branch in plan for _ in branch.sites)
-    if len(matched) > max_fanout:
-        raise AmbiguousSiteError(
-            f"site {selector!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
-            "Pass a larger max_fanout explicitly or use a narrower selector."
-        )
+    refuse_excess_fanout(selector, matched, max_fanout)
     if len(matched) > 1:
         warnings.warn(
             _multi_match_message(selector, matched),
@@ -574,15 +503,7 @@ def find_sites(
         Ordered table of resolved sites.
     """
 
-    if max_fanout is None:
-        raise SiteResolutionError("max_fanout=None is not supported; pass an explicit integer.")
-    if max_fanout < 1:
-        raise AmbiguousSiteError("max_fanout must be at least 1.")
-    if strict and isinstance(query, str):
-        raise SiteResolutionError(
-            "Bare strings are non-portable in strict mode; use tl.label(...), "
-            "tl.func(...), or another typed selector."
-        )
+    check_site_query_arguments(query, strict=strict, max_fanout=max_fanout)
 
     selector = _normalize_query(query)
     if isinstance(selector, FacetSelector):
@@ -591,11 +512,7 @@ def find_sites(
         ensure_supported(selector, lifecycle="site")
     plan = resolve_site_plan(log, selector, strict=strict, require_match=False)
     matched = tuple(site for branch in plan for site in branch.sites)
-    if len(matched) > max_fanout:
-        raise AmbiguousSiteError(
-            f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
-            "Pass a larger max_fanout explicitly or use a narrower selector."
-        )
+    refuse_excess_fanout(query, matched, max_fanout)
     signals = tuple(branch.signal for branch in plan for _ in branch.sites)
     return _SiteTable(matched, selector=query, _signals=signals)
 
@@ -1008,7 +925,8 @@ def _refuse_strict_bare_strings(selector: Any) -> None:
     if isinstance(selector, str) or any(isinstance(node, str) for node in walk_selector(selector)):
         raise SiteResolutionError(
             "Bare strings are non-portable in strict mode; use tl.label(...), "
-            "tl.func(...), or another typed selector."
+            "tl.func(...), or another typed selector.",
+            code="bare_string_selector_strict",
         )
 
 
@@ -1076,13 +994,7 @@ def resolve_site_plan(
         sites = _resolve_branch_sites(trace, branch_selector, planned.universe, strict=strict)
         resolved.append(SiteBranch(planned.universe, sites, planned.pass_filter, branch_selector))
     if require_match:
-        if not any(branch.sites for branch in resolved):
-            raise SiteResolutionError(
-                f"selector {normalized!r} matched 0 sites. Use trace[selector] to inspect what a selector matches."
-            )
-        for branch in resolved:
-            if branch.universe != "node":
-                _refuse_bare_multipass_label(branch.selector, branch.sites)
+        refuse_unmatched_plan(normalized, resolved)
     return tuple(resolved)
 
 

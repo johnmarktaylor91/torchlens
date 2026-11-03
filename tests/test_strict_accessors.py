@@ -12,7 +12,8 @@ from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.module import Module
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
-from torchlens._errors import AmbiguousOpLookupError
+from torchlens._errors import AmbiguousOpLookupError, InvalidArgumentError
+from torchlens._selection.errors import AmbiguousSiteError
 
 
 class StrictAccessorModel(torch.nn.Module):
@@ -72,7 +73,8 @@ def _strict_trace() -> tl.Trace:
     return tl.trace(
         StrictAccessorModel(),
         torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save="all",
     )
 
 
@@ -94,16 +96,71 @@ def test_ops_accessor_returns_op_for_pass_label() -> None:
     assert trace.ops["linear_1_1:1"].label == "linear_1_1:1"
 
 
-def test_trace_getitem_layer_label_always_returns_layer() -> None:
-    """Convenience layer-label lookup is deterministic across pass counts."""
+def test_trace_getitem_never_returns_a_layer() -> None:
+    """``trace[...]`` returns Ops; Layers come only from ``trace.layers[...]`` (walk access RC-260)."""
 
     trace = _strict_trace()
 
-    assert isinstance(trace["mul_1_2"], Layer)
-    assert trace["mul_1_2"] is trace.layers["mul_1_2"]
-    assert isinstance(trace["linear_1_1"], Layer)
-    assert trace["linear_1_1"] is trace.layers["linear_1_1"]
+    assert isinstance(trace["mul_1_2"], Op)
+    assert trace["mul_1_2"] is trace.ops["mul_1_2"]
     assert isinstance(trace["linear_1_1:1"], Op)
+    assert isinstance(trace["MUL_1_2"], Op)
+    for label in trace.layer_labels:
+        if trace.layers[label].num_passes == 1:
+            assert not isinstance(trace[label], Layer)
+    with pytest.raises(AmbiguousSiteError) as info:
+        trace["linear_1_1"]
+    assert info.value.fields["code"] == "multipass_bare_label_ambiguous"
+    message = str(info.value)
+    assert "trace.layers['linear_1_1']" in message
+    assert "'linear_1_1:last'" in message and "'linear_1_1:all'" in message
+    assert "'linear_1_1:1'" in message and "'linear_1_1:2'" in message
+    assert isinstance(trace.layers["linear_1_1"], Layer)
+
+
+def test_last_pass_token_names_the_final_pass() -> None:
+    """``label:last`` resolves to the final pass Op on every door; passes stay 1-based."""
+
+    trace = _strict_trace()
+    last = trace.ops["linear_1_1:2"]
+
+    assert trace["linear_1_1:last"] is last
+    assert trace.ops["linear_1_1:last"] is last
+    assert trace[tl.label("linear_1_1:last")] is last
+    assert trace["mul_1_2:last"] is trace.ops["mul_1_2"]
+    assert trace.layers["linear_1_1:last"] is trace.layers["linear_1_1"]
+    assert "linear_1_1:last" in trace.ops
+    assert trace[tl.label("linear_1_1:last")].pass_number == 2
+    with pytest.raises(InvalidArgumentError) as negative:
+        trace["linear_1_1:-1"]
+    assert negative.value.fields["code"] == "op_lookup_pass_out_of_range"
+    with pytest.raises(KeyError):
+        trace.layers["linear_1_1:0"]
+    with pytest.raises(InvalidArgumentError) as beyond:
+        trace["linear_1_1:3"]
+    assert beyond.value.fields["code"] == "op_lookup_pass_out_of_range"
+
+
+def test_all_pass_token_selects_every_pass() -> None:
+    """``label:all`` is the set spelling: a Selection of every pass of the layer."""
+
+    trace = _strict_trace()
+
+    every = trace["linear_1_1:all"]
+    assert isinstance(every, tl.Selection)
+    assert every.labels == ("linear_1_1:1", "linear_1_1:2")
+    assert trace[tl.label("linear_1_1:all")].labels == every.labels
+    assert every.labels == trace[trace.layers["linear_1_1"].__selection__()].labels
+    single = trace["mul_1_2:all"]
+    assert isinstance(single, tl.Selection)
+    assert single.labels == (trace.layers["mul_1_2"].ops[0].label,)  # the op's own spelling
+    assert trace.layers["linear_1_1:all"] is trace.layers["linear_1_1"]
+    assert "linear_1_1:all" not in trace.ops
+    with pytest.raises(KeyError, match="resolve_all"):
+        trace.ops["linear_1_1:all"]
+    with pytest.raises(InvalidArgumentError) as info:
+        trace["no_such_layer:all"]
+    assert info.value.fields["code"] == "op_lookup_not_found"
 
 
 def test_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
@@ -228,3 +285,73 @@ def test_grad_fns_accessor_returns_grad_fn_for_pass_label() -> None:
 
     assert isinstance(trace.autograd.grad_fns[f"{grad_fn.label}:1"], GradFn)
     assert trace.autograd.grad_fns[f"{grad_fn.label}:1"] is grad_fn
+
+
+class _IdleBranchModel(torch.nn.Module):
+    """Model with a registered submodule the forward never calls and one inf-making op."""
+
+    def __init__(self) -> None:
+        """Register a used and an unused Linear."""
+
+        super().__init__()
+        self.used = torch.nn.Linear(3, 3)
+        self.idle = torch.nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Divide by zero once so one op output is non-finite."""
+
+        y = self.used(x)
+        return y / torch.zeros_like(y)
+
+
+def test_every_collection_serves_its_labels() -> None:
+    """``.labels`` on layers, ops and modules lists the lookup labels in order (walk names option b)."""
+
+    trace = _strict_trace()
+
+    assert trace.layers.labels == tuple(trace.layer_labels)
+    assert trace.ops.labels == tuple(op.label for op in trace.ops)
+    assert "linear_1_1:2" in trace.ops.labels
+    assert trace.modules.labels == tuple(trace.modules.keys())
+    assert "lin" in trace.modules.labels
+    assert trace.params.labels == tuple(param.address for param in trace.params)
+    for label in trace.layers.compute.labels:
+        assert trace.layers.compute[label] is trace.layers[label]
+
+
+def test_ops_compute_filter_matches_the_trace_level_view() -> None:
+    """``trace.ops.compute`` is the Op spelling of ``trace.layers.compute``."""
+
+    trace = _strict_trace()
+
+    compute = trace.ops.compute
+    assert list(compute) == list(trace.compute_ops)
+    assert compute.labels == trace.compute_ops.labels
+    assert not any(op.is_input or op.is_output or op.is_buffer for op in compute)
+    assert {op.layer_label for op in compute} == set(trace.layers.compute.labels)
+    assert list(trace.input_ops.compute) == []
+
+
+def test_ops_nonfinite_and_modules_uncalled_filters() -> None:
+    """``trace.ops.nonfinite`` and ``trace.modules.uncalled`` mirror the Trace-level answers."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _IdleBranchModel(),
+        torch.randn(2, 3),
+        save="all",
+    )
+
+    nonfinite = trace.ops.nonfinite
+    assert nonfinite.labels == tuple(trace.nonfinite_ops)
+    assert len(nonfinite) >= 1
+    assert all(isinstance(op, Op) for op in nonfinite)
+    assert all(not torch.isfinite(op.out).all() for op in nonfinite)
+    compute_labels = set(trace.ops.compute.labels)
+    assert trace.ops.compute.nonfinite.labels == tuple(
+        label for label in nonfinite.labels if label in compute_labels
+    )
+
+    assert list(trace.modules.uncalled) == list(trace.uncalled_modules)
+    assert "idle" in trace.modules.uncalled
+    assert "idle" not in trace.modules.labels

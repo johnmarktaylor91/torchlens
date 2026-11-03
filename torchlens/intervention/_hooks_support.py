@@ -1,4 +1,4 @@
-"""Leaf helpers for hook normalization, live site proxies and facet bookkeeping."""
+"""Leaf helpers for hook normalization (including the hook signature check), live site proxies and facet bookkeeping."""
 
 from __future__ import annotations
 
@@ -10,9 +10,12 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._state import pause_logging
+from .errors import HookSignatureError
 
 if TYPE_CHECKING:
-    from .hooks import HookCallable
+    from collections.abc import Callable
+
+    from .hooks import HookCallable, HookDirection
     from .types import Edit
 
 #: Selector kind of the ``tl.grad(...)`` wrapper (SPEC section 0, THE_WRAPPER).
@@ -95,7 +98,8 @@ def _display_label(log: Any, home_label: str) -> str:
     """Return the final layer label behind a raw home-op hook label, for messages."""
 
     try:
-        return str(log[home_label].layer_label)
+        layer = log._layer_logs.get(home_label)
+        return str((layer if layer is not None else log[home_label]).layer_label)
     except (AttributeError, KeyError, TypeError, ValueError):
         return home_label
 
@@ -284,3 +288,53 @@ def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:
             value = getattr(layer_log, field_name, None)
         snapshot[field_name] = value
     return snapshot
+
+
+def _validate_hook_signature(fn: Callable[..., Any], *, signal: HookDirection) -> None:
+    """Validate the MVP hook callable signature.
+
+    Parameters
+    ----------
+    fn:
+        Hook callable to inspect.
+    signal:
+        Pass of the site branch, for diagnostics and the backward tuple protocol.
+
+    Raises
+    ------
+    HookSignatureError
+        If the callable cannot be called as ``fn(out, *, ctx=context)``.
+        Backward hooks receive a grad as the first positional argument; the
+        parameter name is conventional only, so ``g`` or any other name is
+        accepted.
+    """
+
+    try:
+        signature = inspect.signature(fn)
+    except (TypeError, ValueError) as exc:
+        raise HookSignatureError(f"could not inspect hook signature for {fn!r}") from exc
+
+    parameters = tuple(signature.parameters.values())
+    has_positional = any(
+        parameter.kind
+        in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        for parameter in parameters
+    )
+    has_var_positional = any(
+        parameter.kind == inspect.Parameter.VAR_POSITIONAL for parameter in parameters
+    )
+    ctx_param = signature.parameters.get("ctx")
+    has_var_keyword = any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters
+    )
+    if not has_positional and not has_var_positional:
+        noun = "grad" if signal == "backward" else "out"
+        raise HookSignatureError(f"hook must accept a first positional {noun} argument")
+    if signal == "backward" and (
+        {"grad_output", "grad_fn_handle", "call_index", "run_ctx"} & set(signature.parameters)
+    ):
+        return
+    if ctx_param is None and not has_var_keyword:
+        raise HookSignatureError("hook must accept required keyword-only argument 'ctx'")
+    if ctx_param is not None and ctx_param.kind is not inspect.Parameter.KEYWORD_ONLY:
+        raise HookSignatureError("'ctx' must be a keyword-only parameter")

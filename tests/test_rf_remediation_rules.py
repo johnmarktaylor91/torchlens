@@ -76,7 +76,11 @@ def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
     """
 
     capture = tl.options.CaptureOptions(backward_ready=True)
-    return tl.trace(model, inputs, capture=capture, save_mode="reference")
+    return tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
 
 
 def _fill_convolutions(model: nn.Module) -> None:

@@ -125,11 +125,11 @@ def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
     recording = tl.record(
         StorageModel(),
         torch.ones(1, 3),
-        default_op=CaptureSpec(save_grad=True),
-        streaming=StorageOptions(
+        storage=StorageOptions(
             path=tmp_path / "mirror.tlfast",
             retain_in_memory=True,
         ),
+        default_op=CaptureSpec(save_grad=True),
     )
     record = _first_payload_record(recording)
 
@@ -146,7 +146,7 @@ def test_disk_only_keep_grad_default_rejected_at_construction(tmp_path: Path) ->
         tl.recording.Recorder(
             StorageModel(),
             default_op=CaptureSpec(save_grad=True),
-            streaming=StorageOptions(
+            storage=StorageOptions(
                 path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,
             ),
@@ -170,7 +170,7 @@ def test_disk_only_predicate_keep_grad_rejected_before_record_write(
             StorageModel(),
             torch.ones(1, 3),
             save=keep_op,
-            streaming=StorageOptions(path=bundle_path, retain_in_memory=False),
+            storage=StorageOptions(path=bundle_path, retain_in_memory=False),
         )
 
     partials = list(tmp_path.glob("disk.tlfast.tmp.*"))
@@ -197,11 +197,11 @@ def test_keep_grad_true_cpu_device_warns_once_and_is_allowed(tmp_path: Path) -> 
         recording = tl.record(
             StorageModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(save_grad=True, device="cpu"),
-            streaming=StorageOptions(
+            storage=StorageOptions(
                 path=tmp_path / "mirror.tlfast",
                 retain_in_memory=True,
             ),
+            default_op=CaptureSpec(save_grad=True, device="cpu"),
         )
 
     assert len(warnings_seen) == 1

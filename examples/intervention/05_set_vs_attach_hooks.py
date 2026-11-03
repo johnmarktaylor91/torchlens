@@ -57,7 +57,7 @@ def main() -> None:
     hook_log.push()
 
     assert torch.allclose(set_log.output_ops[-1].out, hook_log.output_ops[-1].out)
-    assert set_log.state_history[-2]["op"] == "set"
+    assert "set" in [entry["op"] for entry in set_log.state_history]
     assert hook_log.state_history[-2]["op"] == "attach_hooks"
 
 

@@ -1,4 +1,4 @@
-"""``Layer.do``, ``Layer.set`` and ``Layer.attach_hooks`` address every pass of a multi-pass layer.
+"""``Layer.do`` (both engines) and ``Layer.attach_hooks`` address every pass of a multi-pass layer.
 
 A bare layer label addresses only a single-pass layer, so the three Layer doors
 must not forward it for a layer that ran several passes: a module reused in a
@@ -93,7 +93,7 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
     model, x, trace = captured
     shared, _fresh = _linear_labels(trace)
     fork = trace.fork()
-    layer = fork[shared]
+    layer = fork.layers[shared]
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
         if door == "do":
             layer.do(tl.scale(2.0))

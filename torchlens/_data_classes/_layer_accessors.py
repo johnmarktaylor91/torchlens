@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
+from .._pass_tokens import split_pass_token
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_views import _layer_log_to_row
 
@@ -188,8 +189,9 @@ class LayerAccessor(Accessor["Layer"]):
     Supports indexing by:
     * **layer label** (str) -- exact match against no-pass label.
     * **ordinal index** (int) -- position in execution order.
-    * **pass notation** (str ``"conv2d_1_1:2"``) -- strips the pass
-      suffix and returns the parent Layer.
+    * **pass notation** (str ``"conv2d_1_1:2"``, ``"conv2d_1_1:last"``,
+      ``"conv2d_1_1:all"``) -- strips the pass suffix and returns the parent
+      Layer.
 
     Available as ``trace.layers``.
     """
@@ -229,12 +231,17 @@ class LayerAccessor(Accessor["Layer"]):
         super().__init__(layer_logs, source_ref=source_ref)
 
     def _resolve_pass_qualified(self, key: str) -> "Layer | None":
-        """Resolve ``layer_label:pass`` notation to the parent Layer."""
+        """Resolve ``layer_label:pass``, ``:last`` or ``:all`` notation to the parent Layer.
+
+        Passes are 1-based: a zero or negative pass number names nothing.
+        """
         base, _, pass_str = key.rpartition(":")
-        try:
-            int(pass_str)
-        except ValueError:
-            return None
+        if split_pass_token(key) is None:
+            try:
+                if int(pass_str) < 1:
+                    return None
+            except ValueError:
+                return None
         return self._resolve_substring(base)
 
     def _resolve_substring(self, key: str) -> "Layer | None":

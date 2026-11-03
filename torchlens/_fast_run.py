@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 import threading
 import time
 import weakref
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
 from typing import Any, cast
 
@@ -16,28 +15,25 @@ from torch import nn
 from torchlens._runnable import ContractCheck, ReadinessReport
 
 from . import _state
-from ._call_fingerprint import (
-    fingerprinting,
-    install_module_token_hooks,
-    module_fingerprint_address,
-)
+from ._call_fingerprint import fingerprinting
 from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._data_classes._trace_accessors import boundary_label_rows
+from ._fast_live_events import _NestedEventTracker
 from ._fast_live_plans import (
-    DirectForwardRoute,
     _admitted_collection_labels,
-    _direct_call,
     _drop_uncollected_payloads,
     _FastOutputPlan,
     _live_modules_by_address,
+    _lossy_output_failure,
     _module_call_budget,
     _output_tensor_leaves,
     _pair_output_leaves,
-    _remove_fast_live_hooks,
+    build_direct_forward_routes,
     build_function_plans,
     build_module_plans,
     collected_function_output,
-    install_collection_hooks,
+    direct_forward_routes_installed,
+    install_session_hooks,
     repeats_last_function_output,
     require_distinct_plan_modules,
     save_payload_paused,
@@ -48,8 +44,6 @@ from ._fast_live_steer import (
     clear_unrefreshed_shape_metadata,
     fast_live_input_admission,
     hooked_run_diagnostic,
-    install_steer_hooks,
-    session_is_active,
 )
 from ._fast_live_until import (
     FastUntilReached,
@@ -60,6 +54,7 @@ from ._fast_live_until import (
 )
 from ._fast_sparse_state import _compile_sparse_call, _CompiledSparseCall, _state_mutating_call_ids
 from ._ir.container import ContainerSpec, rebuild_container_from_spec
+from ._output_slot import returned, stopped
 from ._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
@@ -132,12 +127,9 @@ from ._runnable.witness_contracts import (
     _tensor_leaf_paths,
     _unbound_state_escape_stale,
 )
-from ._utils._module_call_dispatch import forward_entered_through_module_call
 from ._utils.arg_handling import normalize_input_args
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .backends.torch._ops_container_base import _try_build_container_spec
-from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
-from .backends.torch._tl import get_module_meta
 from .errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
 
 
@@ -680,22 +672,25 @@ class _FastSparseSession:
         )
 
 
-class _FastLiveSession:
+class _FastLiveSession(_NestedEventTracker):
     """Native-forward collector guarded by selected-site and boundary call plans."""
 
-    def __init__(self, trace: Any, model: nn.Module) -> None:
-        """Build and install the targeted live-model collection plan."""
+    def __init__(self, trace: Any, model: nn.Module, *, target: Any | None = None) -> None:
+        """Build and install the targeted live-model collection plan.
+
+        Every result write (payloads, truncation, ledger, state) lands on the
+        target; the source is only read. The explicit ``fast=True`` door passes
+        a fork so the source stays untouched; the legacy rerun door passes
+        nothing and refreshes the trace in place.
+        """
 
         self.trace = trace
+        self.target = trace if target is None else target
         self.model_ref = weakref.ref(model)
         self.owner_thread_id: int | None = None
         self.active = False
         self.module_index = 0
         self.function_index = 0
-        # The last collected functional event: its name, output object and
-        # tensor leaves, held strongly so a later same-name event is compared by
-        # object identity, never by a reusable ``id()``.
-        self.last_function_output: tuple[str, Any, tuple[Any, ...]] | None = None
         # True while the session saves a payload: its own ``safe_copy`` clone
         # and transform calls run through the wrapped torch functions and must
         # not count as the model's events.
@@ -731,7 +726,7 @@ class _FastLiveSession:
         self.direct_routes = build_direct_forward_routes(
             model, modules, plan_addresses, self.steer_plan.modules
         )
-        _drop_uncollected_payloads(trace, supported_labels)
+        _drop_uncollected_payloads(self.target, supported_labels)
         self.function_names = frozenset(plan.address_or_name for plan in self.function_plans)
         # The ordered call fingerprint sealed at capture time is the structure
         # guard that admits a different-size input; ``None`` on a trace that
@@ -748,15 +743,7 @@ class _FastLiveSession:
         self.last_fingerprint: tuple[int, int] | None = None
         self.refreshed_labels: frozenset[str] = frozenset(supported_labels)
         self.handles: list[Any] = []
-        self._hook_finalizer = weakref.finalize(self, _remove_fast_live_hooks, self.handles)
-        session_ref = weakref.ref(self)
-        try:
-            self.handles.extend(install_steer_hooks(self.steer_plan, session_ref))
-            self.handles.extend(install_module_token_hooks(model, session_is_active(session_ref)))
-            install_collection_hooks(self.handles, modules, plan_addresses, session_ref)
-        except BaseException:
-            self._hook_finalizer()
-            raise
+        self._hook_finalizer = install_session_hooks(self, model, modules, plan_addresses)
 
     def close(self) -> None:
         """Remove persistent module hooks owned by this session."""
@@ -778,9 +765,9 @@ class _FastLiveSession:
         )
 
     def _poison_and_raise(self, failed: ContractCheck) -> None:
-        """Poison the half-refreshed user Trace, then raise the typed divergence.
+        """Poison the half-refreshed result Trace, then raise the typed divergence.
 
-        Boundary payloads are overwritten in place as the native forward passes
+        Boundary payloads are overwritten on the target as the native forward passes
         each site, so a divergence detected at site N leaves sites 1..N-1 holding
         new-input activations while later sites keep capture-time ones. The
         mixed-activation Trace must never pass downstream faithful consumers
@@ -790,7 +777,7 @@ class _FastLiveSession:
         """
 
         if self.poison_on_divergence:
-            mark_trace_path_status(self.trace, PathFaithfulness.DIVERGED, failed.diagnostic)
+            mark_trace_path_status(self.target, PathFaithfulness.DIVERGED, failed.diagnostic)
         diagnostic = failed.diagnostic
         if (
             diagnostic is not None
@@ -866,7 +853,7 @@ class _FastLiveSession:
                 )
                 return
             if label in plan.save_labels:
-                save_payload_paused(self, self.trace._layer_dict_all_keys[label], value)
+                save_payload_paused(self, self.target._layer_dict_all_keys[label], value)
 
     def capture_module(self, address: str, output: Any) -> None:
         """Collect and guard one atomic-module forward-hook event."""
@@ -979,7 +966,7 @@ class _FastLiveSession:
         self.module_index = 0
         self.module_call_counts = {}
         self.function_index = 0
-        self.last_function_output = None
+        self.reset_event_nesting()
         self.failure = None
         self.shape_varied = False
         self.steer_plan.reset()
@@ -991,7 +978,7 @@ class _FastLiveSession:
             _state._active_fast_run_collector = prior
             self.active = False
             self.owner_thread_id = None
-            self.last_function_output = None
+            self.reset_event_nesting()
 
     def _admit_inputs(self, inputs: Any) -> tuple[Any, Mapping[str, Any], bool]:
         """Split the runtime inputs and admit them against the captured input boundary.
@@ -1060,6 +1047,18 @@ class _FastLiveSession:
         ):
             yield fingerprint
 
+    def _live_model(self) -> nn.Module:
+        """Return the live source model, refusing once it has been collected."""
+
+        model = self.model_ref()
+        if model is None:
+            raise RunCapabilityUnavailableError(
+                "The fast live session's source model is no longer available.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                provider=RunProvider.LIVE,
+            )
+        return model
+
     def run(self, inputs: Any, *, seed: int | None, until: Any = None) -> RunResult:
         """Execute one native forward and enforce the cached static graph guard.
 
@@ -1070,15 +1069,9 @@ class _FastLiveSession:
         """
 
         self.run_started_at = time.monotonic()
-        model = self.model_ref()
-        if model is None:
-            raise RunCapabilityUnavailableError(
-                "The fast live session's source model is no longer available.",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                provider=RunProvider.LIVE,
-            )
+        model = self._live_model()
         input_args, input_kwargs, input_size_changed = self._admit_inputs(inputs)
-        rearm_cleared_sites(self.trace, self.cleared_by_until)
+        rearm_cleared_sites(self.target, self.cleared_by_until)
         self.cleared_by_until = ()
         self.stop_at = (
             None
@@ -1105,6 +1098,8 @@ class _FastLiveSession:
             self._poison_and_raise(self.failure)
         if truncation is not None:
             truncation = self._settle_truncated_prefix(until, input_args, input_kwargs)
+
+            self.target._output_slot = stopped("live run ended at until=")
         else:
             self._check_full_path()
             self._refresh_boundary_payloads(input_args, input_kwargs, output)
@@ -1113,7 +1108,7 @@ class _FastLiveSession:
             # the boundary ops. Every other op's shape and size metadata would
             # otherwise read capture-time numbers as if they were this run's,
             # so they take the not-available spelling (None) once and for all.
-            clear_unrefreshed_shape_metadata(self.trace, self.refreshed_labels)
+            clear_unrefreshed_shape_metadata(self.target, self.refreshed_labels)
             self.shape_metadata_cleared = True
         # A cut forward leaves downstream staged hooks unfired by design.
         unfired = self.steer_plan.warn_unfired() if truncation is None else ()
@@ -1180,7 +1175,7 @@ class _FastLiveSession:
                 )
             )
         self._refresh_boundary_payloads(input_args, input_kwargs, None, inputs_only=True)
-        truncation, self.cleared_by_until = truncate_after(self.trace, stop_plan, until)
+        truncation, self.cleared_by_until = truncate_after(self.target, stop_plan, until)
         return truncation
 
     def _finalize_run(self, output: Any, *, seed: int | None, truncation: Any) -> RunResult:
@@ -1226,7 +1221,7 @@ class _FastLiveSession:
             else ()
         )
         return _finalize_provider_run(
-            fork=self.trace,
+            fork=self.target,
             output=output,
             readiness=readiness,
             state_source=StateSource.LIVE_MODEL_STATE,
@@ -1252,7 +1247,7 @@ class _FastLiveSession:
 
         from ._trace_state import TraceState
 
-        trace = self.trace
+        trace = self.target
         hook_count = len(self.steer_plan.hook_plan)
         record = {
             "op": "rerun",
@@ -1304,14 +1299,13 @@ class _FastLiveSession:
             tuple(getattr(self.trace._layer_dict_all_keys[label], "container_path", None) or ())
             for label in output_labels
         ]
+        lossy_failure = _lossy_output_failure(output, output_labels)
+        if lossy_failure is not None:
+            self._poison_and_raise(lossy_failure)
         values, reason = _pair_output_leaves(output, captured_paths, len(output_labels))
         if values is None and _is_opaque_output_root(output):
-            # Capture walks an unsupported output container (a
-            # ``torch.distributions`` object, a plain class) by attribute
-            # search and records its tensors under one empty address, so the
-            # boundary keeps a single output op however many tensors the object
-            # holds. The live object has not changed; the fast run cannot pair
-            # its leaves with a collapsed boundary.
+            # Capture records an unsupported output container (a plain class)
+            # under one empty address; the fast run cannot pair leaves with it.
             failed = _contract_check(
                 "fast_live_model_output_opaque",
                 False,
@@ -1336,15 +1330,8 @@ class _FastLiveSession:
         assert values is not None
         return values
 
-    def _refresh_boundary_payloads(
-        self,
-        input_args: Any,
-        input_kwargs: Mapping[str, Any],
-        output: Any,
-        *,
-        inputs_only: bool = False,
-    ) -> None:
-        """Refresh saved model-input/output payloads from the native call boundaries."""
+    def _refresh_input_payloads(self, input_args: Any, input_kwargs: Mapping[str, Any]) -> None:
+        """Refresh saved model-input payloads from the native call's input leaves."""
 
         input_leaves = _live_runtime_input_leaves(input_args, input_kwargs)
         if input_leaves is not None:
@@ -1365,16 +1352,28 @@ class _FastLiveSession:
             # A folded input Layer is listed once per pass under one bare
             # label, which ``layer_dict_all_keys`` maps to the LAST pass; the
             # per-listing rule refreshes each pass with its own input.
-            input_ops = boundary_label_rows(input_labels, self.trace.__getitem__)
+            input_ops = boundary_label_rows(input_labels, self.target.layers.__getitem__)
             for op, value in zip(input_ops, input_leaves, strict=True):
                 if op is not None and bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)
+
+    def _refresh_boundary_payloads(
+        self,
+        input_args: Any,
+        input_kwargs: Mapping[str, Any],
+        output: Any,
+        *,
+        inputs_only: bool = False,
+    ) -> None:
+        """Refresh saved model-input/output payloads from the native call boundaries."""
+
+        self._refresh_input_payloads(input_args, input_kwargs)
         if inputs_only:
             return
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
         output_values = self._match_native_output_leaves(output, output_labels)
         for label, value in zip(output_labels, output_values, strict=True):
-            op = self.trace._layer_dict_all_keys[label]
+            op = self.target._layer_dict_all_keys[label]
             expected_shape = tuple(op.shape) if op.shape is not None else None
             expected_dtype = str(op.dtype) if op.dtype is not None else None
             if not isinstance(value, torch.Tensor):
@@ -1414,97 +1413,8 @@ class _FastLiveSession:
         # is stored when an output transform exists; the save scope is
         # otherwise untouched, so a sparse save stays sparse on a rerun.
         transform = self.output_transform
-        self.trace.transformed_output = transform(output) if transform is not None else None
-
-
-def _was_called_directly(module: nn.Module) -> bool:
-    """Return whether a capture marked ``module`` as entered by a direct call."""
-
-    meta = get_module_meta(module)
-    return meta is not None and meta.direct_forward_called
-
-
-def build_direct_forward_routes(
-    model: nn.Module,
-    modules: Mapping[str, nn.Module],
-    plan_addresses: tuple[str, ...],
-    steer_modules: Mapping[str, nn.Module],
-) -> tuple[DirectForwardRoute, ...]:
-    """Build one route per live module a capture entered by a direct ``forward()`` call.
-
-    ``model`` is the live root (never routed: capture leaves the root undecorated),
-    ``modules`` every live address with alias spellings, ``plan_addresses`` the
-    addresses the session collects through a forward hook and ``steer_modules``
-    the steered address to live module map the steer plan resolved.
-    """
-
-    routes: list[DirectForwardRoute] = []
-    for name, module in model.named_modules():
-        if module is model or not _was_called_directly(module):
-            continue
-        collect = [
-            planned
-            for planned in plan_addresses
-            if modules.get("" if planned == "self" else planned) is module
-        ]
-        routes.append(
-            DirectForwardRoute(
-                module_ref=weakref.ref(module),
-                token=_state.module_token(module_fingerprint_address(module, name)),
-                steer_addresses=tuple(
-                    steered for steered, target in steer_modules.items() if target is module
-                ),
-                collect_address=collect[0] if collect else None,
-            )
-        )
-    return tuple(routes)
-
-
-class _RoutedForward(_SessionForward):
-    """A per-run ``forward`` that runs the session hook work on a direct call only."""
-
-    __wrapped__: Callable[..., Any]  # the base's record of the module's own forward
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Pass a ``Module.__call__`` call through; route a direct call."""
-
-        if forward_entered_through_module_call(sys._getframe(1)):
-            return self.__wrapped__(*args, **kwargs)
-        return self._delegate(*args, **kwargs)
-
-
-@contextmanager
-def direct_forward_routes_installed(
-    routes: tuple[DirectForwardRoute, ...], session_ref: weakref.ReferenceType[Any]
-) -> Iterator[None]:
-    """Install the routes for one native forward, then restore every ``forward``.
-
-    A module whose ``forward`` no longer holds the route at exit (the model
-    reassigned it mid-forward) keeps the newer value, as session cleanup does.
-    """
-
-    installed: list[tuple[nn.Module, Any, _RoutedForward]] = []
-    try:
-        for route in routes:
-            module = route.module_ref()
-            if module is None:
-                continue
-            prior = module.__dict__.get("forward", _NO_INSTANCE_FORWARD)
-            original = module.forward
-            wrapper = _RoutedForward(
-                _direct_call(route, module, original, session_ref), module, original, prior
-            )
-            module.__dict__["forward"] = wrapper
-            installed.append((module, prior, wrapper))
-        yield
-    finally:
-        for module, prior, wrapper in reversed(installed):
-            if module.__dict__.get("forward") is not wrapper:
-                continue
-            if prior is _NO_INSTANCE_FORWARD:
-                module.__dict__.pop("forward", None)
-            else:
-                module.__dict__["forward"] = prior
+        self.target._output_slot = returned(output)
+        self.target.transformed_output = transform(output) if transform is not None else None
 
 
 def live_source_model(trace: Any) -> nn.Module | None:

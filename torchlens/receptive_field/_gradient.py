@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 _RECAPTURE_RECIPE = (
     "tl.trace(model, x.requires_grad_(True), "
-    'capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")'
+    'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))'
 )
 
 
@@ -480,8 +480,8 @@ def _source_recapture_recipe(source: Op, target: Op) -> str:
     """
 
     return (
-        "tl.trace(model, x.requires_grad_(True), "
-        'capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference", '
+        "tl.trace(model, x, "
+        'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
         f"save=tl.label({source.short_layer_label!r}) | tl.label({target.short_layer_label!r}))"
     )
 

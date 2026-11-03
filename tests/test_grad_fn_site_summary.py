@@ -37,8 +37,7 @@ def _backward_trace(model: nn.Module | None = None) -> tl.Trace:
     trace = tl.trace(
         model if model is not None else _ReusedModule(),
         torch.randn(3, 4),
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.backward(trace.output_ops[0].out.sum())
     return trace
