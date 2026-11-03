@@ -178,12 +178,71 @@ def _require_tool(page: str) -> None:
         Repo-relative page path.
     """
 
-    for module in TOOL_MODULES[PAGES[page]]:
+    for module in (*TOOL_MODULES[PAGES[page]], *_running_example_modules(page)):
         if importlib.util.find_spec(module) is None:
             message = f"{page} needs {module!r}"
             if PEERS_REQUIRED:
                 pytest.fail(f"{message}, and the peer-recipe leg installs it")
             pytest.skip(message)
+
+
+RUNNING_EXAMPLES_PAGE = "docs/field-guide/running_examples.md"
+RECIPE_PAGES: tuple[str, ...] = tuple(
+    sorted(path.relative_to(REPO).as_posix() for path in (REPO / "docs/recipes").glob("*.md"))
+)
+
+
+def _running_examples() -> dict[str, str]:
+    """Return the two canonical running-example fences, keyed by the module each needs.
+
+    Returns
+    -------
+    dict[str, str]
+        ``{"transformers": decoder fence, "torchvision": ResNet-18 fence}``.
+    """
+
+    decoder, resnet = _fences(RUNNING_EXAMPLES_PAGE)[:2]
+    return {"transformers": decoder, "torchvision": resnet}
+
+
+def _opening_body(page: str) -> str:
+    """Return a page's first Python fence without its recipe-test header line.
+
+    Parameters
+    ----------
+    page:
+        Repo-relative page path.
+
+    Returns
+    -------
+    str
+        The fence source after the header (the whole fence when it has none).
+    """
+
+    first = _fences(page)[0]
+    if HEADER_RE.match(first.splitlines()[0]):
+        return first.split("\n", 1)[1]
+    return first
+
+
+def _running_example_modules(page: str) -> tuple[str, ...]:
+    """Return the module the page's opening running example needs, if it has one.
+
+    Parameters
+    ----------
+    page:
+        Repo-relative page path.
+
+    Returns
+    -------
+    tuple[str, ...]
+        ``("transformers",)`` or ``("torchvision",)``; empty for a page without one.
+    """
+
+    body = _opening_body(page) if page.endswith(".md") else ""
+    return tuple(
+        module for module, fence in _running_examples().items() if body.startswith(fence + "\n")
+    )
 
 
 @pytest.mark.parametrize("page", _params())
@@ -276,3 +335,18 @@ def test_neuro_refusal_homes_have_recipe_pages() -> None:
     for page in ("neuroai/netrep.md", "neuroai/himalaya.md"):
         assert f"(../{page})" in text
         assert f"docs/{page}" in PAGES
+
+
+@pytest.mark.parametrize("page", RECIPE_PAGES)
+def test_recipe_page_opens_with_a_running_example(page: str) -> None:
+    """Each recipe page opens with one running example, byte for byte, then one verb on it."""
+
+    text = (REPO / page).read_text("utf-8")
+    heading = "## Minimal example on the running model"
+    assert heading in text, page
+    assert text.index(heading) < text.index("```python"), page
+    assert _running_example_modules(page), (page, "first fence is not a running example")
+    assert _opening_body(page).rstrip().split("trace = tl.trace(model, x)", 1)[1].strip(), (
+        page,
+        "the opening fence adds no verb after the running example",
+    )

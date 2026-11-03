@@ -19,6 +19,41 @@ The code below is transcribed verbatim into
 `tests/test_attrib_methods_lrp.py`, where the blocking rows run it per
 commit; keep the two in lockstep.
 
+## Minimal example on the running model
+
+This page uses [the decoder on the IOI
+prompt](../field-guide/running_examples.md#the-decoder-on-the-ioi-prompt). LRP propagates
+relevance back from one output logit; this is the logit it starts from on the running decoder.
+The recipe below builds its own model for the method.
+
+```python
+import torch
+import transformers
+
+import torchlens as tl
+
+PROMPT = "When Mary and John went to the store, John gave a drink to"
+words = PROMPT.replace(",", " ,").split()
+vocab = sorted(set(words))
+x = torch.tensor([[vocab.index(word) for word in words]])
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    vocab_size=len(vocab),
+    n_positions=32,
+    n_embd=64,
+    n_layer=2,
+    n_head=4,
+    use_cache=False,
+    attn_implementation="eager",
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+
+trace = tl.trace(model, x)
+
+logit = trace["lm_head"].out[0, -1].max()
+assert logit.ndim == 0
+```
+
 ## The convention
 
 Relevance rides the backward pass as `c` with `R = value * c` at every

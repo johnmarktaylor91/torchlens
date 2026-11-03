@@ -27,6 +27,42 @@ path below imports only `torch` and `transformers`, so `--no-deps` is enough.
 Without `zennit`, LXT warns once at import that its vision-transformer patches
 are unavailable.
 
+## Minimal example on the running model
+
+This page uses [the decoder on the IOI
+prompt](../field-guide/running_examples.md#the-decoder-on-the-ioi-prompt). LXT explains a
+transformer's logits; these are the logits of the running decoder, read from the trace. The
+recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=lxt expected=True
+import torch
+import transformers
+
+import torchlens as tl
+
+PROMPT = "When Mary and John went to the store, John gave a drink to"
+words = PROMPT.replace(",", " ,").split()
+vocab = sorted(set(words))
+x = torch.tensor([[vocab.index(word) for word in words]])
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    vocab_size=len(vocab),
+    n_positions=32,
+    n_embd=64,
+    n_layer=2,
+    n_head=4,
+    use_cache=False,
+    attn_implementation="eager",
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+
+trace = tl.trace(model, x)
+
+logits = trace["lm_head"].out
+RESULT = tuple(logits.shape) == (1, len(words), len(vocab))
+```
+
 ## Build the model and keep LXT's patches reversible
 
 LXT's `monkey_patch` changes classes, not one model: it replaces the

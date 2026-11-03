@@ -20,6 +20,42 @@ imports, and some of them do not install against current torch. The lens
 modules import only `torch`, `transformers`, `huggingface_hub`, and `numpy`,
 which `transformers` already brings, so `--no-deps` is enough.
 
+## Minimal example on the running model
+
+This page uses [the decoder on the IOI
+prompt](../field-guide/running_examples.md#the-decoder-on-the-ioi-prompt). A logit lens decodes
+a hidden state through the model's unembedding; decoding the final normalised state of the
+running decoder gives its logits back. The recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=tuned_lens expected=True
+import torch
+import transformers
+
+import torchlens as tl
+
+PROMPT = "When Mary and John went to the store, John gave a drink to"
+words = PROMPT.replace(",", " ,").split()
+vocab = sorted(set(words))
+x = torch.tensor([[vocab.index(word) for word in words]])
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    vocab_size=len(vocab),
+    n_positions=32,
+    n_embd=64,
+    n_layer=2,
+    n_head=4,
+    use_cache=False,
+    attn_implementation="eager",
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+
+trace = tl.trace(model, x)
+
+hidden = trace["transformer.ln_f"].out
+RESULT = torch.allclose(model.lm_head(hidden), trace["lm_head"].out, atol=1e-6)
+```
+
 ## Real use: published lens weights
 
 Published lenses download from the Hugging Face Hub. This is not run here:
