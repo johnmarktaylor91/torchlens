@@ -1,7 +1,7 @@
 # CNN fields as an intervention site
 
-This entry measures geometric influence on a pretrained ResNet-18 against an independent
-analytic calculation, gradient support and input interventions. The recorded run did not pass: its portable artifact could not replay the intervention.
+This entry measured ResNet-18 geometric influence and input interventions and did not pass:
+the coordinates matched the analytic box, but the field status was `upper_bound` rather than exact.
 The geometric background is [Araujo, Norris and Sim (Distill, 2019)](https://distill.pub/2019/computing-receptive-fields/);
 gradient support is an additional empirical oracle, not a general equality theorem.
 
@@ -10,47 +10,52 @@ gradient support is an additional empirical oracle, not a general equality theor
 | Claim | Geometric CNN influence supports input interventions and predicts projective support. |
 | Script and run line | `python examples/gallery/cnn_fields.py --out outputs/cnn_fields` |
 | Pinned inputs | torchvision ResNet-18, `IMAGENET1K_V1`, eval, float32, seed 17, one 224x224 random input; layer3, channel 0, centre unit. |
-| Verdict | Did not pass; Linux x86_64 CPU, 3 November 2026 at 6:48 AM PT; TorchLens 2.36.3, commit `51a5477ce`. |
-| Cost | 13.3 s measured analysis; 21.26 s process wall time, two CPU threads, 747,500 KiB peak RSS. |
+| Verdict | Did not pass; Linux x86_64 CPU, 3 November 2026 at 6:54 AM PT; TorchLens 2.36.3, commit `9a5e9678e`. |
+| Cost | 18.6 s measured analysis; 26.31 s process wall time, two CPU threads, 722,336 KiB peak RSS. |
 
 ## Oracles
 
-The analytic clipped box must agree exactly and have exact status. The spatial gradient-support
-IoU must be at least 0.95. Ablating the nonempty outside mask must change the unit by exactly
-zero in float32; inside ablation must change it. Projective-field support must have IoU at
-least 0.95 with the spatial units changed by a 4x4 input-patch ablation. The saved diagnostic reports gradient-support IoU 1.0000 and projective-support IoU 1.0000. The final JSON contains the replay failure rather than the intermediate checks, so the other numeric outcomes are not claimed.
+| Oracle | Fixed rule | Measured | Outcome |
+| --- | --- | --- | --- |
+| Analytic box | Exact coordinates and exact status | Expected and measured `[7,218)` on both axes; status `upper_bound` | Fail |
+| Gradient support | IoU >= 0.95 | 1.0 | Pass |
+| Outside ablation | Nonempty mask; float32 unit delta exactly 0 | 5,655 spatial pixels; delta 0 | Pass |
+| Inside ablation | Unit delta > 0 | 0.1923354864 | Pass |
+| Projective support | IoU >= 0.95 against changed spatial units | 1.0 | Pass |
+
+The exact-status rule stays unchanged. Matching coordinates alone do not establish that rule.
+The script saves each check immediately so later replay errors retain the measurements.
 
 ## Controls
 
 A deliberately naive registered-leaf chain treats projection shortcuts as sequential layers;
-its clipped box must differ from the independently branched analytic calculation. This control
-does not assert that every main-path-only formula fails on ResNet. A 4x4 patch in the image
-corner, the same size as the projective-field probe, must lie outside the receptive field and
-leave the target unchanged. These controls were reached before artifact replay, but their numeric outcomes were not retained in the final failure record; no pass is claimed.
+its clipped box `[207,224)` differs from the branched analytic box `[7,218)`: pass. This control
+does not assert that every main-path-only formula fails on ResNet. A 4x4 corner patch lies
+outside the receptive field and has unit delta 0: pass.
 
 ## Artifact and replay
 
-The script saves `cnn_fields.tlspec` as a portable trace, reloads it with `tl.load`, then
-repeats the outside-field zero ablation on a fork. The replay requires exactly zero unit change.
-The saved directory is 34,539,749 bytes; its sorted-path/content SHA256 is `31d9a8b7facbcdaadb790a69080a67df9ba518924d2d45e364d21f982cee09cb`. Replay failed with `ReplayPreconditionError`: portable saves omit capture-time callables and argument templates. The requested loaded-trace edit is unsupported. This entry stops here; it does not substitute an in-process replay or claim a complete reproduction.
+The portable `cnn_fields.tlspec` directory contains 213 files and 34,539,747 bytes;
+sorted-path/content SHA256 `0dddadabe4430728ce019319974becec787c0f738ea475d06d863620e006ed15`. The script reloads it, applies the input mask
+with `InterventionOptions(engine="set_only")`, then calls `run(model, edited_input)`.
+The rerun refused with `EngineDispatchError`: the edited loaded values no longer have a
+persisted intervention recipe. No replay match is claimed. The failed exact-status oracle
+already moves this entry to the next batch; neither rule nor tolerance was changed.
 
 ## Basis-grid row
 
-The attempted path uses capture, select, read, do, compare and save, and ran ResNet-18 only.
-The failure JSON has empty verb/architecture lists because replay aborted entry construction.
-Measured source counts: TorchLens 195; plain PyTorch 37; original reference not measured.
-The script measures nonblank, noncomment,
-non-docstring lines in the marked regions. The TorchLens region includes CLI setup,
-reporting, plotting and helpers; the plain region counts the independent geometry and hook
-oracle functions. These are stated scopes, not an original-reference code comparison. The original TensorFlow reference implementation's lines are not measured.
-Only architectures actually executed are reported.
+Verbs: capture, select, read, do, compare, save. Executed architecture: ResNet-18.
+Nonblank, noncomment, non-docstring source lines: TorchLens 234; plain PyTorch 37;
+original reference not measured. The TorchLens region includes setup, CLI, reporting,
+plotting and helpers. The plain region covers independent geometry and hook/gradient
+extraction. These scoped counts do not compare against original-reference code.
 
 ## The stamp
 
 ```text
 {
-  "commit": "51a5477ce54b9736f15e7ca33e078165e75c16da",
-  "date_utc": "2026-11-03T14:48:24Z",
+  "commit": "9a5e9678e7d642f1ba3bc219c662137b01089b62",
+  "date_utc": "2026-11-03T14:54:17Z",
   "device": "cpu",
   "libraries": {
     "numpy": "2.2.6",
@@ -63,7 +68,7 @@ Only architectures actually executed are reported.
   "torch": "2.13.0+cpu",
   "torch_threads": 2,
   "torchlens": "2.36.3",
-  "wall_seconds": 13.3
+  "wall_seconds": 18.6
 }
 ```
 
