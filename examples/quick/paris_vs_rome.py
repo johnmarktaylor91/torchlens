@@ -14,18 +14,17 @@ from transformers import AutoTokenizer, GPT2LMHeadModel
 import torchlens as tl
 
 model = GPT2LMHeadModel.from_pretrained("gpt2").eval()
-tok = AutoTokenizer.from_pretrained("gpt2")
-
-
-def paris_vs_rome(trace):
-    """How much more the model predicts " Paris" than " Rome" at the last position."""
-    logits = trace["lm_head"].out[0, -1]
-    return (logits[tok.encode(" Paris")] - logits[tok.encode(" Rome")]).item()
-
 
 # TorchLens tokenizes the text automatically for Hugging Face models
 france = tl.trace(model, "The capital of France is")
 italy = tl.trace(model, "The capital of Italy is")
+tok = AutoTokenizer.from_pretrained("gpt2")
+
+
+def paris_vs_rome(trace):  # how much more the model predicts " Paris" than " Rome"
+    logits = trace["lm_head"].out[0, -1]  # the next-word scores
+    return (logits[tok.encode(" Paris")] - logits[tok.encode(" Rome")]).item()
+
 
 # the values of all 144 attention heads
 heads = {
