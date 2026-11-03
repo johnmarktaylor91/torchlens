@@ -33,6 +33,16 @@ class StructuralHashMismatchError(ValidationError, AssertionError):
     ``except AssertionError`` handlers keep working. Structured context on
     ``fields``: ``code`` is always ``"structural_hash_mismatch"``, ``remedy``
     names the fix, and ``expected`` / ``actual`` carry both hashes.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.StructuralHashMismatchError, tl.errors.ValidationError)
+    True
+    >>> try:
+    ...     tl.fingerprint.assert_unchanged(model, x, "0" * 64)
+    ... except tl.errors.StructuralHashMismatchError as err:
+    ...     print(err.fields["code"])
+    structural_hash_mismatch
     """
 
 
@@ -52,6 +62,14 @@ def content(value: Any) -> str:
     -------
     str
         Lowercase hexadecimal SHA-256 digest.
+
+    Examples
+    --------
+    >>> digest = tl.fingerprint.content({"x": x, "tag": "a"})
+    >>> len(digest)
+    64
+    >>> digest == tl.fingerprint.content({"tag": "a", "x": x.clone()})
+    True
     """
 
     digest = sha256()
@@ -190,6 +208,14 @@ def trace(captured_trace: Any) -> str:
     -------
     str
         SHA-256 structural hash for the trace.
+
+    Examples
+    --------
+    >>> run = tl.trace(model, x)
+    >>> len(tl.fingerprint.trace(run))
+    64
+    >>> tl.fingerprint.trace(run) == tl.fingerprint.model(model, x)
+    True
     """
 
     return compute_graph_shape_hash(captured_trace, include_module_address=False)
@@ -240,6 +266,14 @@ def model(model: Any, inputs: Any) -> str:
     -------
     str
         SHA-256 structural hash for the captured trace.
+
+    Examples
+    --------
+    >>> pin = tl.fingerprint.model(model, x)
+    >>> len(pin)
+    64
+    >>> pin == tl.fingerprint.model(model, torch.randn(1, 3, 8, 8))
+    True
     """
 
     return _model_hash(model, inputs)
@@ -271,6 +305,15 @@ def assert_unchanged(model: Any, inputs: Any, expected: str | None) -> str:
         If ``expected`` differs from the actual hash.
     torchlens.errors.ArgumentTypeError
         If ``expected`` is neither a string nor ``None`` (a ``TypeError``).
+
+    Examples
+    --------
+    >>> import warnings
+    >>> with warnings.catch_warnings():
+    ...     warnings.simplefilter("ignore")
+    ...     pin = tl.fingerprint.assert_unchanged(model, x, None)
+    >>> tl.fingerprint.assert_unchanged(model, x, pin) == pin
+    True
     """
 
     actual = _model_hash(model, inputs)
