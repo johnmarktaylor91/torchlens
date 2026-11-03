@@ -35,7 +35,12 @@ from torchlens._visualization.collapse_plan import (
 
 
 class _Block(nn.Module):
-    """Residual MLP block (four ops)."""
+    """MLP block (three ops).
+
+    Not residual on purpose: the box of a block whose output op adds the
+    block's own input draws that add outside the box, between sibling boxes,
+    which (correctly) breaks a segment run.
+    """
 
     def __init__(self, width: int) -> None:
         super().__init__()
@@ -44,7 +49,7 @@ class _Block(nn.Module):
         self.fc2 = nn.Linear(width, width)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.fc2(self.act(self.fc1(x)))
+        return self.fc2(self.act(self.fc1(x)))
 
 
 class _Stage(nn.Module):
