@@ -259,6 +259,8 @@ def apply_slot_function(slot: object) -> Callable[..., Any] | None:
         def call_descriptor(cls: type[Any], *args: Any, **kwargs: Any) -> Any:
             return slot.__get__(None, cls)(*args, **kwargs)
 
+        call_descriptor.__name__, call_descriptor.__qualname__ = slot.__name__, slot.__qualname__
+        call_descriptor.__doc__ = slot.__doc__
         return call_descriptor
     return None
 
@@ -300,9 +302,7 @@ def install_function_apply_wrapper() -> None:
             return original_function(cls, *args, **kwargs)
         return record_function_apply(active_trace, cls, original_function, args, kwargs)
 
-    functools.update_wrapper(
-        wrapped_apply, original.__func__ if isinstance(original, classmethod) else original
-    )
+    functools.update_wrapper(wrapped_apply, original_function)
     installed = classmethod(wrapped_apply)
     torch.autograd.Function.apply = installed  # type: ignore[assignment]
     _INSTALLED_APPLY = installed
