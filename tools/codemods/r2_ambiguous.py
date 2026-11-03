@@ -1939,19 +1939,19 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         0,
     ): "apply",
     (
-        "torchlens/debug/_snoop/_normalize.py",
+        "torchlens/_snoop/_normalize.py",
         '"tl.in_module(...), or narrate post-hoc via trace.narrate(select=...).",',
         "select",
         0,
     ): "skip",
     (
-        "torchlens/debug/_snoop/_normalize.py",
+        "torchlens/_snoop/_normalize.py",
         '"trace.narrate(select=...), or scope live echo with tl.func/tl.in_module.",',
         "select",
         0,
     ): "skip",
     (
-        "torchlens/debug/_snoop/_normalize.py",
+        "torchlens/_snoop/_normalize.py",
         'remedy="use trace.narrate(select=...) post-hoc, or a live selector",',
         "select",
         0,

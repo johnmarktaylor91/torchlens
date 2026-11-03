@@ -41,7 +41,7 @@ ones freely. Imports placed inside functions cross the layers in both directions
 | 2. Capture | Wrapping torch, running the forward pass, logging ops | `backends/` (registry and the torch backend in `backends/torch/`; previews for JAX, TensorFlow, MLX, Paddle, tinygrad), `capture/` (backend-neutral runner, predicates, halt, outcome), `_capture_*.py`, `_chunking.py`, `_input_*.py`, `_robustness.py`, `fastlog/` (sparse predicate recording behind `tl.record`), `distributed/`, `_partial/` |
 | 3. Postprocess | Turning the raw log into a finished graph | `_postprocess/` (steps 0 to 20 plus fractional inserts, order derived from declared read and write contracts) |
 | 4. Persistence and replay | Saving, loading, replaying | `_io/` (bundle writer and reader, `.tlspec` manifest, loaders), `io/` (public administration helpers), `schemas/`, `_runnable/` (the frozen runnable vocabulary in its `__init__.py` and the sparse replay modules behind `Trace.run`), `captured_run.py`, `bundle/` |
-| 5. Analysis and verbs | Everything that reads or edits a finished `Trace` | `validation/` (the tripwire), `intervention/`, `_selection*.py`, `attribution/`, `mechinterp/`, `debug/` (training checks in `debug/_checks/`, live narration in `debug/_snoop/`), `receptive_field/`, `repgeom/`, `stats/`, `semantic/` (facets), `transforms/`, `_observe/`, `_observability/`, `trackers/`, `experiment/`, `_merged/`, `neuro/`, `_extraction/` with `dataset_extraction.py`, `preprocessing/`, `differential.py` |
+| 5. Analysis and verbs | Everything that reads or edits a finished `Trace` | `validation/` (the tripwire), `intervention/`, `_selection*.py`, `attribution/`, `mechinterp/`, `debug/` (training checks in `debug/_checks/`), `_snoop/` (live narration), `receptive_field/`, `repgeom/`, `stats/`, `semantic/` (facets), `transforms/`, `_observe/`, `_observability/`, `trackers/`, `experiment/`, `_merged/`, `neuro/`, `_extraction/` with `dataset_extraction.py`, `preprocessing/`, `differential.py` |
 | 6. Presentation and bridges | Rendering, reports, exports, external tools | `visualization/`, `viz/`, `transformer/`, `report/` (notebook cards in `report/_notebook/`), `export/`, `_quickstart/`, `agent/`, `bridge/`, `callbacks/`, `compat/`, `_ecosystem/`, `examples/`, `_autoroute/`, `_kernel_telemetry.py` |
 | Entry | The public facade | `__init__.py` (lazy attribute table `_LAZY_ATTRS`, `__all__`), `user_funcs.py` (`trace`, `summary`, `render`, validation wrappers) |
 
@@ -111,7 +111,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Activation transforms | `tl.transforms` | `transforms/` | `test_transforms*.py`, `transforms_corpus/` |
 | Debugging helpers | `tl.debug` | `debug/` | `test_debug*.py` |
 | Training checks, observers, trackers | `tl.debug.ChecksSession`, `tl.observers`, `torchlens.trackers` | `debug/_checks/`, `observers.py`, `trackers/`, `_observe/`, `_observability/` | `test_checks*.py`, `test_observ*.py`, `test_tracker*.py`, `test_train_mode/` |
-| Live narration | `torchlens.debug._snoop` | `debug/_snoop/` | `test_snoop*.py` |
+| Live narration | `torchlens._snoop` | `_snoop/` | `test_snoop*.py` |
 | Multi-rank merge | `tl.merge_ranks`, `tl.merged` | `_merged/`, `distributed/` | `test_merge*.py`, `test_distributed*.py` |
 | Dataset extraction | `tl.dataset_extraction` | `dataset_extraction.py`, `_extraction/`, `_data_substrate/` | `test_dataset_extraction*.py` |
 | Neuroscience bridges | `tl.neuro`, `torchlens.preprocessing` | `neuro/`, `preprocessing/`, `bridge/` | `test_neuro*.py` |

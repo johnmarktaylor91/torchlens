@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from ._event import NarrationEvent
 
 if TYPE_CHECKING:
-    from ...stats._tensor_stats import TensorStats
+    from ..stats._tensor_stats import TensorStats
 
 __tl_layer__ = "L5"
 

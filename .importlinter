@@ -438,6 +438,19 @@ forbidden_modules =
     torchlens._visualization
     torchlens.viz
 
+[importlinter:contract:_snoop-no-direct]
+name = snoop (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._snoop
+forbidden_modules =
+    torchlens.bridge
+    torchlens.debug
+    torchlens.export
+    torchlens.report
+    torchlens.viz
+allow_indirect_imports = true
+
 [importlinter:contract:_trace_core-no-path]
 name = _trace_core (L1) does not import higher layers
 type = forbidden
