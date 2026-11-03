@@ -744,7 +744,7 @@ torchlens/backends/_finalize.py::_finalize_single_op	86
 torchlens/backends/_finalize.py::attach_object_module_logs	65
 torchlens/backends/_finalize.py::compute_preview_input_output_distances	86
 torchlens/backends/_finalize.py::finalize_single_pass_trace	150
-torchlens/backends/_finalize.py::new_preview_function_trace	102
+torchlens/backends/_finalize.py::new_preview_function_trace	101
 torchlens/backends/_finalize.py::populate_object_module_build_data	72
 torchlens/backends/default_specs.py	1291
 torchlens/backends/default_specs.py::_simple_leaves	72
@@ -786,7 +786,7 @@ torchlens/backends/mlx/backend.py	2546
 torchlens/backends/mlx/backend.py::MLXBackend._attach_derived_grads	158
 torchlens/backends/mlx/backend.py::MLXBackend._build_event	134
 torchlens/backends/mlx/backend.py::MLXBackend._records_for_intermediate_mlx_grads	91
-torchlens/backends/mlx/backend.py::MLXBackend.capture_trace	260
+torchlens/backends/mlx/backend.py::MLXBackend.capture_trace	259
 torchlens/backends/mlx/backend.py::MLXBackend.emit_mlx_operation	173
 torchlens/backends/mlx/backend.py::MLXBackend.validate_trace	67
 torchlens/backends/mlx/backend.py::_find_mlx_compiled_attributes	84
@@ -799,7 +799,7 @@ torchlens/backends/paddle/backend.py::PaddleBackend._attach_derived_grads	135
 torchlens/backends/paddle/backend.py::PaddleBackend._build_event	136
 torchlens/backends/paddle/backend.py::PaddleBackend._build_op_capture	78
 torchlens/backends/paddle/backend.py::PaddleBackend._records_for_intermediate_paddle_grads	85
-torchlens/backends/paddle/backend.py::PaddleBackend.capture_trace	312
+torchlens/backends/paddle/backend.py::PaddleBackend.capture_trace	311
 torchlens/backends/paddle/backend.py::PaddleBackend.emit_paddle_operation	156
 torchlens/backends/paddle/backend.py::PaddleBackend.validate_trace	68
 torchlens/backends/paddle/backend.py::_PaddleIntermediateTapObserver.call	62
@@ -807,7 +807,7 @@ torchlens/backends/paddle/model_prep.py::discover_paddle_module_tree	82
 torchlens/backends/paddle/validation.py::_rebuild_inputs	77
 torchlens/backends/paddle/wrappers.py::_PaddleWrapperRegistry.wrap_attr	71
 torchlens/backends/tf/backend.py	1396
-torchlens/backends/tf/backend.py::TFBackend._new_trace	133
+torchlens/backends/tf/backend.py::TFBackend._new_trace	132
 torchlens/backends/tf/backend.py::TFBackend.capture_trace	380
 torchlens/backends/tf/backend.py::_reject_unsupported_options	80
 torchlens/backends/tf/derived_grads.py	904
