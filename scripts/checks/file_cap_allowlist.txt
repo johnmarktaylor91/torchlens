@@ -40,7 +40,7 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	172
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	119
 torchlens/_capture/prepare/door.py	1121
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
-torchlens/_capture/projections.py	1574
+torchlens/_capture/projections.py	1568
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
 torchlens/_capture/projections.py::_record_from_record_context	104
@@ -459,7 +459,7 @@ torchlens/_selection/values.py::_resolve_table_element_grain	65
 torchlens/_selection/values.py::_table_rows_by_label	65
 torchlens/_semantic/_norm_reconstruction.py::reconstruct_norm	96
 torchlens/_semantic/coverage.py::facet_coverage	61
-torchlens/_semantic/facets.py	1990
+torchlens/_semantic/facets.py	1943
 torchlens/_semantic/facets.py::FacetView._compute	85
 torchlens/_semantic/facets.py::register	67
 torchlens/_semantic/logit_lens.py	1393
@@ -904,7 +904,7 @@ torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wra
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wrapped_builder.wrapped_transform	62
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
-torchlens/backends/torch/backward.py	4190
+torchlens/backends/torch/backward.py	4187
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	95
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	74
@@ -977,10 +977,10 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2861
-torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	115
-torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	129
-torchlens/backends/torch/wrappers.py::_wrap_torch_locked	102
+torchlens/backends/torch/wrappers.py	2847
+torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
+torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	119
+torchlens/backends/torch/wrappers.py::_wrap_torch_locked	84
 torchlens/backends/torch/wrappers.py::decorate_all_once	68
 torchlens/backends/torch/wrappers.py::torch_func_decorator	798
 torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	644
@@ -1003,8 +1003,6 @@ torchlens/bridge/pytorch_grad_cam.py::cam	81
 torchlens/bridge/sae.py::_next_token_metrics	68
 torchlens/bridge/sae.py::splice	125
 torchlens/bridge/shap.py::explain	67
-torchlens/bridge/transformers.py	801
-torchlens/bridge/transformers.py::_resolve_image_preprocessing	61
 torchlens/bridge/transformers.py::trace_text	66
 torchlens/bundle/__init__.py	1410
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
@@ -1309,7 +1307,7 @@ torchlens/receptive_field/_viz.py::show	83
 torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
-torchlens/recording/_record_one_shot.py::record	146
+torchlens/recording/_record_one_shot.py::record	142
 torchlens/recording/_recorder.py	842
 torchlens/recording/_recorder.py::Recorder.__init__	162
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
@@ -1461,7 +1459,7 @@ torchlens/validation/_invariants_topology.py::_check_sibling_relation_derivation
 torchlens/validation/_invariants_topology.py::_check_trace_self_consistency	91
 torchlens/validation/_layer_grad_report.py::_compare_module_output_grads	212
 torchlens/validation/_operand_value_proofs.py::operand_value_proof_decision	85
-torchlens/validation/_pristine.py::pristine_torch_oracle	68
+torchlens/validation/_pristine.py::pristine_torch_oracle	62
 torchlens/validation/backward.py	821
 torchlens/validation/backward.py::_clone_inputs_with_grad	64
 torchlens/validation/backward.py::_sum_tensors	73

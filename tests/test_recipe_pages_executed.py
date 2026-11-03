@@ -50,6 +50,7 @@ PAGES: dict[str, str] = {
     "docs/field-guide/sae_trainers.md": "sae_trainers",
     "docs/field-guide/sae_crosscoder_diff.md": "crosscoder",
     "docs/field-guide/prisma_clip_sae.md": "prisma",
+    "docs/field-guide/linear_probes.md": "sklearn",
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
@@ -87,6 +88,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "cornet": ("cornet",),
     "clip": ("transformers", "tokenizers", "PIL", "matplotlib"),
     "transcoders": ("transformer_lens", "huggingface_hub", "safetensors"),
+    "sklearn": ("sklearn", "transformers"),
 }
 
 #: Pages measured above the 5 s tier (heavy, 5-20 s) in the peer-recipe leg, or
@@ -108,6 +110,8 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: The Jacobian lens page measures 3.8 s on a two-thread worker (two prompts of
 #: batched autograd plus a jacrev check) and is listed to keep the unmarked
 #: family inside its aggregate budget.
+#: The linear-probe page measured 5.9 s through its sixth fence alone on one
+#: core (OMP_NUM_THREADS=1), before its streaming fence.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/jacobian_lens.md",
@@ -122,6 +126,7 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "examples/recipes/das_causal_basis_recipe.ipynb",
         "examples/recipes/probe_accuracy_by_layer_recipe.ipynb",
         "examples/recipes/cka_rsa_two_models_recipe.ipynb",
+        "docs/field-guide/linear_probes.md",
     }
 )
 
