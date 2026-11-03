@@ -64,7 +64,8 @@ def test_confirmed_label_names_still_resolve() -> None:
     trace = tl.trace(
         _WithBuffer(),
         torch.randn(4, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
+        capture=tl.options.CaptureOptions(save_grads=True),
+        save="all",
     )
     try:
         trace.backward(trace[trace.output_layers[0]].out)

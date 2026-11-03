@@ -38,7 +38,8 @@ def two_pass_trace() -> Iterator[tl.Trace]:
     trace = tl.trace(
         _TwoLayer(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
+        capture=tl.options.CaptureOptions(save_grads=True),
+        save="all",
     )
     loss = trace[trace.output_layers[0]].out
     trace.backward(loss, retain_graph=True)
