@@ -189,7 +189,7 @@ def test_frozen_digest_optin_raises_on_proof_never_exact_pass() -> None:
     frozen_param.requires_grad_(False)
     optimizer = torch.optim.SGD([p for p in model.parameters() if p.requires_grad], lr=0.1)
     session = tc.ChecksSession(model, optimizer)
-    session.register_frozen_check(["0.weight"], evidence="digest")
+    session.register_frozen_check(["0.weight"], snapshot_kind="digest")
     session.attach()
     try:
         for _ in range(2):  # healthy: frozen param owned by no optimizer
@@ -375,5 +375,5 @@ def test_registration_refusals_are_typed() -> None:
     assert action_exc.value.fields["code"] == "check_vocab_invalid"
 
     with pytest.raises(torchlens.errors.CheckConfigError) as evidence_exc:
-        session.register_frozen_check(["weight"], evidence="vibes")
+        session.register_frozen_check(["weight"], snapshot_kind="vibes")
     assert evidence_exc.value.fields["code"] == "check_vocab_invalid"
