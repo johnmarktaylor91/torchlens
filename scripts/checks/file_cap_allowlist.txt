@@ -609,7 +609,7 @@ torchlens/_visualization/_render_utils.py::_open_file_quietly	66
 torchlens/_visualization/_stacking.py::resolve_stack_by	84
 torchlens/_visualization/_summary_internal/_discoverability.py::format_discoverability_summary	64
 torchlens/_visualization/_surgery_diff.py::surgery_diff	97
-torchlens/_visualization/_trace_draw.py::draw	109
+torchlens/_visualization/_trace_draw.py::draw	105
 torchlens/_visualization/auto_collapse.py	2150
 torchlens/_visualization/auto_collapse.py::_compute_signal_skeleton	92
 torchlens/_visualization/auto_collapse.py::_iter_collapsible_child_path_runs	78
