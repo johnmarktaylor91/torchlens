@@ -16,15 +16,17 @@ from typing import Any
 
 __all__ = ["_FUSED_MUTATOR_NAMES", "_fused_update_mode", "_is_fused_mutator", "fused_call_writes"]
 
-_FUSED_MUTATOR_NAMES = {
-    "batch_norm",
-    "native_batch_norm",
-    "_native_batch_norm_legit",
-    "_native_batch_norm_legit_no_training",
-    "cudnn_batch_norm",
-    "instance_norm",
-    "native_group_norm",
-}
+_FUSED_MUTATOR_NAMES = frozenset(
+    {
+        "batch_norm",
+        "native_batch_norm",
+        "_native_batch_norm_legit",
+        "_native_batch_norm_legit_no_training",
+        "cudnn_batch_norm",
+        "instance_norm",
+        "native_group_norm",
+    }
+)
 
 # Position and keyword of the argument that turns the running-statistic update
 # on. Every listed signature is (input, weight, bias, running_mean,

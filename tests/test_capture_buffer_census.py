@@ -38,7 +38,11 @@ class _Census:
 
 
 class _CensusMode(TorchFunctionMode):
-    """Count calls that return a tensor and the registered buffers they read or write."""
+    """Count calls that return a tensor and the registered buffers they read or write.
+
+    A write is a change of the buffer's bytes across the call: native
+    ``batch_norm`` updates its running statistics without bumping ``_version``.
+    """
 
     def __init__(self, model: nn.Module) -> None:
         super().__init__()
@@ -48,7 +52,7 @@ class _CensusMode(TorchFunctionMode):
 
     def __torch_function__(self, func: Any, types: Any, args: Any = (), kwargs: Any = None) -> Any:
         kwargs = kwargs or {}
-        versions = [buf._version for _, buf in self.named_buffers]
+        before = [buf.detach().clone() for _, buf in self.named_buffers]
         out = func(*args, **kwargs)
         if isinstance(out, torch.Tensor):
             self.census.ops += 1
@@ -56,8 +60,8 @@ class _CensusMode(TorchFunctionMode):
                 if id(leaf) in self.buffer_names:
                     self.census.buffers_read.add(self.buffer_names[id(leaf)])
             self.census.buffer_writes += sum(
-                buf._version != before
-                for (_, buf), before in zip(self.named_buffers, versions, strict=True)
+                not torch.equal(buf, old)
+                for (_, buf), old in zip(self.named_buffers, before, strict=True)
             )
         return out
 
@@ -91,7 +95,7 @@ def _buffer_layers(trace: Any) -> list[Any]:
 def _compute_ops(trace: Any) -> list[Any]:
     """Ops of the forward's computation: no inputs, outputs or buffer sources."""
 
-    return [op for op in trace.ops if op.layer_type not in ("input", "output", "buffer")]
+    return [op for op in trace.ops if not (op.is_input or op.is_output or op.is_buffer)]
 
 
 def _assert_counts_match_census(model: nn.Module, x: torch.Tensor) -> None:

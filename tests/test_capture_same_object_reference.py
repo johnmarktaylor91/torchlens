@@ -19,6 +19,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.backends.torch._ops_capture_records import _stamp_same_object
+from torchlens.backends.torch._same_object_handoff import (
+    pop_same_object_mutation,
+    reference_payload_source,
+)
 
 _ARMED = {"backward_ready": True, "save_mode": "reference"}
 _SEQ = 5
@@ -38,20 +43,6 @@ class _PassThroughChain(nn.Module):
         h = self.drop(self.pre(x))
         h = h.contiguous()
         h = h.type(h.dtype)
-        return self.post(h)
-
-
-class _InPlaceAdd(nn.Module):
-    """A linear whose output is bumped in place before a second linear."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.pre = nn.Linear(4, 4)
-        self.post = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = torch.tanh(self.pre(x))
-        h.add_(1.0)
         return self.post(h)
 
 
@@ -110,10 +101,10 @@ def test_same_object_payload_is_the_parent_payload_object() -> None:
         first = _ops_named(trace, "linear")[0]
         chain = [_ops_named(trace, name)[0] for name in ("dropout", "contiguous", "type")]
         assert all(op.out is first.out for op in chain)
-        assert [op.parents for op in chain] == [
-            [first.layer_label],
-            [chain[0].layer_label],
-            [chain[1].layer_label],
+        assert [tuple(op.parents) for op in chain] == [
+            (first.layer_label,),
+            (chain[0].layer_label,),
+            (chain[1].layer_label,),
         ]
     finally:
         trace.cleanup()
@@ -129,36 +120,33 @@ def test_copy_mode_keeps_distinct_same_object_payloads() -> None:
     assert torch.equal(drop.out, first.out)
 
 
-def test_mutating_same_object_return_keeps_its_copy_under_reference_mode() -> None:
-    """An in-place ``add_`` payload is its post-write value, not the live receiver."""
+def test_mutating_same_object_return_is_never_stamped_live() -> None:
+    """An in-place call keeps its post-write copy as the payload in every save mode.
 
-    trace = _capture(_InPlaceAdd(), torch.randn(2, 4), **_ARMED)
-    try:
-        (add,) = _ops_named(trace, "add_")
-        (tanh,) = _ops_named(trace, "tanh")
-        assert add.is_inplace is True
-        assert add.out is not tanh.out
-        assert torch.allclose(add.out, torch.tanh(trace.ops[tanh.parents[0]].out) + 1.0)
-    finally:
-        trace.cleanup()
+    The wrapper stamps the live receiver only on a non-mutating return; an
+    in-place op's payload must stay the value right after its own write.
+    """
+
+    receiver = torch.ones(3)
+    for verdict, expect_live in ((True, False), (False, True)):
+        logged = receiver.clone()
+        _stamp_same_object(logged, receiver, verdict)
+        assert pop_same_object_mutation(logged) is verdict
+        source = reference_payload_source(logged, "reference")
+        assert (source is receiver) is expect_live
+        assert reference_payload_source(logged, "reference") is logged  # the stamp pops
+    logged = receiver.clone()
+    _stamp_same_object(logged, receiver, False, distinct_return=True)
+    assert reference_payload_source(logged, "reference") is logged
 
 
-def test_reference_capture_with_same_object_returns_validates() -> None:
-    """Forward replay passes on the reference-mode capture of the pass-through chain."""
+@pytest.mark.parametrize("scope", ["forward", "backward", "receptive_field"])
+def test_pass_through_chain_validates(scope: str) -> None:
+    """Validation passes; the receptive-field scope captures by reference and runs
+    the metadata invariants, which read every saved reference."""
 
     torch.manual_seed(0)
-    model = _PassThroughChain().eval()
-    x = torch.randn(2, 4)
-    with torch.no_grad():
-        truth = [model(x)]
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(**_ARMED))
-    try:
-        status = trace.validate_forward_pass(truth)
-        assert status is True, status
-    finally:
-        trace.cleanup()
-    assert tl.validate(_PassThroughChain().eval(), x, scope="forward")
-    assert tl.validate(_PassThroughChain().eval(), x, scope="backward")
+    assert tl.validate(_PassThroughChain().eval(), torch.randn(2, 4), scope=scope)
 
 
 def test_gradient_projective_field_seeded_at_an_eval_dropout() -> None:

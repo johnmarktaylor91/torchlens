@@ -291,18 +291,25 @@ def test_until_x_eval_bn_prefix_projection():
     assert result.trace[_type_label(result.trace, "relu")].out is not None
 
 
-def test_until_x_eval_bn_prefix_tamper_refuses_typed():
-    """An in-prefix buffer-sink evidence tamper refuses typed under until=."""
+def test_until_x_bn_prefix_tamper_refuses_typed():
+    """An in-prefix buffer-sink evidence tamper refuses typed under until=.
+
+    The norm runs in training mode: an eval-mode BatchNorm reads its running
+    statistics and writes no buffer, so it leaves no sink to tamper with.
+    """
 
     from torchlens.errors import BufferSinkRoutingError
 
     model = _EvalBnChain()
-    model.eval()
+    model.train()
     log = tl.trace(model, torch.randn(2, 4))
+    tampered = 0
     for label in log.internal_sink_ops:
         layer = log._layer_dict_all_keys[label]
         if record_type(layer) == "buffer":
             layer._internal_set("buffer_value_changed", None)
+            tampered += 1
+    assert tampered
     with pytest.raises(BufferSinkRoutingError):
         log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
 
