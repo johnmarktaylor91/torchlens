@@ -1,4 +1,4 @@
-"""Structural stdlib/builtin denial for resolved callables (the r31 rule).
+"""Structural stdlib/builtin denial for resolved callables.
 
 A resolved callable whose real top-level module is a Python standard-library or
 builtin module is denied on the trusted foreign resolution path, except the

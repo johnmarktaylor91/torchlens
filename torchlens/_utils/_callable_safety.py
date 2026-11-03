@@ -142,7 +142,7 @@ from typing import Any
 
 import torch
 
-# The r31 structural stdlib/builtin rule lives in its own leaf module; the names stay
+# The structural stdlib/builtin rule lives in its own leaf module; the names stay
 # readable here for ``_safe_unpickle`` and the SSOT drift gate.
 from ._stdlib_denial import (  # noqa: F401
     _ALLOWED_STDLIB_ROOTS,
