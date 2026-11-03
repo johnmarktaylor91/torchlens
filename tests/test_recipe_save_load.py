@@ -8,7 +8,9 @@ the audit level; an audit record is not loadable and says so typed.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -82,3 +84,33 @@ def test_predicate_rule_is_not_portable_and_audit_record_is_not_loadable(tmp_pat
     with pytest.raises(ReplayPreconditionError) as excinfo:
         tl.load(audit_path)
     assert excinfo.value.code == "recipe_audit_only"
+
+
+@pytest.mark.parametrize(
+    ("file_name", "edit"),
+    [
+        pytest.param("spec.json", lambda data: data.pop("recipe"), id="no_rules_list"),
+        pytest.param(
+            "spec.json", lambda data: data["recipe"]["rules"].append("not a rule"), id="bad_rule"
+        ),
+        pytest.param(
+            "manifest.json", lambda data: data.update(tensor_entries={}), id="entries_not_list"
+        ),
+    ],
+)
+def test_hand_edited_recipe_record_refuses_typed(
+    tmp_path: Path, file_name: str, edit: Callable[[dict[str, Any]], Any]
+) -> None:
+    """A malformed recipe record refuses with ``recipe_record_malformed`` and names the file."""
+
+    path = tmp_path / "recipe.tlspec"
+    _recipe().save(path)
+    target = path / file_name
+    data = json.loads(target.read_text(encoding="utf-8"))
+    edit(data)
+    target.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ReplayPreconditionError) as excinfo:
+        tl.load(path)
+    assert excinfo.value.code == "recipe_record_malformed"
+    assert excinfo.value.fields["remedy"]
+    assert file_name in str(excinfo.value)

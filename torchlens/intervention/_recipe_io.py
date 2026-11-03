@@ -218,6 +218,12 @@ def save_recipe(
         raise
 
 
+#: Remedy of every malformed-record refusal: the files are rewritten, never repaired.
+_MALFORMED_REMEDY = (
+    "re-save the recipe with Recipe.save(path); a hand-edited or foreign record is not loadable"
+)
+
+
 def _audit_only_recipe(spec_path: Path, save_level: object) -> ReplayPreconditionError:
     """The typed refusal for a recipe record whose payloads cannot be rebuilt."""
 
@@ -239,9 +245,23 @@ def _manifest_tensor_entries(spec_path: Path) -> list[TensorEntry]:
     if not isinstance(manifest_entries, list):
         raise ReplayPreconditionError(
             f"{spec_path / _MANIFEST_FILE} field 'tensor_entries' must be a list, "
-            f"got {type(manifest_entries).__name__}"
+            f"got {type(manifest_entries).__name__}",
+            code="recipe_record_malformed",
+            remedy=_MALFORMED_REMEDY,
         )
     return [TensorEntry.from_dict(e) for e in manifest_entries]
+
+
+def _require_rule_object(rule_payload: Any, index: int, spec_path: Path) -> None:
+    """Refuse a recipe rule that is not an object carrying ``target`` and ``edit``."""
+
+    if not isinstance(rule_payload, dict) or "target" not in rule_payload:
+        raise ReplayPreconditionError(
+            f"{spec_path / _SPEC_FILE} recipe rule {index} must be an object with "
+            "'target' and 'edit'",
+            code="recipe_record_malformed",
+            remedy=_MALFORMED_REMEDY,
+        )
 
 
 def load_recipe(
@@ -270,9 +290,8 @@ def load_recipe(
     Raises
     ------
     ReplayPreconditionError
-        ``recipe_audit_only`` when the artifact holds audit-only opaque
-        payloads (a predicate WHERE term or an opaque edit) that cannot be
-        rebuilt; a malformed ``spec.json`` refuses with the file named.
+        ``recipe_audit_only`` for audit-only opaque payloads (a predicate WHERE term
+        or an opaque edit); ``recipe_record_malformed`` for a malformed file, named.
     """
 
     spec_path = Path(path)
@@ -287,11 +306,7 @@ def load_recipe(
     tensors = _load_tensor_refs(spec_path, _manifest_tensor_entries(spec_path))
     rules: list[Rule] = []
     for index, rule_payload in enumerate(rules_payload):
-        if not isinstance(rule_payload, dict) or "target" not in rule_payload:
-            raise ReplayPreconditionError(
-                f"{spec_path / _SPEC_FILE} recipe rule {index} must be an object with "
-                "'target' and 'edit'"
-            )
+        _require_rule_object(rule_payload, index, spec_path)
         target = _target_spec_from_json(rule_payload["target"])
         selector = selector_from_spec(
             target.selector_kind, target.selector_value, target.metadata, lifecycle="capture"
@@ -324,7 +339,9 @@ def _recipe_rules_payload(data: dict[str, Any], spec_path: Path) -> list[Any]:
     if not isinstance(recipe_payload, dict) or not isinstance(recipe_payload.get("rules"), list):
         raise ReplayPreconditionError(
             f"{spec_path / _SPEC_FILE} is missing its 'recipe.rules' list; the file is "
-            "not a TorchLens recipe or was hand-edited"
+            "not a TorchLens recipe or was hand-edited",
+            code="recipe_record_malformed",
+            remedy=_MALFORMED_REMEDY,
         )
     return list(recipe_payload["rules"])
 
