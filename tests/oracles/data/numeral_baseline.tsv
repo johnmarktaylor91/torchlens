@@ -1148,7 +1148,6 @@ docs-md	docs/maintainers/where.md	1225
 docs-md	docs/maintainers/where.md	1226
 docs-md	docs/maintainers/where.md	123
 docs-md	docs/maintainers/where.md	12349
-docs-md	docs/maintainers/where.md	1237
 docs-md	docs/maintainers/where.md	124
 docs-md	docs/maintainers/where.md	125
 docs-md	docs/maintainers/where.md	126
@@ -1679,7 +1678,6 @@ docs-md	docs/maintainers/where.md	535
 docs-md	docs/maintainers/where.md	536
 docs-md	docs/maintainers/where.md	53697
 docs-md	docs/maintainers/where.md	537
-docs-md	docs/maintainers/where.md	538
 docs-md	docs/maintainers/where.md	539
 docs-md	docs/maintainers/where.md	54
 docs-md	docs/maintainers/where.md	540
@@ -1750,7 +1748,6 @@ docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
-docs-md	docs/maintainers/where.md	629924
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	6316
@@ -1854,7 +1851,6 @@ docs-md	docs/maintainers/where.md	775
 docs-md	docs/maintainers/where.md	776
 docs-md	docs/maintainers/where.md	78
 docs-md	docs/maintainers/where.md	780
-docs-md	docs/maintainers/where.md	7812
 docs-md	docs/maintainers/where.md	782
 docs-md	docs/maintainers/where.md	786
 docs-md	docs/maintainers/where.md	789
@@ -1868,7 +1864,6 @@ docs-md	docs/maintainers/where.md	797
 docs-md	docs/maintainers/where.md	798
 docs-md	docs/maintainers/where.md	80
 docs-md	docs/maintainers/where.md	801
-docs-md	docs/maintainers/where.md	804
 docs-md	docs/maintainers/where.md	81
 docs-md	docs/maintainers/where.md	811
 docs-md	docs/maintainers/where.md	814
@@ -1876,7 +1871,6 @@ docs-md	docs/maintainers/where.md	816
 docs-md	docs/maintainers/where.md	82
 docs-md	docs/maintainers/where.md	821
 docs-md	docs/maintainers/where.md	827
-docs-md	docs/maintainers/where.md	8288
 docs-md	docs/maintainers/where.md	83
 docs-md	docs/maintainers/where.md	830
 docs-md	docs/maintainers/where.md	834
@@ -3819,8 +3813,6 @@ error-strings	torchlens/bridge/lit/_refusals.py	20
 error-strings	torchlens/bridge/lit/_refusals.py	2024
 error-strings	torchlens/bridge/lit/_refusals.py	83
 error-strings	torchlens/bridge/mcp.py	2.0
-error-strings	torchlens/bridge/transformers.py	224,
-error-strings	torchlens/bridge/transformers.py	256,
 error-strings	torchlens/debug/_checks/_audit.py	1.0.
 error-strings	torchlens/debug/_checks/_param_checks.py	16
 error-strings	torchlens/debug/_checks/_param_checks.py	4.5
