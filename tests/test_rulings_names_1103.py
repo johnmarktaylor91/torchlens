@@ -237,3 +237,20 @@ def test_names12_summary_keeps_flop_convention() -> None:
     assert "flop_convention" in inspect.signature(tl.Trace.summary).parameters
     _, trace = _blocks_trace()
     assert trace.summary(flop_convention="fma1") is not None
+
+
+# --- names.7: trace["<module>"].facets is the module's facet view ----------------------
+
+
+def test_names7_plain_door_module_facets_are_the_modules_facets() -> None:
+    """names.7 "(a) Yes": ``trace["dec.0"].facets`` is the block's view, not its output op's.
+
+    The plain door returns the Module for a module address (readme.8), so ``.facets``
+    reads the same lazy view as ``trace.modules["dec.0"].facets``.
+    """
+
+    _, trace = _blocks_trace()
+    module = trace.modules["dec.0"]
+    assert trace["dec.0"] is module
+    assert trace["dec.0"].facets is module.facets
+    assert list(trace["dec.0"].facets.keys()) == list(module.facets.keys())

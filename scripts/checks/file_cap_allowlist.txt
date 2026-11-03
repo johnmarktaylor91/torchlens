@@ -99,12 +99,12 @@ torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	839
 torchlens/_data_classes/interface.py::_getitem_after_pass	120
 torchlens/_data_classes/interface.py::_str_after_pass	63
-torchlens/_data_classes/layer.py	1811
+torchlens/_data_classes/layer.py	1809
 torchlens/_data_classes/module.py	2623
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3485
+torchlens/_data_classes/op.py	3483
 torchlens/_data_classes/op.py::Op.__getattribute__	88
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	66
@@ -1313,7 +1313,7 @@ torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
 torchlens/recording/_record_one_shot.py::record	146
-torchlens/recording/_recorder.py	842
+torchlens/recording/_recorder.py	837
 torchlens/recording/_recorder.py::Recorder.__init__	157
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
