@@ -53,6 +53,9 @@ PAGES: dict[str, str] = {
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
     "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/recipes/eap_ig_circuit_recipe.ipynb": "transformers",
+    "examples/recipes/vision_logit_lens_recipe.ipynb": "transformers",
+    "examples/recipes/leace_concept_erasure_recipe.ipynb": "transformers",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -109,7 +112,14 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: test call (session wall 48.1 s, 30.8 s and 37.9 s; CPU 47.3 s, 30.3 s and
 #: 37.3 s), median 30.1 s. Earlier runs: 17 s alone, 30.8 s unloaded, 37.1 s and
 #: 42.5 s under gate load.
-SLOW_PAGES: frozenset[str] = frozenset({"docs/recipes/acdc_ioi.md"})
+SLOW_PAGES: frozenset[str] = frozenset(
+    {
+        "docs/recipes/acdc_ioi.md",
+        "examples/recipes/eap_ig_circuit_recipe.ipynb",
+        "examples/recipes/vision_logit_lens_recipe.ipynb",
+        "examples/recipes/leace_concept_erasure_recipe.ipynb",
+    }
+)
 
 HEADER_RE = re.compile(r"# recipe-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
