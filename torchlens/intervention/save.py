@@ -146,13 +146,11 @@ def save_intervention(
         _refuse_unsupported_recipe_tensors(spec)
         target_manifest = _build_target_manifest(trace, spec, save_level)
         store = PayloadStore(tmp_path)
-        header = RecipeHeader(
-            save_level=save_level.value,
-            **{
-                **trace_recipe_context(trace),
-                "function_registry_keys": _serialize_function_registry_keys(trace),
-            },
-        )
+        context = {
+            **trace_recipe_context(trace),
+            "function_registry_keys": _serialize_function_registry_keys(trace),
+        }
+        header = RecipeHeader(save_level=save_level.value, **context)
         intervention_entry, disclosures = write_intervention_recipe(
             spec, tmp_path, store=store, header=header
         )
