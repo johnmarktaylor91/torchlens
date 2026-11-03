@@ -43,6 +43,20 @@ jobs:
         with:
           python-version: "3.11"
 
+      # MAJOR-VERSION HARD STOP, on every pull request and every tag, before
+      # anything is built (publish needs this job). It fails when the tag, the
+      # pyproject.toml version or torchlens/__init__.py carries a major above
+      # the current one (lowest of the released tags below this commit, the
+      # pyproject.toml major and the highest major on PyPI), unless the tracked
+      # file .github/MAJOR_RELEASE_APPROVED contains exactly that version. Only
+      # the maintainer's explicit command authorizes creating that file. No
+      # `if:`, no token; stdlib Python only.
+      - name: Refuse an unapproved major version
+        run: |
+          args=(--require-tags --released-from-pypi)
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then args+=(--next "$GITHUB_REF_NAME"); fi
+          python scripts/check_release_major.py "${args[@]}"
+
       - name: Install the hash-locked builder
         # build and its setuptools backend come only from the hash-verified
         # lock, wheels only, so no unpinned package code runs at build time.
