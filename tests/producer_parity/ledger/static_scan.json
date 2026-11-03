@@ -2668,7 +2668,7 @@
   "field": "func_call_id",
   "file": "torchlens/_postprocess/_materialize.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {

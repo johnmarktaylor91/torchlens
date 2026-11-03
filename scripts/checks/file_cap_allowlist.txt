@@ -370,8 +370,8 @@ torchlens/_postprocess/graph_traversal.py	972
 torchlens/_postprocess/graph_traversal.py::_add_output_layers	303
 torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	103
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	132
-torchlens/_postprocess/labeling.py	1123
-torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	120
+torchlens/_postprocess/labeling.py	1122
+torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	119
 torchlens/_postprocess/labeling.py::_log_final_info_for_layers	84
 torchlens/_postprocess/labeling.py::_log_module_hierarchy_info_for_layer	62
 torchlens/_postprocess/labeling.py::_map_raw_labels_to_final_labels	80
