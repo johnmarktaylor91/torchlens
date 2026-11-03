@@ -33,8 +33,7 @@ def _backward_trace() -> tl.Trace:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.backward(trace.output_ops[0].out.sum())
     return trace
@@ -48,8 +47,7 @@ def _double_backprop_trace() -> tl.Trace:
     trace = tl.trace(
         critic,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     score = trace.output_ops[0].out.sum()
     (grad_input,) = torch.autograd.grad(score, x, create_graph=True)
@@ -62,7 +60,7 @@ def test_uniform_rows_suppressed_and_key_present(tmp_path: Path) -> None:
     """First-order single-pass render: no uniform rows, key on by default."""
 
     trace = _backward_trace()
-    dot = trace.draw_backward(path=str(tmp_path / "bwd"), vis_save_only=True, file_format="svg")
+    dot = trace.draw(graph="backward", path=str(tmp_path / "bwd"), file_format="svg").dot
     assert "grad N/A" not in dot  # uniform on every node -> suppressed
     assert "order 1" not in dot  # no higher-order node -> suppressed
     assert ">bwd 1<" not in dot  # single-pass -> suppressed
@@ -75,12 +73,12 @@ def test_key_suppressed_with_show_legend_false(tmp_path: Path) -> None:
     """Explicit False is a deliberate act."""
 
     trace = _backward_trace()
-    dot = trace.draw_backward(
+    dot = trace.draw(
+        graph="backward",
         path=str(tmp_path / "bwd_nokey"),
-        vis_save_only=True,
         file_format="svg",
         show_legend=False,
-    )
+    ).dot
     assert "backward key" not in dot
 
 
@@ -88,7 +86,7 @@ def test_double_backprop_keeps_order_rows_and_key_row(tmp_path: Path) -> None:
     """A second-order node un-suppresses order rows and earns its key row."""
 
     trace = _double_backprop_trace()
-    dot = trace.draw_backward(path=str(tmp_path / "bwd2"), vis_save_only=True, file_format="svg")
+    dot = trace.draw(graph="backward", path=str(tmp_path / "bwd2"), file_format="svg").dot
     assert "order 2" in dot
     assert "order 1" in dot  # mixed orders: the row is information again
     assert "grad-of-grad" in dot  # the cream=order-2 key row
@@ -98,9 +96,7 @@ def test_accum_edges_carry_target_identity(tmp_path: Path) -> None:
     """Accum-identity groundwork: per-edge tooltip metadata, not bare labels."""
 
     trace = _backward_trace()
-    dot = trace.draw_backward(
-        path=str(tmp_path / "bwd_accum"), vis_save_only=True, file_format="svg"
-    )
+    dot = trace.draw(graph="backward", path=str(tmp_path / "bwd_accum"), file_format="svg").dot
     tooltips = re.findall(r'tooltip="(accum -> [^"]+)"', dot)
     assert tooltips, "accum edges must carry their target identity"
     assert len(set(tooltips)) == len(tooltips), (
@@ -113,10 +109,10 @@ def test_single_call_titles_drop_pass_suffix(tmp_path: Path) -> None:
     """Unrolled backward with one call per grad_fn: no stray ':1' titles."""
 
     trace = _backward_trace()
-    dot = trace.draw_backward(
+    dot = trace.draw(
+        graph="backward",
         path=str(tmp_path / "bwd_unrolled"),
-        vis_save_only=True,
         file_format="svg",
-        vis_mode="unrolled",
-    )
+        rolled=False,
+    ).dot
     assert not re.search(r":1</", dot), "single-call grad_fn titles must not carry ':1'"

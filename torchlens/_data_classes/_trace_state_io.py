@@ -16,6 +16,7 @@ from .._io import (
 from .._quantities import Bytes, Duration
 from .._trace_state import TraceState
 from . import _doors, _trace_rehydrate
+from ._trace_pickle_state import _restore_pickled_verification, _sanitize_pickled_verification
 from ._transform_repr import _scrubbed_transform_repr
 from .derived_grad import DerivedGradAccessor
 from .module import ModuleAccessor
@@ -120,6 +121,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "batch_render": "auto",
     "transformed_output": None,
     "_output_transform": None,
+    "_output_slot": None,
     "_options_save_transformed_output": "small",
     "layer_visualizers": None,
     "save_visualizations": False,
@@ -156,6 +158,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "track_nonfinite": False,
     "track_device_memory": False,
     "measure_host_peak_memory": False,
+    "_options_aten_ops": False,
     "_options_structure_only": False,
     "intervention_audit": [],
     "_options_keep_orphans": False,
@@ -210,9 +213,38 @@ _MODEL_LOG_DEFAULT_FILL = {
     **_MODEL_LOG_DEFAULT_FILL,
 }
 _MODEL_LOG_DEFAULT_FILL["tlspec_version"] = TLSPEC_VERSION
+# The declared field set and each field's neutral value: the same fill a reloaded
+# trace receives for keys its writer never stamped (``trace_setstate``), which
+# also drops an unserialized ``_containers`` (absence means no container registry).
+_DECLARED_FIELD_FILL: dict[str, Any] = {
+    name: _MODEL_LOG_DEFAULT_FILL[name] for name in MODEL_LOG_FIELD_ORDER if name != "_containers"
+}
+
+
+def fill_unset_declared_fields(trace: Trace) -> None:
+    """Give a live trace every declared field it has not been assigned.
+
+    ``Trace.__init__`` assigns most declared fields; the rest (verification,
+    completeness and escape-witness stamps, thread provenance, capture outcome)
+    are stamped by torch capture stages and read directly by shared consumers
+    (scrub, report, capture-honesty). A trace that skips those stages, such as a
+    preview-backend trace, takes the neutral value a reloaded trace would get,
+    so live and reloaded traces of one backend expose the same field set.
+    Present keys are never overwritten.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose missing declared fields are filled in place.
+    """
+
+    default_fill_state(trace.__dict__, defaults=_DECLARED_FIELD_FILL)
+
+
 _SESSION_BOOL_KNOBS = (
     "measure_python_peak_memory",
     "measure_host_peak_memory",
+    "_options_aten_ops",
     "track_nonfinite",
     "track_device_memory",
 )
@@ -339,6 +371,9 @@ def trace_getstate(trace: Trace) -> dict[str, Any]:
     state["_options_activation_transform"] = None
     state["_options_grad_transform"] = None
     state["_output_transform"] = None
+    # The actual forward return can retain arbitrary live user objects.
+    # It is available only on the capture that executed the forward.
+    state["_output_slot"] = None
     # R10-7b: the MODERN tl.trace(..., transform=...) kwarg populates
     # `_transform`, a fourth raw-callable holder the original fix missed
     # (it covered only the deprecated activation_transform= spelling).
@@ -377,38 +412,16 @@ def trace_getstate(trace: Trace) -> dict[str, Any]:
     state["_capture_outcome"] = (
         outcome.to_payload() if outcome is not None and hasattr(outcome, "to_payload") else None
     )
-    # grind-r5 P7 (b3 opus R10-1 / b6 opus R16-1): the producer's NEGATIVE
-    # verification claim persists -- a capture TorchLens itself refused to
-    # bless must not round-trip into "no claim". A POSITIVE claim never
-    # persists (a tampered artifact could otherwise forge verified=True;
-    # verdicts may only degrade across persistence). ``rescue_rerun``
-    # stays session-time per the migration doc.
-    if state.get("_provenance_verified") is False:
-        reason = state.get("_provenance_verification_reason")
-        state["_provenance_verification_reason"] = reason if isinstance(reason, str) else None
-    else:
-        state["_provenance_verified"] = None
-        state["_provenance_verification_reason"] = None
+    _sanitize_pickled_verification(state)
     state["tlspec_version"] = TLSPEC_VERSION
     return state
 
 
 def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor: type) -> None:
     """Restore pickle state and rebuild weakref-backed links."""
+    state["_output_slot"] = None
     pickle_module_accessor_state = state.pop("_pickle_module_accessor_state", None)
-    # P7/R10: restore the persisted NEGATIVE verification disclosure. The
-    # row is string-only and can only ever WORSEN a verdict: anything but
-    # the exact {"verified": False} shape is ignored (stays "no claim"), so
-    # a forged row cannot bless a capture and a stripped row merely reverts
-    # to the historical launder this closes for honest artifacts.
-    verification_row = state.pop("_capture_verification", None)
-    if (
-        isinstance(verification_row, dict)
-        and verification_row.get("verified") is False
-        and isinstance(verification_row.get("reason"), (str, type(None)))
-    ):
-        state["_provenance_verified"] = False
-        state["_provenance_verification_reason"] = verification_row.get("reason")
+    _restore_pickled_verification(state)
     for field_name in (
         *_doors.ir().workspaces.LEGACY_TRACE_BUILD_STATE_KEYS,
         # "_build_state" is the pre-M10 flat scratchpad key; the three
@@ -434,23 +447,13 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         "output_id2label": None,
         "output_num_classes": None,
         "_activation_transform_repr": None,
-        "_options_module_identity_mode": "torch_module",
-        "_provenance_param_source": "native-module",
         # Session-time (DROP): a restored trace carries no optimizer handle.
         "_optimizer": None,
         "_options_save_raw_activations": True,
         "_options_save_mode": "copy",
-        "transformed_output": None,
-        "_output_transform": None,
-        "_options_save_transformed_output": "small",
-        "layer_visualizers": None,
-        "save_visualizations": False,
-        "_visualizer_dir": None,
         "_provenance_input_annotations": {},
         "_options_grad_transform": None,
         "_options_save_raw_grads": True,
-        "_options_save_grads": None,
-        "capture_tensor_grad_hooks": True,
         "_grad_op_nums_to_save": [],
         "_autograd_has_backward_pass": False,
         "_grad_fn_logs": OrderedDict(),
@@ -461,7 +464,6 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         "_num_backward_passes": 0,
         "_cost_backward_peak_memory": 0,
         "_provenance_backward_memory_backend": "unknown",
-        "backward_peak_memory_reason": None,
         "_cost_total_autograd_memory": None,
         "_cost_pinned_autograd_memory": None,
         "_buffer_accessor": None,
@@ -470,51 +472,10 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         "_keep_outs_in_memory": True,
         "_defer_streaming_bundle_finalization": False,
         "_out_sink": None,
-        "_append_history": [],
         "_source_code_blob": {},
         "_source_model_ref": None,
         "_options_backward_ready": False,
-        "_options_inference_only": False,
-        "_options_chunk_size": False,
-        "_module_filter": None,
-        "_options_on_nonfinite": False,
-        "track_nonfinite": False,
-        "track_device_memory": False,
-        "measure_host_peak_memory": False,
-        "_options_structure_only": False,
-        "intervention_audit": [],
-        "_options_keep_orphans": False,
-        "annotations": {},
-        "_provenance_observer_spans": [],
-        "_graph_manual_tensor_connections": [],
-        "_source_forward_file": None,
-        "_source_forward_line": None,
-        "_source_class_file": None,
-        "_source_class_line": None,
-        "_source_init_file": None,
-        "_source_init_line": None,
-        "_source_class_docstring": None,
-        "_source_init_signature": None,
-        "_source_init_docstring": None,
-        "_source_forward_signature": None,
-        "_source_forward_docstring": None,
-        "_source_frames": [],
-        "_provenance_cache_hit": False,
-        "_provenance_cache_key": None,
-        "_provenance_cache_path": None,
-        "_provenance_recording_kept": True,
-        "_out_dedup_mode": "identity",
-        "_out_identity_cache": {},
-        "_out_hash_cache": {},
-        "_code_context_cache": {},
-        "_last_hook_handle_ids": (),
         "_graph_conditionals": conditional_accessor(),
-        "_cost_total_grad_memory": 0,
-        "_cost_saved_grad_memory": 0,
-        "_cost_total_param_grad_memory": 0,
-        "_cost_forward_peak_memory": 0,
-        "_provenance_forward_memory_backend": "unknown",
-        "_cost_forward_peak_memory_reason": None,
         "_postprocessing_active": False,
         # `_backward_gradfn_refs` is `FieldPolicy.DROP` (never part of
         # `MODEL_LOG_FIELD_ORDER`) and `__getstate__` always emits an

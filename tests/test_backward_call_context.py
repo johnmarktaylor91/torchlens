@@ -50,9 +50,7 @@ def _trace_and_loss() -> tuple[tl.Trace, torch.Tensor]:
     torch.manual_seed(0)
     model = _ContextModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     return trace, trace[trace.output_layers[0]].out
 
 

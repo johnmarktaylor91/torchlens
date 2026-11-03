@@ -18,7 +18,7 @@ import threading as _threading_module
 import time as _time_module
 import uuid as _uuid_module
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from types import CodeType, FrameType
 from typing import Any, cast
 
@@ -1119,15 +1119,10 @@ class host_nondeterminism_monitor:
         # resolve on the first wrapped op): an in-window import runs the ``sys.meta_path`` finders'
         # frames, which the frame-reachable inventory walks as roots, so a large
         # graph behind a finder (pytest's assertion rewriter) exhausted the budget.
-        try:
-            warm_lazy_torch_imports()  # first, so a failed import below cannot skip it
-            from ..._observability._session import active_session
-            from ..._state import pause_logging
-
-            with pause_logging():
-                active_session()
-        except Exception:
-            pass
+        # Higher layers register their warm-ups (monitor_state.register_warmup); none is imported here.
+        for warm in (warm_lazy_torch_imports, *monitor_state._WARMUPS):  # torch's own first
+            with suppress(Exception):
+                warm()
         try:
             for step_name, step in self._install_steps():
                 try:

@@ -15,8 +15,8 @@ import pytest
 paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
+from tests.conformance._rosters import paddle as paddle_roster  # noqa: E402
 from torchlens.backends.registry import get_backend_spec  # noqa: E402
-from torchlens.conformance._rosters import paddle as paddle_roster  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 

@@ -356,8 +356,7 @@ def _backward_trace() -> tl.Trace:
     trace = tl.trace(
         _BackwardTiny(),
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.backward(trace.output_ops[0].out.sum())
     return trace
@@ -378,8 +377,7 @@ def _checkpoint_trace() -> tl.Trace:
     trace = tl.trace(
         _OneCheckpoint(),
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.backward(trace.output_ops[0].out.sum())
     return trace
@@ -435,11 +433,12 @@ def _structure_only_trace() -> tl.Trace:
 
 
 def _armed_aten_trace() -> tl.Trace:
-    from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
-
     torch.manual_seed(0)
-    with _activate_aten_recording_for_tests():
-        return tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
+    return tl.trace(
+        nn.Sequential(nn.Linear(4, 4), nn.ReLU()),
+        torch.randn(1, 4),
+        capture=tl.options.CaptureOptions(aten_ops=True),
+    )
 
 
 def _telemetry_trace() -> tl.Trace:
@@ -447,7 +446,9 @@ def _telemetry_trace() -> tl.Trace:
 
     torch.manual_seed(0)
     return telemetry._profile_trace_with_cuda_kernels(
-        lambda: tl.trace(nn.Linear(2, 2), torch.ones(2, 2))
+        lambda: tl.trace(
+            nn.Linear(2, 2), torch.ones(2, 2), capture=tl.options.CaptureOptions(aten_ops=True)
+        )
     )
 
 

@@ -12,6 +12,8 @@ from typing import Any
 import pytest
 
 import torchlens as tl
+from tests.conformance import run_conformance
+from tests.conformance._protocol_cases import C0_PROTOCOL_CASES, run_c0_protocol_cases
 from torchlens.backends import (
     REFUSAL_CODES,
     VALIDATION_REASONS,
@@ -35,8 +37,6 @@ from torchlens.backends.registry import (
     registered_backend_specs,
     unregister_backend_spec,
 )
-from torchlens.conformance import run_conformance
-from torchlens.conformance._protocol_cases import C0_PROTOCOL_CASES, run_c0_protocol_cases
 
 ALL_BACKENDS = ("torch", "tf", "jax", "mlx", "paddle", "tinygrad")
 _SNAKE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")

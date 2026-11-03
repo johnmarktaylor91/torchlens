@@ -2,6 +2,17 @@
 
 ## `.tlspec` Compatibility
 
+TorchLens 3 does not load files saved by torchlens 2.x. A saved trace (any
+`tlspec_version` below 11, the format this release writes), a pickled 2.x module
+path, a recording, merged or extraction directory whose manifest names a 2.x
+`torchlens_version`, and the formats below all refuse at `tl.load` with
+`tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message
+names the 2.x origin and the remedy: load the file with torchlens 2.36.x
+(`pip install 'torchlens>=2.36,<3'`), which reads it, or capture the model again with
+this release and save that. Saving the file again with torchlens 2.36.x does not help
+for a trace: 2.36.x writes `tlspec_version` 9. The promise earlier releases made, that
+`.tlspec` files written by torchlens 2.16 would always load, is withdrawn.
+
 TorchLens 2.16.0 wrote two public `.tlspec` directory formats:
 
 - Intervention specs with `spec.json` containing `format_version` (`"1"`, written by
@@ -10,10 +21,9 @@ TorchLens 2.16.0 wrote two public `.tlspec` directory formats:
 
 TorchLens 3 reads neither, and does not migrate them: like every file saved by
 torchlens 2.x, both refuse at `tl.load` and at `tl.validation.validate_tlspec` with
-`tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message
-names the 2.x origin and the remedy. Save the artifact again with torchlens 2.36.x
-(`pip install 'torchlens>=2.36,<3'`), which reads format_version-1 intervention specs, or
-capture the model again with this release. The 2.16 `ModelLog` bundle is the exception
+`tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`). A
+format_version-1 intervention spec saved again with torchlens 2.36.x is written as
+format_version 2, which this release reads. The 2.16 `ModelLog` bundle is the exception
 torchlens 2.36.x cannot read either: only torchlens 2.17.0 does (`pip install
 torchlens==2.17.0` in a separate environment).
 

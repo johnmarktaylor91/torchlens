@@ -376,6 +376,11 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         "sibling removed-spelling scanner over docs/examples cells; naming "
         "old spellings (tl.StreamingOptions needle) is its job",
     ),
+    "tests/test_options_codemod.py": (
+        frozenset({"trace_flat"}),
+        "migration codemod fixtures: the removed CaptureOptions(layers_to_save=...) "
+        "spelling is the input the codemod rewrites; rewriting it is its job",
+    ),
 }
 
 
@@ -537,7 +542,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
     ):
         assert not _scan_file(tmp_path / "canonical_runnable_package.py", canonical), canonical
 
-    clean = 'log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))\n'
+    clean = 'log = tl.trace(model, x, save="all")\n'
     assert not _scan_file(tmp_path / "clean.py", clean), (
         "grouped-option spelling must not false-positive"
     )

@@ -172,7 +172,7 @@ def bisect_precision(
     from ._rerun import isolated_capture
 
     _refuse_unsupported_reference_device(model, reference_dtype)
-    capture = CaptureOptions(layers_to_save="all")
+    capture = CaptureOptions()
     native_trace = reference_trace = None
     try:
         native_trace = isolated_capture(

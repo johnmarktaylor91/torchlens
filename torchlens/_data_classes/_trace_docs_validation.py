@@ -142,9 +142,9 @@ DOCS: dict[str, str] = {
             Explicit stateful static-loop mode. The live provider runs native ``forward``
             with targeted module/function collection and a per-call path/shape guard. The
             loaded provider performs one ordinary verified run, then reuses staged state
-            and compiled argument binders. Unlike the default transactional provider, later
-            fast iterations reuse one result Trace in place. With ``until=`` a live fast
-            run cuts the native forward right after that saved site.
+            and compiled argument binders. Both keep the source Trace untouched; unlike the
+            default transactional provider, later fast iterations refresh one result Trace.
+            With ``until=`` a live fast run cuts the native forward right after that saved site.
         carry_state:
             PROVISIONAL spelling (documented-unstable). Default ``False``: the
             live provider snapshot-restores the model's declared state (named

@@ -1760,7 +1760,7 @@ class Layer(_SelectionOperand):
         exactly when the bridge just rendered this object (memo 3.6).
         """
 
-        from .._notebook.cards import layer_repr_html
+        from ..report._notebook.cards import layer_repr_html
 
         return layer_repr_html(self)
 

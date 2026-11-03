@@ -499,8 +499,7 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
         collapse="none",
         path=str(tmp_path / "module_splice"),
         file_format="svg",
-        vis_save_only=True,
-    )
+    ).dot
     assert rendered is not None
 
 

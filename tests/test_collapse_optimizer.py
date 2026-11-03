@@ -1014,7 +1014,7 @@ def test_float_collapse_level_validation_and_endpoints() -> None:
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
             _trace_collapse_plan(trace, mode=-0.1)
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
-            trace.draw(collapse=1.1, vis_save_only=True)
+            trace.draw(collapse=1.1)
 
         assert _trace_collapse_plan(trace, mode=0.0) == none_plan
         assert _trace_collapse_plan(trace, mode=1.0) == max_result.plan
@@ -1523,9 +1523,8 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         source = str(
             trace.draw(
                 path=str(tmp_path / "max_floor_rep_stats"),
-                vis_save_only=True,
                 file_format="svg",
-                vis_node_placement="dot",
+                layout="dot",
                 collapse="max",
             )
         )
@@ -1721,10 +1720,9 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
     with pytest.warns(UserWarning, match="skipping smart collapse"):
         dot = fresh.draw(
             collapse="max",
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
-        )
+        ).dot
     assert dot  # uncollapsed render still ships
 
     with warnings_module.catch_warnings():
@@ -1767,7 +1765,6 @@ def test_collapse_ceiling_warning_category_and_attribution(
         warnings_module.simplefilter("always")
         fresh.draw(
             collapse="max",
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
         )

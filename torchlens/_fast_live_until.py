@@ -151,7 +151,7 @@ def truncate_after(
     Parameters
     ----------
     trace:
-        The live Trace the fast run refreshes in place.
+        The result Trace the fast run refreshes.
     stop_plan:
         The plan the forward stopped after.
     until:
@@ -199,7 +199,7 @@ def rearm_cleared_sites(trace: Any, labels: Sequence[str]) -> None:
     Parameters
     ----------
     trace:
-        The live Trace the fast run refreshes in place.
+        The result Trace the fast run refreshes.
     labels:
         Labels :func:`truncate_after` unsaved.
     """

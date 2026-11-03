@@ -127,6 +127,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "output_id2label": FieldPolicy.KEEP,
     "output_num_classes": FieldPolicy.KEEP,
     "_output_transform": FieldPolicy.DROP,
+    "_output_slot": FieldPolicy.DROP,
     "_options_save_transformed_output": FieldPolicy.KEEP,
     "layer_visualizers": FieldPolicy.DROP,
     "save_visualizations": FieldPolicy.KEEP,
@@ -187,6 +188,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # process facts of the capturing run; load restores the default.
     "track_device_memory": FieldPolicy.DROP,
     "measure_host_peak_memory": FieldPolicy.DROP,  # session knob
+    "_options_aten_ops": FieldPolicy.DROP,  # session knob
     "_device_memory_samples": FieldPolicy.DROP,
     "annotations": FieldPolicy.KEEP,
     "_provenance_observer_spans": FieldPolicy.KEEP,

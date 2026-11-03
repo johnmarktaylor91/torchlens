@@ -127,6 +127,7 @@ def test_intervention_spec_v2_16_refuses_as_2x() -> None:
     error = assert_refuses_as_2x(_INTERVENTION_V2_16)
     assert error.fields["observed"] == "intervention format_version=1"
     assert error.fields["path"] == str(_INTERVENTION_V2_16)
+    assert "saved again with torchlens 2.36.x is written as format_version 2" in str(error)
 
     with pytest.raises(ArtifactTooOldError) as excinfo:
         validate_tlspec(_INTERVENTION_V2_16)
@@ -162,7 +163,7 @@ _EXTRACTION_V1 = _LEGACY / "extraction_v1"
 def _assert_extraction_v1_refusal(error: ArtifactTooOldError, path: Path) -> None:
     message = str(error)
     assert "saved by torchlens 2.x" in message, message
-    assert "save it again with torchlens 2.36.x" in message, message
+    assert "load it with torchlens 2.36.x" in message, message
     assert error.fields["code"] == "artifact_version_below_floor"
     assert error.fields["observed"] == "extraction manifest schema=tl_extract_manifest_v1"
     assert error.fields["path"] == str(path)
@@ -206,4 +207,33 @@ def test_resuming_an_extraction_into_a_v1_artifact_refuses_as_2x(tmp_path: Path)
             resume=True,
         )
     _assert_extraction_v1_refusal(excinfo.value, work)
+    assert sorted(p.name for p in work.iterdir()) == ["manifest.json"], "nothing written"
+
+
+def test_v2_extraction_saved_by_2x_refuses_at_every_reader_under_3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A v2 extraction manifest stamped by torchlens 2.x refuses at the direct readers too.
+
+    ``tl.load`` refuses it at the root manifest; the extraction readers share
+    ``load_manifest``, which raises the same one 2.x refusal once the running release is 3.
+    """
+
+    manifest = json.loads((_EXTRACTION_V1 / "manifest.json").read_text(encoding="utf-8"))
+    manifest["schema"] = "tl_extract_manifest_v2"
+    manifest["torchlens_version"] = "2.36.3"
+    work = tmp_path / "extraction_v2_saved_by_2x"
+    work.mkdir()
+    (work / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(tl, "__version__", "3.0.0")
+
+    for reader in (load_extraction, open_extraction):
+        with pytest.raises(ArtifactTooOldError) as excinfo:
+            reader(work)
+        message = str(excinfo.value)
+        assert "saved by torchlens 2.x" in message, message
+        assert "load it with torchlens 2.36.x" in message, message
+        assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+        assert excinfo.value.fields["observed"] == "torchlens_version=2.36.3"
+        assert excinfo.value.fields["path"] == str(work)
     assert sorted(p.name for p in work.iterdir()) == ["manifest.json"], "nothing written"

@@ -194,15 +194,20 @@ def _toy(
     inputs: Callable[[], Any],
     *tags: str,
     seconds: float = 0.3,
+    fit_inputs: Callable[[nn.Module], Any] | None = None,
 ) -> Case:
-    """Build a toy case row from ``tests/example_models.py``."""
+    """Build a toy case row from ``tests/example_models.py``.
+
+    ``fit_inputs``, when given, replaces ``inputs`` and receives the built model,
+    for a row whose finite-forward inputs depend on its seeded weights.
+    """
 
     def build() -> tuple[nn.Module, Any]:
         torch.manual_seed(BUILD_SEED)
         model = model_cls()
         model.eval()
         torch.manual_seed(INPUT_SEED)
-        return model, inputs()
+        return model, (fit_inputs(model) if fit_inputs is not None else inputs())
 
     return Case(f"toy:{name}", build, frozenset({"toy", "float_output", *tags}), seconds, "toy")
 
@@ -231,6 +236,46 @@ def _four() -> torch.Tensor:
 
 def _three_imgs() -> list[torch.Tensor]:
     return [torch.rand(2, 3, 8, 8), torch.rand(2, 3, 8, 8), torch.rand(2, 3, 8, 8)]
+
+
+# The validation guard refuses a forward whose every final output is non-finite, so
+# the three rows below feed inputs inside the domain of the model's ops: same graph,
+# finite output (tests/test_toy_models.py documents the plain-input degeneracy).
+
+
+def _loop_img() -> torch.Tensor:
+    # SimpleLoopNoParam takes log() three times; inputs near 20.25 keep every log
+    # argument positive through the loop (the input tests/test_toy_models.py uses).
+    return 20.25 + 0.1 * torch.rand(2, 3, 8, 8)
+
+
+def _img64() -> torch.Tensor:
+    # NestedModules cubes three times after Level21 lifts every value to at least
+    # 8, so the float32 output overflows to inf for any input; in float64 the output
+    # stays finite (about 1e63 to 1e75) with the same graph.
+    return torch.rand(2, 3, 8, 8, dtype=torch.float64)
+
+
+def _recurrent_params_inputs(model: nn.Module) -> torch.Tensor:
+    """Solve for a ``(5, 5)`` input that keeps both of the model's log() arguments positive.
+
+    RecurrentParamsSimple computes ``log(g(tan(log(g(x + 1)))))`` with the affine map
+    ``g(v) = fc1(2 * fc1(v)) = v @ A + d``. Positive targets ``c`` for the second log
+    argument give ``t = g^-1(c)``; ``a = exp(arctan(t))`` is a positive first log
+    argument with ``tan(log(a)) = t``; then ``x = g^-1(a) - 1``.
+    """
+
+    weight = model.fc1.weight.detach().double()
+    bias = model.fc1.bias.detach().double()
+    lin = 2 * weight.T @ weight.T
+    shift = 2 * bias @ weight.T + bias
+
+    def g_inverse(y: torch.Tensor) -> torch.Tensor:
+        return torch.linalg.solve(lin.T, (y - shift).T).T
+
+    targets = 1.0 + 0.5 * torch.rand(5, 5, dtype=torch.float64)
+    first_log_arg = torch.exp(torch.atan(g_inverse(targets)))
+    return (g_inverse(first_log_arg) - 1.0).float()
 
 
 #: Toy rows: the hand-built shapes `tests/example_models.py` keeps. Each row names
@@ -262,14 +307,24 @@ TOY_CASES: tuple[Case, ...] = (
         "conditional",
     ),
     _toy("repeated_module", example_models.RepeatedModule, _img, "recurrent", "child_module"),
-    _toy("nested_modules", example_models.NestedModules, _img, "recurrent", "child_module"),
-    _toy("loop_no_param", example_models.SimpleLoopNoParam, _img, "recurrent"),
+    # NestedModules draws torch.rand in Level21.forward, so it is stochastic (an
+    # unseeded capture reseeds torch from its own stream; see CaptureOptions.random_seed).
+    _toy(
+        "nested_modules",
+        example_models.NestedModules,
+        _img64,
+        "recurrent",
+        "child_module",
+        "stochastic",
+    ),
+    _toy("loop_no_param", example_models.SimpleLoopNoParam, _loop_img, "recurrent"),
     _toy(
         "recurrent_params",
         example_models.RecurrentParamsSimple,
         _vec,
         "recurrent",
         "child_module",
+        fit_inputs=_recurrent_params_inputs,
     ),
     _toy("lstm", example_models.LSTMModel, _seq, "child_module"),
     _toy("rnn", example_models.RNNModel, _seq, "child_module"),

@@ -52,8 +52,9 @@ from .._runnable.execution import (
 )
 from .._runnable.state import validate_run_seed
 from .._runnable.transaction import _LiveRunOptions, _resolve_run_save_labels
+from .._runnable.verification import _run_fork_name
 from .._trace_state import TraceState
-from ..backends.torch._trace_backward import _refuse_stats_capture
+from ..backends.torch._trace_backward import _refuse_stats_capture, _require_live_replay
 from ..backends.torch.backward import disarm_triggers as _disarm_triggers_impl
 from ..errors import (
     PathDivergenceError,
@@ -114,7 +115,10 @@ def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunRe
 def run_fast_live_trace(
     trace: Any, inputs: Any, *, seed: int | None, until: Any = None
 ) -> RunResult:
-    """Run the explicit native-forward targeted-collection live fast path."""
+    """Run the explicit native-forward targeted-collection live fast path.
+
+    The result is the cached session's own fork; the source trace stays untouched.
+    """
 
     model = live_source_model(trace)
     if model is None:
@@ -135,7 +139,8 @@ def run_fast_live_trace(
     ):
         if hasattr(session, "close"):
             session.close()
-        session = _FastLiveSession(trace, model)
+        result_fork = trace._fork_trace(name=_run_fork_name(trace))
+        session = _FastLiveSession(trace, model, target=result_fork)
         trace.__dict__["_fast_run_session"] = session
     return session.run(inputs, seed=seed, until=until)
 
@@ -148,7 +153,7 @@ def try_guarded_fast_rerun(
     Parameters
     ----------
     trace:
-        Live trace carrying the staged spec; refreshed in place on success.
+        Live trace carrying the staged spec; this door refreshes it in place on success.
     model:
         The model the caller passed (or the trace's retained live model).
     inputs:
@@ -349,9 +354,7 @@ def push(
 ) -> Trace:
     """Body of ``Trace.push``; the method carries the documented contract."""
 
-    require_capture_capability(trace, "live_replay")
-    require_structure_only_capability(trace, "live_replay")
-    _refuse_stats_capture(trace, "live_replay")
+    _require_live_replay(trace)
     replay_options = merge_replay_options(replay=replay)
 
     return _push_impl(trace, replay=replay_options)
@@ -632,7 +635,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
 
             with zero_fire_policy_scope(zero_fire_policy):
                 fast_result = run_fast_live_trace(trace, run_inputs, seed=seed, until=until)
-                refuse_unfired_fast_run(trace)
+                refuse_unfired_fast_run(fast_result.trace)
             return fast_result
 
         return _apply_run_save_selection(

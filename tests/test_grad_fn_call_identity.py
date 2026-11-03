@@ -103,7 +103,8 @@ def test_ordinal_index_on_live_backward_trace():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save="all",
     )
     trace.backward(trace[trace.output_layers[0]].out.sum())
     calls = list(trace.autograd.grad_fn_calls.values())

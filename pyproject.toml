@@ -254,6 +254,14 @@ dev = [
     # Contributor tooling, not a torchlens runtime feature, so it lives with the
     # other dev-tooling packages rather than in `test` or core `dependencies`.
     "jsonschema>=4.18,<5",
+    # import-linter enforces the layer contracts in .importlinter
+    # (scripts/checks/layering.py, check `import-contracts`). Repository
+    # tooling, never imported by the package. Declared here, the one extra
+    # both CI's repository-checks job and scripts/smoke_ci_parity.py install,
+    # so the check runs instead of skipping. Bounded below the next major like
+    # the tools above: the 2.x line keeps the config schema and the
+    # `forbidden` contract semantics the file relies on.
+    "import-linter>=2.0,<3",
 ]
 test = [
     # BAND COHERENCE: the four ML packages the bridge/ adapters wrap are banded
@@ -350,7 +358,7 @@ torchlens = [
     # runtime, so the file must ship in BOTH artifacts (the tests/test_mikit_*
     # rows go red on an installed wheel without it).
     "mechinterp/*.json",
-    # Each backend's shipped conformance scorecard, read by tl.compat.report()
+    # Each backend's shipped conformance scorecard, read by tl.report.doctor()
     # (backends/_scorecard_rows.py) without importing the framework.
     "backends/*/scorecard.json",
     # The bundled open font (Liberation Sans, SIL OFL 1.1, shipped
@@ -527,6 +535,7 @@ line-length = 100
 extend-exclude = [
     "tests/classics_corpus/models",
     "torchlens/_data_classes/_schema_bindings.py",
+    "torchlens/_data_classes/_schema_bindings_trace.py",
     "torchlens/_ir/op_record_manifest.py",
 ]
 

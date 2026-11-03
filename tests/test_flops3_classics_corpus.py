@@ -214,7 +214,7 @@ def _check_entry(entry: CorpusEntry) -> None:
     model, inputs = build_entry(entry)
     args, kwargs = _call_args(inputs, whole)
     capture = tl.options.CaptureOptions(backward_ready=True, output_transform=_same)
-    trace = tl.trace(model, args, kwargs, capture=capture)
+    trace = tl.trace(model, args, input_kwargs=kwargs, capture=capture)
     try:
         beyond_fwd, beyond_bwd = BEYOND_FCM.get(entry.id, (0, 0))
         assert (forward_census.beyond, backward_census.beyond) == (beyond_fwd, beyond_bwd)

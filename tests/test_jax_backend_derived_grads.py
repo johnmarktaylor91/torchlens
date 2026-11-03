@@ -123,7 +123,9 @@ def test_jax_derived_grads_match_value_and_grad_oracle() -> None:
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,))
+        ),
     )
 
     def value_fn(test_params: dict[str, Any], test_x: Any) -> Any:
@@ -166,7 +168,9 @@ def test_jax_intermediate_derived_grads_remain_deferred_with_leaf_grads() -> Non
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,))
+        ),
     )
 
     assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
@@ -183,12 +187,14 @@ def test_jax_intermediate_derived_grads_zero_tap_public_surface() -> None:
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=_loss,
-            input_grad_argnums=(0,),
-            intermediate_grads=True,
-            max_intermediate_grads=16,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=_loss,
+                input_grad_argnums=(0,),
+                intermediate_grads=True,
+                max_intermediate_grads=16,
+            )
         ),
     )
     tanh_op = next(op for op in trace._layer_list if op.func_name == "tanh")
@@ -214,17 +220,19 @@ def test_jax_intermediate_derived_grads_do_not_mutate_capture_graph() -> None:
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(params=params, loss_fn=_loss),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(params=params, loss_fn=_loss)),
     )
     t1 = tl.trace(
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=_loss,
-            intermediate_grads=True,
-            max_intermediate_grads=16,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=_loss,
+                intermediate_grads=True,
+                max_intermediate_grads=16,
+            )
         ),
     )
 
@@ -255,11 +263,13 @@ def test_jax_intermediate_derived_grads_cap_hard_fails() -> None:
             cast(Any, _model),
             (params, x),
             backend="jax",
-            grad_options=GradOptions(
-                params=params,
-                loss_fn=_loss,
-                intermediate_grads=True,
-                max_intermediate_grads=1,
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(
+                    params=params,
+                    loss_fn=_loss,
+                    intermediate_grads=True,
+                    max_intermediate_grads=1,
+                )
             ),
         )
 
@@ -274,11 +284,13 @@ def test_jax_intermediate_derived_grads_follow_selective_save() -> None:
         (params, x),
         backend="jax",
         save=tl.func("dot_general"),
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=_loss,
-            intermediate_grads=True,
-            max_intermediate_grads=4,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=_loss,
+                intermediate_grads=True,
+                max_intermediate_grads=4,
+            )
         ),
     )
 
@@ -304,11 +316,13 @@ def test_jax_intermediate_derived_grads_skip_non_float_outputs() -> None:
         cast(Any, masked_model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=lambda output: jnp.sum(output),
-            intermediate_grads=True,
-            max_intermediate_grads=8,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=lambda output: jnp.sum(output),
+                intermediate_grads=True,
+                max_intermediate_grads=8,
+            )
         ),
     )
     bool_ops = [op for op in trace._layer_list if str(op.dtype) == "bool"]
@@ -338,11 +352,13 @@ def test_jax_intermediate_derived_grads_degrade_to_leaf_grads(monkeypatch: Any) 
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=_loss,
-            intermediate_grads=True,
-            max_intermediate_grads=8,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=_loss,
+                intermediate_grads=True,
+                max_intermediate_grads=8,
+            )
         ),
     )
 
@@ -427,7 +443,7 @@ def test_jax_derived_grads_allow_scalar_output_without_loss_fn() -> None:
         cast(Any, scalar_model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(params=params),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(params=params)),
     )
 
     assert jnp.allclose(trace.autograd.derived_grads["params.w"].grad, x)
@@ -441,7 +457,7 @@ def test_jax_derived_grads_reject_non_scalar_output_without_loss_fn() -> None:
             cast(Any, _model),
             (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
             backend="jax",
-            grad_options=GradOptions(params=_params()),
+            capture=tl.options.CaptureOptions(grad_options=GradOptions(params=_params())),
         )
 
 
@@ -453,16 +469,16 @@ def test_jax_derived_grads_are_not_backward_capture() -> None:
         cast(Any, _model),
         (params, jnp.ones((2, 3), dtype=jnp.float32)),
         backend="jax",
-        grad_options=GradOptions(params=params, loss_fn=_loss),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(params=params, loss_fn=_loss)),
     )
 
-    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+    with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
         trace.backward(cast(Any, trace[trace.output_layers[0]].out))
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace[0].grads
 
 
@@ -481,7 +497,9 @@ def test_jax_derived_grads_reject_closed_over_scalar_host_state() -> None:
             cast(Any, uses_global),
             (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
             backend="jax",
-            grad_options=GradOptions(params=_params(), loss_fn=_loss),
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(params=_params(), loss_fn=_loss)
+            ),
         )
 
 
@@ -501,7 +519,9 @@ def test_jax_derived_grads_reject_aux_output_divergence() -> None:
             cast(Any, impure_model),
             (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
             backend="jax",
-            grad_options=GradOptions(params=_params(), loss_fn=_loss),
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(params=_params(), loss_fn=_loss)
+            ),
         )
 
 

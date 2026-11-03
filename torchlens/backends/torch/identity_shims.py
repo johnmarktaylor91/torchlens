@@ -805,7 +805,7 @@ def _install_overrides_membership_shims(records: list[tuple[Any, str, Any]]) -> 
     """Shim the two cached ``torch.overrides`` table accessors for membership.
 
     ``decorate_all_once`` pre-warms both caches so their CONTENTS stay keyed
-    by pristine originals (r4 F3, verified). But membership by the CURRENT
+    by pristine originals (round-4 finding 3, verified). But membership by the CURRENT
     namespace read -- ``F.relu in get_testing_overrides()`` or
     ``my_op in get_overridable_functions()[F]``, the documented
     ``__torch_function__`` author checks -- was False for every wrapped
@@ -889,7 +889,7 @@ def _install_lazy_module_allowlist_shim(records: list[tuple[Any, str, Any]]) -> 
     which is the torchlens wrapper once wrappers are installed, so the
     membership check missed and torch raised its own "uninitialized
     parameter" ``ValueError`` from a plain ``model.to(...)`` on any model
-    holding an un-run lazy module, outside any capture (wave-3 stress F2).
+    holding an un-run lazy module, outside any capture (wave-3 stress case 2).
     Swapping the list for a ledger-resolving view keeps upstream's decision
     (the ``in`` test and the error for every other method are torch's own)
     while the wrapper alias resolves to its original.

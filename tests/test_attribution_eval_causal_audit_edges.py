@@ -31,7 +31,7 @@ import torchlens.attribution as attribution
 import torchlens.mechinterp
 
 PAIR_CLEAN, PAIR_CORRUPT = torch.tensor([[0], [0]]), torch.tensor([[1], [1]])
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True)
 
 
 def _remedy(message: str) -> str:
@@ -202,9 +202,11 @@ def test_patch_edges_resolves_layer_zero_receivers() -> None:
     """A receiver reading the embedding output (a layer-0 receiver) is patched, not refused."""
 
     model = Fixture().eval()
-    clean = tl.trace(model, CLEAN, capture=_CAPTURE)
+    clean = tl.trace(model, CLEAN, capture=_CAPTURE, save="all")
     graph = torchlens.mechinterp.component_graph(clean)
-    corrupt = torchlens.mechinterp.component_graph(tl.trace(model, CORRUPT, capture=_CAPTURE))
+    corrupt = torchlens.mechinterp.component_graph(
+        tl.trace(model, CORRUPT, capture=_CAPTURE, save="all")
+    )
     patched = torchlens.mechinterp.patch_edges(
         clean, [graph.edges["input->m0"]], corrupted_graph=corrupt
     )
@@ -212,9 +214,11 @@ def test_patch_edges_resolves_layer_zero_receivers() -> None:
         want = model.h1(model.norm1(model.embed(CORRUPT)))
     assert torch.equal(patched.modules["h1"].out, want)
     gpt2, ids, other = _tiny_gpt2()
-    trace = tl.trace(gpt2, ids, capture=_CAPTURE)
+    trace = tl.trace(gpt2, ids, capture=_CAPTURE, save="all")
     tiny = torchlens.mechinterp.component_graph(trace)
-    tiny_corrupt = torchlens.mechinterp.component_graph(tl.trace(gpt2, other, capture=_CAPTURE))
+    tiny_corrupt = torchlens.mechinterp.component_graph(
+        tl.trace(gpt2, other, capture=_CAPTURE, save="all")
+    )
     head = torchlens.mechinterp.patch_edges(
         trace, [tiny.edges["input->a0.h0<q>"]], corrupted_graph=tiny_corrupt
     )

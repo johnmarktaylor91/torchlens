@@ -30,6 +30,7 @@ from .._capture_state_helpers import (
 from .._data_classes.trace import Trace
 from .._io.streaming import BundleStreamWriter
 from .._ir.selector_eval import selector_contains_kind
+from .._registry._facet_snapshot import facet_snapshot
 from .._selection.module_alias_guard import refuse_model_alias_spellings
 from .._selection.selectors import BaseSelector
 from .._trace_state import TraceState
@@ -39,7 +40,7 @@ from ..intervention import injection as _injection
 from ..intervention.hooks import normalize_hook_plan, site_universe as _site_universe
 from ..intervention.types import InterventionDecision
 from ..options import StorageOptions
-from ..recording.options import RecordingOptions
+from ..recording.options import _RecordingConfig
 from ..recording.types import CaptureSpec
 from ._episode_ledger import attach_episode_header
 from .prepare.resolve import (
@@ -232,8 +233,6 @@ def _compose_hook_plan(r: SimpleNamespace) -> None:
 def _construct_trace(r: SimpleNamespace) -> Trace:
     """Build the Trace from the resolved request's option values."""
 
-    from .._semantic import facets as facets_mod
-
     return Trace(
         model_class_name=r.model_class_name,
         output_device=r.output_device,
@@ -269,7 +268,7 @@ def _construct_trace(r: SimpleNamespace) -> Trace:
         save_transformed_output=r.save_transformed_output,
         layer_visualizers=r.layer_visualizers,
         save_visualizations=r.save_visualizations,
-        facet_functions=facets_mod.snapshot(r.recipes),
+        facet_functions=facet_snapshot(r.recipes),
     )
 
 
@@ -338,6 +337,7 @@ def _stamp_identity_and_sinks(trace: Trace, r: SimpleNamespace) -> None:
     trace.track_nonfinite = r.track_nonfinite
     trace.track_device_memory = r.track_device_memory
     trace.measure_host_peak_memory = r.measure_host_peak_memory
+    trace._options_aten_ops = bool(r.aten_ops)
     _injection.arm_injection_logging(trace, armed=r.log_injections)
     # L7a mode-marker prep (S2 SEAM, labeled): the flag DECLARES the mode
     # (memo sec 1.5) and stamps the mirror field here at entry. At S2
@@ -376,7 +376,7 @@ def _configure_predicate_options(trace: Trace, r: SimpleNamespace) -> None:
         if r.save_outs_to is not None
         else None
     )
-    trace._predicate_save_options = RecordingOptions(
+    trace._predicate_save_options = _RecordingConfig(
         keep_op=r.save_predicate,
         # The live forward sees only activation branches; gradient and
         # node branches armed as sticky backward hooks above.

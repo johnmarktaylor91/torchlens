@@ -37,7 +37,8 @@ def _make_trace() -> Any:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=CaptureOptions(save_grads="all"),
+        save="all",
     )
 
 

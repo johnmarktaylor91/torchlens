@@ -157,10 +157,9 @@ def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> 
     try:
         log.draw(
             color_by="pass_number",
-            vis_mode="rolled",
+            rolled=True,
             path=str(tmp_path / "rolled"),
             file_format="svg",
-            vis_save_only=True,
         )
         state = log._last_encoding_state if hasattr(log, "_last_encoding_state") else None
         if state is None:
@@ -169,13 +168,11 @@ def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> 
             del _ES  # fall through to the DOT-level assertion below
         graph = log.draw(
             color_by="pass_number",
-            vis_mode="rolled",
+            rolled=True,
             path=str(tmp_path / "rolled2"),
             file_format="svg",
-            vis_save_only=True,
-            return_graph=True,
-        )
-        assert NOTE_PER_PASS_ROLLED in graph.source
+        ).dot
+        assert NOTE_PER_PASS_ROLLED in graph
     finally:
         log.cleanup()
 

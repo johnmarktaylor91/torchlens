@@ -27,24 +27,13 @@ __tl_layer__ = "FACADE"
 #: reusing the verified trace (quickstart memo D8: an incompatible requested
 #: capture recaptures with disclosure, never silently serves the eval trace).
 _LADDER_DEFAULTS: dict[str, Any] = {
-    "grad_transform": MISSING,
-    "save_mode": MISSING,
-    "reconstruction_ready": MISSING,
     "capture": None,
-    "save": None,
+    "save": MISSING,
     "intervene": None,
-    "halt": None,
-    "lookback": 0,
-    "lookback_payload_policy": "metadata_only",
+    "stop_after": None,
     "storage": None,
-    "streaming": None,
-    "profile": MISSING,
     "facets": MISSING,
-    "grouping": MISSING,
-    "jax_static_argnums": MISSING,
-    "grad_options": MISSING,
     "episode": None,
-    "chunk_size": MISSING,
     "chunk_paths": MISSING,
     "backend": None,
 }

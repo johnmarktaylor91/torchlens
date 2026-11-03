@@ -78,7 +78,7 @@ def test_reused_module_with_different_shapes_assembles_by_pass() -> None:
     model = _SharedRelu().eval()
     x = torch.randn(4, 3, 12)
     plain = tl.trace(model, x.clone())
-    chunked = tl.trace(model, x.clone(), chunk_size=2)
+    chunked = tl.trace(model, x.clone(), capture=tl.options.CaptureOptions(chunk_size=2))
     assert [op.label for op in chunked.ops] == [op.label for op in plain.ops]
     relus = [op.label for op in plain.ops if op.func_name == "relu"]
     assert len(relus) == 2, relus
@@ -92,7 +92,7 @@ def test_reused_module_with_equal_shapes_keeps_each_pass_its_own_rows() -> None:
     model = _SharedReluSameShape().eval()
     x = torch.randn(4, 4)
     plain = tl.trace(model, x.clone())
-    chunked = tl.trace(model, x.clone(), chunk_size=2)
+    chunked = tl.trace(model, x.clone(), capture=tl.options.CaptureOptions(chunk_size=2))
     relus = [op.label for op in plain.ops if op.func_name == "relu"]
     assert len(relus) == 2, relus
     for label in relus:
@@ -102,8 +102,8 @@ def test_reused_module_with_equal_shapes_keeps_each_pass_its_own_rows() -> None:
 def test_batch_coupled_activation_refuses_typed() -> None:
     torch.manual_seed(0)
     with pytest.raises(ChunkedForwardConfigError) as info:
-        tl.trace(_Gram().eval(), torch.randn(3, 2), chunk_size=2)
-    assert _code(info.value) == "trace_option_unsupported"
+        tl.trace(_Gram().eval(), torch.randn(3, 2), capture=tl.options.CaptureOptions(chunk_size=2))
+    assert _code(info.value) == "chunked_forward_batch_coupled"
     assert "chunk_size" in info.value.fields.get("remedy", "")
     assert info.value.fields.get("chunk_index") == 1
 
@@ -111,8 +111,12 @@ def test_batch_coupled_activation_refuses_typed() -> None:
 def test_forward_that_needs_the_whole_batch_refuses_typed() -> None:
     torch.manual_seed(0)
     with pytest.raises(ChunkedForwardConfigError) as info:
-        tl.trace(_NeedsWholeBatch().eval(), torch.randn(4, 5, 3), chunk_size=2)
-    assert _code(info.value) == "trace_option_unsupported"
+        tl.trace(
+            _NeedsWholeBatch().eval(),
+            torch.randn(4, 5, 3),
+            capture=tl.options.CaptureOptions(chunk_size=2),
+        )
+    assert _code(info.value) == "chunked_forward_batch_coupled"
     assert isinstance(info.value.__cause__, RuntimeError)
     assert info.value.fields.get("chunk_index") == 0
 
@@ -121,5 +125,10 @@ def test_chunk_option_conflicts_carry_a_code() -> None:
     torch.manual_seed(0)
     model = _SharedReluSameShape().eval()
     with pytest.raises(ChunkedForwardConfigError) as info:
-        tl.trace(model, torch.randn(4, 4), chunk_size=2, storage=tl.to_disk("unused.tlspec"))
-    assert _code(info.value) == "trace_option_unsupported"
+        tl.trace(
+            model,
+            torch.randn(4, 4),
+            storage=tl.to_disk("unused.tlspec"),
+            capture=tl.options.CaptureOptions(chunk_size=2),
+        )
+    assert _code(info.value) == "chunked_capture_option_conflict"

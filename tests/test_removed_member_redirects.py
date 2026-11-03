@@ -70,7 +70,7 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
     ("Trace", "collapse_schedule", "draw"),
     ("Bundle", "replay", "do"),
     ("Bundle", "rerun", "run"),
-    ("VisualizationOptions", "mode", "view"),
+    ("VisualizationOptions", "mode", "rolled"),
     ("VisualizationOptions", "max_module_depth", "depth"),
     ("VisualizationOptions", "layout_engine", "layout"),
     ("VisualizationOptions", "node_mode", "node_style"),

@@ -57,7 +57,7 @@ for _path in (REPO_ROOT, REPO_ROOT / "tests"):
 import torchlens as tl  # noqa: E402
 import torchlens.mechinterp as mi  # noqa: E402
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True)
 
 #: (path suffix, function name) of each counted function, by report key.
 COUNTED: dict[str, tuple[str, str]] = {
@@ -253,8 +253,8 @@ def run(case_name: str, *, wall: bool) -> dict[str, Any]:
         torch.tanh(torch.zeros(max(torch.get_num_threads(), 1), 32768, dtype=dtype))
     case = _case(case_name)
     model = case["model"]
-    clean = tl.trace(model, case["clean_ids"], capture=_CAPTURE)
-    corrupt_trace = tl.trace(model, case["corrupt_ids"], capture=_CAPTURE)
+    clean = tl.trace(model, case["clean_ids"], capture=_CAPTURE, save="all")
+    corrupt_trace = tl.trace(model, case["corrupt_ids"], capture=_CAPTURE, save="all")
     try:
         graph = mi.component_graph(clean)
         corrupt = mi.component_graph(corrupt_trace)

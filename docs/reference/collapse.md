@@ -111,7 +111,7 @@ or total that the hidden content does not support.*
 
 Smart-collapse admission is now gated on the RENDERED UNIVERSE, not raw op count
 (collapse memo D5): the gate variable is `U` — the full plan's rendered node count after
-`module=` focus, `vis_call_depth`, and rolled reductions — tiered by a measured
+`module=` focus, `depth=`, and rolled reductions — tiered by a measured
 `(U, W)` work estimator (`0.0095 * U**1.43 * W**1.02` ms, W = widest rendered sibling
 group). `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) survives as the defensive constant: the
 quality planner is admitted when `U <= 2000` AND the predicted cost fits the budget.
@@ -138,12 +138,12 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
   (`collapse_watchdog_fallback`, with U, W, predicted, and actual).
 
 Context reductions are therefore real remedies for the first time: focusing with
-`module=`, bounding `vis_call_depth`, or rendering rolled genuinely re-admits the
+`module=`, bounding `depth=`, or rendering rolled genuinely re-admits the
 quality planner. The gate is a compute guard, not a correctness limit — the trace
 itself is complete.
 
 The decline is disclosed, never silent. To get a collapsed view of a very large trace, reduce
-the rendered graph first with `module=` focus, `vis_call_depth`, or rolled mode; `fold_repeats`
+the rendered graph first with `module=` focus, `depth=`, or rolled mode; `fold_repeats`
 and `show_containers` styling are unaffected.
 
 ## `collapse_plan()` diagnostics

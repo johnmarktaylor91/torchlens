@@ -36,7 +36,7 @@ remedy — never silent zeros. Joined-but-kernel-less nodes read honest n/a.
 
 ### size_by + scale — box minimums (D4 default mapping)
 
-`draw(size_by="dims", scale="sqrt")` sizes nodes by the numel of the
+`draw(size_by="dims", size_scale="sqrt")` sizes nodes by the numel of the
 non-batch output shape (the conservative area-only mapping, applied as the
 D4 default), emitted as width/height MINIMUMS under `fixedsize=false`:
 labels never truncate, fonts never scale, encoded area clamps at 4x the

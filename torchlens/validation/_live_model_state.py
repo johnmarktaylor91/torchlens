@@ -18,6 +18,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._utils.tensor_leaves import flat_byte_view
+
 
 def _tensor_bits_equal(live: torch.Tensor, saved: torch.Tensor) -> bool:
     """Return whether two dense tensors hold bit-identical contents.
@@ -51,8 +53,8 @@ def _tensor_bits_equal(live: torch.Tensor, saved: torch.Tensor) -> bool:
         return False
     try:
         with torch.no_grad():
-            live_bytes = live.detach().reshape(-1).view(torch.uint8)
-            saved_bytes = saved.detach().reshape(-1).view(torch.uint8)
+            live_bytes = flat_byte_view(live.detach())
+            saved_bytes = flat_byte_view(saved.detach())
             return bool(torch.equal(live_bytes, saved_bytes))
     except (RuntimeError, TypeError, NotImplementedError):
         return False

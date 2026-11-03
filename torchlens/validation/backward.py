@@ -510,10 +510,10 @@ def _capture_backward_candidate(
         logged_inputs,
         input_kwargs=logged_kwargs,
         capture=CaptureOptions(
-            layers_to_save="all",
             save_grads="all",
             seed=seed,
         ),
+        save="all",
     )
     return trace
 

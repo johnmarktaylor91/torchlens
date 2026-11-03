@@ -88,7 +88,7 @@ conformance cell yet.
 
 Other refusals the backend raises: `explicit_seed_unsupported` (`random_seed=`),
 `trace_option_unsupported` (an option outside the backend's list, or `grad_options=`
-combined with `intervene=`/`halt=`), `module_identity_mode_unsupported`,
+combined with `intervene=`/`stop_after=`), `module_identity_mode_unsupported`,
 `value_dependent_branch_unsupported` (a tensor turned into a Python scalar inside the
 forward), `rng_replay_unsupported` (a stochastic Paddle op inside the forward),
 `inplace_op_unsupported` (an in-place or global-state Paddle op inside the forward),

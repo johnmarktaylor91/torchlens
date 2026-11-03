@@ -1,12 +1,12 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 84 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 85 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
   about 1.0 to 1.2x a plain forward hook and exact, also through HF `generate()` with the KV
   cache (`bound.generate(...)`).
-  `tl.record(..., intervene=spec, return_output=True)` is the lighter evidence path (about
+  `tl.record(..., intervene=spec)` (output in `recording.output`) is the lighter evidence path (about
   1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). A pure
   `tl.module(...)` save selector (or a `|` union of them, or one intersected with any selector by
   `&`) escrows only the ops inside matching module passes; joining it with a non-module term by
@@ -22,6 +22,11 @@
   `tl.intervention.population(source, *, origin, ...)` builds the provenance-stamped donor
   population, a `tl.intervention.Population` (`origin=` is required; `.members`, `.origin`,
   `.identity`, `.mean(dim=None, ...)`, `.std(dim=None, ...)`).
+  Each realized draw of a stochastic edit is a `tl.intervention.SamplingRecord` (exported
+  beside `FireRecord`; fields `verb`, `base_seed`, `derived_seed`, `share_draw`,
+  `logical_firing_coordinate`, `eligible_count`, `population_count`, `population_identity`,
+  `donor_group_id`, `draw_indices`, `realized_draw_digest`), carried on
+  `FireRecord.sampling`.
 - Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. There are no
   gradient-only helpers: `tl.grad(site)` addresses the gradient of the site's OUTPUT, and the
   ordinary edits (`tl.scale`, `tl.zero_ablate`, `tl.clamp`, `tl.add_noise`, `tl.clip_norm(max_norm,
@@ -49,8 +54,8 @@
   scrub rebinds the group row once for all members, and caller mutation is
   impossible — this supersedes the historical fresh-mutable-copy-per-read barrier.
 - Steering many forwards or a generation loop: `spec.bind(model)` (capture-free, about 1x a
-  plain hook, works with HF `generate()` and the KV cache), `tl.record(..., intervene=spec,
-  return_output=True)` per forward when activations are needed as evidence, and one full
+  plain hook, works with HF `generate()` and the KV cache), `tl.record(..., intervene=spec)`
+  per forward when activations are needed as evidence (the output is `recording.output`), and one full
   `tl.trace(..., intervene=spec)` as the correctness oracle. Trace-then-rerun
   (`trace.run(model, x)` on a module-targeted staged spec) is a fast path too: the guarded
   fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:
@@ -65,6 +70,9 @@
   TorchLens). The old `tl.bridge.steering_vectors.vector`, `tl.bridge.repeng.control_vector`
   and `tl.bridge.dialz.vector` trainers are removed.
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
+  `recording.options` is a read-only `tl.types.RecordingSettings` of the settings it was made
+  with (live values, for example `recording.options.save_grads`), and `recording.output` is the
+  model's return value (memory only; a loaded recording refuses with `output_not_stored`).
   `tl.record(model, ids, save=..., generate_kwargs={...})` (DOCUMENTED-UNSTABLE) runs one real
   cached HF `generate()` and records the sites at every forward it issues (one Recorder pass
   per forward, so each decode step records only its new position and cost is linear in
@@ -79,7 +87,7 @@
   the historical `on_forward_error="raise"` behavior; opt into
   `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
   `on_forward_error="return_partial"` to return a failed partial `Recording`. Failed partials
-  set `status="partial_error"`, `is_failed=True`, string-only error metadata, `num_committed_ops`,
+  set `status="partial_error"` and `is_failed` `True`, string-only error metadata, `num_committed_ops`,
   and best-effort `last_event_*` fields. user-op failures exclude the failing call; TL-side
   capture failures may include a skipped/partial current-call event. Failed partials cannot be
   converted with `Recording.to_trace()` or used with `Recording.backward()`.
@@ -92,7 +100,8 @@
   re-enables grad (`torch.enable_grad()` inside it) and an output carries autograd history;
   an explicit `inference_only=True` is never cleared.
   A backward run through such a capture records the ATen calls it dispatched on
-  `BackwardPass.aten_ops` (session-time, DOCUMENTED-UNSTABLE), and
+  `BackwardPass.aten_ops` (session-time, DOCUMENTED-UNSTABLE; the per-op rows behind
+  `Trace.aten_ops` / `Op.aten_ops` need `CaptureOptions(aten_ops=True)`), and
   `tl.report.backward_status(trace)` counts them: `executed_flops` is exact for the matmul
   and convolution families at fma2 (FlopCounterMode's convention), per pass in
   `executed_flops_per_pass`, with every other recorded op kind named in `uncounted_ops`.
@@ -148,7 +157,7 @@
   (halted LIVE-provider replay refuses — loaded-sparse `run()` stays allowed).
   A swallowed halt/nonfinite signal (broad `except:` in user code) raises
   `tl.errors.StopSignalSwallowedError` at the capture boundary and settles
-  FAILED, never COMPLETE. Refresh re-arms `raise_on_nan`. Halted analysis
+  FAILED, never COMPLETE. Refresh re-arms `on_nonfinite='raise'`. Halted analysis
   `Trace.save` works (the transient-leak refusal is fixed); halted `backward`
   and loaded-sparse `run()` remain allowed.
 - QUERYABLE NONFINITE RECORD (spellings DOCUMENTED-UNSTABLE): `trace.nonfinite_ops`
@@ -156,11 +165,11 @@
   `trace.nonfinite_coverage` the frozen evidence disclosure (basis + checked/
   unchecked/unexamined counts — read it before trusting an empty answer). On
   default captures the record derives from the memoized saved-payload scan at
-  ZERO capture cost; `CaptureOptions(track_nonfinite=True)` opts into
+  ZERO capture cost; `CaptureOptions(on_nonfinite='track')` opts into
   capture-time per-op checks that also cover unsaved ops (selective-save
   captures), costing ~3-15% of capture time on CPU and deferring device flag
   reads to ONE batch at the finalize seam (never a per-op CUDA sync).
-  `raise_on_nan` stop-and-throw is unchanged and independent; `structure_only`
+  `on_nonfinite='raise'` stop-and-throw is unchanged and independent; `structure_only`
   refuses the combination typed. Session-time knob (`FieldPolicy.DROP`): load
   restores the default and loaded traces serve the saved-payload basis. Doc:
   `docs/reference/capture_outcomes.md` ("The queryable nonfinite record").
@@ -177,9 +186,8 @@
   gold); derived-semantics claims (`decode_output`/`output_table`) refuse
   `nongold_semantics_unavailable` on synthesized values and the first raw `Layer.out`
   read warns once per trace (`nongold_raw_value_read`, internal readers ack via
-  `torchlens._quickstart.internal_read()`). `render(model, ...)` (home
-  `torchlens._user_funcs.render`; `tl.render` root spelling awaits the F35 registration
-  sweep) is a curated facade over the resolver + `Trace.draw`: metadata-only pinned
+  `torchlens._quickstart.internal_read()`). `tl.draw(model, ...)` (home
+  `torchlens._quickstart.draw`; the root export rides the glossary regeneration) is a curated facade over the resolver + `Trace.draw`: metadata-only pinned
   eval/no-grad capture with flags/RNG/norm-buffers restored and state-dict-hash
   verified, `collapse="auto"` as its default (by design: THERE ONLY -- `Trace.draw`
   keeps `"none"`), detached `Drawing` (owns DOT/bytes/path/provenance/receipt,
@@ -333,7 +341,7 @@
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
   `torchlens._visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
   `torchlens._visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
-  and key (member lists only where members differ), and `trace.draw_backward(theme="dark")`
+  and key (member lists only where members differ), and `trace.draw(graph="backward", theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiments.md`):
@@ -417,10 +425,10 @@
   reads `status.state == "passed"` on a plain torch module.
 
   Each backend ships a measured scorecard (`torchlens/backends/<name>/scorecard.json`, checked by
-  `python -m torchlens.conformance.scorecard --backend <name> --check` in its CI leg);
+  `python -m tests.conformance.scorecard --backend <name> --check` in its CI leg);
   `tl.report.doctor()` shows it as the `backend_scorecard:<name>` row;
-  `torchlens.conformance.graduation_report(name)` returns the
-  advisory six-item `GraduationReport`. Per-backend pages: `docs/backends/<name>.md`.
+  `python -m tests.conformance.scorecard --backend <name> --graduation` prints the
+  advisory six-item graduation report. Per-backend pages: `docs/backends/<name>.md`.
 - TensorFlow is available as `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16
   preview when `keras.backend.backend() == "tensorflow"`. The shipped path is eager live capture
   with `op_callbacks` as the primary mechanism: real values, real taken-branch control flow,
@@ -431,16 +439,16 @@
   captures refuse `grad_options` typed. Static-label `intervene=` ships for eager entries
   through a two-level writable layer (module-boundary substitution + curated tf.nn/tf.math
   functional wrap) with FAIL-CLOSED site reachability — a selector matching callback-captured
-  ops the wrap layer never saw refuses typed. `halt=`/`recipes=`, true backward capture, and
+  ops the wrap layer never saw refuses typed. `stop_after=`/`recipes=`, true backward capture, and
   value-dependent predicates remain deferred like sibling preview gaps.
-- The Paddle preview supports live forward `trace(intervene=...)` and `trace(halt=...)` (eager
+- The Paddle preview supports live forward `trace(intervene=...)` and `trace(stop_after=...)` (eager
   dygraph: the wrapper holds each concrete output before the caller sees it). The intervened op
   keeps its real identity with the replacement payload plus hook-minted `FireRecord`s; the replay
   oracle uses a narrow corroborated user-intervention carve-out, so a replacement value presented
   as captured-native FAILS validation. Builtin helper adapters: `zero_ablate`, `scale`, `add`,
   `replace_with` (others refuse typed); decisions are forward-only; intervention/halt predicates
   may be value-dependent (real `tensor_requires_grad`/`is_scalar_bool`/`bool_value` in the ctx);
-  `recipes=` attaches facet recipes; `grad_options` cannot combine with `intervene=`/`halt=`.
+  `recipes=` attaches facet recipes; `grad_options` cannot combine with `intervene=`/`stop_after=`.
   Value-dependent `save=`, streaming, fastlog, and rng_replay stay refused on paddle.
 - All four eager previews (tf/mlx/tinygrad/paddle) group recurrent calls into multi-pass layers
   through the same neutral grouper torch and JAX use (`layer_label:pass` labels, `pass_number`/
@@ -469,7 +477,7 @@
   with channels active. Typed refusals: `encoding_source_invalid`, `encoding_value_invalid`
   (bools and non-scalar tensors refuse — a bool is not a magnitude), `encoding_callable_error`
   (chains the user exception), `encoding_requires_dot_layout`.
-- `Trace.draw(size_by=..., scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
+- `Trace.draw(size_by=..., size_scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
   wave-1 SIZE channel, shipped with the D4 DEFAULT APPLIED (D4 unruled at merge: sqrt scale +
   conservative area-only mapping + typed refusal on rolled varying sources). Sources: a scalar
   record field, the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
@@ -528,7 +536,7 @@
   only pathological inputs (raw ops above 20x the constant) still decline outright
   (`collapse_pathological_skip`; `collapse_plan()` refuses `collapse_plan_unavailable`;
   the schedule degrades to one full-graph step). Context reductions (`module=` focus,
-  `vis_call_depth`, rolled mode) genuinely re-admit the quality planner.
+  `depth=`, rolled mode) genuinely re-admit the quality planner.
 - The committed collapse reference SVGs (`docs/images/collapse`) are rendered with libpango
   1.52. Hosts with an older Pango (1.44, the Ubuntu 20.04 packages) lay text out at different
   widths, so `scripts/render_collapse_reference.py --check` and the schema-lockstep
@@ -550,6 +558,16 @@
   (CPU: largest pass; CUDA: device high-water growth), and `total_backward_memory` counts
   retained gradient storage once. `measure_host_peak_memory` is a session-time knob
   (`FieldPolicy.DROP`) that reruns and refreshes inherit.
+- ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
+  installs a dispatch mode for the forward (and for `backward()` with `backward_ready=True`)
+  and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`
+  rows. `trace.has_aten_ops` reports whether rows exist (also after `tl.load` of an artifact saved
+  from such a capture), `trace.aten_ops` is every row in dispatch order, `op.aten_ops` the rows an
+  op's call dispatched, and `trace.aten_gaps` the disclosed interiors the recorder could not
+  observe (empty when complete). With the switch off nothing is installed and every accessor
+  except `has_aten_ops` raises `tl.errors.AtenOpsUnavailableError` (`aten_ops_unavailable`),
+  naming the switch; `run()` refreshes inherit the knob, `run(fast=True)` results and non-torch
+  backends record nothing. GPU kernel recording is out of scope.
   `CaptureOptions(measure_python_peak_memory=True)` additionally folds in a `tracemalloc`
   Python-allocation peak, which stays positive for tiny models. It is OFF by default because
   the allocator hook costs 1.7x-2.5x total capture time on real CNNs/ViTs. The flag is a
@@ -614,7 +632,7 @@
   alias-aware, but this is not a general OOM guarantee: the forward, transform-only deltas, and
   cross-device temporaries can allocate first. A float sets another fraction, an int an absolute
   cap, and `None` disables it. Predicate-selected disk-only saves are exempt; exhaustive
-  `capture=tl.options.CaptureOptions(layers_to_save="all")` plus `to_disk(...)` remains budgeted
+  `save="all"` plus `to_disk(...)` remains budgeted
   until postprocess eviction (the former bare flat
   `layers_to_save=` kwarg is removed). Unmeasurable auto
   devices warn on first charge and require an absolute budget for enforcement. The reported figure
@@ -635,7 +653,7 @@
   every payload into RAM while the bundle kept the first capture (behaviour-net IO-8). Capture
   again with `to_disk` to a new path or without `to_disk` and run that trace; a trace loaded from
   the bundle keeps its loaded providers. `Trace.save` / `Bundle.save` to an existing path refuse
-  `bundle_save_failed` without `overwrite=True` (no builtin `FileExistsError`).
+  `bundle_path_exists` without `overwrite=True` (no builtin `FileExistsError`).
 - `torch.compile` coexists with capture as a boundary UPGRADE on torch >= 2.6 and a graceful
   boundary below. Behind the feature-detected `HAS_SET_STANCE` flag, every capture holds the public
   `torch.compiler.set_stance("force_eager")` scoped to the forward (skipped when Dynamo was never
@@ -685,8 +703,8 @@
   Files saved by torchlens 2.x: a manifest stamp or Trace state stamp older than the current
   `tlspec_version`, a pickled 2.x module path, or the 2.16 ModelLog format refuses at
   `tl.load` with the typed `tl.errors.ArtifactTooOldError` ("saved by torchlens 2.x"; the
-  remedy names 2.36.x and re-capture). There is no reader, ledger or migration. Legacy 2.16
-  intervention specs remain loadable — the refusal covers Trace rehydration only. WRITE/READ SYMMETRY (W051-IO): the
+  remedy: load it with 2.36.x, or capture again). There is no reader, ledger or migration. The
+  2.16 intervention spec format (`format_version` 1) refuses the same way. WRITE/READ SYMMETRY (W051-IO): the
   save path dry-runs the exact `metadata.pkl` bytes through the loader's default-deny
   unpickler before writing — an unportable value refuses typed (`annotation_value_unportable`
   naming the key path / `metadata_value_unportable`), tensors under annotations (incl.
@@ -775,8 +793,8 @@
   (capability contract: `docs/reference/structure_only_capabilities.md`), and
   value-dependent branches refuse DEVICE-NEUTRALLY with the user's exact
   source line (`value_dependent_branch_unsupported`; missing meta kernels
-  refuse `meta_kernel_unavailable`). Option conflicts (`raise_on_nan`,
-  `replayable`, not-provably-value-free `halt=`) refuse
+  refuse `meta_kernel_unavailable`). Option conflicts (`on_nonfinite='raise'`,
+  `replayable`, not-provably-value-free `stop_after=`) refuse
   `structure_only_option_conflict` at entry. `trace.options.structure_only` mirrors
   the flag (persisted as of the tlspec v8 bump with M-C2/M-C3 load-validation
   rows); `trace.discharge_against(real_trace)` corroborates or refutes the
@@ -832,6 +850,12 @@
   `SelectionError` with `selection_unresolvable` + a closed reason set.
   Producers: `tl.units(site, indices)`, `tl.param(name, mask=None)`,
   `tl.random_like(like=, within=, seed=)` (seeded size-matched control).
+  Unit-level influence: `view.of(units, within=None, method="geometric",
+  probe_budget=256)` on a `receptive_field` / `projective_field` view is the
+  many-unit form of `.at()`: the units `tl.units` takes, a trace-bound Selection
+  back, one region per `within=` site (default model outputs / model inputs),
+  `provenance.basis` and `provenance.field_status` stated; refusals
+  `influence_geometry_unavailable` and `influence_probe_budget`.
   VALUE + STATISTICAL PRODUCERS (producer wave; DOCUMENTED-UNSTABLE):
   `tl.top_k(within, k, by=, largest=)` / `tl.top_fraction(within, fraction)`
   (global deterministic ranking over the population; too-few rankable
@@ -959,7 +983,9 @@
   refuses `slice_save_unsupported`; `__selection__` lifts the member family
   back into the algebra (slices compose and feed `do()`).
   `trace.subgraph(selection)` is the general door presenting ANY ACT region
-  as the same view. Session-time only; never persisted.
+  as the same view. Session-time only; never persisted. Doc of record for what the
+  algebra can and cannot express (completeness, necessity of the closure producers):
+  `docs/reference/selection_completeness.md`.
   `torchlens/_selection/compare.py`).
   CROSS-RUN (L6 stage 4a; DOCUMENTED-UNSTABLE): `resolved.align_to(target)`
   re-binds an ACT selection onto another trace keyed on the L1 structural
@@ -1097,17 +1123,6 @@
   `torchlens._ir.events.BackwardPassEnd.close_path` disclosure is sidecar-event-only in wave 2.
   GROUPED FLOOR -- `trace.grad_fn_site_summary` rolls backward facts up per
   L1 site_key (read-only; keyless legacy refuses `site_key_unavailable`).
-- PREDICATE RUNTIME EXTENSION POINT (S4 seam; every spelling
-  DOCUMENTED-UNSTABLE pending naming-session ratification):
-  `torchlens._ir.predicate_registry` is the ONE documented door through which
-  predicate consumers accept user predicates for the capture-lifecycle
-  `save`/`halt`/`until` slots (`PredicateProtocol` — one positional concrete
-  `RecordContext`; `coerce_predicate(value, slot=...)` — raw callables incl.
-  `BaseSelector` instances returned BY IDENTITY, registered names via a
-  slot-aware enforcing wrapper; `register_predicate(name)` — mutates nothing
-  on the user's object, stamps no loader-consulted attribute). The registry
-  is INERT until consumers adopt name acceptance. `intervene=`/grad slots are
-  outside the contract. Contract: `docs/reference/predicate_runtime.md`.
 - NETRON EXPORT v2 (F14; every kwarg spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.export.netron(log, path=None, *, granularity="module"|"op"|"rolled",
   depth=1, show_buffers="never"|"meaningful"|"always", attachment=None, serve=False,
@@ -1302,16 +1317,9 @@
   is the user-facing verbs door.
 - ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
   `plugins` (entry-point discovery that NEVER executes third-party code at discovery; kill
-  switch). The compatibility window and `tl.migrate` left with the 2.x saved-file readers:
-  a file saved by torchlens 2.x refuses at `tl.load` with one typed error.
-  `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
-  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`
-  (v2: `maturity`, `framework_requirement`, `capabilities`, `roster_groups`,
-  `graduation`), `ScorecardCell`, `PREVIEW_BACKENDS`, `graduation_report`
-  (`GraduationReport`, `GraduationItem`), `RosterModel.expected_op_kinds`
-  (the op-inventory check that fails when a backend silently drops an op) and the
-  protocol roster fields `RosterModel.expected_intermediates`,
-  `RosterModel.has_constants`, `RosterModel.random_init` and `RosterModel.group`.
+  switch). A file saved by torchlens 2.x refuses at `tl.load` with one typed error.
+  `tests/conformance/` (a test-side harness, not shipped in the wheel) holds the C0-C2 packs and the
+  preview-backend scorecard builder; the shipped records stay in `torchlens/backends/<name>/scorecard.json`.
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
@@ -1322,7 +1330,7 @@
   sampled evidence; values are `mean`, `std`, `finite_min`, `finite_max`,
   `numel`, and `nbytes`. The counts are `num_nan`, `num_posinf`, `num_neginf`.
   Sampled narration has `nonfinite_evidence.policy="unavailable"` with a reason.
-  Reuse with a positive `track_nonfinite` verdict has policy `"verdict"` for that
+  Reuse with a positive `on_nonfinite='track'` verdict has policy `"verdict"` for that
   family and renders "nonfinite present" with no count; a negative verdict has
   policy `"exact"`, reason `"track_nonfinite"`, and zero counts.
 - `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
@@ -1638,9 +1646,9 @@
   `Gemma2RMSNorm` serves `inv_rms` (its `rsqrt` output). Doc of record:
   `docs/reference/attribution.md`.
 - Attribution graph overlay and uploads (DOCUMENTED-UNSTABLE):
-  `tl.attribution.overlay(trace, graph, *, reduce="abs_sum", graph_value=None)` paints each
-  site holding feature or error nodes with the `reduce` total of its nodes' influence
-  (`graph_value="activation"`: feature activations) for `trace.draw(color_by=...)`.
+  `trace.draw(color_by=graph)` paints each site holding feature or error nodes with the
+  `abs_sum` total of its nodes' influence (a site-to-value mapping paints feature activations
+  or any other quantity).
   `tl.attribution.graph.upload_to_neuronpedia(exported, *, api_key)` publishes the dict
   `to_neuronpedia` returned (or its file) through Neuronpedia's documented two-step upload and
   returns the page URL; `Direction.upload_to_neuronpedia(*, api_key, scan, vector_label,
@@ -1695,7 +1703,7 @@
   recorder vocabulary is `tl.recording.GradRecord`, `tl.recording.DryRun`, `tl.recording.stop()` and
   `tl.recording.StopSignal`; a stopped capture settles `CaptureStatus.STOPPED` (value `"stopped"`).
   `tl.types.TraceLike` is the read protocol `Trace` and `Recording` share. The seven read-only
-  group views a Trace serves are `tl.types.TraceProvenance`, `tl.types.TraceOptions`,
+  group views a Trace serves are `tl.types.TraceProvenance`, `tl.types.TraceSettings`,
   `tl.types.TraceCost`, `tl.types.TraceSource`, `tl.types.TraceHealth`, `tl.types.TraceGraph` and
   `tl.types.TraceAutograd` (`trace.provenance`, `trace.options`, `trace.cost`, `trace.source`,
   `trace.health`, `trace.graph`, `trace.autograd`); callers read them, never construct them. The backend registry
@@ -1806,9 +1814,22 @@ object's docstring):
 - `tl.debug.BackwardNanReport`: Result of `bisect_nan_backward`.
 - `tl.debug.BisectNanReport`: Result returned by `bisect_nan`.
 - `tl.debug.BisectPrecisionReport`: Result of `bisect_precision`.
+- `tl.debug.CheckFinding`: One immutable finding recorded by a training-loop check.
+- `tl.debug.CheckReport`: Deterministically finalized report of the findings a checks session collected.
+- `tl.debug.ChecksSession`: Standalone, capture-free registry of training-loop checks bound to a model and optimizer.
+- `tl.debug.ClipLedger`: Clip-saturation evidence in three tiers, never a silent guess.
+- `tl.debug.ClipLedgerSnapshot`: Frozen clip-saturation facts, tiered and honest.
 - `tl.debug.FindNanReport`: Structured first-non-finite diagnostic returned by `find_nan`.
 - `tl.debug.GuessInputShapeReport`: Result returned by `guess_input_shape`.
 - `tl.debug.LineageReport`: Result returned by `lineage`.
+- `tl.debug.LivenessProbe`: Liveness statistic recorder; never a verdict.
+- `tl.debug.OptimizerFacts`: Adapter-read facts about one optimizer.
+- `tl.debug.RangeProbe`: Opt-in live semantic range check per site.
+- `tl.debug.ScaleLedger`: The decrement-counting mixed-precision skip ledger.
+- `tl.debug.ScaleLedgerSnapshot`: Frozen skip and scale ledger facts for reports and events.
+- `tl.debug.ScanRow`: Health facts for one unique tensor in a parameter scan.
+- `tl.debug.Watchdog`: Death-spiral watchdog: warns when no step is ever accepted.
+- `tl.debug.WatchdogSnapshot`: Frozen death-spiral watchdog state.
 - `tl.differential.DiffReport`: The settled two-capture differential: rows plus honest totals.
 - `tl.differential.diff`: Settle two captures into the guarded differential projection.
 - `tl.distributed.is_vetted_build`: Capability probe: does this torch build match a censused snapshot?
@@ -1915,4 +1936,4 @@ object's docstring):
   admits `verdict` for presence without counts. `TensorStats.num_nan`,
   `TensorStats.num_posinf`, and `TensorStats.num_neginf` are optional exact counts;
   `TensorStats.num_nonfinite` and `TensorStats.num_finite` are `None` if any count
-  is unknown. Reused `track_nonfinite` false verdicts carry an exact zero census.
+  is unknown. Reused `on_nonfinite='track'` false verdicts carry an exact zero census.

@@ -50,8 +50,9 @@ def _backward_trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     captured = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True, save_grads="all"),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, save_grads="all", save_mode="reference"
+        ),
     )
     output = captured.output_ops[0].out
     captured.backward(output)
@@ -175,8 +176,9 @@ def test_multi_backward_requires_bwd_selector() -> None:
     captured = tl.trace(
         _Summed(),
         torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, save_grads="all"),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, save_grads="all", save_mode="reference"
+        ),
     )
     try:
         output = captured.output_ops[0].out

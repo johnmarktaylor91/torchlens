@@ -399,7 +399,7 @@ def _storage_view_trace(
     model = model_cls()
     x = torch.rand(4)
     ground_truth = copy.deepcopy(model)(x)
-    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_args=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(save_args=True), save="all")
     set_op = next(op for op in trace._layer_list if op.func_name == "set_")
     return model, trace, ground_truth, set_op
 

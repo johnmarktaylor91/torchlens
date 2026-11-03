@@ -284,7 +284,7 @@ def test_raise_on_nan_fires_on_a_non_finite_fp8_activation() -> None:
         tl.trace(
             Fp8NonFinite(),
             torch.ones(1, 2),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
     message = str(excinfo.value)
     assert "non-finite" in message
@@ -368,7 +368,7 @@ def test_unrunnable_nonfinite_check_warns_instead_of_reading_as_clean(monkeypatc
         tl.trace(
             BFloatModel(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
 
     skipped = [item for item in caught if "UNCHECKED for NaN/Inf" in str(item.message)]
@@ -385,7 +385,7 @@ def test_clean_fp8_capture_does_not_trip_raise_on_nan() -> None:
     trace = tl.trace(
         _Fp8CastModel(torch.float8_e4m3fn),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(raise_on_nan=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="raise"),
     )
     assert trace.num_params > 0
 
