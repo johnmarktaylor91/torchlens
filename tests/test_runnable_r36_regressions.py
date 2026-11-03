@@ -24,7 +24,6 @@ stage 4 (positive origin resolution) and guard against over-trigger regressions.
 
 from __future__ import annotations
 
-import json
 import os
 import random
 import subprocess
@@ -38,6 +37,7 @@ from typing import Any, NamedTuple
 import numpy as np
 import pytest
 import torch
+from _format3_envelope import mutate_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
@@ -941,10 +941,9 @@ class TestContextFieldValidation:
         # diagnostic (still a pre-callable refusal, but the pinned surface here is
         # the typed context_field_invalid readiness).
         trace.save(bundle, level="runnable")
-        manifest_path = bundle / "manifest.json"
-        manifest = json.loads(manifest_path.read_text())
-        mutate(manifest)
-        manifest_path.write_text(json.dumps(manifest))
+        # Format 3: the runnable descriptor (the 2.x manifest ``run``) is re-digested so
+        # the file-table check holds and the forged context reaches the parser.
+        mutate_runnable_descriptor(bundle, mutate)
         return bundle
 
     # Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
@@ -960,8 +959,8 @@ class TestContextFieldValidation:
     def test_invalid_ambient_field_refuses_typed(
         self, label: str, field: str, value: Any, tmp_path: Path
     ) -> None:
-        def _mutate(manifest: dict[str, Any]) -> None:
-            manifest["run"]["ambient_context"][field] = value
+        def _mutate(descriptor: dict[str, Any]) -> None:
+            descriptor["ambient_context"][field] = value
 
         bundle = self._tampered(tmp_path, _mutate)
         try:

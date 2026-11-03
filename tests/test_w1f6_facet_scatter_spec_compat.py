@@ -15,6 +15,7 @@ graph) stays. Promoting the confirmation verdict to a hard refusal is an owner d
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -172,15 +173,38 @@ def test_facet_write_spec_without_wrapper_refuses_typed() -> None:
 
 @pytest.mark.parametrize("level", ["executable_with_callables", "portable"])
 def test_save_facet_hook_refuses_at_executable_levels(tmp_path: Any, level: str) -> None:
-    """Executable-level saves of facet-slice hooks refuse instead of persisting
-    a spec whose replay would write the whole home tensor."""
+    """Executable-level saves of facet-slice hooks never persist a spec whose
+    replay would write the whole home tensor.
+
+    Format 3 (docs/maintainers/saved_format_3.md section 5) keeps a facet write as a
+    callable placeholder of its capture-bound scatter wrapper, never the raw helper:
+    the portable level refuses ``intervention_spec_not_portable`` and publishes
+    nothing; ``executable_with_callables`` writes a non-executable recipe whose facet
+    rules hold no built-in edit, so no loaded rerun can apply the helper to the whole
+    home tensor (every rerun door refuses a placeholder recipe).
+    """
 
     _, _, clean = _traced_attention()
     edited = clean.fork("facet_save_refusal")
     edited._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
+    path = tmp_path / f"facet_{level}.tlspec"
 
-    with pytest.raises(OpaqueCallableError, match="facet-slice hook"):
-        edited.save_intervention(tmp_path / f"facet_{level}.tlspec", level=level)
+    if level == "portable":
+        with pytest.raises(OpaqueCallableError) as caught:
+            edited.save_intervention(path, level=level)
+        assert getattr(caught.value, "fields", {}).get("code") == "intervention_spec_not_portable"
+        assert not path.exists(), "a refused facet save published an artifact"
+        return
+    edited.save_intervention(path, level=level)
+    intervention = json.loads((path / "manifest.json").read_text())["intervention"]
+    assert intervention["executable"] is False
+    recipe = json.loads((path / intervention["file"]).read_text())
+    assert recipe["executable"] is False
+    facet_rules = [rule for rule in recipe["rules"] if rule["metadata"].get("facet_write")]
+    assert facet_rules, "the facet write left no rule in the saved recipe"
+    for rule in facet_rules:
+        assert rule["edit"]["portability"] == "callable_placeholder", rule["edit"]
+        assert rule["edit"]["callable"]["$tl"] == "callable_placeholder"
 
 
 # ---------------------------------------------------------------------------
