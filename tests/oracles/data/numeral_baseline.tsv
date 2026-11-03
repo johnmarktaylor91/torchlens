@@ -7709,8 +7709,6 @@ test-docstrings	tests/test_capture_guard_transactionality.py	617
 test-docstrings	tests/test_capture_outcome_characterization.py	17
 test-docstrings	tests/test_capture_outcome_characterization.py	20
 test-docstrings	tests/test_capture_outcome_gates.py	3.6
-test-docstrings	tests/test_capture_pure_observer.py	100
-test-docstrings	tests/test_capture_outcome_validation_side_channel.py	67
 test-docstrings	tests/test_capture_pure_observer.py	128
 test-docstrings	tests/test_capture_pure_observer.py	64
 test-docstrings	tests/test_capture_settlement.py	23
@@ -8326,12 +8324,6 @@ test-docstrings	tests/test_numbers_truth_compute.py	288
 test-docstrings	tests/test_numbers_truth_compute.py	73
 test-docstrings	tests/test_numbers_truth_compute.py	8,16,
 test-docstrings	tests/test_numbers_truth_execution.py	18
-test-docstrings	tests/test_numbers_truth_external_pins.py	124,439,808
-test-docstrings	tests/test_numbers_truth_external_pins.py	16
-test-docstrings	tests/test_numbers_truth_external_pins.py	192
-test-docstrings	tests/test_numbers_truth_external_pins.py	3,974,725,648
-test-docstrings	tests/test_numbers_truth_external_pins.py	544
-test-docstrings	tests/test_numbers_truth_external_pins.py	8,16,
 test-docstrings	tests/test_numbers_truth_ledger.py	16
 test-docstrings	tests/test_numbers_truth_ledger.py	25
 test-docstrings	tests/test_numbers_truth_ledger.py	541
