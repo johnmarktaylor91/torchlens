@@ -20,6 +20,8 @@ version table, the limitations catalog) lives in
 | `flash_attention_4` | `test_flash_attention_4_capture_and_validate` | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64, one NVIDIA L40 (compute capability 8.9), flash-attn-4 4.0.0b37 | capture gap, flagged: exact output, forward validation fails (strict xfail), witnessed trace marked unverified |
 | Router-logit outputs | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host (CPU tensors) | pass (3 of 3) |
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host, CUDA hidden from the ranks | pass |
+| Router-logit outputs | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass (3 of 3) |
+| DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass: typed refusal on both ranks, torch-native path only (transformers refuses `tp_plan` on MPS machines) |
 
 ### Router-logit outputs
 
@@ -47,7 +49,11 @@ capture a rank-local dense copy of the module.
 
 Transformers applies a `tp_plan` only when the rank layout is in the process
 environment (`RANK`, `WORLD_SIZE`, `LOCAL_RANK`); without it the checkpoint
-loads unsharded and there is no tensor parallelism to test.
+loads unsharded and there is no tensor parallelism to test. On macOS, transformers
+refuses a `tp_plan` on any machine with an MPS device, so only the torch-native
+path runs there, and `gloo` needs the loopback interface for a local mesh
+(`GLOO_SOCKET_IFNAME=lo0`; the test sets it when unset), else the shard scatter
+waits out its timeout.
 
 ### `flash_attention_4`
 
