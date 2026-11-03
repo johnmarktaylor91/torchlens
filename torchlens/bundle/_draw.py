@@ -59,7 +59,7 @@ def _draw_diff(bundle: Bundle, stem: str, fmt: str, options: dict[str, Any]) -> 
         right=right,
         on=options["on"],
         path=stem,
-        vis_save_only=not options["open_viewer"],
+        open_viewer=options["open_viewer"],
         file_format=fmt,
         theme=theme if theme is not None else "paper",
     )
