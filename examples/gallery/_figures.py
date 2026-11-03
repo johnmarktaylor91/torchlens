@@ -263,11 +263,12 @@ def draw_cnn_fields(out: Path) -> list[Path]:
         )
         left.add_patch(Rectangle((q0 - 0.5, p0 - 0.5), q1 - q0, p1 - p0, color=GREEN))
         left.text(
-            q1 + 0.03 * side,
-            p0 - 0.015 * side,
+            (q0 + q1 - 1) / 2,
+            p0 - 0.03 * side,
             f"{q1 - q0} x {p1 - p0} patch zeroed",
             color=INK,
             fontsize=SMALL,
+            ha="center",
             va="bottom",
             bbox={"facecolor": "white", "edgecolor": GREEN, "alpha": 0.9, "pad": 1.5},
         )
@@ -372,15 +373,19 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
             image = panel.imshow(rdm, cmap="cividis", vmin=0, vmax=top, interpolation="nearest")
             panel.set_title(stage)
             panel.set(xticks=[], yticks=[])
-        panels[0].set_ylabel(f"TorchLens RDM\n({n_stimuli} x {n_stimuli} stimuli)")
+        panels[0].set_ylabel("TorchLens\nRDM")
         bar = fig.colorbar(
-            image, cax=fig.add_subplot(spec[0, -1]), label="Dissimilarity (1 − r)\nof two stimuli"
+            image,
+            cax=fig.add_subplot(spec[0, -1]),
+            label="Dissimilarity\n(1 − r)",
+            ticks=np.linspace(0, top, 4),
         )
         bar.ax.tick_params(labelsize=13.5)  # single digits read small
         curve = fig.add_subplot(spec[1, :])
         curve.set_title(
-            f"{arch}, {n_stimuli} Fashion-MNIST images\nRDM = representational dissimilarity "
-            f"matrix over the stimuli\nthe {len(rdms)} stage RDMs above are TorchLens's",
+            f"{arch}; {n_stimuli} Fashion-MNIST images, so each RDM (representational "
+            f"dissimilarity matrix)\nis {n_stimuli} x {n_stimuli}; the {len(rdms)} stage RDMs "
+            "above are TorchLens's",
             loc="left",
             fontsize=SMALL,
             color=MUTED,
@@ -389,17 +394,15 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
         curve.plot(x, [shuffled[k] for k in keys], "s--", color=BLUE, lw=2, ms=5)
         curve.text(
             x.mean(),
-            1.05,
-            f"aligned order: must reach {correlation_min:g} "
-            f"(all {len(keys)} round to {min(aligned.values()):.3f})",
+            min(aligned.values()) - 0.05,
+            f"aligned order: pass bar {correlation_min:g}",
             ha="center",
-            va="bottom",
+            va="top",
         )
         curve.text(
             x.mean(),
             min(shuffled.values()) - 0.06,
-            f"one side shuffled: must stay below {shuffled_max:g} "
-            f"(all at or below {max(shuffled.values()):.2f})",
+            "one side shuffled",
             ha="center",
             va="top",
             color=BLUE,
@@ -407,15 +410,15 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
         curve.plot(
             [-0.6, x[-1] + 0.4],
             [shuffled_max, shuffled_max],
-            color=GREY,
-            linestyle=":",
-            lw=1,
+            color=MUTED,
+            linestyle="--",
+            lw=1.4,
             zorder=0,
         )
         curve.text(
             -0.4,
             shuffled_max - 0.03,
-            f"control bar {shuffled_max:g}",
+            f"control bar {shuffled_max:g}: shuffled r must stay below it",
             va="top",
             fontsize=SMALL,
             color=MUTED,
@@ -426,16 +429,19 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
             xticks=x,
             xticklabels=[label if i % 2 == 0 else f"\n{label}" for i, label in enumerate(labels)],
             xlim=(-0.6, len(keys) - 0.4),
-            ylim=(-0.4, 1.25),
+            ylim=(-0.4, 1.08),
+            yticks=(-0.25, 0, 0.25, 0.5, 0.75, 1.0),
             ylabel="Pearson r between the TorchLens RDM\nand the plain-hooks RDM",
             xlabel="Site: the selected stages, then each residual addition in execution order",
         )
         curve.tick_params(axis="x", labelsize=SMALL)
+        curve.tick_params(axis="y", labelsize=13.5)
         curve.grid(axis="y")
         fig.suptitle(
             f"All {len(keys)} sites match the plain-hooks RDMs (r rounds to "
             f"{min(aligned.values()):.3f}; bar {correlation_min:g});\n"
-            f"shuffling one side's stimulus order drops r to {max(shuffled.values()):.2f} or less",
+            "shuffling one side's stimulus order drops r to "
+            f"{_num(max(shuffled.values()), '.3f')} at most",
             fontsize=TITLE,
         )
         return _save(fig, out, "neuro_rdms")
@@ -471,10 +477,11 @@ def _draw_ioi_roc(data: dict[str, Any], out: Path) -> list[Path]:
         ax.plot(roc[:, 0], roc[:, 1], color=BLUE, lw=2.2, zorder=2)
         ax.scatter([data["fpr_at_k"]], [data["recall_at_k"]], s=48, color=VERMILION, zorder=3)
         ax.annotate(
-            f"cutoff at the top {data['k']} heads: {data['recall_at_k']:.0%} of Wang's {positives}",
+            f"cutoff at the top {data['k']} heads:\n{data['recall_at_k']:.0%} of Wang's {positives}",
             (data["fpr_at_k"], data["recall_at_k"]),
-            xytext=(data["fpr_at_k"] + 0.06, data["recall_at_k"] - 0.1),
+            xytext=(data["fpr_at_k"] + 0.02, data["recall_at_k"] - 0.15),
             color=INK,
+            va="top",
             arrowprops={"arrowstyle": "-", "color": VERMILION, "lw": 0.8},
         )
         ax.set(
@@ -487,7 +494,7 @@ def _draw_ioi_roc(data: dict[str, Any], out: Path) -> list[Path]:
         setup = "GPT-2 small, one run"
         if "rows" in data and "steps" in data:
             setup = f"GPT-2 small, {data['rows']:,} IOI rows, {data['steps']} integration steps, one run"
-        setup += "; dotted diagonal: chance"
+        setup += ";\ndotted diagonal: chance"
         ax.set_title(setup, loc="left", color=MUTED)
         fig.suptitle(
             f"Summed outgoing attribution separates Wang's {positives} IOI heads\n"
@@ -500,6 +507,7 @@ def _draw_ioi_roc(data: dict[str, Any], out: Path) -> list[Path]:
 def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
     """Draw the strongest directed head-to-head edges with Wang's classes coloured."""
     import matplotlib.pyplot as plt
+    from matplotlib.patheffects import withStroke
 
     groups: dict[str, list[list[int]]] = data["groups"]
     edges: list[dict[str, Any]] = data["edges"]
@@ -508,31 +516,30 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
     class_of = {tuple(pair): label for label, pairs in groups.items() for pair in pairs}
     ends = [class_of.get(tuple(edge["target"]), "other") for edge in edges]
     top_class = max(set(ends), key=lambda label: (ends.count(label), label))
-    # Edges into one head fan out with distinct curvatures so their arrowheads stay apart.
-    fan_in: dict[tuple[int, int], int] = {}
-    for edge in edges:
-        fan_in[tuple(edge["target"])] = fan_in.get(tuple(edge["target"]), 0) + 1
-    seen: dict[tuple[int, int], int] = {}
+    joined = sum(
+        1 for e in edges if tuple(e["source"]) in class_of and tuple(e["target"]) in class_of
+    )
+    sizes = [abs(float(edge["score"])) for edge in edges]
+    low, high = min(sizes), max(sizes)
     with plt.rc_context(STYLE):
         fig, ax = plt.subplots(figsize=(WIDTH + 0.2, 5.8), layout="constrained")
-        for edge in edges:
-            target = tuple(edge["target"])
-            rank = seen.get(target, 0)
-            seen[target] = rank + 1
-            rad = 0.16 * (rank - (fan_in[target] - 1) / 2)
+        for edge, start, end, rad in _edge_geometry(edges):
+            share = (abs(float(edge["score"])) - low) / (high - low) if high > low else 1.0
+            width = 0.9 + 2.0 * share
             ax.annotate(
                 "",
-                target,
-                tuple(edge["source"]),
+                end,
+                start,
                 arrowprops={
                     "arrowstyle": "-|>,head_length=0.5,head_width=0.25",
                     "color": MUTED,
-                    "lw": 1.4,
-                    "shrinkA": 4,
-                    "shrinkB": 5,
+                    "lw": width,
+                    "shrinkA": 0,
+                    "shrinkB": 0,
                     "connectionstyle": f"arc3,rad={rad:.2f}",
+                    "path_effects": [withStroke(linewidth=width + 2.4, foreground="white")],
                 },
-                zorder=1,
+                zorder=4,
             )
         ax.scatter(
             [layer for layer in range(layers) for _ in range(per_layer)],
@@ -565,12 +572,56 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
             fontsize=SMALL,
             columnspacing=2.4,
             title=f"Wang's head classes (grey: other heads); arrows: the {len(edges)} largest "
-            "absolute edge scores",
+            f"absolute edge scores,\nwidth by |score| ({low:.2f} thinnest to {high:.2f} thickest)",
             title_fontsize=SMALL,
         )
+        count = "All" if joined == len(edges) else f"{joined} of the"
         fig.suptitle(
-            f"The {len(edges)} strongest head-to-head edges: {ends.count(top_class)} of them end at "
-            f"{top_class} heads",
+            f"{count} {len(edges)} strongest head-to-head edges join Wang's head classes;\n"
+            f"{ends.count(top_class)} of them end at {top_class} heads",
             fontsize=TITLE,
         )
         return _save(fig, out, "ioi_circuit")
+
+
+def _edge_geometry(
+    edges: list[dict[str, Any]],
+) -> list[tuple[dict[str, Any], tuple[float, float], tuple[float, float], float]]:
+    """Return ``(edge, start, end, curvature)`` with the ends spread around each head.
+
+    Arrows into one head leave and land at distinct points on a small circle around the
+    dot, and their curvatures differ, so the arrowheads stay apart and a reader can count
+    them. Arrows are drawn above the dots with a white halo, so a line passing a head it
+    does not touch stays visibly continuous.
+    """
+    import math
+
+    fan_in: dict[tuple[int, int], int] = {}
+    fan_out: dict[tuple[int, int], int] = {}
+    for edge in edges:
+        fan_in[tuple(edge["target"])] = fan_in.get(tuple(edge["target"]), 0) + 1
+        fan_out[tuple(edge["source"])] = fan_out.get(tuple(edge["source"]), 0) + 1
+    seen_in: dict[tuple[int, int], int] = {}
+    seen_out: dict[tuple[int, int], int] = {}
+    geometry = []
+    for edge in edges:
+        source, target = tuple(edge["source"]), tuple(edge["target"])
+        rank_in = seen_in.get(target, 0)
+        rank_out = seen_out.get(source, 0)
+        seen_in[target], seen_out[source] = rank_in + 1, rank_out + 1
+        offset_in = 0.6 * (rank_in - (fan_in[target] - 1) / 2)
+        offset_out = 0.6 * (rank_out - (fan_out[source] - 1) / 2)
+        theta = math.atan2(source[1] - target[1], source[0] - target[0])
+        end = (
+            target[0] + 0.32 * math.cos(theta + offset_in),
+            target[1] + 0.32 * math.sin(theta + offset_in),
+        )
+        start = (
+            source[0] - 0.26 * math.cos(theta - offset_out),
+            source[1] - 0.26 * math.sin(theta - offset_out),
+        )
+        rad = 0.18 * (rank_in - (fan_in[target] - 1) / 2) + 0.12 * (
+            rank_out - (fan_out[source] - 1) / 2
+        )
+        geometry.append((edge, start, end, rad))
+    return geometry
