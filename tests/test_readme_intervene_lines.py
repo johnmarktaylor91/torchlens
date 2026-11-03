@@ -192,7 +192,7 @@ def test_readme_gelu_line_on_real_convnext_tiny() -> None:
     handles = [
         module.register_forward_hook(lambda m, i, o: torch.zeros_like(o))
         for name, module in model.named_modules()
-        if name.startswith("stages.2.") and isinstance(module, torch.nn.GELU)
+        if name.startswith("stages.2.") and type(module).__name__ == "GELU"  # timm's own GELU class
     ]
     assert len(handles) == 9
     try:
