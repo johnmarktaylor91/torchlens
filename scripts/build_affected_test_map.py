@@ -302,7 +302,7 @@ def _lazy_rows(value: ast.expr) -> Iterator[tuple[str, str, str | None]]:
     """
     if not isinstance(value, ast.Dict):
         return
-    for key, item in zip(value.keys, value.values):
+    for key, item in zip(value.keys, value.values, strict=True):
         if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
             continue
         if isinstance(item, ast.Tuple) and len(item.elts) == 2:
