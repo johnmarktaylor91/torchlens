@@ -344,18 +344,8 @@ for facade_name, module_path in facades.items():
         and pkgutil.iter_modules(eager_module.__path__, eager_module.__name__ + ".")
     }
     collisions[facade_name] = sorted(set(public_names) & child_modules)
-    expected_exports = {}
-    if facade_name == "recording":
-        for public_name in collisions[facade_name]:
-            child_module = importlib.import_module(f"{module_path}.{public_name}")
-            assert vars(eager_module)[public_name] is child_module
-            source_module, source_name = eager_module._LAZY_ATTRS[public_name]
-            expected_exports[public_name] = getattr(
-                importlib.import_module(source_module), source_name
-            )
     for public_name in public_names:
-        expected = expected_exports.get(public_name, getattr(eager_module, public_name))
-        assert getattr(facade_module, public_name) is expected
+        assert getattr(facade_module, public_name) is getattr(eager_module, public_name)
 
 # P00-fallout refresh (oracles wave 0, 2026-08-26): the shim-removal fallout
 # added four root facades (accessors, backends, types, visualization) whose
@@ -391,23 +381,20 @@ assert collisions == {
     "dataset_extraction": [], "debug": [], "distributed": [],
     "errors": [], "examples": [],
     "experimental": ["dagua", "node_styles"], "export": [],
-    # T48 reconcile: intervention's __all__ gained the compose child module
-    # (F02 stochastic-edit family). The 2.x rename removed sites and renamed
-    # reference to population, the name of its defining child module (the
-    # function is bound over the submodule attribute at package import, as
-    # compose is).
-    "recording": ["dry_run", "recover"], "intervention": ["compose", "population"],
+    # Surface ruling surface.6: the child modules that shared a public export's
+    # name (recording dry_run/recover, intervention compose/population,
+    # receptive_field rules, viz feature_maps) are underscore-private now.
+    "recording": [], "intervention": [],
     "fingerprint": [], "io": [], "observers": [], "options": [],
     "report": [], "repgeom": [],
-    "receptive_field": ["rules"], "stats": [],
+    "receptive_field": [], "stats": [],
     # C04: the transforms facade's children are all underscore-private.
     "transforms": [],
     "types": [],
     "validation": [],
     # Visuals rename: tl.viz exports its nodes child module (the node-visual
-    # factories namespace), and the feature_maps function shares its module's
-    # name; the package imports the function eagerly, so the root keeps it.
-    "viz": ["feature_maps", "nodes"],
+    # factories namespace).
+    "viz": ["nodes"],
 }
 
 """
