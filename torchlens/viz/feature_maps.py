@@ -11,10 +11,10 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
+from .._plots.node_plots import _apply_colormap, _normalize_finite
 from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import ensure_trace_visualizer_dir
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
-from .node_plots import _apply_colormap, _normalize_finite
 
 FeatureMapEvolution: TypeAlias = "OrderedDict[str, torch.Tensor]"
 FeatureMapChannels: TypeAlias = Sequence[int] | Literal["top"] | None

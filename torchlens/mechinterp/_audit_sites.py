@@ -25,7 +25,7 @@ from typing import Any
 import torch
 from torch import Tensor
 
-from torchlens.attribution._audit_claims import _setting_error
+from torchlens.mechinterp._audit_claims import _setting_error
 
 
 @dataclass(frozen=True)

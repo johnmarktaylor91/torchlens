@@ -148,6 +148,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "dataset_extraction": "L5",
     "_extraction": "L5",
     "debug": "L5",
+    # Pixel plotting helpers shared by the reads packages (no internal imports).
+    "_plots": "L5",
     "checks": "L5",
     # -- L6 APPLIANCES ---------------------------------------------------------
     "_semantic": "L6",

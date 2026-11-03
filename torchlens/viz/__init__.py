@@ -10,12 +10,12 @@ from typing import Any
 
 import torch
 
+from .._plots.node_plots import heatmap, image_scatter, lineplot
 from .._visualization.bundle_diff import bundle_diff
 from .._visualization.node_spec import NodeSpec
 from . import batch_summary as _batch_summary, nodes
 from .batch_summary import montage
 from .feature_maps import feature_maps
-from .node_plots import heatmap, image_scatter, lineplot
 
 __all__ = [
     "NodeSpec",

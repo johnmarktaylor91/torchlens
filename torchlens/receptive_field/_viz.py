@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from PIL import Image, ImageDraw
 
+from .._plots import node_plots
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
-from ..viz import node_plots
 from ._errors import (
     AmbiguousInputError,
     ReceptiveFieldConfigurationError,
