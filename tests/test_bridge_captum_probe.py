@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 from types import SimpleNamespace
 
 import pytest
@@ -29,8 +30,11 @@ def test_probe_is_an_identity_module_that_names_its_site() -> None:
 def test_probe_refuses_once_its_model_is_collected() -> None:
     """A probe outliving its model refuses to run instead of resurrecting it."""
 
-    probe = captum._SiteProbe(nn.Identity(), "s1|x|relu||1", "relu_1_1")
-    assert isinstance(probe.model(), nn.Identity)
+    model = nn.Identity()
+    probe = captum._SiteProbe(model, "s1|x|relu||1", "relu_1_1")
+    assert probe.model() is model
+    del model
+    gc.collect()
     with pytest.raises(ValueError, match="outlived"):
         probe.model()
 

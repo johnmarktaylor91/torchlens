@@ -27,7 +27,9 @@ pytestmark = [pytest.mark.optional]
 
 _TARGET = 3
 _N_STEPS = 4
-_IG_METHOD = "riemann_trapezoid"
+# Captum's default approximation; its ``method=`` kwarg cannot travel through
+# ``tl.bridge.captum.attribute``, whose second parameter is also ``method``.
+_IG_METHOD = "gausslegendre"
 
 
 def _outermost(layer: Any) -> str | None:
@@ -148,7 +150,7 @@ def _add_label(log: Any) -> str:
 
     second_relu = [layer for layer in log.layer_list if "layer4.1.relu:2" in _module_calls(layer)]
     assert len(second_relu) == 1, second_relu
-    parents = list(second_relu[0].parent_labels)
+    parents = list(second_relu[0].parents)
     assert len(parents) == 1, parents
     label = str(parents[0])
     assert log[label].output_of_module_calls in ((), [], None), "the add is not a module output"
@@ -179,9 +181,7 @@ def test_functional_add_site_is_a_captum_layer(resnet) -> None:
     relu = model.layer4[1].relu
     cam = _bridged(log, captum_attr.LayerGradCam, label, x)
     torch.testing.assert_close(cam, _gradcam_by_hand(model, x, relu, 2, "input"))
-    lig = _bridged(
-        log, captum_attr.LayerIntegratedGradients, label, x, n_steps=_N_STEPS, method=_IG_METHOD
-    )
+    lig = _bridged(log, captum_attr.LayerIntegratedGradients, label, x, n_steps=_N_STEPS)
     torch.testing.assert_close(lig, _lig_by_hand(model, x, relu, 2, "input"))
     assert lig.shape == cam.shape[:1] + model.layer4[1].conv2.weight.shape[:1] + cam.shape[2:]
     # The spliced forward left the model unhooked and its plain output unchanged.
@@ -206,7 +206,6 @@ def test_pass_index_picks_one_call_of_a_repeated_module(resnet) -> None:
         x,
         pass_index=1,
         n_steps=_N_STEPS,
-        method=_IG_METHOD,
     )
     torch.testing.assert_close(lig_1, _lig_by_hand(model, x, relu, 1, "output"))
     # The second call returns layer4's output, so it resolves to layer4 itself
