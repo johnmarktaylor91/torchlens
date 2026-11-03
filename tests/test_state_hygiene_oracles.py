@@ -40,7 +40,6 @@ from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
     EngineDispatchError,
-    LiveModeLabelError,
     ReplayPreconditionError,
 )
 
@@ -645,22 +644,20 @@ def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
     assert len(staged.records) == 0
 
 
-def test_set_label_rerun_refuses_with_a_set_remedy(mlp) -> None:
-    """Seat 2 F7: ``set(label, value)`` + rerun refuses before the forward, naming ``set()``."""
+def test_set_label_rerun_applies_the_set_value_and_leaves_the_source_staged(mlp) -> None:
+    """``set(label, value)`` + rerun applies the value on new inputs and leaves the spec staged."""
 
     model, x, x2 = mlp
     trace = tl.trace(model, x)
     label = trace.find_sites(tl.module("fc2"))[0].layer_label
-    trace.set(label, torch.full_like(trace[label].out, 0.3), confirm_mutation=True)
+    value = torch.full_like(trace[label].out, 0.3)
+    trace.set(label, value, confirm_mutation=True)
     staged = _staged(trace)
-    readout = trace.output_ops[0].out.clone()
-    with pytest.raises(LiveModeLabelError) as excinfo:
-        trace.run(model, x2)
-    assert excinfo.value.fields["code"] == "rerun_staged_label_unmatchable"
-    assert "Trace.set()" in str(excinfo.value)
-    assert "tl.module(" in str(excinfo.value)
+    result = trace.run(model, x2)
+    assert result is trace
+    assert result.last_run["engine"] in {"rerun", "guarded_fast"}
+    assert torch.equal(trace[label].out, value)
     assert _staged(trace) == staged
-    assert torch.equal(trace.output_ops[0].out, readout)
 
 
 # ---------------------------------------------------------------------------

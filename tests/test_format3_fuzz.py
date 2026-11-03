@@ -63,6 +63,7 @@ def _hashable(rng: random.Random) -> Any:
     return value
 
 
+# Complexity: one bounded recursive generator covers the closed typed-value alternatives.
 def _value(rng: random.Random, depth: int = 0) -> Any:
     if depth >= 4 or rng.random() < 0.35:
         return _scalar(rng)

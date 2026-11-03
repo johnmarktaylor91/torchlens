@@ -14,6 +14,7 @@ Exemption decisions (which ops to skip, which args are structural) are
 delegated to the registries in ``exemptions.py``.
 """
 
+import functools
 import math
 from collections import Counter, defaultdict, deque
 from collections.abc import Sequence
@@ -72,6 +73,12 @@ from ._index_domain import (
     layer_has_index_domain_parent,
 )
 from ._non_pass_record import record_replay_exception as _record_replay_exception
+from ._perturb import _perturb_layer_outs
+from ._pre_replay import (
+    CoreBindings,
+    _is_provable_functionless_source_or_boundary,
+    pre_replay_verdict,
+)
 from ._reduction_depth import _op_reduction_depth
 from ._replay_device import (
     align_output_to_saved_device,
@@ -79,6 +86,7 @@ from ._replay_device import (
     saved_args_on_consumed_devices,
 )
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
+from ._replay_live_params import _restore_live_parameter_args_for_replay
 from ._replay_storage_context import (
     restore_receiver_storage_context,
     write_replay_slot,
@@ -426,11 +434,6 @@ class ValidationCheckResult:
 
         return cls("exempted", reason, justification)
 
-
-# Maximum number of random perturbation attempts before giving up on finding
-# a value different from the original.  Relevant for integer/bool tensors
-# where the value space may be small (e.g., a single-element int tensor).
-MAX_PERTURB_ATTEMPTS = 100
 
 # Deep reduction ops can replay the same FP32 op with tiny differences after
 # many accumulated multiply-adds. Keep this local to validation replay so global
@@ -1363,6 +1366,18 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     return op_has_genuine_replacement_evidence(layer)
 
 
+_PRE_REPLAY_VERDICT = functools.partial(
+    pre_replay_verdict,
+    CoreBindings(ValidationCheckResult, _is_intentional_intervention_replacement),
+)
+"""The pre-replay early exits with this module's result type and replacement predicate."""
+
+_FUNCTIONLESS_SOURCE_OR_BOUNDARY = functools.partial(
+    _is_provable_functionless_source_or_boundary, _is_intentional_intervention_replacement
+)
+"""The functionless source-or-boundary proof with this module's replacement predicate."""
+
+
 def _classify_user_excluded_replay_surface(
     trace: "Trace",
     layer: Op,
@@ -1453,50 +1468,6 @@ def _not_saved_by_user_justification(
         f"save_arg_values={bool(trace._options_save_args)}, "
         f"default_op={default_op}, keep_op={keep_op_name})"
     )
-
-
-def _is_provable_functionless_source_or_boundary(layer: "Op") -> bool:
-    """Return whether a functionless op is a structural source or boundary.
-
-    Parameters
-    ----------
-    layer:
-        Operation pass being validated.
-
-    Returns
-    -------
-    bool
-        True only when captured metadata proves the absence of a callable is
-        expected by design, rather than a lost computational function.
-    """
-
-    if getattr(layer, "func", None) is not None:
-        return False
-    if _is_intentional_intervention_replacement(layer):
-        return True
-    parents = tuple(getattr(layer, "parents", ()) or ())
-    children = tuple(getattr(layer, "children", ()) or ())
-    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
-    has_parent_arg_positions = any(
-        bool(parent_arg_positions.get(arg_type)) for arg_type in ("args", "kwargs")
-    )
-    saved_args = getattr(layer, "saved_args", None)
-    has_saved_args = bool(saved_args)
-    func_call_id = getattr(layer, "func_call_id", None)
-    is_buffer_boundary = (
-        func_call_id is None
-        and bool(getattr(layer, "buffer_source", None))
-        and bool(getattr(layer, "buffer_write_kind", None))
-    )
-    if is_buffer_boundary:
-        return True
-    is_source = (
-        not parents and not has_parent_arg_positions and not has_saved_args and func_call_id is None
-    )
-    if is_source:
-        return True
-    is_output_boundary = bool(parents) and not children and has_parent_arg_positions
-    return is_output_boundary
 
 
 def _resolve_output_entry_for_index(
@@ -1674,7 +1645,7 @@ def _check_layer_arguments_logged_correctly(
         # forward-hook output replacements injected by the user. This skip is
         # deliberately narrow -- it must NOT swallow a real op that merely lost
         # its func, which would mask a capture bug.
-        if _is_provable_functionless_source_or_boundary(target_layer):
+        if _FUNCTIONLESS_SOURCE_OR_BOUNDARY(target_layer):
             continue
 
         # Make sure that all parent layers appear in at least one argument and
@@ -2673,11 +2644,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     _raise_if_replay_arg_version_data_incomplete(self, layer)
 
     # Early exits for layers that cannot or should not be replayed.
-
-    if layer.func is None:
-        if _is_provable_functionless_source_or_boundary(layer):
-            return ValidationCheckResult.exempted("functionless_source_or_boundary")
-        return ValidationCheckResult.failed_result("no_replayable_function")
+    early = _PRE_REPLAY_VERDICT(self, layer, layer_to_validate_parents_for_label, perturb)
+    if early is not None:
+        return early
 
     # Registry 1: skip ALL validation for nondeterministic ops (e.g., empty_like).
     # Membership is proved PER CALL: Tensor.new's value-bearing overloads
@@ -3766,181 +3735,6 @@ def _one_hot_num_classes(layer: Op) -> int | None:
     return None
 
 
-def _restore_live_parameter_args_for_replay(input_args: dict[str, Any], layer: Op) -> None:
-    """Restore live parameter objects into replay args when snapshots still match.
-
-    Some PyTorch kernels, notably oneDNN-backed convolutions, can replay with
-    slightly different accumulation when a model ``nn.Parameter`` is replaced
-    by a detached tensor clone. The original call consumed the live parameter
-    object, so validation should do the same when the source model is still
-    available and the live parameter remains exactly equal to the saved
-    argument snapshot. If the parameter has changed or cannot be resolved, the
-    saved tensor clone is left in place so stale/corrupt captures still fail.
-
-    Parameters
-    ----------
-    input_args:
-        Replay argument mapping created from saved args/kwargs.
-    layer:
-        Operation being replayed.
-
-    Returns
-    -------
-    None
-        ``input_args`` is updated in place.
-    """
-
-    if getattr(layer, "is_inplace", False):
-        return
-    param_logs = tuple(layer._param_logs or ())
-    if not param_logs:
-        return
-
-    skip_paths = _parent_arg_paths(layer)
-    live_params = tuple(_available_live_params(param_logs))
-    if not live_params:
-        return
-
-    input_args["args"] = [
-        _restore_live_parameter_leaf(arg, live_params, skip_paths["args"], (index,))
-        for index, arg in enumerate(input_args["args"])
-    ]
-    input_args["kwargs"] = {
-        key: _restore_live_parameter_leaf(value, live_params, skip_paths["kwargs"], (key,))
-        for key, value in input_args["kwargs"].items()
-    }
-
-
-def _parent_arg_paths(layer: Op) -> dict[str, set[tuple[Any, ...]]]:
-    """Return argument paths occupied by dataflow parent tensors.
-
-    Parameters
-    ----------
-    layer:
-        Operation whose parent argument positions should be skipped.
-
-    Returns
-    -------
-    dict[str, set[tuple[Any, ...]]]
-        Path sets for positional and keyword arguments.
-    """
-
-    parent_positions = getattr(layer, "parent_arg_positions", {}) or {}
-    paths: dict[str, set[tuple[Any, ...]]] = {"args": set(), "kwargs": set()}
-    for arg_type in ("args", "kwargs"):
-        for key in parent_positions.get(arg_type, {}):
-            paths[arg_type].add(key if isinstance(key, tuple) else (key,))
-    return paths
-
-
-def _available_live_params(param_logs: tuple[Any, ...]) -> list[torch.nn.Parameter]:
-    """Resolve live parameters still reachable from a trace's source model.
-
-    Parameters
-    ----------
-    param_logs:
-        Parameter metadata objects attached to an op.
-
-    Returns
-    -------
-    list[torch.nn.Parameter]
-        Live parameters that could be resolved.
-    """
-
-    live_params: list[torch.nn.Parameter] = []
-    for param_log in param_logs:
-        try:
-            live_param = getattr(param_log, "handle", None)
-        except Exception:
-            live_param = None
-        if isinstance(live_param, torch.nn.Parameter):
-            live_params.append(live_param)
-    return live_params
-
-
-def _restore_live_parameter_leaf(
-    value: Any,
-    live_params: tuple[torch.nn.Parameter, ...],
-    skip_paths: set[tuple[Any, ...]],
-    path: tuple[Any, ...],
-) -> Any:
-    """Replace a saved parameter clone with its matching live parameter.
-
-    Parameters
-    ----------
-    value:
-        Candidate replay argument value.
-    live_params:
-        Live parameters used by the operation.
-    skip_paths:
-        Argument paths occupied by graph parents.
-    path:
-        Current path within args or kwargs.
-
-    Returns
-    -------
-    Any
-        ``value`` with matching parameter leaves restored where unambiguous.
-    """
-
-    if path in skip_paths:
-        return value
-    if isinstance(value, torch.Tensor):
-        matches = [
-            live_param
-            for live_param in live_params
-            if _live_parameter_matches_snapshot(live_param, value)
-        ]
-        if len(matches) == 1:
-            return matches[0]
-        return value
-    if isinstance(value, list):
-        return [
-            _restore_live_parameter_leaf(item, live_params, skip_paths, (*path, index))
-            for index, item in enumerate(value)
-        ]
-    if isinstance(value, tuple):
-        restored = [
-            _restore_live_parameter_leaf(item, live_params, skip_paths, (*path, index))
-            for index, item in enumerate(value)
-        ]
-        return type(value)(restored)
-    if isinstance(value, dict):
-        return {
-            key: _restore_live_parameter_leaf(item, live_params, skip_paths, (*path, key))
-            for key, item in value.items()
-        }
-    return value
-
-
-def _live_parameter_matches_snapshot(
-    live_param: torch.nn.Parameter,
-    snapshot: torch.Tensor,
-) -> bool:
-    """Return whether a live parameter exactly matches a saved tensor snapshot.
-
-    Parameters
-    ----------
-    live_param:
-        Live model parameter that was used by an operation.
-    snapshot:
-        Saved replay argument tensor.
-
-    Returns
-    -------
-    bool
-        Whether shape, dtype, device, and values match exactly.
-    """
-
-    if tuple(live_param.shape) != tuple(snapshot.shape):
-        return False
-    if live_param.dtype != snapshot.dtype:
-        return False
-    if live_param.device != snapshot.device:
-        return False
-    return tensor_nanequal(live_param, snapshot, allow_tolerance=False)
-
-
 def _is_buffer_version_parent(parent_layer: Op) -> bool:
     """Return whether a parent is a written buffer-version node."""
 
@@ -3971,174 +3765,3 @@ def _buffer_parent_source_equal(
     except Exception:
         return False
     return tensor_nanequal(saved_arg_value, parent_out, allow_tolerance=False)
-
-
-def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) -> torch.Tensor:
-    """Generate a random perturbation of a saved tensor for validation.
-
-    The perturbation strategy varies by dtype to produce meaningful
-    "wrong" values while respecting type constraints:
-
-    - **Integer types**: sample uniformly from [min, max+1) of the original
-      tensor, with the exclusive high bound clamped by ``torch.iinfo`` so the
-      ``max + 1`` cannot overflow the dtype (a saturated range widens to the
-      full valid dtype range instead).  If the tensor is all-one-value (single
-      unique value), widen the range to [-10, 11) or [0, 11).  Retries up to
-      ``MAX_PERTURB_ATTEMPTS`` to avoid accidentally reproducing the original.
-    - **Bool**: random 0/1, retried to ensure difference.
-    - **Float/complex**: finite range-based random values. Floating tensors
-      whose saved values are entirely non-finite are perturbed to finite zeros
-      so NaN-aware equality cannot turn the perturbation into a no-op.
-
-    Parameters
-    ----------
-    parent_outs:
-        Original parent tensor to perturb.
-    output_outs:
-        Child layer output tensor, used to calibrate float perturbation scale.
-
-    Returns
-    -------
-    torch.Tensor
-        New tensor of the same shape and dtype with perturbed values.
-    """
-    device = parent_outs.device
-    if parent_outs.numel() == 0:
-        return parent_outs.detach().clone()
-
-    if parent_outs.dtype in [
-        torch.int,
-        torch.long,
-        torch.short,
-        torch.uint8,
-        torch.int8,
-        torch.int16,
-        torch.int32,
-        torch.int64,
-    ]:
-        tensor_unique_vals = torch.unique(parent_outs)
-        if len(tensor_unique_vals) > 1:
-            # Multiple unique values: sample within the original range.
-            #
-            # Compute the bounds as Python ints and clamp the exclusive high
-            # bound with ``torch.iinfo`` so ``max() + 1`` can never overflow the
-            # dtype. A legitimately captured tensor holding ``iinfo.max`` (e.g.
-            # PyG sentinel/cluster index tensors carry ``INT64_MAX``) would
-            # otherwise wrap ``max() + 1`` to ``INT64_MIN`` and make
-            # ``torch.randint`` raise "random_ expects 'from' to be less than
-            # 'to'". This mirrors the ``torch.finfo`` clamping the float branch
-            # already does; it only bounds the *sampling range*, never skips the
-            # perturbation, so the tripwire stays non-vacuous.
-            int_info = torch.iinfo(parent_outs.dtype)
-            int_lo = int(parent_outs.min().item())
-            int_hi = int(parent_outs.max().item())
-            int_hi_excl = int_hi + 1 if int_hi < int_info.max else int_info.max
-            if int_lo >= int_hi_excl:
-                # Saturated range (e.g. the whole tensor sits at ``iinfo.max``):
-                # widen to the full valid dtype range so we can still draw a
-                # genuinely different value rather than degenerating to a no-op.
-                int_lo, int_hi_excl = int_info.min, int_info.max
-            perturbed_outs = parent_outs.detach().clone()
-            for _ in range(MAX_PERTURB_ATTEMPTS):
-                perturbed_outs = torch.randint(
-                    int_lo,
-                    int_hi_excl,
-                    size=parent_outs.shape,
-                    device=device,
-                ).type(parent_outs.dtype)
-                if not torch.equal(perturbed_outs, parent_outs):
-                    break
-        else:
-            # Single unique value: widen to a fixed range to guarantee a
-            # different value can be produced.
-            perturbed_outs = parent_outs.detach().clone()
-            for _ in range(MAX_PERTURB_ATTEMPTS):
-                if torch.min(parent_outs) < 0:
-                    perturbed_outs = torch.randint(
-                        -10, 11, size=parent_outs.shape, device=device
-                    ).type(parent_outs.dtype)
-                else:
-                    perturbed_outs = torch.randint(
-                        0, 11, size=parent_outs.shape, device=device
-                    ).type(parent_outs.dtype)
-                if not torch.equal(perturbed_outs, parent_outs):
-                    break
-
-    elif parent_outs.dtype == torch.bool:
-        # Random bool, retried until different from original.
-        perturbed_outs = parent_outs.detach().clone()
-        for _ in range(MAX_PERTURB_ATTEMPTS):
-            perturbed_outs = torch.randint(0, 2, size=parent_outs.shape, device=device).bool()
-            if not torch.equal(perturbed_outs, parent_outs):
-                break
-    else:
-        # Float/complex: uniform random within the original value range.
-        # Using the original range ensures perturbed values stay in the
-        # valid domain for range-restricted functions (e.g., bernoulli
-        # requires probabilities in [0,1]).  For typical tensors with wide
-        # range this produces meaningfully different values.
-        if parent_outs.is_complex():
-            real = parent_outs.real.float()
-            imag = parent_outs.imag.float()
-            r_lo, r_hi = real.min().item(), real.max().item()
-            i_lo, i_hi = imag.min().item(), imag.max().item()
-            if r_lo == r_hi:
-                r_lo, r_hi = r_lo - 1.0, r_hi + 1.0
-            if i_lo == i_hi:
-                i_lo, i_hi = i_lo - 1.0, i_hi + 1.0
-            perturbed_outs = torch.complex(
-                torch.rand(parent_outs.shape, device=device) * (r_hi - r_lo) + r_lo,
-                torch.rand(parent_outs.shape, device=device) * (i_hi - i_lo) + i_lo,
-            ).type(parent_outs.dtype)
-        else:
-            parent_float = parent_outs.float()
-            finite_parent = parent_float[torch.isfinite(parent_float)]
-            if finite_parent.numel() == 0:
-                return torch.zeros_like(parent_outs)
-            lo = finite_parent.min().item()
-            hi = finite_parent.max().item()
-            finite_output = output_outs.detach().float().abs()
-            finite_output = finite_output[torch.isfinite(finite_output)]
-            output_scale = finite_output.max().item() if finite_output.numel() else 0.0
-            dtype_info = torch.finfo(parent_outs.dtype)
-            parent_scale = max(abs(lo), abs(hi), hi - lo, 1.0)
-            scaled_expansion: float | None = None
-            if hi - lo < max(1e-6, abs(lo) * 1e-6):
-                # Near-constant tensor — range is too narrow for meaningful
-                # perturbation at float32 precision. Expand by ±10% of the
-                # parent magnitude, or by the child output scale when the parent
-                # is near zero but the op output is huge. Without the output
-                # scale, zero-valued broadcast parents can be perturbed by only
-                # ~1 and then disappear under float32 rounding beside 1e38
-                # operands.
-                expansion = min(
-                    max(1.0, abs(lo) * 0.1, output_scale * 0.1),
-                    dtype_info.max * 0.25,
-                )
-                if output_scale > parent_scale * 1.0e6:
-                    scaled_expansion = expansion
-                else:
-                    lo, hi = lo - expansion, hi + expansion
-            elif output_scale > parent_scale * 1.0e6:
-                # A non-constant but tiny parent range can also be invisible
-                # when combined additively with enormous operands. Expand only
-                # for extreme scale separation so normal range-restricted
-                # tensors keep their original valid-domain perturbations.
-                scaled_expansion = min(output_scale * 0.1, dtype_info.max * 0.25)
-            if scaled_expansion is not None:
-                signs = torch.where(
-                    torch.rand_like(parent_outs.float(), device=device) < 0.5,
-                    -1.0,
-                    1.0,
-                )
-                magnitudes = (
-                    torch.rand_like(parent_outs.float(), device=device) * 0.5 + 0.5
-                ) * scaled_expansion
-                perturbed_outs = parent_outs.float() + signs * magnitudes
-            else:
-                perturbed_outs = (
-                    torch.rand_like(parent_outs.float(), device=device) * (hi - lo) + lo
-                )
-            perturbed_outs = perturbed_outs.type(parent_outs.dtype)
-
-    return perturbed_outs

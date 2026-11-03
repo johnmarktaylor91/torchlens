@@ -434,6 +434,20 @@
 
 ### Bug Fixes
 
+- **capture**: a model with a sparse registered buffer (a `to_sparse()` adjacency fed to
+  `torch.sparse.mm`) can be captured again; the buffer-write tracker's whole-storage snapshot
+  read `untyped_storage()`, which a sparse tensor does not have, so every capture failed before
+  the forward ran. Sparse buffers are now snapshot through their index and value components,
+  and the `torch.sparse` tensor ops (`mm`, `addmm`, `sampled_addmm`, `sum`, `softmax`,
+  `log_softmax`, `spdiags`, `spsolve`) are wrapped: torch re-exports them from `torch._C._sparse`
+  into a namespace the function crawl never visited, so `torch.sparse.mm` ran unrecorded and
+  its output refused with `output_attribution_failed`.
+- **errors**: `TraceCaptureError` carries a stable `fields["code"]`: `forward_raised` when the
+  model's own code raised, `capture_internal_error` when the innermost attributable frame was
+  TorchLens's. `LiveModeLabelError` defaults to `label_selector_not_live`, so a live selector
+  naming a finalized postprocess label refuses with a code from every raise site.
+  A strict portable save that meets a tensor the codec cannot store (a sparse buffer, for one)
+  refuses with `artifact_tensor_unsupported` instead of an uncoded `ArtifactError`.
 - **capture**: call-site chains no longer include TorchLens's own frames when the package is
   imported through a relative `sys.path` entry such as `PYTHONPATH=.`; those frames had merged
   distinct call sites into false loops. The TorchLens-frame test now compares normalised file
@@ -654,6 +668,10 @@
 - **visualization**: Rendered graphs use the bundled font on machines without Arial installed.
 - **capture**: CPU peak memory is no longer under-reported on kernels whose high-water mark lags the
   exact resident size.
+- **capture**: `Tensor.to_sparse_csr`, `to_sparse_csc`, `to_sparse_bsr` and `to_sparse_bsc` are
+  recorded as ops, like `to_sparse`. torch does not route them through
+  `__torch_function__`, so a sparse tensor built in forward with one of them reached its consumer
+  (`torch.sparse.mm`, `torch.sparse.sampled_addmm`) with no provenance and capture warned.
 
 ### Performance Improvements
 

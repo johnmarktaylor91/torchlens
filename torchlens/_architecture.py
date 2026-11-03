@@ -153,10 +153,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "dataset_extraction": "L5",
     "_extraction": "L5",
     "debug": "L5",
-    "checks": "L5",
     # -- L6 APPLIANCES ---------------------------------------------------------
     "_semantic": "L6",
-    "_notebook": "L6",
     "neuro": "L6",
     # -- L7 PRESENT --------------------------------------------------------------
     "_visualization": "L7",

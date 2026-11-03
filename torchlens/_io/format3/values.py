@@ -83,6 +83,7 @@ def tuple_subtypes() -> dict[str, type]:
     return result
 
 
+# Complexity: one recursive copy bridge preserves closed container subtypes and record identity.
 def _replace_record_copies(value: Any, copies: Mapping[int, Any]) -> Any:
     """Replace live record references while retaining declared value-container identities."""
 

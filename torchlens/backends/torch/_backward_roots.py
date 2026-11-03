@@ -14,6 +14,8 @@ from typing import Any
 
 import torch
 
+from ..._utils._torch_compat import get_accumulate_grad_class
+
 
 def _root_tensors(value: Any) -> tuple[torch.Tensor, ...]:
     """Flatten autograd root arguments into tensors.
@@ -105,3 +107,23 @@ def _roots_by_trace(
         )
         owned.append(mine or graph_roots)
     return tuple(owned)
+
+
+def _is_accumulate_grad(grad_fn_handle: Any) -> bool:
+    """Return whether an autograd node is an AccumulateGrad leaf.
+
+    Parameters
+    ----------
+    grad_fn_handle
+        Autograd node to inspect.
+
+    Returns
+    -------
+    bool
+        True when ``grad_fn_handle`` is an AccumulateGrad node.
+    """
+
+    accumulate_grad_cls = get_accumulate_grad_class()
+    return type(grad_fn_handle).__name__ == "AccumulateGrad" or isinstance(
+        grad_fn_handle, accumulate_grad_cls
+    )

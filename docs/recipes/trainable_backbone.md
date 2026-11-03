@@ -63,8 +63,9 @@ RESULT = (
   `fast_until_site_unsaved`.
 - For the cut run, the model output and later saved sites read `None`; the
   next full run refreshes them.
-- The fast run refreshes the live trace in place and marks it truncated, with
-  an `unverifiable` verdict. Save, export or validate the trace before
+- The fast run returns a new result Trace (`result.trace`) and leaves the
+  source trace untouched; the result is marked truncated, with an
+  `unverifiable` verdict. Save, export or validate the result before
   training through it if you need it as evidence.
 - The backbone stays in eval mode here, so BatchNorm running statistics do not
   update. A loaded artifact's fast tier refuses `run_fast_until_unsupported`;
