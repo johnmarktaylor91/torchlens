@@ -26,6 +26,7 @@ unused position number, every existing op keeps its label.
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 from collections import OrderedDict
 from collections.abc import Iterable
@@ -33,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
 from .._selection.target import TargetSpec
 from ._replay_values import rollback_snapshot
@@ -52,50 +54,6 @@ REPLACEMENT_FUNC_NAME = "intervention_replacement"
 MODULE_BOUNDARY_KEY = "module_boundary_address"
 
 # Fields the clone replaces at once, so the copy may share them with the source.
-_SHALLOW_REPLACED = frozenset(
-    {
-        "edits",
-        "lookup_keys",
-        "children",
-        "parents",
-        "parent_arg_positions",
-        "_edge_uses",
-        "modules",
-        "module_call_stack",
-        "output_of_modules",
-        "output_of_module_calls",
-        "input_to_module_calls",
-        "equivalent_ops",
-        "parent_params",
-        "parent_param_ops",
-        "param_shapes",
-        "non_tensor_pos_args",
-        "non_tensor_kwargs",
-        "input_shapes",
-        "input_dtypes",
-        "input_memory",
-        # Tensor-bearing or object-valued fields: the replacement resets or
-        # shares them, and a deep copy of a non-leaf tensor raises.
-        "grad",
-        "grad_fn",
-        "module",
-        "atomic_module_call",
-        "input_activations",
-        "unattributed_tensor_args",
-        "dropped_edge_tensor_args",
-        "func_non_tensor_args",
-        "_grad_records",
-        "_param_logs",
-        "_param_barcodes",
-        "recurrent_ops",
-        "edge_substitutions",
-        "edge_replacement_stamps",
-        "activation_transform",
-        "transform_config",
-        "func_config",
-        "annotations",
-    }
-)
 
 
 def module_boundary_address(resolved: Any) -> str | None:
@@ -230,7 +188,11 @@ def _next_type_index(trace: Trace) -> int:
 def _mint_replacement(trace: Trace, site: Op, before: dict[str, Any], moved_calls: list[str]) -> Op:
     """Clone the edited last op into the replacement op (edited value, no callable)."""
 
-    replacement = site._copy_with_shallow_fields(_SHALLOW_REPLACED, _store=None)
+    # Every field is shared, then the containers the replacement keeps are
+    # copied one level deep: a deep copy would hit non-leaf tensors inside
+    # saved arguments and records, and the replacement overwrites or shares
+    # everything else.
+    replacement = site._copy_with_shallow_fields(frozenset(LAYER_PASS_LOG_FIELD_ORDER), _store=None)
     modules = [m for m in (site.modules or ()) if not _is_inner_call(m, moved_calls)]
     fields: dict[str, Any] = {
         **_identity_fields(trace, site, before),
@@ -240,6 +202,10 @@ def _mint_replacement(trace: Trace, site: Op, before: dict[str, Any], moved_call
     }
     for name, value in fields.items():
         replacement._internal_set(name, value)
+    for name in LAYER_PASS_LOG_FIELD_ORDER:
+        value = getattr(replacement, name, None)
+        if name not in fields and isinstance(value, (list, dict, set)):
+            replacement._internal_set(name, copy.copy(value))
     return replacement
 
 
