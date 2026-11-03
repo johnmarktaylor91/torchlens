@@ -78,7 +78,7 @@ def _sweep_cells() -> Iterator[Cell]:
 #: The smoke hook. Cell ids listed here run in the smoke tier instead of
 #: ``heavy`` (the two tier marks are exclusive; ``tests/test_marker_lint.py``).
 #: Today it holds the cheap cells the smoke-tier selection chose (the two
-#: cheapest core pairs plus two more). To change it, list the ids and set
+#: cheapest core pairs plus one more). To change it, list the ids and set
 #: ``_SMOKE_TIER`` to the smoke marker spelled in this file (``pytest.mark``
 #: followed by ``.smoke``): the smoke file list is a text scan of each test
 #: file's own source, so the marker must be spelled here, never through an
@@ -107,7 +107,6 @@ SMOKE_CELLS: frozenset[str] = frozenset(
         "PufferLib_NMMO3_observation_encoder_(multi-hot_tile_CNN_+_player_embed)-save-index",
         "Sionna-NeuralReceiver-record-reporting",
         "Sionna-NeuralReceiver-save-index",
-        "Tree_parity_machine-intervene-fork_do",
         "Tree_parity_machine-record-reporting",
         "Tree_parity_machine-save-index",
         "Wavelet_Kernel_Network_(WKN)-record-reporting",
