@@ -26,6 +26,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 from torchlens._merged._artifact import load_merged
 from torchlens._merged._enums import (
@@ -429,8 +430,21 @@ def _rehash_artifact(art: Path) -> None:
     man_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
 
+def _plant_member_metadata(art: Path, payload: bytes) -> None:
+    """Replace rank 1's metadata record with ``payload``, keeping its own file index true.
+
+    A 3.0 member keeps its metadata in ``records/trace.json`` (the 2.x ``metadata.pkl``
+    is gone); the member manifest's digest row is restamped so the planted bytes reach
+    the member's metadata reader instead of its file-digest check.
+    """
+
+    member = art / "members" / "rank_0001.tlspec"
+    (member / "records" / "trace.json").write_bytes(payload)
+    redigest(member, "records/trace.json")
+
+
 def test_denylisted_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> None:
-    """A member ``metadata.pkl`` denylist RCE gadget refuses as tamper (A-R58-1)."""
+    """A member metadata denylist RCE gadget refuses as tamper (A-R58-1)."""
 
     import os
     import pickle
@@ -440,7 +454,7 @@ def test_denylisted_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> N
             return (os.system, ("echo pwned",))
 
     art = _real_two_rank_artifact(tmp_path)
-    (art / "members" / "rank_0001.tlspec" / "metadata.pkl").write_bytes(pickle.dumps(_Evil()))
+    _plant_member_metadata(art, pickle.dumps(_Evil()))
     _rehash_artifact(art)
     with pytest.raises(MergedArtifactError) as caught:
         load_merged(art)
@@ -450,12 +464,10 @@ def test_denylisted_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> N
 
 @pytest.mark.smoke
 def test_corrupt_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> None:
-    """A corrupt member ``metadata.pkl`` stream refuses as tamper (A-R58-1)."""
+    """A corrupt member metadata pickle stream refuses as tamper (A-R58-1)."""
 
     art = _real_two_rank_artifact(tmp_path)
-    (art / "members" / "rank_0001.tlspec" / "metadata.pkl").write_bytes(
-        b"\x80\x05not-a-valid-pickle-stream\xff\xff"
-    )
+    _plant_member_metadata(art, b"\x80\x05not-a-valid-pickle-stream\xff\xff")
     _rehash_artifact(art)
     with pytest.raises(MergedArtifactError) as caught:
         load_merged(art)

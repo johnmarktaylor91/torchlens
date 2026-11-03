@@ -15,6 +15,7 @@ while every legitimately-saved bundle at every save level still loads and runs.
 from __future__ import annotations
 
 import io
+import json
 import pickle
 from pathlib import Path
 
@@ -58,10 +59,10 @@ class _StatefulLinear(nn.Module):
         return torch.relu(self.lin(value)) * self.scale
 
 
-def _metadata_path(bundle_path: Path) -> Path:
-    """Return the ``metadata.pkl`` path inside a saved bundle."""
+def _metadata_files(bundle_path: Path) -> list[Path]:
+    """Return the metadata record files of a saved 3.0 artifact (``records/*.json``)."""
 
-    return bundle_path / "metadata.pkl"
+    return sorted((bundle_path / "records").glob("*.json"))
 
 
 class _OsSystemGadget:
@@ -137,7 +138,13 @@ def test_control_flow_bundle_round_trips(tmp_path: Path) -> None:
     x = torch.randn(2, 4)
     bundle = tmp_path / "cf"
     tl.trace(_ControlFlow(), x, save="all").save(bundle, level="portable")
-    assert b"_load_from_bytes" not in _metadata_path(bundle).read_bytes()
+    records = _metadata_files(bundle)
+    assert records, "a 3.0 artifact writes its metadata as records/*.json"
+    assert not (bundle / "metadata.pkl").exists()
+    for record in records:
+        raw = record.read_bytes()
+        json.loads(raw)
+        assert b"_load_from_bytes" not in raw, record.name
     loaded = tl.load(bundle)
     assert loaded is not None
     for conditional in loaded.graph.conditionals:
