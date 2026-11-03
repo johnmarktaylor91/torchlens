@@ -297,9 +297,7 @@ def _rewrite_door(
     call: ast.Call, door: str, ed: _Edits, counts: Counter, reports: list[str], path: Path
 ) -> None:
     capture_moves = TRACE_CAPTURE_MOVES if door == "trace" else RECORD_CAPTURE_MOVES
-    recording_moves = RECORD_RECORDING_MOVES if door == "record" else ()
     moved_capture: list[str] = []
-    recording_kws: list[ast.keyword] = []
     for kw in list(call.keywords):
         if kw.arg is None:
             continue
@@ -314,8 +312,6 @@ def _rewrite_door(
             moved_capture.append(f"{kw.arg}={ed.text(kw.value)}")
             ed.remove_arg(kw, call)
             counts[f"move:{kw.arg}"] += 1
-        elif kw.arg in recording_moves:
-            recording_kws.append(kw)
         elif (
             kw.arg == "save"
             and isinstance(kw.value, ast.Call)
@@ -326,6 +322,7 @@ def _rewrite_door(
             ed.remove_arg(kw, call)
             counts["save_options"] += 1
     if door == "record":
+        _fold_recording_keywords(call, ed, counts, reports, path)
         for kw in call.keywords:
             if (
                 kw.arg == "recording"
@@ -366,13 +363,10 @@ def _rewrite_door(
             last = (list(call.args) + list(call.keywords))[-1]
             _, b = ed.span(last)
             ed.replace(b, b, f", {name}={style}({', '.join(pieces)})")
-    if recording_kws:
-        _fold_recording_keywords(call, recording_kws, ed, counts, reports, path)
 
 
 def _fold_recording_keywords(
     door_call: ast.Call,
-    flat: list[ast.keyword],
     ed: _Edits,
     counts: Counter,
     reports: list[str],
@@ -386,6 +380,9 @@ def _fold_recording_keywords(
     reported call keeps its flat keywords untouched.
     """
 
+    flat = [kw for kw in door_call.keywords if kw.arg in RECORD_RECORDING_MOVES]
+    if not flat:
+        return
     pieces = [f"{kw.arg}={ed.text(kw.value)}" for kw in flat]
     existing = next((k for k in door_call.keywords if k.arg == "recording"), None)
     ctor = existing.value if existing is not None else None
