@@ -7696,6 +7696,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/intervention/_rerun_predicate.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/intervention/_super/super_logs.py",
@@ -8014,14 +8022,6 @@
   "has_default": false,
   "sites": 4,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "raw_index",
-  "file": "torchlens/intervention/rerun.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
