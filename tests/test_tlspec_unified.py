@@ -903,6 +903,7 @@ def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
     validate_tlspec(path)
 
 
+@pytest.mark.rare
 def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     """MLX schema v2 materialized traces load body entries as MLX arrays."""
 
@@ -957,6 +958,7 @@ def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path
     )
 
 
+@pytest.mark.rare
 @pytest.mark.optional
 def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> None:
     """Public MLX portable saves write codec-backed safetensors body entries."""

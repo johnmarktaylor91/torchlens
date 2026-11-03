@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1401 modules, 629924 lines, 0 modules without a docstring.
+83 packages, 1401 modules, 629951 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -53,7 +53,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2408 |
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3772 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 16 | 6474 |
-| `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 917 |
+| `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8675 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6866 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6379 |
@@ -73,7 +73,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 1980 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
-| `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5227 |
+| `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5243 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 72 | 34887 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
@@ -1113,16 +1113,16 @@ Backend Protocol and public registry exports for TorchLens adapters. (16 modules
 
 ### `torchlens.backends._protocols`
 
-Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 917 lines)
+Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 |
 | `jax` | JAX preview ''BackendProtocol'' (delegating; jaxpr-first, eager values). | 125 |
-| `mlx` | MLX preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 140 |
+| `mlx` | MLX preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 146 |
 | `mlx_wrapped_state` | Import-light probe of the MLX wrapper state for the protocol shell. | 19 |
 | `paddle` | Paddle preview ''BackendProtocol'' shell (delegating; eager dygraph). | 154 |
-| `tf` | TensorFlow preview ''BackendProtocol'' (delegating; eager). | 125 |
+| `tf` | TensorFlow preview ''BackendProtocol'' (delegating; eager). | 130 |
 | `tinygrad` | tinygrad preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 137 |
 | `torch` | Torch's ''BackendProtocol'' object: the reference, by delegation. | 209 |
 
@@ -1546,7 +1546,7 @@ Experimental Dagua rendering bridge exports. (2 modules, 950 lines)
 
 ### `torchlens.export`
 
-Static export helpers for TorchLens logs. (14 modules, 5227 lines)
+Static export helpers for TorchLens logs. (14 modules, 5243 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1563,7 +1563,7 @@ Static export helpers for TorchLens logs. (14 modules, 5227 lines)
 | `_netron_records` | Netron export projection records (netron ). | 504 |
 | `_registry` | The export-target registry: ONE L7 door for every exporter ( item 17). | 125 |
 | `_report` | The single-file offline HTML trace report (B5, treescope memo s6). | 721 |
-| `_trackers` | Tracker-sink export targets (bridge tier; subpackage promotion, item 18). | 507 |
+| `_trackers` | Tracker-sink export targets (bridge tier; subpackage promotion, item 18). | 523 |
 
 ### `torchlens.export._model_explorer`
 
