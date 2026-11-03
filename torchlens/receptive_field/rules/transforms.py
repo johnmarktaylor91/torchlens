@@ -406,12 +406,11 @@ def getitem(context: ReceptiveFieldRuleContext) -> _RuleResult:
     if ellipsis_count > 1:
         return context.unknown("getitem contains multiple ellipses")
     consumed = sum(item is not None and item is not Ellipsis for item in key)
+    pad = [slice(None)] * (len(parent_shape) - consumed)
     for item in key:
-        if item is Ellipsis:
-            expanded.extend([slice(None)] * (len(parent_shape) - consumed))
-        else:
-            expanded.append(item)
-    expanded.extend([slice(None)] * (len(parent_shape) - consumed))
+        expanded.extend(pad if item is Ellipsis else [item])
+    if not ellipsis_count:
+        expanded.extend(pad)  # an ellipsis already stood in for the leftover axes
     output_to_parent: dict[int, int] = {}
     selected: list[int] = []
     selected_indices: dict[int, int] = {}
@@ -468,4 +467,47 @@ def getitem(context: ReceptiveFieldRuleContext) -> _RuleResult:
         selected_parent_indices=selected_indices,
         note="getitem preserves surviving axes with their exact slice affine maps; "
         "fixed-index axes narrow to the recorded index",
+    )
+
+
+@register_rf_rule("gather")
+def gather(context: ReceptiveFieldRuleContext) -> _RuleResult:
+    """Map a value-routed gather per operand.
+
+    ``out[..., i, ...] = source[..., index[..., i, ...], ...]`` along the
+    gathered dimension: the index operand decides one output element each, so
+    it passes through pointwise, while the source operand is read at a position
+    only its values know and is enveloped over that whole dimension.
+    """
+
+    parents = tuple(context.op.parents)
+    shapes = tuple(context.in_shapes)
+    if len(parents) != 2 or len(shapes) != 2 or any(shape is None for shape in shapes):
+        return context.unknown("gather is missing an operand shape")
+    rank = len(context.out_shape)
+    if len(shapes[1]) != rank or len(shapes[0]) != rank:
+        return context.unknown("gather operand ranks do not match the output rank")
+    dim = context.arg("dim", context.arg(0, None))
+    if not isinstance(dim, int):
+        return context.unknown("gather dimension was not captured")
+    axis = dim + rank if dim < 0 else dim
+    if not 0 <= axis < rank:
+        return context.unknown("gather dimension is out of range")
+    source_label, index_label = parents
+    index = context.axis_map(
+        {other: other for other in range(rank)},
+        note="gather reads one index element per output element",
+    )
+    source = _RuleResult(
+        "full",
+        {"axes": (axis,), "exact": False},
+        "gather reads a value-chosen position along the gathered dimension",
+    )
+    return _RuleResult(
+        "per_parent",
+        {
+            "by_parent": {source_label: source, index_label: index},
+            "default": context.full(exact=False),
+        },
+        None,
     )

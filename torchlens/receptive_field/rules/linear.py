@@ -24,9 +24,11 @@ def _batched_operand_shapes(
     shapes = tuple(context.op.input_shapes)
     if len(parents) != 2 or len(shapes) != 2 or parents[0] == parents[1]:
         return None
-    if any(shape is None for shape in shapes):
+    left_shape, right_shape = shapes
+    if left_shape is None or right_shape is None:
         return None
-    left, right = (tuple(int(extent) for extent in shape) for shape in shapes)
+    left = tuple(int(extent) for extent in left_shape)
+    right = tuple(int(extent) for extent in right_shape)
     out = context.out_shape
     rank = len(out)
     if rank < 2 or len(left) != rank or len(right) != rank:

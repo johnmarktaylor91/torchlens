@@ -96,9 +96,14 @@ def _per_operand_attention(
 
     parents = tuple(context.op.parents)
     shapes = tuple(context.op.input_shapes)
-    if len(parents) < 3 or len(shapes) < 3 or any(shape is None for shape in shapes[:3]):
+    if len(parents) < 3 or len(shapes) < 3:
         return None
-    query_shape, key_shape, value_shape = (tuple(int(e) for e in shape) for shape in shapes[:3])
+    raw_query, raw_key, raw_value = shapes[:3]
+    if raw_query is None or raw_key is None or raw_value is None:
+        return None
+    query_shape = tuple(int(extent) for extent in raw_query)
+    key_shape = tuple(int(extent) for extent in raw_key)
+    value_shape = tuple(int(extent) for extent in raw_value)
     rank = len(query_shape)
     if rank < 2 or len(key_shape) != rank or len(value_shape) != rank:
         return None
