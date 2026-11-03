@@ -182,6 +182,7 @@ def hf_route(monkeypatch: pytest.MonkeyPatch) -> _RouteParityModel:
     monkeypatch.setattr(hf_processor, "_load_hf_processor", lambda name: _NamedImagesProcessor())
     monkeypatch.setattr(hf_bridge, "_resolve_tokenizer", lambda model: _FakeTokenizer())
     monkeypatch.setattr(hf_bridge, "_transformers_importable", lambda: True)
+    monkeypatch.setattr(hf_bridge, "_is_hf_pretrained_model", lambda model: True)
     record = ResolvedPreprocessing(
         source="test_recipe", identifier="route-parity", verified=True, config={}, description=""
     )
@@ -297,7 +298,11 @@ def test_pil_image_routes_at_run_and_record_as_at_trace(hf_route: Any) -> None:
     assert trace.input is not None
 
     rerun = trace.run(model, _rgb_image((5, 6, 7)), input_transform=False)
-    recording = tl.record(model, [_rgb_image(), _rgb_image((9, 9, 9))], default_op=True)
+    recording = tl.record(
+        model,
+        [_rgb_image(), _rgb_image((9, 9, 9))],
+        recording=tl.options.RecordingOptions(default_op=True),
+    )
 
     assert _labels(rerun) == reference
     assert recording.records
@@ -326,7 +331,7 @@ def test_record_routes_modality_dict(hf_route: Any) -> None:
     reference, reference_calls = _reference(model, raw)
     _reset_ledgers()
 
-    recording = tl.record(model, raw, default_op=True)
+    recording = tl.record(model, raw, recording=tl.options.RecordingOptions(default_op=True))
 
     assert recording.records
     assert reference
@@ -360,7 +365,7 @@ def test_record_routes_text(hf_route: Any) -> None:
     """``tl.record`` tokenizes a bare string through the model's tokenizer route."""
 
     model = hf_route
-    recording = tl.record(model, "hello", default_op=True)
+    recording = tl.record(model, "hello", recording=tl.options.RecordingOptions(default_op=True))
 
     assert recording.records
     assert _tokenizer_calls == ["hello"]
@@ -432,6 +437,7 @@ def test_whisper_like_audio_dict_keeps_audio_key_and_adds_sampling_rate(
 
     monkeypatch.setattr(hf_processor, "_load_hf_processor", lambda name: _WhisperLikeProcessor())
     monkeypatch.setattr(hf_bridge, "_transformers_importable", lambda: True)
+    monkeypatch.setattr(hf_bridge, "_is_hf_pretrained_model", lambda model: True)
     _reset_ledgers()
     model = _RouteParityModel()
     model.sampling_rate = 16_000
@@ -534,7 +540,7 @@ def test_tiny_clip_singular_image_key_runs_and_records() -> None:
     trace = tl.trace(model, raw, save="none")
     reference = _labels(trace)
     rerun = trace.run(model, {"text": "a dog", "image": _rgb_image((200, 10, 10))})
-    recording = tl.record(model, raw, default_op=True)
+    recording = tl.record(model, raw, recording=tl.options.RecordingOptions(default_op=True))
 
     assert _labels(rerun) == reference
     assert recording.records
