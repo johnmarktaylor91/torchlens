@@ -335,6 +335,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "torchvision": (TEST_EXTRA, "torchvision"),
     "torchvision.models": (TEST_EXTRA, "torchvision"),
+    "torchvision.models.convnext": (TEST_EXTRA, "torchvision"),
     "torchvision.models.resnet": (TEST_EXTRA, "torchvision"),
     "torchvision.models.segmentation": (TEST_EXTRA, "torchvision"),
     "torchvision.ops": (TEST_EXTRA, "torchvision"),
