@@ -14,7 +14,7 @@ binding's `.generate(...)`); which intervention path to use for speed is in
 The package's PRIMARY surface lives in flat modules this layout previously
 omitted entirely: `selectors.py` (site selectors incl. `without_op`),
 `sites.py`, `resolver.py` (trusted-callable resolution), `hooks.py`,
-`predicates.py`, `replay.py` (`push`/`push_from`), `rerun.py` (`run`),
+`predicates.py`, `replay.py` (the `do` propagation), `rerun.py` (`run`),
 `save.py` (intervention specs), `runtime.py`, `sweep.py`, `types.py`,
 `handles.py`, `helpers.py`, and `errors.py`.
 - `_facet_writes.py` holds the facet-write internals `hooks.py` uses (scoped

@@ -687,7 +687,7 @@
         "last_event_func": null,
         "last_event_label": "relu_1_5_raw",
         "last_successful_op_label": "relu_1_5_raw",
-        "n_ops_completed": 4,
+        "n_ops_committed": 4,
         "status": "partial_error",
         "stop_reason": null
       },
