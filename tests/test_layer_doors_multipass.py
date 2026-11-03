@@ -123,6 +123,42 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
         assert fork[f"{shared}:{pass_index}"].edits
 
 
+def test_set_only_callable_on_multi_pass_layer_is_sticky_on_both_passes(captured) -> None:
+    """A callable staged by ``do(..., engine="set_only")`` is a sticky hook on both passes.
+
+    Walk ruling names.3: a callable passed to the set-only engine always becomes a sticky
+    hook, never a one-shot value. It changes no output when staged, fires on each pass of
+    the two-pass layer when a later ``do`` propagates, and still fires on both passes of a
+    later ``run`` on new inputs, matching the same edit written in plain torch.
+    """
+
+    model, x, trace = captured
+    shared, fresh = _linear_labels(trace)
+    fork = trace.fork()
+    baseline = fork[fork.output_layers[0]].out.clone()
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        fork.layers[shared].do(
+            _double,
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
+    # Staged as a hook, not a value, and nothing propagates yet.
+    assert fork._intervention_spec.target_value_specs == []
+    assert fork._intervention_spec.hook_specs
+    assert torch.equal(fork[fork.output_layers[0]].out, baseline)
+
+    # The next propagating do fires the staged hook on both passes.
+    fork[fresh].do(tl.scale(1.0))
+    want = _oracle(model, x, shared_edit=_double)
+    assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
+    # It stays attached: a fresh forward on new inputs fires it on both passes again.
+    x2 = torch.randn(2, 3)
+    fork.run(model, x2)
+    want2 = _oracle(model, x2, shared_edit=_double)
+    assert torch.allclose(fork[fork.output_layers[0]].out, want2, atol=1e-6)
+    for pass_index in (1, 2):
+        assert fork[f"{shared}:{pass_index}"].edits
+
+
 def test_layer_door_on_single_pass_layer_edits_only_that_layer(captured) -> None:
     """A single-pass Layer door keeps addressing just its own layer."""
 
