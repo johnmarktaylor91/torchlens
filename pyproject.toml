@@ -535,6 +535,7 @@ line-length = 100
 extend-exclude = [
     "tests/classics_corpus/models",
     "torchlens/_data_classes/_schema_bindings.py",
+    "torchlens/_data_classes/_schema_bindings_trace.py",
     "torchlens/_ir/op_record_manifest.py",
 ]
 

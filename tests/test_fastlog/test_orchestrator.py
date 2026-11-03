@@ -76,14 +76,14 @@ def _options() -> RecordingOptions:
 def test_root_only_model_emits_root_events() -> None:
     """Root-only models still get synthetic root enter and exit events."""
 
-    output, recording = tl.record(
+    recording = tl.record(
         RootOnly(),
         torch.ones(1),
         save=_options().keep_op,
         default_module=True,
         include_source_events=True,
-        return_output=True,
     )
+    output = recording.output
     kinds = [record.ctx.kind for record in recording]
 
     assert torch.equal(output, torch.tensor([2.0]))
@@ -121,14 +121,14 @@ def test_shared_module_called_twice_has_balanced_events() -> None:
 def test_identity_passthrough_has_module_events() -> None:
     """Identity modules are represented even when their tensor ops through."""
 
-    output, recording = tl.record(
+    recording = tl.record(
         IdentityModel(),
         torch.ones(1),
         save=_options().keep_op,
         default_module=True,
         include_source_events=True,
-        return_output=True,
     )
+    output = recording.output
     labels = [record.ctx.address for record in recording]
 
     assert torch.equal(output, torch.ones(1))
@@ -165,7 +165,7 @@ def test_predicate_exception_cleans_logging_state() -> None:
         tl.record(
             RootOnly(),
             torch.ones(1),
-            halt=bad_halt,
+            stop_after=bad_halt,
             default_module=True,
             default_op=False,
         )

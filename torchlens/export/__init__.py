@@ -564,7 +564,7 @@ def memory_timeline_v2(trace: Any, path: str | Path) -> Path:
 
 _XARRAY_SITE_REMEDY = (
     "export only sites that share the presentation axis: re-capture with "
-    "capture=tl.options.CaptureOptions(layers_to_save=[name, ...]) (unsaved layers are "
+    "save=[name, ...] (unsaved layers are "
     "skipped and disclosed), or export one site with "
     "tl.bridge.xarray.data_array(trace, site)"
 )

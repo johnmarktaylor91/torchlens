@@ -35,7 +35,7 @@ def _bn_trace(n_stimuli: int = 6) -> tl.Trace:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(3, 4), nn.BatchNorm1d(4), nn.ReLU()).eval()
     x = torch.randn(n_stimuli, 3)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return tl.trace(model, x, save="all")
 
 
 class _ZeroTail(nn.Module):
@@ -101,9 +101,7 @@ def test_forced_late_failure_leaves_zero_annotations() -> None:
 
     torch.manual_seed(0)
     model = _ZeroTail().eval()
-    trace = tl.trace(
-        model, torch.randn(6, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    trace = tl.trace(model, torch.randn(6, 3), save="all")
 
     with pytest.raises(ValueError, match="zero-norm"):
         repgeom.rdm_evolution(trace, metric="cosine", min_stimuli=2)
@@ -129,9 +127,7 @@ def test_zero_norm_error_names_site_and_stimulus_rows() -> None:
 
     torch.manual_seed(0)
     model = _ZeroTail().eval()
-    trace = tl.trace(
-        model, torch.randn(6, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    trace = tl.trace(model, torch.randn(6, 3), save="all")
     with pytest.raises(ValueError, match="cosine distance is undefined for zero-norm stimuli"):
         try:
             repgeom.rdm_evolution(trace, metric="cosine", min_stimuli=2)
@@ -175,7 +171,7 @@ def test_shape_mismatch_site_refuses_on_explicit_selection() -> None:
     trace = tl.trace(
         _Transposer().eval(),
         torch.randn(6, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     with pytest.raises(ValueError, match="leading axis") as excinfo:
         repgeom.rdm_evolution(trace, save=tl.func("transpose"), min_stimuli=2)
@@ -222,7 +218,7 @@ def test_resnet18_class_rdm_sweep_fabricates_zero_buffer_pseudo_rdms() -> None:
     model = torchvision.models.resnet18(weights=None).eval()
     n_stimuli = 6
     stimuli = torch.randn(n_stimuli, 3, 64, 64)
-    trace = tl.trace(model, stimuli, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, stimuli, save="all")
 
     buffer_labels = {layer.layer_label for layer in trace.layers if bool(layer.is_buffer_source)}
     assert buffer_labels, "resnet18 trace lost its buffer sites"

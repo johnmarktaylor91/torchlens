@@ -753,3 +753,25 @@ def test_genuine_limits_return_clean_failures() -> None:
     assert not rectangular.found
     assert rectangular.reason == "exact_size_unreachable"
     assert "aspect" in rectangular.message
+
+
+def test_multi_input_refusal_names_the_live_shape_keyword() -> None:
+    """The multi-input refusal points at the keyword ``tl.trace`` accepts today.
+
+    The slow CLIP rider asserts the same message on a real checkpoint; this
+    unmarked twin keeps a keyword rename from leaving the advice stale unseen.
+    """
+
+    import inspect
+
+    from torchlens.debug._infer_failure_classify import classify_nongeometric_failure
+
+    outcome = "forward() missing 1 required positional argument: 'y'"
+    attempts = [((1, 4), outcome), ((1, 8), outcome), ((1, 16), outcome)]
+    classified = classify_nongeometric_failure(attempts, lambda _outcome: False)
+    assert classified is not None
+    reason, message = classified
+    assert reason == "multi_input_required"
+    assert "input_shape=" in message
+    assert "input_size" not in message
+    assert "input_shape" in inspect.signature(tl.trace).parameters

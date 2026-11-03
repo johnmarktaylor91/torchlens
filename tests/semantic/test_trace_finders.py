@@ -52,7 +52,7 @@ def test_trace_finders_return_matching_modules() -> None:
     log = trace_fn(
         _FinderModel(),
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     attention_blocks = list(log.attention_blocks())
     q_modules = list(log.modules_with_facet("q"))
