@@ -205,6 +205,13 @@ def f(x):
     return x
 """
 
+#: The same module with a prose section after ``Examples``: it and the closing-quote
+#: line that ends it keep counting.
+_NOTES_AFTER_EXAMPLES_MODULE = _EXAMPLES_MODULE.replace(
+    '    1\n    """\n',
+    '    1\n\n    Notes\n    -----\n    Counted prose too.\n    """\n',
+)
+
 
 def test_size_caps_leave_only_docstring_examples_uncounted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -213,21 +220,36 @@ def test_size_caps_leave_only_docstring_examples_uncounted(
 
     lines = _EXAMPLES_MODULE.splitlines()
     excluded = _common.example_section_lines(_EXAMPLES_MODULE)
-    # The blank separator, the header, its underline and the two example lines.
-    assert sorted(excluded) == [8, 9, 10, 11, 12]
+    # The blank separator, the header, its underline, the two example lines and the
+    # closing-quote line that ends the section with the docstring.
+    assert sorted(excluded) == [8, 9, 10, 11, 12, 13]
     assert lines[8].strip() == "Examples" and lines[11].strip() == "1"
+    assert lines[12].strip() == '"""'
     assert lines[6].strip() == "Counted prose." and 7 not in excluded
     repo = tmp_path / "repo"
     (repo / "torchlens").mkdir(parents=True)
     (repo / "torchlens" / "m.py").write_text(_EXAMPLES_MODULE)
     monkeypatch.setattr(file_cap, "FILE_CAP", 1)
     monkeypatch.setattr(file_cap, "FUNCTION_CAP", 1)
-    # 14 lines in the file and in ``f``; 5 of them are the Examples section.
-    assert file_cap.measure(repo) == {"torchlens/m.py": 9, "torchlens/m.py::f": 9}
+    # 14 lines in the file and in ``f``; 6 of them are the Examples section.
+    assert file_cap.measure(repo) == {"torchlens/m.py": 8, "torchlens/m.py::f": 8}
     monkeypatch.setattr(file_size_ratchet, "_PROJECT_ROOT", repo)
-    assert file_size_ratchet._line_counts(repo / "torchlens") == {"torchlens/m.py": 9}
-    # Dropping the Examples section changes nothing in the count: prose still counts.
-    without = "\n".join(line for number, line in enumerate(lines, 1) if number not in excluded)
+    assert file_size_ratchet._line_counts(repo / "torchlens") == {"torchlens/m.py": 8}
+    # Dropping the Examples section changes nothing in the count: prose still counts,
+    # and so does the closing-quote line once no Examples section ends there.
+    kept = excluded - {13}  # the closing-quote line stays so the docstring still ends
+    without = "\n".join(line for number, line in enumerate(lines, 1) if number not in kept)
     (repo / "torchlens" / "m.py").write_text(without + "\n")
     assert file_cap.measure(repo) == {"torchlens/m.py": 9, "torchlens/m.py::f": 9}
     assert not _common.example_section_lines(without)
+
+
+def test_size_caps_count_prose_after_an_examples_section() -> None:
+    """A section after ``Examples`` and the closing-quote line that ends it still count."""
+
+    lines = _NOTES_AFTER_EXAMPLES_MODULE.splitlines()
+    excluded = _common.example_section_lines(_NOTES_AFTER_EXAMPLES_MODULE)
+    assert sorted(excluded) == [8, 9, 10, 11, 12]
+    assert lines[14].strip() == "Notes" and 15 not in excluded
+    assert lines[16].strip() == "Counted prose too." and 17 not in excluded
+    assert lines[17].strip() == '"""' and 18 not in excluded

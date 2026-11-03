@@ -115,8 +115,13 @@ def _examples_span(lines: list[str], first: int, last: int) -> set[int]:
     if start is None:
         return span
     end = index  # exclusive; the next header or the docstring's closing line
-    while end > start and (not lines[end - 1].strip() or lines[end - 1].strip() in ('"""', "'''")):
-        end -= 1
+    if end == last:
+        # The section runs to the docstring's end: the closing-quote line and any blank
+        # line before it hold neither code nor prose, so they leave with the section.
+        end = last
+    else:
+        while end > start and not lines[end - 1].strip():
+            end -= 1
     before = start
     while before > first - 1 and not lines[before - 1].strip():
         before -= 1
