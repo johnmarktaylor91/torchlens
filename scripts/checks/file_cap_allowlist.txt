@@ -71,7 +71,7 @@ torchlens/_capture_state_helpers.py::_reject_opaque_wrappers	70
 torchlens/_capture_state_helpers.py::_snapshot_plain_attr_value	200
 torchlens/_constants.py	1445
 torchlens/_constants.py::_get_torch_overridable_functions	104
-torchlens/_data_classes/_compaction.py::compact_op_metadata	63
+torchlens/_data_classes/_compaction.py::compact_op_metadata	61
 torchlens/_data_classes/_lookup_keys.py::_get_lookup_help_str	63
 torchlens/_data_classes/_lookup_keys.py::_give_user_feedback_about_lookup_key	80
 torchlens/_data_classes/_nonfinite.py	885
@@ -105,7 +105,7 @@ torchlens/_data_classes/module.py	2635
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3640
+torchlens/_data_classes/op.py	3598
 torchlens/_data_classes/op.py::Op.__getattribute__	96
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	88
@@ -900,7 +900,7 @@ torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
 torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	76
 torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
-torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	168
+torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	152
 torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snapshot	75
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	113
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	63
@@ -1262,7 +1262,7 @@ torchlens/neuro/_rdms.py::_matrix_mode	95
 torchlens/neuro/_rdms.py::_source_mode	114
 torchlens/neuro/_rdms.py::_validated_matrix	77
 torchlens/neuro/_rdms.py::rdms	127
-torchlens/options.py	1780
+torchlens/options.py	1771
 torchlens/options.py::CaptureOptions.__init__	75
 torchlens/options.py::VisualizationOptions.__init__	130
 torchlens/options.py::_merge_grouped_options	74
