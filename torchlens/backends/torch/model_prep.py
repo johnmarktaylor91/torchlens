@@ -68,6 +68,7 @@ from ._replacement_op_fields import (
 from ._session_cleanup import (  # noqa: F401  (re-exported for tests and sibling modules)
     _clear_callable_session_tensor_metadata,
     _clear_container_tree_tensor_metadata,
+    _clear_module_attribute_tensor_metadata,
     _clear_session_tensor_metadata,
 )
 from ._session_forwards import (
@@ -2326,8 +2327,7 @@ def _undecorate_model_tensors(trace: "Trace", model: nn.Module) -> None:
         trace._session_buffer_identity = {}
     seen: set[int] = set()
     for submodule in model.modules():
-        for attr_val in submodule.__dict__.values():
-            _clear_session_tensor_metadata(attr_val, seen)
+        _clear_module_attribute_tensor_metadata(submodule, seen)
         _clear_callable_session_tensor_metadata(getattr(submodule, "forward", None), seen)
     # Also clean any tensors from the registered buffer dict (_buffers)
     for submodule in model.modules():

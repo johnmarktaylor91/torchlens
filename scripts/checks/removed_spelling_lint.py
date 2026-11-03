@@ -158,6 +158,17 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
         r"|(?<![\w.])(?:tl|torchlens)\.swap_with\b"
         r"|\bintervention_ready\s*="
     ),
+    # The hook-staging door folded into ``do`` (3.0 surface review, no shim):
+    # ``trace.attach_hooks(site, hook)`` is ``trace.do(site, hook, model=model,
+    # inputs=x)``; a remedy that says "attach_hooks() again" teaches a door that
+    # is gone. The receiver list keeps the private ``_trace_hooks.attach_hooks``
+    # body (the moved method) and the ``"attach_hooks"`` state_history kind
+    # (a live record value) out of reach; ``_attach_hooks`` never matches.
+    "attach_hooks": re.compile(
+        r"(?<![\w.])(?:trace|log|fork|layer|op|member|bundle|self|Trace|Layer|Op|Bundle)"
+        r"\.attach_hooks\b"
+        r"|(?<![\w.])(?<!def )attach_hooks\("
+    ),
 }
 
 #: Lines spelling a grouped-option bundle are exempt from ``trace_flat``.
@@ -264,6 +275,7 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
     ),
     "runnable_package": ("torchlens._runnable_", "torchlens/_runnable_"),
     "root_doors": ("tl.save", "torchlens.save", "swap_with", "intervention_ready"),
+    "attach_hooks": ("attach_hooks",),
 }
 
 #: The audited-legitimate ledger: path -> (groups | {"ALL"}, reason).
@@ -277,10 +289,6 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         frozenset({"ALL"}),
         "release history; records the old spellings as history by design",
     ),
-    "benchmarks/perf_results_2026-05-14.md": (
-        frozenset({"ALL"}),
-        "dated benchmark results record (history exemption, S02-fix C3b)",
-    ),
     "benchmarks/intervention_overhead_results.md": (
         frozenset({"ALL"}),
         "generated results record with an explicit history note (S02-fix C3b)",
@@ -288,6 +296,14 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
     "docs/reference/deprecations.md": (
         frozenset({"ALL"}),
         "THE removed-spellings ledger; naming old spellings is its job",
+    ),
+    "MIGRATIONS.md": (
+        frozenset({"attach_hooks"}),
+        "removal record: the 3.0 member moves name the removed hook doors",
+    ),
+    "tests/test_members_fold_rulings.py": (
+        frozenset({"attach_hooks"}),
+        "pytest.raises redirect pin: Trace.attach_hooks refuses typed and names do",
     ),
     "docs/migration/v2.0_api_changes.md": (
         frozenset({"ALL"}),
@@ -521,6 +537,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         "r1_renames": "from torchlens import Bytes, Duration, Flops, Macs, Quantity\n",
         "runnable_package": "from torchlens._runnable_state import prepare_runnable_state\n",
         "root_doors": "tl.save(trace, path)\n",
+        "attach_hooks": "handle = trace.attach_hooks(tl.func('relu'), hook)\n",
     }
     assert set(planted) == set(_FORBIDDEN)
     assert set(_NEEDLES) == set(_FORBIDDEN), "every group needs a needle row"
@@ -586,6 +603,22 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
     ):
         assert not _scan_file(tmp_path / "canonical_root_doors.py", canonical), canonical
 
+    for resurrected in (
+        "fork.attach_hooks(tl.label('relu_1:1'), hook)\n",
+        "``Trace.attach_hooks`` stages a sticky hook\n",
+        "Remedy: detach and attach_hooks() again\n",
+    ):
+        hits = _scan_file(tmp_path / "planted_attach_hooks.py", resurrected)
+        assert any(group == "attach_hooks" for group, _, _ in hits), resurrected
+    for canonical in (
+        "trace.do(tl.func('relu'), hook, model=model, inputs=x)\n",
+        "trace._attach_hooks(site, hook, confirm_mutation=True)\n",
+        "return _doors.intervention()._trace_hooks.attach_hooks(trace, site)\n",
+        "def attach_hooks(trace, site, hook):\n",
+        'record_operation(trace, "attach_hooks", hook_count=1)\n',
+        "def test_attach_hooks_on_a_gradient_site_registers_only() -> None:\n",
+    ):
+        assert not _scan_file(tmp_path / "canonical_attach_hooks.py", canonical), canonical
     for rel in (".github/workflows/nightly.yml", ".pre-commit-config.yaml", "docs/_site_map.yaml"):
         assert _in_scan_scope(rel), f"workflow and config files are in scan scope: {rel}"
     for rel in ("pyproject.toml", "docs/images/x.png", ".github/CODEOWNERS"):

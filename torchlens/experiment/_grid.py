@@ -74,7 +74,7 @@ class GridCell:
 
     Examples
     --------
-    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> base = tl.trace(model, x)
     >>> grid = tl.experiment.sweep_grid(
     ...     base, axes={"site": {"a": "conv2d_1_1", "b": "relu_1_2"}}, edit=tl.zero_ablate(),
     ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="none",
@@ -101,7 +101,7 @@ class SweepGrid:
 
     Examples
     --------
-    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> base = tl.trace(model, x)
     >>> grid = tl.experiment.sweep_grid(
     ...     base, axes={"site": ["conv2d_1_1", "relu_1_2"]}, edit=tl.scale(0.5),
     ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="none",
@@ -594,7 +594,7 @@ def sweep_grid(
 
     Examples
     --------
-    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> base = tl.trace(model, x)
     >>> metric = lambda t: float(t[t.output_layers[0]].out.sum())
     >>> grid = tl.experiment.sweep_grid(
     ...     base, axes={"site": {"a": "conv2d_1_1", "b": "relu_1_2"},

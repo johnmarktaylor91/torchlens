@@ -2571,7 +2571,7 @@ class _observe_tensor_ops:
             return result
 
         # tinygrad deliberately exposes this as a method; preview capture replaces it temporarily.
-        Tensor._apply_uop = wrapped
+        setattr(Tensor, "_apply_uop", wrapped)
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
@@ -2595,7 +2595,7 @@ class _observe_tensor_ops:
         from tinygrad import Tensor
 
         # Restore the deliberately replaced tinygrad method after preview capture.
-        Tensor._apply_uop = self.original
+        setattr(Tensor, "_apply_uop", self.original)
 
 
 def _uop_signature(uop: Any) -> str:
