@@ -7,6 +7,7 @@ the door's predicate refusals and selector resolution moved verbatim from ``prep
 from __future__ import annotations
 
 import warnings
+from collections.abc import Collection
 from dataclasses import replace
 from typing import Any
 
@@ -41,7 +42,7 @@ from ..._trace_selector_helpers import (
 )
 from ...intervention.hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from ...intervention.predicates import InterventionPredicate
-from ...intervention.spec import Recipe, Rule, _canonical_repr
+from ...intervention.spec import Recipe, Rule
 from ...intervention.types import InterventionDecision, InterventionSpec, TargetSpec
 from .request import _DoorArgs, _DoorState
 
@@ -248,7 +249,38 @@ def _fired_capture_records(trace: Trace) -> tuple[list[str], int, list[Any]]:
     return fired_labels, fire_count, fired_records
 
 
-def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> None:
+def _unfired_forward_rules(spec: Recipe, fired_rule_ids: Collection[str]) -> tuple[Rule, ...]:
+    """Return the spec's rules that address the forward pass and fired nowhere.
+
+    Settlement is per rule IDENTITY (the rule ids the capture doors noted as
+    they fired), never per action repr: same-named closures render alike, and
+    a callable never renders like its fire record. A backward-only rule
+    (``tl.grad(...)`` or a node site) fires after the capture returns, so the
+    capture-time settlement never judges it.
+
+    Parameters
+    ----------
+    spec:
+        The capture's public ``intervene=`` spec.
+    fired_rule_ids:
+        Rule ids noted as fired during the capture.
+
+    Returns
+    -------
+    tuple[Rule, ...]
+        Unfired forward rules, in spec order.
+    """
+
+    return tuple(
+        rule
+        for rule in spec.rules
+        if rule.signal != "backward" and rule.rule_id not in fired_rule_ids
+    )
+
+
+def _record_capture_intervention_event(
+    trace: Trace, intervene_request: Any, *, fired_rule_ids: Collection[str]
+) -> None:
     """Write the capture-door InterventionEvent envelope (C03 fire evidence).
 
     One envelope per intervened capture attempt -- fired or not. The capture
@@ -261,22 +293,22 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         Completed capture.
     intervene_request:
         The ``intervene=`` argument as configured, when any.
+    fired_rule_ids:
+        Ids of the public-spec rules that fired during this capture (the
+        per-capture fire ledger).
     """
 
     if intervene_request is None:
         return
-    fired_labels, fire_count, fired_records = _fired_capture_records(trace)
+    fired_labels, fire_count, _fired_records = _fired_capture_records(trace)
     zero_fire_rule_ids: tuple[str, ...] = ()
+    unfired_rules: tuple[Rule, ...] = ()
     if isinstance(intervene_request, Recipe):
         rules = rules_payload(intervene_request)
         edit_names = tuple(str(rule["action"]) for rule in rules)
         selection_repr = " | ".join(str(rule["where"]) for rule in rules)
-        fired_action_reprs = {
-            _canonical_repr(record.edit) for record in fired_records if record.edit is not None
-        }
-        zero_fire_rule_ids = tuple(
-            str(rule["rule_id"]) for rule in rules if str(rule["action"]) not in fired_action_reprs
-        )
+        unfired_rules = _unfired_forward_rules(intervene_request, fired_rule_ids)
+        zero_fire_rule_ids = tuple(rule.rule_id for rule in unfired_rules)
     else:
         rules = ()
         decision = getattr(intervene_request, "decision", None)
@@ -301,16 +333,54 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         zero_fire_rule_ids=zero_fire_rule_ids,
         extra={"armed_edits": armed_edits, "awaiting": "backward"} if armed_edits else None,
     )
-    if fire_count and zero_fire_rule_ids:
-        # Some rules fired and some did not: the fact is on the audit row above;
-        # the capture's on_zero_fire policy settles the rest. (A request that fired
-        # nowhere at all settles at the zero-match selector disclosure instead.)
-        names = ", ".join(zero_fire_rule_ids)
+    _settle_unfired_spec_rules(
+        trace, intervene_request, unfired_rules, any_fired=bool(fired_rule_ids)
+    )
+
+
+def _settle_unfired_spec_rules(
+    trace: Trace, intervene_request: Any, unfired_rules: tuple[Rule, ...], *, any_fired: bool
+) -> None:
+    """Settle a public spec's unfired rules under the capture's ``on_zero_fire``.
+
+    Some rules fired and some did not: the fact is on the audit row; the
+    policy settles the rest. A multi-clause spec that fired nowhere at all
+    settles here too, naming every unfired rule and adding each to the
+    persisted unmatched-selector ledger (it has no single selector, so the
+    zero-match selector disclosure never sees it). A one-clause spec that
+    fired nowhere settles at that selector disclosure instead, unchanged.
+
+    Parameters
+    ----------
+    trace:
+        Completed capture.
+    intervene_request:
+        The ``intervene=`` argument as configured.
+    unfired_rules:
+        The spec's unfired forward rules.
+    any_fired:
+        Whether any rule of the spec fired during the capture.
+    """
+
+    if not unfired_rules or not isinstance(intervene_request, Recipe):
+        return
+    zero_fire_rule_ids = [rule.rule_id for rule in unfired_rules]
+    names = ", ".join(zero_fire_rule_ids)
+    if any_fired:
         settle_capture_zero_fire(
             f"Capture-time intervention rule(s) [{names}] fired at zero sites while "
             "other rules fired; the capture completed with those rules unapplied.",
-            zero_fire_rule_ids=list(zero_fire_rule_ids),
+            zero_fire_rule_ids=zero_fire_rule_ids,
         )
+        return
+    if len(intervene_request.rules) < 2:
+        return
+    for rule in unfired_rules:
+        _record_unmatched_selector(trace, "intervene", rule.target, _rule_signal(rule.target))
+    settle_capture_zero_fire(
+        f"Capture-time intervention rule(s) [{names}] fired at zero sites; no intervention fired.",
+        zero_fire_rule_ids=zero_fire_rule_ids,
+    )
 
 
 def _intervention_spec_from_hook_plan(hook_plan: Any) -> InterventionSpec | None:
@@ -513,22 +583,7 @@ def _warn_zero_match_capture_selectors(
     def _record_unmatched(slot: str, selector: Any, signal: str | None = None) -> None:
         """Append one zero-match fact to the persisted trace annotations."""
 
-        annotations = getattr(trace, "annotations", None)
-        if not isinstance(annotations, dict):
-            return
-        from ..._io._source_privacy import _relativize_path_literals
-
-        # R62: this ledger persists at every save level, so a selector repr
-        # embedding an absolute host path (e.g. a file-payload predicate) must
-        # go through the same path-relativization belt as every other
-        # persisted repr.
-        entry: dict[str, str] = {
-            "slot": slot,
-            "selector": _relativize_path_literals(repr(selector)),
-        }
-        if signal is not None:
-            entry["signal"] = str(signal)
-        annotations.setdefault("unmatched_capture_selectors", []).append(entry)
+        _record_unmatched_selector(trace, slot, selector, signal)
 
     defer_backward_intervention = False
     try:
@@ -593,6 +648,41 @@ def _warn_zero_match_capture_selectors(
         trace.__dict__.pop("_tl_save_selector_fire_count", None)
         if not defer_backward_intervention:
             trace.__dict__.pop("_tl_intervene_selector_fire_count", None)
+
+
+def _record_unmatched_selector(
+    trace: Any, slot: str, selector: Any, signal: str | None = None
+) -> None:
+    """Append one zero-match fact to the persisted ``unmatched_capture_selectors`` ledger.
+
+    Parameters
+    ----------
+    trace:
+        Completed capture.
+    slot:
+        Capture selector slot (``"save"``, ``"intervene"``, ...).
+    selector:
+        The selector (or rule WHERE term) that matched nothing.
+    signal:
+        The pass the selector fires in, when known.
+    """
+
+    annotations = getattr(trace, "annotations", None)
+    if not isinstance(annotations, dict):
+        return
+    from ..._io._source_privacy import _relativize_path_literals
+
+    # R62: this ledger persists at every save level, so a selector repr
+    # embedding an absolute host path (e.g. a file-payload predicate) must
+    # go through the same path-relativization belt as every other
+    # persisted repr.
+    entry: dict[str, str] = {
+        "slot": slot,
+        "selector": _relativize_path_literals(repr(selector)),
+    }
+    if signal is not None:
+        entry["signal"] = str(signal)
+    annotations.setdefault("unmatched_capture_selectors", []).append(entry)
 
 
 def _non_tensor_zero_fire_fields(trace: Any, selector: Any) -> dict[str, Any]:
