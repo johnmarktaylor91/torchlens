@@ -38,10 +38,10 @@ faster (section 12). About 16,450 lines of `torchlens/_io/` leave or shrink to a
 
 ## 1. The layer
 
-One package, `torchlens/_io/format3/`. Nine modules plus `__init__`, every one under the
-800-line file cap (`scripts/checks/file_cap.py`, no new allowlist row). Nine is the smallest count that keeps each under the cap and gives the three
-build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `values.py`,
-`schema.py`; reader: `decode.py`, `reader.py`, `validate.py`; runnable: `runnable.py`).
+One package, `torchlens/_io/format3/`. Each carrier and grammar module stays under the
+800-line file cap (`scripts/checks/file_cap.py`, no new allowlist row). The table names
+the current components; `__init__` provides their thin package entry.
+
 
 | Module | Holds | Budget (lines) | Stream |
 | --- | --- | ---: | --- |
@@ -59,6 +59,9 @@ build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `v
 | `runnable.py` | thin adapter: descriptor JSON and state chunks under `runnable/`; delegates to `_io/runnable.py` (producer) and `_io/runnable_load.py` (loader), which keep their frozen contracts | 200 | Pure wire descriptor and state families; save preparation and runtime binding remain above the carrier |
 | `runnable_families.py` | Fixed runnable family names, shared chunk writer, checked tensor references |
 | `container.py` | Bundle members, manifest bindings and relations |
+| `codec_policy.py` | Tensor carrier roles and backend agreement checked before codec lookup | 100 | reader |
+| `restore.py` | Declared record-state restoration while retaining saved cell values | 200 | reader |
+| `summaries.py` | Closed model-identity and backward-summary schemas | 200 | reader |
 | `codec_policy.py` | the payload codec boundary (section 9): payload columns take the artifact's codec, raw-value cells the array codec, disagreeing hints refuse before codec lookup | 100 | reader |
 | `restore.py` | record restore: the state hook on one decoded row, then the true-up that puts back saved nulls and level-omitted columns so load then save is lossless | 150 | reader |
 | `summaries.py` | closed shapes of the optional manifest summaries (`model_fingerprint`, `backward_summary`), refused `manifest_schema_invalid` when present and malformed | 150 | reader |
