@@ -3,6 +3,8 @@
 Wang et al.'s 26-head indirect-object-identification circuit is the membership oracle for
 an EAP-IG ranking on GPT-2 small; the fixed 1,000-row run passed with head ROC AUC 0.9263.
 
+![ROC curve of the head ranking against Wang's 26-head membership: summed outgoing attribution separates the 26 IOI heads from the other 118 with ROC AUC 0.926, and the top 26 heads recover 77% of Wang's set; the chance diagonal is dotted.](../images/gallery/ioi_roc.svg)
+
 | Field | Value |
 | --- | --- |
 | Claim | Wang et al., *Interpretability in the Wild: a Circuit for Indirect Object Identification in GPT-2 small*, ICLR 2023, arXiv 2211.00593 |

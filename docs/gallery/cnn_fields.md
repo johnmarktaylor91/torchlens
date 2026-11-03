@@ -14,8 +14,8 @@ gradient support is an additional empirical oracle, not a general equality theor
 | Claim | Geometric CNN influence supports input interventions and predicts projective support. |
 | Script and run line | `python examples/gallery/cnn_fields.py --out outputs/cnn_fields` |
 | Pinned inputs | torchvision ResNet-18, `IMAGENET1K_V1`, eval, float32, seed 17, one 224x224 random input; layer3, channel 0, centre unit. |
-| Verdict | Passed; Linux x86_64 CPU, 3 November 2026, TorchLens 2.36.3, commit `01497c6d`. |
-| Cost | 13.9 s measured analysis; 21.1 s process wall time on two CPU threads, 743 MiB peak memory. |
+| Verdict | Passed; Linux x86_64 CPU, 3 November 2026, TorchLens 2.36.3, commit `a676d9ab`. |
+| Cost | 11.6 s measured analysis; 23.6 s process wall time on two CPU threads, 778 MiB peak memory. |
 
 ## Oracles
 
@@ -44,8 +44,8 @@ exact; the label is reported here, not graded.
 
 ## Artifact and replay
 
-The full capture is saved as a portable `cnn_fields.tlspec` (34,539,747 bytes, sha256
-`5854ea7ee5a0a391`...). The script reloads it, zeroes the outside field of the reloaded input,
+The full capture is saved as a portable `cnn_fields.tlspec` (34,539,731 bytes, sha256
+`6d860501249e5a54`...). The script reloads it, zeroes the outside field of the reloaded input,
 reruns the model and compares the unit with the reloaded value: the delta is exactly 0, as in
 memory.
 
@@ -53,7 +53,7 @@ memory.
 
 | Verbs | TorchLens lines | Plain-PyTorch lines | Architecture |
 | --- | --- | --- | --- |
-| capture, select, read, do, compare, save | 233 | 37 | ResNet-18 |
+| capture, select, read, do, compare, save | 218 | 37 | ResNet-18 |
 
 Counts are nonblank, noncomment, non-docstring lines. The TorchLens region includes setup, the
 command line, reporting, plotting and helpers; the plain region covers the independent geometry
@@ -64,8 +64,8 @@ measured.
 
 ```text
 {
-  "commit": "01497c6dcea4b23f5fe5ee3401fc3678fa757123",
-  "date_utc": "2026-11-03T15:27:18Z",
+  "commit": "a676d9ab3e3b3393d68176622c1aa5fb3c730ec8",
+  "date_utc": "2026-11-03T20:24:56Z",
   "device": "cpu",
   "libraries": {
     "numpy": "2.2.6",
@@ -73,12 +73,12 @@ measured.
     "transformers": "5.18.0"
   },
   "machine": "x86_64",
-  "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
-  "python": "3.10.19",
+  "platform": "Linux-7.0.0-1011-gcp-x86_64-with-glibc2.39",
+  "python": "3.10.20",
   "torch": "2.13.0+cpu",
   "torch_threads": 2,
   "torchlens": "2.36.3",
-  "wall_seconds": 13.9
+  "wall_seconds": 11.6
 }
 ```
 

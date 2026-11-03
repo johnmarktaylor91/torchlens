@@ -7,14 +7,19 @@ control shuffles the stimulus order on one side: the RDMs must stop agreeing and
 flag the mismatch, so an order bug cannot pass silently. The entry passes on both architectures.
 The layer-ranking target is synthetic, and no neuroscience benchmark result is claimed.
 
+![Top row: the five stage RDMs (24 by 24 Fashion-MNIST stimuli) that TorchLens extracted from ResNet-18. Bottom: the Pearson correlation between the TorchLens RDM and the plain-hooks RDM at all 13 sites, every point rounding to 1.000 and above the 0.999 bar, and the control curve with one side's stimulus order shuffled, which reaches -0.027 at most, far under the 0.5 control bar.](../images/gallery/neuro_rdms.svg)
+
+The figure is drawn from the ResNet-18 run's saved `neuro_rdms.json` and `neuro_rdms_figure.npz` by
+the shared gallery renderer; the script's `--figure-only` flag redraws it without rerunning the model.
+
 | Item | Recorded setup |
 | --- | --- |
 | Claim | Layer-wise and residual-add RDMs agree with independent extraction and rsatoolbox. |
 | Script and run line | `python examples/gallery/neuro_rdms.py --out outputs/neuro_rdms/resnet18` (add `--arch vit_b_16` for ViT-B/16) |
 | Pinned inputs | ResNet-18 and ViT-B/16, `IMAGENET1K_V1`, eval, float32; first 24 Fashion-MNIST test images in split order; RGB, antialiased bilinear 224x224, ImageNet normalization; seed 17. |
 | Data hash | Compressed-file SHA256 `346e55b948d973a97e58d2351dde16a484bd415d4595297633bb08f03db6a073`. |
-| Verdict | Passed on both; Linux x86_64 CPU, 3 November 2026, TorchLens 2.36.3, commit `01497c6d`. |
-| Cost | ResNet-18: 19.8 s analysis, 31.1 s process wall, 1.08 GiB peak memory. ViT-B/16: 48.8 s analysis, 60.8 s process wall, 2.64 GiB peak memory. Two CPU threads each. |
+| Verdict | Passed on both; Linux x86_64 CPU, 3 November 2026, TorchLens 2.36.3, commit `a676d9ab`. |
+| Cost | ResNet-18: 19.0 s analysis, 35.1 s process wall, 1.09 GiB peak memory. ViT-B/16: 66.8 s analysis, 83.9 s process wall, 2.66 GiB peak memory. Two CPU threads each. |
 
 The [Fashion-MNIST source](https://github.com/zalandoresearch/fashion-mnist) supplies images
 under its MIT license. The hash is independently listed by
@@ -29,7 +34,7 @@ The rules are the ones registered for this entry before any run.
 | Rule | ResNet-18 | ViT-B/16 |
 | --- | --- | --- |
 | Every per-layer RDM from TorchLens has Pearson >= 0.999 with the RDM from independent plain-hook extraction | minimum `0.9999999999999988`, pass | minimum `0.9999999999988609`, pass |
-| Every RDM from `tl.neuro.rdms` matches rsatoolbox's own `calc_rdm` pipeline on the same TorchLens activations to max abs 1e-6 | maximum `4.97e-13`, pass | maximum `6.86e-14`, pass |
+| Every RDM from `tl.neuro.rdms` matches rsatoolbox's own `calc_rdm` pipeline on the same TorchLens activations to max abs 1e-6 | maximum `8.88e-16`, pass | maximum `8.33e-15`, pass |
 | Same best layer on the synthetic final-stage target | `avgpool` for both, pass | `encoder.ln` for both, pass |
 
 ResNet includes five stages and all eight pre-ReLU residual additions. ViT includes three
@@ -38,7 +43,7 @@ output is also one of the residual sums, so 28 requested sites resolve to 27 uni
 independent path uses plain forward hooks and recomputes each residual sum itself.
 
 The first run of this script compared TorchLens RDMs with rsatoolbox RDMs built from the
-plain-hook activations instead, at the same 1e-6 bar. On ResNet-18 that difference is the same
+plain-hook activations instead, at the same 1e-6 bar. On ResNet-18 that difference is
 `4.97e-13`. On ViT-B/16 it is `1.065e-6`, at the fifth encoder layer. The reason is that TorchLens
 switches off PyTorch's fused attention fast path while it captures, so that every operation
 inside attention is visible, and the fused kernel rounds differently. With the fast path also
@@ -62,14 +67,14 @@ flagged.
 
 | Run | Bytes | sha256 |
 | --- | --- | --- |
-| ResNet-18 | 109,342,780 | `4a6c85af9284bfaa`... |
-| ViT-B/16 | 394,121,159 | `47ce4b55200b1e72`... |
+| ResNet-18 | 109,342,735 | `123ddac580a56a5c`... |
+| ViT-B/16 | 394,121,467 | `ad2b998b8d4804db`... |
 
 ## Basis-grid row
 
 | Verbs | TorchLens lines | Plain lines | Architectures |
 | --- | --- | --- | --- |
-| capture, select, read, compare, save | 252 | 56 | ResNet-18, ViT-B/16 |
+| capture, select, read, compare, save | 226 | 56 | ResNet-18, ViT-B/16 |
 
 Counts are nonblank, noncomment, non-docstring lines. The TorchLens region includes setup, the
 command line, plotting, reporting and helpers; the plain region covers independent extraction,
@@ -82,8 +87,8 @@ ResNet-18:
 
 ```text
 {
-  "commit": "01497c6dcea4b23f5fe5ee3401fc3678fa757123",
-  "date_utc": "2026-11-03T15:25:47Z",
+  "commit": "a676d9ab3e3b3393d68176622c1aa5fb3c730ec8",
+  "date_utc": "2026-11-03T20:25:11Z",
   "device": "cpu",
   "libraries": {
     "numpy": "2.2.6",
@@ -92,13 +97,13 @@ ResNet-18:
     "transformers": "5.18.0"
   },
   "machine": "x86_64",
-  "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
-  "python": "3.10.19",
+  "platform": "Linux-7.0.0-1011-gcp-x86_64-with-glibc2.39",
+  "python": "3.10.20",
   "stimulus_order_mismatch": true,
   "torch": "2.13.0+cpu",
   "torch_threads": 2,
   "torchlens": "2.36.3",
-  "wall_seconds": 19.8
+  "wall_seconds": 19.0
 }
 ```
 
@@ -106,8 +111,8 @@ ViT-B/16:
 
 ```text
 {
-  "commit": "01497c6dcea4b23f5fe5ee3401fc3678fa757123",
-  "date_utc": "2026-11-03T15:26:45Z",
+  "commit": "a676d9ab3e3b3393d68176622c1aa5fb3c730ec8",
+  "date_utc": "2026-11-03T20:26:00Z",
   "device": "cpu",
   "libraries": {
     "numpy": "2.2.6",
@@ -116,13 +121,13 @@ ViT-B/16:
     "transformers": "5.18.0"
   },
   "machine": "x86_64",
-  "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
-  "python": "3.10.19",
+  "platform": "Linux-7.0.0-1011-gcp-x86_64-with-glibc2.39",
+  "python": "3.10.20",
   "stimulus_order_mismatch": true,
   "torch": "2.13.0+cpu",
   "torch_threads": 2,
   "torchlens": "2.36.3",
-  "wall_seconds": 48.8
+  "wall_seconds": 66.8
 }
 ```
 
