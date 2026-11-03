@@ -3,8 +3,8 @@
 ``Bundle.relation_grades`` is a derivation over the relation table: nothing is
 stored, and the same rows grade the same way after a save/load round trip.
 User-authored measurement grades stay clamped to ``disclosed`` at the row door
-(W051-HONESTY M8), so the measured rungs are pinned through the derivation's
-own input, a validated params mapping.
+(the honesty rule: no producer writes measured evidence yet), so the measured
+rungs are pinned through the derivation's own input, a validated params mapping.
 """
 
 from __future__ import annotations
@@ -30,8 +30,6 @@ from torchlens.bundle._relation_grades import (
 )
 from torchlens.bundle._relations import RELATION_CLAIM_GRADES
 
-pytestmark = pytest.mark.smoke
-
 MEMBERS = ("turn_2", "turn_1")
 
 
@@ -55,6 +53,12 @@ def bundle():
     finally:
         early.cleanup()
         late.cleanup()
+
+
+def _fresh(bundle: Bundle) -> Bundle:
+    """A new bundle over the fixture's members: ``relate`` installs its table in place."""
+
+    return Bundle({"turn_1": bundle["turn_1"], "turn_2": bundle["turn_2"]})
 
 
 def _item(grade: str, cls: str, **extra: Any) -> dict[str, Any]:
@@ -110,7 +114,7 @@ def test_carry_mode_outside_vocabulary_refuses_at_the_row_door() -> None:
 
 
 def test_carry_mode_none_grades_disclosed_not_unchecked(bundle: Bundle) -> None:
-    b = bundle.relate("successor_of", "turn_2", "turn_1", carry_mode="none")
+    b = _fresh(bundle).relate("successor_of", "turn_2", "turn_1", carry_mode="none")
     (grade,) = b.relation_grades()
     assert grade.grade == "disclosed"
     assert grade.unchecked_reasons == ()
@@ -289,7 +293,7 @@ def test_user_schema_leaves_class_optional_but_validated() -> None:
 
 
 def test_bundle_relation_grades_are_derived_and_survive_a_round_trip(bundle: Bundle) -> None:
-    b = bundle.relate(
+    b = _fresh(bundle).relate(
         "successor_of",
         "turn_2",
         "turn_1",
@@ -318,8 +322,9 @@ def test_bundle_relation_grades_are_derived_and_survive_a_round_trip(bundle: Bun
 def test_opaque_row_grades_unchecked_kind_unregistered(bundle: Bundle) -> None:
     from torchlens.bundle import OpaqueRelationRow
 
-    opaque = OpaqueRelationRow.from_payload(
-        {"kind": "lab.custom_link", "from": "turn_2", "to": "turn_1", "params": {}}
+    opaque = OpaqueRelationRow(
+        "lab.custom_link",
+        {"kind": "lab.custom_link", "from": "turn_2", "to": "turn_1", "params": {}},
     )
     b = Bundle({"turn_1": bundle["turn_1"], "turn_2": bundle["turn_2"]}, relations=[opaque])
     (grade,) = b.relation_grades()

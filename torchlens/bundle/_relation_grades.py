@@ -102,9 +102,9 @@ def grade_relation_row(row: MemberRelationRow | OpaqueRelationRow) -> RelationGr
     """Derive one row's grade from its evidence items and declared params.
 
     Every item a user authors today is clamped to ``disclosed`` or
-    ``unchecked`` at the row's construction (W051-HONESTY M8), so the
-    measured rungs and ``broken`` fire only once a TorchLens producer writes
-    measured items; the derivation is pinned now so that door grades
+    ``unchecked`` at the row's construction (the honesty rule: no producer
+    writes measured evidence yet), so the measured rungs and ``broken`` fire
+    only once a TorchLens producer writes measured items; the derivation is pinned now so that door grades
     identically when it opens.
     """
 
