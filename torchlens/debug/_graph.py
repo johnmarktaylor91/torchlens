@@ -656,6 +656,18 @@ def _feature_dim(
     return feature_dim if 0 <= feature_dim < out.ndim else None
 
 
+#: Columns of the ``dead_neurons`` table, in order.
+_DEAD_NEURON_COLUMNS: tuple[str, ...] = (
+    "op",
+    "total_units",
+    "dead_count",
+    "dead_frac",
+    "sample_dead_idx",
+    "reason",
+    "source_line",
+)
+
+
 def dead_neurons(trace: Trace, *, dim: int | None = None, threshold: float = 0.0) -> Report:
     """Find the dead units of every layer in one completed trace.
 
@@ -701,18 +713,7 @@ def dead_neurons(trace: Trace, *, dim: int | None = None, threshold: float = 0.0
 
     rows, attrs = dead_neurons_rows(trace, dim=dim, threshold=threshold)
     pd = _require_pandas()
-    frame = pd.DataFrame(
-        rows,
-        columns=[
-            "op",
-            "total_units",
-            "dead_count",
-            "dead_frac",
-            "sample_dead_idx",
-            "reason",
-            "source_line",
-        ],
-    )
+    frame = pd.DataFrame(rows, columns=list(_DEAD_NEURON_COLUMNS))
     frame.attrs.update(attrs)
     return table_report(
         "dead_neurons",
