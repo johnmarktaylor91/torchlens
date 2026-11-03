@@ -45,9 +45,10 @@ def visualization() -> ModuleType:
 
 
 def intervention() -> ModuleType:
-    """Door to ``torchlens.intervention`` (edits, selection edits, hooks, run and op-edit destinations)."""
+    """Door to ``torchlens.intervention`` (edits, edit guards, selection edits, hooks, run and op-edit destinations)."""
 
     from ..intervention import (  # noqa: F401
+        _edit_guards,
         _op_edits,
         _trace_edits,
         _trace_hooks,
@@ -67,10 +68,10 @@ def validation() -> ModuleType:
     return _package_of(_trace_checks)
 
 
-def export() -> ModuleType:
-    """Door to ``torchlens.export`` (the trace tables destination)."""
+def stats() -> ModuleType:
+    """Door to ``torchlens.stats`` (the trace tables destination)."""
 
-    from ..export import _trace_tables
+    from ..stats import _trace_tables
 
     return _package_of(_trace_tables)
 
@@ -89,14 +90,6 @@ def backends_torch() -> ModuleType:
     from ..backends.torch import _trace_backward
 
     return _package_of(_trace_backward)
-
-
-def recording() -> ModuleType:
-    """Door to ``torchlens.recording`` (the trace preview destination)."""
-
-    from ..recording import _trace_preview
-
-    return _package_of(_trace_preview)
 
 
 def debug() -> ModuleType:

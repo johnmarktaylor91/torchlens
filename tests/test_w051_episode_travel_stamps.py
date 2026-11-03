@@ -92,18 +92,20 @@ def test_run_product_round_trips_save_load(tmp_path) -> None:
 
 
 def test_guarded_fast_live_product_round_trips_save_load(tmp_path) -> None:
-    """The guarded-fast LIVE path refreshes the user's own trace in place."""
+    """The guarded-fast LIVE path returns a plain product and leaves the source stamped."""
 
     model = _Greedy()
     trace = _episode(model, save=tl.func("cat"))
     assert _stamped(trace)
     result = trace.run(inputs=torch.tensor([[1]]), fast=True)
-    assert result.trace is trace
-    assert trace.provenance.kind == "plain"
-    assert _stamped(trace) == []
+    product = result.trace
+    assert product is not trace
+    assert product.provenance.kind == "plain"
+    assert _stamped(product) == []
+    assert _stamped(trace)
 
     path = tmp_path / "fast.tlspec"
-    trace.save(path)
+    product.save(path)
     loaded = tl.load(path)
     assert loaded.provenance.kind == "plain"
     assert _stamped(loaded) == []

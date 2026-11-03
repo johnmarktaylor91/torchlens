@@ -57,7 +57,7 @@ def test_bundle_write_overwrite_false_does_not_destroy_concurrent(
     monkeypatch.setattr(tlspec_mod, "fsync_tree", racing_fsync)
     with pytest.raises(ArtifactError) as info:
         tl.Bundle({"m": _trace(1)}).save(target, overwrite=False)
-    assert info.value.fields.get("code") == "bundle_save_failed"
+    assert info.value.fields.get("code") == "bundle_path_exists"
 
     assert (target / "MARKER").read_text(encoding="utf-8") == _SENTINEL
 

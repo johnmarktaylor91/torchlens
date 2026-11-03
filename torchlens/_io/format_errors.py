@@ -27,7 +27,7 @@ class ArtifactTooOldError(ArtifactError):
 
     Any stamp older than the current ``tlspec_version``, any pickled 2.x module path and the
     2.16 ModelLog format refuse with this error rather than being partially reconstructed;
-    the remedy is to save the file again with torchlens 2.36.x or capture the model again.
+    the remedy is to load the file with torchlens 2.36.x or capture the model again.
     """
 
 
@@ -98,7 +98,7 @@ del _cls
 
 
 def refuse_bundle_exists(path: object, *, overwritable: bool = False) -> NoReturn:
-    """Raise the ``bundle_save_failed`` refusal for a save or streaming target that exists.
+    """Raise the ``bundle_path_exists`` refusal for a save or streaming target that exists.
 
     Shared by the streaming writer (``to_disk``), ``Trace.save`` and ``Bundle.save``
     (``overwritable=True``: those doors take ``overwrite=``), at the entry check and at
@@ -108,7 +108,7 @@ def refuse_bundle_exists(path: object, *, overwritable: bool = False) -> NoRetur
 
     raise ArtifactError(
         f"Bundle path already exists: {path}",
-        code="bundle_save_failed",
+        code="bundle_path_exists",
         remedy=(
             "pass overwrite=True to replace the existing bundle, or save to a path that "
             "does not exist yet"
@@ -119,10 +119,10 @@ def refuse_bundle_exists(path: object, *, overwritable: bool = False) -> NoRetur
 
 
 def refuse_missing_blobs(blob_ids: list[str]) -> NoReturn:
-    """Raise the ``bundle_load_failed`` refusal for a manifest whose blob files are gone."""
+    """Raise the ``bundle_blob_missing`` refusal for a manifest whose blob files are gone."""
 
     raise ArtifactError(
         f"Bundle manifest references missing blob files for blob_id(s): {', '.join(blob_ids)}.",
-        code="bundle_load_failed",
+        code="bundle_blob_missing",
         remedy="restore the missing blob files, or re-save the bundle from its source capture",
     )

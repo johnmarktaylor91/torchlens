@@ -15,10 +15,7 @@ from torch import nn
 from torchlens._runnable import ContractCheck, ReadinessReport
 
 from . import _state
-from ._call_fingerprint import (
-    fingerprinting,
-    install_module_token_hooks,
-)
+from ._call_fingerprint import fingerprinting
 from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
@@ -29,13 +26,12 @@ from ._fast_live_plans import (
     _module_call_budget,
     _output_tensor_leaves,
     _pair_output_leaves,
-    _remove_fast_live_hooks,
     build_direct_forward_routes,
     build_function_plans,
     build_module_plans,
     collected_function_output,
     direct_forward_routes_installed,
-    install_collection_hooks,
+    install_session_hooks,
     repeats_last_function_output,
     require_distinct_plan_modules,
     save_payload_paused,
@@ -46,8 +42,6 @@ from ._fast_live_steer import (
     clear_unrefreshed_shape_metadata,
     fast_live_input_admission,
     hooked_run_diagnostic,
-    install_steer_hooks,
-    session_is_active,
 )
 from ._fast_live_until import (
     FastUntilReached,
@@ -679,10 +673,17 @@ class _FastSparseSession:
 class _FastLiveSession:
     """Native-forward collector guarded by selected-site and boundary call plans."""
 
-    def __init__(self, trace: Any, model: nn.Module) -> None:
-        """Build and install the targeted live-model collection plan."""
+    def __init__(self, trace: Any, model: nn.Module, *, target: Any | None = None) -> None:
+        """Build and install the targeted live-model collection plan.
+
+        Every result write (payloads, truncation, ledger, state) lands on the
+        target; the source is only read. The explicit ``fast=True`` door passes
+        a fork so the source stays untouched; the legacy rerun door passes
+        nothing and refreshes the trace in place.
+        """
 
         self.trace = trace
+        self.target = trace if target is None else target
         self.model_ref = weakref.ref(model)
         self.owner_thread_id: int | None = None
         self.active = False
@@ -727,7 +728,7 @@ class _FastLiveSession:
         self.direct_routes = build_direct_forward_routes(
             model, modules, plan_addresses, self.steer_plan.modules
         )
-        _drop_uncollected_payloads(trace, supported_labels)
+        _drop_uncollected_payloads(self.target, supported_labels)
         self.function_names = frozenset(plan.address_or_name for plan in self.function_plans)
         # The ordered call fingerprint sealed at capture time is the structure
         # guard that admits a different-size input; ``None`` on a trace that
@@ -744,15 +745,7 @@ class _FastLiveSession:
         self.last_fingerprint: tuple[int, int] | None = None
         self.refreshed_labels: frozenset[str] = frozenset(supported_labels)
         self.handles: list[Any] = []
-        self._hook_finalizer = weakref.finalize(self, _remove_fast_live_hooks, self.handles)
-        session_ref = weakref.ref(self)
-        try:
-            self.handles.extend(install_steer_hooks(self.steer_plan, session_ref))
-            self.handles.extend(install_module_token_hooks(model, session_is_active(session_ref)))
-            install_collection_hooks(self.handles, modules, plan_addresses, session_ref)
-        except BaseException:
-            self._hook_finalizer()
-            raise
+        self._hook_finalizer = install_session_hooks(self, model, modules, plan_addresses)
 
     def close(self) -> None:
         """Remove persistent module hooks owned by this session."""
@@ -774,9 +767,9 @@ class _FastLiveSession:
         )
 
     def _poison_and_raise(self, failed: ContractCheck) -> None:
-        """Poison the half-refreshed user Trace, then raise the typed divergence.
+        """Poison the half-refreshed result Trace, then raise the typed divergence.
 
-        Boundary payloads are overwritten in place as the native forward passes
+        Boundary payloads are overwritten on the target as the native forward passes
         each site, so a divergence detected at site N leaves sites 1..N-1 holding
         new-input activations while later sites keep capture-time ones. The
         mixed-activation Trace must never pass downstream faithful consumers
@@ -786,7 +779,7 @@ class _FastLiveSession:
         """
 
         if self.poison_on_divergence:
-            mark_trace_path_status(self.trace, PathFaithfulness.DIVERGED, failed.diagnostic)
+            mark_trace_path_status(self.target, PathFaithfulness.DIVERGED, failed.diagnostic)
         diagnostic = failed.diagnostic
         if (
             diagnostic is not None
@@ -862,7 +855,7 @@ class _FastLiveSession:
                 )
                 return
             if label in plan.save_labels:
-                save_payload_paused(self, self.trace._layer_dict_all_keys[label], value)
+                save_payload_paused(self, self.target._layer_dict_all_keys[label], value)
 
     def capture_module(self, address: str, output: Any) -> None:
         """Collect and guard one atomic-module forward-hook event."""
@@ -1080,7 +1073,7 @@ class _FastLiveSession:
         self.run_started_at = time.monotonic()
         model = self._live_model()
         input_args, input_kwargs, input_size_changed = self._admit_inputs(inputs)
-        rearm_cleared_sites(self.trace, self.cleared_by_until)
+        rearm_cleared_sites(self.target, self.cleared_by_until)
         self.cleared_by_until = ()
         self.stop_at = (
             None
@@ -1108,7 +1101,7 @@ class _FastLiveSession:
         if truncation is not None:
             truncation = self._settle_truncated_prefix(until, input_args, input_kwargs)
 
-            self.trace._output_slot = stopped("live run ended at until=")
+            self.target._output_slot = stopped("live run ended at until=")
         else:
             self._check_full_path()
             self._refresh_boundary_payloads(input_args, input_kwargs, output)
@@ -1117,7 +1110,7 @@ class _FastLiveSession:
             # the boundary ops. Every other op's shape and size metadata would
             # otherwise read capture-time numbers as if they were this run's,
             # so they take the not-available spelling (None) once and for all.
-            clear_unrefreshed_shape_metadata(self.trace, self.refreshed_labels)
+            clear_unrefreshed_shape_metadata(self.target, self.refreshed_labels)
             self.shape_metadata_cleared = True
         # A cut forward leaves downstream staged hooks unfired by design.
         unfired = self.steer_plan.warn_unfired() if truncation is None else ()
@@ -1184,7 +1177,7 @@ class _FastLiveSession:
                 )
             )
         self._refresh_boundary_payloads(input_args, input_kwargs, None, inputs_only=True)
-        truncation, self.cleared_by_until = truncate_after(self.trace, stop_plan, until)
+        truncation, self.cleared_by_until = truncate_after(self.target, stop_plan, until)
         return truncation
 
     def _finalize_run(self, output: Any, *, seed: int | None, truncation: Any) -> RunResult:
@@ -1230,7 +1223,7 @@ class _FastLiveSession:
             else ()
         )
         return _finalize_provider_run(
-            fork=self.trace,
+            fork=self.target,
             output=output,
             readiness=readiness,
             state_source=StateSource.LIVE_MODEL_STATE,
@@ -1256,7 +1249,7 @@ class _FastLiveSession:
 
         from ._trace_state import TraceState
 
-        trace = self.trace
+        trace = self.target
         hook_count = len(self.steer_plan.hook_plan)
         record = {
             "op": "rerun",
@@ -1362,7 +1355,7 @@ class _FastLiveSession:
             # A folded input Layer is listed once per pass under one bare
             # label, which ``layer_dict_all_keys`` maps to the LAST pass; the
             # per-listing rule refreshes each pass with its own input.
-            input_ops = boundary_label_rows(input_labels, self.trace.__getitem__)
+            input_ops = boundary_label_rows(input_labels, self.target.__getitem__)
             for op, value in zip(input_ops, input_leaves, strict=True):
                 if op is not None and bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)
@@ -1383,7 +1376,7 @@ class _FastLiveSession:
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
         output_values = self._match_native_output_leaves(output, output_labels)
         for label, value in zip(output_labels, output_values, strict=True):
-            op = self.trace._layer_dict_all_keys[label]
+            op = self.target._layer_dict_all_keys[label]
             expected_shape = tuple(op.shape) if op.shape is not None else None
             expected_dtype = str(op.dtype) if op.dtype is not None else None
             if not isinstance(value, torch.Tensor):
@@ -1423,9 +1416,8 @@ class _FastLiveSession:
         # is stored when an output transform exists; the save scope is
         # otherwise untouched, so a sparse save stays sparse on a rerun.
         transform = self.output_transform
-
-        self.trace._output_slot = returned(output)
-        self.trace.transformed_output = transform(output) if transform is not None else None
+        self.target._output_slot = returned(output)
+        self.target.transformed_output = transform(output) if transform is not None else None
 
 
 def live_source_model(trace: Any) -> nn.Module | None:

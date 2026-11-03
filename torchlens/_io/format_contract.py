@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 from ._field_policy import FieldPolicy as FieldPolicy
-from ._pre3_module_paths import pre_3_artifact_error
+from ._pre3_module_paths import PRE_3_MAJOR, pre_3_artifact_error
 from .format_errors import (
     ArtifactError,
     ArtifactTooNewError,
@@ -196,10 +196,13 @@ def raise_if_saved_by_older_major(saved_version: Any, path: str, *, running_vers
 
     A major release does not read the files an earlier major release wrote: the
     saved field names and package paths changed between them, and no compatibility
-    reader is carried. The refusal names the saving release and the two ways out
-    (the earlier major release reads the file, or capture again with this one).
-    Artifacts without a parseable ``torchlens_version`` stamp return untouched;
-    their own typed checks own that case.
+    reader is carried. A file torchlens 2.x saved raises the one 2.x refusal
+    (:func:`torchlens._io._pre3_module_paths.pre_3_artifact_error`), worded like
+    every other 2.x door; an older major raises the same error class naming the
+    saving release and the two ways out (the earlier major release reads the
+    file, or capture again with this one). Artifacts without a parseable
+    ``torchlens_version`` stamp return untouched; their own typed checks own
+    that case.
 
     Parameters
     ----------
@@ -221,6 +224,12 @@ def raise_if_saved_by_older_major(saved_version: Any, path: str, *, running_vers
     saved = _major_version(saved_version)
     if running is None or saved is None or saved >= running:
         return
+    if saved == PRE_3_MAJOR:
+        raise pre_3_artifact_error(
+            f"torchlens_version={saved_version}",
+            path=path,
+            code="artifact_version_below_floor",
+        )
     remedy = (
         f"load it with torchlens {saved}.x (pip install 'torchlens<{running}'), or "
         f"capture the model again with torchlens {running_version} and save that."

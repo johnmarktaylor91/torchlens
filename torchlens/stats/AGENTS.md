@@ -26,6 +26,9 @@ Streaming statistics over activations and dataloaders (`tl.stats`, lazy).
   and restores saved states in place on a hit; anything it cannot key
   refuses (`stats_aggregate_cache_unkeyable`), never a guessed key.
 
+- `_trace_tables.py` - bodies of the `Trace` export verbs (`to_pandas`, `decode_output`,
+  `output_table`), reached from the records through `_data_classes._doors.stats()`;
+  the record keeps one thin method per verb.
 - `tl.trace(model, x, save="stats")` (reduce and discard; `_capture_stats.py`):
   `_trace_selector_helpers._route_save_label_selection` turns `"stats"` into
   `CaptureOptions(activation_transform=<summary-role reducer>,

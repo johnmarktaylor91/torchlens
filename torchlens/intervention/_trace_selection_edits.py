@@ -10,6 +10,7 @@ through the record's ``attach_hooks`` and ``clear_edits`` verbs.
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -30,13 +31,26 @@ from .._selection.do_plan import build_selection_do_plan
 from .._selection.errors import SelectionError
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
+from ..backends.torch._trace_backward import _require_live_replay
+from . import replay as replay_module
+from ._param_fingerprint import changed_param_scope
 from ._replay_context import journal_replay_state, restore_replay_state
+from ._replay_sites import _require_hook_origins
 from .audit import build_fire_record
 from .edge_substitution import apply_edge_substitution_do
 from .errors import EngineDispatchError
-from .hooks import make_hook_context
+from .hooks import _normalize_sticky_hook_specs, make_hook_context
 from .param_substitution import apply_param_substitution_do, buffer_operand_selection
-from .replay import _commit_replay_updates, _replay_site_key, push_from
+from .replay import (
+    _commit_replay_updates,
+    _normalize_replay_hooks,
+    _origin_sites_for_hooks,
+    _preflight_log,
+    _refuse_armed_gradient_rules,
+    _replay_site_key,
+    _warn_if_direct_writes_will_be_overlaid,
+    push_from,
+)
 from .stochastic import assign_batch_donor_groups
 from .types import Edit
 
@@ -212,14 +226,14 @@ def apply_cross_kind_batch_do(
         for kind, step in steps:
             if kind == "ACT":
                 items = [item for _resolved, plan, _audit in step for item in plan]
-                attached.extend(attach_selection_plan_hooks(trace, items, strict=strict))
+                attached.extend(handles := attach_selection_plan_hooks(trace, items, strict=strict))
                 trace.intervention_audit.extend(audit for _resolved, _plan, audit in step)
-                trace.push(replay=ReplayOptions(strict=strict))
+                push_from_handles(trace, handles, strict=strict)
                 continue
             mutation_kind, handles = apply_selection_do(trace, *step, engine=engine, strict=strict)
             attached.extend(handles)
             if mutation_kind == "selection_hooks":
-                trace.push(replay=ReplayOptions(strict=strict))
+                push_from_handles(trace, handles, strict=strict)
     except BaseException:
         for handle_id in attached:
             trace.clear_edits(handle=handle_id, confirm_mutation=True)
@@ -503,3 +517,45 @@ def apply_leaf_selection_edits(trace: Trace, leaf_items: list[dict[str, Any]]) -
             )
         ]
     _commit_replay_updates(trace, pending_updates, pending_records)
+
+
+def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) -> Trace:
+    """Push one transaction's freshly attached hooks downstream.
+
+    Parameters
+    ----------
+    trace:
+        Model log to mutate in place.
+    handle_ids:
+        Sticky-hook handle ids this transaction attached. Empty when the
+        transaction staged a value instead of hooks; every stored rule is
+        then an origin, as for a plain ``push()``.
+    strict:
+        Whether divergence warnings should raise.
+
+    Returns
+    -------
+    Trace
+        The same model log, mutated in place.
+    """
+
+    wanted = frozenset(handle_ids)
+    _require_live_replay(trace)  # the capture gates Trace.push runs first
+    _preflight_log(trace)
+    _refuse_armed_gradient_rules(trace, None)
+    _warn_if_direct_writes_will_be_overlaid(trace)
+    hook_entries = _normalize_replay_hooks(trace, None)
+    origin_entries = hook_entries
+    if wanted:
+        own_specs = [
+            spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted
+        ]
+        origin_entries = _normalize_sticky_hook_specs(
+            own_specs, allow_replay_only_site_targets=True
+        )
+    origins = _require_hook_origins(_origin_sites_for_hooks(trace, origin_entries, strict=strict))
+    with changed_param_scope(False):
+        # Through the module so a replay counter patched on it sees this push too.
+        return replay_module._run_replay(
+            trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
+        )

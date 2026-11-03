@@ -44,6 +44,7 @@ from ..._errors import CaptureGapWarning, OutputAttributionError
 from ..._utils.display import user_stacklevel
 from ..._utils.rng import log_current_rng_states, set_rng_from_saved_states
 from ...errors._base import TorchLensWarning
+from ._state_bytes import _state_bytes_equal
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -459,32 +460,6 @@ def _snapshot_declared_state(model: Any) -> dict[str, Any] | None:
             if buffer is not None:
                 snapshot[f"buffer:{name}"] = buffer.detach().clone()
     return snapshot
-
-
-def _state_bytes_equal(current: torch.Tensor, baseline: torch.Tensor) -> bool:
-    """NaN-safe bitwise equality over two same-shape/dtype state tensors.
-
-    This audit detects WRITES, so the compare must be byte-exact (a tolerant
-    compare would hide a genuine small state write) and NaN-safe (IEEE
-    ``torch.equal`` returns False for NaN==NaN, so a model legitimately
-    holding a NaN parameter/buffer was falsely accused of a double-applied
-    write and lost the rescue path). Element-extent uint8 reinterpret over
-    resolved contiguous copies; exotic layouts fall back to the historical
-    ``torch.equal`` verdict.
-    """
-
-    # detach-ok: read-only byte comparison of state snapshots; never a
-    # training-path payload, nothing retains the detached views.
-    try:
-        current_bytes = (
-            current.detach().resolve_conj().resolve_neg().contiguous().reshape(-1)
-        ).view(torch.uint8)
-        baseline_bytes = (
-            baseline.detach().resolve_conj().resolve_neg().contiguous().reshape(-1)
-        ).view(torch.uint8)
-        return bool(torch.equal(current_bytes, baseline_bytes))
-    except (RuntimeError, TypeError, NotImplementedError):
-        return bool(torch.equal(current, baseline))
 
 
 def _restore_changed_state(model: Any, snapshot: dict[str, Any]) -> tuple[str, ...]:

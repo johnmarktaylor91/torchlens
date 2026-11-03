@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from ._stats_view import resolve_stats_columns
 from ._summary_ladder import DEFAULT_ROW_BUDGET
 
 #: New-grammar level vocabulary (row grain; memo 3.10).
@@ -221,8 +222,6 @@ def _resolve_columns(columns: Any, view: str) -> tuple[str, ...] | None:
     if columns is None:
         return None
     if view == "stats":
-        from ._stats_view import resolve_stats_columns
-
         return resolve_stats_columns(columns)
     if isinstance(columns, str):
         if columns in VIEW_BUNDLES:

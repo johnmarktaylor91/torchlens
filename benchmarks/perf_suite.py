@@ -115,7 +115,7 @@ OP_LABELS = {
     "fastlog_op_50": "fastlog 50% op selectivity",
     "fastlog_all": "fastlog all-op/all-module",
     "aux_validate": "tl.validate(scope='forward')",
-    "aux_compat_report": "tl.compat.report",
+    "aux_compat_report": "tl.report.doctor",
     "aux_save": "tl.save fresh tlspec path",
     "aux_load": "tl.load saved fixture",
     "peer_manual_hooks": "Vanilla hooks manual dict",

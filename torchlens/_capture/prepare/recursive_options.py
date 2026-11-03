@@ -78,6 +78,7 @@ def _copied_capture_fields(opts: CaptureOptions) -> dict[str, Any]:
         "log_injections": opts.log_injections,
         "carry_state": opts.carry_state,
         "measure_host_peak_memory": opts.measure_host_peak_memory,
+        "aten_ops": opts.aten_ops,
         "reconstruction_ready": opts.reconstruction_ready,
         "grouping": opts.grouping,
         "jax_static_argnums": opts.jax_static_argnums,

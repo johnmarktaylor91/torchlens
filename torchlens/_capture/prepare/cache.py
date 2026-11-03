@@ -556,6 +556,7 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "capture_container_structure",
         "track_device_memory",
         "measure_host_peak_memory",
+        "aten_ops",
         "hooks",
         "backward_ready",
         "inference_only",
@@ -704,8 +705,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "intervene": _predicate_cache_key(state.args.intervene),
         "halt": _predicate_cache_key(state.halt),
         "stop_after": _stable_cache_fragment(state.stop_after_site),
-        # Former door kwargs, now CaptureOptions fields: named for the static coverage lint.
-        "grad_options": _stable_cache_fragment(opts.grad_options),
+        "grad_options": _stable_cache_fragment(opts.grad_options),  # former door kwargs from here
         "grouping": opts.grouping,
         "jax_static_argnums": _stable_cache_fragment(opts.jax_static_argnums),
         "on_nonfinite": opts.on_nonfinite,
@@ -714,6 +714,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "structure_only": opts.structure_only,
         "track_device_memory": opts.track_device_memory,
         "measure_host_peak_memory": opts.measure_host_peak_memory,
+        "aten_ops": opts.aten_ops,
         "log_injections": opts.log_injections,
         "save_raw_input": repr(state.save_raw_input_policy),
         "save_transformed_output": repr(state.save_raw_output_policy),

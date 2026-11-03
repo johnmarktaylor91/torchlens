@@ -125,6 +125,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "jax_static_argnums",
     "grad_options",
     "chunk_size",
+    "aten_ops",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "activation_transform",
@@ -639,6 +640,14 @@ class CaptureOptions:
         chunk_size:
             Chunked-forward batch size; ``None`` runs one forward. Cannot
             combine with ``stop_after=``.
+        aten_ops:
+            Whether the capture records the public ATen operations that each logged
+            torch call dispatched to, served by ``Op.aten_ops`` and ``Trace.aten_ops``
+            (a session-time knob; ``Trace.has_aten_ops`` reports it after capture or
+            load). Recording installs a dispatch mode for the forward pass and for
+            ``Trace.backward()`` with ``backward_ready=True``, so it is opt-in. The
+            default ``False`` installs no dispatch mode and the accessors raise
+            ``AtenOpsUnavailableError``. GPU kernel recording is out of scope.
 
         Examples
         --------
@@ -706,6 +715,7 @@ class CaptureOptions:
     jax_static_argnums: int | Sequence[int] | None = None
     grad_options: Any | None = None
     chunk_size: int | None = None
+    aten_ops: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     @refuse_removed_keywords("CaptureOptions", REMOVED_CAPTURE_MEMBERS)
@@ -769,20 +779,21 @@ class CaptureOptions:
         jax_static_argnums: int | Sequence[int] | None | MissingType = MISSING,
         grad_options: Any | None | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
+        aten_ops: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
         supplied = locals().copy()  # every parameter is named after its field
-        specified_fields: set[str] = set()
+        specified: set[str] = set()
         values: dict[str, Any] = {
             field_name: _resolve_option_value(
-                field_name, supplied[field_name], _CAPTURE_DEFAULTS[field_name], specified_fields
+                field_name, supplied[field_name], _CAPTURE_DEFAULTS[field_name], specified
             )
             for field_name in _CAPTURE_FIELDS
         }
         _validate_capture_values(values)
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
-        object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
+        object.__setattr__(self, "_specified_fields", frozenset(specified))
 
     # Runtime only: under TYPE_CHECKING the hook would make every attribute
     # type-check as Any, hiding typos and the removed spellings from mypy.
@@ -1522,7 +1533,7 @@ def to_disk(
     Parameters
     ----------
     path:
-        Destination bundle directory; it must not exist yet (``bundle_save_failed``).
+        Destination bundle directory; it must not exist yet (``bundle_path_exists``).
     retain_in_memory:
         Whether streamed payloads also remain as RAM copies. The model output the forward
         returns stays in memory either way (the output op's payload may alias it). A streamed
