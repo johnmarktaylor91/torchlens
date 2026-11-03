@@ -31,8 +31,7 @@ class AgentToolSpec:
     --------
     >>> spec = tl.agent.spec_for("torchlens_schema")
     >>> isinstance(spec, AgentToolSpec), spec.cli_verb, spec.read_only
-    (True, 'schema', True)
-    """
+    (True, 'schema', True)"""
 
     name: str
     description: str
@@ -651,8 +650,7 @@ def tool_specs() -> tuple[AgentToolSpec, ...]:
     --------
     >>> names = [spec.name for spec in tool_specs()]
     >>> names[0], len(names) == len(tl.agent.list_tools())
-    ('torchlens_doctor', True)
-    """
+    ('torchlens_doctor', True)"""
 
     return (
         AgentToolSpec(

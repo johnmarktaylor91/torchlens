@@ -57,6 +57,8 @@ def json_safe(value: Any) -> Any:
     --------
     >>> json_safe({"loss": float("nan"), "shape": (1, 3)})
     {'loss': {'nonfinite': 'nan'}, 'shape': [1, 3]}
+    >>> json_safe([1, "a"]) == [1, "a"]
+    True
     """
 
     if isinstance(value, float):
@@ -94,6 +96,8 @@ def canonical_dumps(payload: Any) -> str:
     --------
     >>> canonical_dumps({"b": 1, "a": [1, 2]})
     '{"a":[1,2],"b":1}'
+    >>> canonical_dumps({"a": 1, "b": 2}) == canonical_dumps({"b": 2, "a": 1})
+    True
     """
 
     return json.dumps(
