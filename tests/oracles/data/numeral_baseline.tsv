@@ -7702,6 +7702,9 @@ test-docstrings	tests/test_bridges_launch.py	11.2
 test-docstrings	tests/test_bridges_launch.py	20
 test-docstrings	tests/test_bridges_launch.py	2026
 test-docstrings	tests/test_browser_packets_fixd03_f12.py	18.
+test-docstrings	tests/test_buffer_datamodel.py	12
+test-docstrings	tests/test_buffer_datamodel.py	135
+test-docstrings	tests/test_buffer_datamodel.py	996
 test-docstrings	tests/test_bug_fixes_phase14.py	16
 test-docstrings	tests/test_bug_fixes_phase14.py	256
 test-docstrings	tests/test_bug_fixes_phase14.py	3172
@@ -7831,9 +7834,6 @@ test-docstrings	tests/test_data_substrate_extraction_v2.py	14
 test-docstrings	tests/test_data_substrate_extraction_v2.py	16
 test-docstrings	tests/test_data_substrate_transforms.py	13
 test-docstrings	tests/test_dead_config_debloat.py	47
-test-docstrings	tests/test_debug_bisect_precision.py	32
-test-docstrings	tests/test_debug_bisect_precision.py	64
-test-docstrings	tests/test_debug_cost_audit_behaviors.py	100
 test-docstrings	tests/test_debug_findings_source_lines.py	1.0
 test-docstrings	tests/test_debug_findings_source_lines.py	32
 test-docstrings	tests/test_debug_findings_source_lines.py	64
@@ -8650,6 +8650,7 @@ test-docstrings	tests/test_report_honesty_mcp.py	29
 test-docstrings	tests/test_report_honesty_mcp.py	3.2
 test-docstrings	tests/test_report_honesty_memory_shape.py	200
 test-docstrings	tests/test_report_honesty_memory_shape.py	72
+test-docstrings	tests/test_reprs.py	10
 test-docstrings	tests/test_reprs.py	52
 test-docstrings	tests/test_reprs.py	715
 test-docstrings	tests/test_rerun_push_head_ablation_parity.py	12
@@ -8827,10 +8828,6 @@ test-docstrings	tests/test_themes_filter.py	14
 test-docstrings	tests/test_themes_roster.py	12
 test-docstrings	tests/test_themes_skins.py	13
 test-docstrings	tests/test_themes_skins.py	17
-test-docstrings	tests/test_themes_skins.py	3.11,
-test-docstrings	tests/test_themes_stage0.py	100
-test-docstrings	tests/test_themes_stage0.py	20000
-test-docstrings	tests/test_tinygrad_backend_capture.py	11
 test-docstrings	tests/test_tinygrad_backend_protocol.py	1.3
 test-docstrings	tests/test_tl_lifecycle.py	12
 test-docstrings	tests/test_tl_lifecycle.py	79
