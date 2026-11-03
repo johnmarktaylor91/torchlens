@@ -47,6 +47,9 @@ boundary is the property access itself, not the first view query.
   and frees the autograd graph, so call it last or re-capture.
 - `_table.py` - `build_rf_profile()` backs `Trace.receptive_fields()` /
   `Trace.projective_fields()` (pandas required at call time).
+- `_trace_tables.py` - the `receptive_fields(trace, ...)` and
+  `projective_fields(trace, ...)` bodies the thin `Trace` methods reach through
+  `_data_classes._doors.receptive_field()`.
 - `_viz.py` - `show()` and `node_spec()` render overlays.
 - `_types.py` - frozen public dataclasses/enums (`ReceptiveField`,
   `ReceptiveFieldAxis`, `ReceptiveFieldBox`, `ReceptiveFieldStatus`,

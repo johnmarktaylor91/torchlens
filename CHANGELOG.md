@@ -5,6 +5,22 @@
 
 ### Behavior changes
 
+- **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
+  (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
+  the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old
+  third positional value refuse `intervention_direction_invalid`. Rule ids are unchanged.
+  `TapObserver.signal` and `tl.observers.tap(signal=)` stay.
+- **bundle**: `Bundle.measure_members` is gone. `Bundle.map(fn)` is the one per-member read: it
+  returns `fn` over every live member keyed by name, and every effect-table candidate the bundle
+  no longer holds (released, refused or failed) keyed by its candidate id with the value
+  `"unmeasured"`. The `order="chain"` view and the `measure_members_order_unavailable` code go
+  with it; `bundle.history` still lists the operations in ledger order.
+- **draw**: `trace.draw(show_containers=...)` takes four settings: `False` (default), `"labels"`,
+  `"collapsed"` and `"nodes"`. `"auto"` is gone (it drew exactly what `"collapsed"` draws and chose
+  nothing) and so is `"cluster"` (it drew `"labels"` plus a dotted box around an op-returned tuple,
+  which `"nodes"` also draws); both refuse `visualization_show_containers_invalid` with the
+  replacement named. The `overview` lens now pins `"collapsed"`. Each setting is documented in
+  `docs/containers.md`.
 - **fastlog**: the `Recording.enrich` step `"param_addresses"` is gone. It never produced an
   enrichment (capture records carry no `parent_param_addresses` field, so it always refused);
   the accepted steps are `"module_path_strings"` and `"all-feasible"`, and any other name
@@ -31,6 +47,8 @@
 - **validation**: `tl.validate` restores the caller's global RNG streams (Python `random`, NumPy,
   torch CPU and CUDA generators) on return and on error, the way `tl.trace` does; before, a
   backward or layer-gradient validation left the process reseeded with the validation seed.
+  The lower-level `torchlens.validation.validate_forward_pass`, `validate_backward_pass`
+  and the `Trace.validate_forward_pass` replay method make the same promise.
 - **root namespaces**: `tl.mechinterp`, `tl.semantic` and `tl.tviz` are not root attributes;
   in a fresh process they raise a typed `AttributeError` (code `facade_redirect`) that names
   the import. Import the subpackage (`import torchlens.mechinterp`) and call

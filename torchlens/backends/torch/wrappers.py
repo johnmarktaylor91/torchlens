@@ -13,7 +13,7 @@ import time
 import types
 import warnings
 import weakref
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager, nullcontext
 from functools import wraps
 from typing import TYPE_CHECKING, Any, cast
@@ -62,6 +62,7 @@ from ..._utils.tensor_utils import (
     print_override,
     safe_copy,
 )
+from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
 from ._completeness_cross_thread import (
     observe_nonowner_operands,
@@ -90,10 +91,6 @@ from ._ops_containers import _walk_output_tensors_with_paths
 from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
 from ._output_tensors import _collect_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
-from ._storage_overlap import (
-    _storage_overlap_byte_interval,
-    _strided_views_share_storage_elements,
-)
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     DescriptorCompatProperty,
@@ -120,9 +117,11 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
     direct_transform_decorator,
     transform_builder_decorator,
 )
+from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
+from .arg_names import get_arg_names
 from .buffer_writes import (
     record_op_buffer_writes,
     resolve_or_late_index_buffer_address,
@@ -138,6 +137,9 @@ from .escape_detection import (
 from .param_mutation import (
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
     is_prepared_parameter_receiver as _is_prepared_parameter_receiver,
+    late_register_forward_created_parameter,
+    materialized_lazy_slots,
+    note_lazy_slot_materializing,
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
 )
@@ -736,7 +738,6 @@ def _propagate_mutation_label_to_storage_aliases(
     """
 
     from ._ops_capture_records import _record_label_version_snapshot
-    from ._tl import session_storage_alias_candidates, storage_alias_index_key
 
     # SCOPE (r26 reconcile): descriptor/grad-bound captures keep the HISTORICAL
     # topology. The runnable recipe + numeric attestation key payloads PER
@@ -750,11 +751,7 @@ def _propagate_mutation_label_to_storage_aliases(
     # (receptive fields, influence geometry, collapse -- the W3-F1 impact
     # surface) get the mutation edge. Follow-up: teach the runnable reader
     # per-(label, consumer) payload keying, then lift this scope.
-    if (
-        getattr(trace, "is_replayable", False)
-        or trace._options_backward_ready
-        or trace._options_save_grads not in (None, False)
-    ):
+    if not view_mutation_propagation_enabled(trace):
         return
 
     # ``untyped_storage()`` / ``data_ptr()`` / ``stride()`` / ``storage_offset()``
@@ -765,46 +762,10 @@ def _propagate_mutation_label_to_storage_aliases(
     # (kept off the escape census / metadata patches) -- the same sanctioned
     # pattern as ``completeness_witness``'s storage-site indexers.
     with _state.pause_logging(), internal_scalar_read():
-        try:
-            # Meta-safe key (D20): data_ptr() reads 0 for EVERY meta storage.
-            storage_ptr = storage_alias_index_key(mutated.untyped_storage())
-        except Exception:
-            return
-        if storage_ptr is None:
-            return
-        candidates = session_storage_alias_candidates(storage_ptr)
-        if not candidates or (len(candidates) == 1 and candidates[0] is mutated):
-            return
-        mutated_lo, mutated_hi = _storage_overlap_byte_interval(mutated)
-        if mutated_hi <= mutated_lo:
-            return
-        for alias in candidates:
-            if (
-                alias is mutated
-                or not isinstance(alias, torch.Tensor)
-                or isinstance(alias, torch.nn.Parameter)
-            ):
-                continue
-            # Gated read: rejects foreign-session stamps and storage-rebound
-            # objects, so a stale index entry can never act as a live alias.
-            alias_label = get_tensor_label(alias)
-            if alias_label is None or alias_label == out_label:
-                continue
-            try:
-                if (
-                    storage_alias_index_key(alias.untyped_storage()) != storage_ptr
-                    or alias.device != mutated.device
-                ):
-                    continue
-                # Element-exact where provable (round-31 M4): interleaved
-                # element-disjoint views must not inherit the mutation edge.
-                shares_elements = _strided_views_share_storage_elements(mutated, alias)
-            except Exception:
-                continue
-            if shares_elements:
-                set_tensor_label(alias, out_label)
-                _register_inplace_live_grad_hook(trace, alias, out_label)
-                _record_label_version_snapshot(alias, mutated_via=(mutated, alias_label))
+        for alias, alias_label in overlapping_labeled_aliases(mutated, out_label):
+            set_tensor_label(alias, out_label)
+            _register_inplace_live_grad_hook(trace, alias, out_label)
+            _record_label_version_snapshot(alias, mutated_via=(mutated, alias_label))
 
 
 # Positional index of the target Tensor subclass ``cls`` argument for each
@@ -1055,6 +1016,65 @@ def _rebind_setter_swaps_storage(args: tuple[Any, ...]) -> bool:
     )
 
 
+def _call_lazy_slot_plumbing(
+    trace: Any, func: Callable[..., Any], func_name: str, args: tuple[Any, ...], kwargs: Any
+) -> Any:
+    """Pass one lazy-module materialization call on a pending slot through unlogged.
+
+    torch's lazy pre-hook materializes pending ``UninitializedBuffer`` /
+    ``UninitializedParameter`` slots through wrapped calls whose RECEIVER is the
+    pending tensor (``.data`` device read or setter, ``empty_like`` on the data
+    alias). A pending tensor has no shape or storage to log and the plumbing is
+    pre-forward materialization, not model dataflow: the materialized buffer
+    registers at the module-entry gate, the materialized parameter of a module
+    built inside forward at the wrapped call that first consumes it
+    (``late_register_forward_created_parameter``). The watched slot is recorded
+    by identity, and under the dispatch census the call runs as the audited
+    ``lazy_module:materialize`` expected-opaque owner, so its ``.data`` reads are
+    accounted constructor plumbing rather than unowned drops.
+    """
+
+    note_lazy_slot_materializing(trace, args[0])
+    if _diagnostic_edge_armed():
+        with expected_original_call(
+            func,
+            LAZY_MODULE_MATERIALIZE_WRAPPER,
+            func_name=func_name,
+            census_scope=completeness_scope_for_wrapper(LAZY_MODULE_MATERIALIZE_WRAPPER),
+        ):
+            return func(*args, **kwargs)
+    return func(*args, **kwargs)
+
+
+def _register_first_use_state(trace: Any, arg_tensorlike: Iterable[torch.Tensor]) -> None:
+    """Register buffers and late lazy Parameters among a call's tensor arguments.
+
+    Buffers are tagged with ``_tl.address`` during model prep but get no
+    ``_tl.label_raw`` until the first function actually uses them. A Parameter
+    torch materialized from a pending lazy slot earlier in THIS forward (a lazy
+    module built inside forward) registers late here, at its first consuming
+    call; the watched-slot set is ``None`` until such a slot was seen, so the
+    prepared-parameter path pays one attribute read.
+    """
+
+    watched_lazy_slots = materialized_lazy_slots(trace)
+    for t in arg_tensorlike:
+        if isinstance(t, torch.nn.Parameter):
+            if watched_lazy_slots is not None and t in watched_lazy_slots:
+                late_register_forward_created_parameter(trace, t)
+            continue
+        # The r81 identity ladder + F20 lazy late-index live in
+        # buffer_writes.resolve_or_late_index_buffer_address.
+        address = resolve_or_late_index_buffer_address(trace, t)
+        if address is not None and get_tensor_label(t) is None:
+            log_source_tensor(trace, t, "buffer", address)
+        elif address is None:
+            # A tensor the forward closes over (SPEC 2 rule 1) becomes a
+            # ``constant`` source op on first use; anything not proven
+            # pre-forward stays unattributed.
+            log_closure_constant_if_known(trace, t)
+
+
 def torch_func_decorator(
     func: Callable[..., Any],
     func_name: str,
@@ -1275,16 +1295,11 @@ def torch_func_decorator(
         if _is_inside_dynamo_compilation():
             return _call_inside_dynamo_region(trace, func, args, kwargs)
 
-        # F20 lazy-buffer completion: torch's lazy pre-hook materializes
-        # pending UninitializedBuffer/Parameter slots through wrapped calls
-        # whose RECEIVER is the pending tensor (.data device read/setter,
-        # empty_like on the data alias). A pending tensor has no
-        # shape/storage to log and the plumbing is pre-forward
-        # materialization, not model dataflow (the materialized buffer
-        # registers at the module-entry gate); pass the call through
-        # unlogged, mirroring the functorch/dynamo region guards above.
+        # F20 lazy-module completion: torch's materialization plumbing on a
+        # pending slot receiver passes through unlogged (``_call_lazy_slot_plumbing``;
+        # the materialized state registers later), as the region guards above.
         if args and isinstance(args[0], torch.Tensor) and _is_uninitialized_param(args[0]):
-            return func(*args, **kwargs)
+            return _call_lazy_slot_plumbing(trace, func, func_name, args, kwargs)
 
         # Usage stats: count every decorated function call during logging.
         if _state._collect_usage_stats:
@@ -1296,7 +1311,7 @@ def torch_func_decorator(
             )
 
         # Reset barcode; skip metadata-only functions that would cause recursion.
-        # R16-5: ``as_subclass`` is barcode-TRANSPARENT. Torch's default
+        # R16-5: ``as_subclass`` (and ``__index__``) is barcode-TRANSPARENT. Torch's default
         # ``__torch_function__`` return conversion calls ``ret.as_subclass(cls)``
         # INSIDE the enclosing wrapped call (``torch.tanh(subclass_tensor)``),
         # which used to steal the enclosing call's bottom-level barcode: the
@@ -1335,22 +1350,9 @@ def torch_func_decorator(
             and mutates_receiver
         )
 
-        # Register buffer tensors on first encounter. Buffers are tagged with
-        # _tl.address during model prep but don't get _tl.label_raw
-        # until the first function actually uses them.
-        for t in arg_tensorlike:
-            if isinstance(t, torch.nn.Parameter):
-                continue
-            # The r81 identity ladder + F20 lazy late-index live in
-            # buffer_writes.resolve_or_late_index_buffer_address.
-            address = resolve_or_late_index_buffer_address(trace, t)
-            if address is not None and get_tensor_label(t) is None:
-                log_source_tensor(trace, t, "buffer", address)
-            elif address is None:
-                # A tensor the forward closes over (SPEC 2 rule 1) becomes a
-                # ``constant`` source op on first use; anything not proven
-                # pre-forward stays unattributed.
-                log_closure_constant_if_known(trace, t)
+        # Register buffers (and a Parameter materialized from a pending lazy slot
+        # earlier in this forward) on first encounter.
+        _register_first_use_state(trace, arg_tensorlike)
 
         # Intercept print functions to show TorchLens label info in repr.
         if is_print_func and arg_tensorlike:
@@ -1377,25 +1379,21 @@ def torch_func_decorator(
         )
 
         # ---- Deferred-clone interception (clone-on-write) ----
-        # Any wrapped call that can WRITE through a tensor argument must first
-        # copy out pending deferred payload aliases sharing those storages —
-        # this runs BEFORE the mutation, so saved bytes stay capture-time
-        # exact. Triggers cover every wrapped mutation surface: in-place
+        # Any wrapped call that can WRITE through a tensor argument must first copy out pending
+        # deferred payload aliases sharing those storages — this runs BEFORE the mutation, so saved
+        # bytes stay capture-time exact. Triggers cover every wrapped mutation surface: in-place
         # methods and augmented-assignment dunders (``mutates_receiver``),
-        # ``__setitem__``/``zero_``/``__delitem__``, mutating property setters,
-        # ``out=`` destinations, and ``inplace=True`` conveniences (``F.relu``
-        # / ``F.dropout``) whose actual underscore mutation may run below this
-        # wrapper — including POSITIONALLY-passed ``inplace`` (torch's
+        # ``__setitem__``/``zero_``/``__delitem__``, mutating property setters, ``out=`` destinations,
+        # and ``inplace=True`` conveniences (``F.relu`` / ``F.dropout``) whose actual underscore
+        # mutation may run below this wrapper — including POSITIONALLY-passed ``inplace`` (torch's
         # ``Hardswish.forward`` runs ``F.hardswish(input, self.inplace)``, and
-        # ``torch._C._nn.hardswish_`` below it is not a wrapped surface, so
-        # this wrapper is the ONLY interception point; missing it left stale
-        # pending aliases that tripped the belt at the next mutating call —
-        # the mobilenet_v3_small failure). NOT ``has_inplace_signature`` —
-        # that flag is true for EVERY dunder (``"__add__".endswith("_")``)
-        # and is only ever meaningful gated behind a same-object return.
-        # Storage-rebinding ``.data=`` writes no bytes but rides along via its
-        # property-setter signature — a spurious materialization is merely a
-        # wasted clone, never a correctness risk.
+        # ``torch._C._nn.hardswish_`` below it is not a wrapped surface, so this wrapper is the ONLY
+        # interception point; missing it left stale pending aliases that tripped the belt at the next
+        # mutating call — the mobilenet_v3_small failure). NOT ``has_inplace_signature`` — that flag
+        # is true for EVERY dunder (``"__add__".endswith("_")``) and is only ever meaningful gated
+        # behind a same-object return. Storage-rebinding ``.data=`` writes no bytes but rides along
+        # via its property-setter signature — a spurious materialization is merely a wasted clone,
+        # never a correctness risk.
         if _COW_PENDING and (
             mutates_receiver
             or is_mutating_property_setter
@@ -1885,81 +1883,6 @@ def torch_func_decorator(
     setattr(wrapped_func, "__prepare_scriptable__", lambda: func)
 
     return wrapped_func
-
-
-# ---------------------------------------------------------------------------
-# get_arg_names — now writes to _state._arg_names instead of self
-# ---------------------------------------------------------------------------
-
-
-def get_arg_names(orig_func: Callable[..., Any], func_name: str) -> None:
-    """Extract argument names for a function and store in ``_state._arg_names``.
-
-    Tries ``inspect.signature`` first (works for Python functions). Falls back
-    to docstring parsing for C builtins whose signature isn't introspectable.
-
-    Stores under the EXACT registered name: ``add``, ``add_``, and ``__add__``
-    have meaningfully different signatures (``__add__(self, other)`` is a
-    2-arg dunder; ``torch.add(input, other, *, alpha, out)`` is not), and the
-    historical underscore-stripped shared key (#82) let whichever registered
-    last overwrite the rest, recording wrong ``arg_names`` metadata (W3 audit
-    F9). Lookup falls back to the stripped key for names whose own
-    introspection stored nothing, preserving the old best-effort behavior.
-
-    Skipped for property-like attributes (``real``, ``imag``, ``T``, etc.) that
-    aren't callable in the normal sense.
-    """
-    if func_name in ["real", "imag", "T", "mT", "data", "H"]:
-        return
-
-    storage_key = func_name
-
-    try:
-        params = inspect.signature(orig_func).parameters
-        argnames = []
-        for name, param in params.items():
-            if name in ("cls", "self"):
-                continue
-            # #123: Use Parameter.kind instead of naive asterisk stripping
-            if param.kind == inspect.Parameter.VAR_POSITIONAL:
-                argnames.append(f"*{name}")
-            elif param.kind == inspect.Parameter.VAR_KEYWORD:
-                argnames.append(f"**{name}")
-            else:
-                argnames.append(name)
-        # A purely-variadic signature ((*args, **kwargs) on opaque C dunders)
-        # names nothing; prefer the docstring parse, and store nothing when
-        # that also fails -- honest-unknown beats a wrong borrowed signature.
-        # A genuinely empty signature (zero-arg methods) still stores ().
-        if not argnames or not all(name.startswith("*") for name in argnames):
-            _state._arg_names[storage_key] = tuple(argnames)
-            return
-    except (ValueError, TypeError):
-        # TypeError: Python 3.14+ deferred annotation evaluation (PEP 649)
-        # can fail when class-level names (e.g. Tensor.bool) shadow builtins
-        # during inspect.signature() annotation resolution. Falls back to
-        # docstring parsing below.
-        pass
-
-    # Fallback: parse argument names from the docstring's first line.
-    # C builtins typically have docstrings like "add(input, other, *, alpha=1)".
-    docstring = orig_func.__doc__
-    if (type(docstring) is not str) or (len(docstring) == 0):
-        return
-
-    paren_start, paren_end = docstring.find("("), docstring.find(")")
-    argstring = docstring[paren_start + 1 : paren_end]
-    arg_list = argstring.split(",")
-    arg_list = [arg.strip(" ") for arg in arg_list]
-    argnames = []
-    for arg in arg_list:
-        argname = arg.split("=")[0]
-        if argname in ["*", "/", "//", ""]:
-            continue
-        argname = argname.replace("*", "")
-        argnames.append(argname)
-    argnames = tuple([arg for arg in argnames if arg not in ["self", "cls"]])  # type: ignore[assignment]
-    _state._arg_names[storage_key] = argnames  # type: ignore[assignment]
 
 
 def _is_jit_incompatible_dtype_annotation(annotation: Any) -> bool:

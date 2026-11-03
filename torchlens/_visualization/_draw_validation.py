@@ -78,7 +78,12 @@ def _validate_draw_options(
 
 
 # The non-``False`` ``show_containers`` vocabulary (``Trace.draw`` literal).
-_SHOW_CONTAINERS_MODES = ("labels", "cluster", "collapsed", "auto", "nodes")
+_SHOW_CONTAINERS_MODES = ("labels", "collapsed", "nodes")
+
+# Removed spellings and the setting that draws what each one drew: ``"auto"`` never
+# chose anything and was byte-identical to ``"collapsed"``; ``"cluster"`` equalled
+# ``"labels"`` except for the dotted tuple box, which ``"nodes"`` also draws.
+_REMOVED_SHOW_CONTAINERS = {"auto": "collapsed", "cluster": "labels"}
 
 
 def _validate_draw_flag_options(
@@ -110,11 +115,44 @@ def _validate_draw_flag_options(
                 remedy=f"pass {name}=True or {name}=False",
                 argument=name,
             )
-    if not (show_containers is False or show_containers in _SHOW_CONTAINERS_MODES):
-        modes = ", ".join(repr(mode) for mode in _SHOW_CONTAINERS_MODES)
-        raise InvalidArgumentError(
-            f"show_containers must be False or one of {modes}; received {show_containers!r}",
-            code="visualization_show_containers_invalid",
-            remedy=f"pass show_containers=False or one of {modes}",
-            argument="show_containers",
+    if show_containers is False or show_containers in _SHOW_CONTAINERS_MODES:
+        return
+    problem, remedy = _show_containers_refusal(show_containers)
+    raise InvalidArgumentError(
+        problem,
+        code="visualization_show_containers_invalid",
+        remedy=remedy,
+        argument="show_containers",
+    )
+
+
+def _show_containers_refusal(show_containers: object) -> tuple[str, str]:
+    """Return the problem and remedy for a ``show_containers`` value outside the vocabulary.
+
+    A removed spelling (``"auto"``, ``"cluster"``) names the setting that draws what it
+    drew; anything else lists the vocabulary.
+
+    Parameters
+    ----------
+    show_containers:
+        The refused value.
+
+    Returns
+    -------
+    tuple[str, str]
+        Problem sentence and remedy.
+    """
+
+    if isinstance(show_containers, str) and show_containers in _REMOVED_SHOW_CONTAINERS:
+        replacement = _REMOVED_SHOW_CONTAINERS[show_containers]
+        extra = " (or 'nodes' for the dotted tuple box)" if replacement == "labels" else ""
+        return (
+            f"show_containers={show_containers!r} was removed; it drew the same picture as "
+            f"{replacement!r}",
+            f"pass show_containers={replacement!r}{extra}",
         )
+    modes = ", ".join(repr(mode) for mode in _SHOW_CONTAINERS_MODES)
+    return (
+        f"show_containers must be False or one of {modes}; received {show_containers!r}",
+        f"pass show_containers=False or one of {modes}",
+    )

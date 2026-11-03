@@ -544,7 +544,7 @@ class TraceOpAccessor(Accessor[Op]):
         """Return ``self[key]``, memoized per lookup key.
 
         Callers that resolve the same stored child/parent label once per graph edge
-        (the ``_trace_stats`` edge counters) would otherwise repeat one full
+        (the ``_trace_views`` edge counters) would otherwise repeat one full
         ``__getitem__`` per edge. Failed lookups are never memoized, so a missing or
         ambiguous key raises exactly as ``self[key]`` does on every call.
         """

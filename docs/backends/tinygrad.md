@@ -91,7 +91,11 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | Random-init layers (`tinygrad.nn` default init) or in-forward `Tensor.rand` | unsupported | refusal `rng_state_in_graph`; random-init layers must be realized before capture until realize-once capture lands |
 | `random_seed=` | unsupported | refusal `explicit_seed_unsupported` |
 | Trace options outside `module_identity_mode`, `grad_options` | unsupported | refusal `trace_option_unsupported` |
-| Mid-capture `Tensor.realize()`, `assign()`, TinyJit, input mutation | unsupported | typed `BackendUnsupportedError` |
+| Mid-capture `Tensor.realize()` or TinyJit execution | unsupported | refusal `mid_capture_execution_unsupported` |
+| Input mutation (`Tensor.assign()`, `Tensor.replace()`, setitem on an input) | unsupported | refusal `input_mutation_unsupported` |
+| A callable that returns no tinygrad Tensor | unsupported | refusal `tensor_output_required` |
+| No positional tinygrad Tensor input | unsupported | refusal `tinygrad_input_required` |
+| Replay validation or derived gradients on an audit-only trace | unsupported | refusal `live_payloads_required` |
 
 ## Scorecard
 

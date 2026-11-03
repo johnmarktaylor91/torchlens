@@ -764,13 +764,13 @@ class RepeatedOpTypeInLoop(nn.Module):
 
 
 class VaryingLoopNoParam1(nn.Module):
-    def __init__(self):
+    def __init__(self, steps: int = 8):
         super().__init__()
+        self.steps = steps
 
-    @staticmethod
-    def forward(x):
+    def forward(self, x):
         x = x + 2
-        for i in range(8):
+        for i in range(self.steps):
             x = torch.log(x)
             x = x + torch.ones(x.shape)
             x = torch.sin(x)
@@ -787,13 +787,13 @@ class VaryingLoopNoParam1(nn.Module):
 
 
 class VaryingLoopNoParam2(nn.Module):
-    def __init__(self):
+    def __init__(self, steps: int = 8):
         super().__init__()
+        self.steps = steps
 
-    @staticmethod
-    def forward(x):
+    def forward(self, x):
         x = x + 2
-        for i in range(8):
+        for i in range(self.steps):
             x = torch.log(x)
             x = x + torch.ones(x.shape)
             x = torch.sin(x)

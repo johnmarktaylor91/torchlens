@@ -1,0 +1,8 @@
+# What a fresh venv needs to run notebooks/learn beyond `pip install -e ".[viz]"`.
+# Drawings also need the Graphviz binary: `brew install graphviz` (macOS) or `apt install graphviz`.
+jupyterlab
+ipykernel
+# Notebook 08 builds a tiny random Hugging Face model from a config (no download); it skips without this.
+transformers
+# Progress bars inside a kernel (replay in 08, the doctor report in 10) print a traceback without this.
+ipywidgets

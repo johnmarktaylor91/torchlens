@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    import torch
+
 from .._errors import ArgumentTypeError
-from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json, materialize_nested
+from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json
 from .._io.bundle import cleanup_tmp, load as _load
 from .._io.sidecar import (
     AnalysisOnlySidecar,
@@ -302,6 +305,40 @@ if not TYPE_CHECKING:
         return resolve_facade_attr(
             owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
         )
+
+
+def materialize_nested(
+    trace: Any,
+    *,
+    map_location: str | torch.device = "cpu",
+    payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+) -> None:
+    """Replace any remaining nested portable blob refs on a loaded model log.
+
+    This function is a no-op unless the model log was loaded with
+    ``lazy=True, materialize_nested=False``. In the default load mode, nested
+    tensors are already materialized.
+
+    Parameters
+    ----------
+    trace:
+        Model log loaded from a portable bundle.
+    map_location:
+        Target device for the materialized nested tensors.
+    payload_hints:
+        Optional backend payload hints used during materialization.
+
+    Examples
+    --------
+    >>> import torchlens as tl
+    >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
+    >>> tl.io.materialize_nested(log)
+    >>> log.save("demo_bundle_copy")
+    """
+
+    from .._io.rehydrate import rehydrate_nested
+
+    rehydrate_nested(trace, map_location=map_location, payload_hints=payload_hints)
 
 
 __all__ = [
