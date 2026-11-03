@@ -123,6 +123,22 @@ def test_every_public_parameter_has_a_glossary_row() -> None:
     )
 
 
+def test_a_row_naming_a_keyword_the_callable_lacks_is_stale() -> None:
+    """``k=`` on ``Bundle.rank_changes`` is stale once the code takes ``top_k=`` instead."""
+
+    rows = [_row("Bundle.rank_changes", "top_k"), _row("tl.top_changed", "k")]
+    assert glossary_params.stale(rows, TABLE) == [("Bundle.rank_changes", "k")]
+
+
+@pytest.mark.heavy
+def test_no_glossary_keyword_row_names_a_parameter_the_code_lacks() -> None:
+    """A keyword row never says a public callable takes a keyword it does not take."""
+
+    rows = glossary_params.public_parameters(meanings=False)
+    wrong = glossary_params.stale(rows, GLOSSARY.read_text(encoding="utf-8"))
+    assert not wrong, f"glossary keyword rows name parameters the code lacks: {wrong[:20]}"
+
+
 def test_allowlist_entries_carry_reasons() -> None:
     """Any allowlisted unnamed parameter states why."""
 

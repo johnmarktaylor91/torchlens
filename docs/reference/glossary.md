@@ -3633,7 +3633,7 @@ describe each surface in depth.
 | `LogitLensPredictions.is_validated` | Whether the reconstructed lens passed numeric validation |
 | `MissingGrad.raise_error` | Raise the missing-gradient tensor-use error |
 | `NarrationObserver.lines` | field of `NarrationObserver` |
-| `NarrationObserver.signal` | field of `NarrationObserver` |
+| `NarrationObserver.signal` | property of `NarrationObserver`, derived from its `site` (`"backward"` for a `tl.grad(...)` site); not a constructor keyword |
 | `NarrationObserver.sink` | field of `NarrationObserver` |
 | `NarrationObserver.style` | field of `NarrationObserver` |
 | `PatchedRun.metric_value` | field of `PatchedRun` |
@@ -3817,7 +3817,6 @@ describe each surface in depth.
 | `rank_handles=` | keyword of `tl.types.MergedTrace`: mapping from rank to its handle |
 | `run_record=` | keyword of `tl.trackers.HistoryView` |
 | `sampling=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
-| `signal=` | keyword of `tl.stats.NarrationObserver` |
 | `std_evidence=` | keyword of `tl.stats.TensorStats` |
 | `std_se=` | keyword of `tl.stats.TensorStats` |
 | `value_fn=` | keyword of `FacetSpec.computed` |

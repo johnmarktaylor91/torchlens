@@ -248,7 +248,7 @@ def keyword_rows(glossary: str) -> dict[str, list[str]]:
 
 
 def _named_owners(text: str) -> set[str]:
-    """Return the owners a keyword row names, with ``()`` and ``tl.`` stripped.
+    """Return the owners a keyword row names, with a trailing ``()`` stripped.
 
     Only the backticked run right after each ``keyword of`` counts, so a spelling that a
     row's meaning mentions in passing does not name an owner.
@@ -257,16 +257,23 @@ def _named_owners(text: str) -> set[str]:
     owners: set[str] = set()
     for run in _OWNER_RUN.findall(text):
         for span in _SPAN.findall(run):
-            owners.add(span.strip().removesuffix("()").removeprefix("tl."))
+            owners.add(span.strip().removesuffix("()"))
     return owners
 
 
 def _names(owner: str, aliases: Iterable[str]) -> bool:
-    """Return whether glossary spelling ``owner`` names one of ``aliases``."""
+    """Return whether glossary spelling ``owner`` names one of ``aliases``.
+
+    A ``tl.``-prefixed owner is a full path and must equal an alias (members are spelled
+    ``Class.method``, so ``tl.Bundle.rank_changes`` names ``Bundle.rank_changes``). A bare
+    owner may also be a dotted tail of an alias (``FireRecord`` names
+    ``tl.intervention.FireRecord``).
+    """
 
     for alias in aliases:
-        bare = alias.removeprefix("tl.")
-        if bare == owner or bare.endswith(f".{owner}"):
+        if owner in (alias, f"tl.{alias}"):
+            return True
+        if not owner.startswith("tl.") and alias.endswith(f".{owner}"):
             return True
     return False
 
@@ -298,6 +305,38 @@ def missing(rows: Iterable[dict[str, Any]], glossary: str) -> list[dict[str, Any
     return out
 
 
+def stale(rows: Iterable[dict[str, Any]], glossary: str) -> list[tuple[str, str]]:
+    """Return ``(callable, keyword)`` pairs a keyword row names but the code does not take.
+
+    Parameters
+    ----------
+    rows
+        Rows from ``public_parameters`` (every public callable with at least one public
+        parameter).
+    glossary
+        Glossary text.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Sorted pairs; an owner that names no public callable (a private helper, a field
+        table) is not judged.
+    """
+
+    takes: dict[str, set[str]] = {}
+    aliases: dict[str, list[str]] = {}
+    for row in rows:
+        takes.setdefault(row["callable"], set()).add(row["param"])
+        aliases[row["callable"]] = row["aliases"]
+    found: set[tuple[str, str]] = set()
+    for name, texts in keyword_rows(glossary).items():
+        owners = set().union(*map(_named_owners, texts))
+        for callable_, spellings in aliases.items():
+            if name not in takes[callable_] and any(_names(o, spellings) for o in owners):
+                found.add((callable_, name))
+    return sorted(found)
+
+
 def _iter_report(rows: list[dict[str, Any]], gaps: list[dict[str, Any]]) -> Iterator[str]:
     """Yield the summary lines the CLI prints."""
 
@@ -326,7 +365,10 @@ def main(argv: list[str] | None = None) -> int:
     gaps = missing(rows, args.glossary.read_text(encoding="utf-8"))
     for line in _iter_report(rows, gaps):
         print(line)
-    return 1 if gaps else 0
+    wrong = stale(rows, args.glossary.read_text(encoding="utf-8"))
+    for callable_, name in wrong:
+        print(f"glossary names {name}= on {callable_}, which takes no such parameter")
+    return 1 if gaps or wrong else 0
 
 
 if __name__ == "__main__":
