@@ -328,7 +328,7 @@ def test_slice_offers_no_capture_capabilities(log) -> None:
     """A slice is a presenter: no save/run/validate/draw surfaces exist."""
 
     view = log.between("linear_1_1", "add_1_5")
-    for capability in ("save", "run", "validate", "log_backward", "draw", "fork"):
+    for capability in ("save", "run", "validate", "backward", "draw", "fork"):
         assert not hasattr(view, capability)
 
 

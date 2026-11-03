@@ -179,7 +179,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "Grad",
                 'draw(graph="backward")',
                 capture=_GRAD,
-                prep="log_backward",
+                prep="backward",
                 kwargs={"graph": "backward"},
             ),
             _panel(
@@ -187,7 +187,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "Grad",
                 'draw(graph="combined")',
                 capture=_GRAD,
-                prep="log_backward",
+                prep="backward",
                 kwargs={"graph": "combined"},
             ),
             _panel(

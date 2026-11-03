@@ -224,7 +224,11 @@ def test_rerun_after_set_resaves_the_requested_sites(fresh: dict[str, Any]) -> N
     model, x = fresh["model"], fresh["x"]
     trace = tl.trace(model, x, save=_save())
     value = torch.full_like(fresh["outs"][_SITE], 0.5)
-    trace.set(tl.module(_SITE), value, confirm_mutation=True)
+    trace.do(
+        tl.module(_SITE),
+        value,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     _rerun(trace, model, x)
     # Same graph shape as the steered capture: one replacement op at the site.
     assert _saved_labels(trace) == fresh["saved"]

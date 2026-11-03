@@ -135,7 +135,7 @@ def test_validation_entry_refuses_typed() -> None:
 def test_backward_refuses_typed() -> None:
     log = _structure_trace()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
-        log.log_backward(torch.tensor(1.0))
+        log.backward(torch.tensor(1.0))
     assert excinfo.value.fields["code"] == "structure_only_backward_unsupported"
 
 

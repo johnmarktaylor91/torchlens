@@ -71,7 +71,7 @@ def _logged_backward_stream(
         save="all",
         storage=tl.to_disk(bundle_path, retain_in_memory=retain_in_memory),
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     expected = (
         {label: trace[label].grad.detach().clone() for label in trace.saved_grad_ops.keys()}
         if retain_in_memory
@@ -94,7 +94,7 @@ def test_streamed_bundle_honors_per_call_save_grads_override(tmp_path: Path) -> 
     )
     trace._options_save_grads = None
 
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), save_grads=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), save_grads=True)
 
     manifest = Manifest.read(bundle_path / "manifest.json")
     assert any(entry.kind == "grad" for entry in manifest.tensors)

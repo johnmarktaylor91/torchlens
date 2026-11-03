@@ -95,7 +95,7 @@ def _two_tower():
 def _monster():
     example_models = _example_models()
     return example_models.RandomGraphModel(
-        target_nodes=120, nesting_depth=4, seed=42
+        target_nodes=120, call_depth=4, seed=42
     ).eval(), torch.rand(2, 64)
 
 
@@ -222,7 +222,7 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         title="Monster graph",
         structural_role="100+ layer stress test",
         description="Large nested random graph model for clutter, hierarchy, and scale resilience.",
-        substitution_note="Uses example_models.RandomGraphModel(target_nodes=120, nesting_depth=4) as the lightweight production-scale stress test.",
+        substitution_note="Uses example_models.RandomGraphModel(target_nodes=120, call_depth=4) as the lightweight production-scale stress test.",
         rolled=True,
         direction="leftright",
         vis_nesting_depth=2,

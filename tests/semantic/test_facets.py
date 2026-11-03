@@ -616,7 +616,11 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
 
     patched = clean.fork("patch_q_head")
     replacement = torch.zeros_like(clean.modules["attn"].facets.head(1).q)
-    patched.set(tl.facet("q").head(1), replacement)
+    patched.do(
+        tl.facet("q").head(1),
+        replacement,
+        intervention=tl.options.InterventionOptions(engine="set_only"),
+    )
     patched.run(model, x)
 
     assert not torch.allclose(_trace_output(patched), clean_out)
@@ -674,7 +678,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
         capture=tl.options.CaptureOptions(save_grads="all", save_args=True),
         save="all",
     )
-    log.log_backward(_trace_output(log).sum())
+    log.backward(_trace_output(log).sum())
     k_head = log.modules["attn"].facets.head(3).k
 
     assert torch.equal(k_head, log.modules["attn"].facets.k[:, :, 1, :])

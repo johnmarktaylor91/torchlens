@@ -270,8 +270,8 @@ def test_module_call_and_grad_fn_call_indexes_match_scan() -> None:
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
     try:
         loss = trace[trace.output_layers[0]].out.sum()
-        trace.log_backward(loss, retain_graph=True)
-        trace.log_backward(loss, retain_graph=True)
+        trace.backward(loss, retain_graph=True)
+        trace.backward(loss, retain_graph=True)
 
         module_calls = trace.module_calls
         module_keys = [getattr(call, "address", None) for call in module_calls]

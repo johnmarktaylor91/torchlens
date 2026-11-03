@@ -422,7 +422,7 @@ class HistogramResult:
     --------
     >>> hist = tl.stats.Histogram()
     >>> hist.update(torch.tensor([1.0, -1.0, 0.0]))
-    >>> result = hist.result()
+    >>> result = hist.compute()
     >>> sum(result.pos_counts), sum(result.neg_counts), result.specials["zero"]
     (1, 1, 1)
     >>> result.numel
@@ -457,7 +457,7 @@ class Histogram:
     >>> other = Histogram(hist.descriptor)
     >>> other.update(torch.tensor([2.0]))
     >>> hist.merge(other)
-    >>> hist.result().numel
+    >>> hist.compute().numel
     5
     """
 
@@ -538,7 +538,7 @@ class Histogram:
         for key in _SPECIAL_KEYS:
             self._specials[key] += other._specials[key]
 
-    def result(self) -> HistogramResult:
+    def compute(self) -> HistogramResult:
         """Return the finalized histogram counts."""
 
         return HistogramResult(

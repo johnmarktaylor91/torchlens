@@ -227,12 +227,12 @@ def test_backward_hook_removed_mid_pass_skips_the_remaining_grad_fns() -> None:
 
     remover.signal = "backward"  # type: ignore[attr-defined]
     _attach(trace, tl.grad_fn(name="relu"), remover)
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 
     # Backward order: relu2, addmm2, relu1, addmm1. The addmm hook is removed at relu2.
     assert events == ["removed", "relu", "relu"], events
     assert addmm_handle[0] not in _recipe_handles(trace)
 
     events.clear()
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
     assert events == ["relu", "relu"], events

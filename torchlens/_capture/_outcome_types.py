@@ -321,7 +321,7 @@ CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {
         CaptureStatus.UNATTESTED: _ALLOW,
         CaptureStatus.UNKNOWN: "refuse:N3",
     },
-    # log_backward / backward / recording_backward: the autograd graph of a
+    # backward / recording_backward: the autograd graph of a
     # halted capture IS the captured prefix, so HALTED stays allowed.
     "backward": {
         CaptureStatus.COMPLETE: _ALLOW,

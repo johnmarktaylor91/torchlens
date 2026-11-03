@@ -142,7 +142,7 @@ def test_explain_reports_backward_capture() -> None:
 
     x = torch.tensor([[2.0, 3.0]], requires_grad=True)
     log = tl.trace(TinyReportModel(), x, capture=tl.options.CaptureOptions(save_grads=True))
-    log.log_backward(log[log.output_layers[0]].out.sum())
+    log.backward(log[log.output_layers[0]].out.sum())
 
     text = log.explain()
 

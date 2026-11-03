@@ -879,7 +879,7 @@ class GradientRecord:
         Op that received the gradient.
     ordinal:
         One-based local ordinal for this owner.
-    backward_pass_index:
+    backward_pass_number:
         One-based global backward pass number.
     grad:
         Saved raw gradient tensor, if retained.
@@ -898,7 +898,7 @@ class GradientRecord:
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "owner": FieldPolicy.WEAKREF_STRIP,
         "ordinal": FieldPolicy.KEEP,
-        "backward_pass_index": FieldPolicy.KEEP,
+        "backward_pass_number": FieldPolicy.KEEP,
         "grad": FieldPolicy.BLOB,
         "transformed_grad": FieldPolicy.BLOB,
         "shape": FieldPolicy.KEEP,
@@ -912,7 +912,7 @@ class GradientRecord:
         *,
         owner: Any,
         ordinal: int,
-        backward_pass_index: int,
+        backward_pass_number: int,
         grad: torch.Tensor | None,
         transformed_grad: Any | None,
         shape: tuple[int, ...] | None,
@@ -928,7 +928,7 @@ class GradientRecord:
             Object that owns the gradient record.
         ordinal:
             Position of this record within the owner.
-        backward_pass_index:
+        backward_pass_number:
             Backward pass index that produced the gradient.
         grad:
             Raw gradient tensor, if retained.
@@ -946,7 +946,7 @@ class GradientRecord:
 
         self.owner = owner
         self.ordinal = ordinal
-        self.backward_pass_index = backward_pass_index
+        self.backward_pass_number = backward_pass_number
         self.grad = grad
         self.transformed_grad = transformed_grad
         self.shape = shape
@@ -990,7 +990,7 @@ class GradientRecordAccessor(Accessor[GradientRecord]):
     def for_pass(self, pass_index: int) -> GradientRecord:
         """Return the gradient record for a one-based backward pass number."""
 
-        matches = [record for record in self._list if record.backward_pass_index == pass_index]
+        matches = [record for record in self._list if record.backward_pass_number == pass_index]
         if len(matches) == 1:
             return matches[0]
         if matches:
@@ -1001,7 +1001,7 @@ class GradientRecordAccessor(Accessor[GradientRecord]):
                 remedy="use positional indexing on .grads to pick one record",
                 pass_index=pass_index,
             )
-        available = [record.backward_pass_index for record in self._list]
+        available = [record.backward_pass_number for record in self._list]
         raise KeyError(
             f"Gradient record for backward pass {pass_index} not found; participated in "
             f"passes {available}."
@@ -1608,7 +1608,7 @@ class Op(OpAtenMixin, _SelectionOperand):
                     return grad
                 if len(saved) > 1:
                     label = slot("label") or slot("layer_label") or slot("_label_raw")
-                    passes = [record.backward_pass_index for record in saved]
+                    passes = [record.backward_pass_number for record in saved]
                     raise InvalidArgumentError(
                         f"op {label} has gradients saved from multiple backward passes {passes}; "
                         "use op.grads[...] / op.grad_for(bwd=k)",
@@ -2025,7 +2025,7 @@ class Op(OpAtenMixin, _SelectionOperand):
     def _record_gradient(
         self,
         *,
-        backward_pass_index: int,
+        backward_pass_number: int,
         grad: torch.Tensor | None,
         transformed_grad: Any | None,
         shape: tuple[int, ...] | None,
@@ -2037,7 +2037,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         Parameters
         ----------
-        backward_pass_index:
+        backward_pass_number:
             One-based global backward pass number.
         grad:
             Saved raw gradient tensor, if retained.
@@ -2063,12 +2063,12 @@ class Op(OpAtenMixin, _SelectionOperand):
             records = []
             self._internal_set("_grad_records", records)
         records[:] = [
-            record for record in records if record.backward_pass_index != backward_pass_index
+            record for record in records if record.backward_pass_number != backward_pass_number
         ]
         record = GradientRecord(
             owner=self,
             ordinal=len(records) + 1,
-            backward_pass_index=backward_pass_index,
+            backward_pass_number=backward_pass_number,
             grad=grad,
             transformed_grad=transformed_grad,
             shape=shape,
@@ -2539,19 +2539,6 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         return _doors.intervention()._op_edits.do(
             self, input_transform, model=model, inputs=inputs, intervention=intervention
-        )
-
-    def set(
-        self,
-        value: Any,
-        *,
-        strict: bool = False,
-        confirm_mutation: bool = False,
-    ) -> "Trace":
-        """Set this op's out recipe through the owning Trace."""
-
-        return _doors.intervention()._op_edits.set(
-            self, value, strict=strict, confirm_mutation=confirm_mutation
         )
 
     def materialize_out(
