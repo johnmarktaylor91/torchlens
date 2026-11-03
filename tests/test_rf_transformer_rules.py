@@ -394,3 +394,86 @@ def test_bert_style_geometric_set_query_covers_the_sequence() -> None:
         assert _positions(_row(reached, target).mask) == list(range(_SEQ))
     finally:
         trace.cleanup()
+
+
+# ---------------------------------------------------------------------------
+# Index ops the transformer families reach for: ellipsis slices and gather.
+# ---------------------------------------------------------------------------
+
+
+def _input_ops(trace) -> list:
+    """The captured input operations, in call order."""
+
+    return [item for item in trace._layer_list if item.is_input]
+
+
+class _TailSlice(nn.Module):
+    """Slice the trailing axis behind an ellipsis, the rotary-embedding spelling."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x[..., :2]
+
+
+def test_ellipsis_slice_keeps_a_one_to_one_map() -> None:
+    """``x[..., :2]`` reaches one parent cell; at base the key padded twice and went unknown."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(_TailSlice(), torch.randn(1, 2, 3, 4), capture=_ARMED)
+    try:
+        sliced = _op(trace, "__getitem__")
+        (source,) = _input_ops(trace)
+        reached = sliced.receptive_field.of([(0, 1, 2, 1)], within=source.label)
+        assert _cells(_row(reached, source).mask) == [[0, 1, 2, 1]]
+        _all_pass(cross_validate(trace, ops=[sliced.label]))
+    finally:
+        trace.cleanup()
+
+
+class _GatherRows(nn.Module):
+    """Gather one source row per output row, the embedding-lookup spelling."""
+
+    def forward(self, x: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
+        return torch.gather(x, 1, index)
+
+
+def test_gather_widens_only_the_gathered_axis_of_its_source() -> None:
+    """The index operand stays pointwise; the source widens along the gathered axis only."""
+
+    torch.manual_seed(0)
+    index = torch.tensor([[2, 0, 1]]).unsqueeze(-1).expand(1, 3, 4).contiguous()
+    trace = tl.trace(_GatherRows(), torch.randn(1, 3, 4), index, capture=_ARMED)
+    try:
+        gathered = _op(trace, "gather")
+        source, index_op = _input_ops(trace)
+        reached = gathered.receptive_field.of([(0, 1, 3)], within=[source.label, index_op.label])
+        assert _cells(_row(reached, source).mask) == [[0, 0, 3], [0, 1, 3], [0, 2, 3]]
+        assert _cells(_row(reached, index_op).mask) == [[0, 1, 3]]
+    finally:
+        trace.cleanup()
+
+
+class _TwoBranches(nn.Module):
+    """Two independent heads over one input, with no path between them."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.left = nn.Linear(4, 4)
+        self.right = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.left(x), self.right(x)
+
+
+def test_gradient_probe_on_an_unreachable_target_answers_empty() -> None:
+    """A sibling-branch target answers an empty mask instead of raising, as geometry does."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(_TwoBranches(), torch.randn(1, 4), capture=_ARMED)
+    try:
+        seed = _only_output(trace, "left")
+        target = _only_output(trace, "right")
+        for method in ("geometric", "gradient"):
+            reached = seed.projective_field.of([(0, 0)], within="right", method=method)
+            assert not bool(_row(reached, target).mask.any()), method
+    finally:
+        trace.cleanup()
