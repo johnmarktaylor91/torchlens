@@ -614,8 +614,9 @@ def _hook_fields(cell: Cell) -> tuple[dict[str, Any], str]:
 def _after_hooks(cell: Cell) -> None:
     """Hooks fire once per site per pass with the forward signal; scratch survives; a raise refuses typed.
 
-    Every armed pass the cell ran (the capture, the ``forward_match`` replay and
+    Every armed pass the cell ran (the capture, the ``forward_match`` replay,
     the partner feature's reruns and second captures, counted at the capture
+    door, and its saved-DAG replays such as ``fork.do``, counted at the replay
     door) must fire exactly once per op the hook selects in that pass, and no
     fire may fall outside a counted pass.
     """
@@ -627,7 +628,9 @@ def _after_hooks(cell: Cell) -> None:
     selected = [op for op in trace.ops if op.func_name == target]
     fires = log["fires"]
     problems = hook_pass_problems(
-        recorder.passes, len(selected), fires_outside=recorder.fires_outside_passes()
+        recorder.passes,
+        {op.label for op in selected},
+        fires_outside=recorder.fires_outside_passes(),
     )
     armed = [one for one in recorder.passes if one.armed]
     cell.expect(

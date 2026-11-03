@@ -14,9 +14,11 @@ from typing import Any
 import pytest
 
 from tests.behaviour._fill_io import _check_streamed_payloads, _predicate_capture
-from tests.behaviour._hook_passes import HookPass, hook_pass_problems
+from tests.behaviour._hook_passes import HookPass, PassRecorder, hook_pass_problems
 from tests.behaviour.features import feature
 from tests.behaviour.harness import OracleFailure
+
+_TWO = {"relu_1_2", "relu_2_4"}
 
 
 def _armed(*states: Any) -> HookPass:
@@ -26,23 +28,23 @@ def _armed(*states: Any) -> HookPass:
 def test_one_fire_per_selected_op_in_every_armed_pass_is_clean() -> None:
     first, second = {}, {}
     passes = [_armed(first, first), HookPass(False, ()), _armed(second, second)]
-    assert hook_pass_problems(passes, 2) == []
+    assert hook_pass_problems(passes, _TWO) == []
 
 
 def test_a_hook_firing_twice_in_one_pass_fails() -> None:
     first, second = {}, {}
     passes = [_armed(first, first, first, first), _armed(second, second)]
-    assert hook_pass_problems(passes, 2) == ["armed pass 0 fired 4 times for 2 selected ops"]
+    assert hook_pass_problems(passes, _TWO) == ["armed pass 0 fired 4 times for 2 selected ops"]
 
 
 def test_an_armed_pass_with_zero_fires_fails() -> None:
     first = {}
     passes = [_armed(first, first), _armed()]
-    assert hook_pass_problems(passes, 2) == ["armed pass 1 fired 0 times for 2 selected ops"]
+    assert hook_pass_problems(passes, _TWO) == ["armed pass 1 fired 0 times for 2 selected ops"]
 
 
 def test_one_pass_split_over_two_run_states_fails() -> None:
-    assert hook_pass_problems([_armed({}, {})], 2) == [
+    assert hook_pass_problems([_armed({}, {})], _TWO) == [
         "armed pass 0 fired under more than one ctx.run_state"
     ]
 
@@ -50,14 +52,34 @@ def test_one_pass_split_over_two_run_states_fails() -> None:
 def test_fires_in_unarmed_passes_or_outside_every_pass_fail() -> None:
     first = {}
     passes = [_armed(first), HookPass(False, ({},))]
-    assert hook_pass_problems(passes, 1, fires_outside=2) == [
+    assert hook_pass_problems(passes, {"relu_1_2"}, fires_outside=2) == [
         "1 fires in passes that did not arm the hook",
-        "2 fires outside every capture pass",
+        "2 fires outside every counted pass",
     ]
 
 
+def test_a_replay_pass_expects_the_selected_ops_inside_its_cone() -> None:
+    capture, replay = {}, {}
+    cone = frozenset({"relu_2_4", "linear_3_5"})
+    clean = [_armed(capture, capture), HookPass(True, (replay,), cone)]
+    assert hook_pass_problems(clean, _TWO) == []
+    doubled = [_armed(capture, capture), HookPass(True, (replay, replay), cone)]
+    assert hook_pass_problems(doubled, _TWO) == ["armed pass 1 fired 2 times for 1 selected ops"]
+
+
+def test_a_nested_pass_keeps_its_own_fires() -> None:
+    outer, inner = {}, {}
+    recorder = PassRecorder(hook=print, fire_states=[outer])
+    recorder.fire_states.append(inner)
+    recorder.record(True, 1, frozenset({"relu_2_4"}))
+    recorder.fire_states.append(outer)
+    recorder.record(True, 0)
+    assert [len(one.fire_states) for one in recorder.passes] == [1, 2]
+    assert recorder.fires_outside_passes() == 0
+
+
 def test_no_armed_pass_fails() -> None:
-    assert hook_pass_problems([HookPass(False, ())], 0) == ["no armed pass was counted"]
+    assert hook_pass_problems([HookPass(False, ())], set()) == ["no armed pass was counted"]
 
 
 class _Cell(SimpleNamespace):
