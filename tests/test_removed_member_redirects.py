@@ -23,7 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError
 from torchlens._visualization.themes import THEME_PRESETS
-from torchlens.options import VisualizationOptions
+from torchlens.options import CaptureOptions, VisualizationOptions
 
 
 class _Toy(nn.Module):
@@ -46,6 +46,7 @@ def owners():
             "Trace": first,
             "Bundle": tl.Bundle({"a": first, "b": second}),
             "VisualizationOptions": VisualizationOptions(),
+            "CaptureOptions": CaptureOptions(),
             "VisualizationTheme": THEME_PRESETS["torchlens"],
         }
     finally:
@@ -126,7 +127,13 @@ def test_removed_module_name_raises_typed_redirect() -> None:
 def test_unknown_member_still_fails_plain(owners: dict[str, Any]) -> None:
     """Only removed public names redirect; any other miss stays a plain AttributeError."""
 
-    for owner in ("Trace", "Bundle", "VisualizationOptions", "VisualizationTheme"):
+    for owner in (
+        "Trace",
+        "Bundle",
+        "VisualizationOptions",
+        "CaptureOptions",
+        "VisualizationTheme",
+    ):
         with pytest.raises(AttributeError) as excinfo:
             getattr(owners[owner], "no_such_member_anywhere")
         assert not isinstance(excinfo.value, FacadeTeachingError), owner
@@ -143,6 +150,7 @@ _GUARDED_HOOKS: list[tuple[str, str | None]] = [
     ("torchlens/observers.py", None),
     ("torchlens/experiment/__init__.py", None),
     ("torchlens/options.py", "VisualizationOptions"),
+    ("torchlens/options.py", "CaptureOptions"),
     ("torchlens/_visualization/themes.py", "VisualizationTheme"),
 ]
 

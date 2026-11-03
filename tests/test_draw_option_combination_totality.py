@@ -162,6 +162,10 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "size_scale": (PAIRED, "linear"),
     "stack_by": (PAIRED, True),
     "show_redundant_args": (PAIRED, True),
+    # highlight="interventions" routes through the surgery lens, which refuses
+    # typed on this un-edited sweep trace (the rule in expected_refusal); the
+    # edited-trace renders live in test_surgery_visuals_marks.py.
+    "highlight": (PAIRED, "interventions"),
 }
 
 PAIRED_OPTIONS: tuple[str, ...] = tuple(
@@ -185,10 +189,15 @@ REFUSING_COMBOS: dict[frozenset[str], str] = {
 def expected_refusal(combo: frozenset[str]) -> str | None:
     """Return the typed refusal code for a probe combination, else ``None``.
 
-    ``scale`` without ``size_by`` refuses first (the option is meaningless
-    alone), matching shipped precedence; the pinned pair rows cover the rest.
+    ``highlight`` refuses first on this un-edited trace (its lens checks the
+    intervention evidence before any draw option is applied); ``scale``
+    without ``size_by`` refuses next (the option is meaningless alone),
+    matching shipped precedence; the pinned pair rows cover the rest.
     """
 
+    if "highlight" in combo:
+        # The lens checks its headline evidence before drawing anything.
+        return "surgery_evidence_missing"
     if "size_scale" in combo and "size_by" not in combo:
         return "scale_requires_size_by"
     return REFUSING_COMBOS.get(combo)
@@ -299,7 +308,7 @@ _CORE_PAIRS = list(itertools.combinations(CORE_OPTIONS, 2))
 
 #: Every pinned-refusal combination, provoked at smoke (each raises before
 #: rendering, so the family is cheap).
-_REFUSAL_COMBOS: list[tuple[str, ...]] = [("size_scale",)] + [
+_REFUSAL_COMBOS: list[tuple[str, ...]] = [("size_scale",), ("highlight",)] + [
     tuple(sorted(combo)) for combo in sorted(REFUSING_COMBOS, key=sorted)
 ]
 

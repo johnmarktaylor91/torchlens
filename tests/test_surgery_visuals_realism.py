@@ -48,11 +48,9 @@ def _assert_no_banned_verbs(text: str) -> None:
 def _render_with_sidecar(trace, tmp_path: Path, stem: str) -> tuple[str, str]:
     """Render the surgery lens focused on one block; return (svg, census)."""
 
-    from torchlens._visualization.surgery_visuals import render_surgery
-
     outpath = str(tmp_path / stem)
-    render_surgery(
-        trace,
+    trace.draw(
+        highlight="interventions",
         path=outpath,
         file_format="svg",
     )
