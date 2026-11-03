@@ -360,7 +360,8 @@ def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) 
     dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=True)
     label = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
     drawn = "\n".join(line for line in dot.splitlines() if not line.strip().startswith("graph ["))
-    assert '"#98FB98"' not in drawn and '"#ff9999"' not in drawn  # no input/output role fill
+    for role_fill in ('"#98FB98"', '"#ff9999"', '"#009E73"', '"#D55E00"'):
+        assert role_fill not in drawn, role_fill  # no input/output role fill
     assert ">input<" not in label and ">output<" not in label
     assert "TorchLens encoding" in label
     # One block: the key and the channel section share the header label;

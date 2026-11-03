@@ -28,6 +28,7 @@ from ..._selection.selectors import BaseSelector
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends import BackendName
 from ...options import CaptureOptions, merge_capture_options
+from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -200,11 +201,9 @@ class TFBackend:
         # ``capture_options.<field>`` reads above already resolved each one to
         # its concrete (non-MISSING) default via ``merge_capture_options``,
         # with the same backend-local defaults this block used to re-apply.
-        # Re-running ``default_if_missing`` on an already-concrete value was a
-        # no-op at runtime, but it widened mypy's view of the variable back to
-        # its MISSING-including parameter type (``default_if_missing`` returns
-        # ``Any``, which does not narrow); resolving once at the merge
-        # boundary is the fix, not a second pass here.
+        # Re-running ``default_if_missing`` on a concrete value was a runtime no-op
+        # but widened mypy's view back to the MISSING-including parameter type
+        # (it returns ``Any``); resolving once at the merge boundary is the fix.
         activation_transform = default_if_missing(activation_transform, None)
         save_raw_activations = default_if_missing(save_raw_activations, True)
         save_grads = default_if_missing(save_grads, None)
@@ -220,7 +219,7 @@ class TFBackend:
         grad_options = default_if_missing(grad_options, None)
         intervene = default_if_missing(intervene, None)
         save_predicate = _pop_tf_save_predicate(extra_kwargs)
-        _reject_unimplemented_intervention_options(extra_kwargs)
+        facet_recipes = _reject_unimplemented_intervention_options(extra_kwargs)
         _reject_extra_kwargs(extra_kwargs)
         if intervene is not None and grad_options is not None:
             raise BackendUnsupportedError(
@@ -327,6 +326,7 @@ class TFBackend:
             delattr(trace, "capture_events")
             self._attach_param_logs(trace, None)
             self._finish_trace(trace, None)
+            attach_facet_recipes(trace, facet_recipes, backend_name="tf")
             freeze_trace_relation_views(trace)
             stamp_backend_finalized(trace)
             return trace
@@ -451,6 +451,7 @@ class TFBackend:
                 grad_options=grad_options,
                 module_tree=module_tree,
             )
+        attach_facet_recipes(trace, facet_recipes, backend_name="tf")
         freeze_trace_relation_views(trace)
         stamp_backend_finalized(trace)
         return trace
@@ -944,14 +945,15 @@ class TFBackend:
         return bool(generic_function_type is not None and isinstance(value, generic_function_type))
 
 
-def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
-    """Refuse intervention-gated options the tf preview does not implement.
+def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> Any:
+    """Refuse ``halt=`` and pop the facet recipes the tf preview attaches.
 
-    The ``interventions`` capability flag admits ``intervene=``, ``halt=``, and
-    ``facets=`` through the shared option gate, so the two unimplemented
-    spellings keep their typed refusals here in the capture path instead of in
-    the declarative policy tables (where a True flag would classify them as
-    self-contradictory registrations).
+    The ``interventions`` capability flag admits ``intervene=`` and ``halt=``
+    through the shared option gate, so the unimplemented ``halt=`` keeps its
+    typed refusal here in the capture path instead of in the declarative
+    policy tables (where a True flag would classify it as a self-contradictory
+    registration). ``facets=`` is backend-neutral (the ``facet_recipes``
+    record): its value is popped here and snapshotted onto the finished trace.
 
     Parameters
     ----------
@@ -960,8 +962,8 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
 
     Returns
     -------
-    None
-        Returns when neither option is explicitly requested.
+    Any
+        The facet recipes to attach, or ``None`` when none were requested.
     """
 
     halt_value = kwargs.pop("halt", None)
@@ -971,12 +973,7 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
             "partial-forward finalization semantics the tf preview does not "
             "implement. Use the PyTorch backend for predicate-time halt."
         )
-    recipes_value = kwargs.pop("facets", None)
-    if recipes_value is not None and not is_missing(recipes_value):
-        raise BackendUnsupportedError(
-            "tf backend interventions support intervene= only; trace(facets=...) "
-            "replay recipes are torch-only. Use the PyTorch backend for recipes."
-        )
+    return pop_facet_recipes(kwargs)
 
 
 def _reject_extra_kwargs(kwargs: dict[str, Any]) -> None:

@@ -44,7 +44,10 @@
     census is maintained privately.
 9c. The C07X amendment rides the same v9 window (TLSPEC_VERSION stays 9): bundle relation
     grammar v2 (required/optional split; `successor_of` optional evidence envelope +
-    `carry_mode`/`state_source`; closed claim grades + contracted unchecked reasons;
+    `carry_mode` (closed `none`/`verbatim`/`summarized`)/`state_source`/`seams`; item origin
+    `class` (seven kinds, required under reserved schemas); closed claim grades + contracted
+    unchecked reasons; row grades DERIVED by `Bundle.relation_grades` (`broken` on exactly the
+    bulk-origin and verbatim-carry premises; seam-local divergences never escalate);
     1 MiB per-row evidence budget; direction pin `from` = the LATER member), the
     preserve-and-disclose loader doctrine (unknown namespaced relation kinds ->
     `OpaqueRelationRow` under `tl.load(unknown_relations=)`; unknown evidence schema ids

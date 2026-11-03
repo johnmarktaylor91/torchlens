@@ -37,7 +37,7 @@ torchlens/_capture/prepare/cache.py::_store_authenticated_capture_cache	85
 torchlens/_capture/prepare/chunked.py::_append_chunk_trace_state	73
 torchlens/_capture/prepare/chunked.py::plan_chunks	76
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	175
-torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	125
+torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	121
 torchlens/_capture/prepare/door.py	1122
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
 torchlens/_capture/projections.py	1592
@@ -714,7 +714,7 @@ torchlens/attribution/_text.py	1092
 torchlens/attribution/_text.py::_resolve_baseline	160
 torchlens/attribution/_text.py::_resolve_target	178
 torchlens/attribution/_text.py::text	285
-torchlens/attribution/graph/_build.py	834
+torchlens/attribution/graph/_build.py	832
 torchlens/attribution/graph/_build.py::build_graph	93
 torchlens/attribution/graph/_neuronpedia_upload.py::upload_to_neuronpedia	77
 torchlens/attribution/graph/_result.py::AttributionGraph.to_neuronpedia	82
@@ -755,7 +755,7 @@ torchlens/backends/jax/backend.py::JAXBackend._finish_trace	302
 torchlens/backends/jax/backend.py::JAXBackend._populate_pytree_module_build_data	82
 torchlens/backends/jax/backend.py::JAXBackend._relabel_jax_graph_edges	63
 torchlens/backends/jax/backend.py::JAXBackend._validate_jax_regions	70
-torchlens/backends/jax/backend.py::JAXBackend.capture_trace	346
+torchlens/backends/jax/backend.py::JAXBackend.capture_trace	345
 torchlens/backends/jax/backend.py::_experimental_per_op_boundary_vjp_oracle	79
 torchlens/backends/jax/backend.py::_finite_difference_directional_check	83
 torchlens/backends/jax/backend.py::_jax_intermediate_oracle_passes	62
@@ -798,7 +798,7 @@ torchlens/backends/paddle/backend.py::_PaddleIntermediateTapObserver.call	62
 torchlens/backends/paddle/model_prep.py::discover_paddle_module_tree	82
 torchlens/backends/paddle/validation.py::_rebuild_inputs	77
 torchlens/backends/paddle/wrappers.py::_PaddleWrapperRegistry.wrap_attr	71
-torchlens/backends/tf/backend.py	1386
+torchlens/backends/tf/backend.py	1383
 torchlens/backends/tf/backend.py::TFBackend._new_trace	132
 torchlens/backends/tf/backend.py::TFBackend.capture_trace	368
 torchlens/backends/tf/backend.py::_reject_unsupported_options	80
@@ -827,7 +827,7 @@ torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._record_cont
 torchlens/backends/tf/validation.py	1101
 torchlens/backends/tf/validation.py::_validate_self_consistency	86
 torchlens/backends/tf/validation.py::validate_tf_trace_detailed	80
-torchlens/backends/tinygrad/backend.py	3176
+torchlens/backends/tinygrad/backend.py	3174
 torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	176
 torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	90
 torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	74

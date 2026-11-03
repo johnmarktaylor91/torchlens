@@ -78,6 +78,7 @@ from ...validation.status import (
     ValidationStatus,
     count_importer_region_annotations,
 )
+from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,
@@ -542,19 +543,16 @@ class JAXBackend:
             regions; ``"reject"`` preserves the earlier nested-primitive
             rejection behavior.
         jax_max_control_flow_unroll
-            Maximum allowed static unroll length for one JAX control-flow
-            primitive.
+            Maximum static unroll length for one JAX control-flow primitive.
         module_identity_mode
             Optional JAX module mode. Raw callables use ``"function_root"``;
             Equinox module roots default to ``"pytree_module"``.
         grad_options
-            Optional JAX derived-gradient configuration. This runs a second
-            pure functional ``jax.value_and_grad`` pass and populates
-            ``trace.autograd.derived_grads``.
+            Optional JAX derived-gradient configuration: a second pure functional
+            ``jax.value_and_grad`` pass populates ``trace.autograd.derived_grads``.
         capture
-            Grouped ``CaptureOptions``. The sole post-sprint spelling for the
-            flat capture kwargs above; an explicit field here is merged in
-            (``merge_capture_options``) ahead of this backend's own defaults.
+            Grouped ``CaptureOptions``, the sole spelling for the flat capture kwargs
+            above; an explicit field is merged in (``merge_capture_options``) first.
         **kwargs
             Extra public trace kwargs rejected by this backend.
 
@@ -565,6 +563,7 @@ class JAXBackend:
         """
 
         save_predicate = pop_static_label_save_predicate(kwargs, backend_name="JAX")
+        facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
         # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
@@ -766,6 +765,7 @@ class JAXBackend:
                 jax_control_flow=cast(str, jax_control_flow),
                 jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
             )
+        attach_facet_recipes(trace, facet_recipes, backend_name="JAX")
         freeze_trace_relation_views(trace)
         stamp_backend_finalized(trace)
         return trace

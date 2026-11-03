@@ -1220,7 +1220,6 @@ def test_refusal_code_passed_at_the_raise_site_is_the_instance_code() -> None:
 _GATED_TRACE_OPTION_FLAGS_AT_RECORDS = {
     "intervene": "can_intervene",
     "halt": "can_intervene",
-    "facets": "can_intervene",
     "storage": "has_streaming",
     "streaming": "has_streaming",
     "save_grads": "backward_capture",
@@ -1238,6 +1237,7 @@ _PUBLIC_OPTION_SPINE_AT_RECORDS = (
     "inference_only",
     "chunk_size",
     "chunk_paths",
+    "facets",
 )
 
 
@@ -1295,6 +1295,7 @@ def test_capability_tables_derive_from_the_records_in_table_order() -> None:
         "jax_control_flow",
         "jax_max_control_flow_unroll",
         "module_identity_mode",
+        "facets",
     )
     for options in (
         registry.MLX_TRACE_OPTIONS,
@@ -1302,7 +1303,7 @@ def test_capability_tables_derive_from_the_records_in_table_order() -> None:
         registry.PADDLE_TRACE_OPTIONS,
         registry.TF_TRACE_OPTIONS,
     ):
-        assert options == ("module_identity_mode", "grad_options")
+        assert options == ("module_identity_mode", "grad_options", "facets")
 
 
 def test_dispatch_filtered_names_are_the_non_gated_record_options() -> None:
