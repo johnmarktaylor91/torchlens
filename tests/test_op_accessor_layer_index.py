@@ -1,5 +1,8 @@
 """Bare-layer-label Op reads are served from the alias index, not a row scan.
 
+The captures keep live views (``save_mode="view"``) so the GradFn read test can
+differentiate through the recorded tensors the way the Jacobian lens entry does.
+
 ``GradFn.op`` resolves its bare layer label through ``trace.ops.resolve_all`` once
 per op on every backward pass. When that read scanned every row, a Jacobian fit
 on Mamba-130m (about 24k ops, 96 passes per prompt) took six times longer than
@@ -38,7 +41,7 @@ class _Twice(nn.Module):
 def _trace() -> tl.Trace:
     torch.manual_seed(0)
     x = torch.randn(2, 4, requires_grad=True)
-    return tl.trace(_Twice().eval(), x, save="all", capture=CaptureOptions(replayable=True))
+    return tl.trace(_Twice().eval(), x, capture=CaptureOptions(save_mode="view"))
 
 
 def test_resolve_all_bare_layer_label_reads_the_index() -> None:
