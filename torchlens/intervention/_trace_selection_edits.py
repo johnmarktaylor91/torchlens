@@ -31,6 +31,7 @@ from .._selection.do_plan import build_selection_do_plan
 from .._selection.errors import SelectionError
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
+from ..backends.torch._trace_backward import _require_live_replay
 from . import replay as replay_module
 from ._param_fingerprint import changed_param_scope
 from ._replay_context import journal_replay_state, restore_replay_state
@@ -539,6 +540,7 @@ def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) 
     """
 
     wanted = frozenset(handle_ids)
+    _require_live_replay(trace)  # the capture gates Trace.push runs first
     _preflight_log(trace)
     _refuse_armed_gradient_rules(trace, None)
     _warn_if_direct_writes_will_be_overlaid(trace)
