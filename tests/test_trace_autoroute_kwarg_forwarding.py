@@ -36,7 +36,7 @@ from torchlens import _autoroute as autoroute
 AUTOROUTE_EXEMPT_PARAMS = {
     # the dispatch subjects themselves
     "model",
-    "input_args",
+    "inputs",
     "input_kwargs",
     # autoroute only runs when backend is None
     "backend",

@@ -166,7 +166,7 @@
  },
  "plain_trace_kwargs": [
   "model",
-  "input_args",
+  "inputs",
   "extra_positional",
   "input_kwargs",
   "input_shape",
