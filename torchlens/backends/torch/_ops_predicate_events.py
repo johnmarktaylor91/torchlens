@@ -143,6 +143,9 @@ def _emit_predicate_operation_events(
                 transform_kind=getattr(func, "__tl_transform_kind__", None)
                 or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
             )
+        # A context whose decision never completed (a halt or a predicate error
+        # inside the commit) is retained like a selected one.
+        selected = True
         try:
             halt_only = _is_halt_only_capture(state.options)
             if halt_only:
@@ -167,6 +170,7 @@ def _emit_predicate_operation_events(
                 demanded = EnrichmentLevel.METADATA
             else:
                 demanded = EnrichmentLevel.SHELL
+            selected = demanded is not EnrichmentLevel.SHELL
             bulk_default_ram = bool(
                 demanded is EnrichmentLevel.PAYLOAD
                 and capture_session_for(self) is not None
@@ -255,7 +259,7 @@ def _emit_predicate_operation_events(
                         trace=self,
                         intervened=bool(getattr(committed_event, "is_edited", False)),
                     )
-                state.append_context(ctx, selected=bool(spec.save_out or spec.save_metadata))
+                state.append_context(ctx, selected=selected)
 
 
 def _build_graph_relationship_fields(
