@@ -2220,6 +2220,7 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   (`exact | upper_bound | lower_bound | unknown`). `tl.Selection` is
   session-time only, never persisted. Selection kinds `ACT | PARAM | EDGE`
   are a closed vocabulary; mixed kinds refuse `selection_kind_incompatible`.
+  See also: [Completeness of the selection algebra](selection_completeness.md).
 
 **Selection operators `| & - ~` (+ reflected)** — *ratified set (slate 5.4);
 semantics unstable-documented*
@@ -2308,7 +2309,8 @@ no deprecation shim owed*
   `no_index_space`. Both producers are pure functions over the ONE
   executed-DAG graph substrate (`torchlens._selection.graph._TraceGraph`,
   shared with the influence-geometry path machinery), the seam a future
-  graph-MOTIF producer plugs into.
+  graph-MOTIF producer plugs into. See also: [Completeness of the selection
+  algebra](selection_completeness.md) (why `tl.neighborhood` and `tl.between` are necessary).
 
 **TraceSlice / trace.between / trace.subgraph** — *unstable — no
 deprecation shim owed*

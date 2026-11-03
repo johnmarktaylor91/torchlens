@@ -959,7 +959,9 @@
   refuses `slice_save_unsupported`; `__selection__` lifts the member family
   back into the algebra (slices compose and feed `do()`).
   `trace.subgraph(selection)` is the general door presenting ANY ACT region
-  as the same view. Session-time only; never persisted.
+  as the same view. Session-time only; never persisted. Doc of record for what the
+  algebra can and cannot express (completeness, necessity of the closure producers):
+  `docs/reference/selection_completeness.md`.
   `torchlens/_selection/compare.py`).
   CROSS-RUN (L6 stage 4a; DOCUMENTED-UNSTABLE): `resolved.align_to(target)`
   re-binds an ACT selection onto another trace keyed on the L1 structural
