@@ -1799,6 +1799,9 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.facets.describe`: List registered facet function names and declared facets for a class name.
 - `tl.facets.enable_transformer_lens_aliases`: Enable or disable opt-in TransformerLens-style facet aliases.
 - `tl.facets.functions`: List registered recipes, optionally filtered by scope and class-name glob.
+- `tl.inputs`: Input preprocessor registry; see `docs/guides/model_conveniences.md`.
+- `tl.inputs.register`: Decorator registering `fn(model, raw)` that builds the model input from a raw input for future traces (`name=`, `priority=`, `class_name=`); return `None` to decline.
+- `tl.inputs.unregister`: Remove a registered input preprocessor by name.
 - `tl.mechinterp.HeadScores`: Per-head taxonomy scores.
 - `tl.mechinterp.LogitLens`: Result of a :func:`logit_lens` sweep across transformer blocks.
 - `tl.mechinterp.LogitLensPrediction`: Streaming per-layer prediction summary (one row per projected layer).
@@ -1809,6 +1812,9 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.mechinterp.patching`: Prebuilt activation and attribution patching helpers for facets.
 - `tl.neuro.ExtractionPlan`: Immutable measured plan for one whole-model extraction sweep.
 - `tl.neuro.PlanSite`: One requested site's measured plan row.
+- `tl.outputs`: Output decoder registry; see `docs/guides/model_conveniences.md`.
+- `tl.outputs.register`: Decorator registering `fn(outputs)` that returns class labels for future traces' capture-time decode and `decode_output(style=name)`; return `None` to decline.
+- `tl.outputs.unregister`: Remove a registered output decoder by name.
 - `tl._observability.RunningStats`: Always-on scalar spine accumulator (StreamingStat; D8).
 - `tl._observability.RunningStatsResult`: Finalized spine statistics for one population.
 - `tl.recording.ActivationRecord`: One retained recording event.

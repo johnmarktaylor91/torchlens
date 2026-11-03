@@ -72,49 +72,32 @@ df = trace.to_pandas(include_decoded_output_summary=True)
 The extra `decoded_output_summary` column is populated only on output-node rows.
 The default `trace.to_pandas()` schema is unchanged.
 
-## Custom Output Detectors
+## Custom Output Decoders
 
-Register custom output detectors through `tl._autoroute.output.register(...)`.
-A detector runs twice: automatically at the end of every capture, with the
-live model output object and `meta["style"] is None`, and on demand from
-`trace.decode_output(style="my_labels")`, with the retained output tensors
-keyed by head (`{"logits": tensor}`, or the one bare tensor) and
-`meta["style"]` set to the requested style. It returns a
-`ResolvedPostprocessing` record or `None`.
+Register a decoder for your own classifier with `tl.outputs.register(...)`. The
+decorated function receives the model's output and returns the class labels in
+logit order (a list, or a dict from class index to label), or `None` to decline.
+Every later capture of a model whose class matches `class_name=` decodes its
+output into labelled top-k rows; a decoder also answers
+`trace.decode_output(style=<its name>)` on demand.
 
 ```python
-from typing import Any
+@tl.outputs.register(name="my_labels", class_name="MyClassifier", priority=5)
+def my_labels(outputs):
+    """Name the two logits of MyClassifier."""
 
-from torchlens._data_classes.trace import ResolvedPostprocessing
-
-
-@tl._autoroute.output.register(name="my_labels", priority=5)
-def my_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
-    """Resolve a local label bank for decode_output(style='my_labels')."""
-
-    if meta.get("style") != "my_labels":
-        return None
-    return ResolvedPostprocessing(
-        source="project",
-        identifier="my_labels",
-        verified=True,
-        config={"id2label": {0: "cat", 1: "dog"}},
-        description="project label bank",
-        style="classification",
-        selected_output_head=meta.get("head"),
-        label_source="project-local",
-        label_source_version="v1",
-        confidence=1.0,
-    )
+    return {0: "cat", 1: "dog"}
 
 
 trace = tl.trace(model, x)
-rows = trace.decode_output(style="my_labels")
+rows = trace.decode_output(k=1)
 ```
 
-The registration API is intentionally fail-closed: return `None` for non-matches,
-and unregister a temporary detector with
-`tl._autoroute.output.unregister("my_labels")`.
+Decoders run in ascending `priority` order; the built-in detectors sit at 10 to
+30. Remove a decoder with `tl.outputs.unregister("my_labels")`. The matching
+input-side registry is `tl.inputs.register(...)`; the guide
+[Adding conveniences for your model](guides/model_conveniences.md) walks through
+both and a custom facet.
 
 ## Original Input Display
 
@@ -343,7 +326,7 @@ template. It demonstrates:
 
 - auto-detected label tables from `config.id2label`;
 - `output_table()`, `decode_output()`, and gated pandas summaries;
-- the read-time `decode_output(style=, head=)` override and `tl._autoroute.output.register(...)`;
+- the read-time `decode_output(style=, head=)` override and `tl.outputs.register(...)`;
 - original text input display with `show_input_transform_summary=True`;
 - `trace.input` and `trace.provenance.input_preprocessor` provenance.
 
@@ -356,10 +339,10 @@ core flow runs without downloading external model weights.
 - `Trace.output_table(k=5, batch_items=None, *, style=None, head=None)`
 - `Trace.decode_output(k=None, *, style=None, head=None, tokenizer=None)`
 - `Trace.provenance.output_postprocessor`
-- `tl._autoroute.output.register(...)`
-- `tl._autoroute.output.unregister(...)`
-- `tl._autoroute.output.list()`
-- `tl._autoroute.output.info(...)`
+- `tl.outputs.register(...)`
+- `tl.outputs.unregister(...)`
+- `tl.inputs.register(...)`
+- `tl.inputs.unregister(...)`
 - `tl.trace(..., capture=CaptureOptions(input_transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.input`
 - `Trace.provenance.input_preprocessor`

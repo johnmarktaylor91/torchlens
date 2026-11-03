@@ -251,6 +251,8 @@ pages:
   - path: guides/kv_cache.md
     section: field-guide
     group: Intervene
+  - path: guides/model_conveniences.md
+    section: concepts
   - path: guides/offline_report.md
     section: field-guide
     group: See and inspect

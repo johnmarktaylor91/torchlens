@@ -138,6 +138,10 @@ with tl.facets.adding(my_attention):
     log = tl.trace(model, x)
 ```
 
+The guide [Adding conveniences for your model](guides/model_conveniences.md)
+builds a custom facet next to a custom input preprocessor (`tl.inputs.register`)
+and output decoder (`tl.outputs.register`).
+
 `tl.facets.reset()` restores the process registry to built-ins. `tl.facets.functions()`
 and `tl.facets.describe(class_name)` expose registry metadata.
 

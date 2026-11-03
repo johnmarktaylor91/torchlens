@@ -146,6 +146,7 @@ exclude_docs: |
   /maintainers/where.md
   /guides/grouping.md
   /guides/kv_cache.md
+  /guides/model_conveniences.md
   /guides/offline_report.md
   /guides/treescope_cards.md
   /intervention_api.md
