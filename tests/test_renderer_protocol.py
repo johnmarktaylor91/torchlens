@@ -58,7 +58,6 @@ def test_graphviz_renderer_renders_ir_without_trace(
     target = RenderTarget(
         outpath=str(tmp_path / "trace_free"),
         fileformat="svg",
-        save_only=True,
         viewer=False,
     )
 

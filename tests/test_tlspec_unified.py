@@ -137,9 +137,9 @@ def _captured_log(*, replayable: bool = False) -> tl.Trace:
         torch.randn(2, 3),
         capture=CaptureOptions(
             replayable=replayable,
-            layers_to_save="all",
             seed=0,
         ),
+        save="all",
     )
 
 
@@ -508,7 +508,8 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     trace = tl.trace(
         nn.Linear(3, 3),
         torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+        save="all",
     )
     source_op = next(
         op for op in trace.ops if isinstance(op.out, torch.Tensor) and op.out.requires_grad

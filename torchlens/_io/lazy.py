@@ -311,12 +311,18 @@ def _build_manifest_index(
 
     tensors = manifest.get("tensors", [])
     if not isinstance(tensors, list):
-        raise ArtifactError("Portable manifest must contain a list under 'tensors'.")
+        raise ArtifactError(
+            "Portable manifest must contain a list under 'tensors'.",
+            code="manifest_schema_invalid",
+        )
     index: dict[str, dict[str, Any]] = {}
     for entry in tensors:
         blob_id = entry.get("blob_id")
         if not isinstance(blob_id, str):
-            raise ArtifactError("Portable manifest tensor entries must include string blob_id.")
+            raise ArtifactError(
+                "Portable manifest tensor entries must include string blob_id.",
+                code="manifest_schema_invalid",
+            )
         index[blob_id] = entry
     return index
 
@@ -347,7 +353,10 @@ def _manifest_entry_for_blob_ref(
     """
 
     if blob_ref.blob_id not in manifest_index:
-        raise ArtifactError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
+        raise ArtifactError(
+            f"Manifest is missing blob_id={blob_ref.blob_id}.",
+            code="manifest_schema_invalid",
+        )
     entry = manifest_index[blob_ref.blob_id]
     if isinstance(entry, TensorEntry):
         return entry

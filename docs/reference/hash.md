@@ -33,7 +33,7 @@ Output:
 ## `model` and `assert_unchanged`
 
 `tl.fingerprint.model(model, inputs)` performs an inference-only metadata capture with
-`layers_to_save=None`, then hashes it. This is the same capture policy used by
+`save=None`, then hashes it. This is the same capture policy used by
 `tl.fingerprint.assert_unchanged(model, inputs, expected)`.
 
 ```python
@@ -60,5 +60,5 @@ pinned = tl.fingerprint.assert_unchanged(model, example, None)
 ```
 
 On a mismatch it raises `tl.errors.StructuralHashMismatchError`, an `AssertionError` subclass,
-whose message includes both the expected and actual hashes. Use the same `layers_to_save=None`
+whose message includes both the expected and actual hashes. Use the same `save=None`
 metadata-only setting when producing a trace that you plan to compare directly with `tl.fingerprint.model`.

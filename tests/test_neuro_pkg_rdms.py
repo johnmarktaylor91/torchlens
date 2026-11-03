@@ -56,7 +56,7 @@ def _full_trace(n_stimuli: int = 6) -> tl.Trace:
     torch.manual_seed(0)
     model = _BNModel().eval()
     x = torch.randn(n_stimuli, 3, 8, 8)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return tl.trace(model, x, save="all")
 
 
 def _matrices() -> dict[str, np.ndarray]:
@@ -330,7 +330,7 @@ def test_source_mode_inconsistent_row_counts_refuse() -> None:
     log = tl.trace(
         TwoStream().eval(),
         (torch.randn(6, 3), torch.randn(4, 3)),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     with pytest.raises(NeuroHandoffError) as excinfo, warnings.catch_warnings():
         warnings.simplefilter("ignore")

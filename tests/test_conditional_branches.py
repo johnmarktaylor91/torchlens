@@ -1006,9 +1006,9 @@ def _log_model(
         model,
         x,
         capture=CaptureOptions(
-            layers_to_save=layers_to_save,
             save_source_context=save_source_context,
         ),
+        save=layers_to_save,
     )
 
 
@@ -1249,7 +1249,7 @@ def _render_dot_source(
     model: nn.Module,
     x: torch.Tensor,
     *,
-    vis_mode: str = "unrolled",
+    rolled: bool = False,
 ) -> tuple[str, Trace]:
     """Render a model graph and return the DOT source plus model log.
 
@@ -1271,11 +1271,10 @@ def _render_dot_source(
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = f"{tmpdir}/conditional_branch_matrix"
         dot_source = trace.draw(
-            vis_mode=vis_mode,
+            rolled=rolled,
             path=outpath,
-            vis_save_only=True,
             file_format="dot",
-        )
+        ).dot
     return dot_source, trace
 
 
@@ -1626,7 +1625,7 @@ def test_rolled_mixed_arm_model_records_exact_ops_and_composite_render_label() -
     dot_source, render_log = _render_dot_source(
         RolledMixedArmModel(),
         torch.ones(1, 4),
-        vis_mode="rolled",
+        rolled=True,
     )
     conditional_id = _get_root_event(trace).id
     then_edges = trace.graph.conditional_arm_entry_edges[(conditional_id, "then")]

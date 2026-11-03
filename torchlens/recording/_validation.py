@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 from .exceptions import RecordingConfigError
-from .options import RecordingOptions
+from .options import _RecordingConfig
 from .types import CaptureSpec
 
 _POSTPROCESS_PRESETS: Final[set[str]] = {
@@ -15,7 +15,7 @@ _POSTPROCESS_PRESETS: Final[set[str]] = {
 }
 
 
-def validate_recording_options(options: RecordingOptions) -> None:
+def validate_recording_options(options: _RecordingConfig) -> None:
     """Validate fastlog options that depend on combined public settings.
 
     Parameters
@@ -54,7 +54,7 @@ def validate_postprocess(postprocess: str) -> None:
         )
 
 
-def _validate_non_empty_capture(options: RecordingOptions) -> None:
+def _validate_non_empty_capture(options: _RecordingConfig) -> None:
     """Reject statically empty fastlog configurations.
 
     An armed ``narrate=`` narrator is a legal capture on its own ("narrate
@@ -79,7 +79,7 @@ def _validate_non_empty_capture(options: RecordingOptions) -> None:
         )
 
 
-def _validate_disk_only_keep_grad_defaults(options: RecordingOptions) -> None:
+def _validate_disk_only_keep_grad_defaults(options: _RecordingConfig) -> None:
     """Reject static save_grad defaults for disk-only storage."""
 
     if (

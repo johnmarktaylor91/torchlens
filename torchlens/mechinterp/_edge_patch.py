@@ -68,7 +68,7 @@ def _input_edge_record(trace: Any, receiver: Any) -> Any:
             message=f"Receiver {receiver.name!r} has {len(matches)} op edges from its input "
             f"{receiver.input_label!r} into its norm {receiver.norm_address!r}; one is needed "
             "to address the edge.",
-            remedy="capture with tl.options.CaptureOptions(layers_to_save='all', "
+            remedy="capture with save='all' and tl.options.CaptureOptions("
             "replayable=True) and rebuild the graph from that trace",
             receiver=receiver.name,
         )
@@ -155,8 +155,7 @@ def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) ->
                     code="mi_edge_selection_unresolvable",
                     message=f"The projection output behind {attention[index][0].name!r} was "
                     f"not recomputed: {reason}",
-                    remedy="capture with tl.options.CaptureOptions(layers_to_save='all', "
-                    "replayable=True)",
+                    remedy="capture with save='all' and tl.options.CaptureOptions(replayable=True)",
                     receiver=attention[index][0].name,
                 )
             values[index] = projection.detach().clone()

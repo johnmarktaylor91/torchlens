@@ -140,3 +140,20 @@ def test_known_tuple_subtype_retains_its_closed_identity(value: tuple) -> None:
     assert cell["$tl"] == "tuple"
     assert cell["items"] == [2, 3]
     assert cell["subtype"] == f"{type(value).__module__}.{type(value).__qualname__}"
+
+
+@pytest.mark.parametrize("text", ["Opaque()", "x" * 300])
+def test_loaded_unencodable_value_resaves_identically(text: str) -> None:
+    """A loaded disclosure keeps its original type, bounded text, full length and location."""
+
+    class Opaque:
+        def __repr__(self) -> str:
+            return text
+
+    at = "trace.annotations['opaque']"
+    first_encoder = ValueEncoder()
+    first = first_encoder.encode(Opaque(), at)
+    loaded = decode_value(first, at=at)
+    again_encoder = ValueEncoder()
+    assert again_encoder.encode(loaded, at) == first
+    assert again_encoder.disclosures == first_encoder.disclosures

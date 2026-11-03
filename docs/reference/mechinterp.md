@@ -152,7 +152,7 @@ config = GPT2Config(
 )
 model = GPT2LMHeadModel(config).eval()
 ids = torch.randint(0, 32, (1, 5))
-trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+trace = tl.trace(model, ids, save="all")
 graph = torchlens.mechinterp.component_graph(trace)
 
 receiver = graph.receivers["a1.h1<q>"]
@@ -164,9 +164,9 @@ assert edge.contribution is graph.nodes["m0"].value
 
 # A circuit runs as one patch_edges call: every edge outside it reads its
 # sender's value on the corrupted input.
-ready = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
-clean = tl.trace(model, ids, capture=ready)
-corrupt = tl.trace(model, torch.randint(0, 32, (1, 5)), capture=ready)
+ready = tl.options.CaptureOptions(replayable=True)
+clean = tl.trace(model, ids, capture=ready, save="all")
+corrupt = tl.trace(model, torch.randint(0, 32, (1, 5)), capture=ready, save="all")
 corrupt_graph = torchlens.mechinterp.component_graph(corrupt)
 kept = {"input->a0.h0<q>", "a0.h0->a1.h1<v>", "a1.h1->logits"}
 outside = [e for name, e in torchlens.mechinterp.component_graph(clean).edges.items() if name not in kept]

@@ -149,9 +149,7 @@ def _trace_and_validate(model: nn.Module, x: torch.Tensor) -> tuple[tl.Trace, bo
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace = tl.trace(
-            model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
-        )
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True), save="all")
         result = trace.validate_forward_pass([model(x)], validate_metadata=False)
     return trace, result
 

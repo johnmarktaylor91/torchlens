@@ -19,6 +19,8 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   honesty rows, capture-verification banner, call tree). `forward_peak_memory`
   is NOT a profile column — it lives on the Trace itself. pandas is an optional
   dependency resolved lazily via `_require_pandas()` — never import it at module top.
+- `_cost_tiers.py` — the measurable cost tiers of `overhead` and their validation,
+  used by `_cost_perf.py`.
 - `_environment.py` — the environment health checks and capability snapshot behind
   `tl.report.doctor()` (`_doctor.py` imports them lazily).
 - `__init__.py` — public surface (`ExplainReport`, `ProfileReport`, `profile`, `HealthReport`, `FlopsCrossCheck`);
