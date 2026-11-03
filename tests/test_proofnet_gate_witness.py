@@ -162,7 +162,7 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
         "test_lit_bridge_real.py:53",
         "test_mlp_recipes.py:126",
         "test_output_aesthetics.py:1642",
-        "test_output_aesthetics.py:1690",
+        "test_output_aesthetics.py:1694",
         "test_real_world_models.py:1467",
         "test_real_world_models.py:1698",
         "test_tlspec_runnable_r41_crossthread_witness.py:467",
