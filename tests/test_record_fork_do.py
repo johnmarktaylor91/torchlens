@@ -76,3 +76,18 @@ def test_record_episode_keyword_refuses_typed() -> None:
     with pytest.raises(RecordingConfigError) as info:
         tl.recording.Recorder(model, save=tl.func("relu"), episode=object())
     assert info.value.fields["code"] == "episode_unsupported_on_record"
+
+
+def test_cooked_trace_carries_the_recorder_identity_facts(
+    recorded: tuple[tl.Recording, nn.Module, torch.Tensor],
+) -> None:
+    """The cooked Trace names the module the Recorder ran, so ``do`` can gate on it."""
+
+    recording, model, _x = recorded
+    cooked = recording.to_trace()
+    qualname = f"{type(model).__module__}.{type(model).__qualname__}"
+    assert cooked._source_class_qualname == qualname
+    assert cooked._provenance_root_entry_point == f"module_call:{qualname}.forward"
+    assert cooked._provenance_model_object_id == id(model)
+    # Ops outside a container output carry no slot, as on the exhaustive path.
+    assert all(op.multi_output_index is None for op in cooked.ops if not op.in_multi_output)

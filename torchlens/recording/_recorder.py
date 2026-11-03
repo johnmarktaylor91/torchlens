@@ -469,7 +469,7 @@ class Recorder:
             inference_only=inference_only,
             inference_only_implied=inference_only,
         )
-        _configure_predicate_capture(trace, self.options)
+        _configure_predicate_capture(trace, self.options, model=self.model)
         self._reset_state_for_pass(sample_id=sample_id)
         if self._echo_session is not None:
             self._echo_session.reset_pass(self._next_pass_index)

@@ -90,7 +90,8 @@ def _sparse_output_ref(
         activation_transform=None,
         detach_saved_activations=detach_saved_activations,
         visualizer_path=None,
-        multi_output_index=ctx.output_index,
+        # Exhaustive parity (``_ops_activations``): a slot only inside a container output.
+        multi_output_index=ctx.output_index if container_path else None,
         in_multi_output=bool(container_path),
         container_path=container_path,
         container_spec=None,
