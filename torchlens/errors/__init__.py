@@ -237,7 +237,7 @@ _LAZY_EXCEPTION_PATHS = {
     # users from the public ``Op.multi_output_type`` property, so its except
     # must be spellable from the public error surface.
     "ContainerReconstructionError": (
-        "torchlens._ir.container",
+        "torchlens._ir._container_errors",
         "ContainerReconstructionError",
     ),
     "CompileCountsUnavailableError": (

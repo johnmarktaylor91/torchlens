@@ -29,6 +29,7 @@ from ._fast_live_plans import (
     _drop_uncollected_payloads,
     _FastOutputPlan,
     _live_modules_by_address,
+    _lossy_output_failure,
     _module_call_budget,
     _output_tensor_leaves,
     _pair_output_leaves,
@@ -1299,14 +1300,13 @@ class _FastLiveSession:
             tuple(getattr(self.trace._layer_dict_all_keys[label], "container_path", None) or ())
             for label in output_labels
         ]
+        lossy_failure = _lossy_output_failure(output, output_labels)
+        if lossy_failure is not None:
+            self._poison_and_raise(lossy_failure)
         values, reason = _pair_output_leaves(output, captured_paths, len(output_labels))
         if values is None and _is_opaque_output_root(output):
-            # Capture walks an unsupported output container (a
-            # ``torch.distributions`` object, a plain class) by attribute
-            # search and records its tensors under one empty address, so the
-            # boundary keeps a single output op however many tensors the object
-            # holds. The live object has not changed; the fast run cannot pair
-            # its leaves with a collapsed boundary.
+            # Capture records an unsupported output container (a plain class)
+            # under one empty address; the fast run cannot pair leaves with it.
             failed = _contract_check(
                 "fast_live_model_output_opaque",
                 False,

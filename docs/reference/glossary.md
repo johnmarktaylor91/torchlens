@@ -591,7 +591,14 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `rerun_zero_fire`), `"error"` raises the door's typed refusal with that code, and
   `"disclose"` records only. Any other value refuses `zero_fire_policy_invalid`. A rerun edit
   that cannot fire live (`rerun_selector_unmatchable_live`) is refused before the policy runs,
-  whatever the knob says.
+  whatever the knob says. When the rule targeted a module (a plain `tl.module` union at
+  `tl.trace(intervene=)`, a module entry at a rerun, a module rule under `spec.bind`) whose
+  output is not a tensor, the warning, the refusal and the fast rerun's
+  `fast_rerun_graph_unsteered` refusal carry
+  `fields["reason"] == "module_output_not_tensor"` and a `reason_detail` sentence naming the
+  output type and, for a `torch.distributions` output, the parameter output paths to target
+  instead (`module 'policy' output is a Normal, not a tensor; target its parameter ops instead
+  (output paths .loc, .scale)`).
 
 **Bound intervention executor** *(spelling documented-unstable)*
 : `spec.bind(model)` pairs a `tl.Recipe` with a base model as a capture-free callable and
@@ -4338,7 +4345,7 @@ Members of classes whose public home changed, one entry per class.
 : Computed view over a captured Python output container. `Container.leaf_occurrences`: every tensor occurrence and its container path; `Container.leaves`: the ops whose outputs are the container's tensor leaves; `Container.reconstruct_at`: rebuild the container from a snapshot selector (`site=`, `role=`, `values=`); `Container.reconstructable`: whether the view can rebuild the original Python object; `Container.root_id`: identity of the container's root; `Container.root_kind`: what kind of root the container hangs from; `Container.supports_reconstruct`: whether reconstruction is supported for this container.
 
 **`tl.types.ContainerSpec`**
-: Portable description of an output container seen during capture. `ContainerSpec.aux_data`: auxiliary data needed to rebuild the container type; `ContainerSpec.child_specs`: the child path components and their nested specs; `ContainerSpec.literal_value`: the stored value for a non-tensor literal leaf; `ContainerSpec.lossy_reconstruction`: whether rebuilding the container loses information; `ContainerSpec.type_module`: module of the container's type; `ContainerSpec.type_qualname`: qualified name of the container's type.
+: Portable description of an output container seen during capture. `ContainerSpec.aux_data`: auxiliary data needed to rebuild the container type; `ContainerSpec.child_specs`: the child path components and their nested specs; `ContainerSpec.kind`: the container kind (`tuple`, `list`, `dict`, `namedtuple`, `dataclass`, `hf_model_output`, `registered`, `distribution` for a `torch.distributions` object recorded one output per parameter at attribute paths such as `.loc`, `literal`, or `opaque`); `ContainerSpec.literal_value`: the stored value for a non-tensor literal leaf; `ContainerSpec.lossy_reconstruction`: whether rebuilding the container loses information; `ContainerSpec.type_module`: module of the container's type; `ContainerSpec.type_qualname`: qualified name of the container's type.
 
 **`tl.types.ContainerLeafOccurrence`**
 : One tensor occurrence at one container path. `ContainerLeafOccurrence.occ_index`: index of this occurrence; `ContainerLeafOccurrence.producer_op_label`: label of the op that produced the tensor, or `None`; `ContainerLeafOccurrence.tensor_identity`: identity of the tensor, or `None`.
