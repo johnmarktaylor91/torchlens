@@ -34,6 +34,15 @@ BUNDLE_DRAW_KEYWORDS = (
 _SHOW_KINDS = (None, "graph", "strip", "repr", "html")
 
 
+def forward_bundle_draw(arguments: dict[str, Any]) -> Drawing:
+    """Forward ``Bundle.draw``'s fresh ``locals()`` to :func:`bundle_draw`."""
+
+    bundle = arguments.pop("self")
+    path = arguments.pop("path")
+    unsupported = arguments.pop("unsupported")
+    return bundle_draw(bundle, path, unsupported, **arguments)
+
+
 def bundle_draw(
     bundle: Bundle, path: str | None, unsupported: dict[str, Any], **options: Any
 ) -> Drawing:

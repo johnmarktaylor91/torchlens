@@ -61,7 +61,7 @@ from ._deltas import (
     _resolve_member_name as _resolve_member_name,
     _tensor_field as _tensor_field,
 )
-from ._draw import bundle_draw as _bundle_draw, bundle_show as _bundle_show
+from ._draw import bundle_show as _bundle_show, forward_bundle_draw as _forward_bundle_draw
 from ._labels import AmbiguousLabelError, label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
 from ._lookup import _BundleAccessorProperty, _BundleStructuralProperty
@@ -1016,25 +1016,7 @@ class Bundle:
         name under ``nodes="members"``; edges by ``(source, target)``). Any other
         keyword refuses (``bundle_draw_keyword_unsupported``, naming the supported list).
         """
-        return _bundle_draw(
-            self,
-            path,
-            unsupported,
-            graph=graph,
-            nodes=nodes,
-            rolled=rolled,
-            direction=direction,
-            theme=theme,
-            show_legend=show_legend,
-            file_format=file_format,
-            open_viewer=open_viewer,
-            graph_overrides=graph_overrides,
-            node_overrides=node_overrides,
-            edge_overrides=edge_overrides,
-            members=members,
-            metric=metric,
-            on=on,
-        )
+        return _forward_bundle_draw(locals())
 
     def rank_changes(
         self,
