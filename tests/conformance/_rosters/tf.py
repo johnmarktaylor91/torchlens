@@ -223,6 +223,35 @@ def _build_efficientnet() -> tuple[Any, Any]:
     return model, tf.constant(image)
 
 
+#: The keras-hub BERT-Tiny preset (2 layers, hidden size 128) the text row loads.
+_BERT_TINY_PRESET = "bert_tiny_en_uncased"
+#: ``[CLS] the quick brown fox jumps . [SEP]`` in the preset's uncased WordPiece vocabulary.
+_BERT_TOKEN_IDS = np.array([[101, 1996, 4248, 2829, 4419, 14523, 1012, 102]], dtype=np.int32)
+
+
+def _build_bert_tiny() -> tuple[Any, Any]:
+    """Load the keras-hub BERT-Tiny backbone only when called.
+
+    The backbone returns a dict; the row wraps it so the model returns its two
+    outputs as a list (sequence output, then pooled output), which the
+    harness compares output by output.
+    """
+    import keras
+    import keras_hub
+    import tensorflow as tf
+
+    keras.utils.set_random_seed(0)
+    backbone = keras_hub.models.BertBackbone.from_preset(_BERT_TINY_PRESET)
+    outputs = backbone.output
+    model = keras.Model(backbone.input, [outputs["sequence_output"], outputs["pooled_output"]])
+    example = {
+        "token_ids": tf.constant(_BERT_TOKEN_IDS),
+        "segment_ids": tf.zeros_like(_BERT_TOKEN_IDS),
+        "padding_mask": tf.ones_like(_BERT_TOKEN_IDS),
+    }
+    return model, example
+
+
 def _loop_intermediates() -> dict[str, np.ndarray | list[np.ndarray]]:
     """Compute every repeated affine/ReLU value with NumPy."""
     h = _X24
@@ -444,6 +473,19 @@ ROW_SPECS: tuple[dict[str, Any], ...] = (
         "expected_intermediates": {},
         "has_constants": True,
         "random_init": True,
+        "group": "ecosystem",
+    },
+    {
+        "family": "bert_tiny_en_uncased_keras_hub",
+        "realism": "pretrained",
+        "builder": _build_bert_tiny,
+        "checkpoint_evidence": "kaggle:keras/bert/keras/bert_tiny_en_uncased; sha256:<unverified>",
+        "expected_op_kinds": None,
+        "expected_intermediates": {},
+        # The attention softmax adds the padding mask scaled by a Python
+        # large-negative scalar, a constant no recorded op produces.
+        "has_constants": True,
+        "random_init": False,
         "group": "ecosystem",
     },
 )
