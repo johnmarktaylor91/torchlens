@@ -4,7 +4,7 @@ Positive: a numpy round trip and a dlpack round trip inside ``Function.forward``
 captured as ONE ``autogradfunction`` boundary op that validates through replay, with the
 armed completeness census clean. Control: an ordinary custom Function (interior in torch)
 is captured exactly as before. Armed negative: a plain ``.numpy()`` round trip in a module
-forward (no Function) still fails completeness.
+forward (no Function) is never collapsed into a Function boundary.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_B
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.errors import TorchLensWarning
 from torchlens.validation import last_validation_failure, validate_forward_pass
-from torchlens.validation.diagnostics import CHECK_COMPLETENESS
+from torchlens.validation.diagnostics import CHECK_REPLAY
 
 
 class _NumpyDoubleFunction(torch.autograd.Function):
@@ -235,14 +235,13 @@ def test_ordinary_custom_function_is_captured_as_before() -> None:
 
 
 def test_plain_numpy_round_trip_is_not_collapsed() -> None:
-    """Armed negative: without a Function the round trip stays the visible hole it is today.
+    """Armed negative: without a Function nothing is collapsed into an ``autogradfunction`` op.
 
-    Nothing is collapsed and no boundary op appears: ``from_numpy`` is a parentless
-    source op and the output has no input ancestor, exactly as on the base tree. (On the
-    base tree forward validation PASSES this model, because a parentless constructor
-    replays deterministically; the completeness check fails only on a dispatcher-visible
-    unowned op such as ``to_dlpack``'s ``as_strided``. Recorded as a finding in the lane
-    report; this test pins that the boundary never reaches outside a Function.)
+    The plain round trip is the foreign data round trip's territory
+    (``tests/test_foreign_data_roundtrip.py``): the host constructor is one ``foreigndata``
+    op whose parent is the departed tensor, the ``detach`` stays visible, and the host
+    arithmetic in the gap makes validation fail with a typed reason instead of the former
+    silent constant replay.
     """
 
     model = _PlainNumpyRoundTripModel()
@@ -251,20 +250,18 @@ def test_plain_numpy_round_trip_is_not_collapsed() -> None:
         warnings.simplefilter("error", TorchLensWarning)
         trace = tl.trace(model, x)
     assert _boundary_ops(trace) == []
-    from_numpy_ops = [op for op in trace._layer_list if op.type == "fromnumpy"]
-    assert len(from_numpy_ops) == 1
-    assert list(from_numpy_ops[0].parents) == []
-    assert not trace.output_ops[0].input_ancestors
+    assert not any(op.type == "fromnumpy" for op in trace._layer_list)
+    round_trips = [op for op in trace._layer_list if op.func_name == "foreigndata"]
+    assert len(round_trips) == 1
+    assert [record_type(trace[label]) for label in round_trips[0].parents] == ["detach"]
+    assert trace.output_ops[0].input_ancestors
     assert any(op.type == "detach" for op in trace._layer_list)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        base_verdict = validate_forward_pass(model, [x], input_kwargs={})
+        assert validate_forward_pass(model, [x], input_kwargs={}) is False
     failure = last_validation_failure()
-    # The verdict is whatever the base tree gives (True today); the only thing the
-    # boundary may never do is turn this plain round trip into a boundary op.
-    assert base_verdict is True or (
-        failure is not None and failure.check_name == CHECK_COMPLETENESS
-    )
+    assert failure is not None and failure.check_name == CHECK_REPLAY
+    assert failure.extra["reason"] == "foreign_data_roundtrip_unreplayable"
 
 
 class _ForeignHandle:

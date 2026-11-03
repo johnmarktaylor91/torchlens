@@ -277,3 +277,62 @@ def test_graph_label_flops_rows_carry_the_note_on_attention_nodes_only() -> None
         proj, node_label_fields=["flops"], node_overlay="flops"
     )
     assert ATTENTION_FULL_SQUARE_NOTE not in compute_default_node_lines(sdpa)
+
+
+class _CacheReturning(nn.Module):
+    """Returns a hidden state plus 24 identical cache tensors, like a GPT-2 KV cache."""
+
+    def __init__(self) -> None:
+        """One projection."""
+
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        """Hidden state, then 24 cache-shaped views."""
+
+        hidden = self.proj(x)
+        cache = hidden.reshape(1, 2, 2, 2)
+        return (hidden, *(cache * float(index) for index in range(24)))
+
+
+class _CacheWrapper(nn.Module):
+    """A wrapper so the cache-returning row is a module row, not the root."""
+
+    def __init__(self) -> None:
+        """One cache-returning child."""
+
+        super().__init__()
+        self.body = _CacheReturning()
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        """Delegate to the child."""
+
+        return self.body(x)
+
+
+def test_long_output_shape_list_compacts_identical_runs() -> None:
+    """A 25-member output row prints identical runs as ``×N`` and stays short."""
+
+    torch.manual_seed(0)
+    report = tl.summary(_CacheWrapper(), torch.randn(1, 2, 4))
+    row = next(row for row in report._rebuilt.visible_rows if row.name == "body")
+    assert len(row.output_shapes) == 25
+    line = _body_line(str(report), "body (_CacheReturning)")
+    assert "(1, 2, 4), (1, 2, 2, 2) ×24" in line or "(1, 2, 4), (1, 2, 2, 2) x24" in line
+    assert line.count("(1, 2, 2, 2)") == 1
+
+
+def test_compact_shapes_text_budget_rules() -> None:
+    """Short lists stay verbatim; overflowing distinct lists end in a counted elision."""
+
+    from torchlens.report._summary_render import _SHAPE_CELL_BUDGET, _compact_shapes_text
+
+    lstm = ((2, 5, 6), (1, 2, 6), (1, 2, 6))
+    assert _compact_shapes_text(lstm) == "(2, 5, 6), (1, 2, 6), (1, 2, 6)"
+    distinct = tuple((index, 3, 32, 32) for index in range(1, 21))
+    text = _compact_shapes_text(distinct)
+    assert len(text) <= _SHAPE_CELL_BUDGET
+    shown = text.count("(")
+    assert text.startswith("(1, 3, 32, 32), ")
+    assert text.endswith(f", ... +{20 - shown} more")

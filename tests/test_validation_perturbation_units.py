@@ -14,11 +14,8 @@ import torch.nn as nn
 
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.validation import validate_forward_pass
-from torchlens.validation.core import (
-    _copy_validation_args,
-    _deep_clone_tensors,
-    _perturb_layer_outs,
-)
+from torchlens.validation._perturb import _perturb_layer_outs
+from torchlens.validation.core import _copy_validation_args, _deep_clone_tensors
 
 # =============================================================================
 # Perturbation unit tests

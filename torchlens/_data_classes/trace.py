@@ -2790,9 +2790,9 @@ class Trace(TraceLike):
         )
 
     def _refuse_chunked_batch_coupling(self, entries: list[Any]) -> None:
-        """Forward to ``_doors.intervention()._trace_edits.refuse_chunked_batch_coupling``."""
+        """Forward to ``_doors.intervention()._edit_guards.refuse_chunked_batch_coupling``."""
 
-        return _doors.intervention()._trace_edits.refuse_chunked_batch_coupling(self, entries)
+        return _doors.intervention()._edit_guards.refuse_chunked_batch_coupling(self, entries)
 
     def remove(self) -> None:
         """Remove the most recent legacy-returned hook attachment."""
@@ -2931,16 +2931,16 @@ class Trace(TraceLike):
         return _trace_intervention_records.record_operation(self, op, **payload)
 
     def _warn_if_root_mutation(self, *, confirm_mutation: bool) -> None:
-        """Forward to ``_doors.intervention()._trace_edits.warn_if_root_mutation``."""
+        """Forward to ``_doors.intervention()._edit_guards.warn_if_root_mutation``."""
 
-        return _doors.intervention()._trace_edits.warn_if_root_mutation(
+        return _doors.intervention()._edit_guards.warn_if_root_mutation(
             self, confirm_mutation=confirm_mutation
         )
 
     def _select_do_engine(self, engine: str, *, model: nn.Module | None, x: Any) -> str:
-        """Forward to ``_doors.intervention()._trace_edits.select_do_engine``."""
+        """Forward to ``_doors.intervention()._edit_guards.select_do_engine``."""
 
-        return _doors.intervention()._trace_edits.select_do_engine(self, engine, model=model, x=x)
+        return _doors.intervention()._edit_guards.select_do_engine(self, engine, model=model, x=x)
 
     def _apply_do_mutation(
         self,

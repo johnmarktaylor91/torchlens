@@ -30,6 +30,10 @@ _BAR_WIDTH = 3
 #: Suffix on a FLOP cell whose count includes a full-square attention op.
 ATTENTION_MARK = "^"
 
+#: Width past which a shape-list cell is compacted: runs of identical shapes
+#: first (lossless, the fold row's ``×N``), then a counted elision.
+_SHAPE_CELL_BUDGET = 60
+
 
 class CellTotals(NamedTuple):
     """Whole-model denominators the percent cells divide by."""
@@ -167,20 +171,73 @@ def _name_cell(row: ViewRow) -> str:
     return indent + label
 
 
+def _shape_text(shape: tuple[int, ...]) -> str:
+    """One shape tuple as ``(d0, d1, ...)``."""
+
+    return "(" + ", ".join(str(dim) for dim in shape) + ")"
+
+
 def _shapes_text(shapes: tuple[tuple[int, ...], ...]) -> str:
     """Comma-joined shape tuples; '-' when none is known."""
 
     if not shapes:
         return "-"
-    return ", ".join("(" + ", ".join(str(dim) for dim in shape) + ")" for shape in shapes)
+    return ", ".join(_shape_text(shape) for shape in shapes)
+
+
+def _shape_runs(shapes: tuple[tuple[int, ...], ...]) -> list[tuple[str, int]]:
+    """Consecutive identical shapes grouped as ``(text, count)`` in return order."""
+
+    runs: list[tuple[str, int]] = []
+    for shape in shapes:
+        text = _shape_text(shape)
+        if runs and runs[-1][0] == text:
+            runs[-1] = (text, runs[-1][1] + 1)
+        else:
+            runs.append((text, 1))
+    return runs
+
+
+def _compact_shapes_text(shapes: tuple[tuple[int, ...], ...]) -> str:
+    """A shape-list cell that stays every member shape while it fits the budget.
+
+    Within ``_SHAPE_CELL_BUDGET`` the cell is the plain comma-joined list.
+    Past it, runs of identical shapes print once with the fold row's ``×N``
+    (lossless: every member is still accounted for in return order). Only
+    when that still overflows does the tail elide, ending in a count of the
+    member shapes it hides, the way an elision row counts the rows it hides.
+    """
+
+    full = _shapes_text(shapes)
+    if len(full) <= _SHAPE_CELL_BUDGET:
+        return full
+    shape_runs = _shape_runs(shapes)
+    parts = [text if count == 1 else f"{text} ×{count}" for text, count in shape_runs]
+    runs = ", ".join(parts)
+    if len(runs) <= _SHAPE_CELL_BUDGET:
+        return runs
+    counts = [count for _, count in shape_runs]
+    kept: list[str] = []
+    for index, part in enumerate(parts):
+        hidden = sum(counts[index + 1 :])
+        candidate = ", ".join([*kept, part]) + f", ... +{hidden} more"
+        if kept and len(candidate) > _SHAPE_CELL_BUDGET:
+            break
+        kept.append(part)
+    hidden = len(shapes) - sum(counts[: len(kept)])
+    return ", ".join(kept) + (f", ... +{hidden} more" if hidden else "")
 
 
 def _output_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
-    """Every member shape of the row's output in return order; '-' when unknown."""
+    """Every member shape of the row's output in return order; '-' when unknown.
+
+    A long list is compacted by ``_compact_shapes_text`` (identical runs as
+    ``×N``, then a counted elision past the cell budget).
+    """
 
     del config, totals
     if row.output_shapes:
-        return _shapes_text(row.output_shapes)
+        return _compact_shapes_text(row.output_shapes)
     return _shapes_text(() if row.output_shape is None else (row.output_shape,))
 
 
@@ -260,7 +317,7 @@ def _count_cell(value: int | None, config: SummaryConfig) -> str:
 #: Per-column cell formatters (mirrors COLUMN_REGISTRY; closed dispatch).
 _CELL_FORMATTERS: dict[str, Callable[[ViewRow, SummaryConfig, CellTotals], str]] = {
     "name": lambda row, config, totals: _name_cell(row),
-    "input": lambda row, config, totals: _shapes_text(row.input_shapes),
+    "input": lambda row, config, totals: _compact_shapes_text(row.input_shapes),
     "output": _output_cell,
     "kernel_size": lambda row, config, totals: _shapes_text(
         () if row.kernel_size is None else (row.kernel_size,)

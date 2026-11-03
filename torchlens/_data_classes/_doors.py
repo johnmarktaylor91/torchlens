@@ -45,9 +45,10 @@ def visualization() -> ModuleType:
 
 
 def intervention() -> ModuleType:
-    """Door to ``torchlens.intervention`` (edits, selection edits, hooks, run and op-edit destinations)."""
+    """Door to ``torchlens.intervention`` (edits, edit guards, selection edits, hooks, run and op-edit destinations)."""
 
     from ..intervention import (  # noqa: F401
+        _edit_guards,
         _op_edits,
         _trace_edits,
         _trace_hooks,

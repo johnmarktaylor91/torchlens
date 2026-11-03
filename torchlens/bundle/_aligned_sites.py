@@ -52,6 +52,38 @@ def aligned_site_labels(supergraph: Supergraph, reference_name: str) -> dict[str
     return aligned
 
 
+def site_row_key(site: Any) -> str:
+    """Return the row key of one site in ``compare`` and ``rank_changes``.
+
+    A multi-pass op has one row per pass, keyed by the pass-qualified label
+    (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
+
+    Parameters
+    ----------
+    site:
+        An op of the reference member.
+
+    Returns
+    -------
+    str
+        The row key.
+    """
+
+    layer_label = str(site.layer_label)
+    if int(getattr(site, "num_passes", 1) or 1) > 1:
+        return f"{layer_label}:{site.pass_number}"
+    return layer_label
+
+
+def _split_pass_suffix(label: str) -> tuple[str, str]:
+    """Split ``tanh_1_1:2`` into ``("tanh_1_1", ":2")``; a bare label keeps an empty suffix."""
+
+    head, sep, tail = label.rpartition(":")
+    if sep and tail.isdigit():
+        return head, f":{tail}"
+    return label, ""
+
+
 def resolve_aligned_site(
     members: Mapping[str, Trace],
     label: str,
@@ -64,7 +96,9 @@ def resolve_aligned_site(
     members:
         Member name to trace.
     label:
-        Reference member's layer label.
+        Reference member's row key (:func:`site_row_key`): a layer label, or
+        the pass-qualified label of one pass of a multi-pass op. The
+        alignment pairs layer labels; the pass suffix carries over unchanged.
     aligned:
         Map from :func:`aligned_site_labels`. A member the alignment does not
         pair is looked up by the literal label.
@@ -76,13 +110,15 @@ def resolve_aligned_site(
         (it is then not a common site).
     """
 
-    counterparts = aligned.get(label, {})
+    base, suffix = _split_pass_suffix(label)
+    counterparts = aligned.get(base, {})
     resolved: dict[str, Any] = {}
     for name, log in members.items():
         # Exact label: a bare string is a substring selector post hoc, so
         # ``t_1_1`` would also match ``cat_1_10`` and drop the site as ambiguous.
         try:
-            table = _resolve_sites(log, _exact_label(counterparts.get(name, label)), max_fanout=1)
+            target = _exact_label(counterparts.get(name, base) + suffix)
+            table = _resolve_sites(log, target, max_fanout=1)
             resolved[name] = table.first()
         except Exception:  # noqa: BLE001 - missing sites are not common sites
             return None

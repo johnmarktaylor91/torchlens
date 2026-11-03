@@ -14,6 +14,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 from ... import _state
 from ..._errors import CaptureGapWarning
 from ..._utils._torch_symbols import torch_attr
+from ._state_bytes import _whole_storage_uint8
 from .escape_detection import (
     ExpectedOriginalToken,
 )
@@ -196,12 +197,12 @@ def _finalize_census(state: _WitnessState) -> None:
                 "in_replacement_hook": event.in_replacement_hook,
                 "mutates": event.mutates,
                 # A ``.data``-property accessor view (``aten.detach``/``aten.alias``) on a
-                # registered buffer -- the intrinsic, legitimately-uncaptured dispatch of the
-                # ``self.b.data.copy_(x)`` buffer-write idiom. The completeness backstop credits
-                # these apples-to-apples against the dispatch census (see
+                # registered buffer or pending lazy slot -- the legitimately-uncaptured dispatch
+                # of ``self.b.data.copy_(x)`` or ``UninitializedParameter.materialize``. The
+                # backstop credits these apples-to-apples against the dispatch census (see
                 # ``validation._completeness_backstop.completeness_backstop_counts``); a
                 # genuine untraced op is never flagged here (unowned + non-mutating +
-                # pure-view + buffer only).
+                # pure-view + buffer or pending lazy slot only).
                 "state_view_accessor": event.state_view_accessor,
             }
         )
@@ -596,7 +597,6 @@ from ._completeness_boundaries import (  # noqa: E402
 from ._completeness_dispatch import (  # noqa: E402
     _event_is_capture_accounted,
     _finalize_runnable_ledger,
-    _whole_storage_uint8,
 )
 from ._completeness_patches import (  # noqa: E402
     _observe_invisible_host_escapes,
