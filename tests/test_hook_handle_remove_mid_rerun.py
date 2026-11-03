@@ -53,9 +53,12 @@ def test_forward_hook_removed_before_its_site_never_fires_on_that_run() -> None:
 
     relu_handle = trace.attach_hooks(tl.func("relu"), victim, confirm_mutation=True)
 
+    removed: list[bool] = []
+
     def remover(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-        if "removed" not in events:
+        if not removed:
             relu_handle.remove()
+            removed.append(True)
             events.append("removed")
         events.append("linear")
         return out

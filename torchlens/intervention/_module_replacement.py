@@ -71,7 +71,6 @@ _SHALLOW_REPLACED = frozenset(
         "param_shapes",
         "non_tensor_pos_args",
         "non_tensor_kwargs",
-        "input_ops",
         "input_shapes",
         "input_dtypes",
         "input_memory",
@@ -343,7 +342,6 @@ def _wiring_fields(
         "children": tuple(site.children or ()),
         "has_children": bool(site.children),
         "out_versions_by_child": dict(site.out_versions_by_child or {}),
-        "input_ops": [site.label],
         "num_inputs": 1,
         "input_shapes": [before["shape"]],
         "input_dtypes": [before["dtype"]],
@@ -462,9 +460,6 @@ def _rewire_consumers(trace: Trace, site: Op, replacement: Op) -> None:
         child._internal_set(
             "_edge_uses",
             [_rewrite_refs(r, old, new) for r in (child._edge_uses or ())],
-        )
-        child._internal_set(
-            "input_ops", [new if label in old else label for label in (child.input_ops or ())]
         )
 
 
