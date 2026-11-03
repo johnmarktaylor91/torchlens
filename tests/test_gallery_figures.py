@@ -164,3 +164,25 @@ def test_ioi_figure_data_reduces_scores() -> None:
     assert set(data["groups"]) == set(ioi.HEAD_GROUPS)
     assert [edge["source"] for edge in data["edges"]] == [[9, 9], [5, 5]]
     assert data["edges"][1]["channel"] == "q" and data["edges"][1]["score"] == -0.6
+
+
+@pytest.mark.parametrize(
+    "script", sorted(p.name for p in GALLERY.glob("*.py") if not p.name.startswith("_"))
+)
+def test_gallery_scripts_define_everything_before_the_main_guard(script: str) -> None:
+    """A def below ``if __name__ == "__main__"`` is undefined while the script runs."""
+    import ast
+
+    tree = ast.parse((GALLERY / script).read_text("utf-8"))
+    guard_lines = [
+        node.lineno
+        for node in tree.body
+        if isinstance(node, ast.If) and "__main__" in ast.unparse(node.test)
+    ]
+    assert len(guard_lines) == 1, f"{script}: expected one main guard"
+    late = [
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.ClassDef) and node.lineno > guard_lines[0]
+    ]
+    assert late == [], f"{script}: defined after the main guard: {late}"

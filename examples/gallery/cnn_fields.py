@@ -379,10 +379,6 @@ def gradient_mask(model: nn.Module, x: torch.Tensor, layer: str, unit: tuple) ->
 # endregion
 
 
-if __name__ == "__main__":
-    main()
-
-
 def save_figure_inputs(
     x: torch.Tensor,
     spatial: torch.Tensor,
@@ -418,3 +414,7 @@ def save_figure_inputs(
         patch=patch.any(dim=(0, 1)).numpy(),
     )
     return path
+
+
+if __name__ == "__main__":
+    main()

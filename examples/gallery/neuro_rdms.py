@@ -400,10 +400,6 @@ def reference_rdm(features: torch.Tensor) -> np.ndarray:
 # endregion
 
 
-if __name__ == "__main__":
-    main()
-
-
 def save_figure_inputs(matrices: Any, out: Path) -> Path:
     """Save the selected-stage RDMs; ``_figures.draw_neuro_rdms`` draws from them.
 
@@ -428,3 +424,7 @@ def save_figure_inputs(matrices: Any, out: Path) -> Path:
         shuffled_max=SHUFFLED_MAX,
     )
     return path
+
+
+if __name__ == "__main__":
+    main()
