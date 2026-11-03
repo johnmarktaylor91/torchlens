@@ -488,13 +488,16 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
         # An Op-only member reads through the layer's group, which delegates to its pass.
         path = _SPELLING_PATHS["Op"].get(name)
     try:
-        if path is None and kind == "Layer" and name in _OP_ONLY_STORAGE:
-            # A removed Op member reads from the layer's single pass, as the flat read did.
-            return obj._single_pass_or_error(name)
         if path is None:
             # A renamed or removed member keeps its value under its storage
             # attribute; internal readers still need it.
-            return getattr(obj, name if kind is None else record_storage_attr(obj, name))
+            try:
+                return getattr(obj, name if kind is None else record_storage_attr(obj, name))
+            except AttributeError:
+                if kind != "Layer" or name not in _OP_ONLY_STORAGE:
+                    raise
+            # A removed Op member the Layer does not hold reads from its single pass.
+            return obj._single_pass_or_error(name)
         value = obj
         for part in path:
             value = getattr(value, part)
