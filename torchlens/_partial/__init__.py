@@ -29,6 +29,18 @@ class PartialTrace:
         before the exception.
     original_exception:
         Exception raised by the failed capture.
+
+    Examples
+    --------
+    >>> class Breaks(nn.Module):
+    ...     def forward(self, a):
+    ...         return a.relu().view(-1, 7)
+    >>> try:
+    ...     tl.trace(Breaks(), x)
+    ... except tl.errors.TraceCaptureError as err:
+    ...     partial = err.partial_trace
+    >>> type(partial).__name__, len(partial.raw_layers) > 0
+    ('PartialTrace', True)
     """
 
     trace: Trace
