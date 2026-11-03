@@ -339,14 +339,14 @@ def test_attach_rerun_then_detach_restores_baseline(net, exit_door: str) -> None
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/hooks.py.
 def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
-    """F5: a callable ``set`` replacement applies once per rerun, never compounds."""
+    """F5: a callable staged by a ``set_only`` ``do`` applies once per rerun, never compounds."""
 
     model, x, expected = net
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    # set() only stages the replacement; each run applies it.
+    # set_only only stages the hook; each run applies it.
     trace.do(
         tl.module("fc1"),
-        lambda out: out * 2.0,
+        lambda out, *, ctx: out * 2.0,
         intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     staged = _staged(trace)
@@ -632,7 +632,7 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
         trace = tl.trace(model, x, capture=ready)
         trace.do(
             tl.module("fc1"),
-            lambda out: out * 2.0,
+            lambda out, *, ctx: out * 2.0,
             intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
         )
     else:

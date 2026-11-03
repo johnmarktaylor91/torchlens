@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
 from .._debug_report import Report, at_source, table_report, trace_subject
+from .._utils._record_group_table import record_member
 from ._common import (
     _compute_ops,
     _op_from_label,
@@ -578,19 +579,20 @@ def dead_neurons_rows(
         Unit axis forced on every op, or ``None`` to pick it per op (see
         :func:`dead_neurons`).
     max_activation:
-        Maximum activation value for post-activation death.
+        Largest output magnitude a dead unit may reach at any position.
 
     Returns
     -------
     tuple[list[dict[str, Any]], dict[str, Any]]
-        Per-op row dicts and the attrs mapping (skip count, parameters, the
-        insufficient-sample note, capture-honesty facts).
+        One row per layer-output op (see :func:`_layer_output_ops`) and the
+        attrs mapping (skip count, parameters, the insufficient-sample note,
+        capture-honesty facts).
     """
 
     rows: list[dict[str, Any]] = []
     skipped = 0
     axes: dict[str, int] = {}
-    for op in _compute_ops(trace):
+    for op in _layer_output_ops(trace):
         label = _op_label(op)
         source_line = _source_line(op)
         out, reason = _safe_out(op)
@@ -614,13 +616,9 @@ def dead_neurons_rows(
             )
             continue
         reduce_dims = tuple(index for index in range(out.ndim) if index != feature_dim)
-        if reduce_dims:
-            max_by_unit = out.detach().amax(dim=reduce_dims)
-            var_by_unit = out.detach().var(dim=reduce_dims, unbiased=False)
-        else:
-            max_by_unit = out.detach()
-            var_by_unit = torch.zeros_like(out.detach())
-        dead_mask = (max_by_unit <= max_activation) | (var_by_unit == 0)
+        magnitude = out.detach().abs()
+        peak_by_unit = magnitude.amax(dim=reduce_dims) if reduce_dims else magnitude
+        dead_mask = peak_by_unit <= max_activation
         dead_indices = torch.nonzero(dead_mask, as_tuple=False).flatten().tolist()
         total_units = int(out.shape[feature_dim])
         dead_count = len(dead_indices)
@@ -642,10 +640,44 @@ def dead_neurons_rows(
         "skipped": skipped,
         "max_activation": max_activation,
         "dim": dim,
-        "note": "single-trace zero-variance is insufficient sample",
+        "note": "one trace is an insufficient sample for dataset-level death",
         "torchlens_capture_honesty": capture_honesty_facts(trace),
     }
     return rows, attrs
+
+
+def _layer_output_ops(trace: Trace) -> list[Op]:
+    """Return the compute ops whose output is a layer's output.
+
+    A layer is a module call or the model itself, so the ops are those
+    flagged ``is_module_output`` (the tensor a module call returned) or
+    ``is_output_parent`` (a tensor the model's ``forward`` returned). The ops
+    inside a composite activation (the ``tanh`` of a tanh-approximated GELU,
+    the ``sigmoid`` of ``x * sigmoid(x)``) are not layer outputs and get no
+    row: their saturation says nothing about whether the layer's units fire.
+    The trace's output boundary nodes (``is_output``) are clones of the
+    returned ops and are left out, so no tensor is counted twice.
+
+    Parameters
+    ----------
+    trace:
+        Completed TorchLens trace.
+
+    Returns
+    -------
+    list[Op]
+        Layer-output ops in execution order.
+    """
+
+    return [
+        op
+        for op in _compute_ops(trace)
+        if not bool(getattr(op, "is_output", False))
+        and (
+            bool(record_member(op, "is_module_output", False))
+            or bool(record_member(op, "is_output_parent", False))
+        )
+    ]
 
 
 def _feature_dim(
@@ -659,12 +691,33 @@ def _feature_dim(
     return feature_dim if 0 <= feature_dim < out.ndim else None
 
 
-def dead_neurons(trace: Trace, *, dim: int | None = None, max_activation: float = 0.0) -> Report:
-    """Find units that are inactive or zero-variance in one completed trace.
+#: Columns of the ``dead_neurons`` table, in order.
+_DEAD_NEURON_COLUMNS: tuple[str, ...] = (
+    "op",
+    "total_units",
+    "dead_count",
+    "dead_frac",
+    "sample_dead_idx",
+    "reason",
+    "source_line",
+)
 
-    A single trace is a single example; zero-variance here is an insufficient-sample
-    signal, not dataset-level neuron death. Aggregate multiple traces when deciding
-    whether units are dead over a dataset.
+
+def dead_neurons(trace: Trace, *, dim: int | None = None, max_activation: float = 0.0) -> Report:
+    """Find the dead units of every layer in one completed trace.
+
+    A unit is dead when its output is identically zero at every position in
+    the batch: every element of the unit's slice of the activation has a
+    magnitude at or below ``max_activation`` (``0.0`` by default, so exactly
+    zero). The units are a layer's OUTPUT units: one row per op that a module
+    call returned (``Op.is_module_output``) or that the model's ``forward``
+    returned (``Op.is_output_parent``). The ops inside a composite activation
+    (the ``tanh`` of a tanh-approximated GELU, the ``sigmoid`` of SiLU) get no
+    row: a saturated inner intermediate is not a dead output unit.
+
+    A single trace is a single example: a unit that is zero on this input may
+    fire on another. Aggregate multiple traces when deciding whether units
+    are dead over a dataset.
 
     Parameters
     ----------
@@ -679,7 +732,8 @@ def dead_neurons(trace: Trace, *, dim: int | None = None, max_activation: float 
         axis 1 for four or more dimensions. Activations under two dimensions
         get ``reason="invalid-dim"``. An int forces that axis on every op.
     max_activation:
-        Maximum activation value for post-activation death.
+        Largest output magnitude a dead unit may reach at any position:
+        absolute, on the layer's output, ``0.0`` by default.
 
     Returns
     -------
@@ -701,18 +755,7 @@ def dead_neurons(trace: Trace, *, dim: int | None = None, max_activation: float 
 
     rows, attrs = dead_neurons_rows(trace, dim=dim, max_activation=max_activation)
     pd = _require_pandas()
-    frame = pd.DataFrame(
-        rows,
-        columns=[
-            "op",
-            "total_units",
-            "dead_count",
-            "dead_frac",
-            "sample_dead_idx",
-            "reason",
-            "source_line",
-        ],
-    )
+    frame = pd.DataFrame(rows, columns=list(_DEAD_NEURON_COLUMNS))
     frame.attrs.update(attrs)
     return table_report(
         "dead_neurons",

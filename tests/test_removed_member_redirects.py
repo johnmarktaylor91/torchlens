@@ -73,8 +73,6 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
     ("Trace", "disarm_triggers", "autograd.disarm"),
     ("Trace", "log_backward", "backward"),
     ("Trace", "set", "do"),
-    ("Trace", "collapse_plan", "draw"),
-    ("Trace", "collapse_schedule", "draw"),
     ("Bundle", "replay", "do"),
     ("Bundle", "rerun", "run"),
     ("VisualizationOptions", "mode", "rolled"),

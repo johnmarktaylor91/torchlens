@@ -1368,10 +1368,10 @@ def _apply_owner_source_policies(
     # ``FuncCallLocation`` is a unique internal class with no subclasses.
     if type(value).__name__ == "FuncCallLocation":
         _apply_frame_source_policy(scrubbed_state, options)
-    # ``Module`` logs carry the same per-module class/init/forward source
-    # metadata (docstrings + absolute source files) as the Trace; any
-    # source-metadata owner is covered by its field signature.
-    elif "_source_class_docstring" in scrubbed_state:
+    # ``Module``/``GradFn`` logs carry class/init/forward(/backward) source metadata
+    # under public field names (matched by signature); the Trace's private
+    # ``_source_*`` spellings never reach here (the Trace applies the policy itself).
+    elif "class_docstring" in scrubbed_state:
         _apply_source_metadata_policy(scrubbed_state, options)
     # ``ConditionalEvent`` records (in ``conditional_records``) carry the absolute
     # path of the user's forward-defining module in ``source_file``; only the

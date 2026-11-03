@@ -34,6 +34,26 @@ temporary directory, nothing is written beside the notebooks.
 | 09 | `09_scale.ipynb` | 4 | Thousands of batches |
 | 10 | `10_beyond_one_forward.ipynb` | 4 to 5 | Your field's experiment |
 
+## Run in Colab
+
+Each notebook opens with an "Open in Colab" badge (the notebook on the `main` branch of
+`johnmarktaylor91/torchlens`). Its first code cell installs TorchLens from `main` and fetches
+`learn_models.py` beside the notebook; run from a checkout, that cell does nothing.
+
+## Stored outputs
+
+The notebooks are committed with their outputs, so GitHub renders them as run. After changing a
+notebook, or when the API changes, regenerate the outputs in a fresh environment from the
+repository root (the nightly CI job only checks that every cell runs; it does not diff outputs):
+
+```bash
+python scripts/run_notebooks.py --write-outputs notebooks/learn/*.ipynb
+```
+
+The script executes each notebook top to bottom and writes the outputs back with machine
+paths scrubbed. `python scripts/run_notebooks.py notebooks/learn/*.ipynb` runs them without
+writing, which is what the nightly job does.
+
 Rungs: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 compose pieces;
 4 objects for scale and record; 5 extend. The three-line recipe cards live in `examples/5min/`,
 the longer workflows in `examples/50min/`, and the API spec in `docs/reference/glossary.md`.

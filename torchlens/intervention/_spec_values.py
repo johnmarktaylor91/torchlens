@@ -10,7 +10,7 @@ because it governs how each value encodes.
 from __future__ import annotations
 
 from collections.abc import Callable, Collection
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -48,6 +48,13 @@ class _SerializedState:
 
     tensor_entries: list[TensorEntry]
     tensor_refs: dict[str, torch.Tensor]
+    #: Tensor object identity to its sidecar id: one tensor object is written
+    #: once however many places in the spec reference it (a hook spec carries
+    #: its helper as both ``hook`` and ``helper``, and every fire record carries
+    #: the edit again). ``tensor_sources`` keeps those tensors alive so a freed
+    #: ``id()`` cannot be reused by another tensor during the same save.
+    tensor_ids: dict[int, str] = field(default_factory=dict)
+    tensor_sources: list[torch.Tensor] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -218,8 +225,12 @@ def _serialize_value(value: Any, save_level: SaveLevel, state: _SerializedState)
     if value is None or isinstance(value, str | int | float | bool):
         return value
     if isinstance(value, torch.Tensor):
-        tensor_id = f"value_{len(state.tensor_refs)}"
-        state.tensor_refs[tensor_id] = value.detach().cpu()
+        tensor_id = state.tensor_ids.get(id(value))
+        if tensor_id is None:
+            tensor_id = f"value_{len(state.tensor_refs)}"
+            state.tensor_refs[tensor_id] = value.detach().cpu()
+            state.tensor_ids[id(value)] = tensor_id
+            state.tensor_sources.append(value)
         return {"__tensor_ref__": tensor_id}
     if isinstance(value, Edit):
         return {"__helper__": _serialize_helper(value, save_level, state)}

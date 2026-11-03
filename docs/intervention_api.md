@@ -88,8 +88,8 @@ portable selector after discovery.
 
 ## Forward Helpers
 
-Forward helpers return `Edit` objects that can be passed to `do` (with the `set_only` engine),
-`do`, live capture `hooks=...`, replay, or rerun.
+Forward helpers return `Edit` objects that can be passed to `do` (including
+the `set_only` engine), live capture `hooks=...`, replay, or rerun.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |

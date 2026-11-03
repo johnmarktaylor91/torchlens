@@ -218,7 +218,7 @@ def _validate_settings(request: _AuditRequest) -> None:
 
 
 def _trace_once(request: _AuditRequest) -> Any:
-    """Trace the model once, eval mode, no grad, intervention-ready."""
+    """Trace the model once, eval mode, no grad."""
 
     import torchlens as tl
 
@@ -229,7 +229,6 @@ def _trace_once(request: _AuditRequest) -> Any:
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,
-            capture=tl.options.CaptureOptions(replayable=True),
         )
 
 

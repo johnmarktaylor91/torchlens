@@ -451,7 +451,7 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
     if kind == "facet":
         return SelectorCapabilityError(
             "tl.facet(...) / tl.head(...) selectors resolve through intervention mutators "
-            "(Trace.set, Trace.do) and, on a finished trace, as a bare selector "
+            "(Trace.do) and, on a finished trace, as a bare selector "
             "through trace[selector]; not through "
             f"{where}{' (find_sites, composite selectors)' if lifecycle == 'site' else ''}.",
             code="facet_selector_unsupported",

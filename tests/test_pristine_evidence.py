@@ -81,7 +81,7 @@ def _ready(model: nn.Module) -> tl.Trace:
     return tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
 
 
-def _double(out: torch.Tensor) -> torch.Tensor:
+def _double(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
     return out * 2.0
 
 

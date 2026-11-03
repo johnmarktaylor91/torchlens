@@ -10,6 +10,7 @@ from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
 from torchlens._data_classes.cleanup import _scrub_intervention_fields_after_removal
+from torchlens.intervention._trace_edits import set_site
 from torchlens.intervention._types import FireRecord, TargetSpec
 from torchlens.intervention.errors import SpecMutationError
 from torchlens.io import TraceState
@@ -73,7 +74,11 @@ def _first_internal_label(log: Any) -> str:
 
 
 def test_set_callable_tags_one_shot_metadata() -> None:
-    """``set(site, fn)`` tags the spec entry as a one-shot callable set."""
+    """The set body tags a callable value as a one-shot callable set.
+
+    ``do(site, fn, engine="set_only")`` stages ``fn`` as a sticky hook, so the
+    callable set is reached only through the private ``set_site`` body.
+    """
 
     log = _capture()
 
@@ -93,11 +98,7 @@ def test_set_callable_tags_one_shot_metadata() -> None:
 
         return out * 0
 
-    log.do(
-        tl.func("relu"),
-        replacement_fn,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
-    )
+    set_site(log, tl.func("relu"), replacement_fn, confirm_mutation=True)
 
     value_spec = log._intervention_spec.target_value_specs[-1]
     assert value_spec.value is replacement_fn

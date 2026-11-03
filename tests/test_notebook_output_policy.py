@@ -1,9 +1,9 @@
 """Stored-output policy for committed notebooks.
 
 Only the notebooks named in ``scripts/run_notebooks.py`` ``STORED_OUTPUT_NOTEBOOKS`` (the
-ten-minute tutorial) keep executed outputs in git; every other committed notebook is
-output-stripped. ``.gitattributes`` exempts exactly those notebooks from the nbstripout
-filter. Static JSON reads only, no kernel.
+ten-minute tutorial and the learning path in ``notebooks/learn``) keep executed outputs in
+git; every other committed notebook is output-stripped. ``.gitattributes`` exempts exactly
+those notebooks from the nbstripout filter. Static JSON reads only, no kernel.
 """
 
 from __future__ import annotations

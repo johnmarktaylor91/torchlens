@@ -1,4 +1,4 @@
-"""Op-level intervention verbs: ``do``, ``set``, ``grad_for``, facets.
+"""Op-level intervention verbs: ``do``, ``grad_for``, facets.
 
 Reached from ``Op`` through ``_data_classes._doors.intervention()``.
 """

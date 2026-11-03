@@ -98,7 +98,8 @@ def _unmet_log_precondition(log: Trace) -> str | None:
     ):
         return (
             "replay requires per-op argument templates, and this trace has none (a "
-            "tl.record recording keeps none; every tl.trace capture records them); "
+            "tl.record recording and a structure_only capture keep none; every other "
+            "tl.trace capture records them); "
             "capture with tl.trace(model, inputs), or rerun the model with the edit staged: "
             "trace.do(site, edit, model=model, inputs=inputs)"
         )
