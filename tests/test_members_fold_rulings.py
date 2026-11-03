@@ -238,8 +238,9 @@ def test_save_new_outs_redirect_names_the_graph_checked_refresh() -> None:
     and only warns on divergence, so a redirect to it would drop the mismatch raise.
     """
 
+    model = _ShapeBranch()  # run(inputs=) needs the live model; the trace holds it weakly
     trace = tl.trace(
-        _ShapeBranch(),
+        model,
         torch.ones(2, 4, requires_grad=True),
         capture=CaptureOptions(detach_saved_activations=True, seed=7),
     )
