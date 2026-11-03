@@ -9,6 +9,7 @@ import torch
 from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
+from torchlens._data_classes._trace_intervention_records import STAGED_UNFIRED_KEY
 from torchlens._data_classes.cleanup import _scrub_intervention_fields_after_removal
 from torchlens.intervention.errors import SpecMutationError
 from torchlens.intervention.types import FireRecord, TargetSpec
@@ -95,7 +96,8 @@ def test_set_tensor_marks_spec_stale_and_returns_self() -> None:
     assert len(log._intervention_spec.target_value_specs) == 1
     value_spec = log._intervention_spec.target_value_specs[0]
     assert value_spec.value is replacement
-    assert value_spec.metadata == {}
+    # A set-only tensor stays staged until a replay fires it; no created_by marker.
+    assert value_spec.metadata == {STAGED_UNFIRED_KEY: True}
     assert not log._recipe_is_clean()
 
 
