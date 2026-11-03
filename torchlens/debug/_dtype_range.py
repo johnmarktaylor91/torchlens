@@ -9,8 +9,14 @@ import torch
 
 from .._debug_report import Report, at_source, rows_of
 from ._audit import AuditFinding, AuditSeverity
-from ._common import _compute_ops, _op_label, _safe_out, _source_line
-from ._nan import _module_address, _nonfinite_kind
+from ._common import (
+    _compute_ops,
+    _module_address,
+    _nonfinite_kind,
+    _op_label,
+    _safe_out,
+    _source_line,
+)
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace

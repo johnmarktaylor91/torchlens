@@ -289,3 +289,58 @@ def _op_from_label(trace: Trace, label: str) -> Op | None:
 
     op, _ = _resolve_op(trace, label)
     return op
+
+
+def _nonfinite_kind(tensor: torch.Tensor) -> str:
+    """Classify non-finite values in a tensor.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor to inspect.
+
+    Returns
+    -------
+    str
+        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
+    """
+
+    if not torch.is_floating_point(tensor) and not torch.is_complex(tensor):
+        return "none"
+    has_nan = bool(torch.isnan(tensor).any().item())
+    has_inf = bool(torch.isinf(tensor).any().item())
+    if has_nan and has_inf:
+        return "nan+inf"
+    if has_nan:
+        return "nan"
+    if has_inf:
+        return "inf"
+    return "none"
+
+
+def _module_address(op: Op) -> str | None:
+    """Return the containing module address recorded for an op.
+
+    Parameters
+    ----------
+    op:
+        Operation whose module metadata should be read.
+
+    Returns
+    -------
+    str | None
+        Atomic module address or the innermost containing module address.
+    """
+
+    atomic_address = getattr(op, "atomic_module_address", None)
+    if isinstance(atomic_address, str):
+        return atomic_address
+    # Live (mid-capture) ops have no atomic_module_address yet; the fallback
+    # reads the innermost module CALL label ("0:1"), which carries the pass
+    # qualifier -- strip it so the field keeps its ADDRESS contract.
+    module = getattr(op, "module", None)
+    if isinstance(module, tuple) and module and isinstance(module[0], str):
+        return module[0].rsplit(":", 1)[0]
+    if isinstance(module, str):
+        return module.rsplit(":", 1)[0]
+    return None
