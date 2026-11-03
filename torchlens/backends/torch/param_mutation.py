@@ -353,7 +353,7 @@ def parameter_mutation_output_for_logging(
 # (``set_param_meta``, ``trace._param_logs``, the session inventory) and discloses the creation
 # as a ``parameter_created_in_forward`` capture advisory.
 #
-# The carve-out is narrow on purpose (r77 F1: a fresh in-forward ``nn.Parameter`` or a foreign
+# The carve-out is narrow on purpose (round-77 finding 1: a fresh in-forward ``nn.Parameter`` or a foreign
 # model's parameter must never launder provenance). A parameter registers here only when ALL
 # of these hold at consumption time:
 #

@@ -27,7 +27,7 @@ class ArtifactTooOldError(ArtifactError):
 
     Any stamp older than the current ``tlspec_version``, any pickled 2.x module path and the
     2.16 ModelLog format refuse with this error rather than being partially reconstructed;
-    the remedy is to save the file again with torchlens 2.36.x or capture the model again.
+    the remedy is to load the file with torchlens 2.36.x or capture the model again.
     """
 
 
