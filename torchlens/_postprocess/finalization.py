@@ -46,7 +46,6 @@ from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
-from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from ..backends._constants import is_constant_op
 from ..backends.torch._tl import clear_meta
@@ -60,6 +59,7 @@ from ._conditional_records import (
 )
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
+from ._streamed_tensor_types import _dtype_from_manifest_string
 from .saved_summary import _has_retained_gradient_payloads
 
 if TYPE_CHECKING:
@@ -1816,28 +1816,3 @@ def _attach_streamed_tensor_refs(
                     key=writer.get_tensor_reference(tensor_blob.blob_id)["key"],
                 ),
             )
-
-
-def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
-    """Resolve a manifest dtype string back into a ``torch.dtype``.
-
-    Parameters
-    ----------
-    dtype_name:
-        Manifest dtype name without the ``torch.`` prefix.
-
-    Returns
-    -------
-    torch.dtype
-        Resolved dtype object.
-
-    Raises
-    ------
-    ArtifactError
-        If the dtype name is unknown to the current runtime.
-    """
-
-    dtype_obj = torch_dtype_named(dtype_name)
-    if dtype_obj is None:
-        raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
-    return dtype_obj
