@@ -477,3 +477,21 @@ def test_gradient_probe_on_an_unreachable_target_answers_empty() -> None:
             assert not bool(_row(reached, target).mask.any()), method
     finally:
         trace.cleanup()
+
+
+def test_output_role_spelling_names_the_projective_target() -> None:
+    """``target=`` accepts the IO role field status reports, not only the op label."""
+
+    torch.manual_seed(0)
+    model = nn.Sequential(nn.Conv2d(1, 2, 3, padding=1), nn.ReLU())
+    trace = tl.trace(model, torch.randn(1, 1, 8, 8), capture=_ARMED)
+    try:
+        source = next(item for item in trace._layer_list if item.is_input)
+        output = trace.output_ops[0]
+        role = str(output.io_role or "")
+        assert role and role != output.label
+        by_op = source.projective_field.at((4, 4), target=output)
+        by_role = source.projective_field.at((4, 4), target=role)
+        assert (by_role.io_role, by_role.axes) == (by_op.io_role, by_op.axes)
+    finally:
+        trace.cleanup()
