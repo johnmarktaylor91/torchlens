@@ -39,8 +39,7 @@ torchlens/_capture/prepare/chunked.py::plan_chunks	76
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	175
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	125
 torchlens/_capture/prepare/door.py	1122
-torchlens/_capture/prepare/resolve.py::_record_capture_intervention_event	63
-torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	132
+torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
 torchlens/_capture/projections.py	1592
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
@@ -886,10 +885,10 @@ torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	74
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	139
 torchlens/backends/torch/_ops_finalize.py::_raise_if_nonfinite_requested	119
-torchlens/backends/torch/_ops_interventions.py	830
+torchlens/backends/torch/_ops_interventions.py	827
 torchlens/backends/torch/_ops_interventions.py::_apply_live_hooks_to_outputs_legacy	114
-torchlens/backends/torch/_ops_interventions.py::_apply_predicate_intervention	74
-torchlens/backends/torch/_ops_interventions.py::_apply_predicate_mode_interventions_to_outputs	107
+torchlens/backends/torch/_ops_interventions.py::_apply_predicate_intervention	72
+torchlens/backends/torch/_ops_interventions.py::_apply_predicate_mode_interventions_to_outputs	105
 torchlens/backends/torch/_ops_interventions.py::_record_predicate_intervention_spec	85
 torchlens/backends/torch/_ops_predicate_events.py::_build_graph_relationship_fields	97
 torchlens/backends/torch/_ops_predicate_events.py::_build_param_fields	64
@@ -1191,10 +1190,10 @@ torchlens/intervention/rerun.py::_chunked_rerun	78
 torchlens/intervention/rerun.py::_reconcile_rerun_hook_fires	96
 torchlens/intervention/rerun.py::_refuse_source_matched_zero_fire	72
 torchlens/intervention/rerun.py::run	143
-torchlens/intervention/runtime.py	1668
+torchlens/intervention/runtime.py	1638
 torchlens/intervention/runtime.py::_apply_live_backward_hooks	75
 torchlens/intervention/runtime.py::_apply_live_backward_prehooks	72
-torchlens/intervention/runtime.py::_apply_live_hooks	159
+torchlens/intervention/runtime.py::_apply_live_hooks	155
 torchlens/intervention/runtime.py::_execute_hook	80
 torchlens/intervention/runtime.py::_validate_grad_tuple	66
 torchlens/intervention/runtime.py::validate_hook_output	70
@@ -1326,7 +1325,7 @@ torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
 torchlens/recording/_record_one_shot.py::record	177
-torchlens/recording/_recorder.py	859
+torchlens/recording/_recorder.py	847
 torchlens/recording/_recorder.py::Recorder.__init__	167
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93

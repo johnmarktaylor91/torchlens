@@ -26,8 +26,10 @@ from .. import _state
 from .._ir.intervention import FireResult
 from .._state import pause_logging
 from ..backends.torch._tl import clear_tensor_label, get_tensor_label
+from ._rule_match import _match_rules, _rule_decision
 from ._zero_fire import note_capture_rule_fired
 from .hooks import make_live_site_proxy
+from .spec import Recipe
 
 
 @dataclass(frozen=True)
@@ -102,8 +104,6 @@ def _resolve_boundary_predicate(trace: Any) -> _BoundaryPredicate | None:
     predicate_intervene = getattr(predicate_options, "intervene", None)
     if predicate_intervene is None:
         return None
-    from .spec import Recipe
-
     if isinstance(predicate_intervene, Recipe):
         rules = tuple(rule for rule in predicate_intervene.rules if _addresses_module(rule.target))
         return _BoundaryPredicate(predicate_options, rules=rules) if rules else None
@@ -123,8 +123,6 @@ def _boundary_decision(predicate: _BoundaryPredicate, site: Any) -> tuple[Any, A
     """
 
     if predicate.rules:
-        from .spec import _match_rules, _rule_decision
-
         rule = _match_rules(predicate.rules, site)
         if rule is None:
             return None
