@@ -344,10 +344,14 @@ def comparisons(
 ) -> Iterator[dict[str, _Comparison]]:
     base = tmp_path_factory.mktemp("format3_lel")
     torch.manual_seed(0)
+    # Source text is stored state only when snapshotted at capture: a default capture
+    # stores none and reads it from the file on access (tests/test_source_text_lazy.py),
+    # so the cell-by-cell comparison snapshots it. The default path's written and loaded
+    # source text is pinned by the two tests at the end of this module.
     trace = tl.trace(
         _TinyCNN().eval(),
         torch.randn(2, 1, 6, 6),
-        capture=tl.options.CaptureOptions(replayable=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_source_context=True),
     )
     try:
         results = {}
@@ -384,3 +388,58 @@ def test_barcode_renaming_is_one_to_one(comparisons: dict[str, _Comparison], lev
     barcodes = comparisons[level].barcodes
     assert barcodes
     assert len(set(barcodes.values())) == len(barcodes)
+
+
+#: The five source-text columns of a default capture's frames, as written and as loaded:
+#: the capture stored no text, and the artifact keeps only the file name, so a loaded
+#: frame shows the no-text state and never reads a source file.
+_NO_SOURCE_TEXT: dict[str, Any] = {
+    "call_line": "",
+    "code_context": None,
+    "code_context_labeled": "",
+    "num_context_lines": 0,
+    "source_context": "None",
+}
+
+
+@pytest.fixture(scope="module")
+def default_capture_saves(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    base = tmp_path_factory.mktemp("format3_lel_default")
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _TinyCNN().eval(),
+        torch.randn(2, 1, 6, 6),
+        capture=tl.options.CaptureOptions(replayable=True),
+    )
+    try:
+        frame = trace.ops[1].code_context[-1]
+        assert frame.call_line and frame.num_context_lines > 0, "live text reads lazily"
+        for level in _LEVELS:
+            trace.save(base / level, level=level)
+        yield base
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.parametrize("level", _LEVELS)
+def test_default_capture_writes_no_source_text(default_capture_saves: Path, level: str) -> None:
+    _, tables = _tables(default_capture_saves / level)
+    table = tables["func_call_location"]
+    assert table["rows"] > 0
+    written = [column for column in _NO_SOURCE_TEXT if column in table["columns"]]
+    assert written, "the level writes no source-text column"
+    for column in written:
+        cells = [
+            decode_value(cell, at=f"func_call_location[{row}].{column}")
+            for row, cell in enumerate(table["columns"][column])
+        ]
+        assert len(cells) == table["rows"], column
+        assert all(cell == _NO_SOURCE_TEXT[column] for cell in cells), (column, cells[:2])
+
+
+def test_default_capture_loads_with_no_source_text(default_capture_saves: Path) -> None:
+    loaded = tl.load(default_capture_saves / "portable")
+    frames = [frame for op in loaded.ops for frame in op.code_context or ()]
+    assert frames
+    for frame in frames:
+        assert {name: getattr(frame, name) for name in _NO_SOURCE_TEXT} == _NO_SOURCE_TEXT
