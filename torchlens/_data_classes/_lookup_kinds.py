@@ -199,12 +199,13 @@ def layer_for_key(trace: Any, key: str) -> Any:
 
 
 def _ops_named(trace: Any, key: str) -> list[Any]:
-    """Every Op an op or layer label names (all passes of a bare multi-pass label)."""
+    """Every Op a key names: the passes of an op or layer label, else a record key's output ops."""
 
     try:
-        return list(trace.ops.resolve_all(key))
+        ops = list(trace.ops.resolve_all(key))
     except (KeyError, ValueError, AttributeError):
-        return []
+        ops = []
+    return ops or _output_op_candidates(trace, key)[0]
 
 
 def _call_label_address(call_label: Any) -> str | None:

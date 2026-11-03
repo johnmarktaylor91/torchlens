@@ -242,6 +242,7 @@ def test_grad_fns_door_converts_op_labels_and_refuses_several(trace: tl.Trace) -
 
     grad_fns = trace.autograd.grad_fns
     assert grad_fns[FC1] is grad_fns[trace[FC1].grad_fn_label]
+    assert grad_fns["fc1"] is grad_fns[FC1]  # a module address names its output op's grad_fn
     with pytest.raises(AmbiguousOpLookupError):
         grad_fns["_back_"]
 
