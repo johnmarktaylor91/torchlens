@@ -730,7 +730,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   handle are the same as after a removal between runs.
   Editing a root trace warns `TraceMutationWarning` once per root trace; a `fork()` never warns
   and `torchlens.io.suppress_mutate_warnings()` quiets the session. There is no per-call opt-out
-  keyword: `confirm_mutation=` is gone from every door and from `InterventionOptions` (ruled
+  keyword: the `confirm_mutation` option is gone from every door and from `InterventionOptions` (ruled
   3 Nov 2026).
 
 **Region instances** *(spellings documented-unstable)*
@@ -1576,8 +1576,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   pre-mutated site; `Trace.run` performs a full-forward run with the log's active
   intervention spec; `tl.sweep` captures one intervened trace per swept replacement
   value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) `Trace.do(site,
-  value_or_hook=None, /, *, ...)`: the first parameter is `site`, positional-only, on `Trace`,
-  `Layer`, `Op` and `Bundle` alike (ruled 3 Nov 2026). `Trace.run(model=None, x=None, /, *,
+  value_or_hook, /, *, ...)`: the first parameter is `site`, positional-only, on `Trace`,
+  `Layer`, `Op` and `Bundle` alike (ruled 3 Nov 2026). `Trace.run(model, x, /, *,
   inputs=..., ...)`: the model and input are positional-only; positional inputs return a new
   `Trace` (ruled 3 Nov 2026). Replay re-executes
   forward ops only, so a gradient site on `do` without `model=`/`inputs=`, on `engine="replay"`, or in
