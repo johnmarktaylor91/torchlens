@@ -552,7 +552,7 @@ def _capture_source_state(trace: Trace, *, option_name: str) -> Mapping[str, tor
     """
 
     state = trace._runnable.capture_state
-    if state is None and not is_live_trace(trace):
+    if state is None and trace._loaded_from_bundle:
         # The reader binds this family only after validating its capture-state
         # slot universe and byte digests. User-staged state is not capture state.
         state = trace._runnable.embedded_state
