@@ -1,5 +1,4 @@
 corpus	file	numeral
-docs-md	AGENTS.md	1,477
 docs-md	AGENTS.md	1.5
 docs-md	AGENTS.md	10
 docs-md	AGENTS.md	11
@@ -17,7 +16,6 @@ docs-md	AGENTS.md	28
 docs-md	AGENTS.md	3.10,
 docs-md	AGENTS.md	32
 docs-md	AGENTS.md	384
-docs-md	AGENTS.md	38,662
 docs-md	AGENTS.md	40
 docs-md	AGENTS.md	400
 docs-md	AGENTS.md	45
@@ -1058,8 +1056,6 @@ docs-md	docs/maintainers/saved_format_3.md	64
 docs-md	docs/maintainers/saved_format_3.md	800
 docs-md	docs/maintainers/saved_format_3.md	8601
 docs-md	docs/maintainers/saved_format_3.md	86_64
-docs-md	docs/maintainers/testing.md	1,470
-docs-md	docs/maintainers/testing.md	1,477
 docs-md	docs/maintainers/testing.md	12,000
 docs-md	docs/maintainers/testing.md	2.13.0
 docs-md	docs/maintainers/testing.md	20
@@ -1180,7 +1176,6 @@ docs-md	docs/maintainers/where.md	1400
 docs-md	docs/maintainers/where.md	1404
 docs-md	docs/maintainers/where.md	141
 docs-md	docs/maintainers/where.md	1412
-docs-md	docs/maintainers/where.md	1411
 docs-md	docs/maintainers/where.md	1417
 docs-md	docs/maintainers/where.md	142
 docs-md	docs/maintainers/where.md	143
@@ -1490,7 +1485,6 @@ docs-md	docs/maintainers/where.md	352
 docs-md	docs/maintainers/where.md	3526
 docs-md	docs/maintainers/where.md	353
 docs-md	docs/maintainers/where.md	35374
-docs-md	docs/maintainers/where.md	35370
 docs-md	docs/maintainers/where.md	355
 docs-md	docs/maintainers/where.md	356
 docs-md	docs/maintainers/where.md	357
@@ -1669,10 +1663,8 @@ docs-md	docs/maintainers/where.md	535
 docs-md	docs/maintainers/where.md	536
 docs-md	docs/maintainers/where.md	537
 docs-md	docs/maintainers/where.md	539
-docs-md	docs/maintainers/where.md	53999
 docs-md	docs/maintainers/where.md	54
 docs-md	docs/maintainers/where.md	540
-docs-md	docs/maintainers/where.md	54049
 docs-md	docs/maintainers/where.md	541
 docs-md	docs/maintainers/where.md	544
 docs-md	docs/maintainers/where.md	545
@@ -1715,7 +1707,6 @@ docs-md	docs/maintainers/where.md	591
 docs-md	docs/maintainers/where.md	594
 docs-md	docs/maintainers/where.md	595
 docs-md	docs/maintainers/where.md	599
-docs-md	docs/maintainers/where.md	5992
 docs-md	docs/maintainers/where.md	5993
 docs-md	docs/maintainers/where.md	6.3
 docs-md	docs/maintainers/where.md	6.4
@@ -1740,13 +1731,10 @@ docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
-docs-md	docs/maintainers/where.md	629964
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	631
 docs-md	docs/maintainers/where.md	6316
-docs-md	docs/maintainers/where.md	632660
-docs-md	docs/maintainers/where.md	632548
 docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
 docs-md	docs/maintainers/where.md	636
@@ -1760,7 +1748,6 @@ docs-md	docs/maintainers/where.md	642
 docs-md	docs/maintainers/where.md	643
 docs-md	docs/maintainers/where.md	645
 docs-md	docs/maintainers/where.md	647
-docs-md	docs/maintainers/where.md	6474
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	6490
 docs-md	docs/maintainers/where.md	65
@@ -1851,9 +1838,6 @@ docs-md	docs/maintainers/where.md	790
 docs-md	docs/maintainers/where.md	7917
 docs-md	docs/maintainers/where.md	792
 docs-md	docs/maintainers/where.md	793
-docs-md	docs/maintainers/where.md	7936
-docs-md	docs/maintainers/where.md	794
-docs-md	docs/maintainers/where.md	795
 docs-md	docs/maintainers/where.md	796
 docs-md	docs/maintainers/where.md	797
 docs-md	docs/maintainers/where.md	798
@@ -8772,8 +8756,6 @@ test-docstrings	tests/test_run_until.py	18
 test-docstrings	tests/test_run_until.py	2.4
 test-docstrings	tests/test_run_until.py	2.5
 test-docstrings	tests/test_run_until.py	25
-test-docstrings	tests/test_run_until.py	3.3.1
-test-docstrings	tests/test_run_until.py	26.3
 test-docstrings	tests/test_run_until.py	3.3.2
 test-docstrings	tests/test_run_until.py	36
 test-docstrings	tests/test_runnable_ambient_restore.py	32
@@ -9867,3 +9849,7 @@ test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	12_
 test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	13_
 test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	16_
 test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	20_
+test-docstrings	tests/test_checks_kit_session.py	203
+test-docstrings	tests/test_summary_rebuild_ladder.py	19
+test-docstrings	tests/test_summary_rebuild_ladder.py	3.4,
+test-docstrings	tests/test_summary_rebuild_ladder.py	48

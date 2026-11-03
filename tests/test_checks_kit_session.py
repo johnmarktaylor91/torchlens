@@ -10,6 +10,9 @@ S-A callback path (the static mechanism check CPU timing cannot catch).
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 import torch
 import torch.nn as nn
@@ -113,6 +116,25 @@ def test_checkpoint_fires_once_per_backward() -> None:
 
     assert session.backward_id == 1
     assert all(count == 1 for count in session._fire_counts.values())
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_no_per_param_item_in_sa_callback_paths() -> None:
+    """Static mechanism check: no ``.item()`` in any S-A callback path.
+
+    203 per-parameter ``.item()`` calls are 203 device syncs on CUDA; CPU
+    timing cannot catch the mechanism, so the gate is structural (memo
+    test plan row 8).
+    """
+
+    source = Path(tc.__file__).with_name("_session.py").read_text()
+    tree = ast.parse(source)
+    offenders = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and node.attr == "item"
+    ]
+    assert not offenders, f".item() found in _session.py at lines {offenders}"
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.

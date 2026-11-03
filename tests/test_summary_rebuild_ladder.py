@@ -15,6 +15,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.report._factcore import factcore
 from torchlens.report._summary_ladder import (
+    DEFAULT_ROW_BUDGET,
     _ModelIndex,
     build_tree,
     resolve_view,
@@ -183,3 +184,10 @@ def test_unexecuted_module_row_owns_its_params() -> None:
     assert dead_rows and dead_rows[0].kind == "unexecuted"
     assert dead_rows[0].params_owned == 3 * 3 + 3
     _assert_partition(trace, view)
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_hybrid_row_convention_matches_derived_budget() -> None:
+    """The vgg19-derived budget constant is 48 (memo 3.4, derived not chosen)."""
+
+    assert DEFAULT_ROW_BUDGET == 48

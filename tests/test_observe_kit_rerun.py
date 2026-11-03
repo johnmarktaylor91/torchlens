@@ -131,3 +131,14 @@ def test_bisect_precision_works_after_prior_trace() -> None:
         assert result.rows, "expected compared rows from an already-traced model"
     finally:
         _cleanup(prior)
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_rerun_helpers_are_public_in_tl_debug() -> None:
+    """``clone_input_tree`` and ``preserved_rng_state`` are ``tl.debug`` exports."""
+
+    from torchlens.debug import _rerun
+
+    for name in ("clone_input_tree", "preserved_rng_state"):
+        assert name in tl.debug.__all__
+        assert getattr(tl.debug, name) is getattr(_rerun, name)

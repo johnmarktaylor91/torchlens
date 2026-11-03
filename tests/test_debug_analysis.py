@@ -155,6 +155,16 @@ def test_compare_matches_diverges_and_skips_unsaved() -> None:
     assert any("unsaved" in reason for reason in skipped["reason"])
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_compare_defaults_are_locked() -> None:
+    """compare exposes the specified tolerance defaults."""
+
+    params = signature(tl.debug.compare).parameters
+
+    assert params["rtol"].default == 1e-5
+    assert params["atol"].default == 1e-8
+
+
 # Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_graph.py.
 def test_dead_neurons_reports_rows_and_skip_reasons() -> None:
     """dead_neurons reports dense floating tensors and invalid dims."""
@@ -264,3 +274,14 @@ def test_compare_params_meta_tensors_are_incomparable_not_compared() -> None:
     assert frame.attrs["incomparable"] == 2
     assert all(frame["reason"] == "meta-tensor-has-no-data")
     assert frame["allclose"].isna().all()
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_compare_params_defaults_are_locked() -> None:
+    """compare_params exposes the specified defaults."""
+
+    params = signature(tl.debug.compare_params).parameters
+
+    assert params["rtol"].default == 1e-5
+    assert params["atol"].default == 1e-8
+    assert params["include_buffers"].default is False

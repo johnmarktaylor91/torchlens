@@ -181,3 +181,13 @@ def test_sae_lens_bridge_dispatches_encode_reconstruct_and_refuses_junk(
     monkeypatch.setitem(sys.modules, "sae_lens", None)
     with pytest.raises(ImportError, match="torchlens\\[sae\\]"):
         sae_bridge.encode(conv_log, "relu_1_2", _Sae())
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_profiler_execution_trace_is_removed() -> None:
+    """The profiler bridge keeps only ``join``; ``execution_trace`` is gone."""
+
+    from torchlens.bridge import profiler
+
+    assert not hasattr(profiler, "execution_trace")
+    assert profiler.__all__ == ["join"]

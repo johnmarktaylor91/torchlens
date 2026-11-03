@@ -150,6 +150,13 @@ def test_health_alias_rows_excluded_and_disclosed(loop_trace) -> None:
         assert label in alias_labels
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_factcore_grain_vocabulary_is_closed() -> None:
+    """The grain menu is the D3 vocabulary, verbatim."""
+
+    assert GRAINS == ("op", "layer", "site", "module", "call")
+
+
 # Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_trace_groups.py, _data_classes/_trace_inventory.py and more and a sole campaign mutation kill.
 def test_scope_label_on_payload_stripped_artifact(tmp_path) -> None:
     """The D8 scope-label test: no surface claims bytes THIS object lacks.

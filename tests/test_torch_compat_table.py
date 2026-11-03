@@ -12,6 +12,26 @@ from torchlens._utils._torch_compat_table import (
 )
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_table_rows_match_the_capability_flags_exactly() -> None:
+    """Every snapshot flag has exactly one row and every row names a snapshot flag."""
+
+    assert set(CAPABILITY_ROWS) == set(tc._CAPABILITY_ATTRS)
+    assert all(row.flag == flag for flag, row in CAPABILITY_ROWS.items())
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_absent_on_lists_only_measured_versions_in_order() -> None:
+    """``absent_on`` is an ordered subset of the measured matrix."""
+
+    order = {version: index for index, version in enumerate(MEASURED_TORCH_VERSIONS)}
+    for row in CAPABILITY_ROWS.values():
+        assert set(row.absent_on) <= set(order), row.flag
+        assert list(row.absent_on) == sorted(row.absent_on, key=order.__getitem__), row.flag
+        if not row.measured:
+            assert row.absent_on == (), row.flag
+
+
 # Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/_torch_compat.py.
 def test_attribute_probed_flags_agree_with_the_live_probe() -> None:
     """A flag probed from its declared paths reads what those paths resolve to now."""
@@ -19,6 +39,20 @@ def test_attribute_probed_flags_agree_with_the_live_probe() -> None:
     assert set(tc._ATTRIBUTE_PROBES) <= set(CAPABILITY_ROWS)
     for flag in tc._ATTRIBUTE_PROBES:
         assert getattr(tc, flag) is tc._probe_attribute_paths(flag), flag
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_the_compat_module_does_not_import_the_table() -> None:
+    """The measured table is tooling data, kept out of the capture stack's import closure."""
+
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(tc))
+    imported = {
+        node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert "_torch_compat_table" not in imported
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/_torch_compat_table.py.

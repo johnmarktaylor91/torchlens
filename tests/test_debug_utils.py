@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 import torch
 from torch import nn
@@ -93,6 +95,18 @@ def test_find_nan_live_reports_op_module_and_test_location() -> None:
     assert result.source_line is not None
     assert __file__ in result.source_line
     assert "FindNanReport(found=True" in repr(result)
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_find_nan_live_reports_nearest_user_function_location() -> None:
+    """Live find_nan reports the function containing the offending operation."""
+
+    result = tl.debug.find_nan(UserFunctionNanModel(), torch.ones(2, 3))
+    source, start_line = inspect.getsourcelines(_user_nan_function)
+    expected_line = start_line + source.index("    return zero / zero\n")
+
+    assert result.found is True
+    assert result.source_line == f"{__file__}:{expected_line}"
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_nan.py and a sole campaign mutation kill.

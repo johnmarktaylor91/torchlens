@@ -146,7 +146,10 @@ def _graph(model: nn.Module) -> tuple[str, list[tuple[str, tuple[str, ...], Any]
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of _runnable/state_live.py.
 # Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
-@pytest.mark.parametrize(("name", "state"), [("unsqueeze_", "emptied")])
+# Row as_strided_offset/emptied kept: skipped in its per-id coverage run, so it has no measurement (shrink rule 3).
+@pytest.mark.parametrize(
+    ("name", "state"), [("unsqueeze_", "emptied"), ("as_strided_offset", "emptied")]
+)
 def test_geometry_write_graph_does_not_depend_on_the_entry_state(name: str, state: str) -> None:
     """The captured graph from any entry state equals the graph from a fresh model."""
 
@@ -180,7 +183,11 @@ def test_resize_is_one_in_place_write_produced_by_the_resize(name: str, state: s
 # Kept by the shrink-r4 coverage proof: sole branch coverage of validation/_replay_storage_context.py.
 @pytest.mark.heavy
 # Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
-@pytest.mark.parametrize(("name", "state"), [("as_strided_offset", "after_one_forward")])
+# Row as_strided_offset/emptied kept: skipped in its per-id coverage run, so it has no measurement (shrink rule 3).
+@pytest.mark.parametrize(
+    ("name", "state"),
+    [("as_strided_offset", "after_one_forward"), ("as_strided_offset", "emptied")],
+)
 def test_geometry_write_validates_from_every_entry_state(name: str, state: str) -> None:
     """Validation (first trace from the entry state, re-trace from after it) returns True."""
 
