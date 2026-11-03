@@ -53,6 +53,8 @@ from ._conditional_records import (
     _make_public_conditional_ids,
     _merge_conditional_role_labels,
     _resolve_conditional_bool_op,
+    _roles_by_label,
+    roles_held_by_pass,
 )
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
@@ -1321,6 +1323,7 @@ def _build_conditional_records(self: "Trace") -> None:
     event_by_id = {event.id: event for event in self._graph_conditional_records}
     conditional_id_by_event_id = _make_public_conditional_ids(self._graph_conditional_records)
     role_labels_by_cond_arm: dict[tuple[str, int, str], list[str]] = defaultdict(list)
+    arm_stack_entries: dict[tuple[str, int], tuple[int, str]] = {}
     for event in self._graph_conditional_records:
         terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
         conditional_id = conditional_id_by_event_id[event.id]
@@ -1423,6 +1426,7 @@ def _build_conditional_records(self: "Trace") -> None:
                 execution_entry_edge=edge_list[0] if edge_list else None,
             )
             arm_index = len(arms)
+            arm_stack_entries[(conditional_id, arm_index)] = (event.id, branch_kind)
             _merge_conditional_role_labels(
                 role_labels_by_cond_arm,
                 (conditional_id, arm_index, "evaluation"),
@@ -1450,28 +1454,11 @@ def _build_conditional_records(self: "Trace") -> None:
             arm._bind(self, conditional.id, arm_index)
         conditionals.append(conditional)
 
-    # Inverted role index (r8 R60-7): the per-layer triple loop with an
-    # innermost list-membership check was O(N_layers x Sum|role lists|)
-    # whenever a conditional's entry-edge children were numerous (an ``if``
-    # in a hot unrolled loop). One pass over the role buckets builds the
-    # same per-layer role lists in the same (conditional, arm,
-    # evaluation-then-body) order; per-bucket label dedup mirrors the old
-    # one-role-per-membership semantics.
-    roles_by_label: dict[str, list[ConditionalRoleRef]] = {}
-    for conditional in conditionals:
-        for arm_index, arm in enumerate(conditional.arms):
-            for role in ("evaluation", "body"):
-                bucket = role_labels_by_cond_arm.get((conditional.id, arm_index, role), [])
-                bucket_seen: set[str] = set()
-                for label in bucket:
-                    if label in bucket_seen:
-                        continue
-                    bucket_seen.add(label)
-                    roles_by_label.setdefault(label, []).append(
-                        ConditionalRoleRef(conditional.id, arm_index, arm.kind, role)
-                    )
+    roles_by_label = _roles_by_label(conditionals, role_labels_by_cond_arm, ConditionalRoleRef)
     for layer in self._layer_list:
-        layer.in_conditionals = roles_by_label.get(layer.layer_label, [])
+        layer.in_conditionals = roles_held_by_pass(
+            layer, roles_by_label.get(layer.layer_label, []), arm_stack_entries
+        )
         if (
             layer.terminal_conditional_id is not None
             and layer.terminal_conditional_id in event_by_id

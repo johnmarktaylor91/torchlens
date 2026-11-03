@@ -545,6 +545,65 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
             "(finite operands, or a NaN/Inf pattern that does not absorb the delta)"
         ),
     ),
+    Exemption(
+        code="zero_dividend_annihilator",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:_division_decision",
+        refuses=(
+            "a non-zero saved dividend, a non-finite or non-zero quotient, and a perturbed parent at the dividend slot or in more than one slot"
+        ),
+    ),
+    Exemption(
+        code="conjunction_zero_annihilator",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:_conjunction_decision",
+        refuses=(
+            "a co-operand with any non-zero/True element, a non-zero saved output, and a perturbed parent that occupies both operand slots"
+        ),
+    ),
+    Exemption(
+        code="disjunction_saturated",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:_disjunction_decision",
+        refuses=(
+            "a co-operand with any False element or a non-bool dtype (an integer or-operand "
+            "needs every bit set), an output that is not all True, and a perturbed "
+            "parent that occupies both operand slots"
+        ),
+    ),
+    Exemption(
+        code="pow_zero_exponent",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:_pow_zero_exponent_decision",
+        refuses=(
+            "any non-zero exponent element, an output that is not all ones, and a perturbed exponent"
+        ),
+    ),
+    Exemption(
+        code="sdpa_singleton_key",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:_sdpa_singleton_key_decision",
+        refuses=(
+            "two or more key positions, a perturbed query, key or value (the query and "
+            "key edges are the sdpa_single_key proofs), a bool mask, a non-finite query, "
+            "key or scale, non-zero dropout, a fully masked row, and an output that "
+            "differs from the value rows"
+        ),
+    ),
+    Exemption(
+        code="setitem_singleton_index_dim",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:_setitem_singleton_index_decision",
+        refuses=(
+            "an index component addressing a dim of size 2 or more, a boolean mask component, and a perturbed parent at the destination or value slot"
+        ),
+    ),
 )
 
 

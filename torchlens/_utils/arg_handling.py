@@ -27,37 +27,10 @@ from .alias_footprint import (
     tensor_byte_footprint,
     touched_bytes_relation,
 )
-from .tensor_utils import (
-    _clone_tensor_payload,
-    _copy_tensor_payload,
+from .input_leaves import (
+    _clone_input_tensor_payload,
+    leaf_deepcopy_preserves_contract,
 )
-
-INPUT_WAS_PARAMETER_ATTR = "_torchlens_input_was_parameter"
-
-
-def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
-    """Clone a forward-input tensor without preserving ``nn.Parameter`` type.
-
-    Parameters
-    ----------
-    arg
-        Forward input tensor or parameter to clone.
-
-    Returns
-    -------
-    torch.Tensor
-        Plain tensor clone for model input replay. Parameter inputs intentionally
-        become tensors so input provenance wins over Python wrapper type.
-    """
-
-    if isinstance(arg, torch.nn.Parameter):
-        from .._state import pause_logging
-
-        with pause_logging():
-            cloned = _copy_tensor_payload(arg, detach_tensor=False, save_mode="copy")
-        setattr(cloned, INPUT_WAS_PARAMETER_ATTR, True)
-        return cloned
-    return cast(torch.Tensor, _clone_tensor_payload(arg, detach_tensor=False, save_mode="copy"))
 
 
 def _is_structseq_type(arg_type: type[Any]) -> bool:
@@ -569,9 +542,7 @@ def _copy_input_tree_node(
         memo[id(value)] = cloned
         return cloned
     if isinstance(value, torch.Tensor):
-        deepcopy_preserves_contract = (
-            value.is_leaf and not value.requires_grad and type(value) is torch.Tensor
-        )
+        deepcopy_preserves_contract = leaf_deepcopy_preserves_contract(value)
         tensor_records.append((path, value, deepcopy_preserves_contract))
         if id(value) in memo:
             return memo[id(value)]
@@ -899,8 +870,8 @@ def safe_copy_input_tree(
     tensors without autograd history, PyTorch's deepcopy protocol copies each
     underlying storage once and rebuilds every view with its original size,
     stride, and storage offset. Grad-tracked tensors use the historical clone
-    path so gradients still reach the caller's input. Every path shares one memo,
-    so the same tensor repeated at multiple call sites remains one object.
+    path so gradients still reach the caller's input (:mod:`input_leaves` deepcopies
+    a LEAF in validation). Every path shares one memo, so a repeated tensor stays one object.
 
     The tree walk itself is INERT (b3-opus-R12-1): containers are copied by
     :func:`_copy_input_tree_node` through the ``_input_walk`` contract, never
