@@ -1314,7 +1314,7 @@
   preview-backend scorecard builder; the shipped records stay in `torchlens/backends/<name>/scorecard.json`.
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
-  substrate, 3-4x cheaper than settrace); `torchlens.debug._snoop` owns
+  substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
   `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
   `Trace.narrate` replays a finished capture as narration.
   `NarrationEvent.stats` is a `tl.stats.TensorStats` (or `None`). Read

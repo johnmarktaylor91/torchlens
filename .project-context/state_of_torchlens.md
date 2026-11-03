@@ -117,7 +117,7 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/mechinterp/` | Mech-interp kit validated against TransformerLens oracles | Residual decomposition, DLA, head patching |
 | `torchlens/_observability/`, `torchlens/_observe/` | Observability substrates (record schema, history, profiles) and the user-facing observe verbs | Training-time and memory diagnostics |
 | `torchlens/preprocessing/`, `torchlens/_quickstart/` | Input provenance and the quickstart input ladder | Input handling |
-| `torchlens/debug/_snoop/` | Live per-op narration (`echo=`) and post-hoc narration | Debugging a forward pass |
+| `torchlens/_snoop/` | Live per-op narration (`echo=`) and post-hoc narration | Debugging a forward pass |
 | `torchlens/trackers/` | Attach-once training watch engine and sinks | TensorBoard/wandb/JSONL tracking |
 | `torchlens/transforms/` | Built-in activation transforms behind one declared contract | Transform behavior |
 | `torchlens/transformer/` | Transformer pictures (heatmaps, attention, token strips) | Transformer visuals |

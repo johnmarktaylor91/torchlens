@@ -486,6 +486,9 @@ torchlens/_semantic/recipes/attention.py	801
 torchlens/_semantic/recipes/attention.py::_eager_result_checked	68
 torchlens/_semantic/recipes/lm_head.py::language_model_head	62
 torchlens/_semantic/reconstruction.py::_result_or_missing	65
+torchlens/_snoop/_entry.py::resolve_echo_capture_options	66
+torchlens/_snoop/_stats.py::reuse_stats	70
+torchlens/_snoop/_stats.py::sampled_stats	67
 torchlens/_state.py	1394
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
@@ -1085,9 +1088,6 @@ torchlens/debug/_params.py::compare_params	124
 torchlens/debug/_precision.py::bisect_precision	75
 torchlens/debug/_recompute.py::recompute_candidates	76
 torchlens/debug/_rerun.py::isolated_capture	87
-torchlens/debug/_snoop/_entry.py::resolve_echo_capture_options	66
-torchlens/debug/_snoop/_stats.py::reuse_stats	70
-torchlens/debug/_snoop/_stats.py::sampled_stats	67
 torchlens/differential.py::diff	111
 torchlens/distributed/_audit.py::_audit_one_membership	77
 torchlens/distributed/_dtensor.py::dtensor_dual_geometry	81
