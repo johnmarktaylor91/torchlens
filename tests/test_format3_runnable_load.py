@@ -78,7 +78,7 @@ def test_tampered_runnable_chunk_refuses_at_load(tmp_path: Path) -> None:
     chunk.write_bytes(bytes(data))
     with pytest.raises(ArtifactError) as info:
         tl.load(root)
-    assert info.value.code == "bundle_metadata_integrity_refused"
+    assert info.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
 def test_descriptor_declares_every_runnable_payload(tmp_path: Path) -> None:
