@@ -163,9 +163,7 @@ def cast_for_store(
     """
 
     target = _target_for_key(policy, key)
-    if target is None:
-        return tensor, None
-    if tensor.dtype == target:
+    if target is None or tensor.dtype == target:
         _check_store_dtype(key, tensor, shard_format)
         return tensor, None
     try:
