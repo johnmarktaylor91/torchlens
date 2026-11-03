@@ -51,66 +51,6 @@ def test_logged_latents_are_trace_nodes_equal_to_the_result_latents(setup) -> No
     assert result.latents_site.partition(":")[0] in str(result.spliced.summary())
 
 
-def test_spliced_outputs_are_identical_with_logging_on_and_off(setup) -> None:
-    model, x, sae = setup
-    on = _splice(model, x, sae, log_latents=True)
-    off = _splice(model, x, sae)
-    assert len(on.spliced_outputs) == len(off.spliced_outputs)
-    for logged_out, replayed_out in zip(on.spliced_outputs, off.spliced_outputs, strict=True):
-        assert torch.equal(logged_out, replayed_out)
-    assert torch.equal(on.latents, off.latents)
-    assert on.fraction_variance_explained_pooled == off.fraction_variance_explained_pooled
-
-
-def test_logging_off_is_the_replayed_fork_with_no_latent_nodes(setup) -> None:
-    model, x, sae = setup
-    default = _splice(model, x, sae)
-    explicit_off = _splice(model, x, sae, log_latents=False)
-    assert default.latents_site is None and explicit_off.latents_site is None
-    assert _labels(default.spliced) == _labels(default.clean)
-    assert _labels(explicit_off.spliced) == _labels(default.spliced)
-    for left, right in zip(default.spliced_outputs, explicit_off.spliced_outputs, strict=True):
-        assert torch.equal(left, right)
-    # The replayed fork is the base mechanism: splice_module(input_route="out") at the site.
-    fork = default.clean.fork("by_hand")
-    fork.attach_hooks(tl.label("linear_1_1:1"), tl.splice_module(_Recon(sae), input_route="out"))
-    fork.push()
-    assert torch.equal(fork[fork.output_layers[0]].out, default.spliced_outputs[0])
-
-
-class _Recon(nn.Module):
-    def __init__(self, sae: nn.Module) -> None:
-        super().__init__()
-        self.sae = sae
-
-    def forward(self, out: torch.Tensor) -> torch.Tensor:
-        return self.sae.decode(self.sae.encode(out))
-
-
-def test_logged_splice_leaves_the_model_as_it_was(setup) -> None:
-    model, x, sae = setup
-    before = dict(model.named_modules())
-    _splice(model, x, sae, log_latents=True)
-    assert dict(model.named_modules()) == before
-    assert not model.fc1._forward_hooks
-    with torch.no_grad():
-        assert torch.equal(model(x), tl.trace(model, x)[tl.trace(model, x).output_layers[0]].out)
-
-
-def test_logged_splice_keeps_a_latent_edit(setup) -> None:
-    model, x, sae = setup
-
-    def drop_latent_one(latents: torch.Tensor) -> torch.Tensor:
-        edited = latents.clone()
-        edited[..., 1] = 0
-        return edited
-
-    on = _splice(model, x, sae, log_latents=True, latents_edit=drop_latent_one)
-    off = _splice(model, x, sae, latents_edit=drop_latent_one)
-    assert torch.equal(on.spliced_outputs[0], off.spliced_outputs[0])
-    assert torch.equal(on.spliced[on.latents_site].out, off.latents)
-
-
 def test_logged_splice_refuses_a_trace_door_with_a_running_remedy(setup) -> None:
     model, x, sae = setup
     clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))

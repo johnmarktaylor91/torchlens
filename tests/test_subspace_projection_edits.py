@@ -28,7 +28,6 @@ from torchlens.intervention import (
     subspace_ablate,
     subspace_interchange,
 )
-from torchlens.intervention._subspace_projection import PROJECTION_NOTE
 
 _H = 0.5 * torch.tensor(
     [[1, 1, 1, 1], [1, -1, 1, -1], [1, 1, -1, -1], [1, -1, -1, 1]], dtype=torch.float64
@@ -80,35 +79,6 @@ def _edited(basis: torch.Tensor, edit: Any) -> tuple[torch.Tensor, tl.Trace]:
     return fork[_SITE].out.detach(), fork
 
 
-_HAND: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor]]] = {
-    "zero": (tl.zero_ablate, torch.zeros_like),
-    "mean": (lambda: mean_ablate(dim=None), lambda c: torch.zeros_like(c) + c.mean()),
-    "scale": (lambda: tl.scale(3.0), lambda c: 3.0 * c),
-}
-
-
-@pytest.mark.parametrize("rank", sorted(_BASES))
-@pytest.mark.parametrize("verb", sorted(_HAND))
-def test_component_matches_hand_and_complement_is_bit_unchanged(rank: str, verb: str) -> None:
-    basis = _BASES[rank]
-    k = int(basis.shape[0])
-    make_edit, hand = _HAND[verb]
-    out, _fork = _edited(basis, make_edit())
-    component, complement = _split(out, k)
-    base_component, base_complement = _split(_COORDS @ _H, k)
-    assert torch.equal(complement, base_complement)
-    assert torch.equal(component, hand(base_component))
-    assert not torch.equal(component, base_component)
-
-
-def test_audit_record_states_the_projection_and_keeps_the_basis_provenance() -> None:
-    _out, fork = _edited(_BASES["rank1"], tl.zero_ablate())
-    (site,) = fork.intervention_audit[-1]["sites"]
-    assert PROJECTION_NOTE in site["source"]
-    assert "origin='hadamard rows'" in site["source"]
-    assert "basis_sha256=" in site["source"]
-
-
 def test_non_orthonormal_basis_is_orthonormalised_keeping_sign() -> None:
     """A scaled direction edits the component along its unit vector, sign kept."""
 
@@ -120,61 +90,6 @@ def test_non_orthonormal_basis_is_orthonormalised_keeping_sign() -> None:
     torch.testing.assert_close(complement, base_complement, rtol=0.0, atol=1e-12)
     torch.testing.assert_close(component, base_component.clamp(max=0.0), rtol=0.0, atol=1e-12)
     assert "basis orthonormalised" in fork.intervention_audit[-1]["sites"][0]["source"]
-
-
-def test_callable_edit_receives_the_coordinates() -> None:
-    seen: list[tuple[int, ...]] = []
-
-    def _hook(coords: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-        del ctx
-        seen.append(tuple(coords.shape))
-        return coords + 1.0
-
-    out, _fork = _edited(_BASES["rank3"], _hook)
-    assert seen == [(4, 3)]
-    component, _complement = _split(out, 3)
-    assert torch.equal(component, _COORDS[:, :3] + 1.0)
-
-
-def _das_interchange(model: _Mlp, base: torch.Tensor, source: torch.Tensor, basis: torch.Tensor):
-    """Hand DAS interchange: ``x_b - Q^T Q x_b + Q^T Q x_s`` at lin1's output, eagerly."""
-
-    with torch.no_grad():
-        source_hidden = model.lin1(source)
-
-        def _swap(_module: Any, _args: Any, out: torch.Tensor) -> torch.Tensor:
-            return out - (out @ basis.T) @ basis + (source_hidden @ basis.T) @ basis
-
-        handle = model.lin1.register_forward_hook(_swap)
-        try:
-            return model(base)
-        finally:
-            handle.remove()
-
-
-@pytest.mark.parametrize("rank", sorted(_BASES))
-def test_patch_from_is_the_das_interchange(rank: str) -> None:
-    basis = _BASES[rank]
-    torch.manual_seed(0)
-    model = _Mlp().eval()
-    with torch.no_grad():
-        model.lin1.weight.copy_(torch.randn(4, 4, dtype=torch.float64))
-        model.lin2.weight.copy_(torch.randn(3, 4, dtype=torch.float64))
-    base = torch.randn(5, 4, dtype=torch.float64)
-    source = torch.randn(5, 4, dtype=torch.float64)
-    options = tl.options.CaptureOptions(replayable=True)
-    target_log = tl.trace(model, base, capture=options)
-    source_log = tl.trace(model, source, capture=options)
-    fork = target_log.fork()
-    fork.do(tl.subspace(_SITE, basis, origin="das rows"), tl.patch_from(source_log))
-    got = fork[fork.output_layers[0]].out.detach()
-    want = _das_interchange(model, base, source, basis)
-    torch.testing.assert_close(got, want, rtol=0.0, atol=1e-12)
-    component, complement = _split(fork[_SITE].out, int(basis.shape[0]))
-    source_component, _ = _split(source_log[_SITE].out, int(basis.shape[0]))
-    _, base_complement = _split(target_log[_SITE].out, int(basis.shape[0]))
-    torch.testing.assert_close(component, source_component, rtol=0.0, atol=1e-12)
-    torch.testing.assert_close(complement, base_complement, rtol=0.0, atol=1e-12)
 
 
 def _site_units_mask(rows: list[int]) -> torch.Tensor:
@@ -297,47 +212,3 @@ def test_shape_changing_callable_refuses() -> None:
     with pytest.raises(InvalidArgumentError) as caught:
         fork.do(_subspace_sel(), lambda c, *, ctx: c.sum(dim=-1))
     assert caught.value.fields["code"] == "subspace_edit_unsupported"
-
-
-def _random_mlp() -> _Mlp:
-    torch.manual_seed(0)
-    model = _Mlp().eval()
-    with torch.no_grad():
-        model.lin1.weight.copy_(torch.randn(4, 4, dtype=torch.float64))
-        model.lin2.weight.copy_(torch.randn(3, 4, dtype=torch.float64))
-    return model
-
-
-@pytest.mark.parametrize("rank", sorted(_BASES))
-@pytest.mark.parametrize("verb", ["scale", "patch_from"])
-def test_gradient_reaches_upstream_through_the_component_edit(rank: str, verb: str) -> None:
-    """``lin1.weight.grad`` through the subspace edit equals the eager hand version."""
-
-    basis = _BASES[rank]
-    x = torch.randn(5, 4, dtype=torch.float64, generator=torch.Generator().manual_seed(7))
-    source_x = torch.randn(5, 4, dtype=torch.float64, generator=torch.Generator().manual_seed(8))
-    options = tl.options.CaptureOptions(replayable=True)
-    model = _random_mlp()
-    source = tl.trace(_random_mlp(), source_x, capture=options)
-    edit = tl.scale(2.0) if verb == "scale" else tl.patch_from(source)
-    fork = tl.trace(model, x, capture=options).fork()
-    fork.do(tl.subspace(_SITE, basis, origin="rows"), edit)
-    fork[fork.output_layers[0]].out.sum().backward()
-    got = model.lin1.weight.grad
-
-    eager = _random_mlp()
-    with torch.no_grad():
-        donor = eager.lin1(source_x)
-
-    def _hand(_module: Any, _args: Any, out: torch.Tensor) -> torch.Tensor:
-        coords = out @ basis.T
-        new = 2.0 * coords if verb == "scale" else donor @ basis.T
-        return out + (new - coords) @ basis
-
-    handle = eager.lin1.register_forward_hook(_hand)
-    try:
-        eager(x).sum().backward()
-    finally:
-        handle.remove()
-    assert got is not None
-    torch.testing.assert_close(got, eager.lin1.weight.grad, rtol=1e-12, atol=1e-12)

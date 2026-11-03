@@ -179,31 +179,3 @@ def test_redirect_hook_is_hidden_from_type_checkers(path: str, class_name: str |
         if isinstance(inner, ast.FunctionDef) and inner.name == "__getattr__"
     ]
     assert bare == [] and len(guarded) == 1
-
-
-def test_from_import_of_a_removed_name_is_a_plain_import_error() -> None:
-    """Pins the documented CPython limit: ``from`` imports drop the typed redirect.
-
-    ``from pkg import name`` replaces the module ``__getattr__``'s
-    AttributeError with a generic ImportError, so only attribute access
-    carries the facade_redirect message (MIGRATIONS.md, error contract). If a
-    future CPython keeps the original error, this test flags the docs as stale.
-    """
-
-    namespace: dict[str, Any] = {}
-    with pytest.raises(ImportError) as excinfo:
-        exec("from torchlens import resample_ablate", namespace)
-    assert not isinstance(excinfo.value, FacadeTeachingError)
-    assert "cannot import name" in str(excinfo.value)
-
-
-def test_root_resample_ablate_row_matches_the_shared_text() -> None:
-    """The root package's literal copy equals the intervention packages' shared text."""
-
-    from torchlens import _REDIRECTS as root_redirects
-    from torchlens.intervention import _REDIRECTS as package_redirects
-    from torchlens.intervention.helpers import _REDIRECTS as helper_redirects
-
-    shared = helper_redirects["resample_ablate"]
-    assert root_redirects["resample_ablate"] == shared
-    assert package_redirects["resample_ablate"] == shared

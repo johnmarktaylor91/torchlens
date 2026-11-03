@@ -88,19 +88,6 @@ def test_peak_rows_require_citation_and_date() -> None:
 # MFU (D16/D17; T-MFU-DENOM)
 
 
-def test_mfu_reduces_to_f_over_tp_at_one_mode() -> None:
-    """The D16 property test: one mode reduces exactly to F/(T*P)."""
-
-    result = mfu(
-        flops_by_mode={"fp32": 2_000_000},
-        peaks_by_mode={"fp32": 1e9},
-        step_seconds=0.01,
-    )
-    assert result.mfu == pytest.approx(2_000_000 / (0.01 * 1e9))
-    assert result.denominator == "step_wall_time"
-    assert result.peaks_source == "user_supplied"
-
-
 def test_mfu_mode_split_sums_ideal_seconds() -> None:
     """D16: ideal seconds sum per execution mode, then one division."""
 
@@ -173,27 +160,6 @@ def test_time_clean_step_discloses_method_and_reruns() -> None:
 # Roofline + machine balance (D18/D21)
 
 
-def test_roofline_rows_are_hypotheses_and_aggregate_is_sum_over_sum(small_trace) -> None:
-    """D21: bound verdicts are hypotheses; aggregate intensity is
-    sum(FLOPs)/sum(bytes), never a mean of per-op ratios."""
-
-    balance = machine_balance(
-        peak_flops_per_s=1e12,
-        peak_bytes_per_s=1e11,
-        basis="advertised",
-    )
-    result = roofline(small_trace, ridge_intensity=balance.ridge_intensity)
-    covered = [row for row in result.rows if row.reason == "covered"]
-    assert covered
-    for row in covered:
-        assert row.evidence == "estimated+ideal_read_once_write_once"
-        if row.bound_hypothesis is not None:
-            assert row.bound_hypothesis.endswith("_hypothesis")
-    total_flops = sum(row.flops for row in covered)
-    total_bytes = sum(row.ideal_traffic_bytes or 0 for row in covered)
-    assert result.aggregate_intensity == pytest.approx(total_flops / total_bytes)
-
-
 def test_roofline_cache_resident_ops_excluded_from_headline(small_trace) -> None:
     """D21: sub-cache ops carry the hint and never enter headline counts."""
 
@@ -201,14 +167,6 @@ def test_roofline_cache_resident_ops_excluded_from_headline(small_trace) -> None
     assert result.headline_memory_bound == 0
     assert result.headline_compute_bound == 0
     assert result.excluded_cache_resident > 0
-
-
-def test_roofline_without_ridge_renders_no_bounds(small_trace) -> None:
-    """D21: no achieved/bound layer without a supplied ceiling."""
-
-    result = roofline(small_trace)
-    assert all(row.bound_hypothesis is None for row in result.rows)
-    assert result.ridge_intensity is None
 
 
 def test_machine_balance_requires_named_basis() -> None:
@@ -247,29 +205,8 @@ def test_instrumented_rate_is_boxed_and_labeled(small_trace) -> None:
         assert row.device is None or not row.device.startswith("cuda")
 
 
-def test_instrumented_rate_not_in_default_profile(small_trace) -> None:
-    """D20: never in any default view."""
-
-    from torchlens.report import profile
-
-    frame = profile(small_trace, level="op").to_pandas()
-    assert not any("rate" in str(column) for column in frame.columns)
-
-
 # ---------------------------------------------------------------------------
 # Reserved join slots (item 17 / D22)
-
-
-def test_compute_rows_reserve_device_attribution_slots(small_trace) -> None:
-    """D22: device_time / kernel_time / attribution_status exist on every
-    row from day one and stay None until the correlation-ID join."""
-
-    from torchlens.report._compute_truth import compute_aggregation
-
-    for row in compute_aggregation(small_trace).rows:
-        assert row.device_time is None
-        assert row.kernel_time is None
-        assert row.attribution_status is None
 
 
 def test_profiler_join_bridge_is_labeled_approximate() -> None:

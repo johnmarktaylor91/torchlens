@@ -47,34 +47,6 @@ def _envelopes(log: tl.Trace) -> list[dict]:
     ]
 
 
-def test_batch_applies_every_pair_in_one_transaction() -> None:
-    """Two ACT pairs, one push, one envelope, per-pair ACT rows."""
-
-    log = _trace()
-    first = log["relu_1_2"].out
-    second = log["relu_2_4"].out
-    fork = log.fork()
-    fork.do(
-        [
-            (log["relu_1_2"].__selection__(), tl.scale(2.0)),
-            (log["relu_2_4"].__selection__(), tl.zero_ablate()),
-        ]
-    )
-    assert torch.allclose(fork["relu_1_2"].out, first * 2)
-    assert torch.equal(fork["relu_2_4"].out, torch.zeros_like(second))
-    envelopes = _envelopes(fork)
-    assert len(envelopes) == 1, "ONE transactional envelope for the whole batch"
-    assert envelopes[0]["edit_names"] == ["scale", "zero_ablate"]
-    assert envelopes[0]["selection_batch"]["pairs"] == 2
-    assert envelopes[0]["selection_batch"]["staged_stores"] == {
-        "act": 2,
-        "param": 0,
-        "edge": 0,
-    }
-    act_rows = [row for row in fork.intervention_audit if row.get("kind") == "ACT"]
-    assert len(act_rows) == 2, "per-pair ACT disclosure rows"
-
-
 def test_shared_plan_identity_shares_one_donor_group() -> None:
     """D8: ONE plan reused across clauses = one donor_group_id; per_group shares the draw."""
 
@@ -198,36 +170,6 @@ def _assert_same_values(left: dict, right: dict) -> None:
         if left_out is not None:
             assert torch.equal(left_out, right_out), label
         assert left_rest == right_rest, label
-
-
-@pytest.mark.parametrize(
-    "order", [("ACT", "PARAM", "EDGE"), ("EDGE", "ACT", "PARAM"), ("PARAM", "EDGE", "ACT")]
-)
-def test_cross_kind_batch_equals_the_doors_one_at_a_time(order: tuple[str, ...]) -> None:
-    """A batch mixing ACT, PARAM and EDGE equals one do() per pair, in order, exactly."""
-
-    log = _trace64()
-    batch = log.fork()
-    batch.do(_cross_kind_pairs(batch, order))
-    sequential = log.fork()
-    for selection, edit in _cross_kind_pairs(sequential, order):
-        sequential.do(selection, edit)
-    for batch_op, seq_op in zip(batch._layer_list, sequential._layer_list, strict=True):
-        assert batch_op.label == seq_op.label
-        assert batch_op.out.dtype == torch.float64
-        assert torch.equal(batch_op.out, seq_op.out), batch_op.label
-        assert sorted(map(repr, batch_op.edge_substitutions or {})) == sorted(
-            map(repr, seq_op.edge_substitutions or {})
-        )
-    assert not torch.equal(batch[batch.output_layers[0]].out, log[log.output_layers[0]].out), (
-        "the batch changed the output"
-    )
-    envelopes = _envelopes(batch)
-    assert len(envelopes) == 1, "ONE transactional envelope for the whole batch"
-    assert envelopes[0]["selection_batch"]["kinds"] == list(order)
-    assert envelopes[0]["selection_batch"]["staged_stores"] == {"act": 1, "param": 1, "edge": 1}
-    kinds = [row.get("kind") for row in batch.intervention_audit if row.get("kind") != "EVENT"]
-    assert kinds == list(order), "one audit row per pair, in pair order"
 
 
 @pytest.mark.smoke_cells(

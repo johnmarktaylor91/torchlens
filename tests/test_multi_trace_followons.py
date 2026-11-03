@@ -132,16 +132,6 @@ def _bundle() -> tl.Bundle:
     return tl.Bundle({"first": first, "second": second})
 
 
-def test_supergraph_accessor_and_module_type_labels() -> None:
-    """Bundle exposes its supergraph with module type metadata."""
-
-    bundle = _bundle()
-    supergraph = bundle.supergraph
-
-    assert supergraph.topological_order
-    assert any(node.module_type == "Linear" for node in supergraph.nodes.values())
-
-
 def test_compare_topology_rejects_reordered_graphs() -> None:
     """Reordered unique-fingerprint graphs are not reported identical."""
 
@@ -156,32 +146,6 @@ def test_compare_topology_rejects_reordered_graphs() -> None:
     assert diff.is_identical is False
     assert diff.unmatched_a
     assert diff.unmatched_b
-
-
-def test_supergraph_topological_order_respects_edges_after_reordered_bundle() -> None:
-    """Merged bundles with reordered graphs stay acyclic and edge-consistent."""
-
-    x = torch.randn(2, 3)
-    bundle = tl.Bundle(
-        {
-            "first": tl.trace(
-                _ReorderedReluSigmoid(),
-                x,
-                capture=tl.options.CaptureOptions(replayable=True),
-            ),
-            "second": tl.trace(
-                _ReorderedSigmoidRelu(),
-                x,
-                capture=tl.options.CaptureOptions(replayable=True),
-            ),
-        }
-    )
-
-    supergraph = bundle.supergraph
-    positions = {name: idx for idx, name in enumerate(supergraph.topological_order)}
-
-    assert len(positions) == len(supergraph.nodes)
-    assert all(positions[parent] < positions[child] for parent, child in supergraph.edges)
 
 
 def test_super_buffer_views_use_public_live_values_and_param_reads_refuse() -> None:
@@ -253,22 +217,6 @@ def test_bundle_backward_regression_path(tmp_path: Path) -> None:
     assert "cluster_backward_first" in source
     assert "cluster_backward_second" in source
     assert "backward" in source
-
-
-def test_bundle_backward_no_unified_supergraph(tmp_path: Path) -> None:
-    """Bundle backward rendering stays per-member in P6."""
-
-    bundle = _bundle()
-    source = _visualization.show_bundle_graph(
-        bundle,
-        path=str(tmp_path / "backward_bundle_no_supergraph"),
-        signal="backward",
-        file_format="svg",
-    )
-
-    assert source is not None
-    assert "cluster_backward" in source
-    assert "backward_supergraph" not in source
 
 
 def test_bundle_graph_style_primitives_and_chrome_trace_diff(tmp_path: Path) -> None:

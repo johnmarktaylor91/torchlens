@@ -8901,9 +8901,6 @@ test-docstrings	tests/test_site_join.py	42
 test-docstrings	tests/test_site_key.py	033
 test-docstrings	tests/test_site_key.py	777
 test-docstrings	tests/test_site_key.py	93
-test-docstrings	tests/test_skinfill_plain_param_separation.py	12
-test-docstrings	tests/test_skinfill_plain_param_separation.py	76
-test-docstrings	tests/test_skinfill_plain_param_separation.py	8.7
 test-docstrings	tests/test_snoop_core.py	277
 test-docstrings	tests/test_snoop_core.py	554
 test-docstrings	tests/test_snoop_failure.py	2,8
@@ -9329,8 +9326,6 @@ test-docstrings	tests/test_toy_models.py	58
 test-docstrings	tests/test_trace_attr_ownership.py	45
 test-docstrings	tests/test_trace_attr_ownership.py	50
 test-docstrings	tests/test_trace_autoroute_image.py	02.4
-test-docstrings	tests/test_trace_component_ownership.py	220
-test-docstrings	tests/test_trace_component_ownership.py	60
 test-docstrings	tests/test_trace_core_substrate.py	1.0
 test-docstrings	tests/test_trace_core_substrate.py	11
 test-docstrings	tests/test_trace_core_substrate.py	14

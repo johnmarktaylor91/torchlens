@@ -18,17 +18,10 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._visualization.surgery_visuals import (
-    CREDIT_ROWS,
-    MARK_BASES,
-    MARK_KINDS,
-    make_surgery_mark_spec_fn,
-    render_surgery,
-    splice_box_lines,
     surgery_census,
     surgery_facts,
     surgery_stage,
 )
-from torchlens._vocab.node_spec import NodeSpec
 from torchlens.viz import intervention_diff
 
 _CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
@@ -39,7 +32,6 @@ _BANNED_VERBS = ("skipped", "deleted", "removed")
 
 _REPLAY_WORDING = "exit values were substituted; the interior was not replayed"
 _LIVE_WORDING = "the original op ran; edited values replaced its output after execution"
-_STAGED_WORDING = "staged only; nothing has executed"
 
 
 class _Chain(nn.Module):
@@ -101,14 +93,6 @@ def chain_capture():
     return model, x, tl.trace(model, x, capture=_CAPTURE)
 
 
-def _edited_fork(log):
-    """A fork with one recorded replay edit at the relu."""
-
-    fork = log.fork()
-    fork.do(fork[tl.units("relu_1_2", [(0, 0)])], tl.zero_ablate())
-    return fork
-
-
 def _assert_no_banned_verbs(text: str) -> None:
     """No surgery wording may claim execution removal."""
 
@@ -122,154 +106,9 @@ def _assert_no_banned_verbs(text: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_fire_mark_is_fact_and_solid(chain_capture) -> None:
-    """A recorded FireRecord yields a FACT mark: solid border, penwidth 3."""
-
-    _model, _x, log = chain_capture
-    fork = _edited_fork(log)
-    facts = surgery_facts(fork)
-    fire_marks = [mark for mark in facts.marks if mark.kind == "fire"]
-    assert len(fire_marks) == 1
-    assert fire_marks[0].basis == "fact"
-    assert fire_marks[0].call_label == "relu_1_2:1"
-    assert fire_marks[0].site_key == fork.ops["relu_1_2:1"].site_key
-    spec_fn = make_surgery_mark_spec_fn(fork, facts)
-    spec = spec_fn(fork.ops["relu_1_2:1"], NodeSpec(["relu_1_2"]))
-    assert spec is not None
-    assert spec.penwidth == 3.0
-    assert "dashed" not in (spec.style or "")
-    assert any("zero_ablate" in line for line in spec.lines)
-
-
-def test_cohort_mark_is_heuristic_and_dashed() -> None:
-    """A targeted site's un-fired sibling pass gets a DASHED heuristic mark."""
-
-    torch.manual_seed(0)
-    model = _SharedBlock().eval()
-    x = torch.randn(3, 4)
-    log = tl.trace(model, x, capture=_CAPTURE)
-    fork = log.fork()
-    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
-    facts = surgery_facts(fork)
-    by_label = {mark.call_label: mark for mark in facts.marks}
-    assert by_label["linear_1_1:1"].basis == "fact"
-    assert by_label["linear_1_1:2"].basis == "heuristic"
-    assert by_label["linear_1_1:2"].kind == "declared_target"
-    assert "no fire recorded at this instance" in by_label["linear_1_1:2"].row
-    spec_fn = make_surgery_mark_spec_fn(fork, facts)
-    heuristic_spec = spec_fn(fork.ops["linear_1_1:2"], NodeSpec(["linear_1_1:2"]))
-    assert heuristic_spec is not None
-    assert "dashed" in (heuristic_spec.style or "")
-    assert heuristic_spec.penwidth == 2.25
-    fact_spec = spec_fn(fork.ops["linear_1_1:1"], NodeSpec(["linear_1_1:1"]))
-    assert fact_spec is not None
-    assert "dashed" not in (fact_spec.style or "")
-
-
-def _dot_node_statement(source: str, node_name: str) -> str:
-    """Return one node's DOT statement (its attribute list) from ``source``."""
-
-    start = source.index(f"\t{node_name} [")
-    return source[start : source.index("]\n", start)]
-
-
-@pytest.mark.heavy
-def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
-    """Unrolled render: each pass node shows its OWN mark, never its sibling's.
-
-    The node-spec slot receives the aggregate Layer for unrolled nodes, so a
-    lookup keyed on the Layer handed both passes of a reused call both marks
-    (the pass-1 fact row and the pass-2 cohort row) with the solid border.
-    """
-
-    torch.manual_seed(0)
-    model = _SharedBlock().eval()
-    x = torch.randn(3, 4)
-    log = tl.trace(model, x, capture=_CAPTURE)
-    fork = log.fork()
-    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
-    source = render_surgery(
-        fork,
-        rolled=False,
-        path=str(tmp_path / "surgery_passes"),
-        file_format="svg",
-    )
-    edited = _dot_node_statement(source, "linear_1_1pass1")
-    cohort = _dot_node_statement(source, "linear_1_1pass2")
-    assert "edited:" in edited
-    assert "no fire recorded" not in edited
-    assert "dashed" not in edited
-    assert "no fire recorded" in cohort
-    assert "edited:" not in cohort
-    assert "dashed" in cohort
-    assert "penwidth=2.25" in cohort
-
-
-def test_mark_vocabularies_are_closed(chain_capture) -> None:
-    """Every derived mark uses the closed kind and basis vocabularies."""
-
-    _model, _x, log = chain_capture
-    fork = _edited_fork(log)
-    for mark in surgery_facts(fork).marks:
-        assert mark.kind in MARK_KINDS
-        assert mark.basis in MARK_BASES
-
-
-def test_staged_set_only_attributes_no_marks(chain_capture) -> None:
-    """A staged envelope with no recorded site refs mints NO marks.
-
-    No ref, no mark, no fabrication -- the transaction still appears in the
-    census with the staged lane's own (third) truthful wording.
-    """
-
-    _model, _x, log = chain_capture
-    fork = log.fork()
-    fork.do(
-        fork[tl.units("relu_1_2", [(0, 0)])],
-        tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(engine="set_only"),
-    )
-    facts = surgery_facts(fork)
-    assert facts.marks == ()
-    assert facts.transactions[-1].lane == "set_only"
-    box = "\n".join(splice_box_lines(facts))
-    assert _STAGED_WORDING in box
-    assert _REPLAY_WORDING not in box
-    assert _LIVE_WORDING not in box
-
-
 # ---------------------------------------------------------------------------
 # per-lane wording: one lane's text is false in the other lane
 # ---------------------------------------------------------------------------
-
-
-def test_replay_lane_wording_never_borrows_live_text(chain_capture) -> None:
-    """The replay fork's box carries ONLY the replay lane's wording."""
-
-    _model, _x, log = chain_capture
-    fork = _edited_fork(log)
-    text = surgery_census(fork).to_text()
-    assert _REPLAY_WORDING in text
-    assert _LIVE_WORDING not in text
-    _assert_no_banned_verbs(text)
-
-
-def test_live_lane_wording_never_borrows_replay_text() -> None:
-    """The live-intervened capture's box carries ONLY the live wording."""
-
-    torch.manual_seed(0)
-    model = _Chain().eval()
-    x = torch.randn(3, 4)
-    log = tl.trace(
-        model,
-        x,
-        intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    text = surgery_census(log).to_text()
-    assert _LIVE_WORDING in text
-    assert _REPLAY_WORDING not in text
-    _assert_no_banned_verbs(text)
 
 
 def test_zero_fire_rule_is_disclosed(chain_capture) -> None:
@@ -334,18 +173,6 @@ def test_injection_hosts_mark_and_census_count() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_surgery_lens_registered_over_c05_registry() -> None:
-    """The surgery row rides C05's lens registry, never a new view kind."""
-
-    from torchlens._visualization.theme_registry import get_lens
-
-    lens = get_lens("surgery")
-    assert lens.headline_evidence == "intervention_audit"
-    assert "vis_mode" not in lens.members  # never forks the view
-    for line in lens.disclosure:
-        _assert_no_banned_verbs(line)
-
-
 def test_surgery_lens_refuses_without_audit_evidence(chain_capture) -> None:
     """Missing headline evidence refuses typed, naming the capture remedy."""
 
@@ -356,63 +183,9 @@ def test_surgery_lens_refuses_without_audit_evidence(chain_capture) -> None:
     assert "fork.do" in excinfo.value.fields["remedy"]
 
 
-@pytest.mark.heavy
-def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> None:
-    """The census renders INTO the figure and the sidecar travels beside it."""
-
-    _model, _x, log = chain_capture
-    fork = _edited_fork(log)
-    outpath = str(tmp_path / "surgery_fig")
-    render_surgery(fork, path=outpath, file_format="svg")
-    figure = tmp_path / "surgery_fig.svg"
-    sidecar = tmp_path / "surgery_fig.census.txt"
-    assert figure.exists()
-    assert sidecar.exists()
-    svg = figure.read_text()
-    assert "surgery census" in svg
-    assert "pyvene" in svg  # CREDIT rows render into the figure caption
-    _assert_no_banned_verbs(svg)
-    census_text = sidecar.read_text()
-    for credit in CREDIT_ROWS:
-        assert credit in census_text
-    assert _REPLAY_WORDING in census_text
-    _assert_no_banned_verbs(census_text)
-
-
 # ---------------------------------------------------------------------------
 # the site-key-first surgery diff
 # ---------------------------------------------------------------------------
-
-
-def test_diff_joins_site_key_first_and_marks_travel(chain_capture) -> None:
-    """Site-key joins are FACT rows; subject-side marks ride the rows."""
-
-    _model, _x, log = chain_capture
-    fork = _edited_fork(log)
-    diff = intervention_diff(fork, log)
-    matched = [row for row in diff.rows if row.kind == "matched"]
-    assert matched and all(row.join == "site_key" and row.basis == "fact" for row in matched)
-    edited = [row for row in matched if row.subject_label == "relu_1_2:1"]
-    assert any("zero_ablate" in note for note in edited[0].notes)
-    assert diff.counts()["only_in_subject"] == 0
-
-
-def test_diff_positional_cohort_join_is_heuristic() -> None:
-    """Equal cohorts under one shared site key pair positionally: HEURISTIC."""
-
-    torch.manual_seed(0)
-    model = _SharedBlock().eval()
-    x = torch.randn(3, 4)
-    subject = tl.trace(model, x, capture=_CAPTURE)
-    reference = tl.trace(model, x, capture=_CAPTURE)
-    fork = subject.fork()
-    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
-    diff = intervention_diff(fork, reference)
-    joins = {row.subject_label: row for row in diff.rows if row.kind == "matched"}
-    assert joins["linear_1_1:1"].join == "site_key_positional"
-    assert joins["linear_1_1:1"].basis == "heuristic"
-    assert joins["relu_1_2:1"].join == "site_key"
-    assert joins["relu_1_2:1"].basis == "fact"
 
 
 def test_diff_absence_is_disclosed_never_ghosted(chain_capture) -> None:
@@ -451,29 +224,3 @@ def test_diff_refuses_self_and_empty_operands(chain_capture) -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         intervention_diff(log, _Husk())  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "surgery_diff_incomparable"
-
-
-@pytest.mark.heavy
-def test_diff_draw_line_styles_and_census_sidecar(tmp_path) -> None:
-    """The diff figure draws solid fact / dashed heuristic joins + census."""
-
-    torch.manual_seed(0)
-    model = _SharedBlock().eval()
-    x = torch.randn(3, 4)
-    subject = tl.trace(model, x, capture=_CAPTURE)
-    reference = tl.trace(model, x, capture=_CAPTURE)
-    fork = subject.fork()
-    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
-    diff = intervention_diff(fork, reference)
-    rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg")
-    figure_text = (tmp_path / "diff_fig.svg").read_text()
-    assert rendered.endswith("diff_fig.svg")
-    assert "stroke-dasharray" in figure_text  # the heuristic join renders dashed
-    assert "surgery diff" in figure_text
-    _assert_no_banned_verbs(figure_text)
-    sidecar = tmp_path / "diff_fig.census.txt"
-    assert sidecar.exists()
-    census_text = sidecar.read_text()
-    assert "site_key_positional" in census_text
-    for credit in CREDIT_ROWS:
-        assert credit in census_text

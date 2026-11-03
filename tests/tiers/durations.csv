@@ -1207,7 +1207,6 @@ tests/test_site_key_portability.py,8,5.55,1.09,unmarked
 tests/test_site_sweep_unit_candidates.py,4,2.01,1.09,heavy
 tests/test_sites.py,2,0.17,0.15,unmarked
 tests/test_skeleton_recipe_docs.py,5,2.95,2.89,heavy
-tests/test_skinfill_plain_param_separation.py,7,0.09,0.01,unmarked
 tests/test_skip_audit.py,15,11.61,3.94,missing
 tests/test_snoop_core.py,10,1.07,0.21,smoke
 tests/test_snoop_failure.py,10,1.66,0.38,smoke
@@ -1397,7 +1396,6 @@ tests/test_trace_autoroute_image.py,9,7.92,6.76,slow
 tests/test_trace_autoroute_input_preprocessor.py,4,1.40,1.12,slow
 tests/test_trace_autoroute_multimodal.py,5,0.31,0.10,slow
 tests/test_trace_boundary_ops_multipass.py,10,5.61,2.57,unmarked
-tests/test_trace_component_ownership.py,4,0.06,0.02,unmarked
 tests/test_trace_core_op_store.py,17,0.42,0.04,smoke
 tests/test_trace_core_substrate.py,28,4.69,1.68,smoke
 tests/test_trace_field_invariant.py,2,0.78,0.63,unmarked
