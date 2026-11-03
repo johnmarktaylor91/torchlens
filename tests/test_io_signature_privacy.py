@@ -38,7 +38,11 @@ class _SignatureModel(nn.Module):
 
 
 def _bundle_bytes(bundle: Path) -> bytes:
-    return (bundle / "metadata.pkl").read_bytes() + (bundle / "manifest.json").read_bytes()
+    """Every byte the saved artifact holds: the manifest, every record and every payload file."""
+
+    files = sorted(path for path in bundle.rglob("*") if path.is_file())
+    assert any(path.parent.name == "records" for path in files), "no record files were written"
+    return b"".join(path.read_bytes() for path in files)
 
 
 def test_home_path_never_reaches_signature_regardless_of_flag(tmp_path: Path) -> None:
