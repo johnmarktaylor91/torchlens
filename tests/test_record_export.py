@@ -132,3 +132,71 @@ def test_backward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_p
 
     _assert_round_trip(grad_fn, ["label", "class_name", "num_calls"], tmp_path)
     _assert_round_trip(grad_fn_call, ["call_index", "label"], tmp_path)
+
+
+@pytest.fixture
+def record_export_recording() -> tuple[tl.Recording, nn.Module, torch.Tensor]:
+    """Return a sparse recording of the export model with its model and input."""
+
+    torch.manual_seed(0)
+    model = _RecordExportModel()
+    x = torch.randn(2, 3)
+    return tl.record(model, x, save=tl.func("relu")), model, x
+
+
+def test_recording_to_agent_json_matches_cooked_trace(
+    record_export_recording: tuple[tl.Recording, nn.Module, torch.Tensor],
+) -> None:
+    """Recording.to_agent_json cooks through to_trace and delegates (RC-271)."""
+
+    recording, _model, _x = record_export_recording
+    card = recording.to_agent_json(max_ops=4)
+    cooked = recording.to_trace().to_agent_json(max_ops=4)
+    assert isinstance(card, dict)
+    assert card["schema"] == cooked["schema"]
+    assert set(card) == set(cooked)
+    json.dumps(card)
+
+
+def test_recording_xarray_export_cooks_first(
+    record_export_recording: tuple[tl.Recording, nn.Module, torch.Tensor],
+) -> None:
+    """tl.export.xarray accepts a Recording by cooking it (RC-271)."""
+
+    xr = pytest.importorskip("xarray")
+    recording, _model, _x = record_export_recording
+    dataset = tl.export.xarray(recording)
+    assert isinstance(dataset, xr.Dataset)
+    expected = tl.export.xarray(recording.to_trace())
+    assert list(dataset.data_vars) == list(expected.data_vars)
+
+
+def test_recording_save_round_trips_through_load(
+    record_export_recording: tuple[tl.Recording, nn.Module, torch.Tensor], tmp_path: Path
+) -> None:
+    """Recording.save writes the cooked Trace artifact that tl.load reads back (RC-271)."""
+
+    recording, _model, _x = record_export_recording
+    target = tmp_path / "recording.tlspec"
+    recording.save(target)
+    assert target.exists()
+    with pytest.raises(Exception, match="exists|overwrite"):
+        recording.save(target)
+    recording.save(target, overwrite=True)
+    loaded = tl.load(target)
+    assert isinstance(loaded, tl.Trace)
+    assert loaded.num_ops == recording.to_trace().num_ops
+
+
+def test_recording_io_save_cooks_first(
+    record_export_recording: tuple[tl.Recording, nn.Module, torch.Tensor], tmp_path: Path
+) -> None:
+    """torchlens._io.bundle.save (tl.save) accepts a Recording by cooking it (RC-271)."""
+
+    from torchlens._io.bundle import save as io_save
+
+    recording, _model, _x = record_export_recording
+    target = tmp_path / "io.tlspec"
+    io_save(recording, str(target))
+    assert target.exists()
+    assert tl.load(target).num_ops == recording.to_trace().num_ops
