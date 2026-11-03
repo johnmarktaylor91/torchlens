@@ -55,7 +55,8 @@ def test_rerun_preserves_static_layers_to_save_subset() -> None:
     log = tl.trace(
         ThreeOpModel(),
         x,
-        capture=CaptureOptions(layers_to_save=["relu"], save_args=True),
+        capture=CaptureOptions(save_args=True),
+        save=["relu"],
     )
     saved_before = _saved_op_labels(log)
     num_ops_before = len(log._layer_list)

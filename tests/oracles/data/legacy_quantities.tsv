@@ -200,10 +200,10 @@ TraceGraph.max_out_degree	int	quantity	max_out_degree	green	tests/test_edge_coun
 TraceProvenance.model_object_id	int	identifier	-	-	-	id/index/line
 TraceAutograd.num_backward_edges	int	quantity	num_backward_edges	green	tests/oracles/test_legacy_closed_forms.py::test_backward_graph_counts_match_a_raw_recount (I2)	-
 TraceGraph.num_buffer_edges	int	quantity	num_buffer_edges	green	tests/oracles/test_legacy_graph_counts.py::test_buffer_counts (I2)	-
-Trace.num_context_lines	int	identifier	-	-	-	stored source-context line count (TraceOptions.source_context_lines is its view)
+Trace.num_context_lines	int	identifier	-	-	-	stored source-context line count (TraceSettings.source_context_lines is its view)
 Trace.num_buffer_layers	int	quantity	num_buffer_layers	green	tests/oracles/test_legacy_module_counts.py::test_buffer_layer_counts (I2)	-
 TraceGraph.num_compute_edges	int	quantity	num_compute_edges	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
-TraceOptions.source_context_lines	int	identifier	-	-	-	echo of the source_context_lines option
+TraceSettings.source_context_lines	int	identifier	-	-	-	echo of the source_context_lines option
 Trace.num_edges	int	quantity	num_edges	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
 Trace.num_input_layers	int	quantity	num_input_layers	green	tests/oracles/test_legacy_graph_counts.py::test_boundary_counts (I2)	-
 TraceGraph.num_layer_edges	int	quantity	num_layer_edges	green	tests/oracles/test_legacy_graph_counts.py::test_op_and_layer_counts (I2)	-
@@ -216,7 +216,7 @@ Trace.num_params_trainable	int	quantity	num_params_trainable	green	tests/test_bu
 Trace.num_uncalled_modules	int	quantity	num_uncalled_modules	green	tests/oracles/test_legacy_graph_counts.py::test_module_call_and_param_use_counts (I2)	-
 TraceCost.overhead_duration	Duration	quantity	overhead_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 TraceCost.pinned_autograd_memory	Bytes	quantity	pinned_autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-TraceOptions.seed	int	identifier	-	-	-	seed echo
+TraceSettings.seed	int	identifier	-	-	-	seed echo
 TraceCost.saved_activation_memory	Bytes	quantity	saved_activation_memory	green	tests/test_brainpipe_byte_model.py::test_saved_activation_memory_equals_real_retained_bytes (I1)	-
 TraceCost.saved_grad_memory	Bytes	quantity	saved_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes (I2)	-
 TraceProvenance.setup_duration	Duration	quantity	setup_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-

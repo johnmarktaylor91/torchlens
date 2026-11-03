@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .._trace_selector_helpers import _selector_component_is_final_only
+from .._trace_selection_shape import _selector_component_is_final_only
 
 __all__ = ["AddressPreflight", "AddressVerdict", "address_preflight", "cone_preflight"]
 

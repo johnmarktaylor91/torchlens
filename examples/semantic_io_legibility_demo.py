@@ -172,7 +172,6 @@ def main() -> None:
         outpath = Path(tmpdir) / "semantic_io_input"
         text_trace.draw(
             path=str(outpath),
-            vis_save_only=True,
             file_format="svg",
             show_input_transform_summary=True,
         )

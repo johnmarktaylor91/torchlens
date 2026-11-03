@@ -52,8 +52,7 @@ def _traced_bands(model: nn.Module, x: torch.Tensor) -> tuple[tl.Trace, dict[str
     captured = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     return captured, dict(captured.__dict__.get("_autograd_saved_bands", {}))
 

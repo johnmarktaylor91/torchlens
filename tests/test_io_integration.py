@@ -143,8 +143,9 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     streamed_log = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
-        streaming=tl.options.StorageOptions(path=bundle_path),
+        capture=tl.options.CaptureOptions(seed=0),
+        save="all",
+        storage=tl.options.StorageOptions(path=bundle_path),
     )
     assert (bundle_path / "manifest.json").exists()
     assert (bundle_path / "metadata.pkl").exists()
@@ -180,7 +181,8 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     live_log = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True, seed=0),
+        capture=tl.options.CaptureOptions(save_args=True, seed=0),
+        save="all",
     )
 
     live_log.save(source_path, include_saved_args=True)
@@ -224,8 +226,9 @@ def test_streaming_keep_outs_in_memory_false_materializes_from_refs(
     streamed_log = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        capture=tl.options.CaptureOptions(seed=0),
+        save="all",
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
     eager_log = load(bundle_path, lazy=False)
 
@@ -249,8 +252,9 @@ def test_streaming_keep_outs_in_memory_true_keeps_tensor_and_ref(tmp_path: Path)
     streamed_log = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
+        capture=tl.options.CaptureOptions(seed=0),
+        save="all",
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
     )
 
     saved_layers = _saved_layers(streamed_log)

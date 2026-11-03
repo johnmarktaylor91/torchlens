@@ -180,12 +180,13 @@ def test_structural_hash_is_capture_option_invariant_for_metadata_options() -> N
     """Address-free hashes match across equivalent payload-retention choices."""
 
     model = _BufferedModel()
-    all_layers = tl.trace(model, _input(), capture=CaptureOptions(layers_to_save="all"))
-    metadata_only = tl.trace(model, _input(), capture=CaptureOptions(layers_to_save=None))
+    all_layers = tl.trace(model, _input(), save="all")
+    metadata_only = tl.trace(model, _input(), save=None)
     code_context = tl.trace(
         model,
         _input(),
-        capture=CaptureOptions(layers_to_save=None, save_source_context=True),
+        capture=CaptureOptions(save_source_context=True),
+        save=None,
     )
 
     assert (

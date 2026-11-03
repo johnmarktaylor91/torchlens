@@ -125,7 +125,7 @@ def test_rank_engine_renders_moduledict_double_quote_key(tmp_path: Path) -> None
     ``_dot_id``/``_dot_quote`` spliced an unescaped ``"`` into DOT text,
     producing an unterminated string that made ``neato`` fail with a real
     ``RuntimeError`` (subprocess syntax error), reachable whenever
-    ``vis_node_placement="rank"`` is used (or "auto" promotes to rank for a
+    ``layout="rank"`` is used (or "auto" promotes to rank for a
     large enough graph).
     """
     trace = tl.trace(_ModuleDictQuoteKeyModel(), torch.randn(2, 3))
@@ -133,11 +133,10 @@ def test_rank_engine_renders_moduledict_double_quote_key(tmp_path: Path) -> None
     try:
         dot = trace.draw(
             path=str(outpath),
-            vis_save_only=True,
             file_format="svg",
-            vis_node_placement="rank",
+            layout="rank",
             order_siblings=False,
-        )
+        ).dot
     finally:
         trace.cleanup()
 

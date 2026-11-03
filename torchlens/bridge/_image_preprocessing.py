@@ -26,32 +26,29 @@ def accept_image_resolution(model: Any, resolution: Any) -> tuple[Callable[[Any]
             record.source = "hf_auto_image_processor"
             record.description = f"AutoImageProcessor: {record.identifier}"
         return resolution.input_transform, record
-    raise _preprocessing_unresolved(model, record)
-
-
-def _preprocessing_unresolved(model: Any, record: Any) -> InvalidArgumentError:
-    """Build the typed ``preprocessing_unresolved`` refusal for a PIL input."""
-
     reason = record.config.get("reason") if isinstance(record.config, dict) else None
-    return InvalidArgumentError(
+    raise InvalidArgumentError(
         f"torchlens.trace: no preprocessing authority resolved for the PIL image "
         f"input to {type(model).__name__} ({reason or 'nothing resolved'}). "
         "TorchLens refuses to guess a recipe the model may not have been "
         "trained with.",
         code="preprocessing_unresolved",
-        remedy=(
-            "record the weights the model was built with, e.g. "
-            "torchlens.preprocessing.attach_authority(model, weights) (a torchvision "
-            "model is recognised on its own only when its loaded state equals exactly "
-            "one preset checkpoint already in the torch hub cache); or pass your "
-            "loader's own transform, e.g. "
-            "capture=tl.options.CaptureOptions(input_transform=weights.transforms()); "
-            "or opt in to the ImageNet default (resize 256, center-crop 224, "
-            "ImageNet mean/std) with "
-            "capture=tl.options.CaptureOptions("
-            "input_transform=torchlens.preprocessing.imagenet_default()); "
-            "or pass an already-preprocessed tensor"
-        ),
+        remedy=_UNRESOLVED_REMEDY,
         model_type=type(model).__name__,
         resolution_attempt=dict(record.config) if isinstance(record.config, dict) else {},
     )
+
+
+_UNRESOLVED_REMEDY = (
+    "record the weights the model was built with, e.g. "
+    "torchlens.preprocessing.attach_authority(model, weights) (a torchvision "
+    "model is recognised on its own only when its loaded state equals exactly "
+    "one preset checkpoint already in the torch hub cache); or pass your "
+    "loader's own transform, e.g. "
+    "capture=tl.options.CaptureOptions(input_transform=weights.transforms()); "
+    "or opt in to the ImageNet default (resize 256, center-crop 224, "
+    "ImageNet mean/std) with "
+    "capture=tl.options.CaptureOptions("
+    "input_transform=torchlens.preprocessing.imagenet_default()); "
+    "or pass an already-preprocessed tensor"
+)
