@@ -1316,42 +1316,20 @@ def _finish_format3_trace(
     trace._source_bundle_path = root
     trace._source_bundle_created_at = manifest["created_at"]
     trace._source_bundle_provenance = manifest.get("provenance")
-    _attach_run_readiness(trace, manifest.get("run"))
-    _bind_format3_runnable_payloads(
-        trace, manifest=manifest, root=root, map_location=map_location, blobs_dir=blobs_dir
+    # Contract section 7: the runnable component (descriptor and families under ``runnable/``,
+    # listed in ``manifest["runnable"]``); an analysis artifact attaches analysis-only readiness.
+    format3_runnable.attach_runnable(
+        trace,
+        root,
+        manifest.get("runnable"),
+        manifest.get("files") or {},
+        map_location=map_location,
     )
     if manifest.get("disclosures") is not None:
         format3_reader.attach_disclosure_advisory(trace, manifest["disclosures"])
     if manifest.get("intervention") is not None:
         trace._intervention_spec = _finish_format3_recipe(root)
     return trace
-
-
-def _bind_format3_runnable_payloads(
-    trace: Trace,
-    *,
-    manifest: Mapping[str, Any],
-    root: Path,
-    map_location: str | torch.device,
-    blobs_dir: Path | None,
-) -> None:
-    """Bind a 3.0 artifact's runnable payload families; an analysis artifact binds nothing."""
-
-    payloads = runnable_bind.runnable_payload_index(manifest, trace._sparse_run_descriptor)
-    if not payloads.tensors and trace._sparse_run_descriptor is None:
-        return
-    for bind in (
-        _bind_embedded_nonpersistent_buffer_payload,
-        _bind_embedded_weight_payload,
-        _bind_archived_activation_payload,
-    ):
-        bind(
-            trace,
-            manifest=payloads,
-            bundle_path=root,
-            map_location=map_location,
-            resolved_blobs_dir=blobs_dir,
-        )
 
 
 def _finish_format3_bundle(
