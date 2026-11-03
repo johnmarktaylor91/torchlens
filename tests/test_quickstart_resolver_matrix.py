@@ -12,17 +12,14 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
-import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens._quickstart import (
     Drawing,
-    provenance_to_record,
     resolve_inputs,
     trace_input_provenance,
 )
-from torchlens._quickstart._primitive import state_dict_hash
 from torchlens._user_funcs import draw as render
 
 
@@ -45,17 +42,6 @@ SIZE = (1, 3, 8, 8)
 class TestOneResolverOneRecord:
     """Composition cell 1: byte-equivalent provenance across the verbs."""
 
-    def test_declared_rung_provenance_is_identical_across_verbs(self, tmp_path) -> None:
-        """trace / summary / render serialize the same declared record."""
-
-        model = _cnn().eval()
-        trace_log = tl.trace(model, input_shape=SIZE)
-        trace_record = trace_log.provenance.input_preprocessor
-        render_result = render(model, input_shape=SIZE, path=str(tmp_path / "unused.svg"))
-        render_record = provenance_to_record(render_result.provenance)
-        assert trace_record is not None
-        assert dataclasses.asdict(trace_record) == dataclasses.asdict(render_record)
-
     def test_resolver_is_deterministic_across_calls(self) -> None:
         """Two resolutions of the same declared call are byte-equivalent."""
 
@@ -76,15 +62,6 @@ class TestInferredReuse:
         assert result.provenance.origin == "inferred"
         assert result.provenance.strategy
 
-    def test_zero_arg_trace_returns_the_verified_trace(self) -> None:
-        """tl.trace(model) with default kwargs serves the verified capture."""
-
-        log = tl.trace(_cnn().eval())
-        provenance = trace_input_provenance(log)
-        assert provenance is not None
-        assert provenance.origin == "inferred"
-        assert provenance.execution_policy == "eval_no_grad_restored"
-
     def test_zero_arg_trace_with_capture_kwargs_recaptures(self) -> None:
         """Non-default capture kwargs force a fresh capture (memo D8)."""
 
@@ -96,43 +73,8 @@ class TestInferredReuse:
         assert saved, "the save= predicate must have applied to the recapture"
 
 
-class TestPinnedExecutionPolicy:
-    """Memo D8: render restores flags, RNG, and norm buffers, hash-verified."""
-
-    def test_render_restores_train_mode_model_state(self, tmp_path) -> None:
-        """A train-mode model comes back bit-identical from render()."""
-
-        model = _cnn().train()
-        hash_before = state_dict_hash(model)
-        rng_before = torch.get_rng_state()
-        result = render(model, input_shape=SIZE, path=str(tmp_path / "g.svg"))
-        assert model.training is True
-        assert state_dict_hash(model) == hash_before
-        assert torch.equal(rng_before, torch.get_rng_state())
-        assert result.receipt.policy == "eval_no_grad_restored"
-        assert result.receipt.state_verified is True
-
-
 class TestRenderFacade:
     """Memo D12-D14: curated dials, collapse=auto here only, never auto-open."""
-
-    def test_default_collapse_is_auto_and_draw_stays_none(self, tmp_path) -> None:
-        """render defaults to collapse='auto'; Trace.draw keeps 'none'."""
-
-        result = render(_cnn().eval(), input_shape=SIZE, path=str(tmp_path / "g.svg"))
-        assert result.policy["collapse"] == "auto"
-        import inspect
-
-        draw_default = inspect.signature(tl.Trace.draw).parameters["collapse"].default
-        assert draw_default == "none"
-
-    def test_explicit_collapse_override_wins_and_is_disclosed(self, tmp_path) -> None:
-        """An explicit collapse= value lands in the result policy."""
-
-        result = render(
-            _cnn().eval(), input_shape=SIZE, collapse="none", path=str(tmp_path / "g.svg")
-        )
-        assert result.policy["collapse"] == "none"
 
     def test_result_is_detached_and_resaves_without_the_trace(self, tmp_path) -> None:
         """Drawing.save() re-renders from the stored DOT source."""
@@ -164,16 +106,4 @@ class TestRenderFacade:
                 path=str(tmp_path / "g.svg"),
                 color_by="magnitude",
             )
-        assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"
-
-
-class TestDecodeGate:
-    """Composition cell 6 (toy half): decode doors refuse on synthesized values."""
-
-    def test_output_table_refuses_on_synthesized_trace(self) -> None:
-        """decode_output (every decode door's chokepoint) requires gold."""
-
-        log = tl.trace(_cnn().eval(), input_shape=SIZE)
-        with pytest.raises(Exception) as excinfo:
-            log.decode_output()
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"

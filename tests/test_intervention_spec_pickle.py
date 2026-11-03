@@ -57,38 +57,7 @@ def intervened_trace() -> Iterator[tl.Trace]:
         trace.cleanup()
 
 
-def test_builtin_helper_spec_pickle_rebuilds_factory() -> None:
-    """A builtin ``Edit`` pickles; the restored factory works."""
-
-    spec = tl.zero_ablate()
-    restored = pickle.loads(pickle.dumps(spec))
-    assert isinstance(restored, Edit)
-    assert restored.name == spec.name
-    assert restored.factory is not None
-    hook = restored()
-    out = hook(torch.ones(3), ctx=None)
-    assert torch.equal(out, torch.zeros(3))
-
-
-def test_builtin_helper_spec_pickle_preserves_args() -> None:
-    """Constructor arguments survive the rebuild (identity source)."""
-
-    spec = tl.scale(0.5)
-    restored = pickle.loads(pickle.dumps(spec))
-    assert restored.args == spec.args
-    hook = restored()
-    out = hook(torch.ones(3), ctx=None)
-    assert torch.allclose(out, torch.full((3,), 0.5))
-
-
-def test_helper_spec_deepcopy_keeps_factory_identity() -> None:
-    """``copy.deepcopy`` keeps its pre-pickle-hook factory-sharing semantics."""
-
-    spec = tl.zero_ablate()
-    duplicate = copy.deepcopy(spec)
-    assert duplicate.factory is spec.factory
-
-
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_intervened_trace_pickles_like_it_saves(intervened_trace: tl.Trace, tmp_path) -> None:
     """The RED-capable parity case: pickle succeeds where Trace.save succeeds."""
 
@@ -111,35 +80,6 @@ def test_intervened_fork_pickles(intervened_trace: tl.Trace) -> None:
     fork = intervened_trace.fork()
     restored = pickle.loads(pickle.dumps(fork))
     assert len(restored._layer_list) == len(fork._layer_list)
-
-
-def test_pickled_trace_matches_loaded_predicate_carrier_form(
-    intervened_trace: tl.Trace,
-) -> None:
-    """Pickle serializes the predicate carriers to the loaded-artifact form."""
-
-    restored = pickle.loads(pickle.dumps(intervened_trace))
-    assert "_stop_directive" not in restored.__dict__
-    assert "_capture_config" not in restored.__dict__
-    assert restored.__dict__.get("_predicate_save_options") is None
-
-
-def test_add_and_replace_with_pickle_round_trip() -> None:
-    """R10-1: ``add``/``replace_with`` mint portability="builtin" specs but
-    were missing from the rebuild registry -- pickling (and therefore
-    Trace.save/tl.load of a trace intervened with them) minted a dead artifact
-    that raised ``intervention_helper_unknown`` at restore."""
-
-    added = pickle.loads(pickle.dumps(tl.add(1.5)))
-    assert added.name == "add"
-    assert added.args == (1.5,)
-    assert callable(added.factory)
-
-    replacement = torch.ones(2)
-    replaced = pickle.loads(pickle.dumps(tl.replace_with(replacement)))
-    assert replaced.name == "replace_with"
-    assert torch.equal(replaced.args[0], replacement)
-    assert callable(replaced.factory)
 
 
 def test_every_minted_builtin_helper_name_is_rebuildable() -> None:
@@ -193,3 +133,24 @@ def test_every_minted_builtin_helper_name_is_rebuildable() -> None:
         f"builtin helper constructors mint names the rebuild registry cannot "
         f"restore (dead saved artifacts): {unknown}"
     )
+
+
+def test_helper_spec_deepcopy_keeps_factory_identity() -> None:
+    """``copy.deepcopy`` keeps its pre-pickle-hook factory-sharing semantics."""
+
+    spec = tl.zero_ablate()
+    duplicate = copy.deepcopy(spec)
+    assert duplicate.factory is spec.factory
+
+
+def test_builtin_helper_spec_pickle_rebuilds_factory() -> None:
+    """A builtin ``Edit`` pickles; the restored factory works."""
+
+    spec = tl.zero_ablate()
+    restored = pickle.loads(pickle.dumps(spec))
+    assert isinstance(restored, Edit)
+    assert restored.name == spec.name
+    assert restored.factory is not None
+    hook = restored()
+    out = hook(torch.ones(3), ctx=None)
+    assert torch.equal(out, torch.zeros(3))

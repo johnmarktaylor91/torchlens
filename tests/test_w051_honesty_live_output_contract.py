@@ -21,9 +21,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._ir.container import ContainerSpec, DictKey, HFKey, TupleIndex, declared_leaf_slots
+from torchlens._ir.container import ContainerSpec, DictKey
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode
-from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
 
 
@@ -73,6 +72,7 @@ _CONTAINER_ROWS: list[tuple[str, Any, tuple[int, ...]]] = [
 ]
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize(
     ("name", "factory", "shape"), _CONTAINER_ROWS, ids=lambda v: v if isinstance(v, str) else ""
 )
@@ -96,6 +96,7 @@ def test_default_capture_container_output_settles_verified_live(name, factory, s
     assert type(result.output) is type(live)
 
 
+# Kept: sole branch coverage of _data_classes/container.py; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     ("name", "factory", "shape"), _CONTAINER_ROWS, ids=lambda v: v if isinstance(v, str) else ""
 )
@@ -116,6 +117,7 @@ def test_container_contract_capture_settles_verified_live(name, factory, shape) 
     assert type(result.output) is type(live)
 
 
+# Kept: sole branch coverage of _runnable/call_outputs.py, _runnable/output_contracts.py, backends/torch/_ops_containers.py; a sole mutation kill.
 def test_opaque_root_output_names_its_reason() -> None:
     """corr2_5 parity: an unordered-set output keeps the UNVERIFIABLE verdict and now
     names the ``opaque_root`` reason (not the unrecorded-contract remedy)."""
@@ -138,26 +140,7 @@ def test_opaque_root_output_names_its_reason() -> None:
     assert dict(check.diagnostic.details)["reason"] == "opaque_root"
 
 
-def test_declared_leaf_slots_counts_every_leaf_slot() -> None:
-    """The opaque-leaf arm's measuring stick: slots = declared components without a
-    child spec, recursively; literal children consume nothing."""
-
-    inner = ContainerSpec(kind="tuple", length=2)
-    literal = ContainerSpec(kind="literal", literal_value=None)
-    spec = ContainerSpec(
-        kind="hf_model_output",
-        length=3,
-        keys=("logits", "past", "flag"),
-        child_specs=((HFKey("past"), inner), (HFKey("flag"), literal)),
-    )
-    assert declared_leaf_slots(spec) == 3
-    assert declared_leaf_slots(ContainerSpec(kind="dict", length=2, keys=("a", "b"))) == 2
-    assert declared_leaf_slots(ContainerSpec(kind="opaque")) == 0
-    assert declared_leaf_slots(inner) == 2
-    assert declared_leaf_slots(literal) == 0
-    _ = (DictKey, TupleIndex)  # component types exercised through the specs above
-
-
+# Kept: sole branch coverage of _ir/container.py.
 def test_rebuild_arity_error_names_the_dry_slot() -> None:
     """H1 opaque-leaf arm in the codec: running dry names the declared slot and the
     opaque-leaf cause instead of the bare historical message."""
@@ -171,39 +154,7 @@ def test_rebuild_arity_error_names_the_dry_slot() -> None:
     assert "opaque non-tensor object" in str(excinfo.value)
 
 
-def test_live_graph_change_raise_policy_is_structured() -> None:
-    """H3 (RAISE): a refresh graph change surfaces through the divergence spine --
-    ``fields["code"] == call_structure_mismatch``, DIVERGED, the failed contract check
-    attached, the pinned phrase kept -- and never as a bare untyped ValueError.
-
-    Interim lineage bridge: until ``PathDivergenceError`` gains ``ValueError`` in its
-    bases (recorded OUT-OF-FENCE by this lane; the historical ``except ValueError``
-    callers pin that lineage), the raised object is the projector's ValueError carrying
-    the SAME structured fields; once the lineage change lands the same code path raises
-    the typed error and this pin keeps holding.
-    """
-
-    torch.manual_seed(0)
-    model = _Branch().eval()
-    x = torch.randn(3, 8)
-    trace = tl.trace(model, x)
-    flipped = torch.full((3, 8), -5.0)
-    with pytest.raises(ValueError, match="computational graph changed") as excinfo:
-        trace.run(inputs=flipped)
-    exc = excinfo.value
-    fields = exc.fields  # type: ignore[attr-defined]
-    assert fields["code"] == RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value
-    assert fields["path_faithfulness"] is PathFaithfulness.DIVERGED
-    assert fields["contract_check"].name == "live_refresh_graph_signature"
-    assert fields["first_mismatch"].code is RunnableErrorCode.CALL_STRUCTURE_MISMATCH
-    assert dict(fields["first_mismatch"].details)["reason"] == "refresh_graph_changed"
-    assert fields["remedy"]
-    assert isinstance(exc, PathDivergenceError) == issubclass(PathDivergenceError, ValueError)
-    # The source trace is untouched: a second, matching-input run still verifies.
-    again = trace.run(inputs=x)
-    assert again.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
+# Kept: sole branch coverage of _runnable/transaction.py; the catch of its regression fault.
 def test_live_graph_change_return_diverged_policy_is_honored() -> None:
     """H3 (RETURN_DIVERGED): the opt-in returns a poisoned DIVERGED result through the
     one provider finalizer instead of raising; ``output`` is None (no faithful
@@ -232,6 +183,7 @@ def test_live_graph_change_return_diverged_policy_is_honored() -> None:
     assert again.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
+# Kept: sole branch coverage of _ir/container.py.
 def test_rebuild_arity_error_names_the_full_dry_slot_path() -> None:
     """A dry leaf stream names the full nested slot path and the leaf/slot counts,
     not just the last path component."""

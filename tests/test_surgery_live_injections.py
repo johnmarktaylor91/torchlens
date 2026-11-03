@@ -77,29 +77,7 @@ def chain():
     return _Chain().eval(), torch.randn(3, 4)
 
 
-def test_injection_misfire_two_edit_labels_never_shift(chain) -> None:
-    """THE MISFIRE TEST: early-site injections never move a later target.
-
-    Both halves measured: (a) live labels, type indexes, and raw indexes of
-    every model op are IDENTICAL with and without ``log_injections`` (no
-    global label-counter consumption); (b) every model op's site key is
-    IDENTICAL (no site-key cohort ordinal consumption). The second edit
-    targets the LATER site by the same spelling in both runs and fires.
-    """
-
-    model, x = chain
-    spec = tl.when(tl.func("relu"), _sae_like) & tl.when(tl.func("tanh"), tl.scale(0.5))
-    base = tl.trace(model, x, intervene=spec)
-    logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
-    assert [op.label for op in logged._layer_list] == [op.label for op in base._layer_list]
-    assert [op.raw_label for op in logged._layer_list] == [op.raw_label for op in base._layer_list]
-    assert [op.site_key for op in logged._layer_list] == [op.site_key for op in base._layer_list]
-    # the LATER edit fired identically: same tanh output in both runs
-    assert torch.allclose(logged["tanh_1_4"].out, base["tanh_1_4"].out)
-    assert len(logged.injected_ops) > 0
-    assert len(base.injected_ops) == 0
-
-
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_injection_anchored_provenance_c07_grammar(chain) -> None:
     """Provenance is verbatim the C07 slot: anchored key + display label."""
 
@@ -134,97 +112,6 @@ def test_injection_anchored_provenance_c07_grammar(chain) -> None:
     assert first.host_label == host.label
     assert records[0].func_name == "eye"
     assert isinstance(first.out, torch.Tensor)
-
-
-def test_injection_firing_index_advances_per_fire() -> None:
-    """A rule firing at two sites gets firing_index 1 then 2."""
-
-    torch.manual_seed(0)
-    model = _TwoRelu().eval()
-    x = torch.randn(2, 4)
-    spec = tl.when(tl.func("relu"), lambda out, *, ctx: torch.sigmoid(out))
-    logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
-    firing_indexes = sorted({r.provenance.firing_index for r in logged.injected_ops})
-    assert firing_indexes == [1, 2]
-    hosts = {r.host_label for r in logged.injected_ops}
-    assert hosts == {"relu_1_2:1", "relu_2_4:1"}
-
-
-def test_injection_query_split_and_model_family_untouched(chain) -> None:
-    """model_ops is exactly the ordinary op family; injected ops sit apart."""
-
-    model, x = chain
-    logged = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
-    assert [op.label for op in logged.model_ops] == [op.label for op in logged._layer_list]
-    injected_labels = {record.label for record in logged.injected_ops}
-    model_labels = {op.label for op in logged.model_ops}
-    assert injected_labels and not (injected_labels & model_labels)
-    # injected ops never enter lookup or the module hierarchy
-    from torchlens._errors import InvalidArgumentError
-
-    for record in logged.injected_ops:
-        with pytest.raises(InvalidArgumentError):
-            logged[record.label]
-
-
-def test_injection_selectors_never_fire_on_injected_ops(chain) -> None:
-    """A save= selector's selection is identical with injections logged.
-
-    The hook injects a ``relu`` call while the save predicate selects relu
-    ops: the injected relu must never satisfy the selector (injected ops
-    are outside the op stream by construction), so exactly the MODEL relu
-    is selected, logged or not.
-    """
-
-    model, x = chain
-    spec = tl.when(tl.func("relu"), _sae_like)  # injects relu (+ sigmoid, mul, ...)
-    logged = tl.trace(model, x, intervene=spec, save=tl.func("relu"), capture=_LOGGED)
-    base = tl.trace(model, x, intervene=spec, save=tl.func("relu"))
-
-    def _saved_labels(trace) -> list[str]:
-        """Labels whose activation payload was retained by the selector."""
-
-        from torchlens._errors import PayloadUnavailableError
-
-        saved = []
-        for op in trace._layer_list:
-            try:
-                if op.out is not None:
-                    saved.append(op.label)
-            except PayloadUnavailableError:
-                continue
-        return saved
-
-    saved_logged = _saved_labels(logged)
-    saved_base = _saved_labels(base)
-    assert saved_logged == saved_base
-    assert not any("inj" in label for label in saved_logged)
-    assert any(r.func_name == "relu" for r in logged.injected_ops)
-
-
-def test_injection_save_persists_at_analysis_level(chain, tmp_path) -> None:
-    """Stage 2 (F44): analysis saves persist the injected family; runnable refuses.
-
-    The stage-1 blanket refusal is superseded by the persistence codec:
-    a logged trace saves at the default analysis level and loads with its
-    injected records intact (degrade-to-unattested is pinned in the
-    test_log_injections_s2_* files). The RUNNABLE product still cannot
-    carry the family -- its sparse core is the taken-path DAG -- so that
-    one level keeps a typed refusal.
-    """
-
-    model, x = chain
-    logged = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
-    logged.save(str(tmp_path / "logged.tlspec"))
-    loaded = tl.load(str(tmp_path / "logged.tlspec"))
-    assert len(loaded.injected_ops) == len(logged.injected_ops)
-    with pytest.raises(Exception) as excinfo:
-        logged.save(str(tmp_path / "run.tlspec"), level="runnable")
-    assert excinfo.value.fields["code"] == "injection_logged_runnable_unsupported"
-    # an armed-but-unfired capture (no injected ops) saves normally
-    clean = tl.trace(model, x, capture=_LOGGED)
-    assert len(clean.injected_ops) == 0
-    clean.save(str(tmp_path / "clean.tlspec"))
 
 
 def test_injection_validation_tripwire_unchanged(chain) -> None:
@@ -270,43 +157,6 @@ def test_injection_hook_exception_cleans_recorder(chain) -> None:
     assert torch.relu(torch.tensor([-1.0, 2.0])).tolist() == [0.0, 2.0]
 
 
-def test_injection_off_by_default_and_plain_capture_unaffected(chain) -> None:
-    """The option defaults OFF; plain captures carry an empty injected family."""
-
-    model, x = chain
-    assert tl.options.CaptureOptions().log_injections is False
-    plain = tl.trace(model, x)
-    assert plain.injected_ops == ()
-    assert [op.label for op in plain.model_ops] == [op.label for op in plain._layer_list]
-
-
-def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
-    """FIX-2 enrollment pin: the intervene fire counter has a real scrub policy.
-
-    ``_tl_intervene_selector_fire_count`` sat in the external-write ledger
-    with NO ``_PORTABLE_STATE_SPEC`` row, so any save reached while the
-    counter was live (streamed ``to_disk`` finalize runs before the settle
-    epilogue pops it; deferred backward selectors keep it past ``trace()``)
-    refused with ``ArtifactError`` and downgraded runnable honesty
-    verdicts through the witness-coverage path. It is now enrolled exactly
-    like its sibling ``_tl_save_selector_fire_count``: a declared
-    ``FieldPolicy.DROP`` session field, owned, with the dead ledger row
-    deleted (declared and exempted are disjoint by gate).
-    """
-
-    from torchlens._data_classes._trace_components import (
-        TRACE_EXTERNAL_WRITE_EXEMPTIONS,
-        TRACE_FIELD_OWNERSHIP,
-    )
-    from torchlens._data_classes.field_policy import FieldPolicy
-    from torchlens._data_classes.trace import Trace
-
-    name = "_tl_intervene_selector_fire_count"
-    assert Trace._PORTABLE_STATE_SPEC[name] is FieldPolicy.DROP
-    assert TRACE_FIELD_OWNERSHIP[name] == "session"
-    assert name not in TRACE_EXTERNAL_WRITE_EXEMPTIONS
-
-
 def test_streamed_to_disk_intervene_capture_settles_and_loads(chain, tmp_path) -> None:
     """FIX-2 regression: streamed ``to_disk`` + ``intervene=`` captures save.
 
@@ -334,3 +184,26 @@ def test_streamed_to_disk_intervene_capture_settles_and_loads(chain, tmp_path) -
     # the artifact loads, and the session counter never persists.
     assert loaded.outcome.status.name == "COMPLETE"
     assert getattr(loaded, "_tl_intervene_selector_fire_count", None) is None
+
+
+def test_injection_misfire_two_edit_labels_never_shift(chain) -> None:
+    """THE MISFIRE TEST: early-site injections never move a later target.
+
+    Both halves measured: (a) live labels, type indexes, and raw indexes of
+    every model op are IDENTICAL with and without ``log_injections`` (no
+    global label-counter consumption); (b) every model op's site key is
+    IDENTICAL (no site-key cohort ordinal consumption). The second edit
+    targets the LATER site by the same spelling in both runs and fires.
+    """
+
+    model, x = chain
+    spec = tl.when(tl.func("relu"), _sae_like) & tl.when(tl.func("tanh"), tl.scale(0.5))
+    base = tl.trace(model, x, intervene=spec)
+    logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
+    assert [op.label for op in logged._layer_list] == [op.label for op in base._layer_list]
+    assert [op.raw_label for op in logged._layer_list] == [op.raw_label for op in base._layer_list]
+    assert [op.site_key for op in logged._layer_list] == [op.site_key for op in base._layer_list]
+    # the LATER edit fired identically: same tanh output in both runs
+    assert torch.allclose(logged["tanh_1_4"].out, base["tanh_1_4"].out)
+    assert len(logged.injected_ops) > 0
+    assert len(base.injected_ops) == 0

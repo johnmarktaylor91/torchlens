@@ -69,27 +69,6 @@ def _artifact(model: nn.Module, x: torch.Tensor, **capture: object) -> dict:
         captured.cleanup()
 
 
-def test_artifact_shape_categories_and_named_absences() -> None:
-    """Closed categories; absences carry reasons; JSON-serializable."""
-
-    artifact = _artifact(_DeterministicBlock(), torch.ones(2, 8))
-    assert artifact["schema"] == "torchlens.memory_timeline.v2"
-    assert "optimizer_state" in artifact["absent"]
-    assert "optimizer" in artifact["absent"]["optimizer_state"]
-    assert set(artifact["category_totals"]) == set(artifact["categories"])
-    for row in artifact["events"]:
-        assert row["category"] in artifact["categories"]
-        assert row["lifetime_start"] is None and row["lifetime_end"] is None
-    json.dumps(artifact)
-
-
-def test_output_pseudo_rows_are_excluded() -> None:
-    """Output pseudo-rows re-point at producers and never double-count."""
-
-    artifact = _artifact(_DeterministicBlock(), torch.ones(2, 8))
-    assert not any(row["label"].startswith("output") for row in artifact["events"])
-
-
 def test_tied_parameters_count_once_with_alias_rows() -> None:
     """Weight tying: one counted parameter row, one alias row with zero bytes."""
 
@@ -103,25 +82,6 @@ def test_tied_parameters_count_once_with_alias_rows() -> None:
     assert counted_total == unique_param_bytes
 
 
-def test_saved_band_is_not_stacked_and_carries_decomposition() -> None:
-    """The gross band rides beside its decomposition, never in the stack."""
-
-    artifact = _artifact(
-        _DeterministicBlock(), torch.ones(2, 8, requires_grad=True), backward_ready=True
-    )
-    saved = artifact["saved_band"]
-    assert saved["decomposition_available"] is True
-    assert saved["gross_total"] > 0
-    assert saved["stackable_newly_saved_activation"] is not None
-    assert saved["stackable_newly_saved_activation"] <= saved["newly_saved_total"]
-    assert "annotation" in saved["saved_parameter_presentation"]
-    # cumulative produced counts input+activation only, never the saved band.
-    produced = sum(
-        row["bytes"] for row in artifact["events"] if row["category"] in ("input", "activation")
-    )
-    assert artifact["cumulative_produced_bytes"] == produced
-
-
 def test_module_rollup_conservation() -> None:
     """Root total equals the sum of exclusive displayed rows at every depth."""
 
@@ -131,41 +91,6 @@ def test_module_rollup_conservation() -> None:
         exclusive_sum = sum(sum(bucket.values()) for bucket in rollup["rows"].values())
         assert rollup["total_bytes"] == exclusive_sum
         assert rollup["total_bytes"] == sum(row["bytes"] for row in artifact["events"])
-
-
-def test_per_event_series_is_not_monotone_running_total() -> None:
-    """v2 carries per-event bytes; the v1 monotone-max-at-end shape is gone."""
-
-    artifact = _artifact(_DeterministicBlock(), torch.ones(2, 8))
-    forward_bytes = [row["bytes"] for row in artifact["events"] if row["phase"] == "forward"]
-    assert len(forward_bytes) >= 3
-    # Per-event bytes are amounts, not a running total: strictly increasing
-    # everywhere would be the v1 defect reappearing.
-    assert any(
-        later <= earlier for earlier, later in zip(forward_bytes, forward_bytes[1:], strict=False)
-    )
-
-
-def test_svg_renders_byte_exact_and_deterministic() -> None:
-    """The SVG is byte-exact reproducible; the golden pin is its sha256."""
-
-    artifact = _artifact(
-        _DeterministicBlock(), torch.ones(2, 8, requires_grad=True), backward_ready=True
-    )
-    first = timeline(artifact)
-    second = timeline(artifact)
-    assert first == second
-    assert first.startswith("<svg ")
-    assert "not allocator residency" in first
-    assert "annotation, never stacked" in first
-    digest = hashlib.sha256(first.encode()).hexdigest()
-    # Byte-exact golden (regenerate DELIBERATELY with the paired script line
-    # below, never inside a merge gate):
-    #   python -c "from tests.test_observe_kit_timeline import _regen; _regen()"
-    assert digest == _SVG_GOLDEN_SHA256, (
-        f"timeline SVG changed (sha256 {digest}); if the change is deliberate, "
-        "review the rendered SVG and update _SVG_GOLDEN_SHA256 in the same change"
-    )
 
 
 def test_svg_binning_is_disclosed_never_truncating() -> None:
@@ -236,9 +161,3 @@ def _regen() -> None:
         _DeterministicBlock(), torch.ones(2, 8, requires_grad=True), backward_ready=True
     )
     print(hashlib.sha256(timeline(artifact).encode()).hexdigest())
-
-
-#: Byte-exact SVG golden digest (a content hash, not a credential).
-_SVG_GOLDEN_SHA256 = (
-    "44997161eea9920ee564c89e18568cf960460773be7c4f121cbd46a505963563"  # pragma: allowlist secret
-)

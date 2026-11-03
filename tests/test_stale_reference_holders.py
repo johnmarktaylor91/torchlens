@@ -39,17 +39,13 @@ from collections.abc import Callable, Iterator
 import pytest
 import torch
 from _forward_stash import stashed
-from _stale_holders import forward_runs
 from torch import nn
 
 import torchlens as tl
 from torchlens._errors import CaptureGapWarning
-from torchlens.backends.torch import rescue
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
-from torchlens.types import AttributeWrite
 
 _PROVENANCE = "no graph/source provenance"
 _Acts = namedtuple("_Acts", ["first"])
@@ -176,26 +172,6 @@ class _BoxHolder(nn.Module):
         return self.box.fn(x)
 
 
-class _Counted(nn.Module):
-    """Root wrapper counting how many times the capture ran the forward.
-
-    The count is a forward-time write, so a default (pure-observer) capture
-    restores ``calls`` to ``[0]`` and the count is read from the trace record
-    (``tests/_stale_holders.py::forward_runs``).
-    """
-
-    def __init__(self, inner: nn.Module) -> None:
-        super().__init__()
-        self.inner = inner
-        self.calls = [0]
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Count, then delegate."""
-
-        self.calls[0] += 1
-        return self.inner(x)
-
-
 def _module_global_module(env: types.SimpleNamespace) -> nn.Module:
     """``from torch.nn.functional import gelu`` in a defining module, called in forward."""
 
@@ -225,47 +201,7 @@ _HOLDERS: dict[str, Callable[[types.SimpleNamespace], nn.Module]] = {
 _UNREBINDABLE = frozenset({"custom_object"})
 
 
-@pytest.mark.parametrize("holder", sorted(set(_HOLDERS) - _UNREBINDABLE))
-def test_rebindable_stale_reference_captures_in_one_forward(
-    raw: types.SimpleNamespace, holder: str
-) -> None:
-    """Each reachable holder shape is rebound for the capture: one forward, no warning."""
-
-    model = _Counted(_Holder(_HOLDERS[holder](raw)))
-    wrap_torch()
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", UserWarning)
-        trace = tl.trace(model, torch.randn(2, 4))
-
-    assert forward_runs(trace, model) == 1
-    assert "gelu" in [op.func_name for op in trace.ops]
-    assert "internalsource" not in [layer.type for layer in trace._layer_list]
-    assert trace._rescue_rerun is None
-    assert trace.provenance.verified is not False
-
-
-@pytest.mark.parametrize("holder", sorted(_UNREBINDABLE))
-def test_unrebindable_stale_reference_is_disclosed_and_rescued(
-    raw: types.SimpleNamespace, holder: str
-) -> None:
-    """A holder the rebind cannot reach keeps the disclosure and the rescue forward."""
-
-    model = _Counted(_Holder(_HOLDERS[holder](raw)))
-    wrap_torch()
-    with pytest.warns(UserWarning, match=r"adopted at module exit inner\.act"):
-        trace = tl.trace(model, torch.randn(2, 4))
-
-    # Two forwards ran (the disclosure says so), but the re-run started from the
-    # pre-capture attributes, so the record holds ONE forward's write.
-    assert forward_runs(trace, model) == 1
-    assert "gelu" in [op.func_name for op in trace.ops]
-    assert "internalsource" not in [layer.type for layer in trace._layer_list]
-    assert trace._rescue_rerun is not None and trace._rescue_rerun["recovered"] is True
-    assert trace._rescue_rerun["forward_runs"] == 2
-    assert trace.provenance.verified is False
-    assert trace.provenance.verification_reason == "mode_rescue_rerun"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_held_refs_capture.py, campaign mutant kills.
 def test_capture_leaves_every_held_reference_identical(raw: types.SimpleNamespace) -> None:
     """The rebind is undone at cleanup: the same objects sit in the same slots."""
 
@@ -322,71 +258,7 @@ class _Linear4(nn.Module):
         return self.back(self.holder(x))
 
 
-@pytest.mark.heavy
-@pytest.mark.parametrize(
-    ("act_name", "class_name"), [("gelu", "GELUActivation"), ("gelu_pytorch_tanh", "GELUTanh")]
-)
-def test_transformers_activation_built_before_capture_needs_no_rescue(
-    raw: types.SimpleNamespace, act_name: str, class_name: str
-) -> None:
-    """The real transformers activations, built pre-wrap: one forward, no warning, untouched."""
-
-    pytest.importorskip("transformers")
-    from transformers import activations
-
-    act = activations.get_activation(act_name)
-    assert type(act).__name__ == class_name
-    held_before = act.act
-    model = _Counted(_Holder(act))
-    wrap_torch()
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", UserWarning)
-        trace = tl.trace(model, torch.randn(2, 4))
-
-    assert forward_runs(trace, model) == 1
-    assert [op.func_name for op in trace.ops].count("gelu") == 1
-    assert trace._rescue_rerun is None
-    assert act.act is held_before
-
-
-def test_held_reference_is_restored_when_the_forward_raises(
-    raw: types.SimpleNamespace,
-) -> None:
-    """The undo runs on a failed capture too.
-
-    Partial and closure holders are used because a failed capture also
-    releases the model, and release normalizes direct attributes and builtin
-    containers to the live wrappers (a separate, documented behavior).
-    """
-
-    gelu = raw.gelu
-
-    def invoke(v: torch.Tensor) -> torch.Tensor:
-        return gelu(v)
-
-    class Boom(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.act = functools.partial(raw.gelu)
-            self.helper = invoke
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            self.helper(self.act(x))
-            raise RuntimeError("boom")
-
-    model = Boom()
-    held = model.act
-    wrap_torch()
-    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
-        tl.trace(model, torch.randn(2, 4))
-    assert isinstance(_tce_info.value.__cause__, RuntimeError)
-
-    assert model.act is held
-    assert held.func is raw.gelu
-    assert invoke.__closure__ is not None
-    assert invoke.__closure__[0].cell_contents is gelu
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_held_refs_capture.py, campaign mutant kills.
 def test_aliased_holders_stay_aliased_during_the_capture(raw: types.SimpleNamespace) -> None:
     """One rebuilt replacement per original: ``a is b`` holds inside the forward."""
 
@@ -410,47 +282,6 @@ def test_aliased_holders_stay_aliased_during_the_capture(raw: types.SimpleNamesp
     assert model.a is held and model.b is held
 
 
-class _CounterBranchEscape(nn.Module):
-    """Takes the escaping branch only on its first call (a counter-driven branch)."""
-
-    def __init__(self, raw: types.SimpleNamespace) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 4)
-        self.act = _BoxHolder(raw.gelu)  # unrebindable holder: escapes, forces the rescue
-        self.calls = 0
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.calls += 1
-        h = self.fc(x)
-        return self.act(h) if self.calls == 1 else torch.tanh(h)
-
-
-@pytest.mark.parametrize("carry", [False, True], ids=["default", "carry_state"])
-def test_rescue_rerun_starts_from_the_pre_capture_attribute_state(
-    raw: types.SimpleNamespace, carry: bool
-) -> None:
-    """The rescue's second forward sees the attributes the first forward started from.
-
-    Without the rewind the re-run saw ``calls == 1`` left by the first forward,
-    took the other branch and returned a ``tanh`` graph no single forward from
-    the pre-capture state produces. ``carry_state=True`` ends with exactly one
-    forward's writes.
-    """
-
-    model = _CounterBranchEscape(raw)
-    wrap_torch()
-    options = {"capture": CaptureOptions(carry_state=True)} if carry else {}
-    with pytest.warns(UserWarning, match=r"adopted at module exit act"):
-        trace = tl.trace(model, torch.randn(2, 4), **options)
-
-    func_names = [op.func_name for op in trace.ops]
-    assert "gelu" in func_names and "tanh" not in func_names
-    assert trace._rescue_rerun is not None and trace._rescue_rerun["recovered"] is True
-    assert trace._rescue_rerun["forward_runs"] == 2
-    assert trace.modules["self"].attribute_writes["calls"] == AttributeWrite("replaced", 1)
-    assert model.calls == (1 if carry else 0)
-
-
 class _Editing(nn.Module):
     """Edits its holders during the forward: clears, deletes and rebinds."""
 
@@ -468,29 +299,7 @@ class _Editing(nn.Module):
         return y
 
 
-def test_default_capture_undoes_forward_time_holder_edits(raw: types.SimpleNamespace) -> None:
-    """A default capture is a pure observer: every holder is back as it was, by identity.
-
-    The rebind journal undoes only locations that still hold what it installed;
-    the observer bracket then restores every plain attribute the forward
-    changed (the cleared list and the edited dict in place, the rebound
-    attribute to its original object). The edits are read from the trace.
-    """
-
-    model = _Editing(raw)
-    items, table = model.items, model.table
-    wrap_torch()
-    trace = tl.trace(model, torch.randn(2, 4))
-
-    assert model.items is items and items == [raw.gelu]
-    assert model.table is table and table == {"op": raw.tanh, "gone": raw.relu}
-    assert model.act is raw.gelu
-    writes = trace.modules["self"].attribute_writes
-    assert writes["items"].value == []
-    assert set(writes["table"].value) == {"op"} and writes["table"].value["op"] is raw.tanh
-    assert writes["act"].value is torch.sigmoid
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_held_refs_capture.py, campaign mutant kills.
 def test_forward_time_holder_edits_are_never_clobbered_under_carry_state(
     raw: types.SimpleNamespace,
 ) -> None:
@@ -505,6 +314,7 @@ def test_forward_time_holder_edits_are_never_clobbered_under_carry_state(
     assert model.act is torch.sigmoid
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_outputs.py, campaign mutant kills.
 def test_iql_output_activation_returned_by_the_root_is_rescued(
     raw: types.SimpleNamespace,
 ) -> None:
@@ -531,182 +341,3 @@ def test_iql_output_activation_returned_by_the_root_is_rescued(
 
     assert "tanh" in [op.func_name for op in trace.ops]
     assert trace.provenance.verification_reason == "mode_rescue_rerun"
-
-
-def test_clean_module_return_stays_quiet() -> None:
-    """Negative: a wrapped activation returned from a module raises no signal."""
-
-    wrap_torch()
-    model = _Holder(_GELUActivationLike(torch.nn.functional.gelu))
-    trace = tl.trace(model, torch.randn(2, 4))
-
-    assert "gelu" in [op.func_name for op in trace.ops]
-    assert trace._rescue_rerun is None
-    assert trace.provenance.verification_reason != "mode_rescue_rerun"
-
-
-def test_foreign_callable_returned_from_a_module_stays_quiet() -> None:
-    """Negative: a user-defined (non-torch) callable composed of live ops is untouched."""
-
-    def my_gelu(v: torch.Tensor) -> torch.Tensor:
-        return v * torch.sigmoid(1.702 * v)
-
-    wrap_torch()
-    act = _GELUActivationLike(my_gelu)
-    trace = tl.trace(_Holder(act), torch.randn(2, 4))
-
-    assert trace._rescue_rerun is None
-    assert act.act is my_gelu
-
-
-def test_model_owned_tensor_returned_by_a_module_is_not_an_escape() -> None:
-    """Negative: returning a plain tensor attribute that existed before the forward."""
-
-    class ReturnsCache(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.cache = torch.ones(2, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.cache
-
-    class Outer(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.inner = ReturnsCache()
-            self.fc = nn.Linear(4, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.fc(x) + self.inner(x)
-
-    wrap_torch()
-    trace = tl.trace(Outer(), torch.randn(2, 4))
-
-    assert trace._rescue_rerun is None
-
-
-class _ReturnsOwnTensor(nn.Module):
-    """Return a tensor the module owns (a learned query or a registered buffer)."""
-
-    def __init__(self, kind: str) -> None:
-        super().__init__()
-        if kind == "parameter":
-            self.w = nn.Parameter(torch.randn(2, 3))
-        else:
-            self.register_buffer("w", torch.randn(2, 3))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return the owned tensor itself, untouched by any op."""
-
-        return self.w
-
-
-@pytest.mark.parametrize("kind", ["parameter", "buffer"])
-def test_module_returning_its_own_parameter_or_buffer_is_not_an_escape(kind: str) -> None:
-    """Negative: a returned Parameter or buffer is a known source, never a stale-ref gap.
-
-    No provenance warning (the repo's filter would make it an error), no rescue
-    re-run, and the capture is never marked unverified (a clean capture leaves
-    ``capture_verified`` unset; only a rescue or gap sets it ``False``).
-    """
-
-    class Outer(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.fc1 = nn.Linear(4, 3)
-            self.own = _ReturnsOwnTensor(kind)
-            self.fc2 = nn.Linear(3, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.fc2(self.fc1(x) + self.own(x))
-
-    wrap_torch()
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", UserWarning)
-        trace = tl.trace(Outer(), torch.randn(2, 4))
-
-    assert trace._rescue_rerun is None
-    assert trace.provenance.verified is not False
-    assert trace.provenance.verification_reason is None
-
-
-def test_opaque_module_return_is_disclosed_adopted_and_fails_validation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Negative: a genuinely opaque producer is adopted, disclosed, and fails validation.
-
-    The producer is an unpatchable C function (the stand-in for a pybind C++
-    extension; a direct ``torch.ops`` call is now recorded as an ordinary op). With
-    the rescue re-run held off, the primary capture adopts the output at module exit
-    and discloses it; the adopted output has no recorded origin (the graph misses the
-    ``x`` -> ``tanh`` edge), so forward validation fails on ``source_provenance``.
-    """
-
-    class Opaque(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch._C._VariableFunctions.tanh(x)
-
-    wrap_torch()
-    model = _Holder(Opaque())
-    x = torch.randn(2, 4)
-    with monkeypatch.context() as patch:
-        patch.setattr(rescue, "_escape_signal", lambda trace: None)
-        with pytest.warns(UserWarning, match=r"adopted at module exit act"):
-            trace = tl.trace(model, x)
-
-    assert "tanh" not in [op.func_name for op in trace.ops]
-    with pytest.warns(UserWarning, match=_PROVENANCE):
-        assert tl.validate(model, x, scope="forward") is False
-    failure = tl.validation.last_validation_failure()
-    assert failure is not None and failure.check_name == "source_provenance"
-    assert failure.extra["reasons"] == ["module_boundary_adoption"]
-
-
-def test_model_preparation_allocates_no_func_call_ids(
-    raw: types.SimpleNamespace, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Rebinding held refs during model preparation never ticks the call-id counter.
-
-    The model holds a pristine builtin (``F.gelu`` in a partial) and the
-    pristine Python ``F.relu`` that ``nn.TransformerEncoderLayer`` binds as
-    its default activation; only the forward may allocate ``func_call_id``s.
-    """
-
-    from torchlens import _state
-    from torchlens.backends.torch.backend import TorchBackend
-
-    allocated: list[int] = []
-    real_next = _state.next_func_call_id
-
-    def counting_next() -> int:
-        allocated.append(1)
-        return real_next()
-
-    during_prep: list[int] = []
-    real_prepare = TorchBackend.prepare_model_session
-
-    def counting_prepare(self: TorchBackend, session: object, model: object) -> object:
-        before = len(allocated)
-        try:
-            return real_prepare(self, session, model)
-        finally:
-            during_prep.append(len(allocated) - before)
-
-    monkeypatch.setattr(_state, "next_func_call_id", counting_next)
-    monkeypatch.setattr(TorchBackend, "prepare_model_session", counting_prepare)
-
-    class Mixed(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.act = functools.partial(raw.gelu, approximate="tanh")
-            self.encoder = nn.TransformerEncoderLayer(4, 2, dim_feedforward=8, dropout=0.0)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.act(self.encoder(x))
-
-    model = Mixed().eval()
-    wrap_torch()
-    tl.trace(model, torch.randn(2, 3, 4))
-
-    assert during_prep == [0]
-    assert allocated

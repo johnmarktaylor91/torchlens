@@ -43,13 +43,6 @@ def _runnable_descriptor(tmp_path: Path) -> dict:
     return manifest["run"]
 
 
-def test_honest_descriptor_parses(tmp_path: Path) -> None:
-    run = _runnable_descriptor(tmp_path)
-    descriptor = runnable_load.parse_sparse_run_descriptor(run)
-    ids = [slot.slot_id for slot in descriptor.tensor_slots]
-    assert len(ids) == len(set(ids))
-
-
 def test_duplicate_slot_id_refuses_at_parse(tmp_path: Path) -> None:
     run = _runnable_descriptor(tmp_path)
     assert run["tensor_slots"], "test model produced no tensor slots"

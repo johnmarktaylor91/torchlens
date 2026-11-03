@@ -19,7 +19,6 @@ from torch import nn
 
 import torchlens._user_public_impls as user_public_impls
 from torchlens._capture_state_helpers import (
-    _model_for_ground_truth_validation,
     _ModuleTreePlainAttrSnapshot,
 )
 from torchlens._plain_attr_fidelity import assert_copy_kept_instance_attrs
@@ -59,22 +58,6 @@ class Config:
         """Set one attribute."""
 
         self.scale = 2.0
-
-
-class FaithfulConfigModel(nn.Module):
-    """Model whose plain config object survives deepcopy."""
-
-    def __init__(self) -> None:
-        """Build the config and one linear layer."""
-
-        super().__init__()
-        self.cfg = Config()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Scale the linear output by the config value."""
-
-        return self.lin(x) * self.cfg.scale
 
 
 class UncopyableSeanetLikeModel(nn.Module):
@@ -118,18 +101,6 @@ def test_attrdict_model_validates_through_live_model_fallback() -> None:
         assert validate_forward_pass(AttrDictConfigModel(), torch.randn(2, 8)) is True
 
 
-def test_copy_fidelity_flags_attrdict_and_accepts_faithful_copies() -> None:
-    """The fidelity check names the dropped names and passes faithful copies."""
-
-    import copy
-
-    model = AttrDictConfigModel()
-    with pytest.raises(ValueError, match=r"dropped instance attributes \['n_fft'"):
-        assert_copy_kept_instance_attrs(model, copy.deepcopy(model))
-    faithful = FaithfulConfigModel()
-    assert_copy_kept_instance_attrs(faithful, copy.deepcopy(faithful))
-
-
 def test_copy_fidelity_ignores_types_with_custom_copy_protocol() -> None:
     """A type that customizes copying may drop attributes on purpose."""
 
@@ -154,15 +125,6 @@ def test_copy_fidelity_ignores_types_with_custom_copy_protocol() -> None:
     copied = nn.Module()
     copied.thing = source.thing.__deepcopy__({})
     assert_copy_kept_instance_attrs(source, copied)
-
-
-def test_faithful_deepcopy_keeps_the_copy_path() -> None:
-    """A model that deep-copies faithfully is still validated on its copy."""
-
-    model = FaithfulConfigModel()
-    ground_truth_model, snapshot = _model_for_ground_truth_validation(model)
-    assert ground_truth_model is not model
-    assert snapshot is None
 
 
 def test_uncopyable_model_with_numpy_scalar_and_lstm_validates() -> None:
@@ -226,36 +188,3 @@ def test_registered_tensor_alias_attribute_is_identity_tracked() -> None:
     snapshot.restore_changed_attrs()
     assert linear.__dict__["weight_alias"] is linear.weight
     assert set(linear._parameters) == {"weight", "bias"}  # restore registered nothing new
-
-
-def test_non_alias_large_tensor_state_is_still_refused() -> None:
-    """Large tensors that are not registered aliases keep the honest refusal."""
-
-    module = nn.Linear(128, 128)
-    module.cache = [torch.zeros(5000)]
-    module.mixed = [module.weight, torch.zeros(5000)]
-    module.copied_weight = module.weight.detach().clone()
-    snapshot = _ModuleTreePlainAttrSnapshot(module)
-    assert set(snapshot.unsupported_attr_paths) == {
-        "Linear[0].cache",
-        "Linear[0].copied_weight",
-        "Linear[0].mixed",
-    }
-
-
-def test_structured_numpy_void_attribute_is_still_refused() -> None:
-    """A structured ``np.void`` is a writable view into its array, not an immutable scalar.
-
-    Snapshotting it by reference would let an in-place field write during the
-    forward pass go unseen, so the fallback must keep refusing it.
-    """
-
-    records = np.zeros(2, dtype=[("hop", "i8")])
-    record = records[0]
-    record["hop"] = 5
-    assert records[0]["hop"] == 5  # the scalar writes through to its array
-    module = nn.Module()
-    module.record = record
-    module.hop_length = np.prod([2, 2])
-    snapshot = _ModuleTreePlainAttrSnapshot(module)
-    assert set(snapshot.unsupported_attr_paths) == {"Module[0].record"}

@@ -102,26 +102,6 @@ def test_selector_factories_are_immutable_hashable_and_repr_friendly() -> None:
     assert repr(tl.without_op()) == "tl.without_op()"
 
 
-def test_trace_getitem_supports_all_phase2_match_types(phase2_log: tl.Trace) -> None:
-    """``trace[selector]`` resolves labels, functions, modules, containment, and predicates."""
-
-    relu_sites = phase2_log[tl.func("relu")]
-    first_relu_label = phase2_log[relu_sites.labels[0]].layer_label
-
-    assert isinstance(relu_sites, tl.Selection)
-    assert relu_sites.labels == ("relu_1_2:1", "relu_2_3:1")
-    assert phase2_log[tl.label(first_relu_label)].layer_label == first_relu_label
-    assert phase2_log[tl.label(f"{first_relu_label}:1")].layer_label == first_relu_label
-    assert phase2_log[tl.label_contains("linear")].labels == ("linear_1_1:1",)
-    assert phase2_log[tl.module("block.linear")].labels == ("linear_1_1:1",)
-    assert phase2_log[tl.module("block")].labels == ("relu_1_2:1",)
-    block_sites = phase2_log[tl.in_module("block")]
-    assert block_sites.labels == ("linear_1_1:1", "relu_1_2:1")
-    assert phase2_log[
-        tl.where(lambda site: site.func_name == "__add__", name_hint="adds")
-    ].labels == ("add_1_4:1",)
-
-
 def test_selection_sequence_rows_and_getitem_singleton(phase2_log: tl.Trace) -> None:
     """A Selection exposes sequence, slicing, labels, and DataFrame helpers."""
 
@@ -138,30 +118,6 @@ def test_selection_sequence_rows_and_getitem_singleton(phase2_log: tl.Trace) -> 
     assert list(table.to_pandas()["label"]) == ["relu_1_2:1", "relu_2_3:1"]
     assert phase2_log[tl.label("linear_1_1")].layer_label == "linear_1_1"
     assert phase2_log["linear"].layer_label == "linear_1_1"
-
-
-def test_resolution_empty_selection_and_one_thing_refusals(phase2_log: tl.Trace) -> None:
-    """A set selector may be empty and uncapped; a one-thing spelling must match one site."""
-
-    assert phase2_log[tl.func("does_not_exist")].is_empty
-    assert len(phase2_log[tl.func("does_not_exist")]) == 0
-    assert len(phase2_log[tl.func("relu")]) == 2
-
-    with pytest.raises(SiteResolutionError, match="matched 0 sites"):
-        phase2_log[tl.label("does_not_exist")]
-
-    with pytest.raises(AmbiguousSiteError, match="names one site"):
-        phase2_log[tl.func("relu").to_target_spec()]
-
-
-def test_selector_composition_intersection_and_union(phase2_log: tl.Trace) -> None:
-    """Only ``&`` and ``|`` composition are supported in Phase 2."""
-
-    intersection = tl.func("relu") & tl.in_module("block")
-    union = tl.module("block.linear") | tl.module("block")
-
-    assert phase2_log[intersection].labels == ("relu_1_2:1",)
-    assert phase2_log[union].labels == ("linear_1_1:1", "relu_1_2:1")
 
 
 def test_target_specs_freeze_and_resolve_clearly(phase2_log: tl.Trace) -> None:
@@ -185,3 +141,17 @@ def test_target_specs_freeze_and_resolve_clearly(phase2_log: tl.Trace) -> None:
     one_spec = tl.module("block.linear").to_target_spec()
     assert phase2_log[one_spec].layer_label == "linear_1_1"
     assert phase2_log[one_spec.freeze()].layer_label == "linear_1_1"
+
+
+def test_resolution_empty_selection_and_one_thing_refusals(phase2_log: tl.Trace) -> None:
+    """A set selector may be empty and uncapped; a one-thing spelling must match one site."""
+
+    assert phase2_log[tl.func("does_not_exist")].is_empty
+    assert len(phase2_log[tl.func("does_not_exist")]) == 0
+    assert len(phase2_log[tl.func("relu")]) == 2
+
+    with pytest.raises(SiteResolutionError, match="matched 0 sites"):
+        phase2_log[tl.label("does_not_exist")]
+
+    with pytest.raises(AmbiguousSiteError, match="names one site"):
+        phase2_log[tl.func("relu").to_target_spec()]

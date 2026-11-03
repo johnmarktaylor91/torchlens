@@ -9,7 +9,6 @@ stored basis refuses at load with a code whose remedy runs.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -76,76 +75,6 @@ def _out(trace: Any) -> torch.Tensor:
     return trace[trace.output_layers[0]].out
 
 
-@pytest.mark.parametrize("rank", [1, 4])
-@pytest.mark.parametrize("verb", ["scale", "zero_ablate"])
-def test_saved_rotation_reapplies_bit_identically(tmp_path: Path, rank: int, verb: str) -> None:
-    edit = tl.scale(2.0) if verb == "scale" else tl.zero_ablate()
-    session = _edited(_ROTATION[:rank], edit)
-    loaded = _save_load(session, tmp_path / "rotation.tlspec")
-    helper = loaded.hook_specs[0].helper
-    assert helper.name == "subspace_edit" and helper.portability == "builtin"
-    assert helper.args[0].name == verb
-    reapplied = _apply(loaded)
-    assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
-    assert torch.equal(_out(reapplied), _out(session))
-
-
-@pytest.mark.parametrize("rank", [1, 4])
-def test_reloaded_interchange_equals_the_hand_das_interchange(tmp_path: Path, rank: int) -> None:
-    """``replace_with(source value)`` under the rotation is the portable DAS interchange."""
-
-    rows = _ROTATION[:rank]
-    source_value = _ready(_X_SOURCE)[_SITE].out.detach()
-    session = _edited(rows, tl.replace_with(source_value))
-    reapplied = _apply(_save_load(session, tmp_path / "interchange.tlspec"))
-    with torch.no_grad():
-        base = _MODEL.lin1(_X)
-        hand = base + (source_value @ rows.T - base @ rows.T) @ rows
-    assert torch.allclose(reapplied[_SITE].out, hand, rtol=0.0, atol=1e-12)
-    assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
-    # The same interchange through patch_from in the session (not portable: opaque_audit).
-    source = _ready(_X_SOURCE)
-    patched = _edited(rows, tl.patch_from(source))
-    assert torch.allclose(patched[_SITE].out, reapplied[_SITE].out, rtol=0.0, atol=1e-12)
-
-
-def test_reloaded_edit_keeps_the_complement_and_the_basis_provenance(tmp_path: Path) -> None:
-    rows = _ROTATION[:2]
-    session = _edited(rows, tl.scale(3.0), method="das")
-    loaded = _save_load(session, tmp_path / "provenance.tlspec")
-    kwargs = dict(loaded.hook_specs[0].helper.kwargs)
-    assert kwargs["origin"] == _ORIGIN and kwargs["method"] == "das"
-    assert kwargs["axis"] == -1
-    assert (
-        kwargs["origin_sha256"]
-        == _ready()[tl.subspace(_SITE, rows, origin=_ORIGIN)][0].provenance.source.split(
-            "basis_sha256="
-        )[1][:64]
-    )
-    assert kwargs["basis_sha256"] == _basis_digest(rows.contiguous())
-    reapplied = _apply(loaded)
-    base = _ready()[_SITE].out
-    complement = torch.eye(6, dtype=torch.float64) - rows.T @ rows
-    delta = (reapplied[_SITE].out - base).detach()
-    assert torch.allclose(delta @ complement, torch.zeros_like(delta), atol=1e-12)
-    assert not torch.allclose(reapplied[_SITE].out, base * 3.0)
-    fired = [record.edit for record in reapplied[_SITE].edits]
-    assert any(dict(helper.kwargs).get("origin") == _ORIGIN for helper in fired)
-
-
-def test_float32_rotation_round_trips_its_source_dtype(tmp_path: Path) -> None:
-    """A non-default value (a float32 learned rotation, orthonormalised) round-trips."""
-
-    learned = (_ROTATION[:3] * torch.tensor([[2.0], [1.0], [0.5]], dtype=torch.float64)).float()
-    session = _edited(learned, tl.scale(0.5))
-    loaded = _save_load(session, tmp_path / "float32.tlspec")
-    kwargs = dict(loaded.hook_specs[0].helper.kwargs)
-    assert kwargs["source_dtype"] == "float32"
-    assert kwargs["orthonormalised"] is True
-    assert kwargs["basis"].dtype == torch.float64
-    assert torch.equal(_apply(loaded)[_SITE].out, session[_SITE].out)
-
-
 def _stored(rows: torch.Tensor) -> dict[str, Any]:
     return {
         "basis": rows,
@@ -153,18 +82,6 @@ def _stored(rows: torch.Tensor) -> dict[str, Any]:
         "basis_sha256": _basis_digest(rows.contiguous()),
         "origin": _ORIGIN,
     }
-
-
-def test_older_payload_without_the_optional_fields_default_fills() -> None:
-    """Only the required fields: method, origin digest, dtype and flag default-fill."""
-
-    rows = _ROTATION[:2].contiguous()
-    rebuilt = rebuild_builtin_helper("subspace_edit", (tl.scale(2.0),), _stored(rows))
-    kwargs = dict(rebuilt.kwargs)
-    assert kwargs["method"] is None
-    assert kwargs["origin_sha256"] == kwargs["basis_sha256"]
-    assert kwargs["source_dtype"] == "float64"
-    assert kwargs["orthonormalised"] is False
 
 
 def test_previous_opaque_projection_payload_still_loads_as_a_placeholder(tmp_path: Path) -> None:
@@ -213,22 +130,6 @@ def _remedy_runs(error: InvalidArgumentError, tmp_path: Path) -> None:
     assert torch.equal(_apply(tl.io.load_intervention_spec(path))[_SITE].out, fork[_SITE].out)
 
 
-def test_tampered_basis_refuses_at_load(tmp_path: Path) -> None:
-    session = _edited(_ROTATION[:2], tl.scale(2.0))
-    path = tmp_path / "tampered.tlspec"
-    tl.io.save_intervention(session, path, level="portable")
-    spec_json = path / "spec.json"
-    text = spec_json.read_text(encoding="utf-8")
-    digest = _basis_digest(_ROTATION[:2].contiguous())
-    assert digest in text
-    spec_json.write_text(text.replace(digest, "0" * 64), encoding="utf-8")
-    with pytest.raises(Exception) as excinfo:
-        tl.io.load_intervention_spec(path)
-    error = _coded(excinfo.value)
-    assert error.fields["code"] == "subspace_spec_basis_tampered"
-    _remedy_runs(error, tmp_path)
-
-
 def test_changed_rows_refuse_as_tampered_and_non_orthonormal_rows_refuse() -> None:
     rows = _ROTATION[:2].contiguous()
     stored = _stored(rows)
@@ -274,9 +175,15 @@ def _coded(error: BaseException) -> Any:
     raise AssertionError(f"no coded error in the chain of {error!r}")
 
 
-def test_saved_spec_json_carries_the_fields(tmp_path: Path) -> None:
-    path = tmp_path / "fields.tlspec"
-    tl.io.save_intervention(_edited(_ROTATION[:4], tl.scale(2.0)), path, level="portable")
-    text = json.dumps(json.loads((path / "spec.json").read_text(encoding="utf-8")))
-    for field in ("subspace_edit", "basis_sha256", "origin_sha256", "source_dtype", _ORIGIN):
-        assert field in text
+@pytest.mark.parametrize("rank", [1, 4])
+@pytest.mark.parametrize("verb", ["scale", "zero_ablate"])
+def test_saved_rotation_reapplies_bit_identically(tmp_path: Path, rank: int, verb: str) -> None:
+    edit = tl.scale(2.0) if verb == "scale" else tl.zero_ablate()
+    session = _edited(_ROTATION[:rank], edit)
+    loaded = _save_load(session, tmp_path / "rotation.tlspec")
+    helper = loaded.hook_specs[0].helper
+    assert helper.name == "subspace_edit" and helper.portability == "builtin"
+    assert helper.args[0].name == verb
+    reapplied = _apply(loaded)
+    assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
+    assert torch.equal(_out(reapplied), _out(session))

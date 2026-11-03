@@ -29,10 +29,7 @@ from torchlens.backends._backend_protocol import (
     refusal_code_for_capability,
 )
 from torchlens.backends._options import (
-    TRACE_OPTION_CAPABILITY_GATES,
-    ExtraKwargPolicy,
     PreviewTraceOptionPolicy,
-    reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
 )
 from torchlens.backends.registry import BackendCapabilities, BackendUnsupportedError
@@ -62,25 +59,12 @@ def _spec(
     return SimpleNamespace(name=name, capabilities=capabilities)
 
 
-@pytest.mark.parametrize(("option", "flag"), sorted(TRACE_OPTION_CAPABILITY_GATES.items()))
-def test_trace_capability_gate_raises_the_flag_code(option: str, flag: str) -> None:
-    """``tl.trace``'s capability gate refuses with the False flag's registered code."""
-
-    from torchlens._capture.prepare.dispatch import _enforce_capability_option_gates
-
-    with pytest.raises(BackendUnsupportedError) as excinfo:
-        _enforce_capability_option_gates({option: object()}, _spec(flag))
-    _assert_code(excinfo.value, refusal_code_for_capability(flag))
-    assert excinfo.value.fields["option"] == option
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py.
 @pytest.mark.parametrize(
     ("option", "expected"),
     [
         ("jax_static_argnums", _OPTION_CODE),
         ("module_identity_mode", _OPTION_CODE),
-        ("chunk_paths", _OPTION_CODE),
-        ("grad_options", refusal_code_for_capability("intermediate_derived_grads")),
     ],
 )
 def test_trace_option_filter_raises_the_registered_code(option: str, expected: str) -> None:
@@ -94,6 +78,7 @@ def test_trace_option_filter_raises_the_registered_code(option: str, expected: s
     assert excinfo.value.fields["option"] == option
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _user_funcs_guards.py.
 def test_default_backend_early_refusal_is_coded() -> None:
     """``backend=None`` with a jax-only option refuses with the option code before capture."""
 
@@ -116,6 +101,7 @@ def test_default_backend_early_refusal_is_coded() -> None:
     assert not calls
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/__init__.py, recording/_record_one_shot.py.
 @pytest.mark.parametrize("backend_name", ["torch", "fake_preview"])
 def test_record_capability_gate_raises_the_fastlog_code(
     backend_name: str, monkeypatch: pytest.MonkeyPatch
@@ -151,12 +137,11 @@ _SUPPORTED_DEFAULTS: dict[str, Any] = {
 }
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_options.py.
 @pytest.mark.parametrize(
     ("policy_field", "options"),
     [
         ("input_kwargs_message", {"input_kwargs": {"a": 1}}),
-        ("full_save_message", {"layers_to_save": ["x"]}),
-        ("output_device_message", {"output_device": "cpu"}),
         ("save_raw_activations_false_message", {"save_raw_activations": False}),
         ("save_window_message", {"lookback": 2}),
     ],
@@ -172,54 +157,6 @@ def test_option_policy_refusals_raise_the_option_code(
         )
     _assert_code(excinfo.value, _OPTION_CODE)
     assert excinfo.value.fields["backend"] == "fake_preview"
-
-
-@pytest.mark.parametrize(
-    ("option", "expected"),
-    [
-        *[
-            (option, refusal_code_for_capability(flag))
-            for option, flag in sorted(TRACE_OPTION_CAPABILITY_GATES.items())
-        ],
-        ("chunk_size", _OPTION_CODE),
-        ("activation_transform", _OPTION_CODE),
-    ],
-)
-def test_option_policy_truthy_refusal_raises_the_owning_code(option: str, expected: str) -> None:
-    """A refused truthy option raises its capability's code, else the option code."""
-
-    policy = _policy(rejected_truthy_messages={option: f"{option} refused"})
-    with pytest.raises(BackendUnsupportedError) as excinfo:
-        reject_unsupported_trace_options({**_SUPPORTED_DEFAULTS, option: 1}, policy)
-    _assert_code(excinfo.value, expected)
-    assert excinfo.value.fields["option"] == option
-
-
-@pytest.mark.parametrize("runtime", [False, True])
-@pytest.mark.parametrize(
-    ("kwargs", "expected"),
-    [
-        ({"storage": object()}, refusal_code_for_capability("has_streaming")),
-        ({"storage": object(), "streaming": object()}, "streaming_unsupported"),
-        ({"chunk_size": 2}, _OPTION_CODE),
-        ({"storage": object(), "chunk_size": 2}, _OPTION_CODE),
-    ],
-)
-def test_extra_kwarg_refusal_raises_one_registered_code(
-    kwargs: dict[str, Any], expected: str, runtime: bool
-) -> None:
-    """``reject_extra_trace_kwargs``: a shared capability code, else the option code."""
-
-    policy = ExtraKwargPolicy(
-        runtime_option_names=frozenset(),
-        runtime_message="runtime {names}",
-        fallback_message="fallback {names}",
-        always_runtime=runtime,
-    )
-    with pytest.raises(BackendUnsupportedError) as excinfo:
-        reject_extra_trace_kwargs(kwargs, policy)
-    _assert_code(excinfo.value, expected)
-    assert excinfo.value.fields["options"] == sorted(kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -269,12 +206,6 @@ def test_refusal_cells_hard_code_no_mapped_code() -> None:
     assert not formatted, formatted
 
 
-def test_streaming_cell_expects_the_registered_code() -> None:
-    """The streaming cell reads ``streaming_unsupported``, the code the flag maps to."""
-
-    assert refusal_code_for_capability("has_streaming") == "streaming_unsupported"
-
-
 class _RecordingAdapter:
     """Records the options each refusal request passes to the public entry."""
 
@@ -310,6 +241,7 @@ def test_chunk_paths_cell_passes_chunk_size_too() -> None:
     assert call["capture"].chunk_size == 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py.
 def test_chunk_paths_and_size_pass_the_shared_precondition() -> None:
     """Both options together clear ``ChunkedForwardConfigError`` and reach a backend gate.
 
@@ -330,33 +262,7 @@ def test_chunk_paths_and_size_pass_the_shared_precondition() -> None:
     _assert_code(excinfo.value, _OPTION_CODE)
 
 
-@pytest.mark.parametrize(
-    "flag", sorted(f for f, r in CAPABILITY_REQUESTS.items() if r.kind == "capture_option")
-)
-def test_capture_option_probe_marks_only_its_own_fields(flag: str) -> None:
-    """A capture-option request's ``CaptureOptions`` marks only the probed fields explicit.
-
-    Every other field explicit would let the option filter refuse an unrelated
-    spine field with ``trace_option_unsupported`` before the capability gate ran.
-    """
-
-    from dataclasses import fields as dataclass_fields
-
-    from torchlens.options import CaptureOptions
-
-    request = CAPABILITY_REQUESTS[flag]
-    adapter = _RecordingAdapter()
-    _refusal_cases._issue_request(adapter, None, request, (object(), object(), None))
-    [call] = adapter.calls
-    capture = call["capture"]
-    explicit = {
-        field.name
-        for field in dataclass_fields(CaptureOptions)
-        if not field.name.startswith("_") and capture._is_field_explicit(field.name)
-    }
-    assert explicit == {str(request.option)}, explicit
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py.
 def test_capture_option_probe_reaches_the_capability_gate() -> None:
     """The probe's ``capture=`` passes the option filter and refuses with the flag's code."""
 

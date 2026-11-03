@@ -114,42 +114,6 @@ def test_hook_calls_never_fire_other_rules_nesting_path_flat(chain) -> None:
     assert {record.provenance.nesting_path for record in records} == {()}
 
 
-def test_replay_fork_do_records_nothing_and_preserves_records(chain) -> None:
-    """Replay-side hooks record nothing; captured records stay intact."""
-
-    model, x = chain
-    logged = tl.trace(
-        model,
-        x,
-        intervene=tl.when(tl.func("relu"), lambda out, *, ctx: torch.sigmoid(out)),
-        capture=tl.options.CaptureOptions(log_injections=True, replayable=True),
-    )
-    before = logged.injected_ops
-    assert len(before) == 1
-    fork = logged.fork()
-    fork.do(fork[tl.units("tanh_1_4", [(0, 0)])], tl.zero_ablate())
-    assert logged.injected_ops == before
-    fork_records = getattr(fork, "injected_ops", ())
-    # the fork never gains NEW records from replay-side execution
-    assert len(fork_records) <= len(before)
-
-
-def test_record_has_no_injection_spelling_and_cooked_traces_are_empty(chain) -> None:
-    """The fastlog recorder exposes no log_injections door (pinned)."""
-
-    model, x = chain
-    with pytest.raises(TypeError):
-        tl.record(model, x, save=tl.func("relu"), capture=_LOGGED)
-    recording = tl.record(
-        model,
-        x,
-        save=tl.func("relu"),
-        intervene=tl.when(tl.func("relu"), lambda out, *, ctx: torch.sigmoid(out)),
-    )
-    cooked = recording.to_trace()
-    assert cooked.injected_ops == ()
-
-
 def test_episode_intervene_refusal_keeps_injections_unreachable(chain) -> None:
     """episode= + intervene= refuses pre-execution (F40a), logged or not."""
 

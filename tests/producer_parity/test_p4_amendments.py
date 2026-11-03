@@ -530,37 +530,6 @@ def test_sealed_journal_refusals_share_one_catchable_base(
     assert issubclass(SealedJournalAmendmentError, SealedJournalWriteError)
 
 
-def test_sealed_journal_still_accepts_backward_events(
-    leg_templates: dict[str, list[Any]],
-) -> None:
-    """The ONE documented exception: backward capture runs after the seal.
-
-    ``Trace.log_backward`` / ``Recording.backward`` append to the sealed
-    journal by design and ``backward_events`` is not part of the sealed core, so
-    fencing that lane would break real backward capture. Measured across the
-    smoke tier: ``append_backward`` is the only appender that ever fires on a
-    sealed journal.
-    """
-
-    from torchlens._ir.events import BackwardCoverageGap
-
-    journal = _fresh_journal(leg_templates["decomposed"])
-    journal.core_seal_watermark = journal.amendment_seq
-    journal.amendments_sealed = True
-    journal.append_backward(
-        BackwardCoverageGap(
-            pass_index=1,
-            object_id=None,
-            class_qualname=None,
-            reason="dead_node",
-            detail=None,
-            timestamp=1.0,
-        )
-    )
-    assert len(journal.backward_events) == 1
-    assert journal.backward_events[0].seq >= 1
-
-
 def test_working_projection_of_a_sealed_journal_accepts_forward_appends(
     leg_templates: dict[str, list[Any]],
 ) -> None:

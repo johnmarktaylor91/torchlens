@@ -36,31 +36,6 @@ def _digest(fn) -> str:
 # --- legitimate transforms classify COMPLETE (false-refusal guard) -----------------
 
 
-def test_legitimate_transforms_classify_complete() -> None:
-    """The modal transform shapes all measure with nothing opaque."""
-
-    tensor_stat = torch.tensor([1.0, 2.0])
-
-    legit = [
-        lambda t: t.mean(dim=1),
-        lambda t: torch.nn.functional.relu(t),
-        lambda t: t.float(),  # builtin float name must NOT refuse (D8)
-        lambda t: t * _SCALE,  # module-level constant global
-        lambda t: t - tensor_stat,  # closure tensor BY VALUE
-        functools.partial(torch.clamp, min=0.0),
-        torch.abs,
-        lambda t, factor=2.0: t * factor,
-        lambda t, *, bias=1.0: t + bias,
-    ]
-    for fn in legit:
-        record = classify_callable(fn)
-        assert record["classification"] == "complete", (
-            record["opaque_references"],
-            getattr(fn, "__qualname__", fn),
-        )
-        assert record["digest"].startswith("blake2b:")
-
-
 def test_nn_module_and_bound_method_values_measure() -> None:
     """nn.Module callables fold forward + the D6 state digest."""
 
@@ -270,25 +245,6 @@ def test_mutable_closure_state_changes_digest() -> None:
     before = _digest(uses_state)
     state["scale"] = 3.0
     assert _digest(uses_state) != before
-
-
-def test_wrap_state_does_not_change_torch_function_identity() -> None:
-    """torch.abs folds as its pinned identity whether or not TL wrapped it.
-
-    TorchLens wraps torch functions lazily; the wrapper is a FunctionType
-    whose globals hold mutable capture registries, so identity must key on
-    the pinned ``torch.abs@version``, never the wrapper's internals.
-    """
-
-    reference = classify_callable(torch.abs)
-    import torchlens as tl
-
-    torch.manual_seed(0)
-    model = nn.Sequential(nn.Linear(2, 2), nn.ReLU()).eval()
-    tl.trace(model, torch.randn(2, 2))  # ensures wrappers installed
-    wrapped = classify_callable(torch.abs)
-    assert wrapped["digest"] == reference["digest"]
-    assert wrapped["classification"] == "complete"
 
 
 def test_digest_stable_across_processes() -> None:

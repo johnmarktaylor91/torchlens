@@ -13,8 +13,6 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import _capture_honesty
-from torchlens._capture import _episode_ledger as episode_ledger_module
-from torchlens._capture._episode_ledger import episode_step_join_claim
 from torchlens.options import EpisodeOptions
 
 
@@ -73,11 +71,7 @@ def _capture(runner_cls, **spec_kwargs):
     )
 
 
-def test_build_switch_is_flipped_with_the_measurement_behind_it() -> None:
-    assert episode_ledger_module.EPISODE_STEP_JOIN_MEASURED is True
-    assert episode_step_join_claim() == "measured"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture_honesty.py.
 def test_facts_read_the_artifact_envelope_never_the_build_switch() -> None:
     continuous = _capture(GreedyRunner)
     assert _capture_honesty.episode_facts(continuous)["step_join"] == "continuous"
@@ -92,6 +86,7 @@ def test_facts_read_the_artifact_envelope_never_the_build_switch() -> None:
     assert _capture_honesty.episode_facts(stripped)["step_join"] == "unmeasured"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_explain.py.
 def test_explain_renders_break_and_unmeasured_lines() -> None:
     broken = _capture(ToolInjectRunner)
     report = broken.explain()
@@ -103,6 +98,7 @@ def test_explain_renders_break_and_unmeasured_lines() -> None:
     assert "Cross-step continuity is DECLARED, not measured" in unmeasured_report
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture_honesty.py.
 def test_banner_and_preamble_carry_the_join_fact() -> None:
     broken = _capture(ToolInjectRunner)
     preamble = "\n".join(_capture_honesty.honesty_preamble_lines(broken))

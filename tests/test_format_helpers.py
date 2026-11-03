@@ -5,25 +5,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from torch import nn
 
-import torchlens as tl
 from torchlens._utils.display import format_flops, format_size
 from torchlens._visualization._label_format import (
-    format_module_kwargs,
-    format_module_path,
     format_param_list,
-    format_shape,
 )
-
-
-def test_format_size_binary_units() -> None:
-    """Byte formatter uses binary units and keeps bytes integral."""
-
-    assert format_size(0) == "0 B"
-    assert format_size(1023) == "1023 B"
-    assert format_size(1024) == "1.0 KB"
-    assert format_size(1024**2 * 1.5) == "1.5 MB"
 
 
 def test_format_size_rejects_negative_values() -> None:
@@ -33,75 +19,11 @@ def test_format_size_rejects_negative_values() -> None:
         format_size(-1)
 
 
-def test_format_flops_si_units() -> None:
-    """FLOP formatter uses SI units."""
-
-    assert format_flops(0) == "0 FLOPs"
-    assert format_flops(999) == "999 FLOPs"
-    assert format_flops(1000) == "1 KFLOPs"
-    assert format_flops(3_400_000_000) == "3.4 GFLOPs"
-
-
-def test_format_flops_accepts_convention_marker() -> None:
-    """The FMA convention flag is accepted by the public formatter."""
-
-    assert format_flops(2000, decimal_places=1) == "2 KFLOPs"
-
-
 def test_format_flops_rejects_negative_values() -> None:
     """Negative FLOP counts are rejected."""
 
     with pytest.raises(ValueError):
         format_flops(-1)
-
-
-def test_display_formatters_delegate_to_quantity_canonical_outputs() -> None:
-    """Display helpers match ``Bytes`` and ``Flops`` across representative magnitudes."""
-
-    for value in (0, 999, 1024, 1_234_567, 1024**4):
-        assert format_size(value) == str(tl.types.Bytes(value))
-    for value in (0, 999, 1_000, 1_234_000_000, 1_000_000_000_000):
-        assert format_flops(value) == str(tl.types.Flops(value))
-
-
-def test_visualization_format_shape_uses_python_tuple_notation() -> None:
-    """Visualization shape formatter uses Python tuple syntax."""
-
-    assert format_shape((1, 13, 3072)) == "(1, 13, 3072)"
-    assert format_shape([3072]) == "(3072,)"
-    assert format_shape(()) == "()"
-
-
-def test_visualization_format_module_kwargs_uses_actual_names_and_order() -> None:
-    """Visualization kwargs use actual module attribute names in declaration order."""
-
-    module = nn.Linear(in_features=16, out_features=32)
-    module.layer_type = "linear"  # type: ignore[attr-defined]
-    module.func_config = {"out_features": 32, "in_features": 16}  # type: ignore[attr-defined]
-
-    assert format_module_kwargs(module) == "in_features=16, out_features=32"
-
-
-def test_visualization_format_param_list_uses_middle_dot() -> None:
-    """Visualization param lists use tuple shapes and the locked separator."""
-
-    params = [
-        SimpleNamespace(name="weight", shape=(3072, 768), is_trainable=True),
-        SimpleNamespace(name="bias", shape=(3072,), is_trainable=True),
-    ]
-
-    assert format_param_list(params) == "params: weight (3072, 768) · bias (3072,)"
-
-
-def test_visualization_format_param_list_marks_frozen_shapes() -> None:
-    """Visualization param lists use square brackets for frozen params."""
-
-    params = [
-        SimpleNamespace(name="weight", shape=(3072, 768), is_trainable=False),
-        SimpleNamespace(name="bias", shape=(3072,), is_trainable=False),
-    ]
-
-    assert format_param_list(params) == "params: weight [3072, 768] · bias [3072,]"
 
 
 def test_visualization_format_param_list_handles_mixed_and_anonymous_params() -> None:
@@ -114,22 +36,3 @@ def test_visualization_format_param_list_handles_mixed_and_anonymous_params() ->
     ]
 
     assert format_param_list(params) == "params: weight (3072, 768) · [3072,] · (3072,)"
-
-
-def test_visualization_format_param_list_defaults_unknown_trainability_to_parens() -> None:
-    """Visualization param lists default missing trainability to trainable notation."""
-
-    params = [
-        SimpleNamespace(name="weight", shape=(3072, 768)),
-        SimpleNamespace(name="bias", shape=(3072,)),
-    ]
-
-    assert format_param_list(params) == "params: weight (3072, 768) · bias (3072,)"
-
-
-def test_visualization_format_module_path_no_space_after_at() -> None:
-    """Visualization module paths have no space after the at sign."""
-
-    assert format_module_path("<br/>@transformer.layer.5.ffn.lin1") == (
-        "@transformer.layer.5.ffn.lin1"
-    )

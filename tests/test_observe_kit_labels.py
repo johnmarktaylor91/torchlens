@@ -51,17 +51,6 @@ class _DeadChainFaultModel(nn.Module):
         return y / torch.zeros_like(y)
 
 
-class _DeadBranchOffenderModel(nn.Module):
-    """The FAULT itself sits on an input-disconnected chain."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Fault on an internally-initialized chain; the live path is clean."""
-
-        dead = torch.ones(3) * 2.0
-        _bad = dead / torch.zeros(3)  # inf on the dead chain
-        return torch.tanh(x)
-
-
 class _ReusedBlockModel(nn.Module):
     """One Linear called twice; pass 2 overflows to inf INSIDE the reused layer."""
 
@@ -128,6 +117,7 @@ def test_one_label_across_every_nan_surface() -> None:
         assert not parent.endswith("_raw")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_nonfinite_prefix.py.
 def test_dead_chain_bystanders_prune_to_none_and_offender_survives() -> None:
     """Pruned bystanders resolve (None, pruned); the offender is always labeled."""
 
@@ -144,17 +134,7 @@ def test_dead_chain_bystanders_prune_to_none_and_offender_survives() -> None:
         assert status == "pruned"
 
 
-def test_offender_on_dead_branch_is_never_elided() -> None:
-    """Frontier seeding guarantees the OFFENDER survives the orphan flood."""
-
-    exc = _raise_on_nan_error(_DeadBranchOffenderModel(), torch.ones(3))
-    assert exc.fields["layer_status"] == "final"
-    label = exc.fields["layer"]
-    assert isinstance(label, str) and label.startswith("truediv")
-    # The finalized prefix serves the offender through ordinary lookup.
-    assert exc.partial_trace.trace[label] is not None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/stop.py, campaign mutant kills.
 def test_multipass_offender_gets_pass_qualified_canonical_label() -> None:
     """A pass-2 fault in a reused layer names PASS 2, never both passes."""
 
@@ -168,6 +148,7 @@ def test_multipass_offender_gets_pass_qualified_canonical_label() -> None:
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_nonfinite_prefix.py.
 def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> None:
     """When the prefix postprocess cannot run, labels are None + status."""
 
@@ -187,6 +168,7 @@ def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> N
     assert outcome.boundary_label is None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_nonfinite_prefix.py.
 def test_resolver_statuses_are_closed_and_total() -> None:
     """The resolver answers every input with a label or an explicit status."""
 

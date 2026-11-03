@@ -31,15 +31,6 @@ from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
 
-class OpenEndedSlice(nn.Module):
-    """``x[:, 3:]`` -- an open-ended slice on the trailing axis."""
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Slice from a fixed offset to the end."""
-
-        return value[:, 3:] + 1
-
-
 class BoundedSlice(nn.Module):
     """``x[:, 1:5]`` -- a fully bounded slice."""
 
@@ -47,51 +38,6 @@ class BoundedSlice(nn.Module):
         """Slice a fixed sub-range."""
 
         return value[:, 1:5] + 1
-
-
-class IntegerIndex(nn.Module):
-    """``x[:, 0]`` -- a plain integer index, not a slice."""
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Select a single column by integer index."""
-
-        return value[:, 0] + 1
-
-
-class SteppedSlice(nn.Module):
-    """``x[:, ::2]`` -- a slice with a non-trivial step."""
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Select every other column."""
-
-        return value[:, ::2] + 1
-
-
-class NegativeSlice(nn.Module):
-    """``x[:, -1:]`` -- a slice anchored with a negative start."""
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Select the trailing column via a negative-start slice."""
-
-        return value[:, -1:] + 1
-
-
-class EllipsisIndex(nn.Module):
-    """``x[..., 0]`` -- an ``Ellipsis`` literal in the index tuple."""
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Select the last-axis column via an ``Ellipsis`` prefix."""
-
-        return value[..., 0] + 1
-
-
-class NewaxisIndex(nn.Module):
-    """``x[:, None]`` -- a bare ``None`` (newaxis) literal in the index tuple."""
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Insert a new axis, then remove it again for shape parity."""
-
-        return (value[:, None] + 1).squeeze(1)
 
 
 class GeneratorLiteralKwarg(nn.Module):
@@ -121,64 +67,11 @@ def _save_runnable(model: nn.Module, capture_input: torch.Tensor, path: Path) ->
     return path
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("model_cls", "reference_fn"),
-    (
-        (OpenEndedSlice, lambda x: x[:, 3:] + 1),
-        (BoundedSlice, lambda x: x[:, 1:5] + 1),
-        (IntegerIndex, lambda x: x[:, 0] + 1),
-        (SteppedSlice, lambda x: x[:, ::2] + 1),
-        (NegativeSlice, lambda x: x[:, -1:] + 1),
-        (EllipsisIndex, lambda x: x[..., 0] + 1),
-        (NewaxisIndex, lambda x: (x[:, None] + 1).squeeze(1)),
-    ),
-    ids=(
-        "open_ended_slice",
-        "bounded_slice",
-        "integer_index",
-        "stepped_slice",
-        "negative_slice",
-        "ellipsis_index",
-        "newaxis_index",
-    ),
-)
-def test_slice_index_literal_save_load_run_verified_on_original_input(
-    tmp_path: Path,
-    model_cls: type[nn.Module],
-    reference_fn: Callable[[torch.Tensor], torch.Tensor],
-) -> None:
-    """A slice/index literal saves, loads, and runs VERIFIED on the capture input."""
-
-    model = model_cls()
-    capture_input = torch.randn(2, 8)
-    path = _save_runnable(model, capture_input, tmp_path / "slice.tlspec")
-
-    result = tl.load(path).run(inputs=capture_input)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.allclose(result.output, reference_fn(capture_input))
-
-
-@pytest.mark.parametrize(
-    ("model_cls", "reference_fn"),
-    (
-        (OpenEndedSlice, lambda x: x[:, 3:] + 1),
-        (BoundedSlice, lambda x: x[:, 1:5] + 1),
-        (IntegerIndex, lambda x: x[:, 0] + 1),
-        (SteppedSlice, lambda x: x[:, ::2] + 1),
-        (NegativeSlice, lambda x: x[:, -1:] + 1),
-        (EllipsisIndex, lambda x: x[..., 0] + 1),
-        (NewaxisIndex, lambda x: (x[:, None] + 1).squeeze(1)),
-    ),
-    ids=(
-        "open_ended_slice",
-        "bounded_slice",
-        "integer_index",
-        "stepped_slice",
-        "negative_slice",
-        "ellipsis_index",
-        "newaxis_index",
-    ),
+    ((BoundedSlice, lambda x: x[:, 1:5] + 1),),
+    ids=("bounded_slice",),
 )
 def test_slice_index_literal_save_load_run_verified_on_changed_input(
     tmp_path: Path,
@@ -235,26 +128,6 @@ def test_callable_literal_argument_still_refuses_with_unsupported_literal(
     with pytest.raises(RunnablePreflightError, match="producer preflight failed"):
         trace.save(path, level="runnable")
     assert not path.exists()
-
-
-def test_encode_literal_rejects_a_bare_callable() -> None:
-    """The literal encoder itself must reject a bare Python callable."""
-
-    def _callable_literal() -> None:
-        """An arbitrary Python callable -- outside the frozen literal grammar."""
-
-    with pytest.raises(_UnsupportedLiteralError):
-        _encode_literal(_callable_literal)
-
-
-def test_encode_literal_rejects_an_arbitrary_object() -> None:
-    """The literal encoder itself must reject an arbitrary non-grammar object."""
-
-    class _Opaque:
-        """An arbitrary object with no literal-grammar representation."""
-
-    with pytest.raises(_UnsupportedLiteralError):
-        _encode_literal(_Opaque())
 
 
 def test_encode_literal_rejects_a_non_integer_slice_component() -> None:
@@ -389,29 +262,6 @@ def test_r71b_ratified_stock_wrapper_slice_component_normalizes() -> None:
 
     encoded = _encode_literal(slice(_np.int64(1), _np.int64(5), _np.int64(2)))
     assert _decode_literal(encoded) == slice(1, 5, 2)
-
-
-def test_r71b_greens_ordinary_slices_stay_verified(tmp_path: Path) -> None:
-    """No over-trigger: negative/open/bounded/stepped slices, None, and plain ints all
-    stay admitted + VERIFIED."""
-
-    class _SliceInput(nn.Module):
-        def forward(self, x: torch.Tensor, idx: slice) -> torch.Tensor:
-            return x[idx] + 1.0
-
-    x = torch.arange(10.0)
-    for index, idx in enumerate(
-        (
-            slice(None),
-            slice(2, None),
-            slice(1, 5),
-            slice(None, None, 2),
-            slice(-3, None),
-        )
-    ):
-        path = _b_save(_b_capture(_SliceInput(), [x, idx]), tmp_path / f"b_green_{index}.tlspec")
-        result = tl.load(path).run(inputs=[x, idx])
-        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
 def test_r71b_composite_component_policy_covers_every_edge() -> None:

@@ -10,14 +10,11 @@ then ``_raw_to_final_op_labels``) name one op; a trace without them still refuse
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention._replay_cone import _final_label_key_map, _label_key_map
 from torchlens.intervention.errors import ReplayPreconditionError
 
 
@@ -83,40 +80,6 @@ def _hold_rsqrt(trace: tl.Trace) -> tl.Trace:
     return fork
 
 
-def test_replay_names_the_recorded_parent_when_labels_collide() -> None:
-    trace = _capture()
-    assert any(int(op.num_passes) > 1 for op in trace._layer_list)
-    _colliding_label(trace)
-    out = str(trace.output_layers[0])
-    fork = _hold_rsqrt(trace)
-    assert torch.equal(fork[out].out, trace[out].out)
-
-
-def test_op_lookup_prefers_the_final_label_over_a_colliding_raw_label() -> None:
-    """``trace.ops[label]`` names the op whose final label it is, not the op it was raw."""
-
-    trace = _capture()
-    key = _colliding_label(trace)
-    assert trace.ops[key].layer_label == key
-
-
-def test_cone_children_resolve_a_colliding_label_to_the_final_op() -> None:
-    """A child spelled by a final label never names the op that carried it raw.
-
-    The replay cone walks ``children``, which labeling spells in final labels.
-    The layer-wide lookup map keeps every historical spelling too, so the
-    colliding label there names both ops; the cone's final-label map names one.
-    """
-
-    trace = _capture()
-    key = _colliding_label(trace)
-    final_op = trace.ops[key]
-    raw_owner = next(op for op in trace._layer_list if str(op.raw_label) == key)
-    assert str(raw_owner.label) != str(final_op.label)
-    assert str(raw_owner.label) in _label_key_map(trace)[key]
-    assert _final_label_key_map(trace)[key] == (str(final_op.label),)
-
-
 def test_trace_without_pass_exact_maps_still_refuses() -> None:
     """An older trace (no pass-exact maps) refuses rather than guess."""
 
@@ -126,39 +89,3 @@ def test_trace_without_pass_exact_maps_still_refuses() -> None:
     trace._final_to_raw_layer_labels = {}
     with pytest.raises(ReplayPreconditionError, match="refusing to guess a pass"):
         _hold_rsqrt(trace)
-
-
-class TestTinyGemma2:
-    """AG-3's tiny random Gemma-2: holding every norm and pattern replays exactly."""
-
-    @pytest.fixture(scope="class")
-    def setup(self):
-        pytest.importorskip("transformers")
-        from tests import _ag3_fixtures as fx
-
-        model = fx.build_model(torch.float64)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            trace = tl.trace(
-                model,
-                torch.tensor([fx.TOKENS]),
-                capture=tl.options.CaptureOptions(replayable=True),
-            )
-        try:
-            yield fx, model, trace
-        finally:
-            trace.cleanup()
-
-    def test_replay_engine_holds_every_norm_and_pattern(self, setup) -> None:
-        """Holding every rsqrt and softmax at its recorded value replays exactly."""
-
-        _, _, trace = setup
-        held = [str(op.label) for op in trace if op.func_name in ("rsqrt", "softmax")]
-        assert held
-        lm = str(trace.modules["lm_head"].output_ops[0])
-        fork = trace.fork()
-        fork.do(
-            {label: tl.patch_from(trace) for label in held},
-            intervention=tl.options.InterventionOptions(engine="replay"),
-        )
-        assert torch.equal(fork[lm].out, trace[lm].out)

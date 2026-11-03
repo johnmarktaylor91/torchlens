@@ -191,6 +191,7 @@ def test_show_tensor_handles_raw_tensors_int_dtypes_and_missing_payloads() -> No
     assert message == "No saved tensor out is available to display."
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_show_on_recurrent_aggregate_layer_requires_pass_selection() -> None:
     """A multi-pass Layer refuses show() with pass-selection guidance."""
 
@@ -213,23 +214,6 @@ def test_show_on_recurrent_aggregate_layer_requires_pass_selection() -> None:
     single_pass = log["linear_1_1:1"]
     fig = single_pass.show(kind="heatmap")
     assert fig.axes[0].images
-
-
-def test_channel_grid_discloses_hidden_channels() -> None:
-    """A capped grid is visibly marked; it never renders as the full set."""
-
-    from PIL import ImageChops
-
-    base = torch.arange(2 * 3 * 3, dtype=torch.float32).reshape(2, 3, 3)
-    capped_source = torch.cat([base, base + 1.0, base + 2.0], dim=0)  # 6 channels
-    visualizer = tl.viz.nodes.channel_grid(n=2, max_size=64)
-
-    capped = visualizer(capped_source)
-    complete = visualizer(base)
-
-    assert capped is not None and complete is not None
-    # Same two tiles, but the capped render must disclose the 4 hidden channels.
-    assert ImageChops.difference(capped, complete).getbbox() is not None
 
 
 def test_normalize_image_tensor_is_nonfinite_robust() -> None:

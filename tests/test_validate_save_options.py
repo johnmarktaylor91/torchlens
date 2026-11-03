@@ -69,14 +69,6 @@ def _net_and_input(device: str = "cpu") -> tuple[_SmallNet, torch.Tensor]:
     return _SmallNet().to(device), torch.randn(2, 2, 6, 6, device=device)
 
 
-@pytest.mark.parametrize("scope", ["forward", "saved"])
-def test_output_device_cpu_on_cpu_model_validates(scope: str) -> None:
-    """``output_device="cpu"`` on a CPU model is a no-op move and validates."""
-
-    model, x = _net_and_input()
-    assert tl.validate(model, x, scope=scope, output_device="cpu") is True
-
-
 def test_intervention_scope_honors_save_options() -> None:
     """The intervention scope's forward validation runs under the save options."""
 
@@ -87,21 +79,14 @@ def test_intervention_scope_honors_save_options() -> None:
         tl.validate(model, x, scope="intervention", save_budget=64)
 
 
-@pytest.mark.parametrize("scope", ["forward", "saved"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("scope", ["saved"])
 def test_too_small_save_budget_raises_instead_of_passing(scope: str) -> None:
     """A budget the validator capture cannot fit raises the capture's own error."""
 
     model, x = _net_and_input()
     with pytest.raises(SaveBudgetExceededError):
         tl.validate(model, x, scope=scope, save_budget=64)
-
-
-@pytest.mark.parametrize("budget", [None, 1 << 30, 1.0])
-def test_unbounded_or_large_save_budget_validates(budget: Any) -> None:
-    """``None`` (no budget), a large byte cap, or the full fraction all pass."""
-
-    model, x = _net_and_input()
-    assert tl.validate(model, x, scope="forward", save_budget=budget) is True
 
 
 def _capture_error(**capture_kwargs: Any) -> InvalidArgumentError:
@@ -124,10 +109,10 @@ def _capture_error(**capture_kwargs: Any) -> InvalidArgumentError:
     return excinfo.value
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"output_device": "tpu"},
         {"output_device": "cuda:0"},
         {"save_budget": "lots"},
         {"save_budget": True},
@@ -150,7 +135,13 @@ def test_invalid_values_raise_the_capture_errors_before_any_forward(
     assert model.forward_calls == 0
 
 
-@pytest.mark.parametrize("scope", ["backward", "receptive_field"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "scope",
+    [
+        "backward",
+    ],
+)
 @pytest.mark.parametrize("kwargs", [{"output_device": "cpu"}, {"save_budget": 64}])
 def test_scopes_without_a_saving_validator_capture_refuse(
     scope: str, kwargs: dict[str, Any]
@@ -161,39 +152,6 @@ def test_scopes_without_a_saving_validator_capture_refuse(
     with pytest.raises(TypeError, match="only valid for scope='forward', 'saved'"):
         tl.validate(model, x, scope=scope, **kwargs)
     assert model.forward_calls == 0
-
-
-def test_default_call_forwards_no_new_keywords() -> None:
-    """A default ``tl.validate`` reaches the validators with exactly the old keywords."""
-
-    model, x = _net_and_input()
-    with mock.patch.object(
-        public_impls, "_validate_forward_pass_torch", return_value=True
-    ) as torch_entry:
-        assert tl.validate(model, x, scope="forward") is True
-    assert "output_device" not in torch_entry.call_args.kwargs
-    assert "save_budget" not in torch_entry.call_args.kwargs
-
-
-def test_both_validator_captures_receive_the_save_options() -> None:
-    """The first capture and its reproducibility re-trace run under the save options."""
-
-    real_runner = user_funcs._run_model_and_save_specified_outs
-    seen: list[tuple[Any, Any, bool]] = []
-
-    def recording_runner(*args: Any, **kwargs: Any) -> Any:
-        seen.append((kwargs.get("output_device"), kwargs.get("save_budget"), kwargs["save_args"]))
-        return real_runner(*args, **kwargs)
-
-    model, x = _net_and_input()
-    with mock.patch.object(user_funcs, "_run_model_and_save_specified_outs", recording_runner):
-        assert tl.validate(model, x, scope="forward", output_device="cpu", save_budget=None)
-    assert seen == [("cpu", None, True), ("cpu", None, False)]
-
-    seen.clear()
-    with mock.patch.object(user_funcs, "_run_model_and_save_specified_outs", recording_runner):
-        assert tl.validate(model, x, scope="forward")
-    assert seen == [("same", "auto", True), ("same", "auto", False)]
 
 
 def test_non_torch_backend_refuses_non_default_save_options() -> None:

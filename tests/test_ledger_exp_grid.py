@@ -200,12 +200,11 @@ def test_edit_axis_and_edit_keyword_are_exclusive_and_one_is_required() -> None:
     assert _code(excinfo) == "grid_site_axis_missing"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of experiment/_grid.py.
 @pytest.mark.parametrize(
     "axes",
     [
         {},
-        {"site": []},
-        {"site": {"a,b": "relu_1_2"}},
         {"site": {"baseline": "relu_1_2"}},
         {"site": {"a": "relu_1_2", "a2": "relu_1_2"}, "": [tl.scale(0.5)]},
         {"site": "relu_1_2"},

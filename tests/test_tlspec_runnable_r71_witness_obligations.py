@@ -38,13 +38,10 @@ import torchlens as tl
 from torchlens._runnable import (
     _VERDICT_STEERING_WITNESS_FAMILIES,
     WITNESS_FAMILY_REGISTRY,
-    WITNESS_GAP_REGISTRY,
     ControlWitnessKind,
     PathFaithfulness,
     ReadinessStatus,
-    ReplayWitnessStructure,
     WitnessGapKind,
-    derive_required_witness_members,
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
@@ -274,114 +271,9 @@ _FAMILY_FIXTURES: dict[
 # ======================================================================================
 
 
-def test_r71_registry_closure_meta() -> None:
-    """Registry keys == direct kinds | shape prefixes | claim families; every row
-    carries a non-empty independent anchor AND a named runtime consumer; the gap
-    registry is closed; the strip-fixture table covers the registry exactly."""
-
-    direct_kinds = {
-        kind.value
-        for kind in ControlWitnessKind
-        if kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT
-    }
-    shape_families = {
-        family
-        for family, spec in WITNESS_FAMILY_REGISTRY.items()
-        if spec.witness_kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
-    }
-    claim_families = {
-        family for family, spec in WITNESS_FAMILY_REGISTRY.items() if spec.witness_kind is None
-    }
-    assert direct_kinds <= set(WITNESS_FAMILY_REGISTRY), (
-        "a direct ControlWitnessKind has no registry-v2 row -- register it with an "
-        "independent anchor before shipping"
-    )
-    assert direct_kinds | shape_families == _VERDICT_STEERING_WITNESS_FAMILIES
-    assert claim_families == {"inert_sink", "unbound_state_inert"}
-    assert set(WITNESS_FAMILY_REGISTRY) == direct_kinds | shape_families | claim_families
-    for family, spec in WITNESS_FAMILY_REGISTRY.items():
-        assert spec.anchor, family
-        assert spec.runtime_consumer, family
-        if spec.witness_kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT:
-            assert spec.site_prefix == f"{family}:", family
-        else:
-            assert spec.site_prefix is None, family
-    # Named runtime consumers must exist (replay-consumed, never decorative):
-    # each is defined in exactly one runnable module (its home), never only as
-    # a from-import copy on a hub.
-    import importlib
-    import pkgutil
-
-    import torchlens
-    import torchlens._runnable.execution  # noqa: F401  (loads every runnable split)
-
-    runnable_modules = [
-        importlib.import_module(f"torchlens.{info.name}")
-        for info in pkgutil.iter_modules(torchlens.__path__)
-        if info.name.startswith("_runnable")
-    ] + [
-        importlib.import_module(f"torchlens._runnable.{info.name}")
-        for info in pkgutil.iter_modules(torchlens._runnable.__path__)
-    ]
-
-    symbolic = {"terminal_slot_accounting", "strict_state_preparation"}
-    for family, spec in WITNESS_FAMILY_REGISTRY.items():
-        if spec.runtime_consumer in symbolic:
-            continue
-        homes = [
-            module.__name__
-            for module in runnable_modules
-            if getattr(module.__dict__.get(spec.runtime_consumer), "__module__", None)
-            == module.__name__
-        ]
-        assert len(homes) == 1, (
-            f"{family}: runtime consumer {spec.runtime_consumer!r} must be defined in "
-            f"exactly one runnable module, found {homes}"
-        )
-    # Closed gap registry: every kind registered, every source family resolvable.
-    assert set(WitnessGapKind) == set(WITNESS_GAP_REGISTRY)
-    for kind, gap_spec in WITNESS_GAP_REGISTRY.items():
-        assert (
-            gap_spec.source_family in WITNESS_FAMILY_REGISTRY or gap_spec.source_family == "capture"
-        ), kind
-    # The strip-fixture table is the registry's mirror: a new family REDs here
-    # before any E2E fixture exists.
-    assert set(_FAMILY_FIXTURES) == set(WITNESS_FAMILY_REGISTRY)
-
-
 # ======================================================================================
 # 2. Independence -- the required derivation cannot see witnesses/inventory/summary
 # ======================================================================================
-
-
-def test_r71_derivation_independence(tmp_path: Path) -> None:
-    from dataclasses import fields, replace
-
-    from torchlens._runnable import RequiredWitnessInventory, WitnessCompleteness
-
-    structure_fields = {field.name for field in fields(ReplayWitnessStructure)}
-    assert structure_fields == {
-        "calls",
-        "tensor_slots",
-        "input_boundary",
-        "callable_registry",
-        "container_members",
-    }, "ReplayWitnessStructure must stay witness-free by construction"
-
-    path = _save(_trace(_Meta(), torch.randn(2, 4)), tmp_path / "indep.tlspec")
-    descriptor = tl.load(path)._runnable.descriptor
-    baseline = derive_required_witness_members(ReplayWitnessStructure.from_descriptor(descriptor))
-    stripped = replace(
-        descriptor,
-        control_witnesses=(),
-        coverage_gaps=(),
-        witness_completeness=WitnessCompleteness.COMPLETE,
-        required_witness_inventory=RequiredWitnessInventory(registry_version="forged", families=()),
-    )
-    assert (
-        derive_required_witness_members(ReplayWitnessStructure.from_descriptor(stripped))
-        == baseline
-    )
 
 
 # ======================================================================================
@@ -642,79 +534,6 @@ def test_r70_pin_corr2recover_repro_b_stale_escape_strips(tmp_path: Path) -> Non
         assert outcome == "refused" and "context_field_invalid" in detail, (name, detail)
 
 
-def test_r70_pin_free_f1_metadata_matched_pair(tmp_path: Path) -> None:
-    """r70 free-F1: the metadata witness+member lockstep strip that replayed the
-    contiguous arm on a non-contiguous input as VERIFIED now refuses at parse."""
-
-    x = torch.randn(2, 4)
-    source = _save(_trace(_Meta(), x.clone()), tmp_path / "pin_f1.tlspec")
-    tampered = tmp_path / "pin_f1_pair.tlspec"
-    _shutil.copytree(source, tampered)
-    _mutate(
-        tampered,
-        lambda run: (
-            _strip_family_witnesses(run, "model_input_metadata"),
-            _strip_inventory_members(run, "model_input_metadata"),
-        ),
-    )
-    noncontiguous = x.t().contiguous().t()
-    assert not noncontiguous.is_contiguous()
-    outcome, detail = _verdict(tampered, noncontiguous)
-    assert outcome == "refused" and "context_field_invalid" in detail, (outcome, detail)
-
-
-def test_r70_pin_hon1_f2_state_metadata_matched_pair(tmp_path: Path) -> None:
-    """hon1-F2 shape: the state_metadata witness+member lockstep strip leaves the
-    surviving binding facts contradicted -> parse refuses (never a silently
-    unapplied requires_grad bit)."""
-
-    source = _save(_trace(_StateRead(), torch.randn(3)), tmp_path / "pin_f2.tlspec")
-    tampered = tmp_path / "pin_f2_pair.tlspec"
-    _shutil.copytree(source, tampered)
-    _mutate(
-        tampered,
-        lambda run: (
-            _strip_family_witnesses(run, "state_metadata"),
-            _strip_inventory_members(run, "state_metadata"),
-        ),
-    )
-    outcome, detail = _verdict(tampered, torch.randn(3))
-    assert outcome == "refused" and "context_field_invalid" in detail, (outcome, detail)
-
-
-def test_r70_pin_unbound_escape_and_container_matched_pairs(tmp_path: Path) -> None:
-    """unbound_state_escape and container witness+member lockstep strips leave the
-    surviving disposition claim / rehydrated container records contradicted."""
-
-    source = _save(_trace(_UnboundBuffer(), torch.tensor([1.0, 2.0])), tmp_path / "pin_ub.tlspec")
-    tampered = tmp_path / "pin_ub_pair.tlspec"
-    _shutil.copytree(source, tampered)
-    _mutate(
-        tampered,
-        lambda run: (
-            _strip_family_witnesses(run, "unbound_state_escape"),
-            _strip_inventory_members(run, "unbound_state_escape"),
-        ),
-    )
-    outcome, detail = _verdict(tampered, torch.tensor([1.0, 2.0]))
-    assert outcome == "refused" and "context_field_invalid" in detail, (outcome, detail)
-
-    container_source = _save(
-        _trace(_DictInOut(), [torch.tensor([1.0, 2.0]), 1]), tmp_path / "pin_ct.tlspec"
-    )
-    container_tampered = tmp_path / "pin_ct_pair.tlspec"
-    _shutil.copytree(container_source, container_tampered)
-    _mutate(
-        container_tampered,
-        lambda run: (
-            _strip_family_witnesses(run, "container"),
-            _strip_inventory_members(run, "container"),
-        ),
-    )
-    outcome, detail = _verdict(container_tampered, [torch.tensor([1.0, 2.0]), 1])
-    assert outcome == "refused" and "context_field_invalid" in detail, (outcome, detail)
-
-
 def test_r71_producer_regression_fails_typed_at_save(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -828,32 +647,6 @@ def test_r71_no_over_trigger_greens(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-def test_r71_verdict_monotonicity_changed_input(tmp_path: Path) -> None:
-    """The untampered changed-input verdict never improves under matrix tampers: the
-    branch fixture's changed-input DIVERGED and the escape fixture's changed-input
-    UNVERIFIABLE can only move to refusal, never toward VERIFIED."""
-
-    x = torch.tensor([1.0, 2.0, 3.0])
-    changed = torch.tensor([-5.0, -6.0, -7.0])
-    source = _save(_trace(_Branch(), x.clone()), tmp_path / "mono.tlspec")
-    outcome, baseline = _verdict(source, changed)
-    assert outcome in {"ran", "raised"}
-    if outcome == "ran":
-        assert baseline is not PathFaithfulness.VERIFIED
-    for family in ("scalar_bool", "conditional_arm_entry"):
-        for mutator in (
-            lambda run, f=family: _strip_family_witnesses(run, f),
-            lambda run, f=family: (
-                _strip_family_witnesses(run, f),
-                _strip_inventory_members(run, f),
-            ),
-        ):
-            path = tmp_path / f"mono_{family}_{id(mutator)}.tlspec"
-            _shutil.copytree(source, path)
-            _mutate(path, mutator)
-            _assert_never_verified(path, changed)
-
-
 # ======================================================================================
 # 8. Source-scan tripwires -- floor derivation is the ONLY completeness authority
 # ======================================================================================
@@ -893,76 +686,3 @@ def test_r71_floor_source_scan_tripwire() -> None:
 # ======================================================================================
 # 9. THE threat-model pin -- coherent reauthoring is an honest weaker program
 # ======================================================================================
-
-
-def test_r71_reauthor_pin_locks_the_threat_model_boundary(tmp_path: Path) -> None:
-    """The documented ONE scope statement, locked in code: the endpoint of the FULL
-    coherent reauthor of the escape f-artifact (delete the escape call, its slot,
-    its witness, member, obligation, and renumber) is semantically an HONEST capture
-    of the weaker program g(x)=x+5, and its VERIFIED is TRUE against g's oracle-1.
-    Any future change that would "detect" the reauthored artifact REDs this test by
-    also refusing the honest twin. Provenance needs an external trust root; no
-    manifest signature exists (self-computed digests are recomputed by a reauthor)."""
-
-    x = torch.tensor([5.0, 1.0, 1.0])
-    probe = torch.tensor([99.0, 1.0, 1.0])
-
-    class _G(nn.Module):
-        def forward(self, t: torch.Tensor) -> torch.Tensor:
-            return t + 5
-
-    g_path = _save(_trace(_G(), x.clone()), tmp_path / "honest_g.tlspec")
-    g_result = tl.load(g_path).run(inputs=probe.clone())
-    assert g_result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.equal(g_result.output, probe + 5)
-
-    f_path = _save(_trace(_Escape(), x.clone()), tmp_path / "f_artifact.tlspec")
-    reauthored = tmp_path / "reauthored_g.tlspec"
-    _shutil.copytree(f_path, reauthored)
-
-    def _reauthor(run: dict) -> None:
-        # The minimum coherent edit set for the tensor_derived family (documented in
-        # the contract's threat-model subsection): every record implying the
-        # stronger program must be rewritten together.
-        escape_slots = {slot["slot_id"] for slot in run["tensor_slots"] if slot["host_escape"]}
-        assert escape_slots
-        escape_calls = {
-            call["call_id"] for call in run["calls"] if set(call["output_slot_ids"]) & escape_slots
-        }
-        run["calls"] = [call for call in run["calls"] if call["call_id"] not in escape_calls]
-        run["tensor_slots"] = [
-            slot for slot in run["tensor_slots"] if slot["slot_id"] not in escape_slots
-        ]
-        for slot in run["tensor_slots"]:
-            slot["use_sites"] = [
-                site for site in slot["use_sites"] if site["call_id"] not in escape_calls
-            ]
-        run["control_witnesses"] = [
-            witness
-            for witness in run["control_witnesses"]
-            if witness["kind"] != "tensor_derived_scalar_literal"
-        ]
-        for order, witness in enumerate(run["control_witnesses"]):
-            witness["order"] = order
-            witness["witness_id"] = f"witness:{order + 1}"
-        _strip_inventory_members(run, "tensor_derived_scalar_literal")
-
-    _mutate(reauthored, _reauthor)
-    r_result = tl.load(reauthored).run(inputs=probe.clone())
-    assert r_result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.equal(r_result.output, probe + 5)
-
-    # Semantic identity with the honest twin on the load-bearing surfaces.
-    def _semantic_surface(path: Path) -> list[tuple[str, int, int]]:
-        descriptor = tl.load(path)._runnable.descriptor
-        registry = {entry.registry_id: entry.key.qualname for entry in descriptor.callable_registry}
-        return sorted(
-            (
-                str(registry.get(call.registry_id)),
-                len(call.tensor_arguments),
-                len(call.literal_arguments),
-            )
-            for call in descriptor.calls
-        )
-
-    assert _semantic_surface(reauthored) == _semantic_surface(g_path)

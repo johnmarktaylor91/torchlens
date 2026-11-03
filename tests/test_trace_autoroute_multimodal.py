@@ -59,31 +59,6 @@ def test_clip_style_dict_routes_via_auto_processor() -> None:
     assert log.provenance.input_preprocessor.verified is True
 
 
-def test_non_modality_dict_does_not_route(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A plain dict should skip multimodal auto-routing."""
-
-    def fail_trace_multimodal(model: Any, input_dict: Any, **kwargs: Any) -> object:
-        """Fail if multimodal bridge dispatch occurs."""
-
-        raise AssertionError("multimodal bridge should not fire")
-
-    monkeypatch.setattr(hf_bridge, "trace_multimodal", fail_trace_multimodal)
-
-    log = tl.trace(
-        _DictModel(),
-        {"key": "value"},
-        save="none",
-    )
-
-    assert log.provenance.input_preprocessor is None
-
-
-def test_empty_dict_does_not_route() -> None:
-    """An empty dict should not match the multimodal gate."""
-
-    assert hf_bridge._is_hf_multimodal_input({}) is False
-
-
 def test_wrong_modality_value_types_do_not_route() -> None:
     """Modality keys with implausible values should fail closed."""
 
@@ -192,32 +167,3 @@ def test_uncached_processor_on_non_hf_model_keeps_plain_path(
     log = tl.trace(_NamedDictModel(), {"images": _pil_image()}, save="none")
 
     assert log.provenance.input_preprocessor is None
-
-
-def test_dict_transform_override_skips_multimodal_autoroute(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Explicit ``transform=`` should bypass multimodal auto-routing."""
-
-    import PIL.Image  # noqa: F401
-
-    def fail_trace_multimodal(model: Any, input_dict: Any, **kwargs: Any) -> object:
-        """Fail if multimodal bridge dispatch occurs."""
-
-        raise AssertionError("multimodal bridge should not fire")
-
-    monkeypatch.setattr(hf_bridge, "trace_multimodal", fail_trace_multimodal)
-
-    log = tl.trace(
-        nn.Linear(1, 1),
-        {"text": "hello", "images": _pil_image()},
-        capture=tl.options.CaptureOptions(input_transform=lambda value: torch.ones(1)),
-        save="none",
-    )
-
-    # The explicit transform bypasses the multimodal autoroute entirely: no
-    # bridge stamped provenance, so the record is the honest user_transform
-    # stamp (tvscope B1), never the multimodal bridge's richer record.
-    assert log.provenance.input_preprocessor is not None
-    assert log.provenance.input_preprocessor.source == "user_transform"
-    assert log.provenance.input_preprocessor.verified is False

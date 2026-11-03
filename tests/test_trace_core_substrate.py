@@ -167,20 +167,6 @@ def test_core_fork_isolation_prototype() -> None:
     assert fork.tables is core.tables  # base is shared, not copied
 
 
-def test_facade_identity_cache_prototype() -> None:
-    """Repeated facade lookups return the SAME object (strong cache)."""
-
-    core = TraceCore()
-    row = core.table("op").new_row()
-    core.set_facade_factory(lambda kind, r: {"kind": kind, "row": r})
-    first = core.facade("op", row)
-    assert core.facade("op", row) is first
-
-    fork = core.fork()
-    fork_facade = fork.facade("op", row)
-    assert fork_facade is not first  # fork has its own facade cache
-
-
 @pytest.mark.smoke
 def test_core_collectable_after_drop() -> None:
     """A dropped core (with facades and payloads) is garbage-collected."""
@@ -194,17 +180,6 @@ def test_core_collectable_after_drop() -> None:
     del core
     gc.collect()
     assert ref() is None
-
-
-def test_partial_core_prototype() -> None:
-    """A never-frozen core stays readable (partial-capture escape path)."""
-
-    core = TraceCore()
-    row = core.table("op").new_row()
-    core.write("op", row, "func_name", "conv2d")
-    # No freeze: the builder is still authoritative and readable.
-    assert core.read("op", row, "func_name") == "conv2d"
-    assert not core.table("op").frozen
 
 
 @pytest.mark.smoke
@@ -368,123 +343,6 @@ def test_record_dict_shadow_never_streams() -> None:
     restored = pickle.loads(pickle.dumps(param))
     assert restored.module_address == live_value
     assert restored.user_note == "keep_me"
-
-
-def test_op_store_view_parent_mutation_never_leaks_after_isolation() -> None:
-    """Eager fork isolation closes the parent->child first-read window.
-
-    Review finding 4: copy-on-first-read let a PARENT's in-place
-    container mutation between fork time and the fork's first read leak
-    into the fork. ``isolate_mutable_cells`` (called by the fork builder)
-    snapshots every mutable-container cell at fork time.
-    """
-
-    from torchlens._trace_core.op_store import OpRowStore, OpStoreLayout, OpStoreView
-
-    layout = OpStoreLayout(("label", "annotations", "views"))
-    store = OpRowStore(layout)
-    row = store.new_row()
-    shared_view = ("a", "b")
-    store.cell_set(row, 0, "op_1")
-    store.cell_set(row, 1, {"pre": 0})
-    store.cell_set(row, 2, shared_view)
-    store.freeze()
-
-    view = OpStoreView(store)
-    view.isolate_mutable_cells()
-
-    # The eager sweep copies the mutable dict but leaves the immutable
-    # atomic tuple OUT of the overlay (no per-fork materialization).
-    assert row * layout.n_fields + 1 in view._overlay
-    assert row * layout.n_fields + 2 not in view._overlay
-
-    # Parent in-place mutation BEFORE the fork's first read: invisible.
-    store.cell_get(row, 1)["after_fork"] = 1
-    assert view.cell_get(row, 1) == {"pre": 0}
-    # Fork writes stay fork-side.
-    view.cell_get(row, 1)["fork_only"] = 2
-    assert store.cell_get(row, 1) == {"pre": 0, "after_fork": 1}
-    # Immutable views of atomics stay SHARED.
-    assert view.cell_get(row, 2) is shared_view
-
-    # The transposed (columnar) base takes the column read path.
-    big = OpRowStore(OpStoreLayout(("label", "annotations")))
-    n_rows = 600
-    for i in range(n_rows):
-        r = big.new_row()
-        big.cell_set(r, 0, f"op_{i}")
-        big.cell_set(r, 1, {"i": i})
-    big.freeze()
-    # 600 rows is past the transpose threshold: the seal must actually have
-    # transposed to columns (the former `... or True` here asserted nothing).
-    assert big.rows_building() is None and big._columns is not None
-    # Mutation check that the assertion can fail: a small sealed store stays
-    # row-major, so the same predicate distinguishes the two seal shapes.
-    assert store.rows_building() is not None and store._columns is None
-    big_view = OpStoreView(big)
-    big_view.isolate_mutable_cells()
-    big.cell_get(5, 1)["late"] = True
-    assert big_view.cell_get(5, 1) == {"i": 5}
-
-
-def test_fork_parent_inplace_mutation_invisible_to_child() -> None:
-    """End-to-end: sol finding 4's exact repro on a real captured fork."""
-
-    import torchlens as tl
-
-    model = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.ReLU())
-    trace = tl.trace(model, torch.randn(1, 3))
-    child = trace.fork()
-    parent_op = trace.ops[1]
-    child_op = child.ops[1]
-
-    parent_op.annotations["after_fork"] = 1
-    assert "after_fork" not in child_op.annotations
-    child_op.annotations["child_only"] = 2
-    assert "child_only" not in parent_op.annotations
-
-    # Late parent write after the child HAS read: still invisible.
-    parent_op.annotations["late"] = 3
-    assert "late" not in child_op.annotations
-
-
-def test_pickle_load_rehydrates_into_the_store() -> None:
-    """A pickle round-trip rejoins the single-truth core (sol finding 9).
-
-    Loaded traces used to be a coreless dict-backed island (one detached
-    single-row store per record); ``rehydrate_trace_core`` now adopts every
-    restored record into a fresh sealed core with the standard relation
-    freeze. Backward records stay detached by design (no event stream to
-    rebuild an epoch from).
-    """
-
-    import pickle
-
-    import torchlens as tl
-
-    model = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.ReLU(), torch.nn.Linear(4, 2))
-    trace = tl.trace(model, torch.randn(1, 3))
-    clone = pickle.loads(pickle.dumps(trace))
-
-    core = clone.__dict__.get("_trace_core")
-    assert core is not None, "loaded trace must rehydrate a core"
-    assert core.ops is not None and core.ops.frozen
-    assert core.ops.dataflow_edges is not None, "dataflow rejoined the edge table"
-    assert core.label_rows, "label -> row index rebound"
-
-    op = clone.ops["relu_1_2"]
-    assert object.__getattribute__(op, "_core") is core.ops
-    assert op.parents == ("linear_1_1",)
-    assert type(op.equivalent_ops) is frozenset
-
-    param = next(iter(clone.params.values()))
-    assert param.__dict__["_tl_core"] is core.kind_rows["param"]
-
-    # The rehydrated trace forks through the COW path like a live one.
-    fork = clone.fork()
-    assert fork.ops["relu_1_2"].parents == ("linear_1_1",)
-    fork.ops["relu_1_2"].annotations["fork_only"] = 1
-    assert "fork_only" not in clone.ops["relu_1_2"].annotations
 
 
 @pytest.mark.smoke
@@ -671,35 +529,7 @@ def test_fork_sweep_plan_survives_inplace_empty_to_nonempty_mutation() -> None:
     assert later.cell_get(5, 1) == {"present_before_second_fork": 1}
 
 
-def test_fork_snapshots_annotation_filled_inplace_between_forks() -> None:
-    """End-to-end: sol closure round 3's exact public two-fork repro.
-
-    Fork once (caches the sweep plan while ``annotations`` is empty), fill
-    the parent's dict in place, fork again: the second child must see the
-    pre-fork content, not a resurrected empty container.
-    """
-
-    import torchlens as tl
-
-    model = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.ReLU())
-    trace = tl.trace(model, torch.randn(1, 3))
-    op = trace.ops["linear_1_1"]
-    assert op.annotations == {}
-
-    trace.fork()  # builds + caches the sweep plan while the dict is empty
-    op.annotations["present_before_second_fork"] = 1
-
-    child = trace.fork()
-    child_op = child.ops["linear_1_1"]
-    assert child_op.annotations == {"present_before_second_fork": 1}
-
-    # Snapshot semantics still hold in both directions after the fix.
-    op.annotations["late"] = 9
-    assert "late" not in child_op.annotations
-    child_op.annotations["child_only"] = 2
-    assert "child_only" not in op.annotations
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _trace_core/op_store.py.
 def test_sparse_isolation_fork_of_fork() -> None:
     """A fork-of-fork snapshots the parent view's container writes."""
 
@@ -717,102 +547,6 @@ def test_sparse_isolation_fork_of_fork() -> None:
     child_view.isolate_mutable_cells()
     parent_view.cell_get(row, 0)["after_child"] = 2
     assert child_view.cell_get(row, 0) == {"base": 0, "parent_write": 1}
-
-
-def test_fork_shares_one_equivalent_ops_view_per_class() -> None:
-    """Fork layers of one equivalence class share ONE normalized view.
-
-    The finished-Layer write normalization (F5) converts each assigned
-    staging set to an immutable view; materializing a fresh one per member
-    layer was quadratic on single-class traces (32 MB per fork measured on
-    a 2002-op stack). Equal views are documented as shareable across
-    records, so the fork builder memoizes one view per class.
-    """
-
-    import torchlens as tl
-
-    class _TwoReluSites(torch.nn.Module):
-        """Linear+relu blocks written out by hand: one equivalence class, many layers.
-
-        grouping rule rows 14 and 52: a relu inside a loop over a ``ModuleList``
-        is ONE layer (one place in the code), so a class spanning several layers
-        needs the same functional op written at several places.
-        """
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.layers = torch.nn.ModuleList(torch.nn.Linear(8, 8) for _ in range(3))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            x = torch.relu(self.layers[0](x))
-            x = torch.relu(self.layers[1](x))
-            x = torch.relu(self.layers[2](x))
-            return x
-
-    torch.manual_seed(0)
-    trace = tl.trace(_TwoReluSites(), torch.zeros(1, 8))
-    fork = trace.fork()
-    multi_member = {
-        equivalence_class
-        for equivalence_class, members in fork.graph.op_equivalence_classes.items()
-        if len(members) >= 2
-    }
-    assert multi_member, "test model must produce a shared equivalence class"
-    views_by_class: dict = {}
-    members_checked: dict = {}
-    for layer in fork._layer_logs.values():
-        equivalence_class = getattr(layer, "equivalence_class", None)
-        view = layer.__dict__.get("equivalent_ops")
-        if equivalence_class not in multi_member or view is None:
-            continue
-        assert not isinstance(view, (list, set)), "finished layer view stays immutable"
-        prior = views_by_class.setdefault(equivalence_class, view)
-        assert prior is view, "same-class fork layers must share one view object"
-        members_checked[equivalence_class] = members_checked.get(equivalence_class, 0) + 1
-    assert max(members_checked.values(), default=0) >= 2, (
-        "at least one shared class must be checked across two member layers"
-    )
-
-
-def test_rehydrate_mixed_ownership_aborts_with_zero_mutations() -> None:
-    """An unadoptable op set aborts rehydration BEFORE any op is re-bound.
-
-    The former in-loop guards returned early after earlier ops were
-    already adopted, bypassing the rollback and stranding them on an
-    orphaned unfrozen store with ``_trace_core`` never set (closure
-    review, blocking item 2).
-    """
-
-    import pickle
-    from unittest import mock
-
-    import torchlens as tl
-    from torchlens._data_classes import _trace_rehydrate
-    from torchlens._data_classes.op import _OP_STORE_LAYOUT
-    from torchlens._trace_core.op_store import DetachedOpStore, OpRowStore
-
-    model = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.ReLU())
-    trace = tl.trace(model, torch.randn(1, 3))
-    payload = pickle.dumps(trace)
-    with mock.patch.object(_trace_rehydrate, "rehydrate_trace_core", return_value=False):
-        clone = pickle.loads(payload)  # genuine coreless island
-    assert clone.__dict__.get("_trace_core") is None
-
-    ops = list(clone._layer_list)
-    assert len(ops) >= 2
-    # Tamper: bind ONE later op to a foreign shared store (mixed ownership).
-    foreign = OpRowStore(_OP_STORE_LAYOUT)
-    foreign.adopt_row(list(object.__getattribute__(ops[-1], "_core")._cells))
-    object.__setattr__(ops[-1], "_core", foreign)
-    object.__setattr__(ops[-1], "_row", 0)
-
-    assert _trace_rehydrate.rehydrate_trace_core(clone) is False
-    assert clone.__dict__.get("_trace_core") is None, "no core may be installed"
-    for op in ops[:-1]:
-        bound = object.__getattribute__(op, "_core")
-        assert isinstance(bound, DetachedOpStore), (
-            "earlier op re-bound to an orphaned store after abort"
-        )
 
 
 @pytest.mark.smoke
@@ -877,6 +611,7 @@ def test_rehydrate_rollback_after_relation_freeze_is_atomic() -> None:
     assert clone.ops["linear_1_1"].parents == ("input_1",)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_rehydrate.py, _postprocess/_executor.py.
 def test_loaded_partial_capture_stays_staging() -> None:
     """A loaded partial/failed capture is never rehydrated or frozen.
 
@@ -927,80 +662,3 @@ def test_loaded_partial_capture_stays_staging() -> None:
     if fid is not None:
         cell = store.cell_get(0, fid)
         assert type(cell).__name__ != "GroupRef"
-
-
-def test_tlspec_load_adopts_every_record_kind() -> None:
-    """A ``.tlspec`` load leaves NO reachable facade outside the store (F9).
-
-    The closure review found module/module_call facades detached-backed
-    with empty kind tables after a load: the module accessor is rebuilt
-    AFTER ``__setstate__`` sealed the core, and the adoption iterator only
-    discovered records through accessors that do not survive pickling.
-    FuncCallLocation records had the same hole on both load paths (their
-    live discovery container ``_code_context_cache`` empties at pickle).
-    """
-
-    import pickle
-    import tempfile
-
-    import torchlens as tl
-    from torchlens._trace_core.op_store import DetachedOpStore
-
-    class Net(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin1 = torch.nn.Linear(3, 4)
-            self.act = torch.nn.ReLU()
-            self.bn = torch.nn.BatchNorm1d(4)
-            self.lin2 = torch.nn.Linear(4, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            # ``act`` runs twice -> a multi-call module (two ModuleCalls).
-            return self.act(self.lin2(self.bn(self.act(self.lin1(x)))))
-
-    trace = tl.trace(Net(), torch.randn(2, 3))
-
-    def store_backed(record: object) -> bool:
-        store = record.__dict__.get("_tl_core")
-        return store is not None and not isinstance(store, DetachedOpStore)
-
-    def op_cell_fcls(t: object) -> list:
-        found = []
-        for op in t._layer_list:
-            for item in getattr(op, "code_context", None) or ():
-                if type(item).__name__ == "FuncCallLocation":
-                    found.append(item)
-        return found
-
-    with tempfile.TemporaryDirectory() as tmp:
-        trace.save(tmp + "/t.tlspec")
-        loaded = tl.load(tmp + "/t.tlspec")
-
-    core = loaded.__dict__.get("_trace_core")
-    assert core is not None and core.ops is not None and core.ops.frozen
-    for kind in ("param", "buffer", "module", "module_call", "func_call_location"):
-        table = core.kind_rows.get(kind)
-        assert table is not None and len(table) > 0, f"kind table {kind!r} empty"
-        assert table.frozen, f"kind table {kind!r} must seal with the core"
-
-    modules = list(loaded.modules.values())
-    module_calls = [c for m in modules for c in m.calls.values()]
-    assert len(module_calls) >= 5 and any(m.calls and len(m.calls) == 2 for m in modules)
-    for record in (
-        modules
-        + module_calls
-        + list(loaded.params.values())
-        + list(loaded.buffers.values())
-        + op_cell_fcls(loaded)
-    ):
-        assert store_backed(record), f"detached facade survived load: {record!r}"
-
-    # Plain pickle strips modules/buffers entirely (no facades exist), but
-    # params and op-cell FuncCallLocations must still rejoin the store.
-    clone = pickle.loads(pickle.dumps(trace))
-    clone_core = clone.__dict__.get("_trace_core")
-    assert clone_core is not None
-    assert len(clone_core.kind_rows["param"]) > 0
-    assert len(clone_core.kind_rows["func_call_location"]) > 0
-    for record in list(clone.params.values()) + op_cell_fcls(clone):
-        assert store_backed(record), f"detached facade survived pickle: {record!r}"

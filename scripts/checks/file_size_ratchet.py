@@ -515,10 +515,12 @@ _MAX_LEDGER_SLACK = 100
 #: test_real_world_models 5150->5200 (ci-fix's pyg-lib skip, deberta jit gap
 #: and documented-limitation acknowledgements, measured 5193). Next 50-line
 #: step above each measurement.
+#: 2026-11-03 test shrink: test_real_world_models 5100->3250 (measured 3247
+#: after per-id deletions). Next 50-line step above the measurement.
 _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_validation.py": 8750,
     "tests/example_models.py": 5500,
-    "tests/test_real_world_models.py": 5100,
+    "tests/test_real_world_models.py": 3250,
     "tests/test_toy_models.py": 4400,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
@@ -530,18 +532,6 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     # exactly this kind of targeted regression addition, so the growth is
     # the campaign's reviewed product, not drift.
     "tests/validation_goldens/test_validation_exemption_hardening.py": 2550,
-    "tests/test_conditional_branches.py": 2150,
-    # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
-    # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051
-    # 2.17) plus the numpy>=2 profile-silent skip -- the c_call receiver half of the
-    # lane's foreign-thread join coverage, whose thread-routing pins live in
-    # tests/test_w051_nondeterminism_foreign_join.py. The rows are entries in the ONE
-    # registry table the parametrized held-ref test consumes, so a split would sever
-    # the table from its recipe type; next 50-line step above the measured 2088.
-    # T105: +16 lines splitting the held-ref sweep into two alternating-half
-    # families for the smoke duration budget (2s isolated, boundary-flaky
-    # in-session at 76 cells); next 50-line step above the measured 2104.
-    "tests/test_tlspec_runnable_r41_crossthread_witness.py": 2150,
 }
 
 

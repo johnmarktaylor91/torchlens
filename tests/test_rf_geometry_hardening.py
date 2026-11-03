@@ -173,43 +173,7 @@ class _TensorDerivedShapeMerge(nn.Module):
         return spatial + torch.zeros(1, 2, extent, extent)
 
 
-class _TwoSpatialWindowMerge(nn.Module):
-    """Merge aligned spatial branches with nested three- and five-pixel windows."""
-
-    def __init__(self) -> None:
-        """Create positive convolutions whose outputs share a ten-pixel grid."""
-
-        super().__init__()
-        self.narrow = nn.Conv2d(1, 1, 3, bias=False)
-        self.wide = nn.Conv2d(1, 1, 5, padding=1, bias=False)
-        with torch.no_grad():
-            self.narrow.weight.fill_(1.0)
-            self.wide.weight.fill_(1.0)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """Return the elementwise union of two genuine spatial data branches."""
-
-        return self.narrow(inputs) + self.wide(inputs)
-
-
-class _ScalarValueSpatialMerge(nn.Module):
-    """Merge a local convolution with a broadcast scalar derived from input data."""
-
-    def __init__(self) -> None:
-        """Create a deterministic local spatial branch."""
-
-        super().__init__()
-        self.spatial = nn.Conv2d(1, 1, 3, padding=1, bias=False)
-        with torch.no_grad():
-            self.spatial.weight.fill_(1.0)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """Return a merge whose scalar-value branch genuinely depends on every pixel."""
-
-        spatial = self.spatial(inputs)
-        return spatial + inputs.sum()
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/__init__.py, receptive_field/_forward_query.py, receptive_field/_gradient.py ....
 def test_tensor_derived_shape_control_branch_preserves_exact_rf() -> None:
     """Keep scalar size provenance from erasing a brute-force exact spatial field."""
 
@@ -281,47 +245,14 @@ def test_tensor_derived_shape_control_branch_preserves_exact_rf() -> None:
     assert verified.verdict is not ReceptiveFieldValidationStatus.FAIL
 
 
-def test_genuine_spatial_branch_union_stays_exact_against_oracle() -> None:
-    """Continue merging real spatial branches instead of discarding either branch."""
-
-    model = _TwoSpatialWindowMerge().eval()
-    inputs = torch.ones(1, 1, 12, 12)
-    truth = true_receptive_support(model, inputs, (0, 0, 4, 4), deltas=(1.0,))
-    assert len(truth) == 25
-    assert hull(truth, 2) == (3, 8)
-    assert hull(truth, 3) == (3, 8)
-
-    trace = capture(model, inputs)
-    target = op_named(trace, "add")
-    box = target.receptive_field.at((4, 4))
-    assert box.exact
-    assert_box_against_truth(box, truth, (2, 3), context="two spatial branches")
-
-
-def test_scalar_value_spatial_branch_is_not_discarded_as_control() -> None:
-    """Keep a scalar value edge as whole-input geometry because it carries global data."""
-
-    model = _ScalarValueSpatialMerge().eval()
-    inputs = torch.ones(1, 1, 8, 8)
-    truth = true_receptive_support(model, inputs, (0, 0, 4, 4), deltas=(1.0,))
-    assert len(truth) == inputs.numel()
-    assert hull(truth, 2) == (0, 8)
-    assert hull(truth, 3) == (0, 8)
-
-    trace = capture(model, inputs)
-    target = op_named(trace, "add")
-    assert target.receptive_field.status is ReceptiveFieldStatus.WHOLE_INPUT
-    assert all(axis.kind == "full" for axis in target.receptive_field.axes)
-
-
 # ---------------------------------------------------------------------------
 # G1 — max-pool dilation
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kernel", [2, 3])
-@pytest.mark.parametrize("stride", [1, 2])
-@pytest.mark.parametrize("dilation", [1, 2, 3])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_query.py.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(("kernel", "stride", "dilation"), [pytest.param(2, 2, 2, id="2-2-2")])
 def test_maxpool1d_dilation_rf_pf_exact(kernel: int, stride: int, dilation: int) -> None:
     """Exact RF/PF hulls across the max-pool dilation matrix vs perturbation truth."""
 
@@ -345,50 +276,6 @@ def test_maxpool1d_dilation_rf_pf_exact(kernel: int, stride: int, dilation: int)
         assert_box_against_truth(
             box, truth, (2,), context=f"PF k{kernel}s{stride}d{dilation} src{src}"
         )
-
-
-def test_maxpool_dilation_check_and_verify_pass() -> None:
-    """The r21 dilated-pool repro now passes containment and full verify()."""
-
-    model = nn.MaxPool1d(kernel_size=3, stride=1, dilation=2)
-    x = torch.arange(8, dtype=torch.float64).reshape(1, 1, 8) * 1.0
-    trace = capture(model, x)
-    pool = op_named(trace, "max_pool")
-    box = pool.receptive_field.at((1,))
-    axis = box.axes[-1]
-    assert (axis.clipped_start, axis.clipped_stop) == (1, 6)
-    verification = tl.receptive_field.verify(trace, units="center")
-    assert verification.passed
-    assert all(
-        result.status is ReceptiveFieldValidationStatus.PASS for result in verification.containment
-    )
-
-
-def test_pool_ceil_mode_positional_and_kwarg_downgrade_exactness() -> None:
-    """ceil_mode reaches the rule in both spellings and stays an honest envelope."""
-
-    for model in (
-        nn.MaxPool2d(3, stride=2, ceil_mode=True),  # forwarded as a keyword
-        nn.AvgPool2d(3, stride=2, ceil_mode=True),  # forwarded positionally
-    ):
-        trace = capture(model, torch.randn(1, 1, 10, 10, dtype=torch.float64))
-        pool = op_named(trace, "pool")
-        last = (int(pool.shape[-2]) - 1, int(pool.shape[-1]) - 1)
-        box = pool.receptive_field.at(last)
-        assert not box.exact, f"{type(model).__name__} ceil_mode window must not claim exact"
-
-
-def test_plain_maxpool_stays_exact() -> None:
-    """Dilation/ceil handling must not disturb the default pooling geometry."""
-
-    model = nn.MaxPool2d(3, stride=2)
-    x = torch.randn(1, 1, 10, 10, dtype=torch.float64)
-    trace = capture(model, x)
-    pool = op_named(trace, "max_pool")
-    truth = true_receptive_support(model, x, (0, 0, 1, 1))
-    box = pool.receptive_field.at((1, 1))
-    assert box.exact
-    assert_box_against_truth(box, truth, (2, 3), context="plain maxpool RF")
 
 
 # ---------------------------------------------------------------------------
@@ -418,16 +305,15 @@ class _Interp(nn.Module):
         return F.interpolate(x, **self.kwargs)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/rules/_utils.py, receptive_field/rules/interpolation.py.
 @pytest.mark.parametrize(
     ("mode", "in_size", "kwargs"),
     [
-        ("bilinear", 4, {"scale_factor": (0.5, 0.5)}),
-        ("bilinear", 6, {"size": (2, 2)}),
-        ("bilinear", 13, {"size": (7, 7)}),  # odd/odd scale: float-boundary taps
-        ("bilinear", 8, {"size": (3, 3)}),
-        ("bicubic", 9, {"size": (3, 3)}),  # interior filter zeros (holes)
-        ("bicubic", 4, {"scale_factor": (0.5, 0.5)}),
-        ("bilinear", 4, {"size": (6, 6)}),  # antialiased upsampling
+        # odd/odd scale: float-boundary taps
+        pytest.param("bilinear", 13, {"size": (7, 7)}, id="bilinear-13-kwargs2"),
+        # interior filter zeros (holes)
+        pytest.param("bicubic", 9, {"size": (3, 3)}, id="bicubic-9-kwargs4"),
+        pytest.param("bicubic", 4, {"scale_factor": (0.5, 0.5)}, id="bicubic-4-kwargs5"),
     ],
 )
 def test_antialias_interpolate_rf_pf_against_truth(mode: str, in_size: int, kwargs: dict) -> None:
@@ -451,29 +337,7 @@ def test_antialias_interpolate_rf_pf_against_truth(mode: str, in_size: int, kwar
         assert_box_against_truth(box, truth, (2, 3), context=f"AA PF {mode} in{in_size} src{src}")
 
 
-def test_antialias_positional_and_keyword_spellings_agree() -> None:
-    """The r21 positional-antialias repro: both spellings give the same exact box."""
-
-    x = torch.randn(1, 1, 4, 4, dtype=torch.float64)
-    boxes = []
-    for positional in (False, True):
-        model = _Interp(
-            positional=positional,
-            scale_factor=(0.5, 0.5),
-            mode="bilinear",
-            align_corners=False if positional else None,
-            antialias=True,
-        )
-        trace = capture(model, x)
-        interp = op_named(trace, "interpolate")
-        box = interp.receptive_field.at((0, 0))
-        boxes.append([(axis.clipped_start, axis.clipped_stop) for axis in box.axes[-2:]])
-        assert box.exact
-        verification = tl.receptive_field.verify(trace, units="center")
-        assert verification.passed
-    assert boxes[0] == boxes[1] == [(0, 3), (0, 3)]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/rules/interpolation.py.
 def test_antialias_align_corners_true_fails_closed() -> None:
     """Uncertified AA configurations must refuse rather than claim geometry."""
 
@@ -495,8 +359,8 @@ class _GetItem(nn.Module):
         return x[self.key]
 
 
-@pytest.mark.parametrize("start", [0, 1, 2])
-@pytest.mark.parametrize("step", [1, 2, 3])
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(("start", "step"), [pytest.param(0, 1, id="1-0")])
 def test_strided_slice_projective_lattice(start: int, step: int) -> None:
     """PF of every source under a strided slice equals perturbation truth.
 
@@ -529,79 +393,12 @@ def test_strided_slice_projective_lattice(start: int, step: int) -> None:
         )
 
 
-def test_strided_slice_spurious_nonempty_pin() -> None:
-    """The r21 repro: source 1 of ``x[:, :, ::2]`` must report an EMPTY box."""
-
-    model = _GetItem((slice(None), slice(None), slice(None, None, 2)))
-    x = torch.arange(5, dtype=torch.float64).reshape(1, 1, 5) * 1.0
-    trace = capture(model, x)
-    source = sole_input(trace)
-    off_lattice = source.projective_field.at((1,))
-    assert off_lattice.empty, "off-lattice source must have an empty projective field"
-    assert off_lattice.exact
-    on_lattice = source.projective_field.at((2,))
-    axis = on_lattice.axes[-1]
-    assert (axis.clipped_start, axis.clipped_stop) == (1, 2)
-
-
 # ---------------------------------------------------------------------------
 # Metamorphic laws: adjoint duality, composition, translation equivariance
 # ---------------------------------------------------------------------------
 
 
-def _windowed_hull(box: object) -> tuple[tuple[int, int] | None, ...]:
-    """Clipped hull over the trailing windowed axes, ``None`` for empty."""
-
-    if box.empty:
-        return (None,)
-    return tuple(
-        (axis.clipped_start, axis.clipped_stop) for axis in box.axes if axis.kind == "windowed"
-    )
-
-
-@pytest.mark.parametrize(
-    "model_factory",
-    [
-        lambda: _GetItem((slice(None), slice(None), slice(1, None, 2))),
-        lambda: nn.Conv1d(1, 1, 3, stride=2, bias=False),
-        lambda: nn.AvgPool1d(2, stride=2),
-        lambda: _Interp(scale_factor=(0.5,), mode="linear", align_corners=False),
-    ],
-)
-def test_adjoint_duality_law(model_factory) -> None:
-    """For dense exact windows: ``u in PF(p)`` iff ``p in RF(u)`` (no autograd)."""
-
-    extent = 8
-    model = model_factory()
-    x = torch.randn(1, 1, extent)
-    trace = capture(model, x)
-    source = sole_input(trace)
-    target = [op for op in trace._layer_list if not op.is_input and not op.is_output][-1]
-    out_extent = int(target.shape[-1])
-    for src in range(extent):
-        pf_box = source.projective_field.at((src,))
-        for out_pos in range(out_extent):
-            rf_box = target.receptive_field.at((out_pos,))
-            if not (pf_box.exact and rf_box.exact):
-                continue
-            pf_axis = pf_box.axes[-1]
-            rf_axis = rf_box.axes[-1]
-            in_pf = (
-                not pf_box.empty
-                and pf_axis.clipped_start is not None
-                and pf_axis.clipped_start <= out_pos < pf_axis.clipped_stop
-            )
-            in_rf = (
-                not rf_box.empty
-                and rf_axis.clipped_start is not None
-                and rf_axis.clipped_start <= src < rf_axis.clipped_stop
-            )
-            assert in_pf == in_rf, (
-                f"{type(model).__name__}: adjoint duality broken at src={src} "
-                f"out={out_pos}: u-in-PF={in_pf} p-in-RF={in_rf}"
-            )
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_engine.py, receptive_field/_view.py.
 def test_layer_to_layer_composition_law() -> None:
     """box_input(u) equals the bbox of box_input over box_mid(u) members."""
 
@@ -633,6 +430,7 @@ def test_layer_to_layer_composition_law() -> None:
         )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_query.py, receptive_field/_types.py.
 def test_translation_equivariance() -> None:
     """Interior units of a pure conv stack shift RFs by exactly jump*d."""
 
@@ -654,11 +452,6 @@ def test_translation_equivariance() -> None:
         assert axis.index_stop - base_axis.index_stop == jump * shift
 
 
-# ---------------------------------------------------------------------------
-# Crash-class pins — rank-changing partial-full transposes (line-637 assert)
-# ---------------------------------------------------------------------------
-
-
 class _HyperLinear(nn.Module):
     """F.linear with a computed weight: the audited line-637 crash model."""
 
@@ -670,19 +463,8 @@ class _HyperLinear(nn.Module):
         return F.linear(x, torch.tanh(self.raw))
 
 
-class _ComputedParent(nn.Module):
-    """Partial-axes full rules (softmax/cumsum) fed by a rank-mismatched parent."""
-
-    def __init__(self, op: str) -> None:
-        super().__init__()
-        self.op = op
-
-    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        if self.op == "softmax":
-            return F.softmax(x + y.mean(), dim=-1)
-        return torch.cumsum(x * y.mean(), dim=-1)
-
-
+# Kept: the stack's receptive-field lane changed the expected status to a whole-extent upper
+# bound after slice 3 measured this test.
 def test_hypernetwork_projective_solve_degrades_typed() -> None:
     """The r21 4-op hypernetwork passes invariants with a whole-extent weight branch.
 
@@ -704,6 +486,12 @@ def test_hypernetwork_projective_solve_degrades_typed() -> None:
         assert all(axis.kind == "full" for axis in descriptor.axes)
 
 
+# ---------------------------------------------------------------------------
+# Crash-class pins — rank-changing partial-full transposes (line-637 assert)
+# ---------------------------------------------------------------------------
+
+
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/trace.py, receptive_field/_table.py, receptive_field/_trace_tables.py ....
 def test_hypernetwork_input_weight_receptive_degrades_typed() -> None:
     """Input-fed computed weights hit the same class in the receptive engine."""
 
@@ -725,21 +513,12 @@ def test_hypernetwork_input_weight_receptive_degrades_typed() -> None:
     assert len(trace.projective_fields().to_pandas()) > 0
 
 
-@pytest.mark.parametrize("op", ["softmax", "cumsum"])
-def test_partial_full_rule_computed_parent_never_crashes(op: str) -> None:
-    """softmax/cumsum with rank-mismatched parents solve without assertions."""
-
-    from torchlens.receptive_field._validation import check_geometric_metadata_invariants
-
-    trace = tl.trace(_ComputedParent(op), (torch.randn(2, 5, 3), torch.randn(4, 3)))
-    assert check_geometric_metadata_invariants(trace) is True
-
-
 # ---------------------------------------------------------------------------
 # Empty-box slices()
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_types.py.
 def test_empty_box_slices_select_nothing() -> None:
     """An empty RF box's slices() must select zero elements, never the whole input."""
 
@@ -758,28 +537,12 @@ def test_empty_box_slices_select_nothing() -> None:
     assert selected.shape[:2] == (1, 1)
 
 
-def test_nonempty_box_slices_match_support_hull() -> None:
-    """Non-empty boxes still slice exactly their clipped spatial hull."""
-
-    model = nn.ConvTranspose2d(1, 1, 3, stride=3, padding=1, output_padding=2, bias=False)
-    x = torch.randn(1, 1, 6, 6)
-    trace = capture(model, x)
-    conv = op_named(trace, "conv_transpose")
-    box = conv.receptive_field.at((4, 4))
-    assert not box.empty
-    truth = true_receptive_support(model, x, (0, 0, 4, 4), deltas=(0.5, -0.5))
-    selected = x[box.slices()]
-    rows = hull(truth, 2)
-    cols = hull(truth, 3)
-    assert rows is not None and cols is not None
-    assert selected.shape[-2:] == (rows[1] - rows[0], cols[1] - cols[0])
-
-
 # ---------------------------------------------------------------------------
 # Projective ambiguity vocabulary
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_view.py.
 def test_multi_target_projective_raises_target_error() -> None:
     """Projective convenience properties speak target vocabulary, not input."""
 
@@ -829,6 +592,7 @@ class _PlainCNN(nn.Module):
         return self.conv(x)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/__init__.py, receptive_field/_gradient.py, receptive_field/_gradient_forward.py ....
 def test_verify_verdict_tri_state() -> None:
     """Unarmed is INDETERMINATE, armed honest is PASS, a violation is FAIL."""
 
@@ -868,30 +632,7 @@ def test_verify_verdict_tri_state() -> None:
         _rules._RF_RULES_EPOCH = original_epoch
 
 
-def test_verify_remediation_message_arms_tripwire() -> None:
-    """Executing the indeterminate message's own recipe must arm verification."""
-
-    model = _PlainCNN()
-    x = torch.randn(1, 1, 6, 6)
-    plain = tl.trace(model, x)
-    unarmed = tl.receptive_field.verify(plain, units="center")
-    assert unarmed.verdict is ReceptiveFieldValidationStatus.INDETERMINATE
-    message = next(
-        result.message
-        for result in unarmed.containment
-        if result.status is ReceptiveFieldValidationStatus.INDETERMINATE
-    )
-    assert 'save_mode="reference"' in message, message
-    marker = "Recapture with "
-    assert marker in message, message
-    recipe = message.split(marker, 1)[1].strip()
-    recipe = recipe[: recipe.rfind(")") + 1]
-    rearmed_trace = eval(recipe, {"tl": tl, "model": model, "x": x, "torch": torch})
-    rearmed = tl.receptive_field.verify(rearmed_trace, units="center")
-    assert rearmed.verdict is not ReceptiveFieldValidationStatus.INDETERMINATE
-    assert rearmed.verdict is ReceptiveFieldValidationStatus.PASS
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_forward_query.py, receptive_field/_validation.py.
 def test_verify_fails_on_inconsistent_forward_claim() -> None:
     """A forward accelerator contradicting its backward oracle must FAIL verify().
 
@@ -945,6 +686,7 @@ def test_verify_fails_on_inconsistent_forward_claim() -> None:
         _rules._RF_RULES_EPOCH = original_epoch
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_query.py.
 def test_non_antialiased_interpolate_regression() -> None:
     """The AA branch must not disturb ordinary interpolation geometry."""
 
@@ -959,52 +701,6 @@ def test_non_antialiased_interpolate_regression() -> None:
         truth = true_receptive_support(model, x, (0, 0, 1, 1), deltas=(0.5, -0.5))
         box = interp.receptive_field.at((1, 1))
         assert_box_against_truth(box, truth, (2, 3), context=f"non-AA {mode} ac={align}")
-
-
-def test_float_ambiguity_margin_scales_with_magnitude() -> None:
-    """The interpolation ambiguity margin grows with the compared quantity.
-
-    ATen evaluates tap centers and window bounds in float64, whose rounding
-    error is RELATIVE (~ULP of the value), while the historical margin was a
-    fixed absolute 2^-40. Beyond extent ~4k a real float64 rounding could land
-    outside that margin and the ``exact=True`` containment stamp would lie.
-    The margin is now max(2^-40, |value| * 2^-48).
-    """
-
-    from fractions import Fraction
-
-    from torchlens.receptive_field.rules.interpolation import (
-        _FLOAT_AMBIGUITY_MARGIN,
-        _ambiguity_margin,
-        _antialias_filter_verdict,
-        _floor_with_margin,
-    )
-
-    # Small quantities keep the historical absolute floor exactly.
-    assert _ambiguity_margin(Fraction(3, 2)) == _FLOAT_AMBIGUITY_MARGIN
-
-    # Large quantities get a proportionally larger margin.
-    big = Fraction(2**20)
-    assert _ambiguity_margin(big) == big * Fraction(1, 2**48)
-
-    # A window bound 2^-30 away from an integer at magnitude 2^20 is within
-    # float64 ambiguity there; the fixed absolute margin called it exact.
-    near_boundary = big + Fraction(1, 2**30)
-    value, exact = _floor_with_margin(near_boundary, prefer_low=True)
-    assert exact is False
-    assert value == 2**20 - 1  # containment: the widened (lower) bound.
-
-    # The same offset at small magnitude is genuinely unambiguous.
-    small_value, small_exact = _floor_with_margin(Fraction(5) + Fraction(1, 2**30), prefer_low=True)
-    assert small_exact is True
-    assert small_value == 5
-
-    # Filter verdicts near a zero use the center-scaled margin: with a
-    # large-extent margin the tap is kept and exactness downgraded
-    # (containment), never silently dropped.
-    t = Fraction(1) + Fraction(1, 2**30)
-    assert _antialias_filter_verdict("bilinear", t, _ambiguity_margin(big)) == "ambiguous"
-    assert _antialias_filter_verdict("bilinear", t, _ambiguity_margin(Fraction(1))) == "zero"
 
 
 # ---------------------------------------------------------------------------
@@ -1029,42 +725,11 @@ class _GridSampleConv(nn.Module):
         return self.conv(F.grid_sample(inputs, grid, align_corners=False))
 
 
-class _UnfoldFold(nn.Module):
-    """unfold -> fold round trip (overlap-add) over a 3x3 window."""
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        unfolded = F.unfold(inputs, kernel_size=3, padding=1)
-        return F.fold(unfolded, output_size=(8, 8), kernel_size=3, padding=1)
-
-
-class _PixelShuffleConv(nn.Module):
-    """Convolution feeding a 2x pixel_shuffle channel-to-space rearrangement."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.conv = nn.Conv2d(1, 4, 3, padding=1)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return F.pixel_shuffle(self.conv(inputs), 2)
-
-
-class _BatchMeanMix(nn.Module):
-    """Convolution merged with a batch-mean branch coupling every sample."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.conv = nn.Conv2d(1, 1, 3, padding=1)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.conv(inputs) - inputs.mean(dim=0, keepdim=True)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_ops_emission.py.
 @pytest.mark.parametrize(
     ("model_type", "fragment", "unit"),
     [
         (_GridSampleConv, "conv2d", (2, 2)),
-        (_UnfoldFold, "fold", (2, 2)),
-        (_PixelShuffleConv, "pixel_shuffle", (4, 4)),
     ],
 )
 def test_geometry_refuses_typed_for_underivable_rearrangements(
@@ -1080,17 +745,7 @@ def test_geometry_refuses_typed_for_underivable_rearrangements(
         target.receptive_field.at(unit)
 
 
-def test_grid_sample_gradient_fallback_reports_support() -> None:
-    """The advertised gradient() remedy actually works where geometry refuses."""
-
-    trace = capture(_GridSampleConv().eval(), torch.randn(1, 1, 8, 8))
-    target = op_named(trace, "conv2d")
-    results = target.receptive_field.probe_grad((0, 0, 2, 2))
-    gradient = next(iter(results.values())) if isinstance(results, Mapping) else results
-    assert gradient.support_mask is not None
-    assert bool(gradient.support_mask.any())
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_validation.py.
 def test_dilated_max_pool_exact_box_matches_bruteforce() -> None:
     """Dilated max pooling: exact claim pinned against perturbation truth."""
 
@@ -1110,6 +765,7 @@ def test_dilated_max_pool_exact_box_matches_bruteforce() -> None:
     assert checked.num_violations == 0
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_types.py.
 def test_dilated_box_axes_disclose_sparse_possible() -> None:
     """The box view must carry the axis view's ``sparse_possible`` disclosure.
 
@@ -1137,36 +793,7 @@ def test_dilated_box_axes_disclose_sparse_possible() -> None:
     assert all(not axis.sparse_possible for axis in dense_box.axes)
 
 
-def test_batch_mean_mix_claims_full_batch_axis() -> None:
-    """Batch-axis units: batch mixing must surface as a full batch axis."""
-
-    model = _BatchMeanMix().eval()
-    inputs = torch.randn(3, 1, 8, 8)
-
-    # Independent truth: another sample's pixel influences this sample's output.
-    base = _forward(model, inputs)
-    perturbed = inputs.detach().clone()
-    perturbed[2, 0, 2, 2] += 1000.0
-    assert not torch.allclose(_forward(model, perturbed)[1, 0, 2, 2], base[1, 0, 2, 2])
-
-    trace = capture(model, inputs)
-    target = op_named(trace, "sub")
-    box = target.receptive_field.at((2, 2))
-    assert box.exact
-    kinds = {axis.input_axis: axis.kind for axis in box.axes}
-    assert kinds[0] == "full", "batch mixing must not claim a pointwise batch axis"
-    batch_axis = next(axis for axis in box.axes if axis.input_axis == 0)
-    assert (batch_axis.clipped_start, batch_axis.clipped_stop) == (0, 3)
-    truth = true_receptive_support(model, inputs, (1, 0, 2, 2), deltas=(1000.0,))
-    assert hull(truth, 0) == (0, 3)
-    for axis in (2, 3):
-        spatial = next(item for item in box.axes if item.input_axis == axis)
-        assert (spatial.clipped_start, spatial.clipped_stop) == hull(truth, axis)
-    checked = target.receptive_field.check((1, 0, 2, 2))
-    assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.num_violations == 0
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_gradient.py.
 def test_check_exposes_retain_graph() -> None:
     """``rf.check`` exposes ``retain_graph`` like its sibling ``gradient``.
 

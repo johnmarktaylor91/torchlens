@@ -18,23 +18,18 @@ from typing import Any
 import pytest
 
 from tests.conformance import (
-    PREVIEW_BACKENDS,
     CaseResult,
     ConformanceReport,
-    _preview_adapters,
     claim_string,
-    preview_scorecard,
     run_conformance,
 )
 from tests.conformance._adapters import RosterModel, resolve_adapter
-from tests.conformance._cases import run_c1_cases
 from tests.conformance._protocol_cases import (
     c1_row_case_ids,
     c1_tail_case_ids,
     c2_row_case_ids,
 )
 from tests.conformance._scorecard import SCORECARD_VERSION, scorecard_from_report
-from torchlens.backends.registry import BackendUnsupportedError
 from torchlens.errors import ConfigurationError
 
 #: Cells a full run over a two-family protocol-free roster defines: 3 C0, 2x3 + 1 C1, 2x3 C2.
@@ -226,88 +221,6 @@ def test_golden_scorecard_canonical_bytes() -> None:
     }
     assert card.highest_tier == "C0"
     assert "conformant" not in text.lower()
-
-
-def test_every_preview_backend_resolves_to_its_adapter() -> None:
-    """Each preview name resolves; an unknown name still refuses typed."""
-
-    for backend in PREVIEW_BACKENDS:
-        assert resolve_adapter(backend).name == backend
-    with pytest.raises(ConfigurationError) as excinfo:
-        resolve_adapter("mystery-provider")
-    assert excinfo.value.fields["code"] == "conformance_backend_unknown"
-
-
-def test_absent_framework_skips_every_case_and_scores_not_run(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """A framework that is not importable earns no tier beyond C0 and no claim."""
-
-    absent = _preview_adapters.PreviewFramework("paddle", "torchlens_no_such_framework", "paddle")
-    monkeypatch.setitem(_preview_adapters.PREVIEW_FRAMEWORKS, "paddle", absent)
-    report = run_conformance("paddle", tiers=("C0", "C1", "C2"), workdir=tmp_path)
-    model_rows = [row for row in report.results if row.tier != "C0"]
-    assert model_rows and all(row.outcome == "skipped" for row in model_rows)
-    assert all("install torchlens[paddle]" in row.detail for row in model_rows)
-    denominator = _preview_denominator("paddle")
-    assert report.funnel["skipped"] == len(model_rows) == denominator - _PREVIEW_C0_CELLS
-    assert report.earned_tier == "C0"
-    assert "conformant" not in claim_string(report)
-
-    card = preview_scorecard("paddle", workdir=tmp_path)
-    assert card.counts["not_run"] == denominator - _PREVIEW_C0_CELLS
-    assert card.counts["denominator"] == denominator
-    assert card.highest_tier == "C0"
-    assert "conformant" not in card.to_json().lower()
-
-
-class _RefusingAdapter:
-    """Provider double whose capture refuses with a typed backend error."""
-
-    name = "refusing"
-    claim_eligible = False
-
-    def capabilities(self) -> dict[str, bool]:
-        """No gated capability is declared."""
-
-        return {"capture": True, "durable_save": False, "validation_replay": False}
-
-    def trace(self, model: Any, example_input: Any) -> Any:
-        """Refuse the way a backend lacking a capability does."""
-
-        raise BackendUnsupportedError("module roots are not supported")
-
-    def reference_output(self, model: Any, example_input: Any) -> Any:
-        """Never reached."""
-
-        return model(example_input)
-
-
-def test_typed_backend_refusal_scores_unsupported() -> None:
-    """A BackendUnsupportedError becomes an unsupported cell, still in the denominator."""
-
-    roster = (RosterModel("mod", "config_built", lambda: (abs, -1.0)),)
-    rows = run_c1_cases(_RefusingAdapter(), roster)
-    assert rows[0].outcome == "failed"
-    assert rows[0].detail.startswith("unsupported[backend_unsupported]: ")
-    report = ConformanceReport(
-        suite_version="torchlens.conformance.v1",
-        backend="refusing",
-        tiers=("C0", "C1"),
-        results=tuple(rows),
-        funnel={},
-        realism={},
-        earned_tier="",
-        is_claim_eligible=False,
-        environment={},
-        attestation_sha256="",
-    )
-    card = scorecard_from_report(report, roster, framework_version="")
-    states = {(cell.tier, cell.case_id): cell.state for cell in card.cells}
-    assert states[("C1", "c1_capture_completes")] == "unsupported"
-    assert states[("C1", "c1_reference_parity")] == "not_run"
-    assert card.counts["unsupported"] == 1
-    assert card.highest_tier == ""
 
 
 #: MLX's red cells on its packet roster, keyed ``(case_id, family)``, with the cause

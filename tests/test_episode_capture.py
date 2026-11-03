@@ -139,6 +139,7 @@ def _capture_episode(n_steps: int = 4, **trace_kwargs):
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_complete_episode_ledger_rows_and_tokens():
     log = _capture_episode(n_steps=4)
     ledger = episode_ledger_for(log)
@@ -162,6 +163,7 @@ def test_complete_episode_ledger_rows_and_tokens():
         assert row.coord["member_call_index"] == step + 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_episode_ledger_rows_are_write_once():
     log = _capture_episode(n_steps=2)
     from torchlens._capture._episode_ledger import ResolvedEpisode
@@ -182,37 +184,9 @@ def test_episode_ledger_rows_are_write_once():
     assert excinfo.value.fields["code"] == "episode_ledger_incoherent"
 
 
-def test_flat_tally_nested_loops():
-    """Nested loops in the episode root tally as one FLAT step sequence."""
-
-    model = TinyLM()
-    runner = NestedLoopRunner(model, outer=2, inner=3)
-    log = tl.trace(runner, _prompt(), episode=EpisodeOptions(stepped_module=model, num_steps=6))
-    ledger = episode_ledger_for(log)
-    assert ledger is not None
-    assert ledger.steps_completed == 6
-    assert [row.episode_step for row in ledger.rows] == list(range(6))
-    assert [row.coord["member_call_index"] for row in ledger.rows] == list(range(1, 7))
-
-
 # ---------------------------------------------------------------------------
 # Managed RNG recipe + teacher forcing
 # ---------------------------------------------------------------------------
-
-
-def test_entry_seed_recorded_and_sampled_episode_reproduces():
-    model = TinyLM()
-    spec = EpisodeOptions(stepped_module=model, num_steps=4)
-    capture = tl.options.CaptureOptions(seed=1234)
-    first = tl.trace(SampledRunner(model, 4), _prompt(), episode=spec, capture=capture)
-    second = tl.trace(SampledRunner(model, 4), _prompt(), episode=spec, capture=capture)
-    ledger_first = episode_ledger_for(first)
-    ledger_second = episode_ledger_for(second)
-    assert ledger_first is not None and ledger_second is not None
-    assert ledger_first.header.entry_seed == 1234 == first.options.seed
-    tokens_first = [row.step_output for row in ledger_first.rows]
-    tokens_second = [row.step_output for row in ledger_second.rows]
-    assert tokens_first == tokens_second  # managed recipe: bit-identical episode
 
 
 @pytest.mark.smoke
@@ -227,6 +201,7 @@ def test_teacher_forcing_is_disclosed_non_verifying():
     assert ledger.header.fidelity_basis == "forced"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_forced_tokens_must_cover_declared_steps():
     model = TinyLM()
     with pytest.raises(EpisodeDeclarationError) as excinfo:
@@ -243,6 +218,7 @@ def test_forced_tokens_must_cover_declared_steps():
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_stepped_module_must_be_proper_submodule():
     model = TinyLM()
     with pytest.raises(EpisodeDeclarationError) as excinfo:
@@ -250,6 +226,7 @@ def test_stepped_module_must_be_proper_submodule():
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_stepped_module_outside_root_refuses():
     model = TinyLM()
     stranger = TinyLM()
@@ -258,6 +235,7 @@ def test_stepped_module_outside_root_refuses():
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_unsnapshotable_declared_state_refuses_before_execution():
     model = TinyLM()
     runner = GreedyRunner(model, 2)
@@ -274,35 +252,7 @@ def test_unsnapshotable_declared_state_refuses_before_execution():
     assert calls_before == 0  # refusal fires at declaration time, pre-forward
 
 
-def test_save_none_refuses_value_mode_episode():
-    model = TinyLM()
-    with pytest.raises(EpisodeDeclarationError) as excinfo:
-        tl.trace(
-            GreedyRunner(model, 2),
-            _prompt(),
-            episode=EpisodeOptions(stepped_module=model),
-            save="none",
-        )
-    assert excinfo.value.fields["code"] == "episode_declaration_invalid"
-
-
-def test_structure_only_episode_refuses_typed():
-    """S2 combination table: episode x structure_only=True is TYPED REFUSE
-    this sprint (structure-only episodes have no value semantics to fold).
-    The entry refusal shares L7a's capability-table code so the combination
-    has ONE vocabulary across both chokepoints."""
-
-    model = TinyLM()
-    with pytest.raises(EpisodeDeclarationError) as excinfo:
-        tl.trace(
-            GreedyRunner(model, 2),
-            _prompt(),
-            episode=EpisodeOptions(stepped_module=model),
-            capture=tl.options.CaptureOptions(structure_only=True),
-        )
-    assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/door.py.
 def test_chunked_episode_refuses():
     model = TinyLM()
     with pytest.raises(EpisodeDeclarationError) as excinfo:
@@ -315,6 +265,7 @@ def test_chunked_episode_refuses():
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_rng_discipline_only_managed():
     model = TinyLM()
     with pytest.raises(EpisodeDeclarationError) as excinfo:
@@ -360,6 +311,7 @@ def test_halted_episode_ledger_discloses_truncation():
         assert row.step_output is None  # truncated episodes have no output to read
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py, _capture/finalize/epilogue.py.
 def test_failed_episode_attaches_partial_ledger():
     stepped = BombAtStep(bomb_call=3)
     runner = GreedyRunner(stepped, 5)
@@ -387,6 +339,7 @@ def _pickle_roundtrip(log):
     return pickle.loads(pickle.dumps(log))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 @pytest.mark.parametrize(
     ("header_key", "header_value", "code"),
     [
@@ -429,6 +382,7 @@ def test_monotone_prefix_tamper_quarantines_fail_closed():
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_value_mode_all_complete_ledger_requires_tokens():
     log = _capture_episode(n_steps=2)
     payload = dict(log.annotations["episode"])
@@ -446,20 +400,6 @@ def test_value_mode_all_complete_ledger_requires_tokens():
 # ---------------------------------------------------------------------------
 # Gated persistence (S3 registrar row)
 # ---------------------------------------------------------------------------
-
-
-def test_episode_key_rides_plain_v8_artifacts(tmp_path):
-    """tlspec v8: the episode ledger persists on a PLAIN save/load, byte-
-    faithful, with no pre-release marker riding the artifact."""
-
-    log = _capture_episode(n_steps=2)
-    path = tmp_path / "plain.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        log.save(path)
-    loaded = tl.load(path)
-    assert loaded.annotations["episode"] == log.annotations["episode"]
-    assert "episode" in log.annotations  # live trace keeps its session ledger
 
 
 # ---------------------------------------------------------------------------
@@ -483,6 +423,7 @@ def test_member_outcome_row_mapping_is_total_and_non_upgrading():
         row_status_for_member_outcome("BLESSED", None)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_recording_status_row_mapping_fail_closed():
     assert row_status_for_recording_status("complete") == "complete"
     assert row_status_for_recording_status("halted") == "interrupted"

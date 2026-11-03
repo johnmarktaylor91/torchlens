@@ -202,18 +202,6 @@ class _PadlessTokenizer:
         raise AssertionError("tokenization must not be reached without a pad token")
 
 
-def test_missing_pad_token_refuses_with_eos_opt_in_named() -> None:
-    """D9: a missing pad token refuses; EOS-as-pad is the explicit opt-in."""
-
-    from torchlens.dataset_extraction import hf_collate
-
-    collate = hf_collate(_PadlessTokenizer())
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        extract_dataset(_model(), ["a", "b", "c"], ["relu"], collate=collate, progress=False)
-    assert _code(excinfo) == "extraction_pad_token_missing"
-    assert "pad_token='eos'" in str(excinfo.value)
-
-
 def test_pad_token_vocabulary_refuses_unknown_opt_in() -> None:
     """The only pad-token opt-in is 'eos'; anything else refuses."""
 

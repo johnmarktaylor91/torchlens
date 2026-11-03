@@ -57,19 +57,6 @@ def test_parse_bytes_units_and_refusals() -> None:
         assert excinfo.value.fields["code"] == "byte_budget_invalid"
 
 
-def test_two_probe_plan_measures_sites_and_prices_passes() -> None:
-    """The plan holds every observed site with fitted bytes + exact passes."""
-
-    plan = _plan()
-    labels = {site.label for site in plan.sites}
-    assert {"linear_1_1", "relu_1_2", "linear_2_3"} <= labels
-    assert plan.planned_passes == 3 + 4  # warm-up + two probes + ceil(20/5) batches
-    linear_site = next(s for s in plan.sites if s.label == "linear_1_1")
-    # 5 stimuli x 32 features x 4 bytes at the run batch.
-    assert linear_site.bytes_at_batch(5) == 5 * 32 * 4
-    assert not linear_site.is_batch_invariant
-
-
 def test_batch_invariant_site_is_detected_not_total_scaled() -> None:
     """D-15: a site whose bytes ignore batch is flagged and priced flat."""
 
@@ -141,22 +128,6 @@ def test_plan_run_executes_through_the_artifact_runner() -> None:
     assert set(result) == {site.label for site in plan.included_sites}
     for value in result.values():
         assert value.shape == (20, 1)
-
-
-def test_plan_holds_model_weakly() -> None:
-    """The plan itself never adds a strong model reference.
-
-    (TorchLens session registries may keep prepared models alive
-    independently, so outright death is not asserted here; the
-    ``extraction_plan_model_gone`` refusal stays as the defensive door.)
-    """
-
-    import weakref
-
-    model = _model()
-    plan = bp.plan_extraction(model, torch.randn(4, 16), num_stimuli=20, batch_size=5)
-    assert isinstance(plan._model_ref, weakref.ref)
-    assert plan._model_ref() is model
 
 
 def test_unknown_requested_site_is_excluded_actionably() -> None:

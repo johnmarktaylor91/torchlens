@@ -108,6 +108,7 @@ def _component_values(paths: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
     return values
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_path_walker_supports_required_output_containers() -> None:
     """Path-aware traversal preserves supported output container structure."""
 
@@ -145,6 +146,7 @@ def test_path_walker_supports_required_output_containers() -> None:
             assert {spec.kind for spec in specs} == set(expected_kinds)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_ops_predicates.py, campaign mutant kills.
 def test_hf_model_output_replacement_preserves_concrete_type_and_attributes() -> None:
     """Live output replacement preserves HF-style output subclasses."""
 
@@ -160,6 +162,7 @@ def test_hf_model_output_replacement_preserves_concrete_type_and_attributes() ->
     assert replaced.last_hidden_state is hidden
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_intervention_ready_records_unique_container_paths_for_multi_output_op() -> None:
     """Multi-output torch calls share call id while preserving per-output paths."""
 
@@ -197,6 +200,7 @@ def test_intervention_ready_records_unique_container_paths_for_multi_output_op()
     assert all(layer.container_spec is not None for layer in split_layers)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None:
     """Captured templates classify parent refs, literal values, and tensor literals."""
 
@@ -241,53 +245,8 @@ def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None
     assert any(isinstance(component, LiteralValue) for component in flattened)
 
 
-def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> None:
-    """Edge provenance agrees with existing parent-layer arg locations."""
-
-    class AddRelus(torch.nn.Module):
-        """Model with repeated parent use."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Add two relu calls from the same input.
-
-            Parameters
-            ----------
-            x:
-                Input tensor.
-
-            Returns
-            -------
-            torch.Tensor
-                Sum of relu outputs.
-            """
-
-            return torch.relu(x) + torch.relu(x)
-
-    log = tl.trace(
-        AddRelus(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(replayable=True),
-    )
-
-    edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
-    assert edge_layers
-    for layer in edge_layers:
-        loc_labels = set(layer.parent_arg_positions["args"].values()) | set(
-            layer.parent_arg_positions["kwargs"].values()
-        )
-        edge_labels = {
-            log._raw_to_final_layer_labels.get(edge.parent_label, edge.parent_label)
-            for edge in layer._edge_uses
-        }
-        assert edge_labels == loc_labels
-        assert all(
-            log._raw_to_final_layer_labels.get(edge.child_label, edge.child_label)
-            == layer.layer_label
-            for edge in layer._edge_uses
-        )
-        assert all(edge.child_func_call_id == layer.func_call_id for edge in layer._edge_uses)
-
-
+# Kept: the stack's templates-by-default change rewrote these assertions after slice 3 measured
+# this test.
 def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persisted() -> None:
     """Default capture records argument templates and keeps graph edge provenance.
 

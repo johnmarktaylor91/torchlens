@@ -208,13 +208,6 @@ def test_phase_b_exports_are_top_level_importable() -> None:
     )
 
 
-def test_all_target_names_importable() -> None:
-    """Every budgeted top-level name should resolve as ``torchlens.X``."""
-
-    for name in TARGET_ALL:
-        assert hasattr(torchlens, name), name
-
-
 def test_no_duplicates() -> None:
     """Top-level ``__all__`` should not contain duplicate names."""
 

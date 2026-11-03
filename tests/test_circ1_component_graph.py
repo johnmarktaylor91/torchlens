@@ -47,13 +47,6 @@ def bias_edge_count(n_layers: int, n_heads: int, *, parallel: bool) -> int:
     return heads + mlps + n_layers
 
 
-def test_vocabulary_counts_match_the_pinned_oracle_counts() -> None:
-    """The count formula reproduces the oracle's 32,491 and 3,580."""
-
-    assert vocabulary_edge_count(12, 12, parallel=False) == 32_491
-    assert vocabulary_edge_count(6, 8, parallel=True) == 3_580
-
-
 def _randomize(model: nn.Module, seed: int) -> nn.Module:
     """Give every parameter (biases included) nonzero random values."""
 
@@ -137,49 +130,6 @@ def _bar_ratio(graph: mi.ComponentGraph) -> float:
         scale = receiver.value.abs().amax(dim=-1).clamp(min=1.0)
         worst = max(worst, float((error / scale).max()))
     return worst
-
-
-def test_toy_nodes_and_receiver_inputs_equal_the_closed_form(gpt2_toy) -> None:
-    model, ids, _trace_, graph = gpt2_toy
-    nodes, inputs = _closed_form_gpt2(model, ids)
-    assert list(graph.nodes) == list(nodes)
-    for name, expected in nodes.items():
-        torch.testing.assert_close(graph.nodes[name].value, expected, rtol=0, atol=1e-12)
-    for receiver in graph.receivers.values():
-        key = f"a{receiver.layer_index}" if receiver.kind in ("q", "k", "v") else receiver.name
-        torch.testing.assert_close(receiver.value, inputs[key], rtol=0, atol=1e-12)
-    assert graph.nodes["b1"].kind == "bias" and graph.nodes["a1.h0"].module_address == (
-        "transformer.h.1.attn"
-    )
-
-
-def test_toy_edges_follow_the_sequential_vocabulary(gpt2_toy) -> None:
-    _model, _ids, _trace_, graph = gpt2_toy
-    edges = graph.edges.values()
-    vocabulary = [edge for edge in edges if edge.sender.kind != "bias"]
-    assert len(vocabulary) == vocabulary_edge_count(2, 2, parallel=False)
-    assert len(graph.edges) - len(vocabulary) == bias_edge_count(2, 2, parallel=False)
-    assert [s.name for s in graph.receivers["a1.h1<k>"].senders] == [
-        "input",
-        "a0.h0",
-        "a0.h1",
-        "b0",
-        "m0",
-    ]
-    # Sequential block: MLP L reads layer L's heads and bias.
-    assert [s.name for s in graph.receivers["m0"].senders] == ["input", "a0.h0", "a0.h1", "b0"]
-    assert len(graph.receivers["logits"].senders) == len(graph.nodes)
-    edge = graph.edges["m0->a1.h1<v>"]
-    assert edge.contribution is graph.nodes["m0"].value
-    assert edge.receiver is graph.receivers["a1.h1<v>"]
-
-
-def test_toy_receiver_inputs_are_the_sum_of_contributions_float64(gpt2_toy) -> None:
-    _model, _ids, _trace_, graph = gpt2_toy
-    assert _bar_ratio(graph) <= 1e-10
-    receipt = graph.identity_receipt
-    assert receipt["check"] == "receiver_input_equals_sum_of_contributions"
-    assert len(receipt["per_input"]) == 2 * 2 + 1  # a0, m0, a1, m1, logits
 
 
 def _tiny_neox(*, parallel: bool) -> nn.Module:

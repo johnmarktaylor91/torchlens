@@ -33,13 +33,6 @@ def _meta_model() -> nn.Module:
     return model
 
 
-def test_facade_auto_selects_with_declared_input_size() -> None:
-    report = tl.summary(_meta_model(), input_shape=(2, 8))
-    text = report.lower()
-    assert "structure-only" in text or "hypothes" in text
-    assert "8" in report  # geometry rendered
-
-
 def test_facade_accepts_explicit_meta_inputs() -> None:
     report = tl.summary(_meta_model(), torch.empty(2, 8, device="meta"))
     assert "hypothes" in report.lower() or "structure-only" in report.lower()

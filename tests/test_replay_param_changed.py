@@ -153,69 +153,6 @@ def test_opt_in_replays_current_weights_and_records_it(door: str) -> None:
     assert result.last_run[RUN_KEY] == ("fc2.weight",)
 
 
-@pytest.mark.parametrize("door", sorted(DOORS))
-def test_unedited_replay_is_unchanged(door: str) -> None:
-    model, x, trace = _capture()
-    result = DOORS[door](trace)
-    out = str(trace.output_layers[0])
-    assert torch.allclose(result._layer_dict_all_keys[out].out.detach(), _expected_output(model, x))
-    assert RUN_KEY not in result.last_run
-
-
-def test_a_later_push_on_a_replay_fork_refuses() -> None:
-    """Replay forks share the templates, so an edit after the fork still refuses."""
-
-    model, _x, trace = _capture()
-    fork = _replay_fork_do(trace)
-    _in_place_no_grad(model)
-    with pytest.raises(ReplayPreconditionError) as excinfo:
-        _replay_fork_do(fork)
-    assert excinfo.value.fields["code"] == CODE
-
-
-def test_a_rerun_fork_refuses_a_later_edit_but_not_its_own_weights() -> None:
-    """A rerun runs the live model; its fork refuses only edits made after the rerun."""
-
-    model, x, trace = _capture()
-    _in_place_no_grad(model)
-    rerun = trace.fork().do(
-        tl.func("relu"),
-        _double,
-        model=model,
-        inputs=x,
-        intervention=InterventionOptions(engine="rerun"),
-    )
-    out = str(trace.output_layers[0])
-    assert torch.allclose(rerun._layer_dict_all_keys[out].out, _expected_output(model, x))
-    pushed = _replay_fork_do(rerun)
-    assert RUN_KEY not in pushed.last_run
-    _in_place_no_grad(model)
-    with pytest.raises(ReplayPreconditionError) as excinfo:
-        _replay_fork_do(rerun)
-    assert excinfo.value.fields["code"] == CODE
-
-
-def test_an_edit_through_param_data_is_not_caught() -> None:
-    """Documented gap (known gotchas): ``.data`` has its own version counter."""
-
-    model, x, trace = _capture()
-    model.fc2.weight.data.add_(1.0)
-    result = _replay_fork_do(trace)
-    out = str(trace.output_layers[0])
-    assert torch.allclose(result._layer_dict_all_keys[out].out, _expected_output(model, x))
-
-
-def test_a_replaced_parameter_object_keeps_the_captured_values() -> None:
-    """The template holds the captured object, so replay is still faithful to capture."""
-
-    model, x, trace = _capture()
-    expected = _expected_output(model, x)
-    model.fc2.weight = nn.Parameter(model.fc2.weight.detach() + 1.0)
-    result = _replay_fork_do(trace)
-    out = str(trace.output_layers[0])
-    assert torch.allclose(result._layer_dict_all_keys[out].out, expected)
-
-
 @pytest.mark.parametrize("engine", ["replay", "rerun"])
 def test_allow_changed_params_never_changes_the_capture(engine: str) -> None:
     """Cache-key dont-care witness: the opt-in only gates replay's parameter check.

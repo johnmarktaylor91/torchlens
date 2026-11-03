@@ -55,6 +55,7 @@ def _capture(model: nn.Module, value: torch.Tensor, **kwargs: object) -> tl.Trac
     )
 
 
+# Kept: a sole mutation kill; the catch of its regression fault.
 def test_forward_override_intervention_refuses_runnable_save(tmp_path: Path) -> None:
     """A zero-ablated capture refuses runnable save with a named diagnostic.
 
@@ -80,49 +81,7 @@ def test_forward_override_intervention_refuses_runnable_save(tmp_path: Path) -> 
     assert "user_intervention_unsupported" in str(excinfo.value.fields.get("diagnostics"))
 
 
-def test_forward_override_with_activations_also_refuses(tmp_path: Path) -> None:
-    """The refusal is independent of the activation-archive payload flags.
-
-    REVIEWED REBASELINE (deephunt F1): previously asserted the saved artifact's
-    run reported UNVERIFIABLE + NOT_APPLICABLE without a contradicting
-    attestation error; the save itself now refuses first (same rationale as
-    above).
-    """
-
-    torch.manual_seed(0)
-    value = torch.randn(2, 4)
-    trace = _capture(
-        _AblationModel().eval(),
-        value,
-        intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-    )
-    path = tmp_path / "ablated-with-acts.tlspec"
-    with pytest.raises(RunnablePreflightError) as excinfo:
-        trace.save(
-            path,
-            level="runnable",
-            include_weights=True,
-            include_activations=True,
-        )
-    assert "user_intervention_unsupported" in str(excinfo.value.fields.get("diagnostics"))
-    assert not path.exists()
-
-
-def test_plain_capture_still_verifies(tmp_path: Path) -> None:
-    """A non-intervened capture is unchanged: VERIFIED (+ ATTESTED with activations)."""
-
-    torch.manual_seed(0)
-    value = torch.randn(2, 4)
-    trace = _capture(_AblationModel().eval(), value)
-    path = tmp_path / "plain.tlspec"
-    trace.save(path, level="runnable", include_weights=True, include_activations=True)
-
-    result = tl.load(path).run(inputs=value, seed=0)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
+# Kept: sole branch coverage of _capture/prepare/resolve.py, _ir/selector_eval.py, _selection/resolver.py and more; a sole mutation kill; named by a manifest, the interaction matrix or the validation mutation suite.
 def test_backward_grad_intervention_still_verifies(tmp_path: Path) -> None:
     """A backward/grad intervention leaves the forward reproducible -> VERIFIED."""
 

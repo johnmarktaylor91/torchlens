@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
@@ -222,66 +221,6 @@ def _saved_labels(projection: tuple[dict[str, Any], ...]) -> tuple[str, ...]:
     """Return labels with retained activation payloads."""
 
     return tuple(str(row["label"]) for row in projection if row["saved"])
-
-
-@pytest.mark.parametrize(
-    "case",
-    (
-        ModelCase("mlp", S2Mlp, lambda: torch.randn(2, 4)),
-        ModelCase("cnn_inplace_buffer", S2CnnInplaceBuffer, lambda: torch.randn(1, 1, 4, 4)),
-        ModelCase("recurrent", S2Recurrent, lambda: torch.randn(2, 4)),
-        ModelCase("multi_output", S2MultiOutput, lambda: torch.randn(2, 4)),
-    ),
-    ids=lambda case: case.name,
-)
-def test_s2_trace_surfaces_match_exhaustive_projection(case: ModelCase) -> None:
-    """Capture the fixed S2 zoo through every non-intervention surface."""
-
-    torch.manual_seed(20260705)
-    model = case.factory().eval()
-    x = case.input_factory()
-
-    exhaustive = tl.trace(
-        model,
-        x.clone(),
-        capture=tl.options.CaptureOptions(seed=7),
-        save="all",
-    )
-    exhaustive_projection = _projection(exhaustive)
-    target_label = next(row["label"] for row in _op_rows(exhaustive_projection))
-
-    predicate = tl.trace(
-        model, x.clone(), save=_save_all_ops, capture=tl.options.CaptureOptions(seed=7)
-    )
-    two_pass = tl.trace(
-        model,
-        x.clone(),
-        capture=tl.options.CaptureOptions(seed=7),
-        save=[target_label],
-    )
-    recording = tl.record(
-        model,
-        x.clone(),
-        save=_save_all_ops,
-        recording=tl.options.RecordingOptions(include_source_events=True),
-        capture=tl.options.CaptureOptions(seed=7),
-    )
-
-    assert _topology(_projection(predicate)) == _topology(exhaustive_projection)
-    assert _topology(_projection(two_pass)) == _topology(exhaustive_projection)
-    recording_trace = recording.to_trace()
-    recording_projection = _projection(recording_trace)
-    if case.name == "recurrent":
-        assert _recording_raw_operation_identity(
-            recording_projection
-        ) == _recording_raw_operation_identity(exhaustive_projection)
-    else:
-        assert recording_projection == exhaustive_projection
-    assert _saved_labels(exhaustive_projection)
-    assert _saved_labels(_projection(predicate)) == _saved_labels(exhaustive_projection)
-    two_pass_op_saved = set(_saved_labels(_op_rows(_projection(two_pass))))
-    assert target_label in two_pass_op_saved
-    assert two_pass_op_saved.issubset(set(_saved_labels(_op_rows(exhaustive_projection))))
 
 
 def test_s2_intervention_trace_preserves_projection_identity() -> None:

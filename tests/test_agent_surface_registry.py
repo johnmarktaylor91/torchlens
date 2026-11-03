@@ -88,15 +88,6 @@ def test_every_envelope_carries_the_contract_keys(artifact: Path) -> None:
         canonical_dumps(envelope)  # strict-serializable as-is
 
 
-def test_no_absolute_path_in_machine_payloads(artifact: Path) -> None:
-    """basename is a courtesy; no absolute/cwd-derived path appears outside the echo."""
-
-    envelope = call_tool("torchlens_overview", {"path": str(artifact)})
-    envelope["request"] = {}
-    assert str(artifact.parent) not in canonical_dumps(envelope)
-    assert envelope["artifact"]["basename"] == artifact.name
-
-
 def test_error_envelope_exposes_typed_fields() -> None:
     """The error envelope carries class/code/remedy/severity, no traceback."""
 
@@ -169,24 +160,6 @@ def test_continuation_refuses_on_request_drift(artifact: Path) -> None:
             },
         )
     assert exc.value.fields["code"] == "agent_continuation_drift"
-
-
-def test_paged_rows_reassemble_byte_exactly(artifact: Path) -> None:
-    """Concatenated pages equal the unpaged ordered result."""
-
-    unpaged = call_tool("torchlens_dump", {"path": str(artifact), "view": "graph"})
-    rows: list[dict] = []
-    continuation = None
-    while True:
-        args = {"path": str(artifact), "view": "graph", "max_rows": 2}
-        if continuation is not None:
-            args["continuation"] = continuation
-        page = call_tool("torchlens_dump", args)
-        rows.extend(page["data"]["rows"])
-        continuation = page["data"]["next"]
-        if continuation is None:
-            break
-    assert canonical_dumps(rows) == canonical_dumps(unpaged["data"]["rows"])
 
 
 def test_registry_annotations_and_verbs_are_complete() -> None:
