@@ -11,6 +11,7 @@ from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavai
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
+from ._dagua_bridge import render_trace_with_dagua
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
 from ._edit_highlighter import (
     HighlighterStyle,
@@ -1457,8 +1458,6 @@ def draw(
                 code="dagua_renderer_not_opted_in",
                 remedy="opt in via `from torchlens.experimental import dagua` first",
             )
-        from ..experimental.dagua._bridge import render_trace_with_dagua
-
         return render_trace_with_dagua(
             self,
             vis_mode=vis_mode,

@@ -25,13 +25,18 @@ from .._literals import (
     VisRendererLiteral,
 )
 from ..intervention.types import FireRecord
+from ._dagua_bridge import (
+    TorchLensRenderAudit,
+    build_render_audit,
+    render_trace_with_dagua,
+    trace_to_dagua_graph,
+)
 from ._render_dot import draw as _render_draw
 from ._render_entrypoints import render_backward_graph, render_combined_graph
 from .fastlog_preview import preview_fastlog as _preview_fastlog
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from ..experimental.dagua._bridge import TorchLensRenderAudit
     from .code_panel import CodePanelOption
 
 
@@ -364,11 +369,9 @@ def render_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar o
     theme: str = "torchlens",
 ) -> str:
     """Body of ``Trace.render_dagua_graph``; the method docstring is the contract."""
-    from ..experimental.dagua._bridge import render_trace_with_dagua as _impl
-
     return cast(
         str,
-        _impl(
+        render_trace_with_dagua(
             trace,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
@@ -391,9 +394,7 @@ def to_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Tr
     include_grad_edges: bool | None = None,
 ) -> Any:
     """Body of ``Trace.to_dagua_graph``; the method docstring is the contract."""
-    from ..experimental.dagua import trace_to_dagua_graph as _impl
-
-    return _impl(
+    return trace_to_dagua_graph(
         trace,
         vis_mode=vis_mode,
         vis_call_depth=vis_call_depth,
@@ -405,9 +406,7 @@ def to_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Tr
 
 def visualization_field_audit(trace: Trace) -> TorchLensRenderAudit:
     """Body of ``Trace.visualization_field_audit``; the method docstring is the contract."""
-    from ..experimental.dagua._bridge import build_render_audit as _impl
-
-    return _impl(trace)
+    return build_render_audit(trace)
 
 
 __all__ = [

@@ -449,7 +449,7 @@ ROWS: Mapping[str, Row] = {
         "layout.renderer",
         "other-pictures",
         C,
-        "torchlens.experimental.dagua._bridge:render_trace_with_dagua",
+        "torchlens._visualization._dagua_bridge:render_trace_with_dagua",
         status="experimental",
         gate="'dagua' in _literals.VisRendererLiteral.__args__",
         caption_variants=("graphviz", "dagua"),

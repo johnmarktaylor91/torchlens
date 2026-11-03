@@ -368,7 +368,7 @@ def test_dagua_container_semantics_survive_multipass_layers() -> None:
     without the optional dagua runtime installed.
     """
 
-    from torchlens.experimental.dagua._bridge import _container_semantic_attrs
+    from torchlens._visualization._dagua_bridge import _container_semantic_attrs
 
     trace = tl.trace(RecurrentDictOutputModel(), torch.randn(2, 4))
     multipass_layer = trace.layers["relu_1_2"]
