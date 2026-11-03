@@ -41,6 +41,11 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.module import ModuleAccessor
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
+from .._runnable.state import (
+    bind_embedded_nonpersistent_buffers,
+    bind_embedded_trace_state,
+    runnable_tensor_byte_digest,
+)
 from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
 from ..backends.registry import BackendSpec, get_backend_spec
@@ -113,6 +118,7 @@ from .payload_codec import (
     numpy_to_transport_tensor,
 )
 from .rehydrate import rehydrate_trace
+from .runnable_load import attach_sparse_run_readiness
 from .save_policy import _refuse_incoherent_structure_only_write, _resolve_include_flags
 from .scrub import BlobSpec, scrub_for_save
 from .state_keys import invalidate_static_class_attr_cache
@@ -1070,7 +1076,6 @@ def _capture_activation_blob_specs(
 
     from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
     from .._runnable.input_aliases import build_input_attestation_fingerprint
-    from .._runnable.state import runnable_tensor_byte_digest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
     call_id_by_label = {
@@ -1272,8 +1277,6 @@ def _load_216_intervention_spec(
 def _attach_run_readiness(trace: Trace, sparse_run: Any) -> None:
     """Attach the sparse-run readiness report (the loader's one late import of runnable_load)."""
 
-    from .runnable_load import attach_sparse_run_readiness
-
     attach_sparse_run_readiness(trace, sparse_run)
 
 
@@ -1319,7 +1322,7 @@ def _finish_format3_trace(
     trace._source_bundle_provenance = manifest.get("provenance")
     # Contract section 7: the runnable component (descriptor and families under ``runnable/``,
     # listed in ``manifest["runnable"]``); an analysis artifact attaches analysis-only readiness.
-    format3_runnable.attach_runnable(
+    runnable_bind.attach_runnable(
         trace,
         root,
         manifest.get("runnable"),
@@ -1368,6 +1371,14 @@ def _finish_format3_recipe(root: Path) -> InterventionSpec:
 
 format3_reader.install_load_hooks(
     trace=_finish_format3_trace, bundle=_finish_format3_bundle, recipe=_finish_format3_recipe
+)
+runnable_bind.install_runnable_binders(
+    runnable_bind.RunnableBinders(
+        attach_readiness=attach_sparse_run_readiness,
+        bind_state=bind_embedded_trace_state,
+        bind_buffers=bind_embedded_nonpersistent_buffers,
+        byte_digest=runnable_tensor_byte_digest,
+    )
 )
 
 
@@ -1946,8 +1957,6 @@ def _bind_embedded_nonpersistent_buffer_payload(
         )
         embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
-    from .._runnable.state import bind_embedded_nonpersistent_buffers
-
     bind_embedded_nonpersistent_buffers(trace, embedded)
 
 
@@ -2020,8 +2029,6 @@ def _bind_embedded_weight_payload(
         )
         embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
-    from .._runnable.state import bind_embedded_trace_state
-
     bind_embedded_trace_state(trace, embedded)
 
 
@@ -2055,7 +2062,6 @@ def _bind_archived_activation_payload(
     """
 
     from .._runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
-    from .._runnable.state import runnable_tensor_byte_digest
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)

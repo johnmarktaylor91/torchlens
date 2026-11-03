@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1382 modules, 639328 lines, 0 modules without a docstring.
+85 packages, 1382 modules, 639349 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,12 +18,12 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25056 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1496 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4553 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 78 | 37308 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 78 | 37279 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 53 | 35831 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 | 7367 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 53 | 36143 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 | 7088 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10969 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -48,7 +48,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._visualization.lenses.audit` | The lens validation harness (themes memo build item 17). | 5 | 1896 |
 | `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 271 |
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 3 | 176 |
-| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 14 | 4871 |
+| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 14 | 4888 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 240 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 14650 |
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2398 |
@@ -281,7 +281,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (78 modules, 37308 lines)
+Core data structures for representing a logged forward pass. (78 modules, 37279 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -351,7 +351,7 @@ Core data structures for representing a logged forward pass. (78 modules, 37308 
 | `cleanup` | Trace cleanup helpers and post-session teardown. | 1081 |
 | `container` | Runtime views over captured TorchLens output containers. | 1178 |
 | `derived_grad` | Backend-neutral derived gradient records. | 151 |
-| `field_policy` | Structural field-policy tables for TorchLens record classes. | 243 |
+| `field_policy` | Structural field-policy tables for TorchLens record classes. | 214 |
 | `func_call_location` | FuncCallLocation: lightweight record for a single frame in a user-visible call stack. | 557 |
 | `grad_fn` | Autograd grad_fn_handle metadata and lookup accessors. | 841 |
 | `grad_fn_call` | Per-pass runtime data for autograd grad_fn_handle nodes. | 379 |
@@ -412,7 +412,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10552 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (53 modules, 35831 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (53 modules, 36143 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -423,9 +423,9 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `_canonical_pickle` | Hash-seed-independent metadata pickling for portable bundles (B3R4-). | 103 |
 | `_chunk_digest` | Digest of one payload chunk file, computed once per file version. | 83 |
 | `_durability` | Crash-durability helpers for atomic artifact publishes. | 252 |
-| `_field_policy` | ''FieldPolicy'': the portable scrub policy enum (leaf module, no ''_io'' import). | 29 |
+| `_field_policy` | ''FieldPolicy'': the portable scrub policy enum (leaf module, no ''_io'' import). | 61 |
 | `_forgery_identity_facts` | C07X identity-fact load validators (tlspec v9 entry-dark slots). | 265 |
-| `_format3_runnable_bind` | Runnable payloads of a 3.0 artifact: the blob-id index as payload references, keyed chunk reads. | 291 |
+| `_format3_runnable_bind` | Runnable binding of a 3.0 artifact: attach the component the carrier read, bind its families. | 507 |
 | `_inline_tensor` | Inline metadata tensors: a bounded, TorchLens-owned pickle reduction. | 275 |
 | `_json` | Bounded JSON reads for attacker-controlled ''.tlspec'' manifest boundaries. | 392 |
 | `_load_validators` | Load-boundary structural validators for the op graph, edge carriers, and annotations. | 494 |
@@ -434,21 +434,21 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `_rehydrate_lazy_names` | Pure naming helpers mapping manifest blob kinds to lazy-reference fields. | 53 |
 | `_root_manifest` | Route a ''.tlspec'' directory by its root manifest before trace-bundle parsing. | 110 |
 | `_safe_unpickle` | Restricted unpickler for TorchLens portable-bundle metadata. | 1408 |
-| `_save_gates` | Save-entry gate helpers for ''torchlens._io.bundle.save''. | 185 |
+| `_save_gates` | Save-entry gate helpers for ''torchlens._io.bundle.save''. | 244 |
 | `_small_raw` | Bounded portable previews of raw inputs and outputs under ''save_raw_input="small"''. | 183 |
 | `_source_privacy` | Source-embedding privacy policy for portable saves (split from scrub.py). | 479 |
 | `_tlspec_identity` | Model identity and backend runtime fields of the unified ''.tlspec'' manifest. | 370 |
 | `_tlspec_json_helpers` | Pure value helpers for the unified ''.tlspec'' manifest writer. | 93 |
 | `_torch_symbols` | Load/decode/exec-path re-export of the canonical ''torch_attr'' helper (// secC_1/secD_1). | 16 |
 | `accessor_rebuild` | Rebuild weakref-backed model accessors after finalization or rehydrate. | 127 |
-| `bundle` | Portable directory-bundle save/load helpers for TorchLens model logs. | 4273 |
-| `bundle_container` | Bundle-container loading for ''tl.load'': ''bundle.json'' and its members. | 334 |
+| `bundle` | Portable directory-bundle save/load helpers for TorchLens model logs. | 4256 |
+| `bundle_container` | Bundle-container loading for ''tl.load'': ''bundle.json'' and its members. | 355 |
 | `bundle_metadata` | Bundle-metadata (''bundle.json'') section + member-relation loading. | 314 |
 | `field_registry` | Persisted-field registry: the one queryable index of the tlspec envelope. | 276 |
 | `forgery_validation` | Load-boundary validation for persisted cross-record claim families. | 1996 |
 | `format_contract` | The tlspec FORMAT CONTRACT: L1 product vocabulary + record-adjacent helpers. | 674 |
 | `format_errors` | Portable-I/O error vocabulary (logical L0; physically homed with _io). | 128 |
-| `injection_codec` | Injected-op persistence codec (''log_injections'' stage 2). | 798 |
+| `injection_codec` | Injected-op persistence codec (''log_injections'' stage 2). | 799 |
 | `lazy` | Lazy out reference placeholders for portable TorchLens bundles. | 298 |
 | `manifest` | Portable bundle manifest schema and compatibility policy. | 1099 |
 | `paths` | Path validation helpers for portable TorchLens bundles. | 213 |
@@ -472,7 +472,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (15 modules, 7367 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (15 modules, 7088 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -480,17 +480,17 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (15 
 | `_families` | Apply code-owned family grammar data to decoded cells before record construction. | 452 |
 | `container` | The 3.0 bundle container: members as envelope references, relations as JSON. | 278 |
 | `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 265 |
-| `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 700 |
-| `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 476 |
+| `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 703 |
+| `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 480 |
 | `reader` | Reader of the 3.0 saved format: manifest first, digests, record tables, records. | 800 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 672 |
-| `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 69 |
-| `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 647 |
-| `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 304 |
+| `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 74 |
+| `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 397 |
+| `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 284 |
 | `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 799 |
 | `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 577 |
 | `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 586 |
-| `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 727 |
+| `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 706 |
 
 ### `torchlens._ir`
 
@@ -990,13 +990,13 @@ Relocated cross-layer vocabulary closures (L0 BASIS; private home). (3 modules, 
 
 ### `torchlens.agent`
 
-torchlens.agent -- the read-only agent inspection surface (agent ). (14 modules, 4871 lines)
+torchlens.agent -- the read-only agent inspection surface (agent ). (14 modules, 4888 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | torchlens.agent -- the read-only agent inspection surface (agent ). | 61 |
 | `_apimap` | api_map v2: compact rows from ONE authoritative export registry. | 210 |
-| `_artifacts` | Artifact session: manifest-first facts, content identity, bounded loads. | 510 |
+| `_artifacts` | Artifact session: manifest-first facts, content identity, bounded loads. | 527 |
 | `_budgets` | Budgets, truncation, floor semantics, and the continuation struct. | 264 |
 | `_compare` | compare: two-artifact structural + value diff with coverage honesty. | 252 |
 | `_envelope` | Canonical serializer and the one agent-surface envelope (agent ). | 188 |
