@@ -23,9 +23,7 @@ import torch
 
 from .._capture.projections import activation_record_from_event
 from .._errors import InvalidArgumentError
-from .._ir.selector_eval import module_union_matches
-from .._selection.selector_base import BaseSelector
-from .._selection.selectors import module as module_selector
+from .._ir.selector_eval import module_union_matches, selector_from_spec
 from ._generation_options import GenerationOptions
 from .types import ActivationRecord
 
@@ -466,7 +464,7 @@ class _StepSink:
         return TokenSeries(name=name, positions=range(start, stop), values=values)
 
 
-def site_selector(sites: tuple[str, ...]) -> BaseSelector:
+def site_selector(sites: tuple[str, ...]) -> Any:
     """Return the ``tl.module`` union of the declared reducer sites.
 
     The save must be a selector that names the sites as modules: the recorder
@@ -475,7 +473,7 @@ def site_selector(sites: tuple[str, ...]) -> BaseSelector:
     never sees a module output as such.
     """
 
-    selector: BaseSelector = module_selector(sites[0])
+    selector = selector_from_spec("module", sites[0], None)
     for site in sites[1:]:
-        selector = selector | module_selector(site)
+        selector = selector | selector_from_spec("module", site, None)
     return selector

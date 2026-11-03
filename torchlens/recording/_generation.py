@@ -29,8 +29,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
-from .._selection.selector_base import BaseSelector
-from .._selection.selectors import where
+from .._ir.selector_eval import normalize_selector_like
 from ._generation_options import GenerationOptions
 from ._generation_stream import TokenSeries, _StepSink, site_selector
 from ._recorder import Recorder
@@ -546,15 +545,13 @@ def _generation_save(save: Any, generation: GenerationOptions) -> Any:
     return save
 
 
-def _save_with_sites(save: Any, sites: tuple[str, ...]) -> BaseSelector:
+def _save_with_sites(save: Any, sites: tuple[str, ...]) -> Any:
     """Return ``save`` widened to a selector that always keeps the declared sites."""
 
     selector = site_selector(sites)
     if save is None:
         return selector
-    if isinstance(save, BaseSelector):
-        return save | selector
-    return where(save, name_hint="save predicate") | selector
+    return normalize_selector_like(save, lifecycle="capture") | selector
 
 
 def _max_new_tokens(settings: Mapping[str, Any], prompt_length: int | None) -> int | None:
