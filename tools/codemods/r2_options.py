@@ -208,7 +208,34 @@ class _Edits:
                 merged[-1] = (pa, max(pb, b), "")
                 continue
             merged.append((a, b, text))
-        return merged
+        return [
+            (self._close_gap(a, b), b, "") if text == "" else (a, b, text) for a, b, text in merged
+        ]
+
+    def _close_gap(self, a: int, b: int) -> int:
+        """Take the separating comma when merged deletions run to a closing ``)``.
+
+        Removing ``seed=1, lookback=2`` from ``f(x, seed=1, lookback=2)`` merges into one
+        deletion that would leave ``f(x, )``; the comma after ``x`` goes with it. A run
+        ending in a trailing comma (one argument per line) keeps its layout.
+        """
+
+        src = self.source
+        j = b
+        while j < len(src) and src[j] in " \t\r\n":
+            j += 1
+        if j >= len(src) or src[j] != ")" or src[a:b].rstrip().endswith(","):
+            return a
+        i = a
+        while i > 0 and src[i - 1] in " \t":
+            i -= 1
+        return i - 1 if i > 0 and src[i - 1] == "," else a
+
+    def removed(self, node: ast.AST) -> bool:
+        """Whether a pending deletion covers ``node``."""
+
+        a, b = self.span(node)
+        return any(text == "" and ea <= a and b <= eb for ea, eb, text in self.edits)
 
 
 def _rewrite_nonfinite(
@@ -384,7 +411,9 @@ def _fold_recording_keywords(
         _append_into_ctor(ed, ctor, pieces)
         return
     style = _style(ed.source, "RecordingOptions")
-    last = (list(door_call.args) + list(door_call.keywords))[-1]
+    # after the last argument that stays, so the new keyword never lands inside a deletion
+    arguments = list(door_call.args) + list(door_call.keywords)
+    last = next((node for node in reversed(arguments) if not ed.removed(node)), arguments[-1])
     _, b = ed.span(last)
     ed.replace(b, b, f", recording={style}({', '.join(pieces)})")
 

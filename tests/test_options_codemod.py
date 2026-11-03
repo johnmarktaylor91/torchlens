@@ -147,3 +147,19 @@ def test_recorder_keywords_stay_flat() -> None:
     rewritten, reports = _rewrite(source)
     assert not reports
     assert rewritten == source
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "tl.record(model, x, seed=1, default_op=True, lookback=2, history_size=4)",
+        "tl.record(\n    model,\n    x,\n    default_op=True,\n    history_size=4,\n)\n",
+    ],
+)
+def test_record_trailing_keywords_fold_without_stray_commas(source: str) -> None:
+    rewritten, reports = _rewrite(source)
+    assert not reports
+    keywords = _record_keywords(rewritten)
+    assert _ctor_fields(keywords["recording"]) == {"default_op": "True", "history_size": "4"}
+    assert ", ," not in rewritten and ", )" not in rewritten
+    assert _rewrite(rewritten) == (rewritten, [])
