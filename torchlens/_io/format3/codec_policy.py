@@ -39,7 +39,7 @@ def payload_columns(kind: str) -> frozenset[str]:
 def payload_codec(manifest_backend: str) -> str:
     """The one codec the payload cells of a ``manifest_backend`` artifact carry."""
 
-    return _TORCH_CODEC if manifest_backend == "torch" else _ARRAY_CODEC
+    return _TORCH_CODEC if manifest_backend == contract.DEFAULT_BACKEND else _ARRAY_CODEC
 
 
 def _cell_role(at: str) -> tuple[str, str]:

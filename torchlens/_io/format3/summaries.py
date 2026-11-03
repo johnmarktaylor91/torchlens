@@ -31,6 +31,7 @@ _BACKWARD_SUMMARY_FIELDS: Final = (
 
 
 def _is_count(value: Any) -> bool:
+    """Whether ``value`` is a non-negative int (a bool is not a count)."""
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
@@ -53,7 +54,7 @@ def summary_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
     if summary is not None:
         errors.extend(_backward_summary_errors(summary))
     backend = _fingerprint_backend(fingerprint)
-    if backend is not None and backend != "torch" and summary is not None:
+    if backend is not None and backend != contract.DEFAULT_BACKEND and summary is not None:
         errors.append(f"backward_summary must be null for a {backend!r} backend artifact")
     return errors
 
@@ -67,6 +68,7 @@ def _fingerprint_backend(fingerprint: Any) -> str | None:
 
 
 def _fingerprint_errors(value: Any) -> list[str]:
+    """Schema errors in a manifest ``model_fingerprint`` object."""
     if not isinstance(value, Mapping):
         return ["model_fingerprint must be an object"]
     if "backend_fingerprint" in value:
@@ -94,6 +96,7 @@ def _fingerprint_errors(value: Any) -> list[str]:
 
 
 def _backward_summary_errors(value: Any) -> list[str]:
+    """Schema errors in a manifest ``backward_summary`` object."""
     if not isinstance(value, Mapping):
         return ["backward_summary must be an object"]
     errors = _unsupported("backward_summary", value, _BACKWARD_SUMMARY_FIELDS)

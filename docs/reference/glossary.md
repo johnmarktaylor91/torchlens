@@ -1153,7 +1153,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   argument templates that `trace.do(site, edit)` replays are recorded on every capture.
   In the 3.0 format the descriptor is `runnable/descriptor.json` and the state is
   safetensors files beside it, listed by the manifest's `runnable` object; no callable is ever
-  pickled ([saved_format_3.md](../maintainers/saved_format_3.md), section 7).
+  pickled (the maintainer contract `docs/maintainers/saved_format_3.md`, section 7; not on the site).
 
 **Readiness**
 : The non-executing runnable state `ready` or `unavailable`.

@@ -237,6 +237,9 @@ pages:
   - path: maintainers/saved_format_3.md
     section: internal
     note: maintainer page; CONTRIBUTING.md links it
+  - path: maintainers/saved_format_3_design.md
+    section: internal
+    note: maintainer page; saved_format_3.md links it
   - path: maintainers/testing.md
     section: internal
     note: maintainer page; CONTRIBUTING.md links it

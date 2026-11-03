@@ -115,6 +115,7 @@ class _FamilyChunkWriter(ChunkWriter):
         self._numbered = chunked
 
     def _chunk_name(self) -> str:
+        """The member path of the current chunk (numbered only when the family is chunked)."""
         suffix = f"-{self._index:04d}" if self._numbered else ""
         return f"{self.directory}/{self.stem}{suffix}.safetensors"
 

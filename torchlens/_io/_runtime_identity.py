@@ -85,6 +85,7 @@ def check_runtime_identity(
 
 
 def _check_writer_floor(recorded: str, subject: str) -> None:
+    """Refuse a format 3 artifact whose TorchLens stamp predates the first format 3 writer."""
     saved = parse_pep440(recorded, label="manifest torchlens", warn_on_failure=False)
     if saved is None or Version(saved.base_version) >= _FIRST_FORMAT3_WRITER:
         return
@@ -101,6 +102,7 @@ def _check_writer_floor(recorded: str, subject: str) -> None:
 
 
 def _check_torch(recorded: str, subject: str) -> None:
+    """Refuse a torch major mismatch or an unparsable stamp; warn on a torch minor mismatch."""
     runtime = parse_pep440(torch.__version__, label="runtime torch")
     saved = parse_pep440(recorded, label="manifest torch")
     if runtime is not None and saved is not None:
@@ -129,6 +131,7 @@ def _check_torch(recorded: str, subject: str) -> None:
 
 
 def _check_torchlens(recorded: str, subject: str) -> None:
+    """Refuse an unparsable TorchLens stamp; warn when the writer is newer than this runtime."""
     runtime = parse_pep440(TORCHLENS_VERSION, label="runtime torchlens")
     saved = parse_pep440(recorded, label="manifest torchlens", warn_on_failure=False)
     if saved is None:
@@ -158,6 +161,7 @@ def _check_torchlens(recorded: str, subject: str) -> None:
 
 
 def _check_python(recorded: str, subject: str) -> None:
+    """Warn when the writer's Python differs by major version or cannot be parsed."""
     current = runtime_python_version()
     runtime = parse_pep440(current, label="runtime python")
     saved = parse_pep440(recorded, label="manifest python")

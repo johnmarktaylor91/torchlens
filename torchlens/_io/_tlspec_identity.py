@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
-from ..backends.registry import get_backend_spec
+from ..backends.registry import TORCH_BACKEND_NAME, get_backend_spec
 from ._tlspec_json_helpers import _hash_named_tensor_meta, _json_str_or_none
 
 if TYPE_CHECKING:
@@ -250,7 +250,7 @@ def _backend_v2_fields(
         "schema_version": 2,
         "backend": backend_name,
         "backend_runtime": _backend_runtime(source, backend_name=backend_name),
-        "torch_version": torch.__version__ if backend_name == "torch" else None,
+        "torch_version": torch.__version__ if backend_name == TORCH_BACKEND_NAME else None,
         "model_fingerprint": _backend_model_fingerprint(source, backend_name=backend_name),
         "body_format": spec.serialization_policy.body_format,
         "backward_summary": None,

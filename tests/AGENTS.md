@@ -104,7 +104,7 @@ env-fingerprinted golden family (those enforce
 only on the canonical smoke CI row). Everything else that used to be smoke is unmarked or
 `heavy` and still runs in the backstops and the nightly and weekly CI tiers. A new test stays
 unmarked unless it covers a critical path nothing in smoke reaches; the size ceiling keeps the
-tier from regrowing. The tier holds 384 tests (`tests/tiers/collection.json`, collected
+tier from regrowing. The tier holds 382 tests (`tests/tiers/collection.json`, collected
 2026-11-03; per-tier counts, wall estimates and the collect commands are there).
 
 Smoke runs collect only the smoke file list, the test files whose source spells `mark.smoke`

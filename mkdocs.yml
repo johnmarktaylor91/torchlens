@@ -141,6 +141,7 @@ exclude_docs: |
   /maintainers/persisted_fields.md
   /maintainers/review_checklist.md
   /maintainers/saved_format_3.md
+  /maintainers/saved_format_3_design.md
   /maintainers/testing.md
   /maintainers/docstring_examples_census.md
   /maintainers/where.md
