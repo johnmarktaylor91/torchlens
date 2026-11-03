@@ -24,7 +24,7 @@ form. A record list that does not fit the columns exactly keeps the per-object f
 from __future__ import annotations
 
 import struct
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -167,12 +167,12 @@ def _pack_payloads(values: list[Any]) -> tuple[dict[int, Any], RefColumn | None]
     return sparse, (kind, packed_positions, _ID_SEPARATOR.join(blob_ids).encode("utf-8"))
 
 
-def _record_states(records: Any) -> list[dict[str, Any]] | None:
+def _record_states(records: Any) -> list[Mapping[str, Any]] | None:
     """Return each record's state when ``records`` is a list the columns hold exactly."""
 
     if type(records) is not list or not records:
         return None
-    states: list[dict[str, Any]] = []
+    states: list[Mapping[str, Any]] = []
     for record in records:
         if (type(record).__module__, type(record).__qualname__) != _RECORD_TYPE:
             return None
