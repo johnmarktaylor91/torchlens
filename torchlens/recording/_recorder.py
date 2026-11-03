@@ -310,7 +310,7 @@ class Recorder:
         if narrate is MISSING or narrate is None or narrate is False:
             echo_normalized = None
         else:
-            from ..debug._snoop import normalize_echo
+            from .._snoop import normalize_echo
 
             echo_normalized = normalize_echo(narrate)
         self.options: _RecordingConfig = _resolve_recording_config(
@@ -363,7 +363,7 @@ class Recorder:
         self._next_pass_index = 1
         self._echo_session: Any | None = None
         if self.options.echo is not None:
-            from ..debug._snoop import EchoSession
+            from .._snoop import EchoSession
 
             # One narrator per Recorder: per-forward state resets each pass,
             # the configured scope/sink/stats persist (snoop D1).

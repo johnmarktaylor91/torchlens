@@ -1669,7 +1669,8 @@ FUNC_ARG_SPECS["normal"] = ArgSpec(positions=(0, 1), tensor_kwargs=("mean", "std
 
 # Ternary functions with their real schema kwarg names. The shared _P012
 # entry has no tensor_kwargs, so keyword-passed operands were dropped.
-FUNC_ARG_SPECS["addmm"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "mat1", "mat2"))
+for _name in ("addmm", "sampledaddmm", "sspaddmm"):  # sampledaddmm: torch.sparse.sampled_addmm
+    FUNC_ARG_SPECS[_name] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "mat1", "mat2"))
 _ADDBMM_SPEC = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "batch1", "batch2"))
 FUNC_ARG_SPECS["addbmm"] = _ADDBMM_SPEC
 FUNC_ARG_SPECS["baddbmm"] = _ADDBMM_SPEC
@@ -1845,11 +1846,10 @@ FUNC_ARG_SPECS["quantizepertensor"] = ArgSpec(
 FUNC_ARG_SPECS["quantizepertensordynamic"] = ArgSpec(positions=(0,), tensor_kwargs=("input",))
 FUNC_ARG_SPECS["resize"] = _P0
 FUNC_ARG_SPECS["smm"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "mat"))
-FUNC_ARG_SPECS["solveex"] = ArgSpec(positions=(0, 1), tensor_kwargs=("A", "B"))
-FUNC_ARG_SPECS["solvetriangular"] = ArgSpec(positions=(0, 1), tensor_kwargs=("A", "B"))
-FUNC_ARG_SPECS["sspaddmm"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "mat1", "mat2"))
+for _name in ("solveex", "solvetriangular", "spsolve", "tensorsolve"):  # spsolve: torch>=2.5
+    FUNC_ARG_SPECS[_name] = ArgSpec(positions=(0, 1), tensor_kwargs=("A", "B"))
+FUNC_ARG_SPECS["spdiags"] = ArgSpec(positions=(0, 1), tensor_kwargs=("diagonals", "offsets"))
 FUNC_ARG_SPECS["svdlowrank"] = ArgSpec(positions=(0, 3), tensor_kwargs=("A", "M"))
-FUNC_ARG_SPECS["tensorsolve"] = ArgSpec(positions=(0, 1), tensor_kwargs=("A", "B"))
 FUNC_ARG_SPECS["trapezoid"] = ArgSpec(positions=(0, 1), tensor_kwargs=("y", "x"))
 FUNC_ARG_SPECS["trapz"] = ArgSpec(positions=(0, 1), tensor_kwargs=("y", "x"))
 FUNC_ARG_SPECS["tripletmarginwithdistanceloss"] = ArgSpec(

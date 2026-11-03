@@ -128,7 +128,7 @@ class PartialTrace:
             Rendered narration block (no trailing newline).
         """
 
-        from torchlens.debug._snoop._narrate import narrate_partial
+        from torchlens._snoop._narrate import narrate_partial
 
         return narrate_partial(self, last=last, select=select)
 

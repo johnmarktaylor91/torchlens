@@ -1,6 +1,6 @@
 """Live narration for TorchLens captures (the torchsnooper niche, better).
 
-``torchlens.debug._snoop`` implements the ``narrate=`` option on ``tl.trace``,
+``torchlens._snoop`` implements the ``narrate=`` option on ``tl.trace``,
 ``tl.record``, and ``fastlog.Recorder`` -- watch each op happen, one line
 per event, with the last lines before a crash -- plus the post-hoc
 ``.narrate()`` renderer on ``Trace`` / ``PartialTrace`` / ``Recording``.

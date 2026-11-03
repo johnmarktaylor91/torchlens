@@ -1009,7 +1009,7 @@ class Recording(TraceLike):
             Rendered narration block (no trailing newline).
         """
 
-        from torchlens.debug._snoop._narrate import narrate_recording
+        from torchlens._snoop._narrate import narrate_recording
 
         return narrate_recording(self, last=last, select=select)
 
