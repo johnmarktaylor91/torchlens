@@ -126,3 +126,51 @@ def grad_fn_site_summary(trace: "Trace") -> "OrderedDict[str | None, dict[str, A
         entry["grad_fn_labels"] = tuple(sorted(entry["grad_fn_labels"]))
         entry["pass_coverage"] = tuple(sorted(entry["pass_coverage"]))
     return summary
+
+
+def grad_fn_fire_timings(trace: "Trace") -> "OrderedDict[str, Duration | None]":
+    """Return live per-fire backward timing spans keyed like ``grad_fn_calls``.
+
+    DOCUMENTED-UNSTABLE spelling (pending naming-session
+    ratification). Serves the paired ``time.perf_counter()`` stamps
+    carried by the runtime ``GradFnFired`` events: a timed fire yields
+    its span as a :class:`~torchlens._quantities.Duration`, an untimed
+    fire (empty keyed LIFO, stale-key discard, or timing-registration
+    failure) yields ``None`` -- never a false zero. Keys are
+    ``"<grad_fn_label>:<call_index>"`` in fold order.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``grad_fn_fire_timing_unavailable`` on a trace without its
+        runtime capture event stream (loaded artifacts, cleaned traces):
+        events never persist, so such a read has no timing evidence
+        until the coordinated tlspec bump persists the pairs.
+    """
+
+    from .._ir.events import GradFnFired
+
+    stream = trace.__dict__.get("capture_events") or trace.__dict__.get("_capture_events")
+    fired = [
+        event for event in getattr(stream, "backward_events", ()) if isinstance(event, GradFnFired)
+    ]
+    # Evidence test, not a load flag: a rehydrated trace owns a fresh
+    # EMPTY stream, so backward records without any fire event mean the
+    # runtime evidence did not travel (loaded artifact or cleaned trace).
+    if stream is None or (
+        not fired and ({} if trace.__dict__.get("_tl_cleaned_up", False) else trace._grad_fn_logs)
+    ):
+        raise InvalidArgumentError(
+            "Per-fire backward timing is served from the runtime capture "
+            "event stream, which never persists: this trace (loaded from "
+            "an artifact, or already cleaned up) carries no per-fire "
+            "timing evidence for its backward records.",
+            code="grad_fn_fire_timing_unavailable",
+            remedy=(
+                "read grad_fn_fire_timings on the live capturing trace; "
+                "persisted per-fire timing activates at the coordinated "
+                "tlspec version bump"
+            ),
+        )
+    grad_fn_logs = {} if trace.__dict__.get("_tl_cleaned_up", False) else trace._grad_fn_logs
+    return _fire_timings_by_key(fired, grad_fn_logs)
