@@ -761,7 +761,15 @@ def trace_to_dagua_graph(
     direction: str = "bottomup",
     include_grad_edges: bool | None = None,
 ) -> Any:
-    """Translate a TorchLens Trace into a DaguaGraph."""
+    """Translate a TorchLens Trace into a DaguaGraph.
+
+    Examples
+    --------
+    >>> # requires: dagua
+    >>> graph = trace_to_dagua_graph(tl.trace(model, x))
+    >>> type(graph).__name__
+    'DaguaGraph'
+    """
     import dagua
 
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
