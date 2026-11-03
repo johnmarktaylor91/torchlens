@@ -310,6 +310,17 @@ def _make_layer_log_entry(
     )
     if predicate_ctx is not None and not save_this_activation:
         _retain_lookback_candidate(self, predicate_ctx, fields_dict, t)
+    if self._options_aten_ops == "values":
+        # The ATen values recorded beneath this call follow its save verdict.
+        from ._aten_capture import _note_aten_owner_verdict
+
+        _note_aten_owner_verdict(
+            self,
+            fields_dict.get("func_call_id"),
+            "keep"
+            if fields_dict.get("has_saved_activation")
+            else ("deferred" if predicate_ctx is not None else "drop"),
+        )
     _record_nonfinite_if_requested(self, t, new_entry)
     # Echo narrator slot (snoop D1): exactly once per committed op, after the
     # commit and the nonfinite recording, BEFORE the raise_on_nan settlement

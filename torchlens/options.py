@@ -596,10 +596,15 @@ class CaptureOptions:
             Whether the capture records the public ATen operations that each logged
             torch call dispatched to, served by ``Op.aten_ops`` and ``Trace.aten_ops``
             (a session-time knob; ``Trace.has_aten_ops`` reports it after capture or
-            load). Recording installs a dispatch mode for the forward pass and for
-            ``Trace.backward()`` with ``backward_ready=True``, so it is opt-in. The
-            default ``False`` installs no dispatch mode and the accessors raise
-            ``AtenOpsUnavailableError``. GPU kernel recording is out of scope.
+            load). ``True`` records value-free rows; ``"values"`` also keeps each
+            call's returned tensor(s) as ``AtenOp.out`` under the same rules as
+            ``Op.out`` (the ``save=`` selection of the owning torch call,
+            ``detach_saved_activations``, ``output_device``, ``save_mode`` and the
+            save budget). Recording installs a dispatch mode for the forward pass
+            and for ``Trace.backward()`` with ``backward_ready=True``, so it is
+            opt-in. The default ``False`` installs no dispatch mode and the
+            accessors raise ``AtenOpsUnavailableError``. GPU kernel recording is
+            out of scope.
 
         Examples
         --------
@@ -657,7 +662,7 @@ class CaptureOptions:
     structure_only: bool = False
     log_injections: bool = False
     measure_host_peak_memory: bool = False
-    aten_ops: bool = False
+    aten_ops: bool | Literal["values"] = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -712,7 +717,7 @@ class CaptureOptions:
         structure_only: bool | MissingType = MISSING,
         log_injections: bool | MissingType = MISSING,
         measure_host_peak_memory: bool | MissingType = MISSING,
-        aten_ops: bool | MissingType = MISSING,
+        aten_ops: bool | Literal["values"] | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 

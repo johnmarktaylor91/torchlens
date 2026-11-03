@@ -1033,7 +1033,7 @@ class Trace(TraceLike):
         self.track_nonfinite: bool = False
         self.track_device_memory: bool = False
         self.measure_host_peak_memory: bool = False
-        self._options_aten_ops: bool = False
+        self._options_aten_ops: bool | str = False
         self.annotations: dict[str, Any] = {}
         self._source_frames: list[FuncCallLocation] = []
         self._graph_manual_tensor_connections: list[tuple[str, str]] = []

@@ -457,9 +457,17 @@ def _retain_lookback_candidate(
     if candidates is None:
         candidates = deque()
         trace._predicate_lookback_candidates = candidates
-    candidates.append(_RetainedLookbackCandidate(raw_label=ctx.raw_label, payload=payload))
+    candidates.append(
+        _RetainedLookbackCandidate(
+            raw_label=ctx.raw_label,
+            payload=payload,
+            owner_call_id=fields_dict.get("func_call_id"),
+        )
+    )
     while len(candidates) > lookback:
-        candidates.popleft()
+        evicted = candidates.popleft()
+        if not evicted.marked:
+            _settle_aten_values_for_candidate(trace, evicted, "drop")
 
 
 def _copy_lookback_payload(
@@ -574,7 +582,28 @@ def _apply_retroactive_decision(
         if candidate.marked:
             continue
         candidate.marked = True
+        _settle_aten_values_for_candidate(trace, candidate, "keep")
         _replace_event_with_retained_payload(trace, raw_label, candidate.payload)
+
+
+def _settle_aten_values_for_candidate(trace: Trace, candidate: Any, verdict: str) -> None:
+    """Pass a lookback candidate's fate to the ATen values its call owns.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    candidate:
+        Retained lookback candidate leaving the deferred state.
+    verdict:
+        ``keep`` when a successor saved it, ``drop`` when the window evicted it.
+    """
+
+    if getattr(trace, "_options_aten_ops", False) != "values":
+        return
+    from ._aten_capture import _note_aten_owner_verdict
+
+    _note_aten_owner_verdict(trace, getattr(candidate, "owner_call_id", None), verdict)
 
 
 def _replace_event_with_retained_payload(

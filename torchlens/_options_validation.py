@@ -336,6 +336,15 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
             argument="raise_on_nan",
             received_type=type(values["raise_on_nan"]).__name__,
         )
+    if values["aten_ops"] is not True and values["aten_ops"] is not False:
+        if values["aten_ops"] != "values":
+            raise InvalidArgumentError(
+                f"Capture option aten_ops={values['aten_ops']!r} is unsupported",
+                code="aten_ops_invalid",
+                remedy="pass aten_ops=False, aten_ops=True (value-free rows) or "
+                "aten_ops='values' (rows with their output tensors)",
+                argument="aten_ops",
+            )
     if not isinstance(values["structure_only"], bool):
         raise ArgumentTypeError(
             "Capture option structure_only is not a bool",

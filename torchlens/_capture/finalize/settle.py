@@ -222,8 +222,8 @@ def _run_refresh_forward(
         raise_on_nan=bool(self._options_on_nonfinite),
         # A refresh measures CPU peaks only if the source opted in.
         measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
-        # A refresh records ATen operations only if the source opted in.
-        aten_ops=bool(getattr(self, "_options_aten_ops", False)),
+        # A refresh records ATen operations (and values) only if the source opted in.
+        aten_ops=getattr(self, "_options_aten_ops", False),
         output_transform=getattr(self, "_output_transform", None),
         save_transformed_output=self._options_save_transformed_output,
         retain_output_parents_for_layers_to_save=True,

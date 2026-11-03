@@ -2,7 +2,9 @@
 
 The recorder is armed per capture by the public switch (read in
 ``_completeness_finalize._resolve_witness_requests``); there is no process-wide
-or test-only arm.
+or test-only arm. ``aten_ops="values"`` additionally keeps each returned
+tensor as ``AtenOp.out`` under the owner Op's save rules (``save=`` selection,
+``detach_saved_activations``, ``output_device``, ``save_mode``, save budget).
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from ..._ir.events import (
     _AtenCallEvent,
     _AtenExecutionContext,
     _AtenTensorFact,
+    _AtenValueCell,
     _ModePausedInteriorEvent,
 )
 from ..._utils._torch_compat import get_current_autograd_node_fn
@@ -349,6 +352,8 @@ def _prepare_aten_call(
         Immutable pre-dispatch facts.
     """
 
+    if state.aten_value_cells:
+        _release_dropped_aten_values(state, keep_owner=owner_func_call_id)
     namespace, operator, overload, schema, fingerprint = _operator_parts(func)
     autocast = _autocast_context()
     grad_ref = executing_grad_fn_ref(id(state.trace), resolver=get_current_autograd_node_fn())
@@ -432,6 +437,9 @@ def _finish_aten_call(
     """
 
     output_facts = () if exception is not None else _walk_tensor_facts(result, state)
+    values = None
+    if exception is None and output_facts and getattr(state, "record_aten_values", False):
+        values = _retain_aten_values(state, pending, result)
     # Autograd wraps the dispatcher above TorchDispatchMode, so the tensors visible
     # at this redispatch return seam do not yet carry their final GradFn. The
     # post-backward projector links the row through its parent Op's captured
@@ -473,8 +481,125 @@ def _finish_aten_call(
                 else f"{type(exception).__module__}.{type(exception).__qualname__}"
             ),
             execution_context=pending.execution_context,
+            output_values=values,
         )
     )
+
+
+_OWNER_VERDICT_RANK = {"drop": 0, "deferred": 1, "keep": 2}
+
+
+def _retain_aten_values(
+    state: Any, pending: _PendingAtenCall, result: Any
+) -> _AtenValueCell | None:
+    """Copy a returned tensor tree under the Op save rules and park it by owner.
+
+    Parameters
+    ----------
+    state
+        Active witness/ATen recorder state (``record_aten_values`` armed).
+    pending
+        Pre-dispatch facts naming the owner wrapper call.
+    result
+        Successful dispatcher result.
+
+    Returns
+    -------
+    _AtenValueCell | None
+        Cell holding a tensor (single result) or a tuple of tensors (one per
+        output fact, same order); ``None`` when values are not retained in RAM
+        for this capture (an active out sink or released streamed outs).
+    """
+
+    from ..._data_classes._op_save import _effective_activation_save_mode
+    from ..._utils.tensor_utils import copy_tensor_payload
+
+    trace = state.trace
+    if getattr(trace, "_out_sink", None) is not None or not getattr(
+        trace, "_keep_outs_in_memory", True
+    ):
+        return None
+    leaves = tuple(_iter_tensors(result))
+    if not leaves:
+        return None
+    save_mode = _effective_activation_save_mode(
+        trace, func_name=pending.operator, is_inplace=pending.mutation_kind != "none"
+    )
+    detach = bool(getattr(trace, "_options_detach_saved_activations", True))
+    output_device = getattr(trace, "_options_output_device", "same")
+    accountant = getattr(trace, "_save_budget_accountant", None)
+    label = f"aten:{pending.operator}.{pending.overload}"
+    copies: list[torch.Tensor] = []
+    for leaf in leaves:
+        reservation = None
+        if accountant is not None and save_mode != "view":
+            device = leaf.device if output_device in (None, "same") else torch.device(output_device)
+            reservation = accountant.admit(
+                label, device, int(leaf.numel()) * int(leaf.element_size()), site="primary"
+            )
+        copy = copy_tensor_payload(
+            leaf, save_mode=save_mode, detach_tensor=detach, target_device=output_device
+        )
+        if accountant is not None and reservation is not None:
+            accountant.commit(reservation, (copy,))
+        copies.append(copy)
+    cell = _AtenValueCell(copies[0] if isinstance(result, torch.Tensor) else tuple(copies))
+    owner = pending.owner_func_call_id
+    if pending.capture_phase == "forward" and owner is not None:
+        if state.aten_owner_verdicts.get(owner) == "drop":
+            return None
+        if state.aten_owner_verdicts.get(owner) != "keep":
+            state.aten_value_cells.setdefault(owner, []).append(cell)
+    return cell
+
+
+def _note_aten_owner_verdict(trace: Any, func_call_id: int | None, verdict: str) -> None:
+    """Record a wrapper call's ``save=`` verdict for the ATen values it owns.
+
+    Parameters
+    ----------
+    trace
+        Active torch Trace.
+    func_call_id
+        Wrapper call id whose Op(s) just settled their save decision.
+    verdict
+        ``keep`` (an output was saved), ``deferred`` (a retroactive lookback
+        candidate: ``keep`` once a successor saves it, ``drop`` when the window
+        evicts it, else settled at postprocess against ``has_saved_activation``),
+        or ``drop``. A verdict is never downgraded, so one saved output of a
+        multi-output call keeps the call's values.
+    """
+
+    if func_call_id is None:
+        return
+    from ._function_boundary import _active_witness_state
+
+    state = _active_witness_state(trace)
+    if state is None or not getattr(state, "record_aten_values", False):
+        return
+    prior = state.aten_owner_verdicts.get(func_call_id)
+    if prior is None or _OWNER_VERDICT_RANK[verdict] > _OWNER_VERDICT_RANK[prior]:
+        state.aten_owner_verdicts[func_call_id] = verdict
+    if verdict == "keep":
+        state.aten_value_cells.pop(func_call_id, None)
+
+
+def _release_dropped_aten_values(state: Any, *, keep_owner: int | None) -> None:
+    """Free values whose owner settled on ``drop`` (the eager ``save=`` prune).
+
+    Parameters
+    ----------
+    state
+        Active witness/ATen recorder state.
+    keep_owner
+        Owner of the call being prepared; its cells stay pending even if an
+        earlier output of the same call already settled.
+    """
+
+    for owner in [o for o in state.aten_value_cells if o != keep_owner]:
+        if state.aten_owner_verdicts.get(owner) == "drop":
+            for cell in state.aten_value_cells.pop(owner):
+                cell.payload = None
 
 
 def _iter_tensors(value: Any, *, depth: int = 0) -> Iterator[torch.Tensor]:
@@ -566,6 +691,7 @@ def _capture_backward_aten(trace: Any, pass_index: int) -> Iterator[None]:
         record_escapes=False,
         ledger=False,
         record_aten=True,
+        record_aten_values=getattr(trace, "_options_aten_ops", False) == "values",
         aten_events=stream,
         capture_phase="backward",
         backward_epoch_index=pass_index,
