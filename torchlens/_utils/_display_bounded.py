@@ -22,7 +22,7 @@ from .fail_open import fail_open
 _SCALARS = (bool, int, float, str, bytes, type(None), enum.Enum)
 
 
-class RecordTuple(tuple):  # type: ignore[type-arg]
+class RecordTuple(tuple):
     """A tuple of records with a bounded repr: ``AtenOps: 2 calls (aten_825, aten_826)``.
 
     ``title`` names the collection and ``noun`` counts its members; both are
@@ -81,7 +81,7 @@ def short_dataclass_repr(obj: Any, *, width: int = REPR_COLS) -> str:
     for field in dataclasses.fields(obj):
         if not field.repr:
             continue
-        value = fail_open(lambda f=field: getattr(obj, f.name), lambda _error: None)
+        value = _read_field(obj, field.name)
         parts.append(f"{field.name}={_short_value(value)}")
     text = f"{name}({', '.join(parts)})"
     if len(text) <= width:
@@ -113,3 +113,15 @@ def _member_line(item: Any) -> str:
     """One member's one-line repr, guarded so a bad member cannot break the list."""
 
     return fail_open(lambda: repr(item), lambda error: f"<{type(item).__name__}: display failed>")
+
+
+def _read_field(obj: Any, name: str) -> Any:
+    """Read one dataclass field for display; a failing property reads as ``None``."""
+
+    def read() -> Any:
+        return getattr(obj, name)
+
+    def fallback(_error: Exception) -> Any:
+        return None
+
+    return fail_open(read, fallback)
