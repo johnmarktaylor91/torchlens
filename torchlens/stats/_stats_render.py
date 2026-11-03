@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 
+from .._utils._display_numbers import format_count, format_iec_bytes, format_sig
 from ._tensor_stats import TensorStats
 
 #: The package glyph table IS the ramp and nothing else (D4): nine ASCII
@@ -39,29 +40,6 @@ def degrade(text: str) -> str:
     return "".join(DEGRADE_TABLE.get(char, char) for char in text)
 
 
-def format_sig(value: float, digits: int = 4) -> str:
-    """Precision-law scalar formatter (D7).
-
-    4 significant digits with trailing zeros KEPT (``%.4g`` strips them, so
-    ``0.99997`` printed ``1`` and no column aligned -- the live bug this
-    replaces); scientific notation outside ``[1e-4, 1e4)``; integral floats
-    keep the digit budget rather than gaining a spurious wide tail.
-    """
-
-    if value != value or value in (float("inf"), float("-inf")):
-        return str(value)
-    if value == 0:
-        return "0.000"[: digits + 1] if digits > 1 else "0"
-    magnitude = abs(value)
-    if magnitude < 1e-4 or magnitude >= 1e4:
-        text = f"{value:.{max(digits - 1, 0)}e}"
-        mantissa, exponent = text.split("e")
-        return f"{mantissa}e{int(exponent):+03d}"
-    decimals = digits - 1 - int(math.floor(math.log10(magnitude)))
-    decimals = max(decimals, 0)
-    return f"{value:.{decimals}f}"
-
-
 def format_sampled(value: float, se: float | None, digits: int = 4) -> str:
     """Sampled-scalar precision law (D22).
 
@@ -76,33 +54,6 @@ def format_sampled(value: float, se: float | None, digits: int = 4) -> str:
         return f"~0 (+-{format_sig(2 * se, 1)})"
     supported = int(math.floor(math.log10(abs(value) / se)))
     return format_sig(value, max(1, min(digits, supported)))
-
-
-def format_count(count: int) -> str:
-    """Compact human count (n=803k form; exact below 1000)."""
-
-    if count < 1000:
-        return str(count)
-    for suffix, divisor in (("G", 1e9), ("M", 1e6), ("k", 1e3)):
-        if count >= divisor:
-            scaled = count / divisor
-            if scaled >= 100:
-                return f"{scaled:.0f}{suffix}"
-            return f"{scaled:.3g}{suffix}"
-    return str(count)
-
-
-def format_iec_bytes(nbytes: int) -> str:
-    """IEC byte string (KiB/MiB/GiB), 3 significant digits."""
-
-    value = float(nbytes)
-    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
-        if value < 1024 or unit == "TiB":
-            if unit == "B":
-                return f"{int(value)} B"
-            return f"{value:.3g} {unit}"
-        value /= 1024
-    return f"{int(nbytes)} B"
 
 
 def sparkline(counts: tuple[int, ...], *, style: str = "ascii") -> str:
