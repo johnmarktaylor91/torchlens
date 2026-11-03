@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias
 
 from .._errors import ArgumentTypeError
+from ._module_facet_fold import _fold_module_facet
 from .errors import SelectorCompositionError, UnclassifiedSelectorError
 from .target import FrozenTargetSpec, TargetSpec
 
@@ -42,7 +43,7 @@ class BaseSelector:
     #: wraps; ``None`` for every other selector. ``_memo_safe`` unwraps through it.
     _wrapped_operand_attr: ClassVar[str | None] = None
 
-    def __and__(self, other: SelectorLike) -> CompositeSelector:
+    def __and__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector that matches the intersection of two selectors.
 
         Parameters
@@ -52,18 +53,21 @@ class BaseSelector:
 
         Returns
         -------
-        CompositeSelector
+        BaseSelector
             Intersection selector. A non-selector operand that implements
             ``__selection__`` defers to that object's reflected operator, so
             ``selector & rf_box`` composes as a Selection; junk operands keep
-            their shipped refusals.
+            their shipped refusals. ``tl.module(address) & tl.head(i)`` (either
+            order) folds into the facet selector scoped to that module, the
+            same selector as ``tl.head(i).in_module(address)``, so it works at
+            every door a facet selector does.
         """
 
         if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
             return NotImplemented
         return _compose("and", self, other)
 
-    def __rand__(self, other: str) -> CompositeSelector:
+    def __rand__(self, other: str) -> BaseSelector:
         """Return ``other & self`` for a bare label string on the left.
 
         Parameters
@@ -82,7 +86,7 @@ class BaseSelector:
             return NotImplemented
         return _compose("and", other, self)
 
-    def __or__(self, other: SelectorLike) -> CompositeSelector:
+    def __or__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector that matches the union of two selectors.
 
         Parameters
@@ -106,7 +110,7 @@ class BaseSelector:
             )
         return _compose("or", self, other)
 
-    def __ror__(self, other: str) -> CompositeSelector:
+    def __ror__(self, other: str) -> BaseSelector:
         """Return ``other | self`` for a bare label string on the left.
 
         Parameters
@@ -154,7 +158,7 @@ class BaseSelector:
             )
         return NotSelector(self)
 
-    def __sub__(self, other: SelectorLike) -> CompositeSelector:
+    def __sub__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector matching this selector minus ``other`` (DESUGAR).
 
         ``a - b`` desugars to ``CompositeSelector("and", (a, NotSelector(b)))``
@@ -741,15 +745,21 @@ def _memo_safe(operand: Any) -> bool:
     return isinstance(operand, (BaseSelector, str))
 
 
-def _compose(operator: Literal["and", "or"], left: Any, right: Any) -> CompositeSelector:
+def _compose(operator: Literal["and", "or"], left: Any, right: Any) -> BaseSelector:
     """Validate ``left <operator> right`` and build its flat composite.
 
     The composite memoises the facts ``_check_composition`` derived, so the
     next chained operator reads them instead of re-walking every accumulated
     child (an n-step chain was quadratic). They equal a fresh flat
     classification: the ``&`` fold and the ``|`` join combine per operand.
+    A module selector intersected with a facet selector folds into the facet
+    selector scoped to that module instead of a composite.
     """
 
+    if operator == "and":
+        folded = _fold_module_facet(left, right)
+        if folded is not None:
+            return folded
     facts = _check_composition(left, right, operator=operator)
     composite = CompositeSelector(operator, _flatten_same_operator(operator, left, right))
     if _memo_safe(left) and _memo_safe(right):
