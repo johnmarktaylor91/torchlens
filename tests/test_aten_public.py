@@ -19,6 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
+from torchlens import _kernel_telemetry
 from torchlens.backends.torch import _aten_capture
 from torchlens.validation.invariants import check_metadata_invariants
 
@@ -120,6 +121,16 @@ def test_switch_off_refuses_typed_and_reports_no_rows() -> None:
     _assert_refuses(lambda: trace.aten_gaps)
     _assert_refuses(lambda: trace.ops[0].aten_ops)
     assert trace._primitive_op_profile is None
+
+
+def test_kernel_telemetry_refuses_a_factory_that_recorded_no_rows() -> None:
+    """The kernel-telemetry seam refuses typed when its factory captured without the switch."""
+
+    _assert_refuses(
+        lambda: _kernel_telemetry._profile_trace_with_cuda_kernels(
+            lambda: tl.trace(_TwoOpModel(), torch.ones(2))
+        )
+    )
 
 
 def test_switch_off_installs_no_dispatch_path_and_on_counts_one_call_per_row(

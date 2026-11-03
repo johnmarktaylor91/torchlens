@@ -436,6 +436,7 @@ def _require_aten_trace(trace: Any) -> Any:
 
         raise AtenOpsUnavailableError(
             "kernel telemetry needs ATen rows but the factory's trace recorded none",
+            code="aten_ops_unavailable",
             remedy=(
                 "capture inside the factory with tl.trace(model, x, "
                 "capture=tl.options.CaptureOptions(aten_ops=True))"

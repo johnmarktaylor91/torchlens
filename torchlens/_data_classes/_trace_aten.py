@@ -41,7 +41,8 @@ def _require_aten_profile(record: Any, *, what: str) -> _PrimitiveOpProfile:
     if profile is None:
         raise AtenOpsUnavailableError(
             f"{what} needs ATen operation rows, but this capture recorded none "
-            "(the aten_ops option was off, or the artifact was saved without it)"
+            "(the aten_ops option was off, or the artifact was saved without it)",
+            code="aten_ops_unavailable",
         )
     return profile
 
