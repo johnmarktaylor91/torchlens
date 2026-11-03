@@ -32,7 +32,7 @@ from .contract import MANIFEST_FILE, REFUSAL_CODES
 from .runnable_families import refuse as _refuse
 
 #: Index file of a bundle artifact, at its root.
-BUNDLE_INDEX_FILE = "bundle.json"
+BUNDLE_INDEX_FILE = "relations.json"
 #: Directory holding one member artifact per trace.
 MEMBERS_DIR = "members"
 #: The member relation table of a 3.0 bundle, at its root.
@@ -141,7 +141,7 @@ def verify_member_reference(member_root: Path, entry: Mapping[str, Any], *, requ
     member_root:
         Resolved member directory (already contained in the bundle root).
     entry:
-        The member reference from ``bundle.json``.
+        The member reference from ``relations.json``.
     required:
         Whether the reference must carry ``manifest_sha256`` (every 3.0
         bundle does; the tlspec 11 container wrote none).

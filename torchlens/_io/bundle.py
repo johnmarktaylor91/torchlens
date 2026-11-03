@@ -22,7 +22,7 @@ import sys
 import uuid
 import warnings
 import weakref
-from collections.abc import Collection, Iterable, Mapping, Set
+from collections.abc import Collection, Mapping, Set
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +41,11 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.module import ModuleAccessor
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
+from .._runnable.state import (
+    bind_embedded_nonpersistent_buffers,
+    bind_embedded_trace_state,
+    runnable_tensor_byte_digest,
+)
 from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
 from ..backends.registry import BackendSpec, get_backend_spec
@@ -70,11 +75,20 @@ from ._pickle_prescan import OpcodeCeilingExceeded
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
+    _RUNNABLE_ACTIVATION_KIND,
+    _RUNNABLE_NONPERSISTENT_BUFFER_KIND,
+    _RUNNABLE_WEIGHT_KIND,
     _refuse_edge_intervened_save,
     _refuse_shard_local_erasure,
+    _runnable_write_context,
     _save_bundle_via_container_door,
+    _stamped_descriptor,
 )
-from .format3 import contract as format3_contract, reader as format3_reader
+from .format3 import (
+    contract as format3_contract,
+    reader as format3_reader,
+    runnable as format3_runnable,
+)
 from .format3.payloads import (
     NUMPY_CODEC,
     TORCH_CODEC,
@@ -107,6 +121,7 @@ from .payload_codec import (
     numpy_to_transport_tensor,
 )
 from .rehydrate import rehydrate_trace
+from .runnable_load import attach_sparse_run_readiness
 from .save_policy import _refuse_incoherent_structure_only_write, _resolve_include_flags
 from .scrub import BlobSpec, scrub_for_save
 from .state_keys import invalidate_static_class_attr_cache
@@ -114,12 +129,6 @@ from .tensor_policy import FailReason, Ok
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 
 if TYPE_CHECKING:
-    from .._runnable import (
-        ActivationPayloadMember,
-        SlotByteDigest,
-        SparseRunDescriptor,
-        StateByteDigest,
-    )
     from ..bundle import Bundle
     from ..intervention.types import InterventionSpec
 
@@ -173,9 +182,6 @@ _METADATA_PKL_PRESCAN_BYTES = 8 * 1024**2
 # Belt bound on the persisted PARTIAL failure-reason sentinel (B8-12).
 _MAX_PARTIAL_REASON_CHARS = 200
 _BLOB_TENSOR_KEY = "data"
-_RUNNABLE_WEIGHT_KIND = "runnable_weight"
-_RUNNABLE_NONPERSISTENT_BUFFER_KIND = "runnable_nonpersistent_buffer"
-_RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 
 
 class _RenameAwareUnpickler(SafeBundleUnpickler):
@@ -574,7 +580,6 @@ def save(
         include_buffer_values=include_buffer_values,
     )
     sparse_run_descriptor = None
-    sparse_run_json = None
     weight_blob_specs: list[BlobSpec] = []
     nonpersistent_buffer_blob_specs: list[BlobSpec] = []
     activation_blob_specs: list[BlobSpec] = []
@@ -593,44 +598,14 @@ def save(
             arguments=("include_activations", "level"),
         )
     if save_level == "runnable":
-        from .runnable import (
-            require_sparse_run_descriptor,
-            sparse_descriptor_to_json,
-            with_activation_payload,
-            with_weight_payload,
-        )
-
-        sparse_run_descriptor = require_sparse_run_descriptor(trace)
-        nonpersistent_buffer_blob_specs = _capture_nonpersistent_buffer_blob_specs(
-            trace,
+        (
             sparse_run_descriptor,
+            nonpersistent_buffer_blob_specs,
+            weight_blob_specs,
+            activation_blob_specs,
+        ) = _stamped_descriptor(
+            trace, include_weights=include_weights, include_activations=include_activations
         )
-        if nonpersistent_buffer_blob_specs:
-            _warn_nonpersistent_buffer_disclosure_once()
-        if include_weights:
-            weight_blob_specs = _capture_weight_blob_specs(
-                trace,
-                sparse_run_descriptor,
-            )
-            sparse_run_descriptor = with_weight_payload(sparse_run_descriptor)
-        if include_activations:
-            (
-                activation_blob_specs,
-                activation_members,
-                original_input_digests,
-                capture_state_digests,
-                input_fingerprints,
-            ) = _capture_activation_blob_specs(trace, sparse_run_descriptor)
-            if activation_members and not original_input_digests:
-                _warn_unattestable_activation_archive_once()
-            sparse_run_descriptor = with_activation_payload(
-                sparse_run_descriptor,
-                members=activation_members,
-                original_input_digests=original_input_digests,
-                capture_state_digests=capture_state_digests,
-                input_fingerprints=input_fingerprints,
-            )
-        sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
     backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
     backend_spec = get_backend_spec(backend_name)
     _reject_audit_only_materialized_payload_save(
@@ -684,9 +659,6 @@ def save(
                 raise ArtifactError(
                     "Sparse runnable scrub produced tensor blob specs; refusing runnable label."
                 )
-            blob_specs.extend(nonpersistent_buffer_blob_specs)
-            blob_specs.extend(weight_blob_specs)
-            blob_specs.extend(activation_blob_specs)
         _refuse_incoherent_structure_only_write(scrubbed_state)
         _apply_visualization_save_policy(
             trace,
@@ -728,7 +700,8 @@ def save(
                 "be saved without a backend payload codec."
             )
 
-        payload_store = PayloadStore(tmp_path)
+        payload_counter = [0]
+        payload_store = PayloadStore(tmp_path, counter=payload_counter)
         tensor_refs: dict[str, dict[str, Any]] = {}
         tensor_entries: list[TensorEntry] = []
         unsupported_tensors: list[dict[str, str]] = list(scrub_unsupported_tensors)
@@ -781,6 +754,21 @@ def save(
         intervention_entry, recipe_disclosures = write_trace_recipe(
             tmp_path, trace, store=payload_store, save_level=save_level
         )
+        runnable_entry = None
+        if sparse_run_descriptor is not None:
+            runnable_entry = format3_runnable.write_runnable(
+                tmp_path,
+                context=_runnable_write_context(
+                    (
+                        sparse_run_descriptor,
+                        nonpersistent_buffer_blob_specs,
+                        weight_blob_specs,
+                        activation_blob_specs,
+                    ),
+                    payload_counter,
+                ),
+            )
+            payload_store.writer(TORCH_CODEC)
         payload_store.close()
         tensor_entries = seal_tensor_entries(tmp_path, tensor_entries)
 
@@ -819,11 +807,12 @@ def save(
             trace=trace,
             legacy_manifest=manifest,
             save_level=save_level,
-            sparse_run=sparse_run_json,
             scrubbed_state=scrubbed_state,
         )
         if intervention_entry is not None:
             base_manifest["intervention"] = intervention_entry
+        if runnable_entry is not None:
+            base_manifest["runnable"] = runnable_entry.manifest
         tables = TraceTables(
             scrubbed_state,
             tensor_refs,
@@ -906,293 +895,6 @@ def save(
                 cause_type=type(exc).__name__,
             ) from exc
         raise
-
-
-def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) -> None:
-    """Refuse a runnable payload family whose entry labels load would reject.
-
-    r79 (r78 free LOW): ``self._parameters[""] = nn.Parameter(...)`` bypasses
-    ``register_parameter``'s empty-name validation, captures, and SAVED an
-    artifact whose weight tensor entry carried label ``""`` -- which
-    ``validate_tlspec`` categorically refuses at load ("requires a canonical
-    label"). A save door must never produce a stillborn artifact, so this
-    preflight mirrors the load-side canonical-label predicate exactly
-    (non-``str`` or empty refuses; nothing wider).
-
-    Parameters
-    ----------
-    names:
-        Candidate canonical entry labels for one payload family.
-    family:
-        Human-readable payload family name for the refusal message.
-
-    Raises
-    ------
-    RunnablePreflightError
-        Typed save refusal for any label the load door would refuse.
-    """
-
-    from .._runnable import RunnableErrorCode
-
-    for name in names:
-        if not isinstance(name, str) or name == "":
-            raise RunnablePreflightError(
-                f"Runnable {family} entry requires a canonical label; got {name!r}. "
-                "An artifact with this label would be refused wholesale at load "
-                "(empty state names bypass register_parameter/register_buffer "
-                "validation and have no canonical state_dict identity).",
-                code=RunnableErrorCode.SPARSE_PREFLIGHT_FAILED.value,
-            )
-
-
-def _capture_weight_blob_specs(
-    trace: Trace,
-    descriptor: SparseRunDescriptor,
-) -> list[BlobSpec]:
-    """Collect one full source-model state dict as runnable weight blobs.
-
-    Parameters
-    ----------
-    trace:
-        Live capture Trace retaining a weak reference to its source model.
-    descriptor:
-        Sparse descriptor whose canonical names, roles, and aliases define the
-        strict state contract.
-
-    Returns
-    -------
-    list[BlobSpec]
-        Separately named state-only blobs ordered by canonical state name.
-
-    Raises
-    ------
-    ArtifactError
-        If the live source model or its state mapping is unavailable.
-    StateBindingError
-        If the full state dict disagrees with the descriptor contract.
-    RunnablePreflightError
-        If a state name is not a canonical (non-empty) label (r79 save-side
-        mirror of the load door's canonical-label check).
-    """
-
-    from .._runnable.state import validate_state_mapping_for_descriptor
-
-    state = _capture_source_state(trace, option_name="include_weights")
-    validate_state_mapping_for_descriptor(descriptor, state)
-    _require_canonical_runnable_labels(
-        cast(Mapping[str, torch.Tensor], state).keys(), family="weight tensor"
-    )
-    return [
-        BlobSpec(
-            blob_id=f"runnable_weight_{index:05d}",
-            value=state[name].detach().clone(),
-            kind=_RUNNABLE_WEIGHT_KIND,
-            label=name,
-            logical_backend="torch",
-        )
-        for index, name in enumerate(sorted(cast(Mapping[str, torch.Tensor], state)))
-    ]
-
-
-def _capture_nonpersistent_buffer_blob_specs(
-    trace: Trace,
-    descriptor: SparseRunDescriptor,
-) -> list[BlobSpec]:
-    """Collect used non-persistent buffers as mandatory runnable payloads.
-
-    Parameters
-    ----------
-    trace:
-        Live capture Trace retaining the captured initial buffer values.
-    descriptor:
-        Sparse descriptor identifying buffer bindings excluded from ``state_dict``.
-
-    Returns
-    -------
-    list[BlobSpec]
-        One separately stored value blob per used non-persistent buffer name.
-
-    Raises
-    ------
-    StateBindingError
-        If a required captured value is missing or violates its slot contract.
-    RunnablePreflightError
-        If a buffer name is not a canonical (non-empty) label (r79 save-side
-        mirror of the load door's canonical-label check).
-    """
-
-    from .._runnable.state import validate_nonpersistent_buffer_mapping_for_descriptor
-
-    names = sorted(
-        {
-            slot.state_binding.state_dict_name
-            for slot in descriptor.tensor_slots
-            if slot.role.value == "buffer"
-            and slot.state_binding is not None
-            and not slot.state_binding.persistent
-        }
-    )
-    _require_canonical_runnable_labels(names, family="non-persistent buffer")
-    captured_values = getattr(trace, "_buffer_initial_values", {}) or {}
-    values = {name: captured_values[name] for name in names if name in captured_values}
-    validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, values)
-    return [
-        BlobSpec(
-            blob_id=f"runnable_nonpersistent_buffer_{index:05d}",
-            value=cast(torch.Tensor, values[name]).detach().clone(),
-            kind=_RUNNABLE_NONPERSISTENT_BUFFER_KIND,
-            label=name,
-            logical_backend="torch",
-        )
-        for index, name in enumerate(names)
-    ]
-
-
-def _capture_activation_blob_specs(
-    trace: Trace,
-    descriptor: SparseRunDescriptor,
-) -> tuple[
-    list[BlobSpec],
-    tuple[ActivationPayloadMember, ...],
-    tuple[SlotByteDigest, ...],
-    tuple[StateByteDigest, ...],
-    tuple[Any, ...],
-]:
-    """Collect capture-selected activation blobs and attestation eligibility digests.
-
-    Parameters
-    ----------
-    trace:
-        Completed capture retaining the existing ``save=`` payload decisions.
-    descriptor:
-        Sparse descriptor whose slots and calls identify archived membership.
-
-    Returns
-    -------
-    tuple
-        Blob specs, exact activation membership, original-input digests available
-        from selected input payloads, and capture-state digests.
-
-    Raises
-    ------
-    ArtifactError
-        If a selected payload is unavailable or is not a dense torch tensor.
-    """
-
-    from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
-    from .._runnable.input_aliases import build_input_attestation_fingerprint
-    from .._runnable.state import runnable_tensor_byte_digest
-
-    slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
-    call_id_by_label = {
-        op_label: call.call_id for call in descriptor.calls for op_label in call.op_labels
-    }
-    blob_specs: list[BlobSpec] = []
-    members: list[ActivationPayloadMember] = []
-    input_digests: list[SlotByteDigest] = []
-    input_fingerprints: list[Any] = []
-    for op in trace._layer_list:
-        op_label = str(op.label)
-        slot_id = f"slot:{op_label}"
-        if slot_id not in slot_ids:
-            continue
-        out = _physical_op_payload(op, "out")
-        if bool(getattr(op, "is_input", False)) and isinstance(out, torch.Tensor):
-            digest = runnable_tensor_byte_digest(out)
-            input_digests.append(SlotByteDigest(slot_id=slot_id, byte_digest=digest))
-            # hon1_3 (H-a): the physical fingerprint is built from the LIVE retained
-            # in-memory input value that seeded the captured forward (never from the
-            # serialized payload, which contiguifies strides). The run side
-            # fingerprints the executed clone on the same basis.
-            input_fingerprints.append(
-                build_input_attestation_fingerprint(slot_id, out, byte_digest=digest)
-            )
-        if not bool(getattr(op, "has_saved_activation", False)):
-            continue
-        found_payload = False
-        for field_name in ("out", "transformed_out"):
-            payload = _physical_op_payload(op, field_name)
-            if payload is None:
-                continue
-            found_payload = True
-            if not isinstance(payload, torch.Tensor) or payload.layout is not torch.strided:
-                raise ArtifactError(
-                    "include_activations=True requires every selected out/transformed_out "
-                    f"payload to be a dense torch.Tensor; {op_label}.{field_name} is "
-                    f"{type(payload).__name__}."
-                )
-            blob_id = f"runnable_activation_{len(blob_specs):05d}"
-            digest = runnable_tensor_byte_digest(payload)
-            blob_specs.append(
-                BlobSpec(
-                    blob_id=blob_id,
-                    value=payload,
-                    kind=_RUNNABLE_ACTIVATION_KIND,
-                    label=op_label,
-                    logical_backend="torch",
-                )
-            )
-            members.append(
-                ActivationPayloadMember(
-                    blob_id=blob_id,
-                    slot_id=slot_id,
-                    call_id=call_id_by_label.get(op_label),
-                    op_label=op_label,
-                    field=cast(Any, field_name),
-                    byte_digest=digest,
-                )
-            )
-        if not found_payload:
-            raise ArtifactError(
-                "include_activations=True found a capture-selected activation without a "
-                f"materialized out/transformed_out payload at {op_label!r}."
-            )
-
-    state = _capture_source_state(trace, option_name="include_activations")
-    state_digests = tuple(
-        StateByteDigest(
-            state_dict_name=name,
-            byte_digest=runnable_tensor_byte_digest(value),
-        )
-        for name, value in sorted(cast(Mapping[str, torch.Tensor], state).items())
-    )
-    return (
-        blob_specs,
-        tuple(members),
-        tuple(input_digests),
-        state_digests,
-        tuple(input_fingerprints),
-    )
-
-
-def _physical_op_payload(op: Any, field_name: str) -> Any:
-    """Read one stored Op payload without invoking missing-payload access errors."""
-
-    slot = getattr(op, "_slot", None)
-    if callable(slot):
-        return slot(field_name)
-    return getattr(op, field_name, None)
-
-
-def _capture_source_state(trace: Trace, *, option_name: str) -> Mapping[str, torch.Tensor]:
-    """Return the snapshot of the model state used by the captured forward pass.
-
-    The snapshot is taken at the runnable capture boundary, before user model
-    execution. It must never be replaced with a save-time read of the live
-    model because that could embed a drifted state under the capture-state
-    label.
-    """
-
-    state = trace._runnable.capture_state
-    if not isinstance(state, Mapping) or any(
-        not isinstance(name, str) or not isinstance(value, torch.Tensor)
-        for name, value in state.items()
-    ):
-        raise ArtifactError(
-            f"{option_name}=True requires a tensor-only capture-time state snapshot. "
-            "This Trace cannot embed state as embedded_capture_state."
-        )
-    return cast(Mapping[str, torch.Tensor], state)
 
 
 def _reject_audit_only_materialized_payload_save(
@@ -1283,8 +985,6 @@ def _load_216_intervention_spec(
 def _attach_run_readiness(trace: Trace, sparse_run: Any) -> None:
     """Attach the sparse-run readiness report (the loader's one late import of runnable_load)."""
 
-    from .runnable_load import attach_sparse_run_readiness
-
     attach_sparse_run_readiness(trace, sparse_run)
 
 
@@ -1308,9 +1008,8 @@ def _finish_format3_trace(
 
     root, manifest = artifact.root, artifact.manifest
     state = artifact.trace_state(ModuleAccessor)
-    blobs_dir = (
-        resolve_bundle_blobs_dir(root) if (root / format3_contract.BLOBS_DIR).is_dir() else None
-    )
+    has_blobs = (root / format3_contract.BLOBS_DIR).is_dir()
+    blobs_dir = resolve_bundle_blobs_dir(root) if has_blobs else None
     trace = rehydrate_trace(
         state,
         artifact.manifest_for_rehydrate(),
@@ -1329,67 +1028,49 @@ def _finish_format3_trace(
     trace._source_bundle_path = root
     trace._source_bundle_created_at = manifest["created_at"]
     trace._source_bundle_provenance = manifest.get("provenance")
-    _attach_run_readiness(trace, manifest.get("run"))
-    _bind_format3_runnable_payloads(
-        trace, manifest=manifest, root=root, map_location=map_location, blobs_dir=blobs_dir
+    # Contract section 7: the runnable component (descriptor and families under ``runnable/``,
+    # listed in ``manifest["runnable"]``); an analysis artifact attaches analysis-only readiness.
+    runnable_bind.attach_runnable(
+        trace,
+        root,
+        manifest.get("runnable"),
+        manifest.get("files") or {},
+        map_location=map_location,
     )
-    disclosures = manifest.get("disclosures")
-    if disclosures is not None:
-        format3_reader.attach_disclosure_advisory(trace, disclosures)
+    if manifest.get("disclosures") is not None:
+        format3_reader.attach_disclosure_advisory(trace, manifest["disclosures"])
     if manifest.get("intervention") is not None:
         trace._intervention_spec = _finish_format3_recipe(root)
     return trace
 
 
-def _bind_format3_runnable_payloads(
-    trace: Trace,
-    *,
-    manifest: Mapping[str, Any],
-    root: Path,
-    map_location: str | torch.device,
-    blobs_dir: Path | None,
-) -> None:
-    """Bind a 3.0 artifact's runnable payload families (references rebuilt from its
-    blob-id index and parsed ``run`` descriptor); an analysis artifact binds nothing."""
-
-    payloads = runnable_bind.runnable_payload_index(manifest, trace._sparse_run_descriptor)
-    if not payloads.tensors and trace._sparse_run_descriptor is None:
-        return
-    for bind in (
-        _bind_embedded_nonpersistent_buffer_payload,
-        _bind_embedded_weight_payload,
-        _bind_archived_activation_payload,
-    ):
-        bind(
-            trace,
-            manifest=payloads,
-            bundle_path=root,
-            map_location=map_location,
-            resolved_blobs_dir=blobs_dir,
-        )
-
-
 def _finish_format3_bundle(
-    members: list[tuple[str, Trace]], *, relations: Any, baseline: Any, root: Path
+    members: list[tuple[str, Trace]],
+    *,
+    metadata: Mapping[str, Any],
+    root: Path,
+    tlspec_version: Any,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
 ) -> Bundle:
-    """Assemble the loaded members, relations and baseline of a 3.0 bundle."""
+    """Assemble a 3.0 bundle from its members and ``relations.json`` (bare unknown keys refuse
+    ``bundle_section_unknown``; ``unknown_relations`` is the policy for unknown relation kinds)."""
 
-    from ..bundle import Bundle
+    from .bundle_container import assemble_bundle
 
-    bundle = Bundle(members, relations=relations, baseline=baseline)
+    bundle = assemble_bundle(
+        dict(members),
+        dict(metadata),
+        tlspec_version=tlspec_version,
+        unknown_relations=unknown_relations,
+    )
     setattr(bundle, "_source_bundle_path", root)
     return bundle
 
 
 def _finish_format3_recipe(root: Path) -> InterventionSpec:
-    """Stage the recipe ``intervention.json`` describes (design section 8).
-
-    The intervention package owns the rebuild: built-in edits come back
-    through the helper registry, a callable placeholder (rule level or inside
-    a built-in edit's arguments) becomes an audit-only ``Edit`` and is listed
-    in ``metadata["recipe_placeholders"]``, which every rerun door refuses
-    with ``run_intervention_spec_not_persisted``.
-    """
+    """Stage the recipe ``intervention.json`` describes (design section 8): the intervention
+    package rebuilds built-in edits through the helper registry; a callable placeholder becomes
+    an audit-only ``Edit`` listed in ``metadata["recipe_placeholders"]`` (rerun refuses)."""
 
     from ..intervention.save import _load_trace_recipe_spec
 
@@ -1398,6 +1079,14 @@ def _finish_format3_recipe(root: Path) -> InterventionSpec:
 
 format3_reader.install_load_hooks(
     trace=_finish_format3_trace, bundle=_finish_format3_bundle, recipe=_finish_format3_recipe
+)
+runnable_bind.install_runnable_binders(
+    runnable_bind.RunnableBinders(
+        attach_readiness=attach_sparse_run_readiness,
+        bind_state=bind_embedded_trace_state,
+        bind_buffers=bind_embedded_nonpersistent_buffers,
+        byte_digest=runnable_tensor_byte_digest,
+    )
 )
 
 
@@ -1588,7 +1277,14 @@ def load(
             )
         if is_format3_root(bundle_path, tlspec_format):
             # 3.0 saved format: record tables plus safetensors chunks, never the pickle path.
-            return load_format3(bundle_path, lazy, map_location, materialize_nested, payload_hints)
+            return load_format3(
+                bundle_path,
+                lazy,
+                map_location,
+                materialize_nested,
+                payload_hints,
+                unknown_relations=unknown_relations,
+            )
 
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
@@ -1802,69 +1498,6 @@ def _load_trace_payload(
     return trace
 
 
-_NONPERSISTENT_DISCLOSURE_WARNED = False
-"""One-time process flag for the non-persistent buffer save disclosure."""
-
-_UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED = False
-"""One-time process flag for the unattestable-activation-archive save disclosure (r6 H2)."""
-
-
-def _warn_nonpersistent_buffer_disclosure_once() -> None:
-    """Emit the one-time REQUIRED-family privacy disclosure (contract section 5).
-
-    A default runnable save of a model with used non-persistent buffers carries
-    their capture-time tensor values in the required
-    ``runnable_nonpersistent_buffer_v1`` family even with both include flags
-    false -- declared state without which the artifact cannot replay. The family
-    is manifest-visible; this warning makes the disclosure active.
-    """
-
-    global _NONPERSISTENT_DISCLOSURE_WARNED
-    if _NONPERSISTENT_DISCLOSURE_WARNED:
-        return
-    _NONPERSISTENT_DISCLOSURE_WARNED = True
-    warnings.warn(
-        "This runnable save includes capture-time values of used NON-persistent "
-        "buffers (the required runnable_nonpersistent_buffer_v1 family): they are "
-        "declared state the artifact cannot replay without, and they are written "
-        "even with include_weights/include_activations false. Review the buffers "
-        "before sharing the artifact if they may hold sensitive data.",
-        TorchLensWarning,
-        stacklevel=3,
-    )
-
-
-def _warn_unattestable_activation_archive_once() -> None:
-    """Disclose an activation archive saved without any original-input eligibility (r6 H2).
-
-    ``_capture_activation_blob_specs`` can only record ``original_input_digests`` /
-    ``input_fingerprints`` for a model input that the capture actually SELECTED. With a
-    ``save=`` selector -- the recommended idiom -- the input op is usually unselected, so
-    the archive ships blobs and digests but ZERO input eligibility, and numeric attestation
-    is permanently ``NOT_APPLICABLE`` no matter what the caller later passes to ``.run()``.
-    Left silent that is indistinguishable from "you changed the input", so disclose it at
-    SAVE time. The run report carries the matching named
-    ``numeric_attestation:not_applicable:no_recorded_original_input_eligibility`` entry.
-
-    This is the behavior-preserving half only: the status itself is deliberately NOT
-    promoted to ``ATTESTED``.
-    """
-
-    global _UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED
-    if _UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED:
-        return
-    _UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED = True
-    warnings.warn(
-        "This runnable save archives activations but records no original-input "
-        "digests/fingerprints, because the capture selection did not include the model "
-        "input. Numeric attestation on a later .run() will report not_applicable for that "
-        "reason -- not because the inputs changed. Capture the model input alongside the "
-        "selected activations if byte-exact attestation is wanted.",
-        TorchLensWarning,
-        stacklevel=3,
-    )
-
-
 def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str:
     """Return ``"bind"`` / ``"skip"`` / ``"error"`` for one runnable payload family (r39 corr2_3).
 
@@ -1969,8 +1602,6 @@ def _bind_embedded_nonpersistent_buffer_payload(
         )
         embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
-    from .._runnable.state import bind_embedded_nonpersistent_buffers
-
     bind_embedded_nonpersistent_buffers(trace, embedded)
 
 
@@ -2043,8 +1674,6 @@ def _bind_embedded_weight_payload(
         )
         embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
-    from .._runnable.state import bind_embedded_trace_state
-
     bind_embedded_trace_state(trace, embedded)
 
 
@@ -2078,7 +1707,6 @@ def _bind_archived_activation_payload(
     """
 
     from .._runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
-    from .._runnable.state import runnable_tensor_byte_digest
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)

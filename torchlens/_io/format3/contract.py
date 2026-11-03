@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Final, NoReturn
 
-from ..._data_classes.field_policy import StorageKind
+from .._field_policy import StorageKind
 from ..format_errors import ArtifactError
 
 #: Manifest ``format`` value; anything else is not this format.

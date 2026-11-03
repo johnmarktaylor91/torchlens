@@ -28,8 +28,8 @@
 9a. Rehydration floor: this release reads only its own format. An artifact stamped
     `tlspec_version` < 11 was saved by torchlens 2.x and refuses to load with the one typed
     `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`); no alias list,
-    retired-key pop or legacy spelling adapter remains on any record class. Legacy 2.16
-    intervention specs remain loadable (the floor covers Trace rehydration only). Save writes typed JSON with no
+    retired-key pop or legacy spelling adapter remains on any record class. The 2.16
+    intervention spec format also refuses at this floor. Save writes typed JSON with no
     pickle: a value with no typed encoding is stringified with a manifest disclosure, a value
     with no 3.0 form at all refuses typed (`metadata_value_unportable`), and the reload check
     parses and decodes the written records before publish; load validates graph structure,
@@ -223,3 +223,8 @@
     intervals (storage-pointer equality never decides); the recorded default device enters as a
     scoped `with torch.device(...)`; CUDA state stages lazily and atomically at run preparation
     with a no-allocation readiness capability gate.
+- ATen recording is opt-in and never silent: with `CaptureOptions(aten_ops=False)` (the default)
+  no dispatch mode is installed and `trace.aten_ops` / `op.aten_ops` / `trace.aten_gaps` raise
+  `AtenOpsUnavailableError`; with the switch on, a loaded profile's foreign keys are hostile input
+  and still validate, and `mode_paused_interior` gaps are disclosed through `aten_gaps`, never
+  filled with synthetic rows.

@@ -15,18 +15,19 @@ unreferenced.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
 import torch
-from safetensors.torch import load_file, save_file
+from safetensors.torch import load_file
 
 from ..._utils.hashing import sha256_file
 from ..format_errors import ArtifactError
 from ..paths import reject_symlink_path
 from .contract import REFUSAL_CODES, RUNNABLE_DIR, TENSOR_REFERENCE_FIELDS, TYPED_VALUE_KEY
+from .payloads import ChunkWriter, host_tensor
 
 #: Largest safetensors file a chunked family writes, in bytes (contract section 3).
 CHUNK_BYTES = 256 * 1024 * 1024
@@ -65,13 +66,6 @@ def file_row(root: Path, relative: str) -> dict[str, Any]:
     return {"sha256": sha256_file(target), "bytes": target.stat().st_size}
 
 
-def _stored_tensor(tensor: torch.Tensor) -> torch.Tensor:
-    """Return the host-resident bytes of one tensor as safetensors stores them."""
-
-    host = tensor.detach().resolve_conj().resolve_neg().contiguous().cpu()
-    return torch.view_as_real(host).contiguous() if host.is_complex() else host
-
-
 def _reference(blob: str, key: str, tensor: torch.Tensor) -> dict[str, Any]:
     """Build the contract tensor reference of one written tensor."""
 
@@ -90,27 +84,6 @@ def _reference(blob: str, key: str, tensor: torch.Tensor) -> dict[str, Any]:
     return reference
 
 
-def _chunks(
-    members: Sequence[tuple[str, torch.Tensor]], *, chunked: bool
-) -> Iterator[list[tuple[str, torch.Tensor]]]:
-    """Group members into files of at most ``CHUNK_BYTES`` (one group when unchunked).
-
-    A tensor larger than the limit gets a file of its own.
-    """
-
-    current: list[tuple[str, torch.Tensor]] = []
-    size = 0
-    for name, tensor in members:
-        nbytes = tensor.numel() * tensor.element_size()
-        if chunked and current and size + nbytes > CHUNK_BYTES:
-            yield current
-            current, size = [], 0
-        current.append((name, tensor))
-        size += nbytes
-    if current:
-        yield current
-
-
 @dataclass(frozen=True)
 class FamilySink:
     """Where a component's families are written.
@@ -121,13 +94,29 @@ class FamilySink:
         Artifact directory.
     files:
         Manifest ``files`` rows; one row is added per written file.
-    keys:
-        The component's key counter; each tensor takes the next ``t<k>``.
+    counter:
+        Shared artifact counter; each tensor takes the next ``t<k>``.
     """
 
     root: Path
     files: dict[str, dict[str, Any]]
-    keys: Iterator[int]
+    counter: list[int]
+
+
+class _FamilyChunkWriter(ChunkWriter):
+    """Use the shared chunk writer with the runnable family's fixed file naming."""
+
+    def __init__(self, sink: FamilySink, stem: str, *, chunked: bool, cap: int) -> None:
+        super().__init__(
+            sink.root, codec=FAMILY_CODEC, counter=sink.counter, directory=RUNNABLE_DIR, stem=stem
+        )
+        self._index = 1
+        self._cap = cap
+        self._numbered = chunked
+
+    def _chunk_name(self) -> str:
+        suffix = f"-{self._index:04d}" if self._numbered else ""
+        return f"{self.directory}/{self.stem}{suffix}.safetensors"
 
 
 def write_family(
@@ -152,25 +141,16 @@ def write_family(
         Whether the family splits at ``CHUNK_BYTES``.
     """
 
-    paths: list[str] = []
+    cap = CHUNK_BYTES if chunked else sum(t.numel() * t.element_size() for _, t in members)
+    writer = _FamilyChunkWriter(sink, stem, chunked=chunked, cap=cap)
     references: dict[str, dict[str, Any]] = {}
-    for number, group in enumerate(_chunks(members, chunked=chunked), start=1):
-        suffix = f"-{number:04d}" if chunked else ""
-        relative = f"{RUNNABLE_DIR}/{stem}{suffix}.safetensors"
-        stored: dict[str, torch.Tensor] = {}
-        storages: set[int] = set()
-        for name, tensor in group:
-            key = f"t{next(sink.keys)}"
-            value = _stored_tensor(tensor)
-            storage = value.untyped_storage().data_ptr()
-            # Tied weights and view activations share storage, which safetensors refuses.
-            stored[key] = value.clone() if storage in storages else value
-            storages.add(storage)
-            references[name] = _reference(relative, key, tensor)
-        save_file(stored, str(sink.root / relative))
+    for name, tensor in members:
+        relative, key = writer.submit(host_tensor(tensor))
+        references[name] = _reference(relative, key, tensor)
+    writer.flush()
+    for relative in writer.written:
         sink.files[relative] = file_row(sink.root, relative)
-        paths.append(relative)
-    return paths, references
+    return writer.written, references
 
 
 def checked_file(root: Path, relative: str, files: Mapping[str, Any]) -> Path:

@@ -45,7 +45,7 @@ import torchlens as tl
 from torchlens._data_classes._accessor_base import Accessor
 from torchlens._data_classes._state_adapter import state_items
 from torchlens._io.format3 import schema as format_schema
-from torchlens._io.format3.contract import TENSOR_REFERENCE_FIELDS
+from torchlens._io.format3.contract import TENSOR_REFERENCE_FIELDS, TYPED_VALUE_KEY
 from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.payloads import read_tensor
 from torchlens._io.format3.values import RowRef, object_state
@@ -265,7 +265,11 @@ class _Comparison:
             self.miss(f"{at}: {decoded!r:.80} vs {live!r:.80}")
 
     def compare_tensor(self, decoded: Any, live: torch.Tensor, at: str) -> None:
-        if not isinstance(decoded, dict) or not set(decoded) <= set(TENSOR_REFERENCE_FIELDS):
+        if (
+            not isinstance(decoded, dict)
+            or decoded.get(TYPED_VALUE_KEY) != "tensor"
+            or not set(decoded) <= {TYPED_VALUE_KEY, *TENSOR_REFERENCE_FIELDS}
+        ):
             self.miss(f"{at}: live tensor written as {decoded!r:.80}")
             return
         if decoded["dtype"] != str(live.dtype).replace("torch.", ""):

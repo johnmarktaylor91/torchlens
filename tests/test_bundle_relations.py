@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
@@ -474,6 +475,7 @@ def test_persistence_stale_marker_refuses_typed(tiny_trace: Any, tmp_path: Path)
         "fields": ["Bundle.relations"],
     }
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    redigest(target, "relations.json")
     with pytest.raises(PreReleaseArtifactError):
         tl.load(target)
 
@@ -488,6 +490,7 @@ def test_persistence_dangling_member_refuses_typed(tiny_trace: Any, tmp_path: Pa
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["member_relations"] = [_pair_row(dst="ghost")]
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    redigest(target, "relations.json")
     with pytest.raises(BundleRelationError) as excinfo:
         tl.load(target)
     assert excinfo.value.fields["code"] == "bundle_relation_member_missing"

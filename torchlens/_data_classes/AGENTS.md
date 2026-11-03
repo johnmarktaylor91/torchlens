@@ -46,6 +46,8 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_trace_docs_validation.py` | Docstring table: `Trace` validation, run and backward methods |
 | `_trace_field_spec.py` | `Trace._PORTABLE_STATE_SPEC`, the persisted-field policy table |
 | `_trace_removal.py` | Log-entry removal and parameter-reference release behind `Trace._remove_log_entry` and friends |
+| `_trace_aten.py` | Bodies of the public `Trace.has_aten_ops`, `aten_ops` and `aten_gaps` properties; typed refusal when no ATen rows were recorded |
+| `_trace_source_introspection.py` | Live source-model fallbacks behind the `Trace._source_*` signature and docstring properties |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
 | `_trace_intervention_records.py` | Intervention spec state and history records of a `Trace` (record rebuild destination) |
 | `_fork_lineage.py` | Fork lineage functions: fork verb, fork naming, owner-ref rebinding (record rebuild destination) |
@@ -53,7 +55,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_compaction.py` | Freeze-seam Op metadata pooling (M11 fold) + M14 duplicate/empty container-cell pooling (`PooledCell`, hydrate-on-read) + singleton label-list compaction (bare str + identity-gated store registry, kind tables only) |
 | `_layer_spec.py` | `_LAYER_MIRROR_SPEC` and the Layer mirror-field spec (split out of `layer.py`) |
 | `_layer_accessors.py` | `OpAccessor`/`LayerAccessor` dict-like lookup (split out of `layer.py`; re-exported there) |
-| `_schema_bindings.py` | GENERATED per-field `StorageBinding` axes — DO NOT EDIT; regenerate with `tools/generate_record_schema.py` |
+| `_schema_bindings.py`, `_schema_bindings_trace.py` | GENERATED per-field `StorageBinding` axes — DO NOT EDIT; regenerate with `tools/generate_record_schema.py` |
 | `_trace_components.py` | Declared `TRACE_FIELD_OWNERSHIP` component map — 329 entries, pinned equal to the `_FIELD_POLICY` key set (the 229-name `MODEL_LOG_FIELD_ORDER` is a strict subset) |
 | `_trace_stack.py` | `StackedActivations` and `stack_traces()`; `Trace.stack` is a thin method over it |
 | `_trace_rehydrate.py` | Load-side Trace rehydration |

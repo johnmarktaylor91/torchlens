@@ -305,6 +305,29 @@ def _load_unified_bundle_directory(
         bundle_path, raw_members, next_visited, context.member_load_options
     )
 
+    return assemble_bundle(
+        members,
+        metadata,
+        tlspec_version=context.tlspec_version,
+        unknown_relations=unknown_relations,
+    )
+
+
+def assemble_bundle(
+    members: dict[str, Trace],
+    metadata: dict[str, Any],
+    *,
+    tlspec_version: Any,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
+) -> Bundle:
+    """Build a ``Bundle`` from its loaded members and the sections of its metadata object.
+
+    Writer-owned keys are bare; an unknown bare key refuses (``bundle_section_unknown``),
+    namespaced keys load opaque and re-save verbatim, member relations are checked against
+    the loaded member names, and the lineage sections restore verbatim (a pre-F03 artifact
+    reads as origin ``loaded``).
+    """
+
     from ..bundle import Bundle
 
     baseline_name = metadata.get("baseline_name")
@@ -312,7 +335,7 @@ def _load_unified_bundle_directory(
         raise ArtifactError("Unified bundle baseline_name must be a string or null.")
     preserved_sections = _partition_bundle_sections(metadata)
     member_relations = _load_gated_member_relations(
-        metadata, unknown_relations=unknown_relations, tlspec_version=context.tlspec_version
+        metadata, unknown_relations=unknown_relations, tlspec_version=tlspec_version
     )
     lineage = _load_lineage_sections(metadata, member_names=list(members))
     loaded_bundle = Bundle(
@@ -323,8 +346,6 @@ def _load_unified_bundle_directory(
         bundle_id=lineage["bundle_id"],
     )
     loaded_bundle._forked_from_bundle_id = lineage["forked_from_bundle_id"]
-    # Anchors restore verbatim when persisted; a pre-F03 artifact carries no
-    # construction evidence, which reads honestly as origin="loaded".
     anchors = lineage["member_construction"]
     if anchors is None:
         anchors = {name: {"origin": "loaded"} for name in members}

@@ -186,12 +186,16 @@ class PayloadStore:
         Artifact directory.
     directory:
         Chunk directory relative to ``root`` (``blobs`` or ``runnable``).
+    counter:
+        Shared artifact tensor-key counter, or a fresh counter when omitted.
     """
 
-    def __init__(self, root: str | Path, *, directory: str = BLOBS_DIR) -> None:
+    def __init__(
+        self, root: str | Path, *, directory: str = BLOBS_DIR, counter: list[int] | None = None
+    ) -> None:
         self.root = Path(root)
         self.directory = directory
-        self._counter = [0]
+        self._counter = counter if counter is not None else [0]
         self._writers: dict[str, ChunkWriter] = {}
         self._recipe: ChunkWriter | None = None
 

@@ -1,13 +1,16 @@
-"""Private wave-0 ATen-profile recorder and observer-gap bridge."""
+"""ATen-profile recorder and observer-gap bridge for ``CaptureOptions(aten_ops=True)``.
+
+The recorder is armed per capture by the public switch (read in
+``_completeness_finalize._resolve_witness_requests``); there is no process-wide
+or test-only arm.
+"""
 
 from __future__ import annotations
 
 import hashlib
-import os
 import threading
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
-from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,10 +25,6 @@ from ..._ir.events import (
 )
 from ..._utils._torch_compat import get_current_autograd_node_fn
 from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
-
-_RECORD_ATEN_FOR_TESTS: ContextVar[bool] = ContextVar(
-    "torchlens_record_aten_for_tests", default=False
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,36 +47,6 @@ class _PendingAtenCall:
     autocast_context: tuple[tuple[str, bool, str], ...]
     dispatch_key_context: str | None
     execution_context: _AtenExecutionContext
-
-
-@contextmanager
-def _activate_aten_recording_for_tests() -> Iterator[None]:
-    """Arm the private wave-0 ATen recorder for one pytest scope.
-
-    Yields
-    ------
-    None
-        The recorder is enabled only for captures entered in this scope.
-
-    Raises
-    ------
-    RuntimeError
-        If called outside pytest.
-    """
-
-    if "PYTEST_CURRENT_TEST" not in os.environ:
-        raise RuntimeError("the wave-0 ATen recorder activation is test-only")
-    token = _RECORD_ATEN_FOR_TESTS.set(True)
-    try:
-        yield
-    finally:
-        _RECORD_ATEN_FOR_TESTS.reset(token)
-
-
-def _aten_recording_requested() -> bool:
-    """Return whether the private wave-0 recorder is armed in this context."""
-
-    return _RECORD_ATEN_FOR_TESTS.get()
 
 
 def _module_call_stack(trace: Any) -> tuple[tuple[str, int], ...]:

@@ -245,6 +245,7 @@ writes the same file in its own directory: one grammar, two homes.
              "metadata": {}, "selection_recipe": null},
     "metadata": {}}
  ],
+ "capture_rules": [],
  "helpers": [{"name": "scale", "version": 1}], "function_registry_keys": []}
 ```
 
@@ -262,9 +263,21 @@ writes the same file in its own directory: one grammar, two homes.
   `kwargs` is replaced in place by the same object with `position` set to
   `"<rule index>.<argument path>"` (`"0.kwargs.transform"`). Either way the manifest's
   `intervention.executable` is false and the rule loads as an audit-only edit.
-- Such a recipe is written only at the audit level: `save_intervention(level="portable")` on a
+- Such a recipe is written only at the audit level: either `Trace.save(level="portable")`
+  or `save_intervention(level="portable")` on a
   recipe holding a user callable, or a value the format cannot carry, refuses at save time with
   `intervention_spec_not_portable`; the remedy is `level="audit"` or built-in edits.
+- `capture_rules` is an optional array (absent means empty) preserving original built-in
+  capture predicates alongside the canonical staged `rules`. Each entry has exactly `index`
+  (its zero-based array position), `selector` (the same closed TargetSpec object as a rule),
+  and `edit` (the same built-in Edit identity). Unknown recipe keys, unknown entry keys,
+  malformed indices or selectors, and non-built-in capture edits refuse
+  `manifest_schema_invalid`. The existing typed value rules apply to every member; unknown
+  selector kinds or edit names refuse through the existing selector/helper registry.
+  A loaded rerun rebuilds this predicate with the code-owned selector and edit registries,
+  then checks that it restages exactly the saved label rules. It never resolves a callable
+  by an artifact-supplied import name. A callable predicate refuses
+  `intervention_spec_not_portable` at save time.
 - A loaded trace whose recipe holds a placeholder refuses every rerun door
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`) with
   `run_intervention_spec_not_persisted`; the message names the rule position and the callable's
@@ -326,7 +339,7 @@ manifest object lists the component versions and files.
   most 256 MiB (a larger tensor gets a file of its own). `buffers.safetensors` holds the
   non-persistent buffer values. `activations-NNNN.safetensors` holds the capture-selected
   activations when the save archived them. Every tensor is one opaque key `t<k>` in one file, as in
-  section 3 (numbered from `t0` within the component; a reference names its file and key); tensors that share storage (tied weights, view activations) are written as separate
+  section 3 (numbered on the artifact's shared counter; a reference names its file and key); tensors that share storage (tied weights, view activations) are written as separate
   copies, and a complex tensor is stored as its real view with `"complex": true`.
 - The `runnable` manifest object is closed. Required: `descriptor`, `descriptor_version`,
   `call_recipe_version`, `callable_ref_version`, `initializer_policy_version`,

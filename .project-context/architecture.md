@@ -278,7 +278,7 @@ one-liners derived from each module's docstring or a skim of its contents.
 | `bundle/` | Single `Bundle` type for intervention-ready TorchLens model logs |
 | `callbacks/` | Callback integration namespace with lazy Lightning support |
 | `capture/` | Real-time tensor operation capture: source/output tensor logging, family tracking, forward-pass orchestration |
-| `compat/` | Compatibility adapters and runtime support reports (`tl.compat.report`) |
+| `compat/` | Compatibility adapters and the model checks behind `tl.report.doctor(model, inputs)` (`compat/_report.py`) |
 | `data_classes/` | Core data structures representing a logged forward pass |
 | `debug/` | Power-user debugging helpers for completed traces (`bisect_nan`, `hot_path`, ...) |
 | `distributed/` | Distributed capture opt-in: arming, group lifetime identity, and evidence |
