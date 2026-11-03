@@ -8,10 +8,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias
 
 from .._errors import ArgumentTypeError
-from . import selectors as _selectors
 from .errors import SelectorCompositionError, UnclassifiedSelectorError
 from .target import FrozenTargetSpec, TargetSpec
 
@@ -38,6 +37,10 @@ class BaseSelector:
 
     selector_kind: SelectorKind
     selector_value: Any
+
+    #: Attribute holding the single operand a wrapper selector (``~s``, ``tl.grad(s)``)
+    #: wraps; ``None`` for every other selector. ``_memo_safe`` unwraps through it.
+    _wrapped_operand_attr: ClassVar[str | None] = None
 
     def __and__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector that matches the intersection of two selectors.
@@ -357,6 +360,8 @@ class NotSelector(BaseSelector):
 
     selector: SelectorLike
 
+    _wrapped_operand_attr: ClassVar[str | None] = "selector"
+
     def __init__(self, selector: SelectorLike) -> None:
         """Create a negated selector.
 
@@ -527,7 +532,7 @@ def classify_selector_universe(sel: Any) -> SelectorUniverse | None:
                 return None
             combined = universes[0]
             for index in range(1, len(children)):
-                combined = _selectors._and_universe(
+                combined = _and_universe(
                     combined, universes[index], children[index - 1], children[index]
                 )
             return combined
@@ -536,6 +541,54 @@ def classify_selector_universe(sel: Any) -> SelectorUniverse | None:
         return _leaf_universe(str(sel.selector_kind))
     raise UnclassifiedSelectorError(
         f"{type(sel).__name__} has no universe classification; add an explicit bucket."
+    )
+
+
+def _and_universe(
+    left: SelectorUniverse | None,
+    right: SelectorUniverse | None,
+    left_sel: Any,
+    right_sel: Any,
+) -> SelectorUniverse | None:
+    """Combine two ``&`` operands' universes, refusing pairs that share no site."""
+
+    if left is None or right is None:
+        other = right if left is None else left
+        if other in (None, "activation"):
+            return other
+        left = left or "activation"
+        right = right or "activation"
+    if left == right and left != "mixed":
+        return left
+    pair = {left, right}
+    if "mixed" not in pair and "qualifier" in pair and pair & {"gradient", "node"}:
+        return "gradient" if "gradient" in pair else "node"
+    if pair == {"activation", "qualifier"}:
+        site, qualifier = (left_sel, right_sel) if left == "activation" else (right_sel, left_sel)
+        raise SelectorCompositionError(
+            f"{left_sel!r} & {right_sel!r} joins a backward pass qualifier to an "
+            "activation address; activations have no backward pass.",
+            code="selector_signal_mismatch",
+            remedy=f"a pass qualifier needs a gradient address: tl.grad({site!r}) & {qualifier!r}",
+        )
+    if "mixed" in pair:
+        remedy = "write & inside each branch of the |, e.g. (tl.grad(a) & q) | (a & b)"
+    elif pair == {"activation", "gradient"}:
+        remedy = "a gradient and an activation address never share a site; use | for both"
+    elif "activation" in pair:
+        remedy = (
+            "spell the node address alone: tl.grad_fn(label=...), or the tensor address tl.grad(s)"
+        )
+    else:
+        remedy = (
+            "the tensor address tl.grad(s) and the node address tl.grad_fn(...) differ in "
+            "payload; use one of them"
+        )
+    raise SelectorCompositionError(
+        f"Cross-universe composition not supported: {left_sel!r} & {right_sel!r} joins a "
+        f"{left} address and a {right} address, which never share a site.",
+        code="selector_cross_universe_and",
+        remedy=remedy,
     )
 
 
@@ -674,24 +727,28 @@ def _check_composition(
         Raises when composition is invalid.
     """
 
-    from .._ir.selector_eval import contains_followed_by, flatten_and_conjuncts
+    from .._ir.selector_eval import (
+        FollowedBySelector,
+        contains_followed_by,
+        flatten_and_conjuncts,
+    )
 
     a_memo, b_memo = _composition_memo(a), _composition_memo(b)
     a_universe, a_followed = a_memo or (classify_selector_universe(a), contains_followed_by(a))
     b_universe, b_followed = b_memo or (classify_selector_universe(b), contains_followed_by(b))
     if operator == "and":
-        universe = _selectors._and_universe(a_universe, b_universe, a, b)
+        universe = _and_universe(a_universe, b_universe, a, b)
     else:
         universe = _or_universe([a_universe, b_universe])
     if a_followed or b_followed:
         # `&` nests, so validate the FLAT conjunction: `a & fb & b` must pass
         # exactly like `a & b & fb` and the flat three-child spec.
         conjuncts = flatten_and_conjuncts((a, b))
-        direct = [c for c in conjuncts if isinstance(c, _selectors.FollowedBySelector)]
+        direct = [c for c in conjuncts if isinstance(c, FollowedBySelector)]
         buried = [
             c
             for c in conjuncts
-            if not isinstance(c, _selectors.FollowedBySelector) and contains_followed_by(c)
+            if not isinstance(c, FollowedBySelector) and contains_followed_by(c)
         ]
         if len(direct) != 1 or buried:
             raise SelectorCompositionError(
@@ -715,8 +772,8 @@ def _composition_memo(sel: Any) -> tuple[SelectorUniverse | None, bool] | None:
 def _memo_safe(operand: Any) -> bool:
     """Whether an operand's facts cannot drift after composition (no ``TargetSpec`` inside)."""
 
-    while isinstance(operand, (NotSelector, _selectors.GradSelector)):
-        operand = operand.selector if isinstance(operand, NotSelector) else operand.inner
+    while (attr := getattr(type(operand), "_wrapped_operand_attr", None)) is not None:
+        operand = getattr(operand, attr)
     if isinstance(operand, CompositeSelector):
         return _FACTS_KEY in operand.__dict__
     return isinstance(operand, (BaseSelector, str))

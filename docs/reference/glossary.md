@@ -1141,14 +1141,20 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   per-pass-varying and first-pass-only sources are never painted as if uniform, exact cross-pass
   totals encode with a mandatory aggregation legend line, and unclassified sources refuse
   (`encoding_source_invalid`). Wrong-typed values refuse (`encoding_value_invalid`); a raising
-  callable refuses with the original exception chained (`encoding_callable_error`).
+  callable refuses with the original exception chained (`encoding_callable_error`). On a
+  collapsed draw, module boxes and segments take the exact sum of their member ops for additive
+  sources (`"time"`, `"bytes"`, `"flops"`, `"device_time"`, additive fields) with an aggregation
+  legend line; other sources leave them unencoded with a legend note.
 
 **size_by** *(unstable — no deprecation shim owed; keyword-only)*
-: `draw(size_by=...)` sizes eligible operation nodes from a scalar field, the closed `"dims"`
-  shape token (numel of the non-batch output shape — the D4 default mapping, applied because D4
-  is unruled), or a callable `node -> scalar`. Emitted sizes are width/height MINIMUMS under
-  `fixedsize=false`: a label can never be truncated by an encoding and fonts never scale; the
-  encoded area is clamped to 4x the default node area. Strictly opt-in — plain `draw()` keeps
+: `draw(size_by=...)` sizes eligible operation nodes from a scalar field, the `color_by`
+  builtin tokens (`"time"`, `"bytes"`, `"flops"`, ... with the same meaning and units), the
+  closed `"dims"` shape token (numel of the non-batch output shape), or a callable
+  `node -> scalar`. Collapsed boxes and segments size from the same exact member-op sums as
+  `color_by`. Sizes are label-aware: the median label box among encoded nodes (or a node's
+  own label box when larger) is the smallest-value size and the largest value gets 4x that area. Emitted sizes are width/height
+  MINIMUMS under `fixedsize=false`: a label can never be truncated by an encoding and fonts never
+  scale. Strictly opt-in — plain `draw()` keeps
   uniform boxes. On rolled multi-pass layers size REFUSES where color degrades
   (`size_by_rolled_varying`): a size source that cannot be certified single-valued
   (marker-varying, first-pass projection, varying shape under `"dims"`) has no honest "n/a"
