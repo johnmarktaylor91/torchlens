@@ -138,10 +138,11 @@ def restorer(layer):
 
 def p_answer_torchlens(layers):
     restored = corrupt.fork("restore")
-    for layer in layers:
-        site = tl.facet("down_out").in_module(f"lm.transformer.h.{layer}.mlp")
-        restored.attach_hooks(site, restorer(layer))
-    restored.run(wrapped, corrupted)
+    hooks = [
+        (tl.facet("down_out").in_module(f"lm.transformer.h.{layer}.mlp"), restorer(layer))
+        for layer in layers
+    ]
+    restored.do(hooks, model=wrapped, inputs=corrupted)
     return float(restored.output_ops[-1].out.softmax(-1)[:, target].mean())
 
 
