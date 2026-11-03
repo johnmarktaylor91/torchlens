@@ -61,6 +61,10 @@ PAGES: dict[str, str] = {
     "examples/recipes/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
     "examples/recipes/cka_rsa_two_models_recipe.ipynb": "matplotlib",
     "examples/recipes/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "docs/gallery/causal_tracing.md": "transformers",
+    "docs/gallery/cnn_fields.md": "torchvision",
+    "docs/gallery/neuro_rdms.md": "torchvision",
+    "docs/gallery/ioi_circuit.md": "transformers",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -122,6 +126,7 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "examples/recipes/das_causal_basis_recipe.ipynb",
         "examples/recipes/probe_accuracy_by_layer_recipe.ipynb",
         "examples/recipes/cka_rsa_two_models_recipe.ipynb",
+        "docs/gallery/causal_tracing.md",  # 5.37 s in the test call, one core (OMP_NUM_THREADS=1)
     }
 )
 
