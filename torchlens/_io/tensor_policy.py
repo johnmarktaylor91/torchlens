@@ -67,6 +67,7 @@ def is_supported_for_save(
     tensor: torch.Tensor,
     *,
     strict: bool = True,
+    _real_view_codec: bool = True,
 ) -> TensorPolicyDecision:
     """Decide whether a tensor can be persisted in a portable bundle.
 
@@ -77,6 +78,9 @@ def is_supported_for_save(
     strict:
         Whether unsupported tensors should return ``FailReason`` (default) or
         ``SkipReason`` for best-effort bundle creation.
+    _real_view_codec:
+        Whether the caller encodes complex128 through a real-valued view, as
+        the portable payload codec does. Raw safetensors shard writers do not.
 
     Returns
     -------
@@ -86,6 +90,8 @@ def is_supported_for_save(
     """
 
     reason = _unsupported_reason(tensor)
+    if reason is None and tensor.dtype == torch.complex128 and not _real_view_codec:
+        reason = "complex128 tensors require a real-view payload codec"
     if reason is None:
         return Ok()
     if strict:
