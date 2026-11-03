@@ -74,6 +74,12 @@ class RunnableTraceState:
     #: state unknown. Deliberately NOT the poison bit -- the trace's recorded
     #: path facts are not a lie; only live/fast re-execution is refused.
     state_compromised: Mapping[str, Any] | None = None
+    #: Taken once at load, before any session edit: whether the artifact's recorded
+    #: values were intervened (an op replaced or fired, or a fired do() audit row).
+    #: The legacy rerun guard reads this instead of the live trace, so an edit staged
+    #: in this session (a set_only edit on a loaded fork) cannot make a pristine
+    #: artifact look intervened. ``None`` for live traces.
+    loaded_values_intervened: bool | None = None
 
     def pickle_safe_copy(self) -> RunnableTraceState:
         """Return a shallow copy with mapping-proxy bindings made picklable.

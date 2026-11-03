@@ -146,6 +146,7 @@ def test_runnable_trace_surface_and_state_are_declared() -> None:
         "input_label_layouts",
         "module_training_modes",
         "state_compromised",
+        "loaded_values_intervened",
     }
 
 

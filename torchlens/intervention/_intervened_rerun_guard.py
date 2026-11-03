@@ -25,7 +25,7 @@ _LOADED_PROVIDERS = frozenset({"loaded_sparse", "loaded_analysis"})
 _VALUE_NEUTRAL_AUDIT_STATUSES = frozenset({"no_fire", "error", "armed"})
 
 
-def _carries_intervened_values(trace: Any) -> bool:
+def carries_intervened_values(trace: Any) -> bool:
     """Return whether persisted evidence says recorded values were intervened.
 
     Parameters
@@ -47,6 +47,31 @@ def _carries_intervened_values(trace: Any) -> bool:
         isinstance(row, dict) and row.get("status") not in _VALUE_NEUTRAL_AUDIT_STATUSES
         for row in getattr(trace, "intervention_audit", None) or ()
     )
+
+
+def _artifact_values_intervened(trace: Any) -> bool:
+    """Return whether the values the trace was LOADED with were intervened.
+
+    Parameters
+    ----------
+    trace:
+        Loaded trace (or a fork of one; forks copy the runnable state).
+
+    Returns
+    -------
+    bool
+        The snapshot the loader took before any session edit
+        (``RunnableTraceState.loaded_values_intervened``). An edit staged in
+        this session, such as a ``set_only`` edit on a loaded fork, marks ops
+        edited too, so the live evidence cannot tell the artifact's values
+        from the session's; the snapshot can. When no snapshot was taken the
+        live evidence decides.
+    """
+
+    snapshot = getattr(getattr(trace, "_runnable", None), "loaded_values_intervened", None)
+    if snapshot is not None:
+        return bool(snapshot)
+    return carries_intervened_values(trace)
 
 
 def _session_spec_has_fired(trace: Any) -> bool:
@@ -84,16 +109,17 @@ def refuse_unpersisted_intervention_rerun(trace: Any, provider: Any) -> None:
         ``run_intervention_spec_not_persisted`` when the trace was loaded from
         an artifact whose recorded values were intervened and no rerun of this
         session has replaced those values yet. Edits staged after loading do
-        not count: they would run without the recorded intervention. Live
-        traces are never refused: an empty staged spec there means the user
-        detached it on purpose.
+        not count either way: they would run without the recorded
+        intervention, and they never make a pristine artifact look
+        intervened. Live traces are never refused: an empty staged spec there
+        means the user detached it on purpose.
     """
 
     if str(getattr(provider, "value", provider)) not in _LOADED_PROVIDERS:
         return
     if _session_spec_has_fired(trace):
         return
-    if not _carries_intervened_values(trace):
+    if not _artifact_values_intervened(trace):
         return
     raise EngineDispatchError(
         "This trace was loaded from an artifact whose recorded values were "
