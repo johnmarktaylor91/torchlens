@@ -2372,6 +2372,11 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.visualization()._trace_collapse.collapse_schedule(self, context)
 
+    def _suggest_layer_labels(self, selector: str, *, limit: int = 10) -> list[str]:
+        """Did-you-mean layer labels for a failed lookup (the refusal text's candidates)."""
+
+        return _trace_views.suggest_layer_labels(self, selector, limit=limit)
+
     def modules_with_facet(self, name: str) -> Iterator[Any]:
         """Yield Modules whose semantic facet view has a facet available now."""
 

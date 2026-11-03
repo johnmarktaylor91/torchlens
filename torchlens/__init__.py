@@ -350,11 +350,10 @@ def __dir__() -> list[str]:
 def _suggest_layer_labels(trace: _Any, query: str) -> list[str]:
     """Return the did-you-mean layer labels for a failed lookup (empty for non-traces)."""
 
-    from ._data_classes._trace_views import suggest_layer_labels
-
-    if not hasattr(trace, "layer_labels"):
+    suggest = getattr(trace, "_suggest_layer_labels", None)
+    if suggest is None:
         return []
-    return suggest_layer_labels(trace, str(query))
+    return list(suggest(str(query)))
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:

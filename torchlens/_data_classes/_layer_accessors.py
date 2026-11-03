@@ -260,9 +260,7 @@ class LayerAccessor(Accessor["Layer"]):
         source = source_ref() if source_ref is not None else None
         if source is None:
             return []
-        from ._trace_views import suggest_layer_labels
-
-        return suggest_layer_labels(source, str(key))
+        return list(source._suggest_layer_labels(str(key)))
 
     def _trace_filtered(self, impl: str) -> "LayerAccessor":
         """Return the Trace-level layer filter ``impl`` restricted to this collection."""
