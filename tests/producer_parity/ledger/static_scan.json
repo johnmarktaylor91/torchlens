@@ -764,7 +764,7 @@
   "field": "modules",
   "file": "torchlens/_constants.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -1354,6 +1354,14 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/_io/_save_gates.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/_io/bundle.py",
   "has_default": false,
   "sites": 10,
@@ -1596,7 +1604,7 @@
   "field": "parents",
   "file": "torchlens/_ir/_selector_universe.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -2494,14 +2502,6 @@
   "has_default": false,
   "sites": 2,
   "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_ir/selector_eval.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": true,
@@ -3963,6 +3963,14 @@
   "ambiguous": false,
   "field": "step_index",
   "file": "torchlens/_snoop/_session.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_torchvision_ops.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7664,6 +7672,14 @@
   "via_getattr": true
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/intervention/_hooks_support.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "is_edited",
   "file": "torchlens/intervention/_intervened_rerun_guard.py",
@@ -7869,14 +7885,6 @@
   "file": "torchlens/intervention/edge_substitution.py",
   "has_default": false,
   "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/intervention/hooks.py",
-  "has_default": false,
-  "sites": 4,
   "via_getattr": false
  },
  {

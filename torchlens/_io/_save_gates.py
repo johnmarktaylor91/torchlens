@@ -4,7 +4,8 @@ Three entry-time guards that run before (or instead of) the per-trace save
 pipeline: the two PERMANENT erasure-prevention invariants (edge-substitution
 carriers and the shard-local disclosure, both keyed on the ACTIVE SCHEMA so a
 regression re-fires them), and the Bundle container-door delegation that
-routes ``bundle.save(path, ...)`` through ``Bundle.save`` (foldB D8/D9). Split
+routes ``bundle.save(path, ...)`` through ``Bundle.save`` (foldB D8/D9); plus
+the blob-loop refusal of a tensor a strict (portable) save cannot write. Split
 out of ``torchlens/_io/bundle.py`` to respect its size ceiling (R43
 split-never-raise); ``bundle.py`` re-exports these names, so the monkeypatch
 surface ``torchlens._io.bundle._refuse_*`` is unchanged.
@@ -13,10 +14,11 @@ surface ``torchlens._io.bundle._refuse_*`` is unchanged.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .format_errors import ArtifactError
 
 
 def _refuse_edge_intervened_save(trace: Any) -> None:
@@ -183,3 +185,31 @@ def _save_bundle_via_container_door(
             options=tuple(unsupported),
         )
     bundle.save(path, level=level, overwrite=overwrite)
+
+
+def _refuse_unsupported_tensor(error_text: str, blob_spec: Any, reason: str) -> NoReturn:
+    """Refuse a torch tensor the strict (portable) save cannot write.
+
+    Parameters
+    ----------
+    error_text:
+        Refusal text naming the blob's label, kind and the codec's reason.
+    blob_spec:
+        The refused blob (its ``label`` and ``kind`` ride on the error).
+    reason:
+        The payload codec's refusal reason.
+
+    Raises
+    ------
+    ArtifactError
+        With ``fields["code"] == "artifact_tensor_unsupported"``.
+    """
+
+    raise ArtifactError(
+        error_text,
+        code="artifact_tensor_unsupported",
+        remedy="save at level='audit', or make the tensor dense and strided",
+        label=blob_spec.label,
+        kind=blob_spec.kind,
+        reason=reason,
+    )
