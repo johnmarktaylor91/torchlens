@@ -27,6 +27,7 @@ torchvision = pytest.importorskip("torchvision")
 import example_models  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK  # noqa: E402
 from torchlens._visualization import show_model_graph  # noqa: E402
 from torchlens.validation import validate_forward_pass  # noqa: E402
 
@@ -619,10 +620,13 @@ def test_deberta():
     )
     model = transformers.DebertaV2Model(config).eval()
     model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
-    # DebertaV2's disentangled attention builds relative-position buckets via
-    # a bare torch.arange/to() cast with no graph/source provenance (known
-    # limitation, same pattern as test_styletts).
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
+    # DebertaV2 scales attention in the torch.jit.script helper scaled_size_sqrt.
+    # With the ScriptFunction call hook that call is one jitscript boundary op
+    # (code torchscript_boundary) whose output has provenance and replays. Without
+    # it the scale has no graph/source provenance (as in test_styletts) and the
+    # completeness witness may flag a capture gap that fails validation honestly.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         show_model_graph(
             model,
             [],
@@ -632,25 +636,23 @@ def test_deberta():
                 container_path=opj(VIS_OUTPUT_DIR, "encoder-only", "deberta")
             ),
         )
-    # Some transformers releases implement DebertaV2's relative-position
-    # bucketing with torch.jit.script; a jit.script-compiled region executes
-    # outside normal eager dispatch, so TorchLens's completeness witness
-    # correctly flags the capture incomplete (CaptureGapWarning,
-    # capture_verified=False) and validate_forward_pass honestly returns
-    # False rather than blessing a partial capture -- expected, honest
-    # behavior for that environment, not a capture bug. Other releases (no
-    # jit.script path hit) capture completely and validate True.
+    codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
+    got = [str(w.message) for w in caught]
+    unattributed = any("no graph/source provenance" in m for m in got)
+    if HAS_SCRIPT_FUNCTION_CALL_HOOK:
+        assert "torchscript_boundary" in codes and not unattributed, got
+    else:
+        assert unattributed, f"expected the provenance disclosure; got: {got}"
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = validate_forward_pass(model, [], model_kwargs)
     messages = [str(w.message) for w in caught]
     capture_gap = any("unaccounted aten dispatch event" in m for m in messages)
     provenance_gap = any("no graph/source provenance" in m for m in messages)
-    assert provenance_gap, f"expected the provenance disclosure; got: {messages}"
-    assert result or capture_gap, (
-        f"validate_forward_pass returned False with no capture-gap disclosure "
-        f"to explain it; got: {messages}"
-    )
+    if HAS_SCRIPT_FUNCTION_CALL_HOOK:
+        assert result and not provenance_gap, f"boundary capture did not validate: {messages}"
+    else:
+        assert provenance_gap and (result or capture_gap), messages
 
 
 # =============================================================================

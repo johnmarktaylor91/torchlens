@@ -65,7 +65,7 @@ def test_save_new_outs_metadata_preserved():
     """Metadata invariants hold after save_new_outs."""
     model = _SimpleFF()
     log = trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
-    log.save_new_outs(model, torch.randn(2, 5), seed=42)
+    log._save_new_outs(model, torch.randn(2, 5), seed=42)
 
     assert check_metadata_invariants(log) is True
     log.cleanup()
@@ -78,7 +78,7 @@ def test_save_new_outs_recurrent():
     log = trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     assert log.graph.is_recurrent
 
-    log.save_new_outs(model, torch.randn(2, 5), seed=42)
+    log._save_new_outs(model, torch.randn(2, 5), seed=42)
     assert log[log.output_layers[0]].has_saved_activation
     log.cleanup()
 
@@ -91,7 +91,7 @@ def test_save_new_outs_fast_path_does_not_attach_streaming_refs() -> None:
     log = trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     output_label = log.output_layers[0]
 
-    log.save_new_outs(model, torch.randn(2, 5), seed=42, layers_to_save=[output_label])
+    log._save_new_outs(model, torch.randn(2, 5), seed=42, save=[output_label])
 
     assert getattr(log, "_out_writer", None) is None
     assert all(getattr(layer, "out_ref", None) is None for layer in log._layer_list)
@@ -120,7 +120,7 @@ def _assert_save_new_outs_matches_fresh_log(
     log = trace_fn(model, x1, capture=tl.options.CaptureOptions(seed=42))
     fresh_log = None
     try:
-        log.save_new_outs(model, x2, seed=42)
+        log._save_new_outs(model, x2, seed=42)
         fresh_log = trace_fn(model, x2, capture=tl.options.CaptureOptions(seed=42))
         fresh_layers_by_label = {layer.layer_label: layer for layer in fresh_log._layer_list}
 
@@ -197,7 +197,7 @@ class TestSaveNewActivationsStateReset:
         model = _SimpleLinear()
         log = trace_fn(model, torch.randn(2, 10), save="all")
         try:
-            log.save_new_outs(model, torch.randn(2, 10), layers_to_save="all")
+            log._save_new_outs(model, torch.randn(2, 10), save="all")
             assert log.cost.func_calls_duration >= 0
         finally:
             log.cleanup()
@@ -231,7 +231,7 @@ class TestDescriptiveValueError:
         assert model.call_count == 0
         model(torch.randn(2, 10))
         with pytest.raises(ValueError, match="computational graph changed"):
-            log.save_new_outs(model, torch.randn(2, 10))
+            log._save_new_outs(model, torch.randn(2, 10))
 
 
 class TestGraphConsistencyValidation:
@@ -243,7 +243,7 @@ class TestGraphConsistencyValidation:
         log = trace_fn(model, torch.randn(2, 10))
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            log.save_new_outs(model, torch.randn(4, 10))
+            log._save_new_outs(model, torch.randn(4, 10))
             shape_warnings = [x for x in w if "shape changed" in str(x.message)]
             assert len(shape_warnings) > 0
 
@@ -257,7 +257,7 @@ class TestGraphConsistencyValidation:
         try:
             model.reverse = True
             with pytest.raises(ValueError, match="computational graph changed") as exc_info:
-                log.save_new_outs(model, x)
+                log._save_new_outs(model, x)
             assert "parent_arg_positions" in str(exc_info.value)
         finally:
             log.cleanup()
@@ -272,7 +272,7 @@ class TestGraphConsistencyValidation:
         log = trace_fn(model, x1, capture=tl.options.CaptureOptions(save_args=True))
         fresh_log = None
         try:
-            log.save_new_outs(model, x2)
+            log._save_new_outs(model, x2)
             fresh_log = trace_fn(model, x2, capture=tl.options.CaptureOptions(save_args=True))
             refreshed_sub = next(op for op in log._layer_list if op.type == "sub")
             fresh_sub = next(op for op in fresh_log._layer_list if op.type == "sub")
@@ -376,7 +376,7 @@ def test_tampered_buffer_value_changed_claim_refuses_typed():
             sink._internal_set("buffer_value_changed", False)
         model.eval()
         with pytest.raises(BufferSinkRoutingError) as exc_info:
-            log.save_new_outs(model, torch.randn(3, 4))
+            log._save_new_outs(model, torch.randn(3, 4))
         _assert_buffer_sink_refusal(exc_info)
         assert "mode claim" in str(exc_info.value) or "claims" in str(exc_info.value)
     finally:
@@ -395,7 +395,7 @@ def test_mode_flip_between_runs_refuses():
     try:
         model.train()
         with pytest.raises(BufferSinkRoutingError) as exc_info:
-            log.save_new_outs(model, torch.randn(3, 4))
+            log._save_new_outs(model, torch.randn(3, 4))
         _assert_buffer_sink_refusal(exc_info)
     finally:
         log.cleanup()

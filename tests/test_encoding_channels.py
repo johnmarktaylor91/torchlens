@@ -37,6 +37,7 @@ from torchlens._visualization._encoding import (
     interpolate_hex,
     resolve_color_by,
 )
+from torchlens._visualization._trace_collapse import collapse_plan as _collapse_plan
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -170,9 +171,9 @@ def test_collapse_plan_identical_with_channel_active(tmp_path: Path) -> None:
 
     model = nn.Sequential(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), nn.Linear(4, 2))
     log = tl.trace(model, torch.randn(2, 4))
-    plan_off = log.collapse_plan(mode="auto")
+    plan_off = _collapse_plan(log, mode="auto")
     _draw(log, tmp_path, color_by="bytes", collapse="auto")
-    plan_on = log.collapse_plan(mode="auto")
+    plan_on = _collapse_plan(log, mode="auto")
     assert plan_off == plan_on
 
 
@@ -258,6 +259,25 @@ def test_auto_large_graph_forces_dot_with_notice(
     with pytest.warns(UserWarning, match="color_by"):
         _draw(mlp_log, tmp_path, color_by="bytes", layout="auto")
     assert _state(mlp_log).colors  # rendered on dot: channel applied
+
+
+# Kept: Kept: the slices removed this test; the stack's Okabe-Ito default-skin work
+# added the new role fills to its assertion.
+def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    # color_by="bytes" repaints every node, inputs and outputs included, so no
+    # role fill is drawn and the key lists no input or output: the header
+    # block carries the encoding section and only the marks still drawn.
+    dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=True)
+    label = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
+    drawn = "\n".join(line for line in dot.splitlines() if not line.strip().startswith("graph ["))
+    for role_fill in ('"#98FB98"', '"#ff9999"', '"#009E73"', '"#D55E00"'):
+        assert role_fill not in drawn, role_fill  # no input/output role fill
+    assert ">input<" not in label and ">output<" not in label
+    assert "TorchLens encoding" in label
+    # One block: the key and the channel section share the header label;
+    # there is no second legend topology.
+    assert "tl_legend" not in dot
+    assert dot.count("TorchLens encoding") == 1
 
 
 # ---------------------------------------------------------------------------

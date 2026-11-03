@@ -44,7 +44,7 @@ def test_edited_rerun_strict_does_not_raise() -> None:
     x = torch.randn(2, 3, 8, 8)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
-    fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
+    fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
     fork.run(model, x, replay=tl.options.ReplayOptions(strict=True))
 
 

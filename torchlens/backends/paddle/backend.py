@@ -319,7 +319,6 @@ class PaddleBackend:
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         name: str | None = None,
-        module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
         save_raw_input: str | bool | MissingType = MISSING,
@@ -375,7 +374,6 @@ class PaddleBackend:
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
         random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         name = _resolve_optional_capture_field(capture, "name", name)
-        module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = _resolve_optional_capture_field(capture, "transform", transform)
         output_transform = _resolve_optional_capture_field(
             capture, "output_transform", output_transform
@@ -404,7 +402,6 @@ class PaddleBackend:
         random_seed = _default_if_missing(random_seed, None)
         num_context_lines = _default_if_missing(num_context_lines, 7)
         name = _default_if_missing(name, None)
-        module_filter = _default_if_missing(module_filter, None)
         transform = _default_if_missing(transform, None)
         raw_input = _default_if_missing(raw_input, None)
         output_transform = _default_if_missing(output_transform, None)
@@ -447,7 +444,6 @@ class PaddleBackend:
                 "save_source_context": save_code_context,
                 "save_rng": save_rng_states,
                 "backward_ready": backward_ready,
-                "module_filter": module_filter,
                 "transform": transform,
                 "layer_visualizers": layer_visualizers,
                 "save_visualizations": save_visualizations,
@@ -477,7 +473,6 @@ class PaddleBackend:
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
-            module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
             input_transform=cast("Callable[[Any], Any] | None", transform),
             input=raw_input,
@@ -1447,14 +1442,6 @@ class PaddleBackend:
 
         del session, policy
         return value
-
-    def copy_replacement_metadata(self, session: object, src: object, dst: object) -> None:
-        """Copy Paddle side-table labels between replacement tensors."""
-
-        del session
-        label = self.tensor_store.get_label(src)
-        if label is not None:
-            self.tensor_store.set_label(dst, label)
 
     def _normalize_input_args(self, input_args: object) -> list[Any]:
         """Normalize user Paddle input arguments to a positional list."""

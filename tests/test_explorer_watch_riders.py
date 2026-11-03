@@ -153,8 +153,10 @@ class TestRecorderCoverage:
             model,
             default_op=True,
             include_source_events=True,
-            activation_transform=summary(lambda t: t.float().mean().unsqueeze(0)),
-            save_raw_activations=False,
+            capture=tl.options.CaptureOptions(
+                activation_transform=summary(lambda t: t.float().mean().unsqueeze(0)),
+                save_raw_activations=False,
+            ),
         ) as recorder:
             recorder(torch.randn(2, 8))
             recorder(torch.randn(2, 8))
@@ -174,10 +176,12 @@ class TestRecorderCoverage:
         with tl.recording.Recorder(
             model,
             default_op=CaptureSpec(save_out=True, save_grad=True),
-            save_grads=True,
-            grad_transform=summary(lambda t: t.float().abs().sum().unsqueeze(0)),
-            save_raw_grads=False,
-            backward_ready=True,
+            capture=tl.options.CaptureOptions(
+                save_grads=True,
+                grad_transform=summary(lambda t: t.float().abs().sum().unsqueeze(0)),
+                save_raw_grads=False,
+                backward_ready=True,
+            ),
         ) as recorder:
             out_1 = recorder(torch.randn(2, 8, requires_grad=True))
             recorder.backward(out_1.sum())

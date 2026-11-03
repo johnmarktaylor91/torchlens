@@ -231,7 +231,7 @@ def test_halted_trace_refresh_refuses_typed() -> None:
     x = torch.ones(1, 3)
     trace = tl.trace(model, x, stop_after=halt_on_relu)
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        trace.save_new_outs(model, x)
+        trace._save_new_outs(model, x)
     assert exc_info.value.fields["code"] == "N5"
 
 
@@ -354,7 +354,7 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
 
     x = torch.ones(1, 3)
     with Recorder(
-        TwoOpModel(), save=lambda ctx: ctx.kind == "op", halt=_halt_second_pass
+        TwoOpModel(), save=lambda ctx: ctx.kind == "op", stop_after=_halt_second_pass
     ) as recorder:
         first_output = recorder(x)
         second_output = recorder(x)

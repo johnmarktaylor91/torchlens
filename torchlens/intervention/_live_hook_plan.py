@@ -2,8 +2,8 @@
 
 A rerun, an append rerun or a backward pass fires from a hook plan built at
 the run's start and published as ``_state._active_hook_plan``. Removing a
-sticky hook through its ``HookHandle`` takes effect at once, like a torch hook
-handle: ``retire_live_hook_handles`` rebinds the published plan without the
+sticky hook by its handle ids (``clear_edits(handle=...)``) takes effect at once,
+like a torch hook handle: ``retire_live_hook_handles`` rebinds the published plan without the
 removed entries, and ``_drop_handles_removed_mid_run`` makes the rerun's fire
 audit and ledger count the recipe as it stands after the run.
 """

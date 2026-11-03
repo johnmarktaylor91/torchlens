@@ -174,7 +174,7 @@ def test_baseline_auto_detect_and_ambiguity() -> None:
 
     clean = _log()
     dirty = _log()
-    dirty.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    dirty._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
 
     bundle = tl.Bundle({"clean": clean, "dirty": dirty})
     assert bundle.baseline_name == "clean"

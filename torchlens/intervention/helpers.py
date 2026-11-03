@@ -272,7 +272,6 @@ def _broadcast_mean(fill: torch.Tensor, out: torch.Tensor, *, argument: str) -> 
 def scramble_elements(
     source: Any | None = None,
     *,
-    from_: Any | None = None,
     seed: int | None = None,
     allow_shape_change: bool = False,
 ) -> Edit:
@@ -302,10 +301,6 @@ def scramble_elements(
     ----------
     source:
         Source tensor or Op-like object.
-    from_:
-        Alias for ``source`` retained for the PLAN.md constructor spelling.
-        Passing BOTH ``source=`` and ``from_=`` refuses typed
-        (``intervention_source_conflict``); the two spellings name one slot.
     seed:
         Optional hook-local RNG seed.
     allow_shape_change:
@@ -317,16 +312,7 @@ def scramble_elements(
         Built-in stochastic forward helper spec.
     """
 
-    if source is not None and from_ is not None:
-        raise InvalidArgumentError(
-            "scramble_elements received BOTH source= and from_=; the two "
-            "spellings name the same source slot and choosing one silently "
-            "would hide a caller mistake",
-            code="intervention_source_conflict",
-            remedy="pass exactly one of source= or from_=",
-            argument="source",
-        )
-    source_value = source if source is not None else from_
+    source_value = source
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for the elementwise scramble.
@@ -378,7 +364,6 @@ def steer(
     direction: torch.Tensor,
     strength: float = 1.0,
     *,
-    coef: float | None = None,
     dim: int | None = None,
     allow_shape_change: bool = False,
 ) -> Edit:
@@ -390,8 +375,6 @@ def steer(
         Direction tensor.
     strength:
         Scalar multiplier.
-    coef:
-        PLAN.md alias for ``strength``.
     dim:
         Required when a vector direction must be aligned with an out
         axis, avoiding silent batch/position assumptions.
@@ -404,7 +387,7 @@ def steer(
         Built-in forward helper spec.
     """
 
-    scale_value = strength if coef is None else coef
+    scale_value = strength
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for steering.

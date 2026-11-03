@@ -11,7 +11,6 @@ from example_models import TinyReluAdd as ReluAdd
 import torchlens as tl
 from torchlens._data_classes.cleanup import _scrub_intervention_fields_after_removal
 from torchlens.intervention.errors import SpecMutationError
-from torchlens.intervention.handles import HookHandle
 from torchlens.intervention.types import FireRecord, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
@@ -102,23 +101,22 @@ def test_set_callable_tags_one_shot_metadata() -> None:
 
 
 def test_attach_hooks_handle_removes_only_its_own_specs() -> None:
-    """Each attach handle removes only the hook specs it created."""
+    """clear_edits(handle=) removes only the hook specs that attach call created."""
 
     log = _capture()
 
-    first = log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
-    second = log.attach_hooks(tl.func("__add__"), _identity_hook, confirm_mutation=True)
+    first = log._attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
+    second = log._attach_hooks(tl.func("__add__"), _identity_hook, confirm_mutation=True)
 
-    assert isinstance(first, HookHandle)
-    assert isinstance(second, HookHandle)
-    assert first is not second
+    assert isinstance(first, tuple) and isinstance(second, tuple)
+    assert first != second
     assert len(log._intervention_spec.hook_specs) == 2
 
-    first.remove()
+    log.clear_edits(handle=first, confirm_mutation=True)
 
     assert len(log._intervention_spec.hook_specs) == 1
     remaining = log._intervention_spec.hook_specs[0]
-    assert remaining.handle in second.handle_ids
+    assert remaining.handle in second
 
 
 def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
@@ -134,7 +132,7 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     assert after_set is not first_snapshot
     assert len(after_set.target_value_specs) == 1
 
-    log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
     after_attach = log.recipe
     assert after_attach is not after_set
     assert len(after_attach.hook_specs) == 1
@@ -144,9 +142,9 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     assert after_detach is not after_attach
     assert after_detach.hook_specs == ()
 
-    log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
     after_second_attach = log.recipe
-    log.clear_hooks(confirm_mutation=True)
+    log._clear_hooks(confirm_mutation=True)
     after_clear = log.recipe
     assert after_clear is not after_second_attach
     assert after_clear.hook_specs == ()
@@ -167,7 +165,7 @@ def test_cleanup_scrubs_all_label_bearing_intervention_spec_fields() -> None:
     log = _capture()
     target = _first_internal_label(log)
     log.set(target, torch.zeros_like(log[target].out), confirm_mutation=True)
-    log.attach_hooks(tl.label(target), _identity_hook, confirm_mutation=True)
+    log._attach_hooks(tl.label(target), _identity_hook, confirm_mutation=True)
     log._intervention_spec.targets.append(TargetSpec("label", target))
     log._intervention_spec.records.append(
         FireRecord(target_label=target, site_label=target, call_label=log[target].label)

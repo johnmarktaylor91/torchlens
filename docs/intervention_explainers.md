@@ -82,7 +82,7 @@ The older `replay()` and `rerun()` spellings are removed; `push()` and `run()` r
 
 ## Mutate In Place and Fork First
 
-`set`, `attach_hooks`, and `do` mutate the `Trace` they are called on. A root trace warns once
+`set` and `do` mutate the `Trace` they are called on. A root trace warns once
 before this kind of mutation. For branched experiments, fork first:
 
 ```python
@@ -98,8 +98,7 @@ clean = tl.trace(model, x)
 before = clean.find_sites(tl.module("2")).first().out.clone()
 
 candidate = clean.fork("candidate")
-candidate.attach_hooks(tl.func("relu"), tl.zero_ablate())
-candidate.push()
+candidate.do(tl.func("relu"), tl.zero_ablate())
 
 # The fork changed; the trace it came from did not.
 RESULT = torch.equal(clean.find_sites(tl.module("2")).first().out, before)
@@ -113,7 +112,7 @@ captured evidence where safe.
 Writing directly to a saved value, for example `trace[label].out = value`, bypasses the
 intervention recipe. TorchLens marks the owning trace `DIRECT_WRITE_DIRTY` and warns once. A later
 push overlays recipe state; it does not treat the direct write as a portable, auditable
-intervention. Use `set`, `attach_hooks` or `do` when the edit should be part of the recipe.
+intervention. Use `set` or `do` when the edit should be part of the recipe.
 
 ## Subspace edits: the component along a basis
 
@@ -251,8 +250,12 @@ tl.io.save_intervention(fork, path, level="portable")
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, x).fork()
 for hook_spec in spec.hook_specs:
-    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-reloaded = fresh.push()
+    fresh.do(
+        hook_spec.site_target,
+        hook_spec.helper,
+        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+    )
+reloaded = fresh
 helper = spec.hook_specs[0].helper
 
 RESULT = [
@@ -342,10 +345,14 @@ tl.io.save_intervention(fork, path, level="portable")
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, tokens).fork()
 for hook_spec in spec.hook_specs:
-    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+    fresh.do(
+        hook_spec.site_target,
+        hook_spec.helper,
+        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+    )
 
 RESULT = [
-    torch.equal(fresh.push()[site].out, edited[site].out),  # the same edit, bit for bit
+    torch.equal(fresh[site].out, edited[site].out),  # the same edit, bit for bit
     torch.equal(edited[site].out[:, :-1], base[site].out[:, :-1]),  # other positions untouched
     spec.hook_specs[0].helper.portability == "builtin",
 ]

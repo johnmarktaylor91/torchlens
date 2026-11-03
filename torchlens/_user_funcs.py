@@ -5,7 +5,6 @@ This module contains every user-facing function:
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
-  - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
 **Selective save strategy**:
 Predicate ``save=`` and most string/substring ``save=`` label requests are
@@ -172,7 +171,7 @@ def draw(*args: Any, **kwargs: Any) -> Any:
 
 def trace(
     model: nn.Module | Callable[..., Any],
-    input_args: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
+    inputs: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     *extra_positional: Any,
     input_kwargs: dict[Any, Any] | None = None,
     capture: CaptureOptions | None = None,
@@ -240,7 +239,7 @@ def trace(
         F41): ``tl.trace(model.generate, ids, ...)`` resolves the owner via
         ``method.__self__``, wraps it in a TL-authored synthetic root, and
         calls the method exactly once.
-    input_args:
+    inputs:
         Positional args for ``model.forward()``; a single tensor or list.
         The input ladder (memo D2): a real input is the gold rung; omit
         it and pass ``input_shape=``, or omit both to infer -- synthesized
@@ -341,14 +340,14 @@ def trace(
         del forward_kwargs  # must never ride the ladder's locals() snapshot below
         _reject_non_mapping_input_kwargs(input_kwargs)
         model, intervene = _model_door.resolve_trace_operands(model, intervene)
-        if input_shape is not None or input_args is None:
+        if input_shape is not None or inputs is None:
             model = _reject_non_module_ladder_root(model)
             # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
             # resolve BEFORE any capture machinery, then re-enter trace() as gold.
             ladder_kwargs = locals().copy()
             for consumed in (
                 "model",
-                "input_args",
+                "inputs",
                 "extra_positional",
                 "input_kwargs",
                 "input_shape",
@@ -356,7 +355,7 @@ def trace(
                 ladder_kwargs.pop(consumed)
             from ._quickstart._ladder import _trace_via_ladder
 
-            return _trace_via_ladder(model, input_args, input_kwargs, input_shape, ladder_kwargs)
+            return _trace_via_ladder(model, inputs, input_kwargs, input_shape, ladder_kwargs)
         _refuse_compiled_callable_root(model)
         if save is MISSING:
             save = None
@@ -367,9 +366,9 @@ def trace(
                 save, capture, merge_capture_options(capture=capture), model
             )
         public_trace_kwargs = locals().copy()
-        # extra_positional was refused above; backend= routes below; input_shape=
-        # is ladder-consumed (always None here); on_zero_fire= was settled by the
-        # zero_fire_policy_scope above, never a backend option.
+        # The capture pipeline's internal keyword bundle keeps the slot under ``input_args``.
+        public_trace_kwargs["input_args"] = public_trace_kwargs.pop("inputs")
+        # Consumed above (refused, routed, ladder-consumed or settled); never backend options.
         for consumed in ("extra_positional", "backend", "input_shape", "on_zero_fire"):
             public_trace_kwargs.pop(consumed)
         # The capture knobs that used to be door keywords travel inside
@@ -504,17 +503,10 @@ def validate_backward_pass(*args: Any, **kwargs: Any) -> bool:
     return cast(bool, _public_impls_module().validate_backward_pass(*args, **kwargs))
 
 
-def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
-    """Forward to the batch validation implementation."""
-
-    return _public_impls_module().validate_batch_of_models_and_inputs(*args, **kwargs)
-
-
 _PUBLIC_IMPL_WRAPPER_NAMES = (
     "show_model_graph",
     "validate_forward_pass",
     "validate_backward_pass",
-    "validate_batch_of_models_and_inputs",
 )
 
 _public_impl_metadata_synced = False

@@ -63,6 +63,6 @@ GAP-063	cache_key_coverage	trace.backend	2026-08-26	A06	capture-semantics field 
 GAP-064	cache_key_coverage	trace.episode	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-071	cache_key_coverage	trace.storage	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-074	invariance_witness	trace.capture	2026-08-30	F36-remainder	dont-care witness slot empty: the grouped-options container needs a per-field decomposition witness (6b residue)
-GAP-075	invariance_witness	trace.input_args	2026-08-30	F36-remainder	dont-care witness slot empty: input identity is keyed through the input fingerprint, not this field; witness the fingerprint equivalence (6b residue)
-GAP-076	invariance_witness	trace.input_kwargs	2026-08-30	F36-remainder	dont-care witness slot empty: same fingerprint-equivalence witness as input_args (6b residue)
+GAP-075	invariance_witness	trace.inputs	2026-08-30	F36-remainder	dont-care witness slot empty: input identity is keyed through the input fingerprint, not this field; witness the fingerprint equivalence (6b residue)
+GAP-076	invariance_witness	trace.input_kwargs	2026-08-30	F36-remainder	dont-care witness slot empty: same fingerprint-equivalence witness as inputs (6b residue)
 GAP-077	invariance_witness	trace.model	2026-08-30	F36-remainder	dont-care witness slot empty: model identity is keyed through the state-dict hash, not this field; witness the hash equivalence (6b residue)

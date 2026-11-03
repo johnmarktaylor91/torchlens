@@ -207,8 +207,7 @@ log = tl.trace(
     capture=tl.options.CaptureOptions(save_args=True), save="all",
 )
 edited = log.fork("ablated")
-edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())
-edited.run(model, x)
+edited.do(tl.head(3, "q"), tl.zero_ablate(), model=model, inputs=x)
 ```
 
 Static patching uses the same scatter-back path:
@@ -224,7 +223,7 @@ edited.run(model, x)
 facets `q`, `k`, and `v` wherever they are present:
 
 ```python
-edited.attach_hooks(tl.head(3), tl.zero_ablate())
+edited.do(tl.head(3), tl.zero_ablate(), model=model, inputs=x)
 ```
 
 Scatter-back preserves the home tensor dtype, device, shape, and memory format.
@@ -255,7 +254,7 @@ is backed by a real op.
 
 Patching helpers live at `tl.facets.patching`. They run a clean trace and a
 corrupted trace, then reuse the facet intervention path (`fork`,
-`attach_hooks`, `rerun`, and `tl.facet`/`tl.head` selectors) to patch clean
+`do` with `model=`/`inputs=` (a rerun), and `tl.facet`/`tl.head` selectors) to patch clean
 facet activations into the corrupted run.
 
 The metric callable receives the patched `Trace` and must return a scalar

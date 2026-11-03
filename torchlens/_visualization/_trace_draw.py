@@ -6,6 +6,7 @@ method per verb that forwards to these functions.
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -31,7 +32,11 @@ from ._pass_animation import pass_animation_html
 from ._render_dot import draw as _render_draw
 from ._render_entrypoints import render_backward_graph, render_combined_graph
 from ._render_utils import _KNOWN_EXTS, DEFAULT_DRAW_STEM, collision_safe_outpath
-from ._trace_draw_arguments import _forward_render_arguments
+from ._trace_collapse import (
+    collapse_plan as _collapse_plan,
+    collapse_schedule as _collapse_schedule,
+)
+from ._trace_draw_arguments import _backward_render_arguments, _forward_render_arguments
 from .fastlog_preview import preview_fastlog as _preview_fastlog
 from .request import ShowContainersLiteral
 
@@ -192,27 +197,10 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     target = resolve_draw_target(path, file_format, _KNOWN_EXTS)
     path, file_format = target.path, target.file_format
     vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
+    collapse_context: Any = None
     if graph == "backward":
         outpath = "backward_modelgraph" if path is None else path
-        rendered: Any = _render_backward(
-            trace,
-            outpath=outpath,
-            vis_mode=vis_mode,
-            direction=direction,
-            graph_overrides=graph_overrides,
-            node_spec_fn=node_spec_fn,
-            collapsed_node_spec_fn=collapsed_node_spec_fn,
-            node_style=node_style,
-            edge_overrides=edge_overrides,
-            open_viewer=open_viewer,
-            file_format=file_format,
-            code_panel=code_panel,
-            bwd=bwd,
-            show_legend=show_legend,
-            theme=theme,
-            show_module_paths=show_module_paths,
-            show_grad_values=show_grad_values,
-        )
+        rendered: Any = _render_backward(trace, **_backward_render_arguments(locals()))
     elif graph == "combined":
         outpath = "combined_modelgraph" if path is None else path
         rendered = render_combined_graph(
@@ -233,8 +221,24 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         )
     else:
         outpath = collision_safe_outpath(DEFAULT_DRAW_STEM, file_format) if path is None else path
-        rendered = _render_draw(trace, **_forward_render_arguments(locals(), resolve_color_source))
-    return target.finish(str(rendered), str(outpath), num_ops=num_ops, policy=policy)
+        request_sink: dict[str, Any] = {}
+        rendered = _render_draw(
+            trace,
+            request_sink=request_sink,
+            **_forward_render_arguments(locals(), resolve_color_source),
+        )
+        collapse_context = request_sink.get("request")
+    return target.finish(
+        str(rendered),
+        str(outpath),
+        num_ops=num_ops,
+        policy=policy,
+        _collapse_source=weakref.ref(trace),
+        _collapse_context=collapse_context,
+        _collapse_tools=(_collapse_plan, _collapse_schedule)
+        if collapse_context is not None
+        else None,
+    )
 
 
 def animate(

@@ -75,7 +75,11 @@ def test_spec_door_refuses_extra_arguments() -> None:
         log.fork().do(spec, tl.scale(0.5))
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
     with pytest.raises(InvalidArgumentError) as excinfo:
-        log.fork().attach_hooks(spec, tl.scale(0.5), confirm_mutation=True)
+        log.fork().do(
+            spec,
+            tl.scale(0.5),
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
 
 

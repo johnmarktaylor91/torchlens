@@ -305,7 +305,8 @@ def test_capture_options_private_filter_both_directions() -> None:
     # 51 -> 57: the options restructure (C2, JMT's rulings of 2026-11-01): the train
     # pinned 49 and the C2 base 59; the merged class carries 57 public fields.
     # 57 -> 58: CaptureOptions.aten_ops (public ATen operation recording).
-    assert len(_censuses.capture_option_fields()) == 58
+    # 58 -> 57: module_filter removed; save= is the one site selection (B.5 / AB-F07).
+    assert len(_censuses.capture_option_fields()) == 57
 
 
 def test_env_var_census_shapes() -> None:

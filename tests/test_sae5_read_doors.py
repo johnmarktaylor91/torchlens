@@ -86,7 +86,7 @@ def _set_door_value(trace: tl.Trace, selector) -> torch.Tensor:
 
     seen: list[torch.Tensor] = []
     fork = trace.fork("door")
-    fork.attach_hooks(selector, _recording_hook(seen))
+    fork._attach_hooks(selector, _recording_hook(seen))
     fork.push()
     assert seen, "the write door never handed the edit a value"
     return seen[0]

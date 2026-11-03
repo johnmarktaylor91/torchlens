@@ -189,9 +189,9 @@ def test_diff_drawing_of_a_reused_module_does_not_refuse(tmp_path: Path) -> None
         )
     bundle = tl.Bundle({"clean": trace, "ablated": ablated}, baseline="clean")
 
-    dot = bundle.draw(graph="diff", path=str(tmp_path / "d"), open_viewer=False)
+    drawing = bundle.draw(graph="diff", path=str(tmp_path / "d"), open_viewer=False)
 
-    assert dot.startswith("// TorchLens bundle diff")
+    assert drawing.dot.startswith("// TorchLens bundle diff")
     assert (tmp_path / "d.svg").exists()
     stored = bundle.stored_comparison(bundle.store_comparison("relative_l2"))
     relu_nodes = [name for name in stored if name.startswith("relu_")]

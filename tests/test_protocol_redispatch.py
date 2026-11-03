@@ -329,3 +329,145 @@ def test_handler_error_after_redispatch_classifies_user_op(post_wrap_bag: type) 
 
     source = Path(_protocol_redispatch.__file__).read_text()
     assert outcome._PROTOCOL_REDISPATCH_MARKER in source
+
+
+def _scan_modules(
+    table: dict[Any, Any], members: set[Any], local: dict[Any, Any]
+) -> list[tuple[str, Any]]:
+    """Synthetic post-wrap modules: one table reached three ways, plus pre-wrap and excluded."""
+
+    suffix = next(_library_ids)
+    owner = types.ModuleType(f"_tl_scan_owner_{suffix}")
+    owner.TABLE = table  # type: ignore[attr-defined]
+    owner.MEMBERS = members  # type: ignore[attr-defined]
+    owner.Holder = type(  # type: ignore[attr-defined]
+        "Holder", (), {"HANDLED": table, "OWN": {}, "__module__": owner.__name__}
+    )
+    reexport = types.ModuleType(f"_tl_scan_reexport_{suffix}")
+    reexport.TABLE = table  # type: ignore[attr-defined]
+    reexport.LOCAL = local  # type: ignore[attr-defined]
+    excluded = types.ModuleType("torch._tl_scan_excluded")
+    excluded.TABLE = {torch.cat: "never scanned"}  # type: ignore[attr-defined]
+    pre_wrap = next(iter(_protocol_redispatch._PRE_WRAP_MODULES))
+    return [
+        (owner.__name__, owner),
+        (reexport.__name__, reexport),
+        (f"_tl_scan_none_{suffix}", None),
+        (excluded.__name__, excluded),
+        (pre_wrap, types.SimpleNamespace(TABLE={torch.cat: "pre-wrap"})),
+    ]
+
+
+def test_alias_scan_counts_each_distinct_table_once() -> None:
+    """Modules, distinct tables and keys examined are exact; a re-exported table scans once."""
+
+    _ensure_wrapped()
+    ledger, _ = _state.wrap_epoch_ledgers()
+    table: dict[Any, Any] = {torch.cat: "cat", torch.stack: "stack", "name": 1}
+    members: set[Any] = {torch.cat, 7}
+    local: dict[Any, Any] = {1: 2}
+    modules = _scan_modules(table, members, local)
+    try:
+        added, count = _protocol_redispatch._alias_module_tables(modules, ledger)
+        # Two post-wrap modules; tables TABLE, MEMBERS, Holder.OWN, LOCAL once each.
+        assert count == _protocol_redispatch.AliasScanCount(modules=2, tables=4, objects=6)
+        assert added == 3
+        assert len(_protocol_redispatch._ALIAS_JOURNAL) == 3
+        assert _resolve(torch.cat) in table and _resolve(torch.stack) in table
+        assert _resolve(torch.cat) in members
+    finally:
+        _protocol_redispatch.undo_table_aliases()
+    assert table == {torch.cat: "cat", torch.stack: "stack", "name": 1}
+    assert members == {torch.cat, 7}
+
+
+def test_alias_scan_of_a_reachable_twice_table_matches_a_single_reach() -> None:
+    """Scanning a table once per unwrap aliases exactly what scanning it per namespace did."""
+
+    _ensure_wrapped()
+    ledger, _ = _state.wrap_epoch_ledgers()
+    table: dict[Any, Any] = {torch.cat: "cat", torch.stack: "stack"}
+    try:
+        once = _protocol_redispatch._alias_container(table, ledger)
+        again = _protocol_redispatch._alias_container(table, ledger)
+        aliased = dict(table)
+    finally:
+        _protocol_redispatch.undo_table_aliases()
+    assert (once, again) == (2, 0)
+    assert aliased == {
+        torch.cat: "cat",
+        torch.stack: "stack",
+        _resolve(torch.cat): "cat",
+        _resolve(torch.stack): "stack",
+    }
+
+
+def test_unwrap_records_the_alias_scan_count(post_wrap_library: types.ModuleType) -> None:
+    """Every unwrap replaces the recorded count; the post-wrap library's table is in it."""
+
+    from torchlens.backends.torch.wrappers import unwrap_torch
+
+    expected = _protocol_redispatch._alias_module_tables(
+        [(post_wrap_library.__name__, post_wrap_library)], {}
+    )[1]
+    assert expected.tables >= 1 and expected.objects >= len(post_wrap_library.HANDLED)
+    unwrap_torch()
+    try:
+        count = _protocol_redispatch.last_alias_scan_count()
+    finally:
+        _ensure_wrapped()
+    assert count.modules >= expected.modules
+    assert count.tables >= expected.tables
+    assert count.objects >= expected.objects
+
+
+class _LazyMapping(dict):  # type: ignore[type-arg]
+    """A transformers-style lazy mapping: reading it through its protocol has side effects."""
+
+    reads: list[str] = []
+
+    def _read(self, name: str) -> None:
+        type(self).reads.append(name)
+
+    def __iter__(self) -> Iterator[Any]:
+        self._read("__iter__")
+        return super().__iter__()
+
+    def __len__(self) -> int:
+        self._read("__len__")
+        return super().__len__()
+
+    def __contains__(self, key: object) -> bool:
+        self._read("__contains__")
+        return super().__contains__(key)
+
+    def __getitem__(self, key: Any) -> Any:
+        self._read("__getitem__")
+        return super().__getitem__(key)
+
+    def keys(self) -> Any:
+        self._read("keys")
+        return super().keys()
+
+
+def test_alias_scan_reads_stored_keys_without_driving_a_lazy_subclass() -> None:
+    """The scan never calls a table subclass's read protocol, and still aliases its stored keys."""
+
+    _ensure_wrapped()
+    ledger, _ = _state.wrap_epoch_ledgers()
+    lazy = _LazyMapping()
+    dict.__setitem__(lazy, torch.cat, "cat")
+    dict.__setitem__(lazy, "name", 1)
+    module = types.ModuleType(f"_tl_scan_lazy_{next(_library_ids)}")
+    module.MAPPING = lazy  # type: ignore[attr-defined]
+    _LazyMapping.reads.clear()
+    try:
+        added, count = _protocol_redispatch._alias_module_tables(
+            [(module.__name__, module)], ledger
+        )
+        assert _LazyMapping.reads == []
+        assert (added, count.tables, count.objects) == (1, 1, 2)
+        assert dict.__getitem__(lazy, _resolve(torch.cat)) == "cat"
+    finally:
+        _protocol_redispatch.undo_table_aliases()
+    assert dict(dict.items(lazy)) == {torch.cat: "cat", "name": 1}

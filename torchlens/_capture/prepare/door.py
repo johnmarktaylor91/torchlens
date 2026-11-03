@@ -447,7 +447,6 @@ def _merge_door_capture_options(args: _DoorArgs) -> CaptureOptions:
         name=args.name,
         cache=args.cache,
         cache_dir=args.cache_dir,
-        module_filter=args.module_filter,
         jax_control_flow=args.jax_control_flow,
         jax_max_control_flow_unroll=args.jax_max_control_flow_unroll,
         module_identity_mode=args.module_identity_mode,

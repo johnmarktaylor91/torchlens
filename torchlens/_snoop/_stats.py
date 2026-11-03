@@ -83,7 +83,7 @@ def sampled_stats(tensor: torch.Tensor, *, identity: str | None = None) -> Tenso
         probe = tensor.detach().reshape(-1)
         seed = identity_seed(identity, tuple(tensor.shape), str(tensor.dtype))
         sample = seeded_sample(probe, min(SAMPLED_BUDGET, numel), seed).to(torch.float64)
-    record = tensor_stats(sample, identity=identity)
+    record = tensor_stats(sample, _identity=identity)
     sample_size = int(sample.numel())
     sampled = FamilyEvidence("sampled", numel, sample_size)
     unavailable = FamilyEvidence("unavailable", numel, reason="not computed for sampled narration")
@@ -160,7 +160,7 @@ def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> TensorS
     # resolution of the whole cycle.
     from ..stats._tensor_stats import tensor_stats
 
-    return tensor_stats(tensor.detach(), identity=identity)
+    return tensor_stats(tensor.detach(), _identity=identity)
 
 
 def reuse_stats(

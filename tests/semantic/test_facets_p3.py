@@ -187,7 +187,7 @@ def test_fused_pattern_intervention_requires_real_eager_facet() -> None:
     )
 
     with pytest.raises(SiteResolutionError, match="read-only"):
-        log.attach_hooks(tl.facet("pattern"), tl.zero_ablate())
+        log._attach_hooks(tl.facet("pattern"), tl.zero_ablate())
 
 
 def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:

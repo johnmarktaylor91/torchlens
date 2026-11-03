@@ -2,7 +2,7 @@
 
 Surgery memo section 3.1: ``tl.when(...)`` is promoted to return the
 immutable, public :class:`InterventionSpec` -- one multi-clause noun accepted
-unchanged by ``fork.do``, ``fork.attach_hooks``, ``intervene=``, Bundle
+unchanged by ``fork.do``, ``intervene=``, Bundle
 operations, generalized ``sweep``, save/load, and (F01) ``spec.bind(model)``.
 Lane options (``strict``, ``log_injections``, fast tiers) never enter the
 spec: a spec means the same experiment in every lane.

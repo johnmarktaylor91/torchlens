@@ -99,7 +99,7 @@ def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
     with tl.recording.Recorder(
         model,
         save=lambda ctx: ctx.label == "relu_1",
-        save_grads=True,
+        capture=tl.options.CaptureOptions(save_grads=True),
     ) as recorder:
         out_1 = recorder(_input())
         recorder.backward(out_1.sum())

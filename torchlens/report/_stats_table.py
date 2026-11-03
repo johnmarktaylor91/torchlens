@@ -331,7 +331,7 @@ def build_stats_table(
                     skipped_by_budget += 1
                 else:
                     scanned_elements += payload.numel()
-                    stats = tensor_stats(payload, identity=label)
+                    stats = tensor_stats(payload, _identity=label)
                     if stats.mean is None and stats.num_true is None and stats.numel > 0:
                         unavailable = stats.mean_evidence.reason
                         if unavailable and "unsupported" in unavailable:

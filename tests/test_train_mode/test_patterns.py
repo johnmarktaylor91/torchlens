@@ -146,7 +146,7 @@ def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: replay capture supports an auxiliary loss on an intermediate out."""
 
     trace = tl.trace(two_layer_mlp, torch.randn(3, 4), capture=tl.options.CaptureOptions(seed=0))
-    trace.save_new_outs(
+    trace._save_new_outs(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -207,7 +207,7 @@ def test_probe_frozen_backbone_replay(tiny_resnet_with_probe: TinyResnetWithProb
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(seed=0),
     )
-    trace.save_new_outs(
+    trace._save_new_outs(
         tiny_resnet_with_probe,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -321,7 +321,9 @@ def test_multi_pass_recorder_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     optimizer = torch.optim.SGD(two_layer_mlp.parameters(), lr=0.01)
     losses: list[float] = []
 
-    with tl.recording.Recorder(two_layer_mlp, backward_ready=True) as recorder:
+    with tl.recording.Recorder(
+        two_layer_mlp, capture=tl.options.CaptureOptions(backward_ready=True)
+    ) as recorder:
         for _step in range(4):
             optimizer.zero_grad(set_to_none=True)
             output = recorder(torch.randn(3, 4, requires_grad=True))
@@ -388,7 +390,7 @@ def test_save_new_outs_train_mode_inherits() -> None:
         capture=tl.options.CaptureOptions(backward_ready=True, seed=0),
     )
 
-    trace.save_new_outs(
+    trace._save_new_outs(
         model,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=None,
@@ -413,7 +415,7 @@ def test_save_new_outs_train_mode_overrides() -> None:
     )
     original_layer_flags = [layer.detach_saved_activations for layer in trace]
 
-    trace.save_new_outs(
+    trace._save_new_outs(
         model,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -505,7 +507,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     model.forward = types.MethodType(divergent_forward, model)
 
     try:
-        trace.save_new_outs(
+        trace._save_new_outs(
             model,
             torch.ones(2, 4, requires_grad=True),
             backward_ready=True,

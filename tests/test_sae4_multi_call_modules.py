@@ -66,7 +66,7 @@ def test_head_selector_writes_on_a_model_that_calls_a_relu_twice() -> None:
     clean = _head_trace(model, x)
     clean_out = _output(clean).clone()
     edited = clean.fork("head")
-    edited.attach_hooks(tl.head(1), tl.zero_ablate())
+    edited._attach_hooks(tl.head(1), tl.zero_ablate())
     edited.run(model, x)
     assert not torch.allclose(_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0
@@ -77,7 +77,11 @@ def test_a_selector_scoped_to_a_module_that_ran_twice_refuses_naming_its_calls()
     model, x = _AttnReluTwice().eval(), torch.randn(2, 3, 8)
     clean = _head_trace(model, x)
     with pytest.raises(InvalidArgumentError) as caught:
-        clean.fork("scoped").attach_hooks(tl.head(1).in_module("act"), tl.zero_ablate())
+        clean.fork("scoped").do(
+            tl.head(1).in_module("act"),
+            tl.zero_ablate(),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
     assert caught.value.fields["code"] == "facet_selector_module_multi_call"
     calls = caught.value.fields["call_addresses"]
     assert tuple(calls) == ("act:1", "act:2")

@@ -31,6 +31,45 @@ Readers dispatch by detected format (`tl.io.detect_tlspec_format`); the detectio
 keep their 2.16 spellings for current intervention specs, which carry `kind:
 "intervention"` in `manifest.json` beside the 2.16 fields.
 
+### Compatibility window
+
+The intended compatibility window for artifacts written by TorchLens 3.x is five years: a
+`.tlspec` saved by a 3.x release is meant to load in every 3.x release published within five
+years of the one that wrote it. That window is a stated intention, not yet a promise, because
+it rests on three prerequisites and only the first is in place:
+
+1. Typed refusal of unknown fields in both directions: in place. A reader refuses a field it
+   does not know whether the writer was newer or older (`torchlens/_io/state_contract.py`;
+   `tests/test_tlspec_unified.py`), so skew is never absorbed silently.
+2. A state-capable migration protocol that upgrades an older artifact instead of refusing it:
+   not yet built. Today a reader below an artifact's `tlspec_version` refuses with
+   `artifact_version_above_runtime` and the remedy names the release to upgrade to.
+3. A release gate in which an already-published reader loads artifacts written by the current
+   tree: not yet run. The committed goldens prove the reverse direction only (the current
+   reader loading older artifacts).
+
+Until all three are green the promise is the narrower one this page already makes: within 3.x,
+a newer reader loads older 3.x artifacts and refuses, typed, anything it cannot read; a newer
+artifact refuses, typed, in an older reader. The five-year window becomes a promise, and this
+section drops its conditions, when prerequisites 2 and 3 land. Files written by torchlens 2.x
+are outside the window entirely (see above).
+
+## Member moves of the 3.0 surface review (hard changes, no shims)
+
+- `Trace.attach_hooks`, `Layer.attach_hooks`, `Op.attach_hooks`, `Trace.clear_hooks`,
+  `tl.intervention.HookHandle` and `prepend=` are REMOVED. `do(site, hook, ...)` attaches
+  the sticky hook and propagates at once; `do(tl.when(site, hook),
+  intervention=InterventionOptions(engine="set_only"))` stages without running; `do`
+  returns the trace, and `clear_edits(site)` or `clear_edits(handle=ids)` removes hooks.
+- `Trace.collapse_plan`, `Trace.collapse_schedule` and `Trace.collapse_order` are REMOVED.
+  Read `collapse_plan` and `collapse_schedule` on the `Drawing` a forward
+  `trace.draw(collapse=...)` returns; the mode and render context follow the draw call,
+  and the plan carries the ranking. `Trace.module_collapse_order` stays.
+- `Trace.save_new_outs` (use `trace.run(model, x)`), `Trace.find_layers`, `Op.save_activation`,
+  `tl.validation.validate_batch_of_models_and_inputs`, `InterventionOptions.from_values`,
+  `InterventionOptions.is_field_explicit`, `CaptureBackend.fetch_label_move_input_tensors`
+  and `CaptureBackend.copy_replacement_metadata` are REMOVED from the public surface.
+
 ## Visualization Collapse Engine
 
 `Trace.draw(collapse=...)` is one v2 smart-collapse surface: `"none"`, `"auto"`, `"max"`,

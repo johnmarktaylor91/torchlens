@@ -8,8 +8,6 @@ Pins, in both failure directions of the one line that shipped wrong:
 - A1c: ``mean_ablate(source=tensor)`` derives ``is_batch_independent=True`` (the
   fill value never reads the traced batch; append is permitted), while the
   self-mean derives ``False`` (couples batch rows; append refuses).
-- 0b: ``source=``/``from_=`` both passed refuses typed instead of silently
-  preferring ``source=``.
 """
 
 from __future__ import annotations
@@ -48,29 +46,19 @@ def test_append_refuses_self_mean_and_permits_tensor_source() -> None:
     """The append gate honors the DERIVED flag in both directions."""
 
     model, x, log = _traced_model()
-    log.attach_hooks(tl.func("relu"), tl.mean_ablate(dim=None), confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), tl.mean_ablate(dim=None), confirm_mutation=True)
     log.run(model, x)
     with pytest.raises(AppendBatchDependenceError):
         log.run(model, torch.randn(2, 4), replay=ReplayOptions(append=True))
 
     model2, x2, log2 = _traced_model()
-    log2.attach_hooks(
+    log2._attach_hooks(
         tl.func("relu"), tl.mean_ablate(source=torch.ones(4), dim=None), confirm_mutation=True
     )
     log2.run(model2, x2)
     n_before = log2["relu_1_2"].out.shape[0]
     appended = log2.run(model2, torch.randn(2, 4), replay=ReplayOptions(append=True))
     assert appended["relu_1_2"].out.shape[0] == n_before + 2
-
-
-def test_scramble_source_and_from_both_passed_refuses() -> None:
-    """0b: both spellings passed is a conflict, never a silent preference."""
-
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.intervention.scramble_elements(torch.ones(3), from_=torch.zeros(3))
-    assert excinfo.value.fields["code"] == "intervention_source_conflict"
-    assert "source=" in str(excinfo.value)
-    assert "from_=" in str(excinfo.value)
 
 
 def test_typo_can_never_flip_batch_independent_open() -> None:

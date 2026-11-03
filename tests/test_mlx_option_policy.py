@@ -27,7 +27,6 @@ def _valid_mlx_options() -> dict[str, Any]:
         "save_source_context": False,
         "save_rng": False,
         "backward_ready": False,
-        "module_filter": None,
         "transform": None,
         "output_device": "same",
         "layer_visualizers": None,

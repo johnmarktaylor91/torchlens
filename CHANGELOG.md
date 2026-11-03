@@ -9,6 +9,8 @@
   written; the default never does) in place of `vis_save_only=`. `Trace.to_dagua_graph` and
   `tl.experimental.dagua.trace_to_dagua_graph` take `rolled=` (a bool) and `depth=` in place of
   `vis_mode=` and `vis_call_depth=`, the same spellings as `trace.draw`.
+- **api**: `inputs=` replaces `input_args=` on the capture, validation, debug and report entry
+  points, and `x=` on `Bundle.run`, `tl.debug.find_nan` and `tl.debug.nonfinite_origin`.
 - **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
   pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
   merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at
@@ -18,6 +20,10 @@
   capture the model again with this release. Nothing migrates a 2.x file, and there is no
   `tl.migrate`. The promise made with 2.16.0 that its `.tlspec` files would always load is
   withdrawn; `MIGRATIONS.md` (".tlspec Compatibility") lists every case.
+- **capture**: `CaptureOptions.module_filter` and `tl.Trace(module_filter=)` are removed; compose the
+  predicate into `save=`. `Trace.save_new_outs` takes `save=` and `save_grads=` in place of
+  `layers_to_save=` and `grad_layers_to_save=`. The `module_filter_zero_saved` warning goes with
+  `module_filter`.
 - **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
   (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
   the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old

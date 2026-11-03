@@ -8,6 +8,8 @@ READ existing result records, never recompute.
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,35 @@ def clean(tmp_path: Path) -> Path:
     """The deterministic clean fixture artifact."""
 
     return save_clean_artifact(tmp_path)
+
+
+# Kept: Kept: the slices removed this test; the stack added the agent init verb to its
+# purity gate.
+def test_tier0_verbs_stay_torch_free(clean: Path) -> None:
+    """info/schema/guide/version/ls/agent init never import torch (the purity gate)."""
+
+    probe = (
+        "import sys\n"
+        "from torchlens.agent import cli\n"
+        "rc = cli.main({args!r})\n"
+        "assert rc == 0, rc\n"
+        "assert 'torch' not in sys.modules, 'tier-0 verb imported torch'\n"
+    )
+    for args in (
+        ["version", "--json"],
+        ["guide"],
+        ["schema", "--json"],
+        ["info", str(clean), "--json"],
+        ["ls", str(clean.parent), "--json"],
+        ["agent", "init", "--json", "--file", str(clean.parent / "AGENTS.md")],
+    ):
+        result = subprocess.run(
+            [sys.executable, "-c", probe.format(args=args)],
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
+        assert result.returncode == 0, (args, result.stderr[-500:])
 
 
 def test_missing_artifact_exits_3(tmp_path: Path) -> None:

@@ -315,7 +315,7 @@ def test_f2_refresh_rearms_raise_on_nan() -> None:
     )
     assert trace.outcome.status is CaptureStatus.COMPLETE
     with pytest.raises(CaptureError, match="non-finite"):
-        trace.save_new_outs(model, torch.zeros(1, 3))
+        trace._save_new_outs(model, torch.zeros(1, 3))
 
 
 def test_run_on_cleaned_up_husk_refuses_with_the_n_gate(recwarn) -> None:

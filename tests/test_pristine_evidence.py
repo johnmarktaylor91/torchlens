@@ -210,3 +210,29 @@ def test_bundle_without_a_pristine_member_refuses_typed() -> None:
     assert bundle.baseline_name is None
     with pytest.raises(BaselineUndeterminedError):
         bundle.rank_changes()
+
+
+def test_runnable_model_doc_states_the_hooked_run_disclosure() -> None:
+    """The short runnable model and the exhaustive contract tell one story.
+
+    ``run(inputs=)`` pushes inputs through the model; a hooked or intervened
+    run settles ``unverifiable`` under ``hooked_run_unverified`` and the trace
+    reads ``is_pristine == False``: disclosed, never silent. The user-facing
+    model page must say so in the contract's own vocabulary.
+    """
+
+    docs = Path(__file__).resolve().parents[1] / "docs" / "reference"
+    model = (docs / "runnable_model.md").read_text(encoding="utf-8")
+    contract = (docs / "runnable_tlspec_contract.md").read_text(encoding="utf-8")
+    section = model.split("## Clean run, hooked run, and disclosure", 1)[1].split("\n## ", 1)[0]
+    for anchor in (
+        "`Trace.is_pristine == False`",
+        "`hooked_run_unverified`",
+        "`pristine=false`",
+        "`run_staged_spec_unapplied`",
+        "`user_intervention_unsupported`",
+        "never silent",
+    ):
+        assert anchor in section, anchor
+    for anchor in ("hooked_run_unverified", "pristine=false", "run_staged_spec_unapplied"):
+        assert anchor in contract, anchor

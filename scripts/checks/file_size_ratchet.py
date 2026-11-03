@@ -140,7 +140,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # verbatim to _op_save.py, _op_relations.py, _op_cost.py, _labels.py,
     # intervention/_op_edits.py and receptive_field/_op_fields.py; re-keyed
     # down to the next 50-line step above the measurement (3635).
-    "torchlens/_data_classes/op.py": 3650,
+    # 3650 -> 3550 (2026-11-03 C-077 merge): the C-063 stack and C-076 together
+    # bring op.py to 3549; re-keyed down to the next 50-line step.
+    "torchlens/_data_classes/op.py": 3550,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -234,7 +236,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
     # 3750 -> 3600: the record-s2 fold plus the c2-rulings Trace port measure 3566 (slack rule).
-    "torchlens/_data_classes/trace.py": 3600,
+    "torchlens/_data_classes/trace.py": 3500,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the

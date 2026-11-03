@@ -1,11 +1,10 @@
 """F12 pins: live skin palettes (N4), ramps, the N17 neutral fill, and the
 CVD accessibility gates.
 
-Every shipped skin, the default included, renders the legacy role colours
-(JMT's 29 Oct ruling: the default look is main's released look); the
-Okabe-Ito set ships as data with its accessibility evidence attached, and
-the legacy set's deuteranopia failure is pinned here as the fork's
-evidence.
+The default ``torchlens`` skin and ``colorblind`` render the Okabe-Ito set
+(the flip was held until the collapse budget gate landed); ``paper`` and
+``high_contrast`` keep the legacy role colours, and the legacy set's
+deuteranopia failure is pinned here as the fork's evidence.
 """
 
 from __future__ import annotations
@@ -22,9 +21,34 @@ from torchlens._visualization.lenses.audit import palette_distinguishability
 from torchlens._visualization.node_spec import NodeSpec
 from torchlens._visualization.themes import (
     LEGACY_SEMANTIC_PALETTE,
+    OKABE_ITO_SEMANTIC_PALETTE,
     THEME_PRESETS,
+    apply_theme_to_spec,
     resolve_theme,
 )
+
+
+# Kept: the slices removed this test; the stack's Okabe-Ito default-skin work rewrote it to assert the new palette.
+def test_default_skin_renders_the_okabe_ito_palette() -> None:
+    """The default skin translates every legacy constant to its Okabe-Ito role colour."""
+
+    theme = resolve_theme("torchlens")
+    assert theme.semantic_palette is OKABE_ITO_SEMANTIC_PALETTE
+    for role, constant in LEGACY_SEMANTIC_PALETTE.items():
+        spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor=constant), theme)
+        assert spec.fillcolor == OKABE_ITO_SEMANTIC_PALETTE[role], role
+    assert resolve_theme("colorblind").semantic_palette is OKABE_ITO_SEMANTIC_PALETTE
+
+
+# Kept: the slices removed this test; the stack's Okabe-Ito default-skin work rewrote it to assert the new palette.
+def test_paper_and_high_contrast_keep_their_historical_palettes() -> None:
+    """The paper and high_contrast skins keep the legacy role colours."""
+
+    for name in ("paper", "high_contrast"):
+        theme = resolve_theme(name)
+        assert theme.semantic_palette is LEGACY_SEMANTIC_PALETTE
+        spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#98FB98"), theme)
+        assert spec.fillcolor == "#98FB98", name
 
 
 def test_legacy_palette_fails_deuteranopia_the_fork_evidence() -> None:

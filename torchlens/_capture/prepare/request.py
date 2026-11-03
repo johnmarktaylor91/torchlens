@@ -89,7 +89,6 @@ class _DoorArgs:
     name: str | None | MissingType = MISSING
     cache: bool | MissingType = MISSING
     cache_dir: str | Path | None | MissingType = MISSING
-    module_filter: Callable[[Any], bool] | None | MissingType = MISSING
     stop_after: Any | None | MissingType = MISSING
     structure_only: bool | MissingType = MISSING
     jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING
@@ -212,7 +211,6 @@ def _run_plan_capture_rows(state: _DoorState) -> dict[str, Any]:
             state.inference_only_value and not opts._is_field_explicit("inference_only")
         ),
         "name": state.log_name,
-        "module_filter": opts.module_filter,
     }
 
 

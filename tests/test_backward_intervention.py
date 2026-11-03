@@ -307,7 +307,7 @@ def test_composite_grad_output_selector_matches_real_live_backward_hook() -> Non
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace.attach_hooks(
+    trace._attach_hooks(
         tl.grad_output() & tl.grad_fn(name="relu"),
         _helper_spec(
             "count_grad_output",
@@ -354,7 +354,7 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace.attach_hooks(
+    trace._attach_hooks(
         tl.grad_fn(name="relu") & tl.in_backward_pass(2),
         _helper_spec(
             "count_second_pass",

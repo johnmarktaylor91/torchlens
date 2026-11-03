@@ -8,6 +8,11 @@ splice did: reconstruction fidelity, the SAE latents, the change in next-token
 cross-entropy and the KL divergence from the clean run. TorchLens ships no SAE
 loader; the division of labour is SAELens for the SAE, TorchLens for the run.
 
+An SAE is a discovery instrument: it proposes features in a basis you did not choose. For
+monitoring a known behaviour in a deployed model, a probe trained on the same activations
+(`tl.extract_dataset` writes them, with provenance) is the field's production instrument; see
+[comparable tools, discovery and monitoring](../migration/landscape.md#discovery-and-monitoring).
+
 ```text
 pip install torchlens transformers
 pip install "sae-lens==6.54.0"

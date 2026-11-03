@@ -195,3 +195,19 @@ reason: test-suite shrink round 4 removed selector_semantics_matrix.json rows wh
 env: py3.10-torch2.13.0
 torch: 2.13.0
 recorded: 2026-11-03
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: Okabe-Ito palette renders on the default torchlens and colorblind skins: input, output and weight role fills change in every default-skin golden
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 11af67bcbd114266d618e0731bfcd17e489850fb (dirty)
+recorded: 2026-11-03T09:34:14.082119+00:00
+---
+generator: tests/test_rank_render_ir_semantic_goldens.py
+flag: TORCHLENS_UPDATE_RANK_RENDER_IR=1
+reason: Okabe-Ito palette renders on the default torchlens and colorblind skins: input, output and weight role fills change in every default-skin golden
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 11af67bcbd114266d618e0731bfcd17e489850fb (dirty)
+recorded: 2026-11-03T09:34:20.785790+00:00

@@ -14,6 +14,7 @@ historical importers reach for, so the import surface is unchanged.
 
 from __future__ import annotations
 
+import importlib
 import warnings
 import weakref
 from collections.abc import Iterator
@@ -30,6 +31,22 @@ from ._rule_match import _match_rules, _rule_decision
 from ._zero_fire import note_capture_rule_fired
 from .hooks import make_live_site_proxy
 from .spec import Recipe
+
+#: ``backends.torch._ops_interventions``, bound on first use: the backend module
+#: imports this package at module level, so a module-level import here would
+#: cycle; the per-op fire-result helpers below read it on every module exit.
+_OPS_INTERVENTIONS: Any = None
+
+
+def _ops_interventions() -> Any:
+    """Return the torch backend's intervention-state module, importing it once."""
+
+    global _OPS_INTERVENTIONS
+    module = _OPS_INTERVENTIONS
+    if module is None:
+        module = importlib.import_module("..backends.torch._ops_interventions", __package__)
+        _OPS_INTERVENTIONS = module
+    return module
 
 
 @dataclass(frozen=True)
@@ -97,10 +114,7 @@ def _resolve_boundary_predicate(trace: Any) -> _BoundaryPredicate | None:
 
     if trace is None:
         return None
-    try:
-        predicate_options = trace._predicate_save_options
-    except AttributeError:
-        predicate_options = None
+    predicate_options = trace.__dict__.get("_predicate_save_options")
     predicate_intervene = getattr(predicate_options, "intervene", None)
     if predicate_intervene is None:
         return None
@@ -389,9 +403,7 @@ def _record_tensor_live_fire_results(
         Fire results emitted by the live hook dispatcher.
     """
 
-    from ..backends.torch._ops_interventions import _set_tensor_live_fire_results
-
-    _set_tensor_live_fire_results(tensor, fire_results)
+    _ops_interventions()._set_tensor_live_fire_results(tensor, fire_results)
 
 
 def _peek_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...]:
@@ -414,8 +426,7 @@ def _peek_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ..
         fire_results = ()
     if fire_results:
         return fire_results
-    from ..backends.torch import _ops_interventions as intervention_state
-
+    intervention_state = _ops_interventions()
     try:
         with pause_logging():
             storage = tensor.untyped_storage()

@@ -607,7 +607,7 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
     clean_out = _trace_output(clean).clone()
 
     zeroed = clean.fork("zero_q_head")
-    zeroed.attach_hooks(tl.head(0, "q"), tl.zero_ablate())
+    zeroed._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
     zeroed.run(model, x)
 
     assert not torch.allclose(_trace_output(zeroed), clean_out)
@@ -639,7 +639,7 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
     clean_out = _trace_output(clean).clone()
 
     edited = clean.fork("fused_qk")
-    edited.attach_hooks(
+    edited._attach_hooks(
         [
             (tl.head(0, "q"), tl.zero_ablate()),
             (tl.head(1, "k"), tl.zero_ablate()),
@@ -654,7 +654,7 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
 
     conflict = clean.fork("fused_conflict")
     with pytest.raises(SiteResolutionError, match="Facet intervention conflict"):
-        conflict.attach_hooks(
+        conflict._attach_hooks(
             [
                 (tl.head(0, "q"), tl.zero_ablate()),
                 (tl.facet("q").head(0), tl.zero_ablate()),
@@ -683,7 +683,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
 
     edited = log.fork("gqa_refuse")
     with pytest.raises(RuntimeError, match="aliasing_selection.*alias group"):
-        edited.attach_hooks(tl.head(3, "k"), tl.zero_ablate())
+        edited._attach_hooks(tl.head(3, "k"), tl.zero_ablate())
 
 
 def test_in_place_or_view_version_facet_write_refuses() -> None:
@@ -719,7 +719,7 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
     )
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
-        log.fork("unsafe_refuse").attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
+        log.fork("unsafe_refuse")._attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
 
 
 def test_facets_public_module_all_is_curated() -> None:
