@@ -3253,9 +3253,8 @@ def _run_backward_with_capture(
 def _settle_armed_gradient_edits(trace: Any, pass_index: int) -> None:
     """Write the settle rows of the gradient edits armed on ``trace`` (SPEC 3.3).
 
-    The settle law lives with the doors that arm (``_trace_intervention``);
-    this is the one call at backward pass end. Until that function exists on
-    the branch this runs on, there is nothing armed to settle.
+    The settle law lives with the doors that arm (``_trace_grad_sites``);
+    this is the one call at backward pass end.
 
     Parameters
     ----------
@@ -3265,11 +3264,9 @@ def _settle_armed_gradient_edits(trace: Any, pass_index: int) -> None:
         One-based index of that pass.
     """
 
-    from ..._data_classes import _trace_intervention
+    from ..._data_classes._trace_grad_sites import settle_armed_gradient_edits
 
-    settle = getattr(_trace_intervention, "settle_armed_gradient_edits", None)
-    if settle is not None:
-        settle(trace, pass_index=pass_index)
+    settle_armed_gradient_edits(trace, pass_index=pass_index)
 
 
 def disarm_triggers(trace: Any) -> None:

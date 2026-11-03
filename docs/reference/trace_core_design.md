@@ -275,7 +275,7 @@ private; computed collapse metadata stays out of serialization.
 - **`Trace.fork()`**: core-level COW — share frozen base + pools; new facade cache, new
   overlay, detached backward epochs, independent intervention/history state, payload
   handles per today's fork policy. Transactions checkpoint overlay + epochs; rollback
-  discards atomically. The forkcopier (`_trace_intervention.py`) is DELETED in the same
+  discards atomically. The forkcopier (the former `_trace_intervention.py`) is DELETED in the same
   wave that proves fork/rollback/payload-alias/parent-run/GC parity — a strict
   improvement (-331 lines, -3 CPython private APIs, faster fork), not a give-back.
 
@@ -396,7 +396,7 @@ the physical move is mechanical against it.
 `RunnableTraceState` (sizes per plane: the ownership map above is the
 authority; the historical approximate counts here drifted twice). All 220 FIELD_ORDER entries keep emitting the same semantic
 mapping through component-backed properties. Label/address/lookup maps move to core
-indexes; accessors become facade factories. Mixins stay as presentation organization;
+indexes; accessors become facade factories. Thin `Trace` methods over function modules stay as presentation organization;
 internal algorithms move to narrow component/core protocols. `Module` — the second god
 object — gets its own responsibility decomposition into narrow query/presentation
 helpers without moving public methods. `TraceBuildState` actually goes away: its 20

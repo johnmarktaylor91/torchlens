@@ -423,7 +423,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_cost_total_param_memory` | scalar | required: every level | keep | fact | `Trace.cost.total_param_memory` |
 | `_decoded_output` | scalar | required: every level | keep | fact | none (storage only) |
 | `_final_to_raw_layer_labels` | scalar | required: every level | keep | fact | none (storage only) |
-| `_grad_fn_logs` | scalar | required: every level | keep | fact | `Trace.autograd.grad_fn_fire_timings`, `Trace.autograd.grad_fns`, `Trace.autograd.saved_grad_fns`, `TraceStatsMixin.grad_fn_site_summary` |
+| `_grad_fn_logs` | scalar | required: every level | keep | fact | `Trace.grad_fn_site_summary`, `Trace.autograd.grad_fn_fire_timings`, `Trace.autograd.grad_fns`, `Trace.autograd.saved_grad_fns` |
 | `_grad_fn_param_refs` | scalar | required: every level | keep | fact | none (storage only) |
 | `_grad_op_nums_to_save` | scalar | required: every level | keep | fact | none (storage only) |
 | `_graph_conditional_arm_entry_edges` | scalar | required: every level | keep | fact | `Trace.graph.conditional_arm_entry_edges` |
@@ -437,11 +437,11 @@ record, by record; a rename appears as one removed and one added row.
 | `_graph_stop_frontier` | scalar | required: every level | keep | fact | `Trace.graph.stop_frontier` |
 | `_graph_structure_evidence` | scalar | required: every level | keep | fact | `Trace.graph.structure_evidence` |
 | `_has_direct_writes` | scalar | required: every level | keep | fact | none (storage only) |
-| `_layer_dict_all_keys` | scalar | required: every level | keep | fact | `TraceStatsMixin.grad_fn_site_summary` |
+| `_layer_dict_all_keys` | scalar | required: every level | keep | fact | `Trace.grad_fn_site_summary` |
 | `_layer_dict_main_keys` | scalar | required: every level | keep | fact | none (storage only) |
-| `_layer_list` | scalar | required: every level | keep | fact | `Trace.cost.flops_by_op_type`, `Trace.cost.macs_by_kind`, `Trace.cost.total_flops_backward`, `Trace.graph.has_conditional_branching` and 16 more |
-| `_layer_logs` | scalar | required: every level | keep | fact | `TraceStatsMixin.layers`, `TraceStatsMixin.saved_layers` |
-| `_layer_num_calls` | scalar | required: every level | keep | fact | `Trace.graph.is_recurrent`, `Trace.graph.max_ops_per_layer`, `TraceStatsMixin.compute_ops`, `TraceStatsMixin.input_ops` and 5 more |
+| `_layer_list` | scalar | required: every level | keep | fact | `Trace.buffer_read_ops`, `Trace.buffer_write_ops`, `Trace.compute_ops`, `Trace.model_ops` and 16 more |
+| `_layer_logs` | scalar | required: every level | keep | fact | `Trace.layers`, `Trace.saved_layers` |
+| `_layer_num_calls` | scalar | required: every level | keep | fact | `Trace.compute_ops`, `Trace.input_ops`, `Trace.ops`, `Trace.ops_with_params` and 5 more |
 | `_layer_num_to_lookup_keys_dict` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layer_nums_to_save` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layers_logged` | scalar | required: every level | keep | fact | none (storage only) |
@@ -483,7 +483,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_orphan_logs` | scalar | required: every level | keep | fact | `Trace.graph.orphans` |
 | `_orphan_records` | scalar | required: every level | blob_recursive | fact | none (storage only) |
 | `_out_recipe_revision` | scalar | required: every level | keep | fact | none (storage only) |
-| `_param_logs` | scalar | required: every level | keep | fact | `Trace.graph.tied_param_groups`, `TraceStatsMixin.params`, `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable` and 8 more |
+| `_param_logs` | scalar | required: every level | keep | fact | `Trace.params`, `Trace.graph.tied_param_groups`, `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable` and 8 more |
 | `_phase_timings` | scalar | required: every level | keep | fact | none (storage only) |
 | `_primitive_op_profile` | scalar: `Any | None` | required: every level | keep | fact | none (storage only) |
 | `_provenance_backend` | scalar | required: every level | keep | fact | `Trace.provenance.backend` |
@@ -537,7 +537,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_source_init_signature` | computed | required: every level | keep | fact | `Trace.source.init_signature` |
 | `_source_snapshots` | scalar | required: every level | keep | fact | `Trace.source.snapshots` |
 | `_spec_revision` | scalar | required: every level | keep | fact | none (storage only) |
-| `_tracing_finished` | scalar | required: every level | keep | fact | `TraceStatsMixin.input_ops`, `TraceStatsMixin.output_ops` |
+| `_tracing_finished` | scalar | required: every level | keep | fact | `Trace.input_ops`, `Trace.output_ops` |
 | `annotations` | scalar: `dict[str, Any]` | required: every level | keep | fact | `Trace.annotations` (field) |
 | `backend_runtime_device_summary` | scalar: `dict[str, Any] | None` | required: every level | keep | fact | `Trace.backend_runtime_device_summary` (field) |
 | `backward_peak_memory_reason` | scalar | required: every level | keep | fact | `Trace.backward_peak_memory_reason` (field) |
@@ -589,7 +589,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `_param_barcodes` | interned | required: every level | keep | fact | `Op.has_params`, `Layer.has_params` |
 | `_param_logs` | scalar | required: every level | keep | fact | `Op.num_param_tensors_frozen`, `Op.num_param_tensors_trainable`, `Op.param_dtypes`, `Op.param_names` and 8 more |
 | `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Op.gradient_transform`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace` and 40 more |
-| `_tracing_finished` | interned | required: every level | keep | fact | `TraceStatsMixin.input_ops`, `TraceStatsMixin.output_ops` |
+| `_tracing_finished` | interned | required: every level | keep | fact | `Trace.input_ops`, `Trace.output_ops` |
 | `activation_memory` | interned | required: every level | keep | fact | `Op.activation_memory` (field) |
 | `address` | interned | required: every level | keep | fact | `Op.address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Op.annotations` (field) |

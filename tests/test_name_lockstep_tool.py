@@ -252,7 +252,8 @@ def test_removed_member_residue_skips_an_owner_that_still_reaches_the_leaf(
 ) -> None:
     """A member moved between mixins of ``Trace`` leaves ``Trace.leaf`` current.
 
-    Only the gone defining class's own spelling is stale.
+    The pair is one moved name (both sides spell ``Trace.provenance``); only the gone
+    defining class's own spelling is stale.
     """
 
     corpus = _lockstep_repo(
@@ -280,9 +281,11 @@ def test_removed_member_residue_skips_an_owner_that_still_reaches_the_leaf(
             owner_names=["StatsMixin", "Trace"],
         )
     }
-    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
-    stale = [(f.row_id, f.location) for f in findings if f.problem == "stale"]
-    assert stale == [("member:m:VizMixin.provenance", "examples/demo.py:2")]
+    surface_diff = diff_inventories(base, head)
+    assert [(m.basis, m.retired_owners) for m in surface_diff.moved] == [("moved", ("VizMixin",))]
+    findings = check.check_lockstep(surface_diff, corpus, head)
+    stale = [(f.change, f.row_id, f.location) for f in findings if f.problem == "stale"]
+    assert stale == [("moved", "member:m:StatsMixin.provenance", "examples/demo.py:2")]
 
 
 def test_gate_items_carry_snippet_and_reference(tmp_path: Path) -> None:
