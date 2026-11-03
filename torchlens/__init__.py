@@ -281,7 +281,7 @@ _REDIRECTS: dict[str, str] = {
     "tviz": "renamed; use torchlens.transformer (import torchlens.transformer) for the kit; the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention)",
     "unwrap_torch": "use torchlens.backends.torch.wrappers.unwrap_torch",
     "validate_backward_pass": "use torchlens.validation.validate_backward_pass",
-    "validate_batch_of_models_and_inputs": "removed: loop over your models and call torchlens.validate(model, x) for each; the batch CSV harness has no successor",
+    "validate_batch_of_models_and_inputs": "removed: the batch CSV harness has no successor; use torchlens.validate once per model (torchlens.validate(model, x))",
     "validate_forward_pass": "use torchlens.validation.validate_forward_pass",
     "validate_model_activations": "use torchlens.validate(scope='forward')",
     "validate_saved_activations": "use torchlens.validate(scope='saved')",
