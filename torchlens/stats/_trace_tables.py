@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
+from .._data_classes._trace_field_spec import TRACE_PORTABLE_STATE_SPEC
 from .._data_classes.interface import _format_conditional_branch_stack
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
 from .._utils.collections import _path_component_key
@@ -89,6 +90,30 @@ def _decoded_batch_topk_rows(value: Any) -> list[dict[str, Any]] | None:
         for row in rows
     ):
         return cast(list[dict[str, Any]], rows)
+    return None
+
+
+def _decoded_text_rows(value: Any) -> list[dict[str, Any]] | None:
+    """Return decoded text rows (``batch_item, rank, text, token_ids``), or ``None``.
+
+    Parameters
+    ----------
+    value:
+        Decoded output value.
+
+    Returns
+    -------
+    list[dict[str, Any]] | None
+        The text rows of a tokenizer-backed decode, or ``None`` for another kind.
+    """
+
+    if not isinstance(value, list) or not value:
+        return None
+    if all(
+        isinstance(row, dict) and {"batch_item", "rank", "text", "token_ids"} <= set(row)
+        for row in value
+    ):
+        return cast(list[dict[str, Any]], value)
     return None
 
 
@@ -240,16 +265,16 @@ def _recompute_or_refuse(trace: "Trace", k: int | None) -> Any:
     """
 
     recomputed = _recompute_decoded_output(trace, top_n=k)
-    if recomputed is None:
-        raise PayloadUnavailableError(
-            "no decoded output was captured and no output tensor is retained",
-            code="decoded_output_unavailable",
-            remedy=(
-                "decode on demand with decode_output(style=..., head=...) while the "
-                "output activations are retained (the default save policy)"
-            ),
-        )
-    return recomputed
+    if recomputed is not None:
+        return recomputed
+    door = _decode_door()
+    # Nothing was decoded at capture: run the detectors over the retained
+    # output tensors now. The door raises the typed refusals itself
+    # (``decoded_output_unavailable`` when nothing is retained,
+    # ``decode_style_unknown`` when no detector resolves a style).
+    return door.decode_trace_output(
+        trace, style=None, head=None, tokenizer=None, top_n=k or door._TOP_N_CAPTURED
+    )
 
 
 def _recompute_above_captured(trace: "Trace", k: int, captured_top_n: int) -> Any:
@@ -528,6 +553,11 @@ def output_table(
             argument="top_n",
         )
     decoded = trace.decode_output(k=k, style=style, head=head)
+    text_rows = _decoded_text_rows(decoded)
+    if text_rows is not None:
+        wanted = _normalize_batch_items(batch_items, text_rows)
+        kept = [row for row in text_rows if wanted is None or row["batch_item"] in wanted]
+        return pd.DataFrame(kept, columns=["batch_item", "rank", "text", "token_ids"])
     rows = _decoded_batch_topk_rows(decoded)
     if rows is None:
         raise PayloadUnavailableError(
@@ -560,8 +590,10 @@ def _recompute_decoded_output(trace: "Trace", top_n: int | None) -> Any | None:
     """
 
     postprocessor = trace._provenance_output_postprocessor
-    if postprocessor is None or getattr(postprocessor, "style", None) == "hf_text":
+    if postprocessor is None:
         return None
+    if getattr(postprocessor, "style", None) == "hf_text":
+        return _recompute_text_output(trace, postprocessor)
     logits = _retained_output_logits(trace)
     if logits is None:
         return None
@@ -573,6 +605,46 @@ def _recompute_decoded_output(trace: "Trace", top_n: int | None) -> Any | None:
     if rows is None:
         return None
     return {"kind": "batch_topk", "rows": rows}
+
+
+def _session_output_tokenizer(trace: "Trace") -> Any | None:
+    """Return the capturing session's output tokenizer, or ``None`` when there is none.
+
+    ``_output_tokenizer`` is a declared ``FieldPolicy.DROP`` Trace field that
+    exists only during the capturing session: settlement pops it from the
+    instance dict and serialization never writes it, so its absence is the
+    normal settled or reloaded state, read here from the instance dict. A
+    renamed field is not mistaken for that state: once the name leaves the
+    declared spec, the read below is a plain lookup that fails loudly.
+    """
+
+    field = "_output_tokenizer"
+    if field not in TRACE_PORTABLE_STATE_SPEC:
+        return trace.__dict__[field]
+    return trace.__dict__.get(field)
+
+
+def _recompute_text_output(trace: "Trace", postprocessor: Any) -> Any | None:
+    """Re-decode a text-style output with the session tokenizer, or ``None``.
+
+    The tokenizer lives on the trace only for the capturing session (it is
+    never serialized), so a reloaded trace returns ``None`` and the caller
+    refuses typed.
+    """
+
+    if _session_output_tokenizer(trace) is None:
+        return None
+    door = _decode_door()
+    try:
+        return door.decode_trace_output(
+            trace,
+            style="hf_text",
+            head=getattr(postprocessor, "selected_output_head", None),
+            tokenizer=None,
+            top_n=door._TOP_N_CAPTURED,
+        )
+    except (PayloadUnavailableError, InvalidArgumentError):
+        return None
 
 
 def _decoded_output_summary(trace: "Trace") -> str | None:

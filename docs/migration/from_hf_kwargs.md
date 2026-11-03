@@ -68,7 +68,7 @@ RESULT = (
 | `model(ids, output_hidden_states=True).hidden_states[i]` for `i >= 1` | `tl.extract(model, ids, ["transformer.h.<i-1>"])` (the block's module address) | Equal for every block except the last: transformers applies the final norm (`ln_f` on GPT-2) to `hidden_states[-1]`, while the last block's own output is before it. |
 | `hidden_states[0]` (the embeddings) | The embedding module's output, or the op after the position embeddings are added | Find it with `tl.trace(model, ids).layers`. |
 | `model(ids, output_attentions=True).attentions[i]` with `attn_implementation="eager"` | `trace.modules["transformer.h.<i>.attn"].facets["pattern"]` | Under eager attention the softmax is a captured op. |
-| `output_attentions=True` under the default `sdpa` (or flash) backend | Read the reconstructed facets: `tl.trace(model, ids, reconstruction_ready=True)` | The fused kernel never materializes the probabilities, so transformers has nothing to return there (see below). |
+| `output_attentions=True` under the default `sdpa` (or flash) backend | Read the reconstructed facets: `tl.trace(model, ids, capture=tl.options.CaptureOptions(reconstruction_ready=True))` | The fused kernel never materializes the probabilities, so transformers has nothing to return there (see below). |
 | Registering your own function in `AttentionInterface` | `tl.bridge.transformers.register_attention(model)`, then `with tl.bridge.transformers.record_attention(model) as attn:` | Registers the attention function and its matching mask function together. |
 | Queries, keys, values, per-head outputs | `module.facets["q"]`, `["k"]`, `["v"]`, `["z"]` | No keyword argument returns these. |
 
@@ -112,7 +112,7 @@ RESULT = (tuple(probs.shape), torch.count_nonzero(probs[1, :, :2, 2:]).item() ==
   `module.facets["q"]`, `["k"]`, `["v"]`, `["z"]`, and any executed op through
   `tl.trace(model, ids).layers`.
 - Attention probabilities under the default fused `sdpa` backend, as reconstructed facets
-  (`tl.trace(model, ids, reconstruction_ready=True)`, see `docs/facets.md`), where
+  (`tl.trace(model, ids, capture=tl.options.CaptureOptions(reconstruction_ready=True))`, see `docs/facets.md`), where
   `output_attentions=True` returns nothing.
 - Attention registered together with its mask function, so a custom function never loses its
   causal or padding mask (`tl.bridge.transformers.register_attention`).
