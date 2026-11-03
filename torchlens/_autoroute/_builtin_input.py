@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from torchlens._autoroute.input import register
 from torchlens._data_classes.trace import Trace
-from torchlens.bridge import _hf_refusals, transformers as _hf
+from torchlens.bridge import transformers as _hf
 
 
 @register(name="hf_text", priority=10)
@@ -38,7 +38,10 @@ def hf_multimodal(model: Any, payload: Any, **kwargs: Any) -> Trace | None:
         return None
     if not _hf._can_resolve_hf_processor(model):
         # An uncached processor on a Hugging Face model refuses typed rather
-        # than letting the raw modality dict reach the model's forward.
+        # than letting the raw modality dict reach the model's forward. The
+        # bridge layer (L8) sits above autoroute (L4), so the import is deferred.
+        from torchlens.bridge import _hf_refusals
+
         _hf_refusals.refuse_uncached_multimodal_processor(
             model, _hf._model_name_or_path(model), payload
         )

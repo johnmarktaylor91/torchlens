@@ -35,7 +35,7 @@ from .._output_slot import (
 )
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
-from ..intervention.predicates import InterventionPredicate, _warn_intervene_fired_nowhere
+from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
@@ -71,6 +71,7 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
     """
 
     from .._selection.selectors import BaseSelector
+    from ..intervention.predicates import _warn_intervene_fired_nowhere
 
     save_selector = state.options.keep_op
     if isinstance(save_selector, BaseSelector):
