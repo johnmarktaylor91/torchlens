@@ -91,8 +91,12 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: wave-three pages the unmarked family charged 15.8 s against its 13.6 s
 #: aggregate budget; its two largest pages, the tuned-lens training notebook
 #: (7.1 s) and the Prisma CLIP SAE page (2.0 s), are listed for that reason.
+#: The Jacobian lens page measures 3.8 s on a two-thread worker (two prompts of
+#: batched autograd plus a jacrev check) and is listed to keep the unmarked
+#: family inside its aggregate budget.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
+        "docs/recipes/jacobian_lens.md",
         "docs/recipes/lrp_transformers_lxt.md",
         "docs/neuroai/journey.md",
         "docs/recipes/tcav.md",
