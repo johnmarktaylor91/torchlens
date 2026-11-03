@@ -1,30 +1,24 @@
 corpus	file	numeral
-docs-md	AGENTS.md	1,474
-docs-md	AGENTS.md	1,500
 docs-md	AGENTS.md	1.5
 docs-md	AGENTS.md	10
 docs-md	AGENTS.md	11
 docs-md	AGENTS.md	130
 docs-md	AGENTS.md	140
-docs-md	AGENTS.md	186
 docs-md	AGENTS.md	2.0
 docs-md	AGENTS.md	2.1
 docs-md	AGENTS.md	2.13.0
 docs-md	AGENTS.md	2.15
 docs-md	AGENTS.md	20
 docs-md	AGENTS.md	2026
-docs-md	AGENTS.md	236
 docs-md	AGENTS.md	26.04
 docs-md	AGENTS.md	28
 docs-md	AGENTS.md	3.10,
 docs-md	AGENTS.md	32
-docs-md	AGENTS.md	39,361
 docs-md	AGENTS.md	40
 docs-md	AGENTS.md	45
 docs-md	AGENTS.md	5.5
 docs-md	AGENTS.md	60
 docs-md	AGENTS.md	65
-docs-md	AGENTS.md	9.9
 docs-md	AGENTS.md	91
 docs-md	README.md	0.0198,
 docs-md	README.md	0.0946,
@@ -1071,8 +1065,6 @@ docs-md	docs/maintainers/saved_format_3.md	64
 docs-md	docs/maintainers/saved_format_3.md	800
 docs-md	docs/maintainers/saved_format_3.md	8601
 docs-md	docs/maintainers/saved_format_3.md	86_64
-docs-md	docs/maintainers/testing.md	1,400
-docs-md	docs/maintainers/testing.md	1,500
 docs-md	docs/maintainers/testing.md	12,000
 docs-md	docs/maintainers/testing.md	2.13.0
 docs-md	docs/maintainers/testing.md	20
@@ -1750,7 +1742,6 @@ docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
-docs-md	docs/maintainers/where.md	629924
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	6316
@@ -1910,7 +1901,6 @@ docs-md	docs/maintainers/where.md	903
 docs-md	docs/maintainers/where.md	904
 docs-md	docs/maintainers/where.md	91
 docs-md	docs/maintainers/where.md	914
-docs-md	docs/maintainers/where.md	917
 docs-md	docs/maintainers/where.md	92
 docs-md	docs/maintainers/where.md	93
 docs-md	docs/maintainers/where.md	933
@@ -7636,7 +7626,6 @@ test-docstrings	tests/test_conformance_torch_roster.py	1.3
 test-docstrings	tests/test_conformance_torch_roster.py	16
 test-docstrings	tests/test_conformance_torch_roster.py	32
 test-docstrings	tests/test_container_registry_p1.py	051
-test-docstrings	tests/test_container_registry_p4.py	051
 test-docstrings	tests/test_container_visualization.py	16
 test-docstrings	tests/test_containers.py	051
 test-docstrings	tests/test_containers.py	22
@@ -7862,7 +7851,6 @@ test-docstrings	tests/test_flops4_multiroot_markers.py	2.7
 test-docstrings	tests/test_flops4_multiroot_markers.py	3,2
 test-docstrings	tests/test_flops4_multiroot_markers.py	60
 test-docstrings	tests/test_fork_retention_disclosure.py	83
-test-docstrings	tests/test_fork_serialization.py	14
 test-docstrings	tests/test_forward_created_parameters.py	77
 test-docstrings	tests/test_fp8_guard.py	12.5
 test-docstrings	tests/test_fp8_guard.py	16
@@ -8110,8 +8098,6 @@ test-docstrings	tests/test_io_lazy.py	728
 test-docstrings	tests/test_io_mediated_allocation_bypass.py	1,681
 test-docstrings	tests/test_io_mediated_allocation_bypass.py	16,000,000
 test-docstrings	tests/test_io_mediated_allocation_bypass.py	30
-test-docstrings	tests/test_io_metadata_enum_pickle_by_value.py	3.11.0
-test-docstrings	tests/test_io_metadata_enum_pickle_by_value.py	3.11.3
 test-docstrings	tests/test_io_pickle.py	153,1905
 test-docstrings	tests/test_io_pickle.py	7065122
 test-docstrings	tests/test_io_plain_pickle.py	10
@@ -8435,7 +8421,6 @@ test-docstrings	tests/test_onebackward_realmodel.py	81
 test-docstrings	tests/test_onebackward_refusals.py	10
 test-docstrings	tests/test_onebackward_refusals.py	14
 test-docstrings	tests/test_op_label_resolution.py	2_4
-test-docstrings	tests/test_op_payload_lifetime.py	37
 test-docstrings	tests/test_oracle_attestation.py	10
 test-docstrings	tests/test_oracle_attestation.py	13.1
 test-docstrings	tests/test_oracle_attestation.py	53
@@ -8521,8 +8506,6 @@ test-docstrings	tests/test_perf_method.py	128
 test-docstrings	tests/test_perf_method.py	256
 test-docstrings	tests/test_perf_method.py	33
 test-docstrings	tests/test_perf_ownership.py	28
-test-docstrings	tests/test_persist_honesty_real_model.py	18
-test-docstrings	tests/test_persist_honesty_real_model.py	19
 test-docstrings	tests/test_persist_honesty_streamed_settlement.py	18
 test-docstrings	tests/test_persist_honesty_streamed_settlement.py	20
 test-docstrings	tests/test_pinned_autograd_memory.py	32
@@ -8584,9 +8567,6 @@ test-docstrings	tests/test_r10_container_rce.py	64
 test-docstrings	tests/test_r12_import_ref_rce.py	10
 test-docstrings	tests/test_r12_import_ref_rce.py	12
 test-docstrings	tests/test_r18a_compat_report.py	37
-test-docstrings	tests/test_r18cg_capture_gap.py	2.12
-test-docstrings	tests/test_r18cg_capture_gap.py	2.13
-test-docstrings	tests/test_r18cg_capture_gap.py	2.13.
 test-docstrings	tests/test_r18g_tensor_rng.py	100
 test-docstrings	tests/test_r18g_tensor_rng.py	16
 test-docstrings	tests/test_r18g_tensor_rng.py	1_000_001
@@ -8601,8 +8581,6 @@ test-docstrings	tests/test_r19d_hash_scalar.py	256
 test-docstrings	tests/test_r19d_hash_scalar.py	60416438
 test-docstrings	tests/test_r19d_hash_scalar.py	64
 test-docstrings	tests/test_r19d_hash_scalar.py	86
-test-docstrings	tests/test_r20capprov_witness.py	24
-test-docstrings	tests/test_r20capprov_witness.py	31
 test-docstrings	tests/test_r20i_ir_livelane.py	10
 test-docstrings	tests/test_r20j_container.py	99
 test-docstrings	tests/test_r20l_ir_refs.py	11
@@ -8622,8 +8600,6 @@ test-docstrings	tests/test_r29_capval_hardening.py	85
 test-docstrings	tests/test_r29_capval_hardening.py	96
 test-docstrings	tests/test_r36_cuda_hygiene.py	13
 test-docstrings	tests/test_r36_cuda_hygiene.py	36
-test-docstrings	tests/test_r36_tensor_method_smuggling.py	256
-test-docstrings	tests/test_r39_callable_invoke_denylist.py	39
 test-docstrings	tests/test_r43_gate_inversion.py	43
 test-docstrings	tests/test_r45_property_classification.py	1_1
 test-docstrings	tests/test_r45_property_classification.py	2.7.1
@@ -8673,7 +8649,6 @@ test-docstrings	tests/test_recipe_dissection.py	64
 test-docstrings	tests/test_recipe_dissection.py	64.
 test-docstrings	tests/test_recipe_dissection.py	7697
 test-docstrings	tests/test_record_schema_bindings.py	11
-test-docstrings	tests/test_reentrant_trace.py	55
 test-docstrings	tests/test_rehydration_floor.py	10,
 test-docstrings	tests/test_rehydration_floor.py	2.16
 test-docstrings	tests/test_rehydration_floor.py	2.16_
@@ -8699,9 +8674,6 @@ test-docstrings	tests/test_repgeom_validation_edges.py	14
 test-docstrings	tests/test_repgeom_validation_edges.py	15
 test-docstrings	tests/test_repgeom_validation_edges.py	64
 test-docstrings	tests/test_repgeom_validation_edges.py	66
-test-docstrings	tests/test_replay2_rf_walk_depth.py	0.25
-test-docstrings	tests/test_replay2_rf_walk_depth.py	0.25,
-test-docstrings	tests/test_replay2_rf_walk_depth.py	600
 test-docstrings	tests/test_replay_corruption_battery.py	14
 test-docstrings	tests/test_replay_exact_parent_pass.py	10,
 test-docstrings	tests/test_replay_grad_fidelity.py	64
@@ -8815,15 +8787,6 @@ test-docstrings	tests/test_rng_inert_reachability.py	57
 test-docstrings	tests/test_rng_inert_reachability.py	59
 test-docstrings	tests/test_rng_inert_reachability.py	61
 test-docstrings	tests/test_rng_inert_reachability.py	75
-test-docstrings	tests/test_rng_monitor_escapes_r3.py	19937
-test-docstrings	tests/test_rng_monitor_escapes_r3.py	3.9
-test-docstrings	tests/test_rng_monitor_escapes_r3.py	57
-test-docstrings	tests/test_rng_monitor_escapes_r3.py	624
-test-docstrings	tests/test_rng_monitor_escapes_r3.py	64
-test-docstrings	tests/test_rng_monitor_foreign_threads.py	051
-test-docstrings	tests/test_rng_monitor_foreign_threads.py	2.16
-test-docstrings	tests/test_rng_monitor_foreign_threads.py	61
-test-docstrings	tests/test_rng_restore_door.py	11
 test-docstrings	tests/test_rng_seal_r57.py	3.11
 test-docstrings	tests/test_rng_seal_r57.py	57
 test-docstrings	tests/test_robustness_pr1.py	2.1
@@ -8868,9 +8831,6 @@ test-docstrings	tests/test_runnable_state_rollback.py	5.1
 test-docstrings	tests/test_runnable_state_rollback.py	5.2
 test-docstrings	tests/test_runnable_state_rollback.py	5.3
 test-docstrings	tests/test_runnable_state_rollback.py	5.4
-test-docstrings	tests/test_runnable_trace_seam.py	11
-test-docstrings	tests/test_runnable_trace_seam.py	60
-test-docstrings	tests/test_runnable_trace_seam.py	85
 test-docstrings	tests/test_s5_render_identity_harness.py	256
 test-docstrings	tests/test_save_budget.py	32
 test-docstrings	tests/test_save_budget.py	34
@@ -8892,9 +8852,6 @@ test-docstrings	tests/test_schema_lockstep.py	3.11
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	10
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	22.3
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	36
-test-docstrings	tests/test_schema_v11_contract.py	10
-test-docstrings	tests/test_schema_v11_contract.py	11
-test-docstrings	tests/test_schema_v11_contract.py	11,
 test-docstrings	tests/test_schema_v9_c07x_episode.py	10
 test-docstrings	tests/test_schema_v9_c07x_episode.py	40
 test-docstrings	tests/test_schema_v9_c07x_episode.py	42
@@ -8975,7 +8932,6 @@ test-docstrings	tests/test_stoch_edits_population.py	32
 test-docstrings	tests/test_stoch_edits_verbs.py	12
 test-docstrings	tests/test_stoch_edits_verbs.py	15
 test-docstrings	tests/test_stoch_edits_verbs.py	34
-test-docstrings	tests/test_storage_context_replay.py	16
 test-docstrings	tests/test_streaming_finalization_arming.py	18
 test-docstrings	tests/test_streaming_stats.py	13
 test-docstrings	tests/test_streaming_stats.py	19
@@ -9083,8 +9039,6 @@ test-docstrings	tests/test_tlspec_envelope_ceiling.py	10
 test-docstrings	tests/test_tlspec_envelope_ceiling.py	2.13
 test-docstrings	tests/test_tlspec_envelope_ceiling.py	2026
 test-docstrings	tests/test_tlspec_envelope_state_contract.py	10
-test-docstrings	tests/test_tlspec_intervention_transitional.py	11.0
-test-docstrings	tests/test_tlspec_intervention_transitional.py	2.16.0
 test-docstrings	tests/test_tlspec_parse_depth_guard.py	10,000
 test-docstrings	tests/test_tlspec_parse_depth_guard.py	16
 test-docstrings	tests/test_tlspec_parse_depth_guard.py	33
@@ -9283,10 +9237,6 @@ test-docstrings	tests/test_tlspec_runnable_r77_buffer_universe.py	37611347240,
 test-docstrings	tests/test_tlspec_runnable_r77_buffer_universe.py	75
 test-docstrings	tests/test_tlspec_runnable_r77_buffer_universe.py	76
 test-docstrings	tests/test_tlspec_runnable_r77_buffer_universe.py	77
-test-docstrings	tests/test_tlspec_runnable_r77_param_provenance.py	20.0
-test-docstrings	tests/test_tlspec_runnable_r77_param_provenance.py	73
-test-docstrings	tests/test_tlspec_runnable_r77_param_provenance.py	75
-test-docstrings	tests/test_tlspec_runnable_r77_param_provenance.py	76
 test-docstrings	tests/test_tlspec_runnable_r79_empty_name_param.py	79
 test-docstrings	tests/test_tlspec_runnable_r79_seed_typing.py	64
 test-docstrings	tests/test_tlspec_runnable_r79_session_leak.py	20.0
@@ -9554,7 +9504,6 @@ test-docstrings	tests/test_validation_rung1_class3.py	255
 test-docstrings	tests/test_validation_rung1_class3.py	32
 test-docstrings	tests/test_validation_rung1_class3.py	65504
 test-docstrings	tests/test_validation_uninitialized_dest.py	1,3
-test-docstrings	tests/test_var_names.py	3.11
 test-docstrings	tests/test_visual_language_sentinels.py	13
 test-docstrings	tests/test_viz_cluster_honesty.py	19
 test-docstrings	tests/test_viz_fold_honesty.py	1..23
@@ -9619,7 +9568,6 @@ test-docstrings	tests/test_w051_gate_budget_resolver.py	282.
 test-docstrings	tests/test_w051_gate_layer_accessors.py	4.4
 test-docstrings	tests/test_w051_gate_plan_check.py	1_1
 test-docstrings	tests/test_w051_gate_plan_check.py	1_2
-test-docstrings	tests/test_w051_honesty_facts.py	10
 test-docstrings	tests/test_w051_honesty_hf_default_config.py	051
 test-docstrings	tests/test_w051_honesty_live_output_contract.py	051
 test-docstrings	tests/test_w051_honesty_live_output_contract.py	2_5
@@ -9942,8 +9890,6 @@ test-names	tests/test_r23_type_reduce_rce.py	21_
 test-names	tests/test_r25_container_final.py	26_
 test-names	tests/test_r25_container_final.py	27_
 test-names	tests/test_r25_container_final.py	562_
-test-names	tests/test_r36_tensor_method_smuggling.py	36_
-test-names	tests/test_r39_callable_invoke_denylist.py	39_
 test-names	tests/test_r45_property_classification.py	45_
 test-names	tests/test_r45_torch_symbol_decode.py	49_
 test-names	tests/test_r8_operator_gate_rce.py	32_
@@ -9995,8 +9941,6 @@ test-names	tests/test_runnable_r36_regressions.py	26
 test-names	tests/test_runnable_r36_regressions.py	27
 test-names	tests/test_schema_v10_contract_and_goldens.py	10_
 test-names	tests/test_schema_v10_contract_and_goldens.py	216_
-test-names	tests/test_schema_v11_contract.py	10_
-test-names	tests/test_schema_v11_contract.py	11_
 test-names	tests/test_site_join.py	18_
 test-names	tests/test_site_key.py	2_4
 test-names	tests/test_snoop_real_model.py	18_
@@ -10054,7 +9998,6 @@ test-names	tests/test_tlspec_runnable_r75_envelope_path.py	75_
 test-names	tests/test_tlspec_runnable_r75_param_identity.py	75_
 test-names	tests/test_tlspec_runnable_r77_buffer_universe.py	77_
 test-names	tests/test_tlspec_runnable_r77_fact_components.py	77_
-test-names	tests/test_tlspec_runnable_r77_param_provenance.py	77_
 test-names	tests/test_tlspec_runnable_r79_empty_name_param.py	79_
 test-names	tests/test_tlspec_runnable_r79_seed_typing.py	79_
 test-names	tests/test_tlspec_runnable_r79_session_leak.py	79_

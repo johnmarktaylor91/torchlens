@@ -24,7 +24,6 @@ from torchlens._visualization.theme_registry import (
 )
 
 
-@pytest.mark.smoke
 def test_builtin_rows_are_registered_and_teach_their_settings() -> None:
     overview = get_lens("overview")
     blueprint = get_lens("blueprint")
@@ -118,7 +117,6 @@ def test_graphviz_renderer_declares_encodings_capability() -> None:
     assert RendererCapabilities().encodings is False
 
 
-@pytest.mark.smoke
 def test_explicit_max_above_ceiling_warns_every_call(monkeypatch) -> None:
     # N15 (themes item 1): explicit collapse="max" above the compute gate
     # was a SILENT byte-identical no-op on every call after the first

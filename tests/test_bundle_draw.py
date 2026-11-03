@@ -59,6 +59,7 @@ def test_bundle_draw_returns_dot_for_the_union_graph(tmp_path: Path) -> None:
     assert (tmp_path / "union.svg").exists()
 
 
+@pytest.mark.smoke
 def test_bundle_draw_diff_folds_show_diff(tmp_path: Path) -> None:
     if shutil.which("dot") is None:
         pytest.skip("graphviz dot not installed")

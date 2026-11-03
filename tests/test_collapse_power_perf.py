@@ -9,7 +9,6 @@ revision walk zero, and B2 pins that legality-grammar checks scale linearly
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -75,7 +74,6 @@ def _count_wiring_walks(monkeypatch, fn) -> int:
     return calls["n"]
 
 
-@pytest.mark.smoke
 def test_fingerprint_memo_walks_each_member_once_then_zero(monkeypatch) -> None:
     """One fold sweep walks each member at most once; a rerun walks zero.
 
@@ -101,7 +99,6 @@ def test_fingerprint_memo_walks_each_member_once_then_zero(monkeypatch) -> None:
     assert second == 0, f"warm sweep must be pure cache hits, walked {second} times"
 
 
-@pytest.mark.smoke
 def test_cached_fingerprints_match_direct_computation() -> None:
     """Memoized signature/bindings equal the direct uncached functions.
 

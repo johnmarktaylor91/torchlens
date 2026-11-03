@@ -207,7 +207,6 @@ def test_shape_summary_single_axis_monotone_on_real_capture() -> None:
     assert set(linear.shape_summary) <= SHAPE_SUMMARY_CHARACTER_CLASS
 
 
-@pytest.mark.smoke
 def test_shape_summary_format_matrix() -> None:
     # Single varying axis, monotone (asc / desc): first->last.
     assert layer_shape_summary(_StubLayer([(2, 2, 8), (2, 3, 8), (2, 4, 8)])) == "2->4"

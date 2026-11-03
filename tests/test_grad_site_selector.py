@@ -88,7 +88,6 @@ def test_grad_selector_identity_hash_and_repr() -> None:
     assert {address, tl.grad("relu_3")} == {address}
 
 
-@pytest.mark.smoke
 def test_grad_accepts_every_forward_site_spelling() -> None:
     """A2: each accepted spelling resolves to the bare inner's ops, tagged gradient."""
 
@@ -136,7 +135,6 @@ def test_grad_unmatched_inner_refuses_like_the_activation_door() -> None:
     assert "trace[selector]" in str(bare.value) and "trace[selector]" in str(grad.value)
 
 
-@pytest.mark.smoke_cells("test_grad_construction_refusals[nested]")
 @pytest.mark.parametrize(
     ("build", "code"),
     [
@@ -201,7 +199,6 @@ def test_grad_refuses_a_pass_qualifier_hidden_in_a_deserialized_inner() -> None:
     assert "tl.grad(s) & tl.in_backward_pass(2)" in exc.value.fields["remedy"]
 
 
-@pytest.mark.smoke
 def test_mixed_union_keeps_both_branches() -> None:
     """A4: tl.grad(s) | s plans a gradient and an activation branch on the same op."""
 
@@ -230,7 +227,6 @@ def test_find_sites_signal_column() -> None:
     assert len(grad_frame) == len(act_frame) == 2
 
 
-@pytest.mark.smoke_cells("test_cross_universe_composition_refusals[grad_and_activation]")
 @pytest.mark.parametrize(
     ("build", "code"),
     [
@@ -267,6 +263,7 @@ def test_cross_universe_composition_refusals(build: Any, code: str) -> None:
     assert _code(exc) == code
 
 
+@pytest.mark.smoke
 def test_signal_mismatch_remedy_names_the_gradient_spelling() -> None:
     """A5: the remedy spells tl.grad('relu_3') & tl.in_backward_pass(2)."""
 
@@ -319,7 +316,6 @@ def test_differently_filtered_gradient_operands_stay_separate() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_grad_complement_and_union_normalise_inside_the_gradient_universe() -> None:
     """A6: ~tl.grad(s) == tl.grad(~s); tl.grad(a) | tl.grad(b) == tl.grad(a | b)."""
 
@@ -342,7 +338,6 @@ def test_grad_complement_and_union_normalise_inside_the_gradient_universe() -> N
     assert [op.label for op in union[0].sites] == [op.label for op in joined[0].sites]
 
 
-@pytest.mark.smoke
 def test_bare_label_never_resolves_in_the_backward_universe() -> None:
     """A7: after a backward, a bare label is the forward op; node selectors unchanged."""
 
@@ -393,7 +388,6 @@ def test_grad_target_spec_round_trip() -> None:
         assert normalize_selector_like(spec.freeze(), lifecycle="site") == address
 
 
-@pytest.mark.smoke
 def test_root_exports_grad_and_drop_gradient_only_helpers() -> None:
     """A8: grad and clip_norm are exported; the six helpers are gone with no alias."""
 

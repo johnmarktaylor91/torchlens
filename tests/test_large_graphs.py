@@ -677,7 +677,6 @@ class TestRtreeRescale:
         dot = 'a [pos="100,200!" width=1.0 height=0.5]'
         assert _rescale_dot_for_rtree(dot, ceiling=28000.0) is None
 
-    @pytest.mark.smoke
     def test_over_ceiling_scales_uniformly(self) -> None:
         """An over-range layout is shrunk so max coord == ceiling, preserving ratio."""
 

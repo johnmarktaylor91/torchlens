@@ -430,7 +430,6 @@ def test_loaded_sparse_sequential_runs_have_unique_fork_labels(
     assert first.trace.name != second.trace.name
 
 
-@pytest.mark.smoke
 def test_loaded_sparse_fast_run_verifies_once_then_reuses_compiled_result_trace(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
 ) -> None:

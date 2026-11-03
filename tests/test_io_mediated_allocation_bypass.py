@@ -257,9 +257,6 @@ def test_numpy_reconstruct_helpers_resolve_for_the_guard() -> None:
     assert allowlisted == {"numpy.core.multiarray", "numpy._core.multiarray"}
 
 
-@pytest.mark.smoke_cells(
-    "test_reconstruct_mediated_ndarray_allocation_refused[numpy.core.multiarray]"
-)
 @pytest.mark.parametrize("module", ["numpy._core.multiarray", "numpy.core.multiarray"])
 def test_reconstruct_mediated_ndarray_allocation_refused(module: str) -> None:
     """A tiny ``_reconstruct`` REDUCE no longer allocates an attacker-sized array."""
@@ -304,7 +301,6 @@ def test_reconstruct_gadget_refused_end_to_end_through_tl_load(tmp_path: Path) -
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke_cells("test_torch_tensor_factory_reduce_refused[arange]")
 @pytest.mark.parametrize(
     "factory", ["empty", "empty_strided", "zeros", "ones", "rand", "randn", "arange"]
 )
@@ -331,7 +327,6 @@ def test_torch_reference_still_resolves_as_an_inert_value() -> None:
     assert resolved(torch._C._VariableFunctionsClass, "empty") is not None
 
 
-@pytest.mark.smoke
 def test_tensor_constructor_method_descriptor_reduce_refused() -> None:
     """A tensor CONSTRUCTOR METHOD reached off ``TensorBase`` cannot amplify a small tensor.
 
@@ -384,7 +379,6 @@ def test_tensor_constructor_methods_are_all_refused(method: str) -> None:
     assert _alloc_refusal_reason(descriptor, (torch.zeros(1), (_N,))) is not None
 
 
-@pytest.mark.smoke
 def test_ownership_probe_decides_instead_of_crashing_on_a_hostile_owner() -> None:
     """A REDUCE target whose owner is UNHASHABLE must be DECIDED, not raise out of the belt.
 
@@ -534,7 +528,6 @@ def test_rebuild_amplification_refused_end_to_end_through_tl_load(tmp_path: Path
     assert "_load_from_bytes" in str(caught.value) + str(caught.value.__cause__)
 
 
-@pytest.mark.smoke
 def test_inline_tensor_round_trips_exactly() -> None:
     """The writer's inline reduction preserves value, shape, dtype and ``requires_grad``.
 
@@ -581,7 +574,6 @@ def test_nn_module_construction_refused(module: str, name: str, args: tuple[int,
         _RenameAwareUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_nn_module_rule_is_argument_bearing_only() -> None:
     """A ZERO-ARGUMENT module construction stays allowed -- real artifacts do exactly that.
 
@@ -622,7 +614,6 @@ def test_zero_argument_module_newobj_round_trips() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke_cells("test_integer_sized_buffer_allocation_refused[bytes]")
 @pytest.mark.parametrize("name", ["bytes", "bytearray"])
 def test_integer_sized_buffer_allocation_refused(name: str) -> None:
     """``bytes(N)`` / ``bytearray(N)`` allocate N zero bytes from ~30 pickle bytes."""

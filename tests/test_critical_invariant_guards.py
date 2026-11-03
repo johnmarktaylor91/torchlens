@@ -13,11 +13,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 import torchlens._constants as tl_constants
-
-pytestmark = pytest.mark.smoke
 
 STATE_PATH = Path(__file__).resolve().parents[1] / "torchlens" / "_state.py"
 

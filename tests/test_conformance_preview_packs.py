@@ -438,6 +438,7 @@ def _tf_known_red_cells() -> dict[tuple[str, str], str]:
     return _known_red_cells({}, tf_roster.CONFIG_BUILT_FAMILIES, keras)
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_jax
 def test_jax_pack_earns_c1_with_its_named_red_cells(
@@ -458,6 +459,7 @@ def test_jax_pack_earns_c1_with_its_named_red_cells(
     _assert_named_reds(("jax", str(jax.__version__)), tmp_path, _jax_known_red_cells(), 9, "C1")
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.tf_backend
 def test_tf_pack_earns_c0_with_its_named_red_cells(
@@ -476,6 +478,7 @@ def test_tf_pack_earns_c0_with_its_named_red_cells(
     _assert_named_reds(("tf", str(tf.__version__)), tmp_path, _tf_known_red_cells(), 9, "C0")
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_mlx
 def test_mlx_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
@@ -512,6 +515,7 @@ def test_mlx_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
     assert "conformant" not in card.to_json().lower()
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_tinygrad
 def test_tinygrad_pack_full_ladder(tmp_path: Path) -> None:
@@ -521,6 +525,7 @@ def test_tinygrad_pack_full_ladder(tmp_path: Path) -> None:
     _assert_full_ladder(preview_scorecard("tinygrad", workdir=tmp_path), "tinygrad")
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_paddle
 def test_paddle_pack_full_ladder(tmp_path: Path) -> None:
