@@ -289,10 +289,6 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         frozenset({"ALL"}),
         "release history; records the old spellings as history by design",
     ),
-    "benchmarks/perf_results_2026-05-14.md": (
-        frozenset({"ALL"}),
-        "dated benchmark results record (history exemption, S02-fix C3b)",
-    ),
     "benchmarks/intervention_overhead_results.md": (
         frozenset({"ALL"}),
         "generated results record with an explicit history note (S02-fix C3b)",
