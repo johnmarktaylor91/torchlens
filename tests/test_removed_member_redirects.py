@@ -99,6 +99,8 @@ REMOVED_MODULE_NAMES: list[tuple[str, str, str]] = [
     ("torchlens.observers", "record_span", "torchlens.observers.span"),
     ("torchlens.intervention", "intervening", "torchlens.without_op"),
     ("torchlens.intervention", "replay_from", "Trace.do"),
+    ("torchlens.intervention", "sites", "torchlens.experiment.sweep_sites"),
+    ("torchlens.intervention", "SiteSpec", "torchlens.experiment.sweep_sites"),
     ("torchlens.experiment", "ledger", "torchlens.experiment.sweep_sites"),
     ("torchlens.experiment", "ExperimentLedger", "torchlens.experiment.sweep_sites"),
     ("torchlens.experiment", "LedgerEntry", "torchlens.experiment.sweep_sites"),

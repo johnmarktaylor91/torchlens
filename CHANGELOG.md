@@ -5,6 +5,10 @@
 
 ### Behavior changes
 
+- **intervention**: `torchlens.intervention.sites` (the `sites()` builder with `SiteCollection` and
+  `SiteSpec`) is removed (round-2 walk names.7). Pass selectors to
+  `torchlens.experiment.sweep_sites(...)` directly. The old names refuse with the typed
+  `facade_redirect` error.
 - **backward**: `Trace.log_backward(loss)` is gone; `trace.backward(loss)` is the one spelling (round-2
   walk names.5). It was already an alias of `log_backward`, so the behaviour and keywords
   (`save_grads=`, `retain_graph=`, and the other `torch.Tensor.backward` keywords) are unchanged.
