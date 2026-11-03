@@ -1080,7 +1080,7 @@ jobs:
                 tqdm.__version__, graphviz.__version__, torch.__version__,
                 safetensors.__version__)
           trace = tl.trace(nn.Sequential(nn.Linear(4, 3), nn.ReLU()), torch.randn(2, 4))
-          assert trace.num_ops >= 2
+          assert len(trace.ops) >= 2
           # r7 R83-3: the floors for safetensors (tlspec blobs) and pillow
           # (drawing surfaces) resolved here but were never EXERCISED -- a
           # floor too low to carry the API TorchLens calls still passed. One
@@ -1089,8 +1089,8 @@ jobs:
               bundle = Path(tmp) / "floor.tlspec"
               tl.save(trace, str(bundle))
               loaded = tl.load(str(bundle))
-              assert loaded.num_ops == trace.num_ops
-              loaded.draw(vis_save_only=True, vis_outpath=str(Path(tmp) / "floor_graph"))
+              assert len(loaded.ops) == len(trace.ops)
+              loaded.draw(path=str(Path(tmp) / "floor_graph"))
               loaded.cleanup()
           print("floor-env capture + save/load + draw OK")
           PY
