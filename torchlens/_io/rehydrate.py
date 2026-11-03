@@ -36,7 +36,13 @@ from ._small_raw import (
     _RAW_INPUT_IMAGE_MAX_EDGE,
 )
 from .accessor_rebuild import rebuild_trace_accessors
-from .lazy import LazyActivationRef, _file_identity
+from .lazy import (
+    LazyActivationRef,
+    _build_manifest_index,
+    _file_identity,
+    _manifest_entry_for_blob_ref,
+    _read_materialization_manifest,
+)
 from .manifest import (
     _TORCH_BACKEND_NAME,
     Manifest,
@@ -359,26 +365,6 @@ def _apply_manifest_backend(trace: Trace, manifest: Manifest | dict[str, Any]) -
         backend_name = manifest.get("backend")
     if isinstance(backend_name, str) and backend_name:
         trace._provenance_backend = backend_name
-
-
-def _build_manifest_index(
-    manifest: Manifest | dict[str, Any],
-) -> Mapping[str, dict[str, Any] | TensorEntry]:
-    """Index manifest tensor entries by blob id."""
-
-    if isinstance(manifest, Manifest):
-        return {entry.blob_id: entry for entry in manifest.tensors}
-
-    tensors = manifest.get("tensors", [])
-    if not isinstance(tensors, list):
-        raise ArtifactError("Portable manifest must contain a list under 'tensors'.")
-    index: dict[str, dict[str, Any]] = {}
-    for entry in tensors:
-        blob_id = entry.get("blob_id")
-        if not isinstance(blob_id, str):
-            raise ArtifactError("Portable manifest tensor entries must include string blob_id.")
-        index[blob_id] = entry
-    return index
 
 
 _REHYDRATE_LEAF = 0
@@ -967,50 +953,6 @@ def _build_lazy_tensor_ref(
     )
 
 
-def _manifest_entry_for_blob_ref(
-    blob_ref: BlobRef,
-    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
-) -> TensorEntry | None:
-    """Return the manifest entry corresponding to one ``BlobRef``.
-
-    Parameters
-    ----------
-    blob_ref:
-        Blob reference to resolve.
-    manifest_index:
-        Manifest tensor entries indexed by blob id.
-
-    Returns
-    -------
-    TensorEntry | None
-        Resolved manifest entry, or ``None`` when the manifest only contains the
-        older minimal tensor schema.
-
-    Raises
-    ------
-    ArtifactError
-        If the blob id is missing from the manifest.
-    """
-
-    if blob_ref.blob_id not in manifest_index:
-        raise ArtifactError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
-    entry = manifest_index[blob_ref.blob_id]
-    if isinstance(entry, TensorEntry):
-        return entry
-    required_fields = {
-        "backend",
-        "shape",
-        "dtype",
-        "device_at_save",
-        "layout",
-        "bytes",
-        "sha256",
-    }
-    if not required_fields.issubset(entry.keys()):
-        return None
-    return TensorEntry.from_dict(entry)
-
-
 def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
     """Resolve a manifest dtype string into a ``torch.dtype``.
 
@@ -1229,7 +1171,7 @@ def rehydrate_nested(
                 "source bundle manifest has changed since load; materialize refs and retry"
             )
 
-    manifest = Manifest.read(manifest_path)
+    manifest = _read_materialization_manifest(bundle_path)
     manifest_index = _build_manifest_index(manifest)
     payload_statuses: list[str] = []
     resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)

@@ -686,7 +686,7 @@ def write_intervention_recipe(
     return write_recipe(root, recipe), disclosures
 
 
-__all__ = [
+__all__ = (
     "EnvelopeSpec",
     "RecordTables",
     "TraceTables",
@@ -703,4 +703,4 @@ __all__ = [
     "write_record_files",
     "write_trace",
     "write_trace_envelope",
-]
+)

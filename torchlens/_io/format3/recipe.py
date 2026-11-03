@@ -760,7 +760,7 @@ def has_rules(spec: Any) -> bool:
     return bool(getattr(spec, "hook_specs", None) or getattr(spec, "target_value_specs", None))
 
 
-__all__ = [
+__all__ = (
     "PLACEHOLDER_PORTABILITY",
     "RECIPE_FORMAT",
     "RECIPE_FORMAT_VERSION",
@@ -774,4 +774,4 @@ __all__ = [
     "trace_recipe_context",
     "write_recipe",
     "write_trace_recipe",
-]
+)
