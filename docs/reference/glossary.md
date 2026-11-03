@@ -3108,7 +3108,9 @@ deprecation shim owed*
   `params_trainable`, `flops`, `flops_pct`, `macs`, `train`, `mode`,
   `passes`, `evidence`. `input` lists the shapes of the distinct tensors
   entering a row; `output` lists every member shape of the row's output in
-  return order; `kernel_size` / `groups` read the row's own conv or
+  return order (past 60 characters a run of identical shapes prints once as
+  `shape ×N`, and a list still too long ends in `... +K more`; `input` cells
+  compact the same way); `kernel_size` / `groups` read the row's own conv or
   pooling op; `params_trainable` is the per-path trainable count (`train`
   stays the yes/no/partial `requires_grad` tri-state); `mode` is
   `module.training` as captured (`train` / `eval` / `mixed`); `flops_pct`
@@ -4105,7 +4107,7 @@ The sections above describe each surface in depth.
 | `GradFnSketch.num_nodes` | Number of walked nodes |
 | `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
 | `GradReceptiveField.cross_batch_influence` | Whether the influence crosses batch elements |
-| `GradReceptiveField.io_role` | The input role (model input name or op label) the gradient was taken with respect to |
+| `GradReceptiveField.io_role` | The far end of the probe, the space `support_mask` covers: the source (model input name or op label) for a receptive probe, the target op label for a projective probe; `source_key` / `target_key` read it direction-stably |
 | `GradReceptiveField.nonfinite_count` | Number of NaN or Inf gradient entries; nonzero makes validation indeterminate |
 | `GradReceptiveField.rtol` | Relative tolerance for the support threshold |
 | `GradReceptiveField.signed_grad` | The signed gradient, kept so a sign-disagreeing adjoint can be checked |
