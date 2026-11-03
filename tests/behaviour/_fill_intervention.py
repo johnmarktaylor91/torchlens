@@ -46,6 +46,12 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 import torchlens as tl
+from tests.behaviour._hook_passes import (
+    HookPass,
+    hook_pass_problems,
+    start_recording,
+    stop_recording,
+)
 from torchlens.errors import TorchLensError
 
 if TYPE_CHECKING:
@@ -577,17 +583,20 @@ def _prepare_hooks(cell: Cell) -> None:
     target = _second_float_func(cell)
     if target is None:
         _not_applicable("no second floating-point function to hook")
-    log: dict[str, Any] = {"fires": [], "states": [], "run_state": None}
+    log: dict[str, Any] = {"fires": [], "states": [], "run_states": []}
 
     def hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         ctx.state["n"] = ctx.state.get("n", 0) + 1
         ctx.run_state["fires"] = ctx.run_state.get("fires", 0) + 1
-        log["run_state"] = ctx.run_state
+        log["run_states"].append(ctx.run_state)
         if not any(state is ctx.state for state in log["states"]):
             log["states"].append(ctx.state)
         log["fires"].append((ctx.signal, ctx.state["n"], ctx.timing))
         return out + 1
 
+    # Every pass the cell runs with this hook armed is counted at the capture door
+    # (tests/behaviour/_hook_passes.py), never inferred from the fires.
+    log["passes"] = start_recording(hook)
     # The cell is the only object both hooks share; capture_fields would reach CaptureOptions.
     vars(cell)[_HOOKS_KEY] = (log, target)
     _merge_intervene(cell, tl.when(tl.func(target), hook))
@@ -604,15 +613,32 @@ def _hook_fields(cell: Cell) -> tuple[dict[str, Any], str]:
 
 
 def _after_hooks(cell: Cell) -> None:
-    """Hooks fire once per site per pass with the forward signal; scratch survives; a raise refuses typed."""
+    """Hooks fire once per site per pass with the forward signal; scratch survives; a raise refuses typed.
+
+    Every armed pass the cell ran (the capture, the ``forward_match`` replay and
+    the partner feature's reruns and second captures, counted at the capture
+    door) must fire exactly once per op the hook selects in that pass, and no
+    fire may fall outside a counted pass.
+    """
 
     trace = cell.require_trace()
     log, target = _hook_fields(cell)
+    recorder = log["passes"]
+    stop_recording(recorder)
     selected = [op for op in trace.ops if op.func_name == target]
     fires = log["fires"]
+    passes = [
+        HookPass(
+            getattr(armed, "last_run", None),
+            sum(1 for op in armed.ops if op.func_name == target),
+        )
+        for armed in recorder.traces
+    ]
+    problems = hook_pass_problems(passes, log["run_states"])
     cell.expect(
-        len(fires) == len(selected),
-        f"hook fired {len(fires)} times for {len(selected)} selected ops",
+        not problems,
+        f"hook fired {len(fires)} times for {len(selected)} selected ops over "
+        f"{len(passes)} armed passes: {'; '.join(problems[:4])}",
     )
     cell.expect(
         all(signal == "forward" for signal, _, _ in fires), "a forward hook saw another signal"
@@ -622,7 +648,7 @@ def _after_hooks(cell: Cell) -> None:
         "ctx.state scratch did not survive the pass with its fire counts",
     )
     cell.expect(
-        log["run_state"] is not None and log["run_state"].get("fires") == len(fires),
+        all((armed.run_state or {}).get("fires", 0) == armed.selected for armed in passes),
         "ctx.run_state did not survive the run",
     )
     marked = {op.label for op in trace.ops if op.is_edited}
