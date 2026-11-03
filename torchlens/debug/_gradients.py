@@ -67,7 +67,7 @@ _GRAD_AUDIT_COLUMNS = (
 _NO_GRADS_HINT = (
     "no saved gradients; capture with "
     "capture=tl.options.CaptureOptions(save_grads=True), then call "
-    "trace.log_backward(loss)"
+    "trace.backward(loss)"
 )
 
 #: Closed classification bases (D17): legacy total-norm default, RMS opt-in.
@@ -649,7 +649,7 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         ``scale_provenance``, and ``source_line`` (``"file:line"`` of the user
         code that ran the op). The printed card names the loss scale the
         verdicts used, and an empty report prints the capture recipe
-        (``CaptureOptions(save_grads=True)`` then ``trace.log_backward(loss)``).
+        (``CaptureOptions(save_grads=True)`` then ``trace.backward(loss)``).
 
     Raises
     ------
@@ -665,7 +665,7 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
     >>> # requires: pandas
     >>> net = nn.Sequential(nn.Linear(4, 4), nn.Tanh())
     >>> run = tl.trace(net, torch.randn(2, 4, requires_grad=True), capture=tl.options.CaptureOptions(save_grads=True))
-    >>> _ = run.log_backward(run[run.output_layers[0]].out.sum())
+    >>> _ = run.backward(run[run.output_layers[0]].out.sum())
     >>> frame = grad_health(run).to_pandas()
     >>> len(frame) > 0, frame.attrs["bwd"]
     (True, 1)

@@ -78,7 +78,7 @@ def _trace_with_tap(tap: TapObserver) -> object:
         capture=tl.options.CaptureOptions(replayable=True, hooks=tap),
     )
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
     return trace
 
 
@@ -95,7 +95,7 @@ def test_tap_backward_tensor_mount_input_alias_matches() -> None:
         capture=tl.options.CaptureOptions(replayable=True, hooks=tap),
     )
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
 
     assert len(tap.records) == 1
     record = tap.records[0]
@@ -133,7 +133,7 @@ def test_record_span_backward_event_inside_active_span() -> None:
     loss = trace[trace.output_layers[0]].out.sum()
 
     with tl.observers.span("backward_only", signal="backward"):
-        trace.log_backward(loss)
+        trace.backward(loss)
 
     assert tap.records[0].span_names == ("backward_only",)
 

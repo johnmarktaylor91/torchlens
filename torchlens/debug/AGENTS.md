@@ -91,7 +91,7 @@ back. `HealthReport` and `FlopsCrossCheck` are defined here but exported from `t
 - `grad_health(...)` builds a gradient-magnitude table (a tabular
   `Report`); its frame is an annotated empty frame with a message rather than
   raising when grads are absent (the card prints that message: capture with
-  `CaptureOptions(save_grads=True)`, then `trace.log_backward(loss)`).
+  `CaptureOptions(save_grads=True)`, then `trace.backward(loss)`).
 - Loss scale: with no `grad_scale`/`grad_scales`, `_grad_scale_proof.unscaled_proof`
   decides from the trace whether the backward provably ran unscaled (no op under
   autocast, no Mul/Div/custom autograd node between the loss and the model

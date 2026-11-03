@@ -112,7 +112,7 @@ upgrade, `torchlens.bridge.treescope` (`docs/guides/treescope_cards.md`); TorchL
 
 - **Edits a run, not a tree.** TorchLens saves recipes, not rewritten model trees; the model
   definition is unchanged.
-- **Replay versus rerun.** `.do(site, edit)` on a replayable trace replays the recorded graph
+- **Replay versus rerun.** `.do(site, edit)` on a captured trace replays the recorded graph
   from the edited value; passing `model=` and `inputs=` runs the model again, which matters
   when the edit may change control flow or randomness.
 - **No named axes.** Tensors stay positional; helpers take `dim=` where they need an axis.

@@ -78,7 +78,7 @@ def _grad_trace(scale_loss: float | None = None) -> tl.Trace:
     trace = tl.trace(SigmoidMlp(), x, capture=tl.options.CaptureOptions(save_grads=True))
     out = trace[trace.output_layers[0]].out
     loss = out.sum() if scale_loss is None else out.sum() * scale_loss
-    trace.log_backward(loss)
+    trace.backward(loss)
     return trace
 
 
@@ -173,7 +173,7 @@ def test_grad_health_stays_unknown_under_autocast() -> None:
     x = torch.randn(5, 4, requires_grad=True)
     with torch.autocast("cpu", dtype=torch.bfloat16):
         trace = tl.trace(SigmoidMlp(), x, capture=tl.options.CaptureOptions(save_grads=True))
-    trace.log_backward(trace[trace.output_layers[0]].out.float().sum())
+    trace.backward(trace[trace.output_layers[0]].out.float().sum())
     frame = tl.debug.grad_health(trace).to_pandas()
 
     assert "autocast" in frame.attrs["scale_proof"]

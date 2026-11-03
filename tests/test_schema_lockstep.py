@@ -89,7 +89,7 @@ def lockstep_trace() -> Iterator[Trace]:
         torch.randn(2, 3, requires_grad=True),
         capture=tl.options.CaptureOptions(save_grads="all"),
     )
-    trace.log_backward(trace[trace.output_layers[0]].out)
+    trace.backward(trace[trace.output_layers[0]].out)
     try:
         yield trace
     finally:

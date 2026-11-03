@@ -102,7 +102,7 @@ def _has_grad_hooks(tensor: torch.Tensor) -> bool:
     ],
 )
 def test_record_opt_in_restores_grad_hooks_and_backward(opt_in: dict[str, object]) -> None:
-    """Each backward opt-in installs the hooks and log_backward records gradients."""
+    """Each backward opt-in installs the hooks and backward records gradients."""
 
     model, x = _model_and_input()
     if "default_grad" in opt_in:
@@ -116,7 +116,7 @@ def test_record_opt_in_restores_grad_hooks_and_backward(opt_in: dict[str, object
     assert recording.grad_records
 
 
-def test_recorder_log_backward_without_opt_in_refuses() -> None:
+def test_recorder_backward_without_opt_in_refuses() -> None:
     """The with-block Recorder door refuses the same way."""
 
     model, x = _model_and_input()
@@ -226,7 +226,7 @@ def test_trace_under_no_grad_with_enable_grad_inside_keeps_backward() -> None:
         assert trace.outcome.inference_only is False
         loss = trace[trace.output_layers[0]].out.sum()
         assert loss.grad_fn is not None
-        trace.log_backward(loss, save_grads=True)
+        trace.backward(loss, save_grads=True)
         assert model.lin.weight.grad is not None
         assert any(layer.grads for layer in trace._layer_list)
     finally:
@@ -244,7 +244,7 @@ def test_trace_explicit_inference_only_with_enable_grad_inside_stays_on() -> Non
         assert trace.outcome.inference_only is True
         loss = model(x).sum()
         with pytest.raises(ConfigurationError, match="autograd graph was discarded"):
-            trace.log_backward(loss)
+            trace.backward(loss)
     finally:
         trace.cleanup()
 

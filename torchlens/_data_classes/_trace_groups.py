@@ -379,7 +379,7 @@ class TraceGraph(_TraceGroup):
 
 
 class TraceAutograd(_TraceGroup):
-    """Backward-pass records and grad_fn facts of a Trace.
+    """Backward-pass records and grad_fn facts of a Trace, and its autograd interception switch.
 
     Examples
     --------
@@ -389,6 +389,18 @@ class TraceAutograd(_TraceGroup):
     """
 
     __slots__ = ()
+
+    def disarm(self) -> None:
+        """Detach this Trace from global autograd backward interception.
+
+        Returns
+        -------
+        None
+            Future plain ``loss.backward()`` or ``torch.autograd.*`` calls will
+            not record into this Trace.
+        """
+
+        self._trace._disarm_autograd()
 
     @property
     def backward_passes(self) -> Any:

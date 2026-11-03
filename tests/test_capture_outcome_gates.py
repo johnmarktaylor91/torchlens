@@ -165,7 +165,7 @@ def test_n2_failed_capture_refuses_validation_entry() -> None:
 def test_n3_failed_capture_refuses_backward_and_replay() -> None:
     source = _failed_partial_trace()
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        source.log_backward(torch.ones(1))
+        source.backward(torch.ones(1))
     assert exc_info.value.fields["code"] == "N3"
     with pytest.raises(CaptureOutcomeError) as exc_info:
         source.push()
@@ -182,7 +182,7 @@ def test_halted_backward_stays_allowed() -> None:
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     frontier = trace[trace.output_layers[0]].out
-    trace.log_backward(frontier.sum())
+    trace.backward(frontier.sum())
     assert trace.outcome.status is CaptureStatus.STOPPED
 
 

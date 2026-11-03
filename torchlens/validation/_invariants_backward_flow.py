@@ -314,7 +314,7 @@ def _projected_backward_records(
 ) -> tuple[Counter[tuple[str, int]], Counter[tuple[str, int]], dict[tuple[int, int | None], int]]:
     """Count the op, param and grad_fn records projected for passes above the base.
 
-    A projected grad_fn call with no ``backward_pass_index`` is never in a
+    A projected grad_fn call with no ``backward_pass_number`` is never in a
     fired event (events always carry an int pass index), so it stays in scope
     under a ``None`` key and fails the caller's multiplicity comparison by itself.
     """
@@ -322,19 +322,19 @@ def _projected_backward_records(
     projected_grad_records: Counter[tuple[str, int]] = Counter()
     for layer in trace._layer_list:
         for record in getattr(layer, "_grad_records", ()):
-            if record.backward_pass_index <= pass_index_base:
+            if record.backward_pass_number <= pass_index_base:
                 continue
-            projected_grad_records[(layer.layer_label, record.backward_pass_index)] += 1
+            projected_grad_records[(layer.layer_label, record.backward_pass_number)] += 1
     projected_param_records: Counter[tuple[str, int]] = Counter()
     for param_address, param_log in trace._param_logs.items():
         for record in getattr(param_log, "_grad_records", ()):
-            if record.backward_pass_index <= pass_index_base:
+            if record.backward_pass_number <= pass_index_base:
                 continue
-            projected_param_records[(param_address, record.backward_pass_index)] += 1
+            projected_param_records[(param_address, record.backward_pass_number)] += 1
     projected_calls: dict[tuple[int, int | None], int] = defaultdict(int)
     for grad_fn_handle in trace._grad_fn_logs.values():
         for call in grad_fn_handle.calls.values():
-            call_pass_index = call.backward_pass_index
+            call_pass_index = call.backward_pass_number
             if call_pass_index is not None and call_pass_index <= pass_index_base:
                 continue
             projected_calls[(grad_fn_handle.grad_fn_object_id, call_pass_index)] += 1
@@ -452,7 +452,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
     # the placeholder synthesizer writes ``interventions=[]``), AND (2) the
     # trace itself owns an ARMED intervention spec -- one with actual
     # targets/hooks/values, populated only by ``trace(intervene=...)`` /
-    # ``attach_hooks`` / ``set``. Plain captures carry an EMPTY spec object,
+    # ``attach_hooks`` / a ``set_only`` do. Plain captures carry an EMPTY spec object,
     # so a stale ``_tl_live_fire_results`` leak into a plain capture carries
     # records but no armed spec and stays refused.
     if _intervention_spec_is_armed(getattr(trace, "_intervention_spec", None)):

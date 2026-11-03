@@ -62,7 +62,7 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
         assert info.value.fields.get("code") == "trace_option_unsupported"
     finally:
         # The deferred grad stream keeps its writer thread until backward finalizes it.
-        trace.log_backward(trace[trace.output_layers[0]].out.sum())
+        trace.backward(trace[trace.output_layers[0]].out.sum())
 
 
 def test_append_rerun_on_callback_streaming_trace_raises() -> None:

@@ -23,7 +23,11 @@ def _interventions() -> tl.Trace:
 
     x = torch.randn(2, 3)
     log = tl.trace(_ReluAdd(), x, capture=tl.options.CaptureOptions(replayable=True))
-    log.set(tl.func("relu"), torch.zeros(2, 3))
+    log.do(
+        tl.func("relu"),
+        torch.zeros(2, 3),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     return log
 
 
