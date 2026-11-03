@@ -17,6 +17,9 @@ from typing import Any
 
 import torch
 
+from ... import _state
+from ..._utils.rng import monitor_state
+
 
 def _nvtx_host_available() -> bool:
     """Return whether this host can emit NVTX ranges (a CUDA device is visible)."""
@@ -150,10 +153,11 @@ def resolve_active_session_fn() -> Callable[[], Any]:
     """Return the observability session reader, importing it on first use.
 
     The import is lazy so ``torchlens.backends.torch`` does not load the
-    observability substrate at import time. The host-nondeterminism monitor
-    calls this before it arms: left to the first wrapped op, the import runs
-    inside the monitor window, and the import machinery's ``sys.meta_path``
-    finder frames become roots of its frame-reachable inventory.
+    observability substrate at import time. :func:`_warm_session_reader`,
+    registered with the host-nondeterminism monitor, calls this before a
+    window arms: left to the first wrapped op, the import runs inside the
+    monitor window, and the import machinery's ``sys.meta_path`` finder
+    frames become roots of its frame-reachable inventory.
 
     Returns
     -------
@@ -166,13 +170,29 @@ def resolve_active_session_fn() -> Callable[[], Any]:
     session_fn: Callable[[], Any] | None = _active_session_fn
     if session_fn is None:
         try:
-            from ..._observability._session import active_session
+            from ..._observability._session import (  # deferred: cycle _observability (layering follow-up)
+                active_session,
+            )
         except ImportError:  # pragma: no cover - torn install without the substrate
             session_fn = _no_active_session
         else:
             session_fn = active_session
         _active_session_fn = session_fn
     return session_fn
+
+
+def _warm_session_reader() -> None:
+    """Resolve (import) the session reader before a monitor window arms.
+
+    Registered at import below, so the window never imports the observability
+    substrate itself; logging is paused so the resolve never records an op.
+    """
+
+    with _state.pause_logging():
+        resolve_active_session_fn()()
+
+
+monitor_state.register_warmup(_warm_session_reader)
 
 
 def _push_op_markers(trace: Any, func_name: str, func_call_id: int) -> tuple[bool, Any]:
