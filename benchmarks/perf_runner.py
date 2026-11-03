@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from benchmarks.artifact_size import artifact_size_bytes  # noqa: E402
 from benchmarks.host_label import benchmark_host_label  # noqa: E402
 from benchmarks.perf_models import (  # noqa: E402
     build_tiny_dummy,
@@ -565,7 +566,7 @@ def _operation(
             path = Path(parent.name) / f"trace_{counter['i']}.tlspec"
             counter["i"] += 1
             trace.save(str(path))
-            state["serialized_file_size_bytes"] = path.stat().st_size
+            state["serialized_file_size_bytes"] = artifact_size_bytes(path)
 
         return save_once
     if operation == "aux_load":
@@ -576,7 +577,7 @@ def _operation(
         state["_tempdir"] = parent
         path = Path(parent.name) / "trace_fixture.tlspec"
         trace.save(str(path))
-        state["serialized_file_size_bytes"] = path.stat().st_size
+        state["serialized_file_size_bytes"] = artifact_size_bytes(path)
         return lambda: tl.load(str(path))
     if operation == "peer_manual_hooks":
         return lambda: run_vanilla_hooks_manual_dict(model, x)
