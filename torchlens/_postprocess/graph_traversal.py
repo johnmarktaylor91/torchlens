@@ -455,13 +455,13 @@ def _add_output_layers(
             # (a retained graph would poison later captures), while live
             # traces keep the graph-attached output — it is the very handle
             # backward() differentiates through.
-            _parent_payload = (
+            _producer_tensor = (
                 output_node.out
                 if output_node.out is not None
                 else output_node.payload.transformed_out
             )
             _detach_payload = not (
-                torch.is_tensor(_parent_payload) and _parent_payload.grad_fn is not None
+                torch.is_tensor(_producer_tensor) and _producer_tensor.grad_fn is not None
             )
             if output_payload_aliases_parent(output_tensor, output_node.out):
                 # HONESTY 13-R1: the producer already retains this exact value,
@@ -960,8 +960,7 @@ def _log_internally_terminated_tensor(
     (hunt-6 R52-2).
     """
     layer_entry = self[tensor_label]
-    # An Op row: the flat cell (A.13 moves is_internal_sink only on Layer), set by
-    # name so the record-groups codemod cannot respell it to the Layer attribute.
+    # An Op row: is_internal_sink stays flat on Op (A.13 moves it only on Layer).
     layer_entry._internal_set("is_internal_sink", True)
     if tensor_label not in seen_sink_labels:
         seen_sink_labels.add(tensor_label)
