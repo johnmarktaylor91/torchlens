@@ -1477,3 +1477,105 @@ def test_cuda_marker_scanner_is_red_capable() -> None:
         _unmarked_cuda_skip_sites(f"{alias}\n@GPU\n@pytest.mark.cuda\ndef test_b():\n    pass")
         == []
     )
+
+
+def _carries_cuda_mark(nodes: list[ast.expr]) -> bool:
+    """Return whether decorator or ``pytestmark`` expressions include ``pytest.mark.cuda``."""
+
+    return any(
+        isinstance(sub, ast.Attribute)
+        and sub.attr == "cuda"
+        and isinstance(sub.value, ast.Attribute)
+        and sub.value.attr == "mark"
+        for node in nodes
+        for sub in ast.walk(node)
+    )
+
+
+def _pytestmark_values(body: list[ast.stmt]) -> list[ast.expr]:
+    """Return the values a module or class body assigns to ``pytestmark``."""
+
+    return [
+        statement.value
+        for statement in body
+        if isinstance(statement, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in statement.targets)
+    ]
+
+
+def _is_cuda_only_skip(node: ast.AST) -> bool:
+    """Return whether ``node`` is ``if not torch.cuda.is_available(): pytest.skip(...)``."""
+
+    if not isinstance(node, ast.If) or ast.unparse(node.test) != "not torch.cuda.is_available()":
+        return False
+    first = node.body[0]
+    return (
+        isinstance(first, ast.Expr)
+        and isinstance(first.value, ast.Call)
+        and ast.unparse(first.value.func) == "pytest.skip"
+    )
+
+
+def _unmarked_cuda_body_skips(text: str) -> list[int]:
+    """Return 1-based lines of in-body CUDA-only skips in tests lacking the ``cuda`` marker.
+
+    ``if not torch.cuda.is_available(): pytest.skip(...)`` inside a test makes it
+    CUDA-only as surely as the decorator does, so the test, its class or its
+    module ``pytestmark`` must carry ``cuda`` for the GPU leg's ``-m cuda``
+    selection to reach it. A compound condition (one parametrized case needing
+    CUDA) is a per-case gate and is not flagged.
+    """
+
+    tree = ast.parse(text)
+    offenders: list[int] = []
+
+    def visit(body: list[ast.stmt], marked: bool) -> None:
+        for statement in body:
+            if isinstance(statement, ast.ClassDef):
+                class_marks = statement.decorator_list + _pytestmark_values(statement.body)
+                visit(statement.body, marked or _carries_cuda_mark(class_marks))
+            elif isinstance(statement, ast.FunctionDef | ast.AsyncFunctionDef):
+                if not statement.name.startswith("test"):
+                    continue
+                if marked or _carries_cuda_mark(statement.decorator_list):
+                    continue
+                offenders.extend(
+                    node.lineno for node in ast.walk(statement) if _is_cuda_only_skip(node)
+                )
+
+    visit(tree.body, _carries_cuda_mark(_pytestmark_values(tree.body)))
+    return offenders
+
+
+def test_in_body_cuda_only_skips_carry_the_cuda_marker() -> None:
+    """Every in-body CUDA-only skip sits in a test that carries ``cuda`` (GPU leg selection)."""
+
+    tests_dir = Path(__file__).resolve().parent
+    offenders = [
+        f"{path.relative_to(tests_dir.parent)}:{line}"
+        for path in sorted(tests_dir.rglob("test_*.py"))
+        if "cuda.is_available()" in (text := path.read_text(encoding="utf-8"))
+        for line in _unmarked_cuda_body_skips(text)
+    ]
+    assert not offenders, (
+        "add @pytest.mark.cuda to the tests holding these CUDA-only skips:\n  "
+        + ("\n  ".join(offenders))
+    )
+
+
+def test_in_body_cuda_skip_scanner_is_red_capable() -> None:
+    """A planted unmarked in-body CUDA skip is reported; marked or per-case ones are not."""
+
+    body = "    if not torch.cuda.is_available():\n        pytest.skip('x')\n"
+    assert _unmarked_cuda_body_skips(f"def test_a():\n{body}") == [2]
+    assert _unmarked_cuda_body_skips(f"@pytest.mark.cuda\ndef test_a():\n{body}") == []
+    module_marked = f"pytestmark = [pytest.mark.cuda]\ndef test_a():\n{body}"
+    assert _unmarked_cuda_body_skips(module_marked) == []
+    class_marked = "@pytest.mark.cuda\nclass TestA:\n    def test_a(self):\n" + body.replace(
+        "    ", "        "
+    )
+    assert _unmarked_cuda_body_skips(class_marked) == []
+    per_case = (
+        "def test_a(c):\n    if c and not torch.cuda.is_available():\n        pytest.skip('x')\n"
+    )
+    assert _unmarked_cuda_body_skips(per_case) == []
