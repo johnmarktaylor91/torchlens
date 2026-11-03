@@ -135,7 +135,8 @@ def _build_torch_bundle(tmp_path: Path, *, name: str = "trace.tlspec") -> Path:
 def _build_intervention_spec(tmp_path: Path, *, name: str = "iv.tlspec") -> Path:
     """Save one portable intervention spec carrying a tensor sidecar.
 
-    Uses ``tl.steer`` so the spec persists exactly one ``tensors/`` sidecar,
+    Stages one tensor value with a ``set_only`` ``do`` so the spec persists
+    exactly one ``tensors/`` sidecar,
     exercising the guarded tensor-sidecar loader on the happy path.
 
     Parameters
@@ -160,7 +161,7 @@ def _build_intervention_spec(tmp_path: Path, *, name: str = "iv.tlspec") -> Path
     )
     log.do(
         tl.func("relu"),
-        tl.steer(torch.ones(2, 3)),
+        torch.ones(2, 3),
         intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     spec_path = tmp_path / name
