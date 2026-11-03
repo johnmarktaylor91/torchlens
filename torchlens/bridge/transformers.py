@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
-import sys
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -154,12 +153,12 @@ def _is_hf_multimodal_input(value: Any) -> bool:
 def _transformers_importable() -> bool:
     """Return whether ``transformers`` is loaded or installed (no import, no I/O)."""
 
-    if "transformers" in sys.modules:
-        return True
     try:
         return importlib.util.find_spec("transformers") is not None
     except ValueError:
-        return False
+        # Raised only for a module already loaded without a ``__spec__``
+        # (a test stub): loaded is importable.
+        return True
 
 
 def _can_resolve_hf_processor(model: Any) -> bool:
