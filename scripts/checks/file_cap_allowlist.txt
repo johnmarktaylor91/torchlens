@@ -264,11 +264,11 @@ torchlens/_io/runnable_load.py::attach_sparse_run_readiness	178
 torchlens/_io/runnable_load.py::parse_sparse_run_descriptor	111
 torchlens/_io/runnable_load.py::preflight_sparse_run_descriptor	110
 torchlens/_io/save_policy.py::_resolve_include_flags	101
-torchlens/_io/scrub.py	1669
+torchlens/_io/scrub.py	1668
 torchlens/_io/scrub.py::_effective_policy	79
 torchlens/_io/scrub.py::_is_runtime_only_trace_field	67
 torchlens/_io/scrub.py::_rebuild_tuple_value	67
-torchlens/_io/_scrub_identities.py::_scrub_nondeterministic_identities	219
+torchlens/_io/_scrub_identities.py::_scrub_nondeterministic_identities	218
 torchlens/_io/scrub.py::scrub_for_save	110
 torchlens/_io/sidecar.py::register_sidecar_family	97
 torchlens/_io/state_contract.py::inspect_state_contract	108
