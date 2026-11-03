@@ -434,8 +434,9 @@ jobs:
             --junitxml="${{ runner.temp }}/junit/stress-subset.xml"
 
       - name: Declare the executed-test floor
-        # About half of the tests the subset executes (SUBSET_MEASURED).
-        run: echo "stress-subset.xml 400" >> "${{ runner.temp }}/junit/legs.floor"
+        # About half of the 941 tests the subset executed on the pinned
+        # environment at the push's head (1,202 collected, 261 not applicable).
+        run: echo "stress-subset.xml 470" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}

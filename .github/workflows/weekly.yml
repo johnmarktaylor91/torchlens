@@ -705,8 +705,9 @@ jobs:
             --tb=short -rfE --junitxml="${{ runner.temp }}/junit/stress-full-${SHARD}.xml"
 
       - name: Declare the executed-test floor
-        # About half of the tests a shard executes (FULL_MEASURED).
-        run: echo "stress-full-${{ matrix.shard }}.xml 1300" >> "${{ runner.temp }}/junit/legs.floor"
+        # About half of the smallest shard's executed count at the push's
+        # head (2,889 to 2,925 executed of about 3,696 per shard).
+        run: echo "stress-full-${{ matrix.shard }}.xml 1440" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
