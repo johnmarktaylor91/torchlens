@@ -159,6 +159,7 @@ _GUARDED_HOOKS: list[tuple[str, str | None]] = [
     ("torchlens/experiment/__init__.py", None),
     ("torchlens/options.py", "VisualizationOptions"),
     ("torchlens/_visualization/themes.py", "VisualizationTheme"),
+    ("torchlens/_data_classes/op.py", "Op"),
 ]
 
 

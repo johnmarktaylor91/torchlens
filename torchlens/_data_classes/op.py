@@ -92,6 +92,7 @@ from .._trace_core.relation_views import (
 from .._trace_state import TraceState
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils.arg_handling import copy_arg_tree
+from .._utils.facade import refuse_removed_member
 from .._utils.tensor_utils import (
     concatenate_batch_tensors,
     get_memory_amount_from_metadata,
@@ -158,12 +159,9 @@ _object_setattr = object.__setattr__
 # Fields whose reads go through the lazy-materialization path in
 # ``Op.__getattribute__``; every other name short-circuits straight to the slot.
 _LAZY_READ_FIELDS = frozenset({"grad", "out"})
-# ``equivalent_ops``/``recurrent_ops`` historically lived here too as
-# copy-on-read fields (a fresh mutable copy per read, protecting the ONE
-# canonical container shared by every group member from alias corruption).
-# The M7 live group views replace that barrier natively: cells hold a shared
-# ``GroupRef`` and reads resolve to the group's cached IMMUTABLE view
-# (``_GroupViewField``), so sharing is alias-safe without per-read copies.
+# ``equivalent_ops``/``recurrent_ops`` were copy-on-read fields here; the M7
+# live group views (shared ``GroupRef`` cells, cached immutable ``_GroupViewField``
+# reads) make sharing alias-safe without per-read copies.
 _INTERCEPTED_READ_FIELDS = _LAZY_READ_FIELDS
 _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_source_trace_ref": None,
@@ -210,15 +208,10 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_construction_done": True,
 }
 # Typed container defaults for every non-Optional container field in
-# `LAYER_PASS_LOG_FIELD_ORDER`. Same defect and fix as
-# `trace._MODEL_LOG_CONTAINER_DEFAULTS`: the blanket ``{field: None}`` base
-# below makes an absent (legacy/partial-state) container field restore as
-# ``None`` instead of its declared list/dict/set/tuple, which then crashes real
-# consumer code (membership/iteration in ``finalization.py``,
-# ``loop_detection.py``, ``invariants.py``). Plain builtin types are used so
-# ``coerce_container_typed_state`` (called from ``Op.__setstate__``) also
-# repairs a present-but-wrong-typed legacy value (e.g. a ``set`` where a
-# ``list`` is now declared).
+# `LAYER_PASS_LOG_FIELD_ORDER` (same fix as `trace._MODEL_LOG_CONTAINER_DEFAULTS`):
+# an absent legacy field restores as its declared container, not ``None``, and
+# plain builtin types let ``coerce_container_typed_state`` (``Op.__setstate__``)
+# repair a present-but-wrong-typed legacy value.
 _LAYER_PASS_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "lookup_keys": [],
     "annotations": {},
@@ -1174,6 +1167,10 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
+#: Public Op members removed by the do fold (remove-and-rename, no alias).
+_REMOVED_OP_MEMBERS: dict[str, str] = {"attach_hooks": "use op.do(hook, ...) -- do stages the hook"}
+
+
 class Op(OpAtenMixin, _SelectionOperand):
     """Metadata for a single tensor operation (one pass of one layer).
 
@@ -1678,16 +1675,9 @@ class Op(OpAtenMixin, _SelectionOperand):
             out = slot("out")
             source_ref = slot("_source_trace_ref")
             source_trace = None if source_ref is None else source_ref()
-            # Lazy-payload honesty gate (agent memo P0 part 1): a saved
-            # payload behind a lazy blob ref MATERIALIZES (sha-verified,
-            # attaching -- interactive semantics preserved) instead of
-            # silently reading ``None``. The historical capture-only
-            # ``_predicate_save_options`` gate limited this to predicate
-            # captures, so every ``tl.load(..., lazy=True)`` artifact
-            # served silent Nones for rows whose manifest says saved=true.
-            # Live streamed captures (``retain_in_memory=False``) keep
-            # their pinned None: the user chose that memory posture and an
-            # attribute read must not re-inflate it by attaching.
+            # Lazy-payload honesty gate (P0 part 1): a saved payload behind a
+            # lazy blob ref materializes (sha-verified) instead of reading None;
+            # live streamed captures (retain_in_memory=False) keep their None.
             if (
                 out is None
                 and slot("out_ref") is not None
@@ -1702,10 +1692,8 @@ class Op(OpAtenMixin, _SelectionOperand):
                 and not slot("has_saved_activation", False)
                 and (
                     getattr(source_trace, "_predicate_save_options", None) is not None
-                    # P0 part 4: on a LAZILY loaded artifact ``.out`` is never
-                    # a silent None -- unsaved rows refuse typed. Eager and
-                    # preview-backend loads keep their historical None-for-
-                    # unsaved contract.
+                    # P0 part 4: a lazily loaded artifact never serves a silent
+                    # None for an unsaved row; eager loads keep None-for-unsaved.
                     or getattr(source_trace, "payload_load_status", None) == "loaded_lazy"
                 )
             ):
@@ -1732,6 +1720,15 @@ class Op(OpAtenMixin, _SelectionOperand):
                 }
                 _validate_reference_out_not_mutated(state)
         return _getattribute(self, name)
+
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            """Miss hook: a removed public member redirects typed (``facade_redirect``)."""
+
+            if not name.startswith("_"):
+                refuse_removed_member("Op", name, _REMOVED_OP_MEMBERS)
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(
         self,
