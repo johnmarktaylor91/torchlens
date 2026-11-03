@@ -272,6 +272,25 @@ known boundary, `seams`, which an item may cite under `seam`.
 grade is derived from the items every time.
 
 ```python
+import torch
+
+import torchlens as tl
+
+
+class TinyLM(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.embed = torch.nn.Embedding(32, 8)
+        self.head = torch.nn.Linear(8, 32)
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        return self.head(self.embed(ids))
+
+
+lm = TinyLM()
+turn_1 = tl.trace(lm, torch.tensor([[1, 2, 3]]))
+turn_2 = tl.trace(lm, torch.tensor([[1, 2, 3, 4, 5]]))  # turn 1's prompt carried forward
+b = tl.Bundle({"turn_1": turn_1, "turn_2": turn_2})
 b.relate(
     "successor_of", "turn_2", "turn_1",
     carry_mode="verbatim",
@@ -287,8 +306,8 @@ b.relate(
     },
 )
 grade = b.relation_grades()[-1]
-grade.grade              # "disclosed": declared, nothing checked
-grade.exogenous_items    # 1: the declared carry
+assert grade.grade == "disclosed"    # declared, nothing checked
+assert grade.exogenous_items == 1    # the declared carry
 ```
 
 A `carry_mode="none"` row with no evidence grades `disclosed`: a declared fresh start is a claim
