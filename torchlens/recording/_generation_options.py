@@ -109,9 +109,3 @@ class GenerationOptions:
                 code="record_generation_options_invalid",
                 remedy="pass a byte budget, or None to disable the guard",
             )
-
-    @property
-    def keeps_everything(self) -> bool:
-        """Return whether no ring buffer bounds the retained forwards."""
-
-        return self.keep_last is None

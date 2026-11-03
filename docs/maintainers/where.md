@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1408 modules, 631310 lines, 0 modules without a docstring.
+83 packages, 1408 modules, 631304 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12349 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 22 | 6889 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 22 | 6883 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 13666 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
@@ -1809,13 +1809,13 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 13
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (22 modules, 6889 lines)
+Lightweight predicate-recording namespace for TorchLens. (22 modules, 6883 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Lightweight predicate-recording namespace for TorchLens. | 114 |
 | `_generation` | Record chosen sites across one real Hugging Face ''generate'' call. | 658 |
-| `_generation_options` | Grouped options of the streaming generation recorder (DOCUMENTED-UNSTABLE spellings). | 117 |
+| `_generation_options` | Grouped options of the streaming generation recorder (DOCUMENTED-UNSTABLE spellings). | 111 |
 | `_generation_stream` | Per-token series, ring buffer, disk spill and cost guard of the generation recorder. | 479 |
 | `_halt` | Fastlog early-abort control signal. | 73 |
 | `_indexes` | Index file writers for fastlog directory bundles. | 81 |

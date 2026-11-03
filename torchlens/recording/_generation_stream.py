@@ -385,7 +385,7 @@ class _StepSink:
                 f"forward {step} brought the retained payloads to {self.retained_bytes:,} "
                 f"bytes, over the {budget:,}-byte budget"
             )
-        if step != 1 or not self.options.keeps_everything:
+        if step != 1 or self.options.keep_last is not None:
             return
         new_tokens = self.max_new_tokens(self.windows[0].stop)
         if new_tokens is None:
