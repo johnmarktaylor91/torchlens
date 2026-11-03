@@ -615,9 +615,9 @@ def dead_neurons_rows(
 
 
 def _feature_dim(
-    trace: Trace, op: Op, out: torch.Tensor, dim: int | None, axes: dict[str, int]
+    trace: Trace, op: Op, out: Any, dim: int | None, axes: dict[str, int]
 ) -> int | None:
-    """Return the unit axis for one activation, or ``None`` when it is invalid."""
+    """Return the unit axis for one activation tensor, or ``None`` when it is invalid."""
 
     if dim is None:
         return unit_axis(trace, op, out, axes)
