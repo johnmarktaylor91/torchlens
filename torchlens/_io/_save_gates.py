@@ -20,7 +20,12 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import torch
 
-from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
+from .._runnable import (
+    ActivationPayloadMember,
+    RunnableErrorCode,
+    SlotByteDigest,
+    StateByteDigest,
+)
 from .._runnable.input_aliases import build_input_attestation_fingerprint
 from .._runnable.state import runnable_tensor_byte_digest
 from ..errors._base import TorchLensWarning
@@ -292,8 +297,6 @@ def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) 
         Typed save refusal for any label the load door would refuse.
     """
 
-    from .._runnable import RunnableErrorCode
-
     for name in names:
         if not isinstance(name, str) or name == "":
             raise RunnablePreflightError(
@@ -510,7 +513,7 @@ def _capture_activation_blob_specs(
             raise ArtifactError(
                 "include_activations=True found a capture-selected activation without a "
                 f"materialized out/transformed_out payload at {op_label!r}.",
-                code="run_capability_unavailable",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
             )
 
     state = _capture_source_state(trace, option_name="include_activations")
@@ -556,7 +559,7 @@ def _capture_source_state(trace: Trace, *, option_name: str) -> Mapping[str, tor
         raise ArtifactError(
             f"{option_name}=True requires a tensor-only capture-time state snapshot. "
             "This Trace cannot embed state as embedded_capture_state.",
-            code="run_capability_unavailable",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
         )
     return cast(Mapping[str, torch.Tensor], state)
 
