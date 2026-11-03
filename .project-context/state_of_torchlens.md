@@ -261,7 +261,7 @@ objects yet.
 
 | Appliance | Extra | Docstring intent | Current state |
 |-----------|-------|------------------|---------------|
-| `torchlens._notebook` | `notebook` | IPython/Jupyter notebook integration | Import gate for `IPython` and `jupyter_client`, no public objects |
+| `torchlens.report._notebook` | `notebook` | IPython/Jupyter notebook integration | Import gate for `IPython` and `jupyter_client`, no public objects |
 | `torchlens.neuro` | `neuro` | RDM, CKA, Brain-Score, representation helpers | Import gate for `rsatoolbox` and `brainscore_core`, no public objects |
 
 The earlier empty `viewer`, `paper`, and `llm` stub packages were removed (`chore: remove empty

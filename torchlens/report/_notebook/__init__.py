@@ -2,10 +2,10 @@
 
 Import time stays inert: this module must NOT import ``IPython`` /
 ``jupyter_client`` (the ``notebook`` extra's foreign third-party
-dependencies) as a side effect of ``import torchlens._notebook``. A bare
+dependencies) as a side effect of ``import torchlens.report._notebook``. A bare
 package import can happen incidentally -- e.g. a portable ``.tlspec``
 bundle's metadata unpickler resolving a pickled global whose module path
-names ``torchlens._notebook`` -- and an eager import-time dependency check
+names ``torchlens.report._notebook`` -- and an eager import-time dependency check
 would run that foreign code with no trust opt-in.
 
 Attribute access resolves through the shared five-step facade order
@@ -71,7 +71,7 @@ def __getattr__(name: str) -> Any:
         dependency is absent.
     """
 
-    from .._utils.facade import resolve_facade_attr
+    from ..._utils.facade import resolve_facade_attr
 
     return resolve_facade_attr(
         owner=__name__,
@@ -95,7 +95,7 @@ def __dir__() -> list[str]:
         advertised.
     """
 
-    from .._utils.facade import facade_dir
+    from ..._utils.facade import facade_dir
 
     return facade_dir(globals(), _LAZY_ATTRS, _SUBMODULES)
 

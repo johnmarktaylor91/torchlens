@@ -180,7 +180,7 @@ def array_grid_html(
         ``torch.Tensor`` payload (any device; only visible cells convert).
     roles:
         Optional proven per-axis role names (see
-        :func:`torchlens._notebook._axis_labels.axis_labels`).
+        :func:`torchlens.report._notebook._axis_labels.axis_labels`).
     budgets:
         Truncation budgets, passed EXPLICITLY to the ported protocol
         (defaults to the ArrayAutovisualizer numbers; memo 3.5).

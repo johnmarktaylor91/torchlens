@@ -148,7 +148,6 @@ PACKAGE_LAYERS: dict[str, str] = {
     "debug": "L5",
     # -- L6 APPLIANCES ---------------------------------------------------------
     "_semantic": "L6",
-    "_notebook": "L6",
     "neuro": "L6",
     # -- L7 PRESENT --------------------------------------------------------------
     "_visualization": "L7",

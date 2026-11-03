@@ -40,8 +40,8 @@ ones freely. Imports placed inside functions cross the layers in both directions
 | 2. Capture | Wrapping torch, running the forward pass, logging ops | `backends/` (registry and the torch backend in `backends/torch/`; previews for JAX, TensorFlow, MLX, Paddle, tinygrad), `capture/` (backend-neutral runner, predicates, halt, outcome), `_capture_*.py`, `_chunking.py`, `_input_*.py`, `_robustness.py`, `fastlog/` (sparse predicate recording behind `tl.record`), `distributed/`, `_partial/` |
 | 3. Postprocess | Turning the raw log into a finished graph | `_postprocess/` (steps 0 to 20 plus fractional inserts, order derived from declared read and write contracts) |
 | 4. Persistence and replay | Saving, loading, replaying | `_io/` (bundle writer and reader, `.tlspec` manifest, loaders), `io/` (public administration helpers), `schemas/`, `_runnable/` (the frozen runnable vocabulary in its `__init__.py` and the sparse replay modules behind `Trace.run`), `captured_run.py`, `bundle/` |
-| 5. Analysis and verbs | Everything that reads or edits a finished `Trace` | `validation/` (the tripwire), `intervention/`, `_selection*.py`, `attribution/`, `mechinterp/`, `debug/`, `receptive_field/`, `repgeom/`, `stats/`, `semantic/` (facets), `transforms/`, `checks/`, `_observe/`, `_observability/`, `trackers/`, `_snoop/`, `experiment/`, `_merged/`, `neuro/`, `_extraction/` with `dataset_extraction.py`, `preprocessing/`, `conformance/`, `differential.py` |
-| 6. Presentation and bridges | Rendering, reports, exports, external tools | `visualization/`, `viz/`, `transformer/`, `report/`, `export/`, `_quickstart/`, `agent/`, `_notebook/`, `bridge/`, `callbacks/`, `compat/`, `_ecosystem/`, `examples/`, `_autoroute/`, `_kernel_telemetry.py` |
+| 5. Analysis and verbs | Everything that reads or edits a finished `Trace` | `validation/` (the tripwire), `intervention/`, `_selection*.py`, `attribution/`, `mechinterp/`, `debug/` (training checks in `debug/_checks/`, live narration in `debug/_snoop/`), `receptive_field/`, `repgeom/`, `stats/`, `semantic/` (facets), `transforms/`, `_observe/`, `_observability/`, `trackers/`, `experiment/`, `_merged/`, `neuro/`, `_extraction/` with `dataset_extraction.py`, `preprocessing/`, `differential.py` |
+| 6. Presentation and bridges | Rendering, reports, exports, external tools | `visualization/`, `viz/`, `transformer/`, `report/` (notebook cards in `report/_notebook/`), `export/`, `_quickstart/`, `agent/`, `bridge/`, `callbacks/`, `compat/`, `_ecosystem/`, `examples/`, `_autoroute/`, `_kernel_telemetry.py` |
 | Entry | The public facade | `__init__.py` (lazy attribute table `_LAZY_ATTRS`, `__all__`), `user_funcs.py` (`trace`, `summary`, `render`, validation wrappers) |
 
 Torch stays clean on `import torchlens`. The first capture installs the wrappers through
@@ -162,7 +162,7 @@ every shape it should survive, and through `_constants.py` field orders and the
 
 **Overlapping homes.** `io/` is the public administration namespace and `_io/` the
 implementation. `viz/` plots activations, `visualization/` renders graphs, `transformer/` draws
-transformer pictures. `checks/`, `validation/`, `debug/` and four root `_validation_*.py`
+transformer pictures. `validation/`, `debug/` and four root `_validation_*.py`
 modules all verify something. `errors/` is the public exception package, `_errors.py` the
 internal helpers, and `intervention/errors.py` the intervention catalogue. `facets.py` at
 the root is an alias that replaces itself in `sys.modules` with `_semantic/facets.py`.

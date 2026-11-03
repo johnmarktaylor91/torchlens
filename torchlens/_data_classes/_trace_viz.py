@@ -575,7 +575,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         Document composition (F08 x C05 x F16): the Trace card (treescope
         memo B1/B2 -- identity, honesty badge, NaN/Inf line, and the
         budgeted lookup-key index, assembled through
-        ``torchlens._notebook.cards``) renders first, and on finished
+        ``torchlens.report._notebook.cards``) renders first, and on finished
         traces the rebuilt summary table (F08; summary memo 3.11 -- the
         bare ``trace`` cell is the most likely first touch in Jupyter)
         follows as a sibling fragment. A summary failure degrades to the

@@ -2554,7 +2554,7 @@
  {
   "ambiguous": false,
   "field": "is_edited",
-  "file": "torchlens/_notebook/cards.py",
+  "file": "torchlens/report/_notebook/cards.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -2562,7 +2562,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_notebook/cards.py",
+  "file": "torchlens/report/_notebook/cards.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -2570,7 +2570,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/_notebook/cards.py",
+  "file": "torchlens/report/_notebook/cards.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -2578,7 +2578,7 @@
  {
   "ambiguous": false,
   "field": "source_trace",
-  "file": "torchlens/_notebook/cards.py",
+  "file": "torchlens/report/_notebook/cards.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -2586,7 +2586,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_notebook/cardtree.py",
+  "file": "torchlens/report/_notebook/cardtree.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -2594,7 +2594,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/_notebook/frontier.py",
+  "file": "torchlens/report/_notebook/frontier.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false

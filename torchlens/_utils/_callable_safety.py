@@ -339,7 +339,7 @@ _DENIED_MODULES: frozenset[str] = frozenset(
 # (builtin) -- is admitted here so the legitimate ``operator:neg`` custom ref survives.
 # The torch namespaces (torch / torch.Tensor / torch.nn.functional) are NOT stdlib, so
 # they are naturally allowed and need no carve-out. First-party ``torchlens.*`` (incl.
-# appliance ``torchlens.neuro`` / ``torchlens._notebook`` under explicit trust) is not
+# appliance ``torchlens.neuro`` / ``torchlens.report._notebook`` under explicit trust) is not
 # stdlib either, so it is naturally allowed. A user's ``allowed_custom_callable_modules``
 # entry that names a NON-stdlib user package still resolves; but a user CANNOT re-allow
 # a stdlib module (an allowlist entry naming e.g. ``io`` stays DENIED -- that is the
@@ -1492,7 +1492,7 @@ def is_denied_operator_gadget(func: Callable[..., Any]) -> bool:
 # This is the canonical appliance-module vocabulary used by safe unpickling and
 # first-party callable classification. The intervention resolver keeps a fenced
 # import-order pin that is equality-gated in the SSOT drift suite.
-_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens._notebook"})
+_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens.report._notebook"})
 
 # Attribute stamped on a callable at ``@torchlens.facets.register`` time (on the
 # recipe function AND its optional predicate). It is the DETERMINISTIC, process-

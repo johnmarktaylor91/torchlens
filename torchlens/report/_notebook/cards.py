@@ -11,7 +11,7 @@ object").
 Hard card rules implemented here (each earned by a measurement):
 
 - R-NEVER-RAISE: every entry point renders behind
-  :func:`torchlens._notebook.cardtree.safe_card_html`.
+  :func:`torchlens.report._notebook.cardtree.safe_card_html`.
 - Honesty states (partial, halted, poisoned, unknown coverage, unsaved,
   truncated) are NEVER folded.
 - Per-pass fields read via ``layer.ops[k]``, never off the Layer (per-pass
@@ -31,8 +31,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._data_classes._trace_missing_attrs import is_live_trace
-from .._record_type import first_op
+from ..._data_classes._trace_missing_attrs import is_live_trace
+from ..._record_type import first_op
 from ._access import CopyRoot, resolve_copy_root
 from ._axis_labels import sdpa_attention_hint
 from ._grid import GridBudgets, array_grid_html
@@ -79,7 +79,7 @@ def _bridge_sentinel(obj: Any) -> str | None:
     """
 
     try:
-        from ..bridge.treescope import consume_repr_suppression
+        from ...bridge.treescope import consume_repr_suppression
 
         if consume_repr_suppression(obj):
             return BRIDGE_SENTINEL_HTML
@@ -488,7 +488,7 @@ def _frontier_label(record: Any) -> str:
     """
 
     try:
-        from .._partial import _display_label
+        from ..._partial import _display_label
 
         return str(_display_label(record))
     except Exception:  # noqa: BLE001 - a display read may never raise

@@ -319,8 +319,8 @@ torchlens/_merged/_artifact.py::load_merged	296
 torchlens/_merged/_artifact.py::save_merged	206
 torchlens/_merged/_engine.py::derive_merge	76
 torchlens/_merged/_presenter.py	896
-torchlens/_notebook/_grid.py::array_grid_html	97
-torchlens/_notebook/_truncation.py::infer_balanced_truncation	97
+torchlens/report/_notebook/_grid.py::array_grid_html	97
+torchlens/report/_notebook/_truncation.py::infer_balanced_truncation	97
 torchlens/_observability/_artifact.py::HistoryWriter._columns_for	65
 torchlens/_observability/_chassis.py::ObserverEvent.__post_init__	78
 torchlens/_observability/_collector.py	1042
