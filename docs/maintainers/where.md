@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1392 modules, 640262 lines, 0 modules without a docstring.
+85 packages, 1393 modules, 640267 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -47,7 +47,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2268 |
 | `torchlens._visualization.lenses.audit` | The lens validation harness (themes memo build item 17). | 5 | 1896 |
 | `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 271 |
-| `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 3 | 176 |
+| `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 4 | 181 |
 | `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 14 | 4888 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 240 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 14650 |
@@ -991,11 +991,12 @@ Renderer contracts and implementations for visualization RenderIR. (3 modules, 2
 
 ### `torchlens._vocab`
 
-Relocated cross-layer vocabulary closures (L0 BASIS; private home). (3 modules, 176 lines)
+Relocated cross-layer vocabulary closures (L0 BASIS; private home). (4 modules, 181 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 17 |
+| `_package_version` | The package version, shared without importing the public facade. | 5 |
 | `node_spec` | NodeSpec value vocabulary (ratified V2 relocation; item 6). | 127 |
 | `trace_state` | Run-state ownership for TorchLens intervention execution. | 32 |
 
