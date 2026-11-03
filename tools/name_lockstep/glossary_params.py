@@ -40,6 +40,8 @@ _SKIPPED = frozenset({"self", "cls"})
 #: A keyword row: first cell is exactly one backticked ``name=``.
 _KEYWORD_ROW = re.compile(r"^\|\s*`([A-Za-z_][A-Za-z0-9_]*)=`\s*\|(.*)\|\s*$")
 _SPAN = re.compile(r"`([^`]+)`")
+#: The run of backticked owners right after ``keyword of`` (``A``, ``B`` and ``C``).
+_OWNER_RUN = re.compile(r"keyword of ((?:`[^`]+`(?:,? and |, |,)?)+)")
 
 
 def _member_target(row: dict[str, Any]) -> object | None:
@@ -122,39 +124,84 @@ def _ordered(paths: Iterable[str]) -> list[str]:
     return sorted(unique, key=lambda p: (any(s.startswith("_") for s in p.split(".")), len(p), p))
 
 
-def public_parameters(package: str = inventory.PACKAGE) -> list[dict[str, Any]]:
+def _inherited_from(cls: type, spellings: dict[int, list[str]]) -> list[str]:
+    """Return the spellings of the public class whose constructor ``cls`` inherits unchanged.
+
+    Parameters
+    ----------
+    cls
+        A reached class.
+    spellings
+        Spellings of every reached callable, keyed on ``id``.
+
+    Returns
+    -------
+    list[str]
+        The defining base class's spellings, or an empty list when ``cls`` defines its own
+        constructor, the base is not reached publicly, or the signatures differ.
+    """
+
+    base = next((k for k in cls.__mro__ if "__init__" in vars(k) or "__new__" in vars(k)), None)
+    if base is None or base is cls or base is object or id(base) not in spellings:
+        return []
+    if str(inventory._signature(base)) != str(inventory._signature(cls)):
+        return []
+    return spellings[id(base)]
+
+
+def _default_text(param: inspect.Parameter) -> str | None:
+    """Return a short, stable spelling of a parameter's default, or None when it has none."""
+
+    if param.default is param.empty:
+        return None
+    text = re.sub(r" at 0x[0-9a-f]+", "", repr(param.default))
+    return text if len(text) <= 60 else "..."
+
+
+def public_parameters(
+    package: str = inventory.PACKAGE, *, meanings: bool = True
+) -> list[dict[str, Any]]:
     """Return one row per public callable and public parameter.
 
     Parameters
     ----------
     package
         Package to import.
+    meanings
+        Read each parameter's documented meaning (slower; the coverage check needs none).
 
     Returns
     -------
     list[dict[str, Any]]
-        Rows ``{callable, aliases, param, kind, default, meaning}`` sorted by callable, param.
+        Rows ``{callable, aliases, defined_by, param, kind, default, meaning}`` sorted by
+        callable, param. ``defined_by`` is the spelling of the callable that defines the
+        signature: the callable itself, or the public base class whose constructor a class
+        inherits unchanged (its spellings join ``aliases``).
     """
 
+    callables = public_callables(package)
+    spellings = {id(value): paths for paths, value in callables}
     rows: list[dict[str, Any]] = []
-    for spellings, target in public_callables(package):
+    for paths, target in callables:
         signature = inventory._signature(target)
         if signature is None:
             continue
+        base = _inherited_from(target, spellings) if inspect.isclass(target) else []
         for param in signature.parameters.values():
             if param.kind not in _NAMED_KINDS or param.name in _SKIPPED:
                 continue
             if param.name.startswith("_"):
                 continue
-            meaning, _ = docsections.param_meaning(target, param.name)
-            default = None if param.default is param.empty else repr(param.default)
+            meaning = docsections.param_meaning(target, param.name)[0] if meanings else ""
             rows.append(
                 {
-                    "callable": spellings[0],
-                    "aliases": spellings,
+                    "callable": paths[0],
+                    "aliases": paths + base,
+                    "defined_by": base[0] if base else paths[0],
+                    "constructor": inspect.isclass(target),
                     "param": param.name,
                     "kind": param.kind.name.lower(),
-                    "default": default if default is None or len(default) <= 80 else "...",
+                    "default": _default_text(param),
                     "meaning": meaning,
                 }
             )
@@ -184,12 +231,16 @@ def keyword_rows(glossary: str) -> dict[str, list[str]]:
 
 
 def _named_owners(text: str) -> set[str]:
-    """Return the backticked spellings in a keyword row, with ``()`` and ``tl.`` stripped."""
+    """Return the owners a keyword row names, with ``()`` and ``tl.`` stripped.
+
+    Only the backticked run right after each ``keyword of`` counts, so a spelling that a
+    row's meaning mentions in passing does not name an owner.
+    """
 
     owners: set[str] = set()
-    for span in _SPAN.findall(text):
-        spelled = span.strip().removesuffix("()")
-        owners.add(spelled.removeprefix("tl."))
+    for run in _OWNER_RUN.findall(text):
+        for span in _SPAN.findall(run):
+            owners.add(span.strip().removesuffix("()").removeprefix("tl."))
     return owners
 
 
@@ -252,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.load:
         rows = json.loads(args.load.read_text(encoding="utf-8"))
     else:
-        rows = public_parameters()
+        rows = public_parameters(meanings=args.dump is not None)
     if args.dump:
         args.dump.write_text(json.dumps(rows, indent=1) + "\n", encoding="utf-8")
     gaps = missing(rows, args.glossary.read_text(encoding="utf-8"))
