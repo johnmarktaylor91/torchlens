@@ -1983,3 +1983,7 @@ torchlens._visualization._highlight:check_highlight:InvalidArgumentError::1	CONT
 torchlens._observability._native_profile:require_join_result:ProfilerSessionError::1	CONTRACTED	device_time_unavailable	new F27 draw(color_by/size_by='device_time') refusal contracted in its own change (torchnative W2.3)
 torchlens._selection.selector_base:_and_universe:SelectorCompositionError::1	CONTRACTED	selector_signal_mismatch	grad-site integration: a pass qualifier joined to a bare activation selector (SPEC 1.5)
 torchlens._selection.selector_base:_and_universe:SelectorCompositionError::2	CONTRACTED	selector_cross_universe_and	grad-site integration: & across the activation, gradient and node universes (SPEC 1.5)
+torchlens._selection._site_record:site_trace:SelectionError::1	CONTRACTED	selection_trace_released	Site.record on a row whose trace was released; typed + remedy + contract row (walk surface.5)
+torchlens._selection._site_record:site_record:SelectionError::1	CONTRACTED	selection_unresolvable	Site.record on a live trace holding no such record (reason site_not_in_trace); typed + remedy + contract row
+torchlens._selection._module_facet_fold:_fold_module_facet:SelectorCompositionError::1	CONTRACTED	selector_module_facet_scope_conflict	module(a) & facet scoped to b != a names no site; typed + remedy + contract row (RC-252)
+torchlens.report._summary_report:SummaryReport.table:InvalidArgumentError::1	CONTRACTED	summary_table_unavailable	report.table on a report without a stats table teaches view="stats"; typed + remedy + contract row (RC-41)

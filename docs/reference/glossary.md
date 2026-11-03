@@ -51,6 +51,23 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   are Layer collections; on any Layer collection they keep the members that pass the Trace-level
   filter, so `len(trace.layers.compute)` counts the compute Layers.
 
+**Op filters**
+: `trace.ops.compute` and `trace.ops.nonfinite` are Op collections; on any Op collection they
+  keep the members that pass the Trace-level filter (`Trace.compute_ops`, `Trace.nonfinite_ops`),
+  so `len(trace.ops.compute)` counts the compute ops and `trace.saved_ops.nonfinite` the saved
+  ops whose output held NaN or Inf.
+
+**Module filters**
+: `trace.modules.uncalled` lists the addresses `Trace.uncalled_modules` records; an uncalled
+  module has no Module record, so the answer is addresses, not records.
+
+**Collection labels (`.labels`)**
+: Every collection serves `.labels`, the tuple of its lookup labels in collection order:
+  `trace.layers.labels` the Layer labels, `trace.ops.labels` the counted Op labels,
+  `trace.modules.labels` the module addresses, `trace.params.labels` the parameter addresses, and
+  the same on any filtered collection (`trace.layers.compute.labels`). The per-noun Trace
+  projections (`Trace.layer_labels`) stay.
+
 **Recording**
 : A sparse, torch-only event stream returned by `tl.record(model, inputs, save=...)`.
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
@@ -1255,6 +1272,17 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   regex pattern) select ops by their public labels. `tl.where` filters a table with a
   predicate callable.
 
+**Pass tokens (`label:N`, `label:last`, `label:all`)**
+: Passes are 1-based: `relu_1_1:2` is the second pass of a recurrent layer, and there are no
+  negative pass indices. `relu_1_1:last` names the final pass and `relu_1_1:all` every pass,
+  wherever a label is accepted: `trace["relu_1_1:last"]` and `trace.ops["relu_1_1:last"]`
+  return that Op, `trace["relu_1_1:all"]` and `trace[tl.label("relu_1_1:all")]` return the
+  Selection of every pass (an Op collection refuses `:all` with a `KeyError` naming those
+  doors), and `trace.layers["relu_1_1:last"]` is the aggregate Layer like any pass spelling.
+  A bare multi-pass label through `trace[...]` refuses (`multipass_bare_label_ambiguous`, the
+  `tl.label` refusal) naming these spellings and `trace.layers[label]`; `trace[...]` never
+  returns a Layer.
+
 **tl.all_sites** — *unstable — no deprecation shim owed*
 : `tl.all_sites()` is the universal selector: `trace[tl.all_sites()]` selects every op of the
   trace as a whole site, the same result as `trace[tl.label_matches(".*")]` (it stores that
@@ -1279,7 +1307,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.head(i)` writes head `i` of every matching facet in every module and says how many sites
   it writes (a `TorchLensWarning` coded `facet_selector_fanout`, with `fields["site_count"]`;
   36 on a 12-layer GPT-2: q, k and v in each layer); `.in_module(address)` scopes it to one
-  module;
+  module, and so does composition: `tl.module(address) & tl.head(i)` (either order) is that
+  same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`,
+  `attach_hooks`); a facet already scoped to another module refuses
+  `selector_module_facet_scope_conflict`;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
   `transform_kind="autograd.grad"`; `autogradbackward`, an in-forward `loss.backward()` or
@@ -1340,8 +1371,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.grad(s) & tl.in_backward_pass(n)` restricts the gradient branch to pass `n`. `&` across
   universes refuses `selector_cross_universe_and` (`tl.grad(s) & s`, `s & tl.grad_fn(...)`,
   `tl.grad(s) & tl.grad_fn(...)`), `~` over a union that spans universes refuses
-  `selector_cross_universe_not` (negate inside each branch: `tl.grad(~a) | ~a`), and a pass
-  qualifier on a bare activation selector refuses `selector_signal_mismatch`. A gradient site resolves its inner selector exactly as the
+  `selector_cross_universe_not` (negate inside each branch: `tl.grad(~a) | ~a`), a pass
+  qualifier on a bare activation selector refuses `selector_signal_mismatch`, and
+  `tl.module(a) & tl.head(i).in_module(b)` with `a != b` refuses
+  `selector_module_facet_scope_conflict`. A gradient site resolves its inner selector exactly as the
   activation door does (zero matches refuse); a matched op the loss never reaches is a
   `no_fire`, never a resolution error and never a zero tensor. `Trace.find_sites(tl.grad(s))`
   returns the matched forward sites with `signal="backward"`; its `.to_dataframe()` table
@@ -2380,7 +2413,9 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   terms (selector / receptive-field box / gradient-RF / facet / param / unit)
   and boolean combinators, trace-independent; `trace[selector]` (the one
   resolution door) returns a `tl.Selection` — frozen, trace-bound, an ordered
-  tuple of `tl.types.Site(key, mask, provenance)` rows, never capped; a
+  tuple of `tl.types.Site(key, mask, provenance)` rows, never capped (a row's
+  `.record` is the `Op`, `Param` or `EdgeUseRecord` it names, read through a weak
+  link to the trace; `selection_trace_released` once the trace is gone); a
   spelling that names one thing (an exact label, a target spec, a facet
   selector) must match exactly one site and returns that record
   (`site_spelling_not_unique` otherwise). `Selection` is a container: `len`,
@@ -2487,7 +2522,7 @@ no deprecation shim owed*
   `selection_kind_incompatible`; unknown sites refuse `site_not_in_trace`;
   member sites with no output index space refuse `non_tensor_site` /
   `no_index_space`. Both producers are pure functions over the ONE
-  executed-DAG graph substrate (`torchlens._selection.graph._TraceGraph`,
+  executed-DAG graph substrate (`torchlens._selection.graph._ExecutedDag`,
   shared with the influence-geometry path machinery), the seam a future
   graph-MOTIF producer plugs into. See also: [Completeness of the selection
   algebra](selection_completeness.md) (why `tl.neighborhood` and `tl.between` are necessary).
@@ -2634,14 +2669,17 @@ shim owed; S2-gated*
   `site_not_in_trace | value_not_saved | non_tensor_site | no_index_space |
   mask_shape_mismatch | facet_write_mask_unavailable | population_too_small |
   multipass_bare_label | value_criterion_invalid | basis_dim_mismatch`),
-  `selection_apply_invalid` (stage 2), and `slice_save_unsupported`
+  `selection_apply_invalid` (stage 2), `selection_trace_released` (`Site.record`
+  after the trace was released), and `slice_save_unsupported`
   (`Trace.save` on a `TraceSlice` presenter). The `multipass_bare_label` reason
   is the `tl.units` face of the multi-pass bare-label ambiguity refusal: a
   bare layer label addresses only single-pass layers, and each pass of a
-  recurrence-grouped layer must be named pass-qualified (`label:pass`); the
-  string/`tl.label` addressing face is `multipass_bare_label_ambiguous` on
-  `AmbiguousSiteError` (both teaching refusals name every pass-qualified
-  spelling; spellings DOCUMENTED-UNSTABLE).
+  recurrence-grouped layer must be named pass-qualified (`label:pass`, `label:last`, or
+  `label:all` for every pass); the
+  string/`tl.label` addressing face (`trace[label]` included) is
+  `multipass_bare_label_ambiguous` on `AmbiguousSiteError` (both teaching refusals name
+  every pass-qualified spelling, `:last`, `:all` and `trace.layers[label]`; spellings
+  DOCUMENTED-UNSTABLE).
 
 **tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
 default-keep); mask-application semantics documented-unstable*
@@ -3297,6 +3335,14 @@ deprecation shim owed*
   at the column's registry position. A FLOP cell whose count includes a
   full-square attention op ends in `^` with a footer note. See
   [summary](summary.md).
+
+**SummaryReport.table (`trace.summary(view="stats").table`)** — *unstable — no deprecation shim owed*
+: The typed observation table (`StatsTable`) behind a `view="stats"` report: `rows`
+  (`StatsTableRow` records with `state`, `stats`, `reason`, `parent_mark`), `ok_rows`,
+  `sort_rows(by=..., descending=...)` (sorts on a sampled column are disclosed) and
+  `fold_same_as_parent()` (opt-in fold of `= parent` rows with an exact count). The report's
+  text is one rendering of it. A report built with any other view carries no table and
+  refuses `summary_table_unavailable`.
 
 **Summary Params footer extras** — *unstable — no deprecation shim owed*
 : The Params footer line carries `size` (unique parameter storage, dtype
@@ -4163,8 +4209,12 @@ The sections above describe each surface in depth.
 ### Members
 | Spelling | Meaning |
 | --- | --- |
+| `Accessor.labels` | The lookup label of every record the collection lists, in order |
 | `Accessor.count_by` | Count records by one or more record fields |
+| `ModuleAccessor.uncalled` | Addresses of registered modules the captured pass never called |
 | `Accessor.search` | Return records whose lookup key contains `needle` |
+| `TraceOpAccessor.compute` | The members that are not input, output or buffer rows |
+| `TraceOpAccessor.nonfinite` | The members whose output held NaN or Inf |
 | `AmbiguousBackendError.default_remedy` | The remedy the error names when none is passed |
 | `BackendCapabilities.can_intervene` | Whether live intervention capture is supported (was `interventions`) |
 | `BackendCapabilities.has_validation_replay` | Whether the backend can perform replay validation |
@@ -4453,6 +4503,7 @@ The sections above describe each surface in depth.
 | `ScanRow.zero_fraction` | Fraction of values equal to zero |
 | `Selection.align_to` | Re-bind a resolved selection onto another trace |
 | `Selection.labels` | Pass-qualified op label of every row, in row order |
+| `Site.record` | The `Op`, `Param` or `EdgeUseRecord` the row names, through a weak trace link |
 | `Selection.selector` | The selector that produced the rows, or `None` |
 | `Selection.to_pandas` | One row per site: label, kind, key, num_selected, numel, shape, relation, source |
 | `Session.to_bundle` | Return a bundle containing all captured invocation logs |
@@ -5423,7 +5474,7 @@ alphabetical order.
 : Backward-pass records and grad_fn facts of a Trace; `trace.autograd` is the instance a Trace serves. `TraceAutograd.backward_passes`: access backward pass records by 0-based position or named pass number; `TraceAutograd.backward_root_grad_fn_object_ids`: root grad-fn `object_id` per backward pass; `last_backward_root_grad_fn_object_id`; `TraceAutograd.derived_grads`: derivedGradAccessor for leaf-level derived gradients (non-torch backends / explicit derivation); `TraceAutograd.escape_detector_backward_coverage`: backward coverage reported by the escape detector; `TraceAutograd.grad_fn_calls`: access per-invocation GradFnCall records by qualified label or index; `TraceAutograd.grad_fn_fire_timings`: return live per-fire backward timing spans keyed like ``grad_fn_calls``; `TraceAutograd.grad_fn_order`: grad_fn labels in backward execution order; `TraceAutograd.grad_fns`: access backward grad_fn_handle metadata by label, index, pass label, or substring; `TraceAutograd.has_backward_pass`: backward data / gradient values present; `TraceAutograd.has_grads`: backward data / gradient values present; `TraceAutograd.intermediate_derived_grads`: access exact op-level derived gradient records, when a backend provides them; `TraceAutograd.last_backward_pass`: return the most recent backward pass record, if any; `TraceAutograd.last_backward_root_grad_fn_object_id`: most recent backward root grad_fn_handle object id, if any; `TraceAutograd.num_backward_edges`: distinct edges in the backward GradFn graph, or ``None`` if ungated; `TraceAutograd.saved_grad_fn_calls`: access GradFnCall records with saved gradient inputs or outputs; `TraceAutograd.saved_grad_fns`: access GradFns containing at least one saved GradFnCall.
 
 **`tl.types.TraceSource`**
-: Source facts of the traced model class: locations, signatures, docstrings; `trace.source` is the instance a Trace serves. `TraceSource.class_docstring`: model class location and docs; `TraceSource.class_file`: model class location and docs; `TraceSource.class_line`: model class location and docs; `TraceSource.class_location`: combined model class source location; `TraceSource.class_name`: short Python class name of the source model; `TraceSource.class_qualname`: fully qualified class name; useful for run verification; `TraceSource.cls`: return the live source model class when the model is still alive; `TraceSource.forward_docstring`: `forward()` info; `TraceSource.forward_file`: `forward()` info; `TraceSource.forward_line`: `forward()` info; `TraceSource.forward_location`: combined forward source location; `TraceSource.forward_signature`: `forward()` info; `TraceSource.frames`: python call-stack frames at capture time (`list[FuncCallLocation]`); `TraceSource.init_docstring`: `__init__` info; `TraceSource.init_file`: `__init__` info; `TraceSource.init_line`: `__init__` info; `TraceSource.init_location`: combined model ``__init__`` source location; `TraceSource.init_signature`: `__init__` info; `TraceSource.snapshots`: source snapshots taken for the traced model.
+: Where the traced model's source lives: the class, `__init__` and `forward` locations (file, line, combined location), the forward signature, the three docstrings, the captured frames, and the live class while the model is still alive; `trace.source` is the instance a Trace serves. `TraceSource.class_docstring`: model class location and docs; `TraceSource.class_file`: model class location and docs; `TraceSource.class_line`: model class location and docs; `TraceSource.class_location`: combined model class source location; `TraceSource.class_name`: short Python class name of the source model; `TraceSource.class_qualname`: fully qualified class name; useful for run verification; `TraceSource.cls`: return the live source model class when the model is still alive; `TraceSource.forward_docstring`: `forward()` info; `TraceSource.forward_file`: `forward()` info; `TraceSource.forward_line`: `forward()` info; `TraceSource.forward_location`: combined forward source location; `TraceSource.forward_signature`: `forward()` info; `TraceSource.frames`: python call-stack frames at capture time (`list[FuncCallLocation]`); `TraceSource.init_docstring`: `__init__` info; `TraceSource.init_file`: `__init__` info; `TraceSource.init_line`: `__init__` info; `TraceSource.init_location`: combined model ``__init__`` source location; `TraceSource.init_signature`: `__init__` info; `TraceSource.snapshots`: source snapshots taken for the traced model.
 
 **`tl.types.TraceProvenance`**
 : How, when and from what this Trace was captured; `trace.provenance` is the instance a Trace serves. `TraceProvenance.backend`: `Literal["torch","tf","jax","mlx","paddle","tinygrad"]` capture backend tag. Portable; `TraceProvenance.backend_config`: backend runtime snapshot captured at trace time; `TraceProvenance.backend_version`: backend runtime snapshot captured at trace time; `TraceProvenance.backward_memory_backend`: backend used to measure backward memory; `TraceProvenance.cache_hit`: whether this capture was served from the capture cache; `TraceProvenance.cache_key`: key of the capture-cache entry this capture used or wrote; `TraceProvenance.cache_path`: path of the capture-cache entry, when one was used; `TraceProvenance.cleanup_duration`: phase timings (`func_calls_duration` = pure model compute proxy); `TraceProvenance.distributed_scope`: distributed scope of the capture (rank and world facts), if any; `TraceProvenance.duration`: total elapsed. `overhead_duration`: TorchLens overhead (capture minus func calls); `TraceProvenance.end_time`: epoch timestamps; `TraceProvenance.fingerprint`: hash of captured topology + shape-relevant structure; `TraceProvenance.forward_memory_backend`: memory backend that measured the forward peak; `TraceProvenance.input_annotations`: user-attached metadata (Trace-wide / inputs); `TraceProvenance.input_object_id`: python `id()` of the input at capture. Within-session only; `TraceProvenance.input_preprocessor`: descriptor of the input preprocessor applied before capture, if any; `TraceProvenance.input_signature_hash`: hash of input shapes/dtypes/devices; `TraceProvenance.input_structure`: structural descriptor of the model input (shape/dtype/pytree spec); `TraceProvenance.is_appended`: chunked-append provenance; `TraceProvenance.jax_closed_jaxpr`: closed jaxpr of the traced JAX function; `TraceProvenance.jax_inlined_call_primitives`: JAX call primitives inlined during capture; `TraceProvenance.kind`: kind of capture (live, cooked from a Recording, loaded); `TraceProvenance.model_object_id`: python `id()` of the model at capture time. Within-session only; `TraceProvenance.observer_spans`: observer spans recorded during the capture; `TraceProvenance.output_postprocessor`: output-decoding descriptors; `TraceProvenance.owner_thread_id`: thread id of the thread that owned the capture; `TraceProvenance.owner_thread_qualified`: whether the owner thread was fully qualified for the capture; `TraceProvenance.param_hash_full`: parameter-value hashes; `TraceProvenance.param_hash_quick`: parameter-value hashes; `TraceProvenance.param_source`: how params were derived — `"native-module"`, `"pytree-derived"`, `"none"`; `TraceProvenance.recording_kept`: whether the capture's Recording was kept; `TraceProvenance.root_entry_point`: persisted identity fact disclosing a bound-method capture root (`"bound_method:<owner>.<method>"`), absent on ordinary module-root captures; `TraceProvenance.setup_duration`: phase timings (`func_calls_duration` = pure model compute proxy); `TraceProvenance.start_time`: epoch timestamps; `TraceProvenance.summary()`: the capture-provenance block (the relocated summary preamble); `TraceProvenance.thread_activity_detected`: whether other threads were active during the capture; `TraceProvenance.thread_count_end`: thread count when the capture ended; `TraceProvenance.thread_count_start`: thread count when the capture started; `TraceProvenance.verification_reason`: machine-readable reason a live capture is not positively verified; `TraceProvenance.verified`: whether the live capture is positively verified (``None`` when not recorded).

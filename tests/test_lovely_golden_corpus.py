@@ -126,7 +126,7 @@ def test_op_envelope_golden() -> None:
     """
 
     trace = _elementwise_trace()
-    op = trace["relu_1_3"].ops[0]
+    op = trace.layers["relu_1_3"].ops[0]
     assert repr(op) == (
         "_Elementwise/relu_1_3 (pass 1/1) [op 3/4 relu] -> "
         "f32[8]@cpu [0.000 .. 0.5000] mean=0.1429 sd=0.1821 zero=4/8"
