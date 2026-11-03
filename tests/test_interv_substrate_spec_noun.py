@@ -1,7 +1,7 @@
 """C03: the ONE immutable public InterventionSpec accepted at every door.
 
 Surgery memo 3.1: ``tl.when(...)`` returns the immutable multi-clause spec;
-the exact same object is accepted by ``fork.do``, ``fork.attach_hooks``,
+the exact same object is accepted by ``fork.do``,
 ``intervene=``, ``sweep``, and the save/load path. Lane options never enter
 the spec, no lane silently drops a rule, and per-rule IDs distinguish rules
 differing in ANY action argument.

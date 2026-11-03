@@ -744,7 +744,7 @@ def sweep_sites(
     Parameters
     ----------
     baseline:
-        The un-edited capture (``replayable``); becomes the
+        The un-edited capture; becomes the
         ``"baseline"`` member and the comparison anchor.
     candidates:
         Ordered candidate plan: ``{candidate_id: site}`` or a sequence of
@@ -790,7 +790,7 @@ def sweep_sites(
 
     Examples
     --------
-    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> base = tl.trace(model, x)
     >>> bundle = tl.experiment.sweep_sites(
     ...     base, candidates={"relu": "relu_1_2"}, edit=tl.zero_ablate(),
     ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="all",

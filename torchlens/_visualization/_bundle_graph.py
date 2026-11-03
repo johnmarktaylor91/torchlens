@@ -8,11 +8,12 @@ graph) and add nodes, module clusters and edges to a Graphviz digraph.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ..viz._drawing import resolve_draw_target
+from ._svg_compose import render_detached_dot
 
 if TYPE_CHECKING:
     import os
@@ -541,4 +542,6 @@ def resolve_bundle_draw_target(
 ) -> DrawTarget:
     """Resolve ``Bundle.draw``'s path and format (``torchlens.bundle`` may not import ``torchlens.viz``)."""
 
-    return resolve_draw_target(path, file_format, known_extensions, default_format)
+    target = resolve_draw_target(path, file_format, known_extensions, default_format)
+    # The bundle picture re-renders (notebook display, save) the way it drew.
+    return replace(target, render=render_detached_dot)
