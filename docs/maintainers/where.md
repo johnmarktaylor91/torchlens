@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1427 modules, 638728 lines, 0 modules without a docstring.
+83 packages, 1427 modules, 638763 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -21,9 +21,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 86 | 37350 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
-| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 59 | 36610 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 23 | 8441 |
+| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10560 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 59 | 36620 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 23 | 8457 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11480 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._observability` | Observability substrates. | 21 | 7936 |
@@ -397,7 +397,7 @@ TorchLens ecosystem runtime: provider discovery. (2 modules, 594 lines)
 
 ### `torchlens._extraction`
 
-Extraction v2 runtime (extract memo items 4-19). (19 modules, 10551 lines)
+Extraction v2 runtime (extract memo items 4-19). (19 modules, 10560 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -405,7 +405,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10551 lines)
 | `_engine_batching` | Pure batching and device-move helpers behind the extraction engine. | 98 |
 | `callable_identity` | Callable identity for extraction resume (extract + item 15). | 710 |
 | `context` | Batch context, row validation, and user-key validation (extract item 4). | 250 |
-| `dtype_policy` | Save-dtype routing: explicit, routed, disclosed (extract + item 9). | 211 |
+| `dtype_policy` | Save-dtype routing: explicit, routed, disclosed (extract + item 9). | 220 |
 | `engine` | The extraction v2 store pipeline and run engines (extract + ). | 1847 |
 | `envelope` | The typed batch envelope and the collate door (extract + item 5). | 673 |
 | `export` | Read-only streaming exporters + the self-contained contract. | 744 |
@@ -423,7 +423,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10551 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (59 modules, 36610 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (59 modules, 36620 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -449,7 +449,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `_runnable_synthetic` | The closed table of TorchLens-owned synthetic callables a runnable artifact may name. | 51 |
 | `_runtime_identity` | Runtime identity policy shared by every artifact reader. | 174 |
 | `_safe_unpickle` | Restricted unpickler for TorchLens portable-bundle metadata. | 1404 |
-| `_save_gates` | Save-entry gate helpers for ''torchlens._io.bundle.save''. | 686 |
+| `_save_gates` | Save-entry gate helpers for ''torchlens._io.bundle.save''. | 690 |
 | `_scrub_identities` | Canonical identities and record joins for portable scrub metadata. | 264 |
 | `_skipped_blobs` | Non-strict save: null the refs of blobs the payload codec skipped, and fix the saved counts. | 94 |
 | `_small_raw` | Bounded portable previews of raw inputs and outputs under ''save_raw_input="small"''. | 351 |
@@ -483,13 +483,13 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `state_keys` | Narrow class-method shadow filter for portable ''__setstate__'' loads. | 307 |
 | `streaming` | Streaming bundle writer used during forward-pass out capture. | 995 |
 | `streaming_async` | Bounded single-worker write pipeline behind the async streaming bundle writer. | 236 |
-| `tensor_policy` | Compatibility checks for tensors saved into portable bundles. | 153 |
+| `tensor_policy` | Compatibility checks for tensors saved into portable bundles. | 159 |
 | `tlspec` | Unified ''.tlspec'' manifest writer helpers. | 749 |
 | `writer_contract` | The normative writer contract and its digest (ecosystem MEMO 3.1). | 151 |
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (23 modules, 8441 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (23 modules, 8457 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -505,15 +505,15 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (23 
 | `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 304 |
 | `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 757 |
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 480 |
-| `reader` | Reader of the 3.0 saved format: manifest first, digests, record tables, records. | 770 |
+| `reader` | Reader of the 3.0 saved format: manifest first, digests, record tables, records. | 773 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 789 |
 | `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 161 |
 | `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 80 |
-| `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 400 |
+| `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 411 |
 | `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 284 |
 | `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 271 |
 | `summaries` | Closed shapes of the optional manifest summaries (''model_fingerprint'' | 119 |
-| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 786 |
+| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 788 |
 | `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 674 |
 | `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 697 |
 

@@ -201,3 +201,19 @@ def tensor_references(root: Path) -> dict[str, dict[str, Any]]:
             elif isinstance(value, list):
                 stack.extend(value)
     return found
+
+
+def read_runnable(root: Path) -> dict[str, Any]:
+    """Read the canonical runnable descriptor outside the manifest envelope."""
+
+    return json.loads((root / "runnable/descriptor.json").read_text(encoding="utf-8"))
+
+
+def write_runnable(root: Path, descriptor: dict[str, Any]) -> None:
+    """Restamp an edited descriptor so its own guards, rather than its digest, run."""
+
+    (root / "runnable/descriptor.json").write_text(
+        json.dumps(descriptor, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    redigest(root, "runnable/descriptor.json")

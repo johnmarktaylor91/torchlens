@@ -332,13 +332,25 @@ def _read_descriptor(root: Path, files: Mapping[str, Any]) -> Mapping[str, Any]:
             f"({type(exc).__name__}).",
             _ALTERED,
         )
-    if not isinstance(descriptor, Mapping):
+    if not isinstance(descriptor, Mapping) or (
+        descriptor.get("capability") == RUNNABLE_TLSPEC_SCHEMA_VERSION
+        and not isinstance(descriptor.get("ambient_context"), Mapping)
+    ):
         _refuse(
             "manifest_invalid",
-            f"The runnable descriptor {descriptor_path} must be an object.",
+            f"The runnable descriptor {descriptor_path} must be an object with "
+            "an explicit ambient_context for the current capability.",
             _ALTERED,
         )
     return descriptor
+
+
+def _checked_descriptor(
+    root: Path, manifest: Mapping[str, Any], files: Mapping[str, Any]
+) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """Validate component metadata before record allocation or family reads."""
+
+    return _checked_manifest(manifest), _read_descriptor(root, files)
 
 
 def load_runnable(
@@ -387,8 +399,7 @@ def load_runnable(
                 _ALTERED,
             )
         return None
-    checked = _checked_manifest(manifest)
-    descriptor = _read_descriptor(root, files)
+    checked, descriptor = _checked_descriptor(root, manifest, files)
     families: dict[str, Mapping[str, torch.Tensor]] = {}
     for family, (_stem, _chunked, bound_as) in FAMILIES.items():
         if family not in checked:
