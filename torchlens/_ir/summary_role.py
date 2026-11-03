@@ -107,11 +107,11 @@ def summary(fn: Callable[[Any], Any], *, name: str | None = None) -> SummaryTran
 
         log = tl.trace(
             model, x,
-            save=tl.options.SaveOptions(
+            capture=tl.options.CaptureOptions(
                 activation_transform=summary(lambda t: torch.histc(t.float(), 64)),
                 save_raw_activations=False,   # reduce-only: raw clone skipped (P2)
+                backward_ready=True,
             ),
-            capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
     Parameters

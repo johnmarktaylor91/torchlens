@@ -215,16 +215,14 @@ def test_differentiable_replay_patching_captures_backward_grads() -> None:
     clean = tl.trace(
         ReplayPatchModel(),
         clean_x,
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads="all", replayable=True, backward_ready=True
-        ),
+        capture=tl.options.CaptureOptions(save_grads="all", replayable=True, backward_ready=True),
+        save="all",
     )
     corrupt = tl.trace(
         ReplayPatchModel(),
         corrupt_x,
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads="all", replayable=True, backward_ready=True
-        ),
+        capture=tl.options.CaptureOptions(save_grads="all", replayable=True, backward_ready=True),
+        save="all",
     )
     clean_relu = _first_func(clean, "relu")
     patch = clean_relu.out
@@ -294,9 +292,8 @@ def test_differentiable_replay_forks_isolated_records() -> None:
     log = tl.trace(
         ReplayPatchModel(),
         x,
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads="all", replayable=True, backward_ready=True
-        ),
+        capture=tl.options.CaptureOptions(save_grads="all", replayable=True, backward_ready=True),
+        save="all",
     )
 
     replayed = log.push(

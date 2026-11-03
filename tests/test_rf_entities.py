@@ -169,8 +169,7 @@ def test_landed_gradient_and_check_are_wired_with_typed_precondition_errors() ->
     trace = tl.trace(
         nn.Conv2d(2, 4, 3),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = next(op for op in trace._layer_list if op.func_name == "conv2d")
     input_op = next(op for op in trace._layer_list if op.is_input)

@@ -56,7 +56,7 @@ def _trace() -> tl.Trace:
     return tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
 

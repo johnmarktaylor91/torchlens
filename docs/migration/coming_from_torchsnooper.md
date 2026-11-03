@@ -117,11 +117,11 @@ construction (CI-enforced). Value stats are opt-in per rung:
 | rung | prints | cost shape | soundness rule |
 | --- | --- | --- | --- |
 | `off` (default) | metadata only | zero value reads, zero syncs | -- |
-| `reuse` | only facts another armed feature already paid for (`track_nonfinite`, `raise_on_nan`) | zero additional reads | exact where present; ABSENT where not, never `0%` |
+| `reuse` | only facts another armed feature already paid for (`on_nonfinite='track'`, `on_nonfinite='raise'`) | zero additional reads | exact where present; ABSENT where not, never `0%` |
 | `sampled` | `~`-marked moments from a bounded seeded budget with `sampled=k/N` evidence | roughly flat per line across tensor sizes | **no finiteness claim, ever** (a planted NaN in 12.6M elements is invisible to an 8k subsample) |
 | `exact` | full exact stats + exact nonfinite census | scales with bytes | typed refusal above the documented numel budget; the remedy names `sampled` |
 
-`track_nonfinite=True, narrate=..., stats="reuse"` is the recommended recipe for
+`on_nonfinite='track', narrate=..., stats="reuse"` is the recommended recipe for
 a numerically suspicious run. At full volume the terminal itself can dominate:
 prefer `sink="file.log"` and the opt-in bounds (`max_lines`) on big models.
 Substrate multipliers and per-line costs are measured by

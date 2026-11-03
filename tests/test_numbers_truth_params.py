@@ -87,7 +87,7 @@ class PartialFreeze(nn.Module):
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Metadata-only capture."""
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+    return tl.trace(model, x, save=None)
 
 
 def test_tied_params_counted_once_by_object_identity() -> None:

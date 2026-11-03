@@ -8,12 +8,11 @@ generation, so hand edits cannot survive. The declared axes live in
 
 from __future__ import annotations
 
+from ._schema_bindings_trace import TRACE_BINDINGS
 from .._io._field_policy import StorageBinding, StorageKind
 
-from ._schema_bindings_trace import STORAGE_BINDINGS as _TRACE_STORAGE_BINDINGS
-
 STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
-    "trace": _TRACE_STORAGE_BINDINGS["trace"],
+    "trace": TRACE_BINDINGS,
     "op": {
         "_label_raw": StorageBinding(StorageKind.INTERNED),
         "_layer_label_raw": StorageBinding(StorageKind.INTERNED),
@@ -160,7 +159,6 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "min_distance_to_output": StorageBinding(StorageKind.INTERNED),
         "max_distance_to_output": StorageBinding(StorageKind.INTERNED),
         "is_buffer": StorageBinding(StorageKind.INTERNED),
-        "is_constant": StorageBinding(StorageKind.INTERNED),
         "address": StorageBinding(StorageKind.INTERNED),
         "buffer_pass": StorageBinding(StorageKind.INTERNED),
         "buffer_source": StorageBinding(StorageKind.INTERNED),

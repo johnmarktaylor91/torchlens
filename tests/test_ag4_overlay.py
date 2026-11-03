@@ -1,4 +1,4 @@
-"""An attribution graph painted onto its trace by ``tl.attribution.overlay``.
+"""An attribution graph painted onto its trace by ``trace.draw(color_by=graph)``.
 
 Pre-registered bars (fixtures F1 and F3): with the default influence, a
 rendered node gets a value exactly when it is the output of a module (or
@@ -22,6 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
+from torchlens.attribution._viz import attribution_color_by
 
 TOL = 1e-12
 DOC = Path(__file__).resolve().parents[1] / "docs" / "reference" / "attribution.md"
@@ -96,61 +97,22 @@ def test_graph_overlay_colours_exactly_the_node_sites(built, name) -> None:
         if node.kind in ("feature", "error"):
             expected[node.site] = expected.get(node.site, 0.0) + abs(influence[index])
     assert len(expected) >= 2
-    painted = _check_painting(trace, tl.attribution.overlay(trace, graph), expected)
+    painted = _check_painting(trace, attribution_color_by(trace, graph), expected)
     assert painted >= len(expected)
-
-
-@pytest.mark.parametrize("name", ["F1", "F3"])
-def test_graph_overlay_activation_colours_feature_sites(built, name) -> None:
-    trace, graph = built[name]
-    activations = graph.feature_activations.numpy()
-    expected: dict[str, float] = {}
-    for index in graph.node_indices("feature"):
-        site = graph.nodes[index].site
-        expected[site] = expected.get(site, 0.0) + abs(float(activations[index]))
-    color_by = tl.attribution.overlay(trace, graph, graph_value="activation")
-    assert _check_painting(trace, color_by, expected) >= len(expected)
-
-
-def test_graph_overlay_reduce_applies_across_a_site(built) -> None:
-    trace, graph = built["F1"]
-    influence = _numpy_influence(graph)
-    expected: dict[str, float] = {}
-    for index, node in enumerate(graph.nodes):
-        if node.kind in ("feature", "error"):
-            expected[node.site] = max(expected.get(node.site, -np.inf), influence[index])
-    _check_painting(trace, tl.attribution.overlay(trace, graph, reduce="max"), expected)
-
-
-def test_graph_overlay_refuses_an_unknown_graph_value(built) -> None:
-    trace, graph = built["F1"]
-    with pytest.raises(tl.errors.AttributionError) as excinfo:
-        tl.attribution.overlay(trace, graph, graph_value="gradient")
-    assert excinfo.value.fields["code"] == "attribution_overlay_argument_invalid"
-    assert "Remedy:" in str(excinfo.value)
-
-
-def test_graph_value_is_refused_for_other_sources(built) -> None:
-    trace, _graph = built["F1"]
-    label = trace.layer_labels[1]
-    with pytest.raises(tl.errors.AttributionError) as excinfo:
-        tl.attribution.overlay(trace, {label: 1.0}, graph_value="influence")
-    assert excinfo.value.fields["code"] == "attribution_overlay_argument_invalid"
-    assert tl.attribution.overlay(trace, {label: 1.0})(trace[label]) == 1.0
 
 
 def test_graph_overlay_refuses_a_graph_from_another_trace(built) -> None:
     _trace, graph = built["F1"]
     other = tl.trace(nn.Sequential(nn.Linear(2, 2)), torch.ones(1, 2))
     with pytest.raises(tl.errors.AttributionError) as excinfo:
-        tl.attribution.overlay(other, graph)
+        attribution_color_by(other, graph)
     assert excinfo.value.fields["code"] == "attribution_overlay_graph_mismatch"
     assert "Remedy:" in str(excinfo.value)
 
 
 def test_docs_graph_example_overlay_lines_run(tmp_path) -> None:
     fences = re.findall(r"```python\n(.*?)\n```", DOC.read_text(encoding="utf-8"), re.DOTALL)
-    (fence,) = [f for f in fences if "tl.attribution.overlay(trace, graph" in f]
+    (fence,) = [f for f in fences if "color_by(trace, graph" in f]
     namespace: dict[str, object] = {"DOCS_TMPDIR": str(tmp_path), "__name__": "__docs__"}
     exec(compile(fence, str(DOC), "exec"), namespace)  # noqa: S102 -- the doc's own example
     color_by = namespace["color_by"]

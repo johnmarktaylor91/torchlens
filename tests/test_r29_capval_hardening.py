@@ -426,7 +426,8 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
     trace = tl.trace(
         _MulTrivialProducer().eval(),
         torch.randn(4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     assert state["dropped"] > 0, "injection did not drop any edge -- inconclusive"
     # Two independent tripwires catch this plant: the capture-sealed
@@ -453,7 +454,8 @@ def test_f3b_honest_capture_passes_invariants() -> None:
     trace = tl.trace(
         _MulTrivialProducer().eval(),
         torch.randn(4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     assert check_metadata_invariants(trace)
 
@@ -473,7 +475,8 @@ def _final_twin_sub_trace() -> Any:
     trace = tl.trace(
         _TwinSub().eval(),
         torch.randn(4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     sub_op = next(o for o in trace.ops if o.func_name == "__sub__")
     return trace, sub_op

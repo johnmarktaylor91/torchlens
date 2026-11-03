@@ -1,4 +1,4 @@
-"""Validation subpackage for saved outs, backward capture, and invariants."""
+"""Validation subpackage for saved activations, backward capture, and invariants."""
 
 from __future__ import annotations
 

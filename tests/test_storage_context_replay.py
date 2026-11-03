@@ -135,7 +135,8 @@ def test_capture_saves_the_aliased_receiver_with_its_source_storage() -> None:
         trace = tl.trace(
             model,
             torch.rand(4),
-            capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
+            capture=CaptureOptions(save_args=True, seed=0),
+            save="all",
         )
     try:
         op = next(layer for layer in trace._layer_list if layer.func_name == "as_strided_")
@@ -180,7 +181,8 @@ def test_wrong_storage_context_still_fails_replay() -> None:
         trace = tl.trace(
             model,
             x,
-            capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
+            capture=CaptureOptions(save_args=True, seed=0),
+            save="all",
         )
     try:
         from torchlens.validation.core import validate_saved_outs

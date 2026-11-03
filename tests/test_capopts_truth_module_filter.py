@@ -91,9 +91,9 @@ def test_module_filter_empty_save_selection_not_blamed() -> None:
             ThreeStep(),
             torch.randn(2, 4),
             capture=CaptureOptions(
-                layers_to_save="none",
                 module_filter=lambda op: False,
             ),
+            save="none",
         )
     assert "module_filter_zero_saved" not in _warned_codes(caught)
 

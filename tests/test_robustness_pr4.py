@@ -126,12 +126,8 @@ def test_torch_compile_top_level_unwrap_matches_eager_trace() -> None:
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        compiled_trace = tl.trace(
-            compiled, input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
-    eager_trace = tl.trace(
-        eager_twin, input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+        compiled_trace = tl.trace(compiled, input_tensor, save="none")
+    eager_trace = tl.trace(eager_twin, input_tensor, save="none")
 
     assert [op.layer_label for op in compiled_trace._layer_list] == [
         op.layer_label for op in eager_trace._layer_list
@@ -162,8 +158,8 @@ def test_torch_compile_unwrap_note_emits_once_across_two_traces() -> None:
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.trace(first, input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none"))
-        tl.trace(second, input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none"))
+        tl.trace(first, input_tensor, save="none")
+        tl.trace(second, input_tensor, save="none")
 
     unwrap_warnings = [
         warning
@@ -183,7 +179,7 @@ def test_torch_compile_top_level_wrapper_remains_callable_after_trace() -> None:
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        tl.trace(compiled, input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none"))
+        tl.trace(compiled, input_tensor, save="none")
 
     assert optimized_module_type is not None
     assert isinstance(compiled, optimized_module_type)
@@ -203,12 +199,8 @@ def test_torch_compile_nested_submodule_traces_and_restores_parent() -> None:
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        nested_trace = tl.trace(
-            parent, input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
-    eager_trace = tl.trace(
-        eager_parent, input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+        nested_trace = tl.trace(parent, input_tensor, save="none")
+    eager_trace = tl.trace(eager_parent, input_tensor, save="none")
 
     assert optimized_module_type is not None
     assert parent.child is child
@@ -240,7 +232,7 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
         metadata = tl.trace(
             torch.compile(_Tiny(), backend="eager"),
             input_tensor,
-            capture=tl.options.CaptureOptions(layers_to_save="none"),
+            save="none",
         )
     assert "_orig_mod" not in {module.address for module in metadata.modules.values()}
     assert_single_note(caught)
@@ -260,7 +252,7 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
             torch.compile(_Tiny(), backend="eager"),
             input_tensor,
             visualization=tl.options.VisualizationOptions(
-                container_path=str(graph_path), save_only=True, file_format="svg"
+                container_path=str(graph_path), file_format="svg"
             ),
         )
     assert "_orig_mod" not in graph_path.with_suffix(".svg").read_text()
@@ -274,7 +266,7 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
         )
     assert_single_note(caught)
 
-    log = tl.trace(_Tiny(), input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none"))
+    log = tl.trace(_Tiny(), input_tensor, save="none")
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -361,7 +353,7 @@ def test_compiled_submodule_restored_after_forward_exception(parent_raises: bool
         model = _ParentWithChild(compiled_child)
 
     with pytest.raises(TraceCaptureError, match="forward failure") as _tce_info:
-        tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="none"))
+        tl.trace(model, torch.randn(2, 4), save="none")
     assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert model.child is compiled_child
@@ -379,9 +371,7 @@ def test_torch_jit_script_raises_at_entry() -> None:
     assert isinstance(scripted, torch.jit.ScriptModule)
 
     with pytest.raises(RuntimeError, match="ScriptModule"):
-        tl.trace(
-            scripted, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
+        tl.trace(scripted, torch.randn(2, 4), save="none")
 
 
 def test_torch_jit_trace_raises_at_entry() -> None:
@@ -391,18 +381,14 @@ def test_torch_jit_trace_raises_at_entry() -> None:
     assert isinstance(traced, torch.jit.ScriptModule)
 
     with pytest.raises(RuntimeError, match="ScriptModule"):
-        tl.trace(
-            traced, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
+        tl.trace(traced, torch.randn(2, 4), save="none")
 
 
 def test_torch_jit_unwrap_suggestion_matches_reality() -> None:
     """Logging the un-scripted Python module still works after scripting."""
     model = _Tiny()
     _ = torch.jit.script(model)  # must not poison the original
-    log = tl.trace(
-        model, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+    log = tl.trace(model, torch.randn(2, 4), save="none")
     assert len(log._layer_logs) > 0
 
 
@@ -432,9 +418,7 @@ def test_torch_export_exported_program_raises_at_entry() -> None:
     # typed refusal (an ``ExportedProgram`` is not an ``nn.Module``); the old
     # accidental AttributeError leak this test used to match was itself a bug.
     with pytest.raises(ValueError, match="Unsupported model type"):
-        tl.trace(
-            exported, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
+        tl.trace(exported, torch.randn(2, 4), save="none")
 
 
 # ---------------------------------------------------------------------------
