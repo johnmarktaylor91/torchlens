@@ -4622,6 +4622,7 @@ The sections above describe each surface in depth.
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
 | `ValidationFailure.check_name` | Which validation phase fired (always set) |
+| `ValidationStatus.__bool__` | The pass/fail result as a bool; raises `TypeError` unless replay validation ran (`state` is `passed` or `failed`) |
 | `ValidationStatus.available_live` | Build the default status for a live trace with validation support |
 | `ValidationStatus.exempted_reason_counts` | Stable reason-code counts for nodes whose replay/perturbation check had a provable exemption |
 | `ValidationStatus.from_replay_counts` | Fold replay outcome counts into a trace-level status |
