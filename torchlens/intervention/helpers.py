@@ -26,6 +26,7 @@ from ._helper_internals import (
     _splice_module_spec,
     _swap_with_spec,
 )
+from ._patch_mapping import apply_position_map, normalize_positions, resolve_source_site
 from .errors import (
     HookValueError,
     SpliceModuleDeviceError,
@@ -1281,6 +1282,25 @@ __all__ = [
 ]
 
 
+def _patch_donor_value(source: Any, source_site: Any, fire_op: Any) -> tuple[Any, torch.Tensor]:
+    """Return ``(site_label, donor value)`` for one firing of a ``patch_from`` hook.
+
+    The donor op is ``source_site`` on ``source`` when given, else the
+    pass-qualified op matching the firing site. A facet target (``tl.head`` /
+    ``tl.facet``) edits one slice of the home op, so the donor value is the SAME
+    facet view of the source value, never the whole home output.
+    """
+
+    if source_site is None:
+        site_label, donor_op = _resolve_patch_donor_site(source, fire_op)
+    else:
+        site_label, donor_op = resolve_source_site(source, source_site)
+    value = donor_op.out
+    if not isinstance(value, torch.Tensor):
+        raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
+    return site_label, _donor_facet_slice(source, donor_op, value)
+
+
 def patch_from(
     source: Any,
     *,
@@ -1342,7 +1362,6 @@ def patch_from(
     DOCUMENTED-UNSTABLE spelling pending its naming-session ratification.
     """
 
-    from ._patch_mapping import apply_position_map, normalize_positions, resolve_source_site
     from .stochastic import SamplingPlan, plan_patch_helper
 
     if isinstance(source, SamplingPlan):
@@ -1374,19 +1393,7 @@ def patch_from(
             recurrent/weight-reused models.
             """
 
-            from .errors import HookValueError
-
-            if source_site is None:
-                site_label, donor_op = _resolve_patch_donor_site(source, ctx.op)
-            else:
-                site_label, donor_op = resolve_source_site(source, source_site)
-            value = donor_op.out
-            if not isinstance(value, torch.Tensor):
-                raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
-            # A facet target (tl.head / tl.facet) edits one slice of the home op:
-            # the donor is the SAME facet view of the source value, never the
-            # whole home output.
-            value = _donor_facet_slice(source, donor_op, value)
+            site_label, value = _patch_donor_value(source, source_site, ctx.op)
             # Never hand the source trace's stored tensor itself downstream —
             # the engine writes hook outputs into this trace's records.
             if pairs is None:
