@@ -12,6 +12,7 @@ from typing import Any, cast
 
 import pytest
 import torch
+from _format3_envelope import mutate_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
@@ -38,7 +39,7 @@ from torchlens.options import CaptureOptions
 
 
 def _restamp_runtime_fingerprints(run: dict) -> None:
-    """Re-derive every call's ``runtime_fingerprint`` from the (edited) manifest.
+    """Re-derive every call's ``runtime_fingerprint`` from the (edited) descriptor.
 
     Parse now re-derives and enforces the per-call fingerprint, so a fixture
     that edits a signature-relevant fact (e.g. the callable registry key) must
@@ -350,17 +351,18 @@ def test_safe_load_survives_unresolved_key_and_run_fails_once_with_full_report(
     )
     path = tmp_path / "unresolved.tlspec"
     source.save(path, level="runnable")
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["run"]["callable_registry"][0]["key"] = {
-        "namespace": "torch",
-        "qualname": "definitely_absent",
-        "dispatch_kind": "function",
-        "version": 1,
-        "import_path": None,
-    }
-    _restamp_runtime_fingerprints(manifest["run"])
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def edit(descriptor: dict[str, Any]) -> None:
+        descriptor["callable_registry"][0]["key"] = {
+            "namespace": "torch",
+            "qualname": "definitely_absent",
+            "dispatch_kind": "function",
+            "version": 1,
+            "import_path": None,
+        }
+        _restamp_runtime_fingerprints(descriptor)
+
+    mutate_runnable_descriptor(path, edit)
 
     loaded = tl.load(path)
     assert len(loaded._layer_list) == len(source._layer_list)
@@ -388,10 +390,9 @@ def test_load_defers_unsupported_callable_schema_to_structured_readiness(
     )
     path = tmp_path / "future_ref.tlspec"
     source.save(path, level="runnable")
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["run"]["callable_ref_schema"] = 2
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    mutate_runnable_descriptor(
+        path, lambda descriptor: descriptor.__setitem__("callable_ref_schema", 2)
+    )
 
     with pytest.raises(ValueError, match="callable_ref_schema"):
         tl.validation.validate_tlspec(path)

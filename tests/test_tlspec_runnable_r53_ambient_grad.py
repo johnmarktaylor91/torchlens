@@ -15,12 +15,12 @@ pin.
 from __future__ import annotations
 
 import dataclasses
-import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import mutate_runnable_descriptor, read_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
@@ -60,8 +60,7 @@ def _save_runnable(model: nn.Module, x: torch.Tensor, path: Path, **save_kwargs:
 
 
 def _descriptor_ambient(path: Path) -> dict[str, Any]:
-    manifest = json.loads((path / "manifest.json").read_text())
-    return dict(manifest["run"]["ambient_context"])
+    return dict(read_runnable_descriptor(path)["ambient_context"])
 
 
 def test_grad_on_capture_records_ambient_and_replays_recorded_arm(tmp_path: Path) -> None:
@@ -145,10 +144,7 @@ def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path:
     # Value-free descriptor (no weights): the load surfaces the typed readiness
     # refusal instead of hard-failing on a missing parsed descriptor.
     path = _save_runnable(model, x, tmp_path / "tampered.tlspec")
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["run"]["ambient_context"].pop(field)
-    manifest_path.write_text(json.dumps(manifest))
+    mutate_runnable_descriptor(path, lambda descriptor: descriptor["ambient_context"].pop(field))
 
     loaded = tl.load(path)  # analysis-only load must succeed
     readiness = loaded.readiness
@@ -166,17 +162,16 @@ def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path:
 def test_null_ambient_mode_is_a_typed_refusal_never_a_default(field: str, tmp_path: Path) -> None:
     """``null`` is not a legal producer value for the global mode (every
     supported torch exposes both queries): a nulled field is a typed refusal
-    through EITHER the manifest schema preflight or the strict parser --
+    through EITHER the descriptor schema preflight or the strict parser --
     a defaulted-mode run is unreachable both ways."""
 
     torch.manual_seed(0)
     model = GradBranchModel().eval()
     x = torch.randn(2, 3)
     path = _save_runnable(model, x, tmp_path / "nulled.tlspec")
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["run"]["ambient_context"][field] = None
-    manifest_path.write_text(json.dumps(manifest))
+    mutate_runnable_descriptor(
+        path, lambda descriptor: descriptor["ambient_context"].__setitem__(field, None)
+    )
 
     try:
         loaded = tl.load(path)
