@@ -1,4 +1,4 @@
-"""Deferred record contexts for a lean ``tl.module`` read.
+"""Record contexts built on demand for a lean ``tl.module`` read.
 
 A ``RecordContext`` carries the last ``history_size`` contexts of its pass, and
 each of those carries its own window, so building any context needs every
