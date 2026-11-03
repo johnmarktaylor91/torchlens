@@ -139,7 +139,14 @@ def _build_shared_fields_dict(
         captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)
         fields_dict["args_template"] = captured_template
         fields_dict["kwargs_template"] = captured_template if kwargs else None
-        fields_dict["func_id"] = captured_template.func_id
+        # The portable function identity is what lets a LOADED bundle resolve its
+        # callables for validation; a default capture records templates only for
+        # in-process replay, so it keeps the default bundle's identity-free contract.
+        fields_dict["func_id"] = (
+            captured_template.func_id
+            if getattr(self, "is_replayable", False) or self._options_save_args
+            else None
+        )
     else:
         fields_dict["args_template"] = None
         fields_dict["kwargs_template"] = None

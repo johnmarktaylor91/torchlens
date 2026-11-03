@@ -447,7 +447,11 @@ class CaptureOptions:
         recurrence_detection:
             Whether repeated graph patterns are detected during postprocess.
         replayable:
-            Whether replay-template metadata is captured for intervention APIs.
+            Whether the runnable apparatus is captured: the state, RNG and escape
+            records a ``level="runnable"`` save and a sparse run need, plus edge
+            provenance. Saved-graph replay (``do()`` without ``model=``) does not need
+            it: every capture records the per-op argument templates replay uses.
+            Measured capture premium on CPU: 5-8x wall time.
         capture_container_structure:
             Whether to persist input and output container structure without
             enabling intervention replay metadata.
