@@ -125,14 +125,12 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
         The detached picture (memo D13). Never ``None``.
     """
 
-    values = dict(locals())
-    values["input_args"] = values.pop("inputs")
-    return _capture_and_render(**values)
+    return _capture_and_render(**locals())
 
 
 def _capture_and_render(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None,
     input_shape: Any,
     draw_kwargs: dict[str, Any],
@@ -140,7 +138,7 @@ def _capture_and_render(
 ) -> Drawing:
     """Capture the model's concrete forward and render it with the facade's dials."""
 
-    resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="draw")
+    resolved = resolve_inputs(model, inputs, input_kwargs, input_shape, verb="draw")
     trace, receipt = capture_concrete(
         model,
         resolved.plan,

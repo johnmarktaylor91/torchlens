@@ -367,12 +367,9 @@ def trace(
                 save, capture, merge_capture_options(capture=capture), model
             )
         public_trace_kwargs = locals().copy()
-        # The public keyword is ``inputs``; the capture pipeline's internal
-        # keyword bundle keeps the positional-argument slot under ``input_args``.
+        # The capture pipeline's internal keyword bundle keeps the slot under ``input_args``.
         public_trace_kwargs["input_args"] = public_trace_kwargs.pop("inputs")
-        # extra_positional was refused above; backend= routes below; input_shape=
-        # is ladder-consumed (always None here); on_zero_fire= was settled by the
-        # zero_fire_policy_scope above, never a backend option.
+        # Consumed above (refused, routed, ladder-consumed or settled); never backend options.
         for consumed in ("extra_positional", "backend", "input_shape", "on_zero_fire"):
             public_trace_kwargs.pop(consumed)
         # The capture knobs that used to be door keywords travel inside
