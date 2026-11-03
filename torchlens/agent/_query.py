@@ -341,7 +341,7 @@ def _leaf_condition(op: str, value: Any) -> str:
         "in_module": (
             f"any(e.rsplit(':', 1)[0] == {value!r} or "
             f"e.rsplit(':', 1)[0].startswith({value!r} + '.') "
-            "for e in op.module_call_stack)"
+            "for e in op.module_context.call_stack)"
         ),
         "dtype": f"str(op.dtype) == {value!r}",
         "pass_index": f"int(op.pass_number or 1) == {value!r}",
