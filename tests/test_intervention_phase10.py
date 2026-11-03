@@ -132,7 +132,11 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
 
     x = torch.randn(2, 3)
     log = _log(_ReluModel(), x)
-    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        tl.zero_ablate(),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     path = tmp_path / "mylog.tlspec"
 
     log.save_intervention(path, level="audit")

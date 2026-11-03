@@ -162,8 +162,8 @@ The tlspec 12 bump that ships with the format adds, so that a loaded trace equal
   `op.edge_replacement_stamps` (an absent map is written as an empty object, never null), and
   `trace._options_grouping_policy` (the grouping stamp the loader used to settle after loading is
   settled by the writer; the reader verifies it instead of rewriting it).
-- `grad_fn_call.backward_pass_number` replaces `backward_pass_index` (a rename landing with the
-  names work; whichever lands second rebases).
+- `grad_fn_call.backward_pass_number` replaces `backward_pass_index` (the names ruling's rename,
+  landed together with this format).
 - `trace._phase_timings` is an object keyed by the step names of
   `torchlens._postprocess._pipeline.PIPELINE` (`add_output_layers`, `map_final_labels`, ...),
   float seconds per step; the former `postprocess:Step N: description` keys are gone. A timing

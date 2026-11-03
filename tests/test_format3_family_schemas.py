@@ -291,7 +291,7 @@ def saved_backward(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
     try:
-        trace.log_backward(trace[trace.output_layers[0]].out.sum())
+        trace.backward(trace[trace.output_layers[0]].out.sum())
         trace.save(root)
         yield root
     finally:

@@ -135,7 +135,7 @@ def saved(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, Path]]
     grads_model = _TinyCNN().train()
     grads_input = _input().requires_grad_(True)
     graded = tl.trace(grads_model, grads_input, capture=tl.options.CaptureOptions(save_grads="all"))
-    graded.log_backward(graded[graded.output_layers[0]].out.sum())
+    graded.backward(graded[graded.output_layers[0]].out.sum())
     graded.save(base / "grads", include_saved_args=True, include_rng_states=True)
 
     replayable = tl.trace(_TinyCNN().eval(), x, capture=tl.options.CaptureOptions(replayable=True))
