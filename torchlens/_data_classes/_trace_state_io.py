@@ -211,6 +211,33 @@ _MODEL_LOG_DEFAULT_FILL = {
     **_MODEL_LOG_DEFAULT_FILL,
 }
 _MODEL_LOG_DEFAULT_FILL["tlspec_version"] = TLSPEC_VERSION
+# The declared field set and each field's neutral value: the same fill a reloaded
+# trace receives for keys its writer never stamped (``trace_setstate``).
+_DECLARED_FIELD_FILL: dict[str, Any] = {
+    field_name: _MODEL_LOG_DEFAULT_FILL[field_name] for field_name in MODEL_LOG_FIELD_ORDER
+}
+
+
+def fill_unset_declared_fields(trace: Trace) -> None:
+    """Give a live trace every declared field it has not been assigned.
+
+    ``Trace.__init__`` assigns most declared fields; the rest (verification,
+    completeness and escape-witness stamps, thread provenance, capture outcome)
+    are stamped by torch capture stages and read directly by shared consumers
+    (scrub, report, capture-honesty). A trace that skips those stages, such as a
+    preview-backend trace, takes the neutral value a reloaded trace would get,
+    so live and reloaded traces of one backend expose the same field set.
+    Present keys are never overwritten.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose missing declared fields are filled in place.
+    """
+
+    default_fill_state(trace.__dict__, defaults=_DECLARED_FIELD_FILL)
+
+
 _SESSION_BOOL_KNOBS = (
     "measure_python_peak_memory",
     "measure_host_peak_memory",
