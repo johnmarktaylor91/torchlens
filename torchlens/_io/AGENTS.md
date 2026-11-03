@@ -21,7 +21,7 @@ hostile input, and every load path here is fail-closed.
   `allowed_custom_callable_modules` allowlist, which stays enforced even alongside broad trust.
 - Trust keys on the resolved object's REAL module, never the pickled path; known-dangerous
   modules (`os`, `sys`, `subprocess`, `builtins`, `importlib`, ...) are hard-denied.
-- `_pre3_module_paths.refuse_pre_3_module_path()` (called from `find_class`) refuses a pickled
+- `format_contract.refuse_pre_3_module_path()` (called from `find_class`) refuses a pickled
   module path only torchlens 2.x wrote, with `ArtifactTooOldError`.
 - No file bytes ever reach `torch.load`: `torch.storage._load_from_bytes` (the storage leg of
   torch's default tensor reduction) is refused by name. Plain metadata tensors (annotation

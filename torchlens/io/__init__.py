@@ -13,7 +13,10 @@ if TYPE_CHECKING:
 from .._errors import ArgumentTypeError
 from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json
 from .._io.bundle import cleanup_tmp, load as _load
-from .._io.format3.values import UnencodableValue
+from .._io.format3 import contract as _format3_contract
+from .._io.format3.reader import (  # noqa: F401  (validate_tlspec's 3.0 door)
+    validate_artifact as _validate_format3_artifact,
+)
 from .._io.sidecar import (
     AnalysisOnlySidecar,
     SidecarFamily,
@@ -48,8 +51,7 @@ def reset_naming_counter(class_name: str | None = None) -> None:
 def detect_tlspec_format(path: str | Path) -> str:
     """Detect the on-disk TorchLens ``.tlspec`` format.
 
-    Detection is ordered from the newest, most explicit schema markers to older
-    legacy markers. The first matching marker wins.
+    Detection runs from the newest, most explicit markers to the oldest; the first match wins.
 
     Parameters
     ----------
@@ -59,59 +61,65 @@ def detect_tlspec_format(path: str | Path) -> str:
     Returns
     -------
     str
-        One of ``"v2.0_unified"``, ``"v2.16_intervention_with_kind"``,
-        ``"v2.16_intervention"``, ``"v2.16_modellog_portable"``, or
-        ``"unknown"``.
+        One of ``"v3"`` (the 3.0 saved format), ``"pre_3"`` (a save written by
+        TorchLens 2.x), or ``"unknown"`` (no TorchLens save markers).
     """
 
     tlspec_path = Path(path)
     _reject_symlinked_metadata_path(tlspec_path)
     manifest = _read_json_object_if_present(tlspec_path / "manifest.json")
-    if manifest is not None:
-        has_kind = "kind" in manifest
-        has_tlspec_version = "tlspec_version" in manifest
-        if has_tlspec_version and has_kind:
-            return "v2.0_unified"
-        if has_kind and _read_json_object_if_present(tlspec_path / "spec.json") is not None:
-            # The intervention classification needs the artifact to actually
-            # BE one: a v2.16 intervention bundle carries spec.json. Inferring
-            # it from `kind` alone misrouted a unified manifest whose
-            # tlspec_version was deleted into the intervention loader, which
-            # died on the absent spec.json with an untyped FileNotFoundError
-            # (R73) instead of falling through to the typed manifest refusal.
-            return "v2.16_intervention_with_kind"
-        if has_tlspec_version:
-            # `tlspec_version` is itself a tlspec-schema-only marker: the
-            # genuine pre-tlspec v2.16 ModelLog format never carried it (it
-            # used `io_format_version`/`n_activation_blobs` instead, matched
-            # below). A manifest with `tlspec_version` but no `kind` is an
-            # older-but-still-modern unified manifest (or one whose `kind`
-            # was lost) -- route it through v2.0_unified so the REAL numeric
-            # `tlspec_version` floor check applies. The former fallthrough
-            # here misrouted exactly this shape into the legacy
-            # ArtifactTooOldError path with a "pre-tlspec
-            # ModelLog format" message that is false for a tlspec-schema
-            # artifact (R73 fast-tier fuzz finding, 2026-10).
-            return "v2.0_unified"
+    if manifest is not None and manifest.get("format") == _format3_contract.FORMAT_NAME:
+        return "v3"
+    return "pre_3" if _pre3_observed(tlspec_path) is not None else "unknown"
 
-    spec = _read_json_object_if_present(tlspec_path / "spec.json")
-    if spec is not None and "format_version" in spec:
-        return "v2.16_intervention"
 
-    if (
-        manifest is not None
-        and "io_format_version" in manifest
-        and "n_activation_blobs" in manifest
+def _pre3_observed(path: Path) -> str | None:
+    """Identify the 2.x marker without opening a pickle or decoding a record.
+
+    Parameters
+    ----------
+    path:
+        Artifact root already checked for symlinks by format detection.
+
+    Returns
+    -------
+    str | None
+        Marker text shared by load and validation, or no recognized 2.x marker.
+    """
+
+    from .._io.format3.validate import legacy_stamp
+
+    _reject_symlinked_metadata_path(path)
+    _reject_symlinked_metadata_path(path / "manifest.json")
+    stamp = legacy_stamp(path / "manifest.json")
+    if stamp is not None:
+        return f"tlspec_version={stamp}"
+    manifest = _read_json_object_if_present(path / "manifest.json")
+    if manifest is not None and all(
+        marker in manifest for marker in ("io_format_version", "n_activation_blobs")
     ):
-        # The GENUINE v2.16.0 ModelLog spellings (io_format_version /
-        # n_activation_blobs / n_gradient_blobs), measured on the only genuine
-        # v2.16 bundle in existence (tests/goldens/legacy, ecosystem panel
-        # r3). The checked-in "v2.16" fixtures elsewhere use the modern
-        # spellings above -- a format that never shipped -- so before this
-        # branch the real artifact classified "unknown" while the never-real
-        # shape classified v2.16 (MEMO 3.5, erratum FORK F2 detection half).
-        return "v2.16_modellog_portable"
-    return "unknown"
+        return (
+            f"io_format_version={manifest['io_format_version']}, "
+            f"n_activation_blobs={manifest['n_activation_blobs']}"
+        )
+    for marker in ("metadata.pkl", "bundle.json"):
+        marker_path = path / marker
+        _reject_symlinked_metadata_path(marker_path)
+        if marker_path.exists():
+            return f"{marker} at the artifact root"
+    spec = _read_json_object_if_present(path / "spec.json")
+    if spec is not None and "format_version" in spec:
+        return f"intervention format_version={spec['format_version']}"
+    if manifest is None:
+        return None
+    for marker in ("tlspec_version", "kind", "io_format_version", "n_activation_blobs"):
+        if marker in manifest:
+            return f"{marker}={manifest[marker]}"
+    if "format" not in manifest and any(
+        marker in manifest for marker in ("torchlens_version", "tensor_entries")
+    ):
+        return "manifest.json without a format key"
+    return None
 
 
 def _reject_symlinked_metadata_path(path: Path) -> None:
@@ -346,7 +354,6 @@ __all__ = [
     "AnalysisOnlySidecar",
     "SidecarFamily",
     "TraceState",
-    "UnencodableValue",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "attach_sidecar",

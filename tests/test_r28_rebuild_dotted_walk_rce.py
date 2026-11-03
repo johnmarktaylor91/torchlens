@@ -335,5 +335,5 @@ def test_detect_tlspec_format_regular_bundle_unaffected(tmp_path: Path) -> None:
 
     bundle = tmp_path / "regular.tlspec"
     _write_bundle_manifest(bundle, {"kind": "x", "tlspec_version": 1})
-    assert detect_tlspec_format(bundle) == "v2.0_unified"
+    assert detect_tlspec_format(bundle) == "pre_3"
     assert inspect_tlspec(bundle)["kind"] == "x"

@@ -102,7 +102,7 @@ EXCLUDES = (
     "tests/classics_corpus/models",
     "CHANGELOG.md",
     "MIGRATIONS.md",
-    "torchlens/_io/_pre3_module_paths.py",
+    "torchlens/_io/format_contract.py",
 )
 SUFFIXES = {
     ".py",

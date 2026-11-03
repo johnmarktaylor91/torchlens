@@ -5,7 +5,7 @@ real artifact per format family (see its README), and this module loads each of 
 checks the one refusal: the 2.x origin and the remedy are named, the code is
 ``artifact_version_below_floor``, and the artifact path travels in the structured fields where
 the loader has it. Two forged variants cover the door a restamped manifest uses: a 2.x payload
-whose manifest names the current format refuses at the unpickler (the pickled module path), and
+whose manifest names the current format refuses at the root listing (its ``metadata.pkl``), and
 a stamp below the oldest known format refuses at the manifest. The 2.16 intervention spec
 format (``format_version`` 1) is its own family: it has no ``tlspec_version`` and refuses at
 its spec stamp, at ``tl.load`` and at ``tl.validation.validate_tlspec``. So is the v1
@@ -75,13 +75,18 @@ def test_genuine_modellog_refusal_names_the_one_release_that_reads_it() -> None:
     path, _ = _FAMILIES["modellog_v2_16_genuine"]
     error = assert_refuses_as_2x(path)
     assert "torchlens==2.17.0" in error.fields["remedy"]
+    assert error.fields["observed"].startswith("io_format_version=2, n_activation_blobs=")
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        validate_tlspec(path)
+    assert excinfo.value.fields["remedy"] == error.fields["remedy"]
+    assert excinfo.value.fields["observed"] == error.fields["observed"]
 
 
-def test_restamped_2x_payload_refuses_at_the_unpickler(tmp_path: Path) -> None:
+def test_restamped_2x_payload_refuses_at_the_root_listing(tmp_path: Path) -> None:
     """A 2.x payload under a manifest that names the current format still refuses as 2.x.
 
-    The module path the payload pickled is the evidence: no manifest edit can make a 2.x
-    pickle look current.
+    The ``metadata.pkl`` at the root is the evidence: no manifest edit can make a 2.x
+    pickle layout look current, and the reader never opens the pickle.
     """
 
     source, _ = _FAMILIES["tlspec_v9"]
@@ -93,7 +98,7 @@ def test_restamped_2x_payload_refuses_at_the_unpickler(tmp_path: Path) -> None:
 
     error = assert_refuses_as_2x(work)
 
-    assert str(error.fields["observed"]).startswith("module_path=torchlens."), error.fields
+    assert error.fields["observed"] == "metadata.pkl at the artifact root", error.fields
 
 
 @pytest.mark.parametrize("stamp", [0, 1, MIN_TLSPEC_VERSION - 1])
@@ -122,7 +127,7 @@ def test_intervention_spec_v2_16_refuses_as_2x() -> None:
     assert _INTERVENTION_V2_16.exists(), "frozen 2.16 intervention spec missing"
     spec = json.loads((_INTERVENTION_V2_16 / "spec.json").read_text(encoding="utf-8"))
     assert spec["format_version"] == "1", "the artifact must stay a format_version-1 spec"
-    assert tl.io.detect_tlspec_format(_INTERVENTION_V2_16) == "v2.16_intervention"
+    assert tl.io.detect_tlspec_format(_INTERVENTION_V2_16) == "pre_3"
 
     error = assert_refuses_as_2x(_INTERVENTION_V2_16)
     assert error.fields["observed"] == "intervention format_version=1"

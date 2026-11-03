@@ -35,8 +35,10 @@ from safetensors.torch import load_file
 from torchlens.backends.registry import BackendPayloadUnsupportedError
 
 from .. import __version__ as TORCHLENS_VERSION
+from .._capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
 from .._data_classes._state_adapter import state_items
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._data_classes.module import ModuleAccessor
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
@@ -49,15 +51,22 @@ from . import (
     BlobRef,
     FieldPolicy,
     PayloadLoadHints,
+    _format3_runnable_bind as runnable_bind,
     _json,
     raise_if_manifest_below_floor,
     refuse_bundle_exists,
     refuse_missing_blobs,
 )
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
-from ._durability import _restrict_mode, _restrict_tree_modes, fsync_dir, fsync_tree
+from ._durability import (
+    _directories_content_equal,
+    _restore_backup,
+    _restrict_mode,
+    _restrict_tree_modes,
+    fsync_dir,
+    fsync_tree,
+)
 from ._pickle_prescan import OpcodeCeilingExceeded
-from ._pre3_module_paths import modellog_216_error
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
@@ -65,6 +74,7 @@ from ._save_gates import (
     _refuse_shard_local_erasure,
     _save_bundle_via_container_door,
 )
+from .format3 import contract as format3_contract, reader as format3_reader
 from .format3.payloads import (
     NUMPY_CODEC,
     TORCH_CODEC,
@@ -74,6 +84,7 @@ from .format3.payloads import (
     tensor_reference,
 )
 from .format3.recipe import write_trace_recipe
+from .format3.route import is_format3_root, load_format3
 from .format3.writer import (
     EnvelopeSpec,
     TraceTables,
@@ -85,6 +96,7 @@ from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
     _make_tmp_bundle_path,
+    reanchor_visualizer_paths as _reanchor_visualizer_paths,
     reject_symlink_path as _reject_symlink_path,
     resolve_bundle_blob_path,
     resolve_bundle_blobs_dir,
@@ -1234,6 +1246,161 @@ def _reject_audit_only_materialized_payload_save(
     )
 
 
+def _load_216_intervention_spec(
+    bundle_path: Path,
+    tlspec_format: str,
+    trust_custom_callables: bool,
+    allowed_custom_callable_modules: Any,
+) -> Any:
+    """Load (or refuse typed) a directory the detector classifies as a 2.16 intervention spec."""
+
+    from ..intervention.save import load_intervention_spec
+
+    # Typed boundary (r7 R73): a trace manifest whose ``tlspec_version``
+    # key was lost still carries ``kind``, so format detection
+    # classifies it as a v2.16 intervention spec and the spec loader
+    # then surfaced a RAW FileNotFoundError for the spec.json the
+    # artifact never had. Incoherent format markers are a corrupt
+    # artifact and must refuse typed at the dispatch.
+    if bundle_path.is_dir() and not (bundle_path / "spec.json").exists():
+        raise ArtifactError(
+            f"Artifact at {bundle_path} classifies as {tlspec_format} "
+            "(its manifest carries 'kind' without 'tlspec_version') but "
+            "contains no spec.json — the format markers are incoherent, "
+            "which means the manifest lost required keys or the "
+            "artifact is corrupt. Remedy: restore the manifest's "
+            "tlspec_version key or re-save the artifact from its "
+            "source trace.",
+            code="tlspec_format_markers_incoherent",
+        )
+    return load_intervention_spec(
+        bundle_path,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )
+
+
+def _attach_run_readiness(trace: Trace, sparse_run: Any) -> None:
+    """Attach the sparse-run readiness report (the loader's one late import of runnable_load)."""
+
+    from .runnable_load import attach_sparse_run_readiness
+
+    attach_sparse_run_readiness(trace, sparse_run)
+
+
+# ---------------------------------------------------------------------------
+# 3.0 saved format: the rehydration side of the reader doors
+# ---------------------------------------------------------------------------
+# ``format3/reader.py`` sits below the record classes; the steps needing ``rehydrate_trace``,
+# the accessors, ``Bundle`` and the intervention types live here and are installed into the
+# reader's doors at import (``format3_reader.install_load_hooks`` below).
+
+
+def _finish_format3_trace(
+    artifact: format3_reader.DecodedArtifact,
+    *,
+    lazy: bool,
+    map_location: str | torch.device,
+    materialize_nested: bool,
+    payload_hints: PayloadLoadHints | None,
+) -> Trace:
+    """Rehydrate one decoded 3.0 trace artifact: tensors, accessors, provenance, recipe."""
+
+    root, manifest = artifact.root, artifact.manifest
+    state = artifact.trace_state(ModuleAccessor)
+    blobs_dir = (
+        resolve_bundle_blobs_dir(root) if (root / format3_contract.BLOBS_DIR).is_dir() else None
+    )
+    trace = rehydrate_trace(
+        state,
+        artifact.manifest_for_rehydrate(),
+        root,
+        lazy=lazy,
+        map_location=map_location,
+        materialize_nested=materialize_nested,
+        payload_hints=payload_hints,
+        resolved_blobs_dir=blobs_dir,
+        trace=artifact.objects["trace"][0],
+    )
+    reanchor_loaded_episode_evidence(trace)
+    _reanchor_visualizer_paths(trace, root)
+    trace._loaded_from_bundle = True
+    trace._source_bundle_manifest_sha256 = sha256_file(root / format3_contract.MANIFEST_FILE)
+    trace._source_bundle_path = root
+    trace._source_bundle_created_at = manifest["created_at"]
+    trace._source_bundle_provenance = manifest.get("provenance")
+    _attach_run_readiness(trace, manifest.get("run"))
+    _bind_format3_runnable_payloads(
+        trace, manifest=manifest, root=root, map_location=map_location, blobs_dir=blobs_dir
+    )
+    disclosures = manifest.get("disclosures")
+    if disclosures is not None:
+        format3_reader.attach_disclosure_advisory(trace, disclosures)
+    if manifest.get("intervention") is not None:
+        trace._intervention_spec = _finish_format3_recipe(root)
+    return trace
+
+
+def _bind_format3_runnable_payloads(
+    trace: Trace,
+    *,
+    manifest: Mapping[str, Any],
+    root: Path,
+    map_location: str | torch.device,
+    blobs_dir: Path | None,
+) -> None:
+    """Bind a 3.0 artifact's runnable payload families (references rebuilt from its
+    blob-id index and parsed ``run`` descriptor); an analysis artifact binds nothing."""
+
+    payloads = runnable_bind.runnable_payload_index(manifest, trace._sparse_run_descriptor)
+    if not payloads.tensors and trace._sparse_run_descriptor is None:
+        return
+    for bind in (
+        _bind_embedded_nonpersistent_buffer_payload,
+        _bind_embedded_weight_payload,
+        _bind_archived_activation_payload,
+    ):
+        bind(
+            trace,
+            manifest=payloads,
+            bundle_path=root,
+            map_location=map_location,
+            resolved_blobs_dir=blobs_dir,
+        )
+
+
+def _finish_format3_bundle(
+    members: list[tuple[str, Trace]], *, relations: Any, baseline: Any, root: Path
+) -> Bundle:
+    """Assemble the loaded members, relations and baseline of a 3.0 bundle."""
+
+    from ..bundle import Bundle
+
+    bundle = Bundle(members, relations=relations, baseline=baseline)
+    setattr(bundle, "_source_bundle_path", root)
+    return bundle
+
+
+def _finish_format3_recipe(root: Path) -> InterventionSpec:
+    """Stage the recipe ``intervention.json`` describes (design section 8).
+
+    The intervention package owns the rebuild: built-in edits come back
+    through the helper registry, a callable placeholder (rule level or inside
+    a built-in edit's arguments) becomes an audit-only ``Edit`` and is listed
+    in ``metadata["recipe_placeholders"]``, which every rerun door refuses
+    with ``run_intervention_spec_not_persisted``.
+    """
+
+    from ..intervention.save import _load_trace_recipe_spec
+
+    return _load_trace_recipe_spec(root)
+
+
+format3_reader.install_load_hooks(
+    trace=_finish_format3_trace, bundle=_finish_format3_bundle, recipe=_finish_format3_recipe
+)
+
+
 @overload
 def load(
     path: str | Path,
@@ -1304,6 +1471,12 @@ def load(
         Rehydrated object selected by the bundle manifest.
     """
     ...
+
+
+#: Root files only a 2.x artifact carries; a directory holding one keeps the 2.x
+#: path until that path is deleted. ``spec.json`` is the v2.16 intervention root.
+#: Detector answers the 3.0 reader owns: the 3.0 format, the tlspec-stamped 2.x shape (it
+#: refuses by stamp or root listing there) and manifests no 2.x family claims.
 
 
 def load(
@@ -1397,48 +1570,26 @@ def load(
         routed = load_by_root_manifest(bundle_path)
         if routed is not NOT_ROUTED:
             return routed
-        from ..io import detect_tlspec_format
+        from ..io import _pre3_observed, detect_tlspec_format
+        from .format_contract import _MODELLOG_216_NOTE, below_floor_error
 
         tlspec_format = detect_tlspec_format(bundle_path)
-        if tlspec_format in {"v2.16_intervention", "v2.16_intervention_with_kind"}:
-            from ..intervention.save import load_intervention_spec
+        if tlspec_format == "pre_3":
+            observed = _pre3_observed(bundle_path) or "2.x artifact markers"
+            raise below_floor_error(
+                observed=observed,
+                path=str(bundle_path),
+                remedy_note=(
+                    _MODELLOG_216_NOTE
+                    if observed.startswith("io_format_version=2, n_activation_blobs=")
+                    else ""
+                ),
+                code="artifact_version_below_floor",
+            )
+        if is_format3_root(bundle_path, tlspec_format):
+            # 3.0 saved format: record tables plus safetensors chunks, never the pickle path.
+            return load_format3(bundle_path, lazy, map_location, materialize_nested, payload_hints)
 
-            # Typed boundary (r7 R73): a trace manifest whose ``tlspec_version``
-            # key was lost still carries ``kind``, so format detection
-            # classifies it as a v2.16 intervention spec and the spec loader
-            # then surfaced a RAW FileNotFoundError for the spec.json the
-            # artifact never had. Incoherent format markers are a corrupt
-            # artifact and must refuse typed at the dispatch.
-            if bundle_path.is_dir() and not (bundle_path / "spec.json").exists():
-                raise ArtifactError(
-                    f"Artifact at {bundle_path} classifies as {tlspec_format} "
-                    "(its manifest carries 'kind' without 'tlspec_version') but "
-                    "contains no spec.json — the format markers are incoherent, "
-                    "which means the manifest lost required keys or the "
-                    "artifact is corrupt. Remedy: restore the manifest's "
-                    "tlspec_version key or re-save the artifact from its "
-                    "source trace.",
-                    code="tlspec_format_markers_incoherent",
-                )
-            return load_intervention_spec(
-                bundle_path,
-                trust_custom_callables=trust_custom_callables,
-                allowed_custom_callable_modules=allowed_custom_callable_modules,
-            )
-        if tlspec_format == "v2.16_modellog_portable":
-            raise modellog_216_error(str(bundle_path), code="artifact_version_below_floor")
-        if tlspec_format == "v2.0_unified":
-            return _load_unified_tlspec(
-                bundle_path,
-                lazy=lazy,
-                map_location=map_location,
-                materialize_nested=materialize_nested,
-                payload_hints=payload_hints,
-                trust_custom_callables=trust_custom_callables,
-                allowed_custom_callable_modules=allowed_custom_callable_modules,
-                bundle_visited=_bundle_visited,
-                unknown_relations=unknown_relations,
-            )
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
 
@@ -1619,8 +1770,6 @@ def _load_trace_payload(
     # output was an unmaterialized blob handle, so the episode ledger's
     # evidence anchor had nothing to compare. Payloads are attached now; the
     # load itself refutes a ledger re-minted over another execution.
-    from .._capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
-
     reanchor_loaded_episode_evidence(trace)
     _reanchor_visualizer_paths(trace, bundle_path)
     setattr(trace, "_loaded_from_bundle", True)
@@ -1628,9 +1777,7 @@ def _load_trace_payload(
     setattr(trace, "_source_bundle_path", bundle_path)
     setattr(trace, "_source_bundle_created_at", manifest.created_at)
     setattr(trace, "_source_bundle_provenance", manifest.provenance)
-    from .runnable_load import attach_sparse_run_readiness
-
-    attach_sparse_run_readiness(trace, sparse_run)
+    _attach_run_readiness(trace, sparse_run)
     _bind_embedded_nonpersistent_buffer_payload(
         trace,
         manifest=manifest,
@@ -1753,7 +1900,7 @@ def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str
 def _bind_embedded_nonpersistent_buffer_payload(
     trace: Trace,
     *,
-    manifest: Manifest,
+    manifest: Manifest | runnable_bind.RunnablePayloadIndex,
     bundle_path: Path,
     map_location: str | torch.device,
     resolved_blobs_dir: Path | None = None,
@@ -1820,19 +1967,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_file(blob_path)
-        if observed_sha256 != entry.sha256:
-            raise ArtifactError(
-                "Checksum mismatch for embedded non-persistent buffer "
-                f"blob_id={entry.blob_id} at {blob_path}."
-            )
-        tensor_map = _load_safetensors_file(blob_path, map_location)
-        tensor = tensor_map.get(_BLOB_TENSOR_KEY)
-        if tensor is None:
-            raise ArtifactError(
-                f"Embedded non-persistent buffer blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}."
-            )
-        embedded[entry.label] = tensor
+        embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
     from .._runnable.state import bind_embedded_nonpersistent_buffers
 
@@ -1842,7 +1977,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
 def _bind_embedded_weight_payload(
     trace: Trace,
     *,
-    manifest: Manifest,
+    manifest: Manifest | runnable_bind.RunnablePayloadIndex,
     bundle_path: Path,
     map_location: str | torch.device,
     resolved_blobs_dir: Path | None = None,
@@ -1906,16 +2041,7 @@ def _bind_embedded_weight_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_file(blob_path)
-        if observed_sha256 != entry.sha256:
-            raise ArtifactError(
-                f"Checksum mismatch for embedded state blob_id={entry.blob_id} at {blob_path}."
-            )
-        tensor_map = _load_safetensors_file(blob_path, map_location)
-        tensor = tensor_map.get(_BLOB_TENSOR_KEY)
-        if tensor is None:
-            raise ArtifactError(f"Embedded state blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}.")
-        embedded[entry.label] = tensor
+        embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
     from .._runnable.state import bind_embedded_trace_state
 
@@ -1925,7 +2051,7 @@ def _bind_embedded_weight_payload(
 def _bind_archived_activation_payload(
     trace: Trace,
     *,
-    manifest: Manifest,
+    manifest: Manifest | runnable_bind.RunnablePayloadIndex,
     bundle_path: Path,
     map_location: str | torch.device,
     resolved_blobs_dir: Path | None = None,
@@ -1996,14 +2122,7 @@ def _bind_archived_activation_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_file(blob_path)
-        if observed_sha256 != entry.sha256:
-            raise ArtifactError(
-                f"Checksum mismatch for archived activation blob_id={entry.blob_id} at {blob_path}."
-            )
-        tensor = _load_safetensors_file(blob_path, map_location).get(_BLOB_TENSOR_KEY)
-        if tensor is None:
-            raise ArtifactError(f"Archived activation blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}.")
+        tensor = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
         # r6 M4: the file ``sha256`` above attests the BLOB against the MANIFEST, but the
         # member's ``byte_digest`` -- the value republished on the public
         # ``ArchivedActivation.byte_digest`` beside ``.value`` -- was never checked
@@ -2661,44 +2780,6 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
             stacklevel=2,
         )
     return removed
-
-
-def _directories_content_equal(left: Path, right: Path) -> bool:
-    """Return whether two directory trees hold byte-identical file contents.
-
-    Used by :func:`cleanup_tmp` to decide whether an orphaned ``.bak.*``
-    bundle directory is a provable duplicate of the live bundle (safe to
-    delete) versus genuinely distinct data that must not be silently
-    destroyed. Compares the set of relative file paths and, for each,
-    the file's SHA-256 digest via :func:`sha256_file`.
-
-    Parameters
-    ----------
-    left:
-        First directory to compare.
-    right:
-        Second directory to compare.
-
-    Returns
-    -------
-    bool
-        ``True`` if both directories contain the same relative file paths
-        with byte-identical contents, ``False`` otherwise (including on
-        any I/O error while comparing, to fail closed toward "not proven
-        redundant").
-    """
-
-    try:
-        left_files = sorted(p.relative_to(left) for p in left.rglob("*") if p.is_file())
-        right_files = sorted(p.relative_to(right) for p in right.rglob("*") if p.is_file())
-    except OSError:
-        return False
-    if left_files != right_files:
-        return False
-    try:
-        return all(sha256_file(left / rel) == sha256_file(right / rel) for rel in left_files)
-    except OSError:
-        return False
 
 
 def _scrub_trace_for_bundle(
@@ -4175,55 +4256,6 @@ def _run_save_recovery(
         _disclose("backup-restore", failure)
 
 
-def _reanchor_visualizer_paths(trace: Trace, bundle_path: Path) -> None:
-    """Contain every loaded ``visualizer_path`` inside the bundle's own directory.
-
-    ``visualizer_path`` is the one bundle-file field that bypassed
-    ``resolve_bundle_blob_path`` + ``_reject_symlink_path``: it was persisted as an
-    absolute path and flowed verbatim into Graphviz ``image=`` on ``.draw()`` with
-    only a ``.png`` suffix check. A hostile bundle could therefore name ANY local
-    ``.png`` and have ``tl.load(evil).draw()`` disclose it (B8-9).
-
-    On load we discard whatever directory the bundle claimed and re-anchor to
-    ``<bundle>/visualizers/<basename>``, then containment-check that it resolves
-    inside the bundle's own ``visualizers/`` directory and is a real file. Anything
-    that escapes, is missing, or sits behind a symlinked ``visualizers/`` is dropped
-    to ``None`` -- the render then simply omits the thumbnail.
-
-    Parameters
-    ----------
-    trace:
-        Freshly rehydrated trace whose layer ``visualizer_path`` fields are untrusted.
-    bundle_path:
-        Root of the loaded bundle.
-    """
-
-    layer_list = trace._layer_list
-    if not layer_list:
-        return
-    visualizers_dir = bundle_path / "visualizers"
-    if visualizers_dir.is_symlink() or not visualizers_dir.is_dir():
-        for layer in layer_list:
-            if getattr(layer, "visualizer_path", None) is not None:
-                layer.visualizer_path = None
-        return
-    resolved_root = visualizers_dir.resolve()
-    for layer in layer_list:
-        claimed = getattr(layer, "visualizer_path", None)
-        if not isinstance(claimed, str) or not claimed:
-            continue
-        candidate = (visualizers_dir / Path(claimed).name).resolve()
-        try:
-            candidate.relative_to(resolved_root)
-        except ValueError:
-            layer.visualizer_path = None
-            continue
-        if candidate.is_symlink() or not candidate.is_file():
-            layer.visualizer_path = None
-            continue
-        layer.visualizer_path = str(candidate)
-
-
 def _remove_path(path: Path) -> None:
     """Remove a backup path after a successful overwrite replacement.
 
@@ -4239,45 +4271,3 @@ def _remove_path(path: Path) -> None:
         shutil.rmtree(path)
     else:
         path.unlink()
-
-
-def _restore_backup(backup_path: Path, bundle_path: Path, *, warn_on_failure: bool = True) -> bool:
-    """Best-effort restore an overwritten bundle after a failed replacement.
-
-    On a DOUBLE fault (the save failed AND this restore also fails -- permissions,
-    disk-full, a cross-device backup), the user's previous artifact is gone from its
-    canonical ``bundle_path`` but still exists under the ``.bak.<uuid>`` backup name.
-    Silently swallowing that left the prior artifact stranded under a hidden name the
-    error never mentioned; disclose the backup path so it is recoverable (matching the
-    save handler's stated intent). No behavior change on the single-fault path, where
-    the restore succeeds.
-
-    Parameters
-    ----------
-    backup_path:
-        Backup path holding the previous bundle contents.
-    bundle_path:
-        Final bundle path to restore.
-    warn_on_failure:
-        Emit a warning naming the stranded backup when the restore fails. Callers that
-        do their own disclosure (``cleanup_tmp``) pass ``False``.
-
-    Returns
-    -------
-    bool
-        ``True`` when the backup was restored onto ``bundle_path``.
-    """
-
-    try:
-        backup_path.rename(bundle_path)
-    except OSError as exc:
-        if warn_on_failure:
-            warnings.warn(
-                f"Could not restore the previous bundle from its backup after a failed "
-                f"save ({exc}). Your prior artifact is NOT lost: it remains at "
-                f"{backup_path}. Move it back to {bundle_path} to recover it.",
-                TorchLensWarning,
-                stacklevel=2,
-            )
-        return False
-    return True

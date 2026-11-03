@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import IO, Any
 
@@ -231,8 +232,12 @@ def loads_bounded(
     max_depth: int = _MAX_JSON_DEPTH,
     max_bytes: int = _MAX_JSON_BYTES,
     max_nodes: int = _MAX_JSON_NODES,
+    object_pairs_hook: Callable[[list[tuple[str, Any]]], Any] | None = None,
 ) -> Any:
     """Parse a JSON string after byte-size, depth, and object-count prescans.
+
+    ``object_pairs_hook`` reaches ``json.loads`` unchanged so a caller can see
+    duplicate object keys (the stdlib keeps the last one silently).
 
     Raises ``json.JSONDecodeError`` on an over-size, over-nested, or over-populated
     payload (so the existing boundary handlers catch it), and re-raises a
@@ -260,7 +265,9 @@ def loads_bounded(
         raise _refuse(f"manifest JSON contains the non-finite constant {name}", text)
 
     try:
-        return json.loads(text, parse_constant=_reject_constant)
+        return json.loads(
+            text, parse_constant=_reject_constant, object_pairs_hook=object_pairs_hook
+        )
     except RecursionError as exc:  # pragma: no cover - prescan normally fires first
         raise _refuse(
             "manifest JSON nesting exceeded the interpreter recursion limit", text
