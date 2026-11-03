@@ -98,7 +98,7 @@ from .format3.payloads import (
     tensor_reference,
 )
 from .format3.recipe import write_trace_recipe
-from .format3.route import is_format3_root, load_format3
+from .format3.route import Format3LoadRequest, is_format3_root, load_format3
 from .format3.writer import (
     EnvelopeSpec,
     TraceTables,
@@ -1279,11 +1279,13 @@ def load(
             # 3.0 saved format: record tables plus safetensors chunks, never the pickle path.
             return load_format3(
                 bundle_path,
-                lazy,
-                map_location,
-                materialize_nested,
-                payload_hints,
-                unknown_relations=unknown_relations,
+                Format3LoadRequest(
+                    lazy=lazy,
+                    map_location=map_location,
+                    materialize_nested=materialize_nested,
+                    payload_hints=payload_hints,
+                    unknown_relations=unknown_relations,
+                ),
             )
 
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():

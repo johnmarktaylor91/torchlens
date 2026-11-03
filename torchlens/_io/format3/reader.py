@@ -43,6 +43,7 @@ from .validate import (
     TLSPEC_KEY,
     artifact_error,
     check_record_anchors,
+    check_runnable_slots,
     check_version_window,
     integrity_error,
     is_int,
@@ -181,12 +182,13 @@ def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
 
 
 def validate_artifact(path: str | Path) -> dict[str, Any]:
-    """Validate the manifest and every listed file (bytes, SHA-256, no unlisted file;
-    ``bundle_metadata_integrity_refused`` otherwise); return the manifest."""
+    """Validate the manifest, every listed file (bytes, SHA-256, no unlisted file;
+    ``bundle_metadata_integrity_refused`` otherwise) and the runnable slot cross-check."""
 
     root = Path(path)
     manifest = read_manifest(root)
     verify_listed_files(root, manifest)
+    check_runnable_slots(root, manifest)
     return manifest
 
 
@@ -194,11 +196,9 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
 
 
 class TensorRefSink:
-    """Collects the tensor cells a decode meets, as ``BlobRef`` markers plus lazy-layer entries.
-
-    The entries become the manifest's tensor index for the rehydrate path. A structure-only
-    cell decodes to ``None``; codec, chunk and ``t<k>`` key are checked; repeats must agree.
-    """
+    """Collects the tensor cells a decode meets (``BlobRef`` markers plus lazy-layer entries that
+    become the tensor index); a structure-only cell decodes to ``None``; codec, chunk and
+    ``t<k>`` key are checked; repeats must agree."""
 
     def __init__(self, *, codecs: tuple[str, ...], files: Mapping[str, Mapping[str, Any]]) -> None:
         self.entries: dict[str, dict[str, Any]] = {}

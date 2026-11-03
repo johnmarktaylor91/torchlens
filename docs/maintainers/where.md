@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1382 modules, 639397 lines, 0 modules without a docstring.
+85 packages, 1382 modules, 639467 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -22,8 +22,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 53 | 36160 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 | 7119 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 53 | 36162 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 | 7187 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10969 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -412,7 +412,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10552 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (53 modules, 36160 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (53 modules, 36162 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -441,7 +441,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `_tlspec_json_helpers` | Pure value helpers for the unified ''.tlspec'' manifest writer. | 93 |
 | `_torch_symbols` | Load/decode/exec-path re-export of the canonical ''torch_attr'' helper (// secC_1/secD_1). | 16 |
 | `accessor_rebuild` | Rebuild weakref-backed model accessors after finalization or rehydrate. | 127 |
-| `bundle` | Portable directory-bundle save/load helpers for TorchLens model logs. | 3901 |
+| `bundle` | Portable directory-bundle save/load helpers for TorchLens model logs. | 3903 |
 | `bundle_container` | Bundle-container loading for ''tl.load'': ''bundle.json'' and its members. | 355 |
 | `bundle_metadata` | Bundle-metadata (''bundle.json'') section + member-relation loading. | 314 |
 | `field_registry` | Persisted-field registry: the one queryable index of the tlspec envelope. | 276 |
@@ -472,7 +472,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (15 modules, 7119 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (15 modules, 7187 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -484,11 +484,11 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (15 
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 480 |
 | `reader` | Reader of the 3.0 saved format: manifest first, digests, record tables, records. | 799 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 672 |
-| `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 74 |
+| `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 80 |
 | `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 397 |
 | `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 284 |
 | `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 799 |
-| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 609 |
+| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 671 |
 | `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 586 |
 | `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 706 |
 

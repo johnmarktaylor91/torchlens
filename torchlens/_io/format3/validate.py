@@ -575,6 +575,68 @@ def _check_manifest_rows(
         )
 
 
+def _persistent_slot_names(descriptor: Mapping[str, Any]) -> set[str]:
+    """Return the state names of the descriptor's persistent tensor slots."""
+
+    slots = descriptor.get("tensor_slots")
+    names: set[str] = set()
+    for slot in slots if isinstance(slots, list) else ():
+        binding = slot.get("state_binding") if isinstance(slot, Mapping) else None
+        if not isinstance(binding, Mapping) or binding.get("persistent") is not True:
+            continue
+        name = binding.get("state_dict_name")
+        if isinstance(name, str):
+            names.add(name)
+    return names
+
+
+def check_runnable_slots(root: Path, manifest: Mapping[str, Any]) -> None:
+    """Cross-check the runnable descriptor's weight slots against the shipped state family.
+
+    With ``payload_layers.weights.present`` true, the names of ``runnable.state_dict_tensors``
+    must equal the descriptor's persistent slot names: a deleted family (a missing entry) or a
+    relabelled entry refuses typed ``manifest_schema_invalid``. Without the flag the family
+    must be absent. An artifact without a runnable object has nothing to check.
+    """
+
+    runnable = manifest.get("runnable")
+    if not isinstance(runnable, Mapping):
+        return
+    descriptor_path = root / f"{contract.RUNNABLE_DIR}/descriptor.json"
+    descriptor, _ = read_json_file(descriptor_path, code=_CORRUPT, what="runnable descriptor")
+    layers = descriptor.get("payload_layers") if isinstance(descriptor, Mapping) else None
+    weights = layers.get("weights") if isinstance(layers, Mapping) else None
+    present = weights.get("present") if isinstance(weights, Mapping) else None
+    if not isinstance(present, bool):
+        raise artifact_error(
+            f"Runnable descriptor {descriptor_path} must declare payload_layers.weights.present.",
+            code=_CODES["manifest_invalid"],
+            remedy="save the trace again at level='runnable'; the runnable component was altered",
+            file_path=str(descriptor_path),
+        )
+    shipped_value = runnable.get("state_dict_tensors")
+    shipped = set(shipped_value) if isinstance(shipped_value, Mapping) else set()
+    declared = _persistent_slot_names(descriptor)
+    if present and shipped != declared:
+        raise artifact_error(
+            f"Runnable weight entries disagree with tensor slots: {len(declared - shipped)} "
+            f"declared state name(s) missing, {len(shipped - declared)} shipped name(s) "
+            "undeclared.",
+            code=_CODES["manifest_invalid"],
+            remedy="save the trace again at level='runnable'; the runnable component was altered",
+            file_path=str(root),
+            missing=sorted(declared - shipped),
+            undeclared=sorted(shipped - declared),
+        )
+    if not present and shipped:
+        raise artifact_error(
+            "Runnable weight blobs are present while payload_layers.weights.present is false.",
+            code=_CODES["manifest_invalid"],
+            remedy="save the trace again at level='runnable'; the runnable component was altered",
+            file_path=str(root),
+        )
+
+
 def validate_records(
     tables: Mapping[str, list[dict[str, Any]]],
     *,
