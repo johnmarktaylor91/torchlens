@@ -23,7 +23,7 @@ class ThenFeedsOutput(nn.Module):
         self.arm = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.sum() > 0:
+        if x.sum() > 0:  # noqa: SIM108 -- the test needs an if statement with an else arm
             y = self.arm(x)
         else:
             y = -x

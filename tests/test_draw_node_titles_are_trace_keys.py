@@ -34,7 +34,7 @@ class TinyRNN(nn.Module):
         h = torch.zeros_like(x)
         for _ in range(4):
             h = torch.tanh(self.cell(x + h))
-        if h.sum() > 0:
+        if h.sum() > 0:  # noqa: SIM108 -- the test needs an if statement with an else arm
             h = self.boost(h)
         else:
             h = -h
