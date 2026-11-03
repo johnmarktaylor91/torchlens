@@ -121,7 +121,7 @@ MAX_SALIENCE_FLOOR = 0.75
 #: frontier DP is measured superlinear (~n^1.75) in rendered op count with no
 #: internal time budget, so above this many ops the optimizer DECLINES with a
 #: disclosed warning instead of silently burning CPU-hours: ``draw`` renders
-#: uncollapsed, ``Trace.collapse_plan()`` refuses typed
+#: uncollapsed, ``Drawing.collapse_plan()`` refuses typed
 #: (``collapse_plan_unavailable``), and the schedule degrades to its single
 #: full-graph step. Calibration: the largest shipped-suite models
 #: (densenet201 at 1,517 ops, maxvit_t at 1,307) must stay admitted -- their

@@ -54,6 +54,14 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "validate_saved_outs": (
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),
+    "collapse_plan": (
+        "use tl.render(model, x, return_trace=True).collapse_plan(mode) on the draw result -- "
+        "Trace.collapse_plan moved to the draw result"
+    ),
+    "collapse_schedule": (
+        "use tl.render(model, x, return_trace=True).collapse_schedule() on the draw result -- "
+        "Trace.collapse_schedule moved to the draw result"
+    ),
     "log_backward": "use trace.backward(loss) -- Trace.log_backward was renamed",
     "disarm_triggers": (
         "use trace.autograd.disarm() -- Trace.disarm_triggers moved to the autograd group"

@@ -986,8 +986,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   measured (U, W) work estimator: over-budget requests degrade to a deterministic compact
   fallback plan (coded `collapse_budget_fallback`), never an uncollapsed wall; only
   pathological inputs (raw ops above 20x the constant) decline outright
-  (`collapse_pathological_skip`; `Trace.collapse_plan()` refuses typed
-  (`collapse_plan_unavailable`); `Trace.collapse_schedule()` degrades to its single
+  (`collapse_pathological_skip`; `Drawing.collapse_plan()` refuses typed
+  (`collapse_plan_unavailable`); `Drawing.collapse_schedule()` degrades to its single
   full-graph step).
 
 **Module.collapse_score / Trace.module_collapse_order** — *unstable — no deprecation shim owed*
@@ -995,7 +995,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   largest submodule's, rounded to 6 places; 0.0 for the root, a module of at most one Layer, or the
   only child of a non-root module that hides the same ops (the parent, the name the user wrote,
   ranks instead; in a chain of such wrappers the outermost ranks). It ranks candidates and never reads the selected plan
-  (`Trace.collapse_plan()` may skip a high-priority module); `module_collapse_order` lists every
+  (`Drawing.collapse_plan()` may skip a high-priority module); `module_collapse_order` lists every
   module's priority, highest first. Computed at access, never persisted.
 
 **Run folding**
@@ -3574,6 +3574,8 @@ describe each surface in depth.
 | `ContributionScores.topk` | Return the ``k`` largest contributors at one (position, direction) |
 | `CurveStep.build_inputs` | The perturbed inputs of this step, shaped like the caller's ``inputs`` |
 | `CurveStep.build_interventions` | The recorded edits of this step, as ``(selection, edit)`` pairs |
+| `Drawing.collapse_plan` | Return the renderer-faithful diagnostic collapse plan for one mode, planned on the trace the draw retained |
+| `Drawing.collapse_schedule` | Return the ordered monotone float collapse schedule, planned on the trace the draw retained |
 | `Drawing.file_format` | The rendered file format (``"pdf"``, ``"svg"``, ...) |
 | `Drawing.receipt` | Execution receipt from the pinned capture policy |
 | `ExtractionPlan.batch_size` | field of `ExtractionPlan` |

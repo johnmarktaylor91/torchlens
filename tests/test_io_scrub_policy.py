@@ -407,8 +407,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
             t.draw(path=str(out / "graph")),
             t.draw(path=str(out / "graph_encoded"), color_by="time"),
         ),
-        "collapse_plan": lambda t: t.collapse_plan(),
-        "collapse_schedule": lambda t: t.collapse_schedule(),
         "collapse_order": lambda t: t.collapse_order(),
         "receptive_fields": lambda t: t.receptive_fields(),
         "projective_fields": lambda t: t.projective_fields(),

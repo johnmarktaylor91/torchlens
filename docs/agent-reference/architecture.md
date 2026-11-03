@@ -351,8 +351,8 @@ Key entry points:
   `None` preserves defaults (`"none"` has no run folding; `"auto"`/`"max"` use band-pressure
   folding), `True` folds eligible repeated runs even with `collapse="none"`, and `False` disables
   run folding. `collapse="max"` may emit segment boxes; `(xN)`, ellipsis, and segment labels must
-  `Trace.collapse_plan(mode=...)` returns the diagnostic
-  plan, and `Trace.collapse_schedule()` returns the float schedule metadata. Smart-collapse
+  `Drawing.collapse_plan(mode=...)` returns the diagnostic
+  plan, and `Drawing.collapse_schedule()` returns the float schedule metadata. Smart-collapse
   admission (F11, memo D5) gates on U -- the rendered universe of the full plan -- tiered by
   a measured (U, W) work estimator, with `COLLAPSE_OPTIMIZER_MAX_OPS` (2000,
   `torchlens._visualization.collapse_optimizer`) as the defensive constant: over-budget

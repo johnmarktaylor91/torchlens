@@ -16,6 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from tests.test_agent_surface_helpers import RepeatedBlockNet, deterministic_input
+from torchlens._visualization._trace_collapse import collapse_plan as _trace_collapse_plan
 from torchlens.agent._budgets import OVERVIEW_MAX_TOKENS
 from torchlens.agent._fold import FOLD_KEY_VERSION, fold_trace, normalize_module_path
 
@@ -137,7 +138,7 @@ def test_fold_coherence_with_the_collapse_plan(tmp_path: Path) -> None:
     log = _clean_trace()
     fold = fold_trace(log)
     membership = fold.membership()
-    plan = log.collapse_plan(mode="max")
+    plan = _trace_collapse_plan(log, mode="max")
     plan_ops: set[str] = set()
     for node in plan.nodes:
         if hasattr(node, "ops"):
@@ -211,7 +212,7 @@ def test_fold_seam_decision_rule_documented_on_gpt2() -> None:
     model = transformers.AutoModelForCausalLM.from_pretrained("gpt2").eval()
     input_ids = torch.arange(12).unsqueeze(0)
     log = tl.trace(model, (), input_kwargs={"input_ids": input_ids}, save=None)
-    plan = log.collapse_plan(mode="max")
+    plan = _trace_collapse_plan(log, mode="max")
     box_names = [type(node).__name__ for node in plan.nodes]
     block_level_boxes = [
         node
