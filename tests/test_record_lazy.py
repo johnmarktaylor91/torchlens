@@ -10,7 +10,7 @@ carries (only the wall-clock ``time_since_pass_start`` differs between runs).
 from __future__ import annotations
 
 from collections import OrderedDict
-from dataclasses import replace
+from dataclasses import fields, replace
 from typing import Any
 
 import pytest
@@ -67,10 +67,11 @@ def _save(name: str) -> Any:
     return tl.module("block1") | tl.module("head") if save is None else save
 
 
-def _record(name: str, *, lean: bool) -> Recording:
-    build, inp, _ = _CASES[name]
+def _record(name: str, model: nn.Module, *, lean: bool) -> Recording:
+    # One model instance for both recordings: a module stack frame carries the
+    # module's id, so two instances never give equal contexts.
     with torch.no_grad():
-        return tl.record(build(), inp(), save=_save(name), lean=lean)
+        return tl.record(model, _CASES[name][1](), save=_save(name), lean=lean)
 
 
 _Flat = tuple[RecordContext, tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]
@@ -108,11 +109,27 @@ def _chain(root: RecordContext) -> dict[tuple[int, int], _Flat]:
     return chain
 
 
+def _differing_fields(lean: _Flat, default: _Flat) -> dict[str, tuple[Any, Any]]:
+    """Name the fields where two flattened contexts differ."""
+
+    diff = {
+        f.name: (getattr(lean[0], f.name), getattr(default[0], f.name))
+        for f in fields(default[0])
+        if getattr(lean[0], f.name) != getattr(default[0], f.name)
+    }
+    if lean[1:] != default[1:]:
+        diff["windows"] = (lean[1:], default[1:])
+    return diff
+
+
 def _assert_records_equal(default: Recording, lean: Recording) -> None:
     assert len(lean.records) == len(default.records) > 0
     for d, ln in zip(default.records, lean.records, strict=True):
         assert _key(ln.ctx) == _key(d.ctx)
-        assert _chain(ln.ctx) == _chain(d.ctx)
+        lean_chain, default_chain = _chain(ln.ctx), _chain(d.ctx)
+        assert lean_chain.keys() == default_chain.keys()
+        for key, flat in default_chain.items():
+            assert lean_chain[key] == flat, (key, _differing_fields(lean_chain[key], flat))
         assert ln.spec == d.spec
         assert torch.equal(ln.ram_payload, d.ram_payload)
 
@@ -136,9 +153,10 @@ def deferred_count(monkeypatch: pytest.MonkeyPatch) -> list[int]:
 def test_lean_module_read_defers_contexts_and_equals_the_default(
     name: str, deferred_count: list[int]
 ) -> None:
-    default = _record(name, lean=False)
+    model = _CASES[name][0]()
+    default = _record(name, model, lean=False)
     assert deferred_count[0] == 0
-    lean = _record(name, lean=True)
+    lean = _record(name, model, lean=True)
     assert deferred_count[0] > 0
     _assert_records_equal(default, lean)
     assert torch.equal(torch.as_tensor(default.num_ops), torch.as_tensor(lean.num_ops))
@@ -147,11 +165,13 @@ def test_lean_module_read_defers_contexts_and_equals_the_default(
 def test_recorder_passes_defer_and_equal_the_default(deferred_count: list[int]) -> None:
     """A second pass reuses the raw labels of the first; its records still match."""
 
+    model = _Shared()
+
     def run(lean: bool) -> Recording:
         with (
             torch.no_grad(),
             tl.recording.Recorder(
-                _Shared(), save=tl.module("block:1") | tl.module("head"), lean=lean
+                model, save=tl.module("block:1") | tl.module("head"), lean=lean
             ) as recorder,
         ):
             recorder(_shared_input())
@@ -182,8 +202,9 @@ def test_ineligible_lean_reads_build_contexts_eagerly(
 ) -> None:
     name = "small_block2"
     build, inp, _ = _CASES[name]
+    model = build()
     with torch.no_grad():
-        default = tl.record(build(), inp(), **kwargs)
-        lean = tl.record(build(), inp(), lean=True, **kwargs)
+        default = tl.record(model, inp(), **kwargs)
+        lean = tl.record(model, inp(), lean=True, **kwargs)
     assert deferred_count[0] == 0
     _assert_records_equal(default, lean)
