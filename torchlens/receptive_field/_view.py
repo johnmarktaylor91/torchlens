@@ -74,9 +74,9 @@ def _module_outputs(trace: Any, within: object | None) -> list[object] | None:
     """Replace module addresses and module records in ``within`` by their output ops.
 
     A string that names no op, layer or io role but is a module address (or a
-    module pass label) stands for that module's output ops, as
-    ``trace["layer3"]`` does; ``Module`` and ``ModuleCall`` records are read the
-    same way. Every other region passes through unchanged.
+    module pass label) stands for that module's output ops, read through
+    ``trace.modules``; ``Module`` and ``ModuleCall`` records are read the same way.
+    Every other region passes through unchanged.
     """
 
     if within is None:
@@ -86,7 +86,7 @@ def _module_outputs(trace: Any, within: object | None) -> list[object] | None:
     for item in items:
         record = item
         if isinstance(item, str) and not _find_act_ops(trace, item) and item in trace.modules:
-            record = trace[item]
+            record = trace.modules[item]
         if hasattr(record, "__selection__") or isinstance(record, str):
             regions.append(item)
         elif hasattr(record, "calls"):
