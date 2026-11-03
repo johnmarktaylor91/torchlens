@@ -259,9 +259,7 @@ def _detached_fields(trace: Trace, collapse_context: Any) -> dict[str, Any]:
         "_collapse_tools": (_collapse_plan, _collapse_schedule)
         if collapse_context is not None
         else None,
-        "_render": functools.partial(
-            render_detached_dot, image_root=getattr(trace, "_visualizer_dir", None)
-        ),
+        "_render": functools.partial(render_detached_dot, image_root=trace._visualizer_dir),
     }
 
 
