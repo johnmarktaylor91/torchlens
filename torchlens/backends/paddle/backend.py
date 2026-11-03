@@ -30,9 +30,10 @@ from ..._ir.events import (
     ParentEdge,
 )
 from ..._ir.intervention import FireResult, FunctionEventInput
-from ..._ir.predicate import RecordContext
+from ..._ir.predicate import CaptureSpec, RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
@@ -43,7 +44,6 @@ from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
-from ...recording.types import CaptureSpec
 from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._finalize import (
     attach_function_root_module,
@@ -340,7 +340,7 @@ class PaddleBackend:
         # see the matching comment in ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            layers_to_save=layers_to_save,
+            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -356,7 +356,7 @@ class PaddleBackend:
             save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
         )
-        layers_to_save = capture_options.layers_to_save
+        layers_to_save = capture_options._layers_to_save
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
@@ -385,11 +385,10 @@ class PaddleBackend:
         module_identity_mode = _resolve_optional_capture_field(
             capture, "module_identity_mode", module_identity_mode
         )
-        # layers_to_save/keep_orphans/output_device/detach_saved_activations/
-        # save_arg_values/save_code_context/save_rng_states/
-        # recurrence_detection/compute_input_output_distances/verbose/
-        # backward_ready/save_raw_input/batch_render/save_raw_output/
-        # save_visualizations are CaptureOptions-native fields: the
+        # keep_orphans/output_device/detach_saved_activations/save_arg_values/
+        # save_code_context/save_rng_states/recurrence_detection/verbose/
+        # compute_input_output_distances/backward_ready/save_raw_input/batch_render/
+        # save_raw_output/save_visualizations are CaptureOptions-native fields: the
         # ``capture_options.<field>`` reads above already resolved each one to
         # its concrete (non-MISSING) default via ``merge_capture_options``,
         # with the same backend-local defaults this block used to re-apply.
@@ -554,14 +553,14 @@ class PaddleBackend:
                 halt_signal = exc
                 output = exc.frontier_output
             trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+            trace._output_slot = stopped(halt_signal.reason) if halt_signal else returned(output)
             trace._paddle_capture_gap_markers.extend(
                 f"{PARAMETER_WRITE_MARKER}: {address}"
                 for address in self._param_write_guard.written_addresses(trace)
             )
             if halt_signal is not None:
                 trace.is_stopped = True
-                trace.stop_reason = halt_signal.reason
-                trace._graph_stop_frontier = halt_signal.reason
+                trace.stop_reason = trace._graph_stop_frontier = halt_signal.reason
                 trace.transformed_output = None
             elif intervention_runtime is not None:
                 intervention_runtime.warn_if_zero_matches()

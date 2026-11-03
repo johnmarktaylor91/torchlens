@@ -18,11 +18,10 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _boundary_node_count(dot_source: str, kind: str) -> int:
@@ -242,10 +241,9 @@ def test_modulelog_show_graph_method(tmp_path: Path) -> None:
     module_log = log.modules["block1"]
     direct = _render_dot(log, tmp_path / "direct", module=module_log)
     method = module_log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "method" / "graph"),
-    )
+    ).dot
 
     assert method == direct
 
@@ -308,7 +306,7 @@ def test_module_focus_under_uncalled_container(tmp_path: Path, address: str, vis
     log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
     assert "blocks" not in log.modules
     assert "heads" not in log.modules
-    dot = _render_dot(log, tmp_path, module=address, vis_mode=vis_mode)
+    dot = _render_dot(log, tmp_path, module=address, rolled=vis_mode == "rolled")
 
     assert f"@{address}" in dot
     assert _boundary_node_count(dot, "input") >= 1

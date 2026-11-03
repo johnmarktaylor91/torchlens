@@ -49,6 +49,7 @@ import torch
 from .._utils.fail_open import fail_open
 from ..errors._base import TorchLensError
 from ._site_record import _require_edge_provenance, bind_entries, edge_address_of, site_record
+from ._site_refusals import multipass_bare_label_message
 from .align import align_resolved_selection
 from .errors import SelectionError, SelectorCompositionError
 from .mask import (
@@ -1226,8 +1227,6 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
 
 def _multipass_bare_label_refusal(site: str, matches: Sequence[Any]) -> SelectionError:
     """Refuse a multi-pass layer's bare spelling: units() addresses ONE op's index space."""
-    from ._site_refusals import multipass_bare_label_message
-
     layer_label = getattr(matches[0], "layer_label", None) or site
     pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
     return _unresolvable(

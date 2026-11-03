@@ -43,11 +43,11 @@ verifier reports per-field findings with consequences instead of one alarm
 bell.
 
 ```python
-report = pp.audit(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3})
+report = pp.compare(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3})
 print(report.verdict)                  # "mismatch"
 print(report.mismatched_fields)        # ("mean", "std")
 
-pp.audit(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3}, strict=True)
+pp.compare(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3}, strict=True)
 # PreprocessingAuditError [preprocessing_audit_mismatch]: strict preprocessing
 # audit found mismatched fields -- mean: authority=(0.485, 0.456, 0.406) ...
 ```

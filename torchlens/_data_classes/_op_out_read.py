@@ -28,7 +28,7 @@ def _out_read_state(slot: Callable[..., Any], out: Any) -> dict[str, Any]:
 def _synthesized_out_read_due(source_trace: Any) -> bool:
     """Whether an ``Op.out`` read on this trace owes the synthesized-value warning.
 
-    Quickstart memo D7 (F17): the first raw value read on a trace whose input
+    Quickstart gate: the first raw value read on a trace whose input
     values were synthesized warns once per Trace. ``trace[label]`` returns the
     Op, so the read the quickstart documents (``log[...].out``) lands on
     ``Op.out``; the gate itself dedupes per trace.

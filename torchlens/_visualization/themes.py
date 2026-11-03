@@ -24,8 +24,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from .._vocab.node_spec import NodeSpec
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
-from .node_spec import NodeSpec
 
 #: The Okabe-Ito semantic role palette (memo FORK-2 branch A set). Shipped as
 #: data only, no skin renders it; the CVD accessibility gate measures it.
@@ -323,15 +323,13 @@ def collapse_tokens(theme: VisualizationTheme) -> CollapseTokens:
     )
 
 
-def resolve_theme(theme: str, *, for_paper: bool = False) -> VisualizationTheme:
+def resolve_theme(theme: str) -> VisualizationTheme:
     """Return a supported visualization theme preset.
 
     Parameters
     ----------
     theme:
         Theme preset name.
-    for_paper:
-        Whether to force the paper preset.
 
     Returns
     -------
@@ -344,7 +342,7 @@ def resolve_theme(theme: str, *, for_paper: bool = False) -> VisualizationTheme:
         If the requested theme is unknown.
     """
 
-    resolved_name = "paper" if for_paper else theme
+    resolved_name = theme
     if resolved_name not in THEME_PRESETS:
         supported = ", ".join(sorted(THEME_PRESETS))
         raise InvalidArgumentError(

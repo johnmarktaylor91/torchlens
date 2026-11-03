@@ -302,8 +302,10 @@ def test_capture_options_private_filter_both_directions() -> None:
     # (F01-AMENDED landed) both parents carry log_injections; pins agree.
     # 49 -> 50: U40.1 CaptureOptions.carry_state.
     # 50 -> 51: measure.2 CaptureOptions.measure_host_peak_memory.
-    # 49 -> 50: CaptureOptions.aten_ops (public ATen operation recording).
-    assert len(_censuses.capture_option_fields()) == 50
+    # 51 -> 57: the options restructure (C2, JMT's rulings of 2026-11-01): the train
+    # pinned 49 and the C2 base 59; the merged class carries 57 public fields.
+    # 57 -> 58: CaptureOptions.aten_ops (public ATen operation recording).
+    assert len(_censuses.capture_option_fields()) == 58
 
 
 def test_env_var_census_shapes() -> None:

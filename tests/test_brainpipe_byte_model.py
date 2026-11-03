@@ -58,11 +58,11 @@ def _real_retained_bytes(log: object) -> int:
 def test_saved_activation_memory_equals_real_retained_bytes(transform, keep_raw) -> None:
     """The accounting oracle: reported == summed real retained bytes."""
 
-    save_options = tl.options.SaveOptions(
+    capture = tl.options.CaptureOptions(
         activation_transform=transform,
         save_raw_activations=keep_raw,
     )
-    log = tl.trace(_model(), torch.randn(64, 256), save=save_options)
+    log = tl.trace(_model(), torch.randn(64, 256), capture=capture)
     reported = int(log.cost.saved_activation_memory)
     real = _real_retained_bytes(log)
     assert reported == real, (
@@ -83,7 +83,7 @@ def test_reduced_configuration_reports_reduced_bytes() -> None:
     reduced_log = tl.trace(
         _model(),
         torch.randn(64, 256),
-        save=tl.options.SaveOptions(activation_transform=_pool, save_raw_activations=False),
+        capture=tl.options.CaptureOptions(activation_transform=_pool, save_raw_activations=False),
     )
     assert int(reduced_log.cost.saved_activation_memory) * 16 < int(
         raw_log.cost.saved_activation_memory

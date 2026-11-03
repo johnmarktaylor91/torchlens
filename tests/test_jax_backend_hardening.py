@@ -1096,7 +1096,7 @@ def test_jax_rejects_callback_effects() -> None:
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
     (
-        ({"layers_to_save": ["tanh"]}, "full-save only"),
+        ({"save": ["tanh"]}, "full-save only"),
         ({"lookback": 1}, "full-save only"),
         # Gated options refuse through the central capability gate, whose
         # canonical message names the owning flag and the refused option.
@@ -1117,10 +1117,7 @@ def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -
 
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
-    (
-        ({"payload_policy": "full"}, "payload_policy.*not implemented"),
-        ({"save_preview": True}, "save_preview.*not implemented"),
-    ),
+    (({"payload_policy": "full"}, "payload_policy.*not implemented"),),
 )
 def test_jax_rejects_declared_future_public_options(
     kwargs: dict[str, Any],
@@ -1192,7 +1189,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.autograd.num_backward_edges is None
 
     outpath = tmp_path / "jax_graph"
-    dot = trace.draw(path=str(outpath), vis_save_only=True, file_format="dot")
+    dot = trace.draw(path=str(outpath), file_format="dot").dot
     assert isinstance(dot, str)
 
     audit_path = tmp_path / "jax_audit.tlspec"

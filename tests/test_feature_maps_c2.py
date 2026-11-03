@@ -239,10 +239,9 @@ def test_feature_map_node_spec_renders_one_image_and_overlay_differs_from_fallba
     feature_maps(trace, max_stimuli=2)
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(max_stimuli=2, max_channels=1),
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "feature_graph"),
-    )
+    ).dot
 
     image_paths = list((Path(trace._visualizer_dir) / "feature_maps").glob("*.png"))
     assert len(image_paths) == 1
@@ -316,10 +315,9 @@ def test_tlspec_roundtrip_preserves_maps_and_renders_after_load(tmp_path: Path) 
     assert torch.equal(restored._annotation_blobs["featmap:layer:conv2d_1_1:maps"], original)
     dot = restored.draw(
         node_spec_fn=feature_map_node_spec(),
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "restored_feature_graph"),
-    )
+    ).dot
     assert "feature_maps" in dot
 
 
@@ -332,15 +330,13 @@ def test_default_draw_without_hook_is_byte_identical_and_plain_trace_has_no_blob
     assert trace._annotation_blobs is None
 
     first = trace.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "first"),
-    )
+    ).dot
     second = trace.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "second"),
-    )
+    ).dot
 
     assert trace._annotation_blobs is None
     assert first == second
@@ -443,10 +439,9 @@ def test_node_spec_tooltip_discloses_per_cell_normalization(tmp_path: Path) -> N
     feature_maps(trace)
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(),
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "norm_disclosure"),
-    )
+    ).dot
 
     assert "cells independently normalized" in dot
 
@@ -485,10 +480,9 @@ def test_tooltip_reports_true_totals_not_capped_counts(tmp_path: Path) -> None:
 
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(),
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "true_totals"),
-    )
+    ).dot
 
     assert "4 of 6 stimuli" in dot
     assert "4 of 8 channels" in dot
@@ -503,10 +497,9 @@ def test_aggregate_labels_report_actual_reduction(tmp_path: Path) -> None:
     feature_maps(trace, reduce="max")
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(),
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "reduce_label"),
-    )
+    ).dot
 
     assert "aggregate (max)" in dot
 
@@ -556,12 +549,11 @@ def test_rolled_draw_with_annotations_survives_multipass_layers(tmp_path: Path) 
     feature_maps(trace, save=tl.in_module("stem"))
 
     dot = trace.draw(
-        vis_mode="rolled",
+        rolled=True,
         node_spec_fn=feature_map_node_spec(),
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "rolled_annotated"),
-    )
+    ).dot
     assert "Feature maps for" in dot
 
     from torchlens.repgeom import (

@@ -16,6 +16,7 @@ from .._io import (
 from .._quantities import Bytes, Duration
 from .._trace_state import TraceState
 from . import _doors, _trace_rehydrate
+from ._trace_pickle_state import _restore_pickled_verification, _sanitize_pickled_verification
 from ._transform_repr import _scrubbed_transform_repr
 from .derived_grad import DerivedGradAccessor
 from .module import ModuleAccessor
@@ -120,6 +121,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "batch_render": "auto",
     "transformed_output": None,
     "_output_transform": None,
+    "_output_slot": None,
     "_options_save_transformed_output": "small",
     "layer_visualizers": None,
     "save_visualizations": False,
@@ -369,6 +371,9 @@ def trace_getstate(trace: Trace) -> dict[str, Any]:
     state["_options_activation_transform"] = None
     state["_options_grad_transform"] = None
     state["_output_transform"] = None
+    # The actual forward return can retain arbitrary live user objects.
+    # It is available only on the capture that executed the forward.
+    state["_output_slot"] = None
     # R10-7b: the MODERN tl.trace(..., transform=...) kwarg populates
     # `_transform`, a fourth raw-callable holder the original fix missed
     # (it covered only the deprecated activation_transform= spelling).
@@ -407,38 +412,16 @@ def trace_getstate(trace: Trace) -> dict[str, Any]:
     state["_capture_outcome"] = (
         outcome.to_payload() if outcome is not None and hasattr(outcome, "to_payload") else None
     )
-    # grind-r5 P7 (b3 opus R10-1 / b6 opus R16-1): the producer's NEGATIVE
-    # verification claim persists -- a capture TorchLens itself refused to
-    # bless must not round-trip into "no claim". A POSITIVE claim never
-    # persists (a tampered artifact could otherwise forge verified=True;
-    # verdicts may only degrade across persistence). ``rescue_rerun``
-    # stays session-time per the migration doc.
-    if state.get("_provenance_verified") is False:
-        reason = state.get("_provenance_verification_reason")
-        state["_provenance_verification_reason"] = reason if isinstance(reason, str) else None
-    else:
-        state["_provenance_verified"] = None
-        state["_provenance_verification_reason"] = None
+    _sanitize_pickled_verification(state)
     state["tlspec_version"] = TLSPEC_VERSION
     return state
 
 
 def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor: type) -> None:
     """Restore pickle state and rebuild weakref-backed links."""
+    state["_output_slot"] = None
     pickle_module_accessor_state = state.pop("_pickle_module_accessor_state", None)
-    # P7/R10: restore the persisted NEGATIVE verification disclosure. The
-    # row is string-only and can only ever WORSEN a verdict: anything but
-    # the exact {"verified": False} shape is ignored (stays "no claim"), so
-    # a forged row cannot bless a capture and a stripped row merely reverts
-    # to the historical launder this closes for honest artifacts.
-    verification_row = state.pop("_capture_verification", None)
-    if (
-        isinstance(verification_row, dict)
-        and verification_row.get("verified") is False
-        and isinstance(verification_row.get("reason"), (str, type(None)))
-    ):
-        state["_provenance_verified"] = False
-        state["_provenance_verification_reason"] = verification_row.get("reason")
+    _restore_pickled_verification(state)
     for field_name in (
         *_doors.ir().workspaces.LEGACY_TRACE_BUILD_STATE_KEYS,
         # "_build_state" is the pre-M10 flat scratchpad key; the three

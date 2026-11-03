@@ -30,7 +30,7 @@ class ModuleAccessorFilters:
         return []
 
     def _composition_note(self) -> str | None:
-        """Composition breakdown: total calls across modules (F10)."""
+        """Composition breakdown: total calls across modules."""
 
         calls = sum(getattr(ml, "num_calls", 0) or 0 for ml in self._list)
         if calls <= len(self._list):

@@ -74,9 +74,8 @@ def test_each_decode_step_matches_a_full_no_cache_forward(family: str) -> None:
     n_new = 8
     plain = model.generate(PROMPT, **_greedy(n_new))
 
-    tokens, generation = tl.record(
-        model, PROMPT, save=_save(sites), generate_kwargs=_greedy(n_new), return_output=True
-    )
+    generation = tl.record(model, PROMPT, save=_save(sites), generate_kwargs=_greedy(n_new))
+    tokens = generation.output
 
     assert isinstance(generation, GenerationRecording)
     assert torch.equal(tokens, plain)
@@ -137,7 +136,11 @@ def test_sampled_generation_records_its_seed_and_reproduces() -> None:
     plain = model.generate(PROMPT, **settings)
 
     generation = tl.record(
-        model, PROMPT, save=tl.module("transformer.ln_f"), generate_kwargs=settings, seed=7
+        model,
+        PROMPT,
+        save=tl.module("transformer.ln_f"),
+        generate_kwargs=settings,
+        capture=tl.options.CaptureOptions(seed=7),
     )
 
     assert torch.equal(generation.sequences, plain)
@@ -308,8 +311,12 @@ def test_session_end_walk_does_not_grow_with_the_step_count(monkeypatch) -> None
 @pytest.mark.parametrize(
     ("record_kwargs", "extra", "fragment"),
     [
-        ({"halt": lambda ctx: False}, {}, "halted forward"),
-        ({"on_forward_error": "return_partial"}, {}, "partial forward-error modes"),
+        ({"stop_after": lambda ctx: False}, {}, "halted forward"),
+        (
+            {"on_forward_error": "return_partial"},
+            {},
+            "partial forward-error modes",
+        ),
         ({}, {"prompt_lookup_num_tokens": 2}, "assisted decoding"),
     ],
 )

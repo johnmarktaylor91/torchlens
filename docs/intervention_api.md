@@ -1,11 +1,11 @@
 # Intervention API Reference
 
-This page documents the public v2 intervention API that shipped in the current
-branch. It avoids proposed naming changes from separate design workstreams.
+This page documents the public intervention API: selectors, edit helpers, hooks,
+replay and bundles.
 
 To apply one intervention to many forwards or a `generate()` loop, use `spec.bind(model)`
-(capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec,
-return_output=True)` when you need activations too, or rerun a steered trace with
+(capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec)` (the
+model output is `recording.output`) when you need activations too, or rerun a steered trace with
 `trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
 entry "Guarded fast rerun"). Recipe: "Steering many forwards / generation" in
 [agent-reference/common-patterns.md](agent-reference/common-patterns.md).
@@ -19,16 +19,16 @@ Selectors resolve against completed `Trace.layers` records.
 | `tl.label` | `label(name: str)` | Exact final, raw, short, or pass-qualified label. |
 | `tl.func` | `func(name: str)` | Match captured function name OR normalized layer type such as `"relu"` or `"add"`. |
 | `tl.module` | `module(address: str)` | Match a module output boundary. |
-| `tl.label_contains` | `contains(substring: str)` | Case-insensitive label substring search. |
-| `tl.label_matches` | `regex(pattern: str)` | Case-sensitive `re.search` over labels. |
+| `tl.label_contains` | `label_contains(substring: str)` | Case-insensitive label substring search. |
+| `tl.label_matches` | `label_matches(pattern: str)` | Case-sensitive `re.search` over labels. |
 | `tl.all_sites` | `all_sites()` | Every site; the named form of `tl.label_matches(".*")`. `tl.all_sites() - region` is the complement of `region` in the whole trace. |
 | `tl.where` | `where(predicate, *, name_hint=None)` | Predicate over layer pass records; non-portable. |
 | `tl.in_module` | `in_module(address: str)` | Match sites contained in a module address. |
 | `tl.grad_fn` | `grad_fn(name=None, *, label=None, is_custom=None)` | Backward grad_fn by autograd class name, label substring or custom flag (backward sites only). |
 
 One interpreter evaluates every selector in every lifecycle (capture-time
-`save=`, post-hoc `find_sites`, live hooks); `contains` is case-insensitive and
-`regex` case-sensitive everywhere. Post-hoc `contains`/`regex` search the
+`save=`, post-hoc `find_sites`, live hooks); `label_contains` is case-insensitive and
+`label_matches` case-sensitive everywhere. Post-hoc `label_contains`/`label_matches` search the
 final `layer_label` only; exact `tl.label` additionally matches raw, short,
 and pass-qualified spellings. Capture-only selectors (`tl.followed_by`,
 `tl.preceded_by`) and mutator-only selectors (`tl.facet`, `tl.head`) refuse
@@ -67,8 +67,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -80,7 +79,7 @@ conditional = tl.trace(
     model,
     x,
     intervene=tl.when(tl.func("relu") & tl.preceded_by(tl.in_module("block")), tl.zero_ablate()),
-    lookback=4,
+capture=CaptureOptions(lookback=4),
 )
 ```
 
@@ -208,8 +207,8 @@ capability statement).
 Forward exceptions keep the historical behavior unless you opt in. With
 `on_forward_error="attach_partial"`, TorchLens attaches `exc.partial_recording` and re-raises
 the original exception. With `on_forward_error="return_partial"`, `tl.record(...)` returns a
-failed partial `Recording`; `return_output=True` returns `(None, partial)` because there is no
-valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
+failed partial `Recording`; its `output` refuses with `output_forward_failed` because there is
+no valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
 string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials are not topology-complete, so `Recording.to_trace()` and
@@ -285,11 +284,11 @@ returns, so a fork made right after a rerun costs the same as any other
 (about 420,000 calls; about 1.25 million before, when that capture's cleanup
 ran inside whatever came next, typically the next fork).
 
-`Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
+`Trace.draw(intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
 `log.set(...)` or `log.do(...)`. Each edited node gets a purple ring and a
 last row naming the edit (`Δ zero_ablate`), and the header names the edits;
-`vis_show_cone=True` (off by default) adds a translucent purple underlay
+`show_cone=True` (off by default) adds a translucent purple underlay
 under the arrows and node outlines the edit changed downstream. Capture-time `intervene=...` calls record
 fire metadata on matched layers, but they are not replay plans and are not
 drawn as planned sites.
@@ -321,10 +320,19 @@ inserted edit op still meets its counterpart. A site that only some members have
 
 Relationship gates are intentional, and they check two predicates separately:
 a model-axis floor (`node` needs `same_param_shapes`; comparison reads need
-`shared_graph`) and, for comparison reads, VALUE-LEVEL input identity derived
-from retained input payloads. An identity relationship is never accepted as
-proof of input equality, unprovable input identity refuses fail-closed
-(`bundle_gate_input_identity_unproven`), and members joined by an ordering
+`shared_graph`) and, for comparison reads, SITE LINE-UP. Runs on different
+inputs or checkpoints compare (clean vs. patched, two prompts, two weight
+states) whenever their graphs line up: the pair either captured the same input
+VALUES (derived from retained input payloads) or has equal graph-shape hashes.
+A pair on different inputs whose graphs differ (data-dependent control flow
+took another branch) refuses `bundle_gate_input_values_differ`; with no input
+payloads to prove identity and graphs that differ it refuses
+`bundle_gate_input_identity_unproven`. An identity relationship is never
+accepted as proof of input equality or of line-up. Inputs of different shapes
+(prompts of different token counts) refuse one of two ways: when their graphs
+still line up, at the first site whose shapes differ (`metric_shape_mismatch`,
+naming the site); when the length changed the graph (GPT-2 does), with
+`bundle_gate_input_values_differ`, whose message names both input shapes. Members joined by an ordering
 relation (`successor_of`/`forked_from`/`escalates`) are not comparison
 operands regardless of rank (`bundle_gate_ordering_topology`). Pair-scoped
 reads (`compare(a, b)`, `most_changed` baseline pairs) gate only the

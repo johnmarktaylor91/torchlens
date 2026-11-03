@@ -27,11 +27,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from ._stats_table import StatsTable
 from ._summary_charset import degrade
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from ._stats_table import StatsTable
 
 #: The five-value evidence enum (summary item 10 / costreport D2). Orthogonal
 #: to applicability; a mixed aggregate never upgrades past its weakest member.
