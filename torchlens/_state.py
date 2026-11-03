@@ -544,13 +544,13 @@ default on is a maintainer fork (cost + observer-effect trade), not a lane decis
 """
 
 _runnable_ledger_armed: bool = False
-# Private wave-0 ATen recorder edge-token arm. It is capture-scoped and never portable.
+# ATen recorder edge-token arm (``CaptureOptions(aten_ops=True)``). Capture-scoped, never portable.
 _aten_recording_armed: bool = False
 """Whether the r35 event-lifecycle ledger requires wrapper ownership tokens.
 
-Armed only around a runnable-eligible (``replayable``) capture forward so
-the dispatch census can attribute raised / host-returning aten events to their
-exact wrapper owner even when both diagnostic shadow modes are off.
+Armed around a runnable-eligible (``replayable``) capture forward and around an
+``aten_ops=True`` capture, so the dispatch census can attribute raised / host-returning
+aten events to their exact wrapper owner even when both diagnostic shadow modes are off.
 """
 _prepared_models: weakref.WeakSet[Any] = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.

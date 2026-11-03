@@ -272,12 +272,14 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 ### Documented-unstable ATen profile INDEX
 
-The wave-0 ATen execution-profile core is gated off for ordinary callers. As of the tlspec v8
-coordinated bump its fields persist (`FieldPolicy.KEEP`) and loaded profiles validate their
-foreign keys whenever present; older v6/v7 artifacts contain no primitive profile. The public recorder, entity accessors, and absent-profile
-refusal remain unavailable until the S2-owned capability amendment lands. The names below are the
-exact surface already introduced by the gated core. Each is documented unstable and may be renamed
-or removed without a compatibility alias. No validation or honesty tripwire may be weakened.
+The ATen execution profile is recorded by the public switch `CaptureOptions(aten_ops=True)` and
+served by the stable accessors `Trace.aten_ops`, `Trace.has_aten_ops`, `Trace.aten_gaps` and
+`Op.aten_ops` (entries below this index); an absent profile refuses typed with
+`AtenOpsUnavailableError` (`aten_ops_unavailable`). As of the tlspec v8 coordinated bump the
+profile's fields persist (`FieldPolicy.KEEP`) and loaded profiles validate their foreign keys
+whenever present; older v6/v7 artifacts contain no primitive profile. The names below are the
+row-level surface the profile exposes. Each is documented unstable and may be renamed or removed
+without a compatibility alias. No validation or honesty tripwire may be weakened.
 
 <!-- ATEN-UNSTABLE-INDEX:START -->
 
@@ -305,6 +307,46 @@ or removed without a compatibility alias. No validation or honesty tripwire may 
 | Temporary label grammar | `aten_<sequence>` | unstable -- no deprecation shim owed |
 
 <!-- ATEN-UNSTABLE-INDEX:END -->
+
+**aten_ops (CaptureOptions)**
+: Opt-in (default `False`): the torch capture records the ATen operations each logged torch call
+  dispatched to, as value-free `AtenOp` rows, through a dispatch mode installed for the forward
+  and, with `backward_ready=True`, for `Trace.backward()` / `log_backward()`. The default installs
+  no dispatch mode and adds no per-op work. A session-time knob (not persisted; load restores
+  `False`) that `run()` refreshes inherit; the recorded rows themselves persist (tlspec v8+), so a
+  loaded trace keeps `has_aten_ops`. `run()` results, fast or not, inherit the recording of the
+  trace they refresh; non-torch backends record nothing. GPU kernel recording is out of scope. Spelling: velocity walk builds.2 (1 Nov 2026).
+
+**Trace.has_aten_ops**
+: `True` when the trace carries recorded ATen operations: after a capture with
+  `CaptureOptions(aten_ops=True)` (a present-but-empty profile counts) and after loading an
+  artifact saved from one; `False` otherwise. The one accessor that never raises. Spelling:
+  velocity walk builds.3 (1 Nov 2026; booleans take `is_`/`has_`).
+
+**Trace.aten_ops**
+: Every recorded `AtenOp` in dispatch order, forward rows then backward rows, as a tuple. Raises
+  `AtenOpsUnavailableError` (`aten_ops_unavailable`) when the capture recorded none, so an empty
+  answer never stands in for "recording was off".
+
+**Trace.aten_gaps**
+: The disclosed interiors where ATen rows are missing by construction (the profile's
+  `mode_paused_interior` records): each names the capture phase, the dispatch sequence it spans
+  and the owning op references of a stretch where the dispatch mode was paused, for example inside
+  a user-injected intervention. An empty tuple means the recorded rows are complete. Raises
+  `AtenOpsUnavailableError` when the capture recorded none.
+
+**Op.aten_ops**
+: The ATen operations this op's torch call dispatched to, in dispatch order: the rows whose
+  resolved owner references carry the op's label. An op whose call dispatched nothing observable
+  yields an empty tuple while the trace still `has_aten_ops`. Raises `AtenOpsUnavailableError`
+  when the owning trace recorded none.
+
+**AtenOpsUnavailableError**
+: `torchlens.errors.AtenOpsUnavailableError` (`CaptureError`, `RuntimeError` lineage), code
+  `aten_ops_unavailable` in `exc.fields["code"]`: `Trace.aten_ops`, `Trace.aten_gaps` or
+  `Op.aten_ops` was read on a capture that recorded no ATen operations (the switch was off, the
+  artifact was saved without it, or the trace is a `run(fast=True)` result). The message names the
+  remedy, `CaptureOptions(aten_ops=True)`; check `Trace.has_aten_ops` first to avoid it.
 
 `AtenOp` is one value-free dispatcher call measured during a concrete capture. Its label is opaque,
 capture-local, and intentionally excluded from universal Trace string lookup. `OpRef` is a redundant

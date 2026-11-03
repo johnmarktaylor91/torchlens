@@ -149,6 +149,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "track_nonfinite": "capture_config",
     "track_device_memory": "capture_config",
     "measure_host_peak_memory": "capture_config",
+    "_options_aten_ops": "capture_config",
     "_device_memory_samples": "capture_config",
     "_autograd_saved_bands": "capture_config",
     "_autograd_seen_saved_storages": "capture_config",

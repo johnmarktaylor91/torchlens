@@ -570,4 +570,36 @@ DOCS: dict[str, str] = {
             Frozen sub-DAG view (session-time only; never persisted).
         """
     ),
+    "has_aten_ops": (
+        """Whether this trace carries recorded ATen operations.
+
+        ``True`` after a capture with ``CaptureOptions(aten_ops=True)`` and after
+        loading an artifact saved from one (a present-but-empty profile counts);
+        ``False`` otherwise. ``run()`` results, fast or not, inherit the recording
+        of the trace they refresh.
+        """
+    ),
+    "aten_ops": (
+        """All recorded ATen operations in dispatch order (forward, then backward).
+
+        Raises
+        ------
+        AtenOpsUnavailableError
+            If the capture recorded none; re-capture with ``aten_ops=True``.
+        """
+    ),
+    "aten_gaps": (
+        """Disclosed stretches where ATen rows are missing by construction.
+
+        Each gap names the capture phase, the dispatch sequence it spans and the
+        owning op references of an interior where the dispatch mode was paused
+        (for example inside a user-injected intervention). An empty tuple means
+        the recorded rows are complete.
+
+        Raises
+        ------
+        AtenOpsUnavailableError
+            If the capture recorded no ATen operations.
+        """
+    ),
 }

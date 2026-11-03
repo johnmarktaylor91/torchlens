@@ -92,7 +92,7 @@ torchlens/_data_classes/_trace_removal.py::batch_remove_log_entries	67
 torchlens/_data_classes/_trace_rerun_state.py::replace_state_from	71
 torchlens/_data_classes/_trace_stack.py::stack_traces	68
 torchlens/_data_classes/_trace_state_io.py::trace_getstate	111
-torchlens/_data_classes/_trace_state_io.py::trace_setstate	334
+torchlens/_data_classes/_trace_state_io.py::trace_setstate	282
 torchlens/_data_classes/cleanup.py	1081
 torchlens/_data_classes/cleanup.py::_scrub_conditional_fields_after_removal	72
 torchlens/_data_classes/cleanup.py::cleanup	137
@@ -107,14 +107,14 @@ torchlens/_data_classes/module.py	2723
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3645
+torchlens/_data_classes/op.py	3640
 torchlens/_data_classes/op.py::Op.__getattribute__	96
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3732
+torchlens/_data_classes/trace.py	3703
 torchlens/_data_classes/trace.py::Trace.__init__	366
 torchlens/_data_classes/trace.py::Trace.draw	107
 torchlens/_data_classes/trace.py::Trace.save	83
@@ -1278,7 +1278,7 @@ torchlens/neuro/_rdms.py::_source_mode	114
 torchlens/neuro/_rdms.py::_validated_matrix	77
 torchlens/neuro/_rdms.py::rdms	127
 torchlens/options.py	1900
-torchlens/options.py::CaptureOptions.__init__	203
+torchlens/options.py::CaptureOptions.__init__	193
 torchlens/options.py::VisualizationOptions.__init__	132
 torchlens/options.py::_merge_grouped_options	74
 torchlens/options.py::visualization_to_render_kwargs	65
