@@ -176,9 +176,12 @@ def draw(*args: Any, **kwargs: Any) -> Any:
     Examples
     --------
     >>> # requires: graphviz
-    >>> drawing = tl.draw(model, x, file_format="svg")
-    >>> type(drawing).__name__, drawing.file_format, drawing.path is None
-    ('Drawing', 'svg', True)
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     drawing = tl.draw(model, x, path=f"{folder}/net.svg", file_format="svg")
+    TorchLens graph written to ...net.svg
+    >>> type(drawing).__name__, drawing.file_format, drawing.path.name
+    ('Drawing', 'svg', 'net.svg')
     """
 
     from ._quickstart._render import draw as _draw_impl

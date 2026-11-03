@@ -68,9 +68,9 @@ class TorchLensError(Exception):
 
     Examples
     --------
-    >>> error = TorchLensError("capture refused", code="example_refusal")
+    >>> error = TorchLensError("capture refused", code="activation_not_saved")
     >>> error.fields["code"], error.severity
-    ('example_refusal', 'recoverable')
+    ('activation_not_saved', 'recoverable')
     >>> issubclass(tl.errors.SelectionError, TorchLensError)
     True
     """
@@ -216,9 +216,9 @@ class TorchLensWarning(UserWarning):
     >>> import warnings
     >>> with warnings.catch_warnings(record=True) as caught:
     ...     warnings.simplefilter("always")
-    ...     warnings.warn(TorchLensWarning("check this", code="example_notice"))
+    ...     warnings.warn(TorchLensWarning("check this", code="trace_zero_fire"))
     >>> caught[0].category.__name__, caught[0].message.fields["code"]
-    ('TorchLensWarning', 'example_notice')
+    ('TorchLensWarning', 'trace_zero_fire')
     """
 
     default_severity: ClassVar[Severity] = "informational"

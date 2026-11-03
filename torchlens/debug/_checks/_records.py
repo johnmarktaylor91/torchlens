@@ -92,12 +92,12 @@ class CheckFinding:
     Examples
     --------
     >>> finding = tl.debug.CheckFinding(
-    ...     check_name="demo", code="demo_code", severity="info", action="collect", message="hello"
+    ...     check_name="demo", code="param_value_nonfinite", severity="info", action="collect", message="hello"
     ... )
     >>> finding.severity
     'info'
     >>> finding.to_dict()["code"]
-    'demo_code'
+    'param_value_nonfinite'
     >>> try:
     ...     _ = tl.debug.CheckFinding("demo", "c", "fatal", "collect", "m")
     ... except tl.errors.CheckConfigError as err:
