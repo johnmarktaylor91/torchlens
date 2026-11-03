@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 import pytest
 import torch
 
+from tests.support.cairosvg_skip import require_cairosvg
 from torchlens._observability import (
     Histogram,
     HistoryCollector,
@@ -395,7 +396,7 @@ class TestRenderers:
 
 class TestCairosvgRoundTrip:
     def test_all_views_convert(self) -> None:
-        cairosvg = pytest.importorskip("cairosvg")
+        cairosvg = require_cairosvg()
         view = _synthetic_view()
         for document in (
             quantile_fan(view, "m:a"),
