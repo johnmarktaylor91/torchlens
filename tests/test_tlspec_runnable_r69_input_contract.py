@@ -43,6 +43,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    read_runnable_descriptor,
+    write_runnable,
+)
 from torchlens._input_walk import (
     classify_scalar,
     decode_mapping_key,
@@ -696,12 +700,8 @@ def test_r69_multi_slot_escape_witnesses_stay_runnable(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     # A genuinely DUPLICATED escape fact (same name AND slot) still refuses at parse.
     import copy as _copy
-    import json as _json
-    import os as _os
 
-    manifest_path = _os.path.join(path, "manifest.json")
-    manifest = _json.load(open(manifest_path))
-    run = manifest["run"]
+    run = read_runnable_descriptor(path)
     twin = _copy.deepcopy(
         next(
             w
@@ -712,7 +712,7 @@ def test_r69_multi_slot_escape_witnesses_stay_runnable(tmp_path: Path) -> None:
     twin["witness_id"] = "witness:9999"
     twin["order"] = 9999
     run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
-    _json.dump(manifest, open(manifest_path, "w"))
+    write_runnable(path, run)
     from torchlens._runnable import ReadinessStatus
 
     reloaded = tl.load(path)
