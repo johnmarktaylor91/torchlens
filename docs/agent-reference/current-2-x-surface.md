@@ -77,6 +77,12 @@
   step 0 the prefill; `.records_at(step)`; `.settings`; `.not_recorded`). Unsupported decoding
   (beams, batches, several return sequences, `use_cache=False`, `intervene=`) refuses with
   `record_generation_unsupported`.
+  `generation=torchlens.recording.GenerationOptions(reducers=, kv_sites=, keep_last=, spill=,
+  max_saved_bytes=)` (DOCUMENTED-UNSTABLE) streams that recording at thousands of tokens: per-token
+  reducers from `torchlens.recording.reducers` (`norm`, `top_k`, `probe`; each a `Reducer`), KV-cache
+  slices as series, a ring buffer with disk spill and a retained-byte guard
+  (`record_generation_budget_exceeded`); `GenerationRecording.series(name)` returns a
+  `TokenSeries` (`positions`, `values`), `.series_names`, `.peak_saved_bytes`, `.evicted_steps`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
   registry. The old `keep_op=`/`keep_module=` alias kwargs are removed; `save=` is the only

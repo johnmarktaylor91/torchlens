@@ -105,6 +105,36 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   cache, `intervene=`, `halt=` and partial forward-error modes refuse with
   `record_generation_unsupported`, whose `reason` field names what is unsupported.
 
+**Streaming generation recording** *(spellings documented-unstable)*
+: `tl.record(model, input_ids, generate_kwargs={...}, generation=GenerationOptions(...))` widens
+  the generation recorder from "keep the selected sites at every token" to a per-token stream
+  that stays small at thousands of tokens. `torchlens.recording.GenerationOptions` groups it:
+  `reducers=` maps a site address to a callable applied to the site's payload after every forward,
+  whose result (first axis the forward's positions) replaces the payload in the record and is
+  recorded in the record's `metadata` (`reducer`, `reduced_from_shape`); the declared sites are
+  recorded even without `save=`. `torchlens.recording.reducers` ships `norm(ord=2.0, dim=-1,
+  position_dim=1)` (one norm per position), `top_k(k, dim=-1, position_dim=-2)` (the `k` largest
+  indices per position, the attended keys on an attention-probability site) and
+  `probe(fitted, position_dim=1)` (the decision function of an already-fitted linear probe: a
+  scikit-learn linear estimator with `coef_`/`intercept_`, an `nn.Linear` or a `(weight, bias)`
+  pair), each a named `Reducer`. `kv_sites=` names decoder layer indexes (or `True` for all)
+  whose new KV-cache slices are kept per token as series `kv.<layer>.key` and `kv.<layer>.value`
+  (`[positions, kv_heads, head_dim]`). `keep_last=N` is a ring buffer: the payloads of older
+  forwards are written to `spill=` (one `torch.save` file per step) or dropped, and the record
+  keeps a metadata stub (`payload`, `spill_file`). `max_saved_bytes=` (512 MiB by default,
+  `None` off) refuses with `record_generation_budget_exceeded` when the retained bytes exceed
+  the budget, projected for the whole generation right after the first decode step. The
+  `GenerationRecording` adds `.options`, `.series_names`, `.series(name)` (a `TokenSeries`:
+  `name`, `positions`, a `range` of absolute positions, `values`, one row per position, read back
+  from the spill when evicted; refuses an unknown or fully dropped series with
+  `record_generation_step_missing`), `.peak_saved_bytes` and `.evicted_steps` (step to
+  `"spilled"` or `"dropped"`). A reducer that raises, returns a non-tensor or a value whose
+  first axis is not the forward's positions, a site a forward did not record, a duplicate site
+  per forward, or a `kv_sites` layer the cache lacks refuses with
+  `record_generation_reducer_invalid`; a malformed `GenerationOptions` or `generation=` without
+  `generate_kwargs=` refuses with `record_generation_options_invalid`. The cost benchmark is
+  `benchmarks/generation_stream_cost.py`.
+
 **Capture outcome**
 : The frozen `Trace.outcome`, `Recording.outcome`, or `PartialTrace.outcome`. Its status is one of
   `COMPLETE`, `STOPPED`, `ABORTED_NONFINITE`, `FAILED`, `UNATTESTED`, or `UNKNOWN`; failed outcomes
