@@ -16,6 +16,8 @@ scratch files: no network, well under 5 s.
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -100,19 +102,41 @@ def test_commit_msg_hook_accepts_a_normal_message_and_approval_file(tmp_path: Pa
 
 
 def test_release_guard_refuses_unapproved_major(tmp_path: Path) -> None:
-    """The release check refuses X+1.0.0 unless the approval file names exactly it."""
+    """The workflow's own guard step refuses X+1.0.0 unless the approval file names exactly it.
 
+    ``semantic-release`` is a stub that prints the version it is told to, so the
+    step's shell text and the check run exactly as in the release job.
+    """
+
+    steps = _release_steps()
+    run_text = steps[_step_index(steps, "scripts/check_release_major.py")]["run"]
     (tmp_path / "pyproject.toml").write_text('[project]\nversion = "2.36.0"\n', encoding="utf-8")
+    (tmp_path / "scripts").mkdir()
+    shutil.copy(_RELEASE_GUARD, tmp_path / "scripts" / _RELEASE_GUARD.name)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "python").symlink_to(sys.executable)
+    stub = bin_dir / "semantic-release"
+    stub.write_text('#!/bin/sh\nprintf "%s\\n" "$STUB_NEXT"\n', encoding="utf-8")
+    stub.chmod(0o755)
 
     def run(next_version: str) -> int:
+        env = {
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+            "HOME": str(tmp_path),
+            "STUB_NEXT": next_version,
+        }
         return subprocess.run(
-            [sys.executable, str(_RELEASE_GUARD), "--next", next_version, "--root", str(tmp_path)],
+            ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", run_text],
+            cwd=tmp_path,
+            env=env,
             capture_output=True,
             text=True,
             check=False,
         ).returncode
 
     assert run("2.37.0") == 0
+    assert run("2.36.1") == 0
     assert run("3.0.0") == 1
     assert run("") == 1  # unparsable output fails closed
     approval = tmp_path / ".github" / "MAJOR_RELEASE_APPROVED"
