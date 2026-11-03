@@ -26,12 +26,12 @@ from .._errors import InvalidArgumentError
 from ..agent import (
     call_tool as _registry_call,
     call_tool_envelope,
-    canonical_dumps,
+    canonical_dumps as _canonical_dumps,
     list_tools,
     tool_specs,
 )
 from ..agent._guide_text import AGENT_GUIDE
-from ..agent._schemas import load_schema, schema_index
+from ..agent._schemas import load_schema as _load_schema, schema_index as _schema_index
 
 #: Server-level instructions shown to MCP hosts (the trust boundary is
 #: STATED here, per agent memo 3.13 -- never a per-payload field).
@@ -186,9 +186,9 @@ def _register_resources(server: Any) -> None:
     def _schema_index_resource() -> str:
         """The served schema-id index."""
 
-        return canonical_dumps({"index": schema_index()})
+        return _canonical_dumps({"index": _schema_index()})
 
-    for schema_id in schema_index():
+    for schema_id in _schema_index():
 
         def _make(schema_ref: str) -> Any:
             """Bind one schema id into a resource closure."""
@@ -197,7 +197,7 @@ def _register_resources(server: Any) -> None:
             def _schema_resource() -> str:
                 """Serve one shipped schema document as an MCP resource."""
 
-                return canonical_dumps(load_schema(schema_ref))
+                return _canonical_dumps(_load_schema(schema_ref))
 
             return _schema_resource
 

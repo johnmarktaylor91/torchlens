@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._data_classes.grad_fn import GradFn
 from .._ir.selector_eval import _grad_fn_forward_op
-from .._selection.resolver import _resolve_sites
+from .._selection import resolver as _resolver
 from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import (  # noqa: F401
     INTERVENTION_CONE_COLOR,
@@ -222,7 +222,7 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
 
     by_label: dict[str, Op] = {}
     for target in targets:
-        table = _resolve_sites(trace, target, max_fanout=max(1, len(trace._layer_list)))
+        table = _resolver._resolve_sites(trace, target, max_fanout=max(1, len(trace._layer_list)))
         for site in table:
             forward_site = _forward_site(site)
             # Key by the pass-qualified label (op.label, e.g. relu_1_1:2) so
