@@ -621,9 +621,9 @@ torchlens/_visualization/auto_collapse.py::_split_run_by_member_uniformity	80
 torchlens/_visualization/auto_collapse.py::_synthetic_child_condensed_flow_graph	87
 torchlens/_visualization/auto_collapse.py::resolve_collapse_fn	89
 torchlens/_visualization/auto_collapse.py::resolve_repeat_folds	180
-torchlens/_visualization/bundle_diff.py	805
+torchlens/_visualization/bundle_diff.py	804
 torchlens/_visualization/bundle_diff.py::_build_dot	119
-torchlens/_visualization/bundle_diff.py::bundle_diff	99
+torchlens/_visualization/bundle_diff.py::bundle_diff	98
 torchlens/_visualization/code_panel.py::resolve_code_panel_source	80
 torchlens/_visualization/collapse_ladder.py::collapse_schedule	124
 torchlens/_visualization/collapse_optimizer.py	4084
@@ -1049,7 +1049,7 @@ torchlens/debug/_determinism.py::check_determinism	138
 torchlens/debug/_dtype_range.py::dtype_range	117
 torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	155
 torchlens/debug/_grad_fn_walk.py::walk_grad_fn	98
-torchlens/debug/_gradients.py::grad_health	67
+torchlens/debug/_gradients.py::grad_health	66
 torchlens/debug/_gradients.py::gradient_flow_audit_rows	146
 torchlens/debug/_graph.py::_compare_rows	126
 torchlens/debug/_graph.py::dead_neurons_rows	81
