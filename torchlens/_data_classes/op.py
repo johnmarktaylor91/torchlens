@@ -1619,22 +1619,23 @@ class Op(OpAtenMixin, _SelectionOperand):
             grad = slot("grad")
             if grad is None and slot("grad_ref") is not None:
                 return object.__getattribute__(self, "materialize_grad")()
+            ref = slot("_source_trace_ref")
+            if grad is None and ref is not None and ref() is None and slot("has_grad", False):
+                _getattribute(self, "source_trace")  # collected Trace: grad evicted, refuse typed
             return grad
         if name == "out":
             slot = _object_getattribute(self, "_slot")
             out = slot("out")
             source_ref = slot("_source_trace_ref")
             source_trace = None if source_ref is None else source_ref()
-            # Lazy-payload honesty gate (agent memo P0 part 1): a saved
-            # payload behind a lazy blob ref MATERIALIZES (sha-verified,
-            # attaching -- interactive semantics preserved) instead of
-            # silently reading ``None``. The historical capture-only
-            # ``_predicate_save_options`` gate limited this to predicate
-            # captures, so every ``tl.load(..., lazy=True)`` artifact
-            # served silent Nones for rows whose manifest says saved=true.
-            # Live streamed captures (``retain_in_memory=False``) keep
-            # their pinned None: the user chose that memory posture and an
-            # attribute read must not re-inflate it by attaching.
+            # A collected Trace evicted the payload: refuse typed, never a silent None.
+            if out is None and source_trace is None and source_ref is not None:
+                _getattribute(self, "source_trace")
+            # Lazy-payload honesty gate (agent memo P0 part 1): a saved payload
+            # behind a lazy blob ref MATERIALIZES (sha-verified, attaching)
+            # instead of silently reading ``None``, for predicate captures and
+            # ``tl.load(..., lazy=True)``. Live streamed captures
+            # (``retain_in_memory=False``) keep their pinned None.
             if (
                 out is None
                 and slot("out_ref") is not None
@@ -1649,10 +1650,8 @@ class Op(OpAtenMixin, _SelectionOperand):
                 and not slot("has_saved_activation", False)
                 and (
                     getattr(source_trace, "_predicate_save_options", None) is not None
-                    # P0 part 4: on a LAZILY loaded artifact ``.out`` is never
-                    # a silent None -- unsaved rows refuse typed. Eager and
-                    # preview-backend loads keep their historical None-for-
-                    # unsaved contract.
+                    # P0 part 4: a LAZILY loaded artifact's unsaved rows refuse
+                    # typed; eager and preview loads keep None-for-unsaved.
                     or getattr(source_trace, "payload_load_status", None) == "loaded_lazy"
                 )
             ):

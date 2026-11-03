@@ -19,10 +19,12 @@ from __future__ import annotations
 import gc
 import weakref
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import RecordBindingError
 
 
 class _StackNet(nn.Module):
@@ -85,3 +87,58 @@ def test_cleanup_husks_the_save_budget_accountant() -> None:
     log.cleanup()
     assert "_save_budget_accountant" not in log.__dict__
     assert "_predicate_lookback_candidates" not in log.__dict__
+
+
+class _ConvReluNet(nn.Module):
+    """Small conv net with one relu op to hold past its Trace."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(1, 4, 3)
+        self.head = nn.Linear(64, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(torch.relu(self.conv(x)).flatten(1))
+
+
+def _relu_op(trace):
+    return next(trace[label] for label in trace.op_labels if trace[label].func_name == "relu")
+
+
+@pytest.mark.parametrize("save", [None, "relu"], ids=["save-all", "save-selected"])
+def test_op_out_after_trace_collection_refuses_typed(save) -> None:
+    """A held Op's ``.out`` never reads a silent ``None`` once its Trace is collected.
+
+    The Op holds its Trace weakly and the last owner's death evicts the saved
+    payload, so the read refuses with the documented ``trace_reference_collected``
+    code instead of returning ``None`` (backend-table defect 9).
+    """
+
+    kwargs = {} if save is None else {"save": tl.func(save)}
+    trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6), **kwargs)
+    op = _relu_op(trace)
+    assert isinstance(op.out, torch.Tensor)
+    del trace
+    gc.collect()
+    with pytest.raises(RecordBindingError) as exc_info:
+        _ = op.out
+    assert exc_info.value.fields["code"] == "trace_reference_collected"
+    assert op.func_name == "relu"  # metadata stays readable
+
+
+def test_op_grad_after_trace_collection_refuses_typed() -> None:
+    """A held Op's saved gradient refuses typed after its Trace is collected."""
+
+    trace = tl.trace(
+        _ConvReluNet(),
+        torch.randn(1, 1, 6, 6),
+        capture=tl.options.CaptureOptions(save_grads=True),
+    )
+    trace[trace.output_layers[0]].out.sum().backward()
+    op = _relu_op(trace)
+    assert isinstance(op.grad, torch.Tensor)
+    del trace
+    gc.collect()
+    with pytest.raises(RecordBindingError) as exc_info:
+        _ = op.grad
+    assert exc_info.value.fields["code"] == "trace_reference_collected"
