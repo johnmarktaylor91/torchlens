@@ -182,5 +182,8 @@ def test_address_ambiguities_bound_text_and_preserve_candidate_payload(
     assert f"'0.{key}'" in message and f"'4.{key}'" in message
     assert f"'5.{key}'" not in message and f"'6.{key}'" not in message
     assert "; and 2 more" in message
-    assert "\n  remedy    use a full address" in message
+    remedy = "use a pass-qualified label, full address, or explicit call index"
+    assert f"\n  remedy    {remedy}" in message
+    assert caught.value.fields["code"] == "ambiguous_op_lookup"
+    assert caught.value.fields["remedy"] == remedy
     assert caught.value.fields["candidates"] == tuple(f"{index}.{key}" for index in range(7))
