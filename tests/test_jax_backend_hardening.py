@@ -1104,7 +1104,7 @@ def test_jax_rejects_callback_effects() -> None:
             {"intervene": tl.when(tl.func("tanh"), tl.zero_ablate())},
             "can_intervene=False.*intervene",
         ),
-        ({"halt": tl.func("tanh")}, "can_intervene=False.*halt"),
+        ({"stop_after": tl.func("tanh")}, "can_intervene=False.*stop_after"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )

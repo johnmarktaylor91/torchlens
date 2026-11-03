@@ -62,6 +62,7 @@ def test_jax_replay_kind_table_covers_foundation_kinds() -> None:
 
 
 @pytest.mark.rare
+@pytest.mark.backend_jax
 def test_jax_scan_replay_kinds_are_deterministic() -> None:
     """Scan helper replay kinds should reconstruct deterministic slice and stack values."""
 
@@ -83,6 +84,7 @@ def test_jax_scan_replay_kinds_are_deterministic() -> None:
 
 
 @pytest.mark.rare
+@pytest.mark.backend_jax
 def test_jax_decision_replay_kinds_validate_recorded_control_points() -> None:
     """Decision helper replay kinds should validate branch and stop-point semantics."""
 

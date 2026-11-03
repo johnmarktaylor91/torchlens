@@ -27,7 +27,7 @@ import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 from torchlens.backends.mlx import GradOptions  # noqa: E402
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError  # noqa: E402
 
-pytestmark = pytest.mark.rare
+pytestmark = [pytest.mark.rare, pytest.mark.backend_mlx]
 
 
 class TinyMLP(nn.Module):
@@ -765,7 +765,7 @@ def test_mlx_static_func_save_filters_public_payloads(tmp_path: Path) -> None:
 def test_mlx_static_label_contains_and_composite_save_work() -> None:
     """MLX allows label, contains, and safe boolean composites for static save."""
 
-    label_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label("relu_1_3_raw:1"))
+    label_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label("relu_1_3:1"))
     contains_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label_contains("relu"))
     composite_trace = tl.trace(
         TinyMLP(),
@@ -776,7 +776,7 @@ def test_mlx_static_label_contains_and_composite_save_work() -> None:
     _assert_static_save_summary(label_trace, {"relu"})
     _assert_static_save_summary(contains_trace, {"relu"})
     _assert_static_save_summary(composite_trace, {"linear"})
-    assert list(composite_trace.saved_ops.keys()) == ["linear_1_2_raw:1"]
+    assert list(composite_trace.saved_ops.keys()) == ["linear_1_2:1"]
 
 
 @pytest.mark.parametrize(
