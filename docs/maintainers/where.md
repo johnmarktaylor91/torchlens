@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1409 modules, 632050 lines, 0 modules without a docstring.
+83 packages, 1410 modules, 632239 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -65,7 +65,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 8363 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 1964 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 24 | 10004 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 25 | 10155 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3825 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2214 |
 | `torchlens.errors` | Public TorchLens exception classes. | 4 | 1030 |
@@ -86,7 +86,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 19 | 5968 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
-| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 13666 |
+| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 13704 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 6894 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4862 |
@@ -1443,7 +1443,7 @@ Compatibility adapters for TorchLens 2.x. (5 modules, 1964 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (24 modules, 10004 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (25 modules, 10155 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1461,7 +1461,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_grad_fn_walk` | Post-hoc ''grad_fn'' walker (approved diagnostic, R grad_fn ruling). | 378 |
 | `_grad_scale_proof` | Prove from a trace that a backward ran without loss scaling. | 189 |
 | `_gradients` | Gradient-flow audit helpers for TorchLens traces. | 669 |
-| `_graph` | Graph lineage, comparison, and activation-analysis helpers. | 635 |
+| `_graph` | Graph lineage, comparison, and activation-analysis helpers. | 681 |
 | `_graph_breaks` | Correlate TorchDynamo graph breaks with eager TorchLens operations. | 444 |
 | `_infer_failure_classify` | Evidence-led probe-diary failure classification (quickstart ). | 99 |
 | `_infer_input_shape` | Input-shape inference helpers for TorchLens debug utilities. | 2248 |
@@ -1471,6 +1471,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_precision` | Precision bisector: locate where reduced-precision numerics first diverge. | 378 |
 | `_recompute` | Activation recomputation candidate ranking helpers. | 98 |
 | `_rerun` | Isolated reruns: run the same forward more than once under controlled state. | 220 |
+| `_unit_axis` | Pick the unit (feature) axis of an op's activation for ''dead_neurons''. | 105 |
 
 ### `torchlens.debug._checks`
 
@@ -1854,7 +1855,7 @@ Import-clean representation geometry helpers (real subpackage; item 18). (8 modu
 
 ### `torchlens.report`
 
-Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (34 modules, 13666 lines)
+Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (34 modules, 13704 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1889,7 +1890,7 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_summary_ladder` | The summary auto ladder (summary memo item 11, decisions 3.1/3.4). | 1293 |
 | `_summary_render` | The rebuilt summary renderer (summary /3.6/3.13). | 571 |
 | `_summary_report` | The detached immutable summary report layer (summary memo item 10). | 530 |
-| `_summary_result` | Rebuilt summary result assembly (summary memo item 12, 3.7/3.8). | 367 |
+| `_summary_result` | Rebuilt summary result assembly (summary memo item 12, 3.7/3.8). | 405 |
 | `_trace_facts` | Trace fact functions reached from the records through ''_data_classes._doors.report''. | 206 |
 | `_trace_summary` | Trace summary, HTML repr and first-nonfinite functions (record rebuild destination). | 185 |
 
