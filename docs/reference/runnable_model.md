@@ -13,12 +13,15 @@ A sparse runnable artifact records one observed execution path without embedding
 object or tensor-valued intermediates in its sparse core. It can be loaded for analysis and,
 when readiness succeeds, replayed through the transactional `Trace.run()` API.
 
-Runnable saving requires replay-template metadata from the original capture. Opt in with
+Runnable saving requires the runnable apparatus from the original capture: callable registry
+keys, state snapshots, alias topology and escape records (every capture already records the
+per-op argument templates saved-graph replay uses). Opt in with
 `capture=tl.options.CaptureOptions(replayable=True)` (or the equivalent flat
 `replayable=True` argument) before calling
 `trace.save(path, level="runnable", ...)`. A normal capture remains valid for analysis
-saves, but runnable preflight rejects it with `RunnablePreflightError` and the structured
-`MISSING_CALLABLE_REF` finding; saving cannot reconstruct the missing call templates later.
+saves and for `trace.do(site, edit)`, but runnable preflight rejects it with
+`RunnablePreflightError` and the structured `MISSING_CALLABLE_REF` finding; saving cannot
+reconstruct the missing callable keys later.
 
 The subsystem has four ownership regions:
 

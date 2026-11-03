@@ -54,7 +54,7 @@ def edit(activation, *, ctx):
     return activation
 
 
-trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(model, ids)
 edited = trace.fork("edited")
 edited.do(tl.module("transformer.h.0"), edit)
 block0 = edited["transformer.h.0"].out
@@ -69,7 +69,7 @@ RESULT = (list(block0.shape), bool((block0[:, :, :2] == 2.5).all()), logits_chan
 | nnsight operation (0.8.0rc1, transformers 5.18.0) | TorchLens (transformers 5.18.0) | Notes |
 | --- | --- | --- |
 | `with model.trace(ids): h = model.transformer.h[0].output.save()` | `tl.extract(model, ids, ["transformer.h.0"])["transformer.h.0"]` | TorchLens runs the forward first and you read the result afterwards. |
-| `model.transformer.h[0].output[:, :, :2] = 2.5` inside the trace | Capture with `capture=tl.options.CaptureOptions(replayable=True)`, then `trace.fork().do(tl.module("transformer.h.0"), edit)` | `edit` is a tensor or a function of the original output; `do` replays the recorded graph downstream. |
+| `model.transformer.h[0].output[:, :, :2] = 2.5` inside the trace | Capture with `tl.trace(model, x)`, then `trace.fork().do(tl.module("transformer.h.0"), edit)` | `edit` is a tensor or a function of the original output; `do` replays the recorded graph downstream. |
 | Save every op, including ones no module owns (`.source`) | Nothing to ask for: `tl.trace` records every executed op (`trace.layers`) | |
 | `model.trace(...)` on the wrapped model | `tl.trace(model._model, ids)` on the model nnsight wraps | See Using both. |
 | Trace a model invocation | `tl.trace(model, x, save=tl.func("relu"))` | TorchLens stores a completed `Trace` after execution. |
@@ -131,4 +131,4 @@ prompt.
   call `model.forward`; with both it re-executes (see
   [intervention_explainers.md](../intervention_explainers.md)). Pushing is exact only for
   graph-stable edits.
-- The edit in the example must have a stored graph to replay: capture with `replayable=True`.
+- The edit in the example replays the stored graph; every `tl.trace` capture records what that needs.

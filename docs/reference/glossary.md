@@ -1084,8 +1084,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
-  must use `replayable=True`; this flag supplies replay templates even when no intervention
-  is planned.
+  must use `replayable=True`: the flag records the runnable apparatus (callable registry keys,
+  state snapshots, alias topology, escape records), which no default capture keeps; the per-op
+  argument templates that `trace.do(site, edit)` replays are recorded on every capture.
 
 **Readiness**
 : The non-executing runnable state `ready` or `unavailable`.
