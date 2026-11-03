@@ -61,6 +61,26 @@ def show(trace: Trace, kind: str | None = None, **kwargs: Any) -> Any:
     return trace.draw(**kwargs)
 
 
+def _draw_policy(  # noqa: PLR0913 - one entry per policy key the Drawing records
+    graph: GraphLiteral,
+    rolled: bool,
+    theme: str,
+    collapse: CollapseLiteral,
+    module: Module | str | None,
+    depth: int,
+) -> dict[str, Any]:
+    """Return the resolved render policy a draw door's ``Drawing`` records."""
+
+    return {
+        "graph": graph,
+        "rolled": rolled,
+        "theme": theme,
+        "collapse": collapse,
+        "module": module,
+        "depth": depth,
+    }
+
+
 def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw door
     trace: Trace,
     *,
@@ -165,14 +185,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
             argument="graph",
         )
     num_ops = len(trace) if hasattr(trace, "__len__") else None
-    policy: dict[str, Any] = {
-        "graph": graph,
-        "rolled": rolled,
-        "theme": theme,
-        "collapse": collapse,
-        "module": module,
-        "depth": depth,
-    }
+    policy = _draw_policy(graph, rolled, theme, collapse, module, depth)
     vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
     if graph == "backward":
         outpath = "backward_modelgraph" if path is None else path

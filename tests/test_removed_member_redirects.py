@@ -145,7 +145,7 @@ def test_layer_set_raises_typed_redirect(owners: dict[str, Any]) -> None:
 
     layer = next(iter(owners["Trace"].layers))
     with pytest.raises(FacadeTeachingError) as excinfo:
-        layer.set
+        _ = layer.set
     assert excinfo.value.fields["code"] == "facade_redirect"
     assert "set_only" in str(excinfo.value)
     assert getattr(layer, "set", "absent") == "absent"
