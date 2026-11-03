@@ -1370,13 +1370,18 @@ def _bind_format3_runnable_payloads(
 
 
 def _finish_format3_bundle(
-    members: list[tuple[str, Trace]], *, relations: Any, baseline: Any, root: Path
+    members: list[tuple[str, Trace]],
+    *,
+    metadata: Mapping[str, Any],
+    root: Path,
+    tlspec_version: Any,
 ) -> Bundle:
-    """Assemble the loaded members, relations and baseline of a 3.0 bundle."""
+    """Assemble a 3.0 bundle from its loaded members and the sections of ``relations.json``
+    (bare unknown keys refuse ``bundle_section_unknown``; namespaced keys load opaque)."""
 
-    from ..bundle import Bundle
+    from .bundle_container import assemble_bundle
 
-    bundle = Bundle(members, relations=relations, baseline=baseline)
+    bundle = assemble_bundle(dict(members), dict(metadata), tlspec_version=tlspec_version)
     setattr(bundle, "_source_bundle_path", root)
     return bundle
 
