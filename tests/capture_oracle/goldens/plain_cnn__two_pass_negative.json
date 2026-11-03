@@ -236,7 +236,14 @@
             "source_trace": "unknown",
             "source_trace_id": "unknown",
             "step_index": "defaulted_zero",
-            "templates.args_template": "unknown",
+            "templates.args_template.args": "populated",
+            "templates.args_template.func_id.dispatch_kind": "populated",
+            "templates.args_template.func_id.import_path": "unknown",
+            "templates.args_template.func_id.namespace": "populated",
+            "templates.args_template.func_id.qualname": "populated",
+            "templates.args_template.func_id.version": "populated",
+            "templates.args_template.kwargs": "defaulted_empty",
+            "templates.args_template.notes": "defaulted_empty",
             "templates.has_saved_args": "defaulted_false",
             "templates.kwargs_template": "unknown",
             "templates.saved_args": "unknown",
@@ -382,7 +389,14 @@
             "source_trace": "unknown",
             "source_trace_id": "unknown",
             "step_index": "defaulted_zero",
-            "templates.args_template": "unknown",
+            "templates.args_template.args[0]": "populated",
+            "templates.args_template.func_id.dispatch_kind": "populated",
+            "templates.args_template.func_id.import_path": "unknown",
+            "templates.args_template.func_id.namespace": "populated",
+            "templates.args_template.func_id.qualname": "populated",
+            "templates.args_template.func_id.version": "populated",
+            "templates.args_template.kwargs": "defaulted_empty",
+            "templates.args_template.notes": "defaulted_empty",
             "templates.has_saved_args": "defaulted_false",
             "templates.kwargs_template": "unknown",
             "templates.saved_args": "unknown",
@@ -554,20 +568,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 516515,
+      "python_peak_memory_median_bytes": 522289,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 59.029693715274334
+      "wall_time_median_ms": 65.52288797684014
     }
   },
   "sha256_chunks": [
-    "27419154",
-    "effeaf29",
-    "0f437d2f",
-    "edec278e",
-    "d5aadd5f",
-    "2b551183",
-    "4095be42",
-    "d00662e0"
+    "371d5d04",
+    "2dad0fad",
+    "865ef94a",
+    "f595e6a3",
+    "601a6963",
+    "7153089e",
+    "4bb07594",
+    "c0403107"
   ]
 }
