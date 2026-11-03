@@ -175,19 +175,6 @@ def postprocess(
         ast_branches.release_parsed_asts()
 
 
-def _stamp_raw_event_shape_hash(self: "Trace", capture_events: object) -> None:
-    """Record the session-only raw-event hash for a live (not cooked) capture.
-
-    A cooked Recording journals module boundaries and the root frame in its op
-    lane, so its raw-event hash never equals a live exhaustive journal's; it
-    carries none and rerun compares the postprocessed graph hashes instead,
-    exactly as for a loaded trace.
-    """
-
-    if self.__dict__.get("_cooked_from") is None:
-        self._raw_event_shape_hash = compute_raw_event_shape_hash(capture_events)
-
-
 def _postprocess_body(
     self: "Trace", output_tensors: list[torch.Tensor], output_tensor_addresses: list[str]
 ) -> None:
@@ -209,7 +196,7 @@ def _postprocess_body(
     # buffer source event so it materializes with everything else.
     output_parent_labels = _resolve_output_parent_labels(self, output_tensors)
     if capture_events is not None:
-        _stamp_raw_event_shape_hash(self, capture_events)
+        self._raw_event_shape_hash = compute_raw_event_shape_hash(capture_events)
         capture_session = capture_session_for_events(capture_events)
         # Both branches read the AMENDED fold (never the raw list): the seal
         # folds via the reducer, and a session-detached journal (cooked

@@ -109,9 +109,9 @@ def test_cooked_trace_graph_shape_matches_exhaustive_capture(
     assert cooked_relu.module is None and exhaustive_relu.module is None
     assert list(cooked_relu.modules) == list(exhaustive_relu.modules) == []
     assert cooked["input_1"].func_name == exhaustive["input_1"].func_name == "none"
-    # The raw-event hash is session-only; a cooked journal is shaped differently,
-    # so the cooked Trace carries none and rerun falls back to the graph hash.
-    assert cooked._raw_event_shape_hash is None
+    # The cooked Trace keeps its own journal's raw-event hash; rerun compares the
+    # postprocessed graph hashes for a cooked trace, as it does for a loaded one.
+    assert cooked._raw_event_shape_hash
     assert compute_graph_shape_hash(cooked, rerun_signature=True) == compute_graph_shape_hash(
         exhaustive, rerun_signature=True
     )
