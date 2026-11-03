@@ -521,7 +521,6 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     # exactly this kind of targeted regression addition, so the growth is
     # the campaign's reviewed product, not drift.
     "tests/validation_goldens/test_validation_exemption_hardening.py": 2550,
-    "tests/test_conditional_branches.py": 2150,
     # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
     # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051
     # 2.17) plus the numpy>=2 profile-silent skip -- the c_call receiver half of the

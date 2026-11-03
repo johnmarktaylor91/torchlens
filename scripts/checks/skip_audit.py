@@ -373,7 +373,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
 # Each must be consciously allowlisted here (relative posix path from tests/).
 DYNAMIC_IMPORTORSKIP_SITES = frozenset(
     {
-        "test_backend_registry.py",  # importorskips the registry's own dependency map
         "test_subfolder_imports.py",  # importorskips each subfolder's declared optional deps
     }
 )

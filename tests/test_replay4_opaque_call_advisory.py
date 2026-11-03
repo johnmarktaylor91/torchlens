@@ -189,6 +189,12 @@ def test_advisory_fires_once_per_session() -> None:
     assert advisory.SCRIPTED_CODE in advisory._WARNED_CODES
 
 
+# Source-line fixture: the dlpack test locates the "# dlpack call site" comment below by text.
+def _dlpack_line_fixture(x: torch.Tensor) -> object:
+    capsule = torch.utils.dlpack.to_dlpack(x)  # dlpack call site
+    return capsule
+
+
 # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_opaque_call_advisory.py, campaign mutant kills.
 def test_dlpack_call_site_gets_the_advisory_without_the_jit_hint() -> None:
     line = _line_of("# dlpack call site")
