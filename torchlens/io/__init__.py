@@ -315,7 +315,7 @@ def load_intervention_spec(
     Examples
     --------
     >>> import pathlib, tempfile
-    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
+    >>> fork = tl.trace(model, x).fork()
     >>> _ = fork.do(tl.func("relu"), tl.zero_ablate())
     >>> with tempfile.TemporaryDirectory() as tmp:
     ...     path = pathlib.Path(tmp) / "edit.tlspec"

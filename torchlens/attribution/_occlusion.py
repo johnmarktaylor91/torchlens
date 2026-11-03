@@ -206,7 +206,7 @@ def occlusion(
     Parameters
     ----------
     trace
-        Live captured Trace with replayable saved values.
+        Live captured Trace with saved values.
     selection
         Selection query, resolved selection, or region producer to occlude.
     score
@@ -225,7 +225,7 @@ def occlusion(
 
     Examples
     --------
-    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> trace = tl.trace(model, x)
     >>> result = tl.attribution.occlusion(
     ...     trace, trace.input_ops[0], score=lambda t: t.output_ops[0].out.sum()
     ... )
