@@ -47,9 +47,10 @@ def saved(tmp_path_factory):
 
 @pytest.fixture
 def built_counter(monkeypatch):
-    """Count record objects allocated by the reader (none may exist after a refusal)."""
+    """Observe real reader allocations; a refusal must precede Trace allocation."""
 
     import torchlens._data_classes._state_adapter as adapter
+    import torchlens._io.format3.reader as reader
 
     calls = []
     original = adapter.state_new
@@ -59,6 +60,7 @@ def built_counter(monkeypatch):
         return original(cls)
 
     monkeypatch.setattr(adapter, "state_new", counting)
+    monkeypatch.setattr(reader, "state_new", counting)
     return calls
 
 
@@ -76,11 +78,14 @@ def _expect_refusal_or_roundtrip(root, original, built_counter):
     artifact that was loaded, never against the pristine copy.
     """
 
+    allocated_before = len(built_counter)
     try:
         loaded = _load(root)
     except ArtifactError as exc:
         assert exc.fields.get("code") in KNOWN_CODES, exc
-        assert not any(cls.__name__ == "Trace" for cls in built_counter), "a Trace was built"
+        assert not any(cls.__name__ == "Trace" for cls in built_counter[allocated_before:]), (
+            "a Trace was built"
+        )
         return "refused"
     again = resave(
         loaded, root.parent / (root.name + "-again"), read_manifest(original)["save_level"]
@@ -99,12 +104,15 @@ def _expect_refusal_or_roundtrip(root, original, built_counter):
 def _expect_manifest_refusal(root, key, built_counter, *, code="manifest_schema_invalid"):
     """A rejected manifest mutation names its field and one exact refusal code."""
 
+    allocated_before = len(built_counter)
     with pytest.raises(ArtifactError) as info:
         _load(root)
     assert info.value.fields.get("code") == code, key
     details = "; ".join(info.value.fields.get("errors", ())) or str(info.value)
     assert key in details, (key, details)
-    assert not any(cls.__name__ == "Trace" for cls in built_counter), "a Trace was built"
+    assert not any(cls.__name__ == "Trace" for cls in built_counter[allocated_before:]), (
+        "a Trace was built"
+    )
 
 
 def _manifest_swap_code(key, value):
@@ -134,6 +142,7 @@ def test_unmodified_copy_round_trips(saved, tmp_path, built_counter):
     root, _ = saved
     copy = copy_artifact(root, tmp_path / "copy")
     assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "roundtrip"
+    assert any(cls.__name__ == "Trace" for cls in built_counter), "allocation observer was idle"
 
 
 @pytest.mark.parametrize("offset", [0, 7, 64, 257, 1031, -3])
