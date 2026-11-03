@@ -31,6 +31,7 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_record, write_record
 from _refuses_as_2x import assert_refuses_as_2x
 from torch.utils.checkpoint import checkpoint
 
@@ -42,6 +43,7 @@ from torchlens._io.prerelease import (
     registered_prerelease_fields,
 )
 from torchlens._io.scrub import scrub_for_save
+from torchlens.intervention.errors import OpaqueCallableError
 
 # ---------------------------------------------------------------------------
 # Registry-driven completeness ledger (brief: enumerate from the registry,
@@ -263,7 +265,7 @@ def _persisted_eq(a: object, b: object) -> bool:
     return bool(a == b)
 
 
-def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str) -> tl.Trace:
+def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str, *, level: str = "portable") -> tl.Trace:
     """Save plainly, prove the current stamp and the marker's absence, load plainly.
 
     The write must stamp ``tlspec_version == TLSPEC_VERSION`` (9) and carry NO
@@ -278,17 +280,19 @@ def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str) -> tl.Trace:
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace.save(str(path))
+        trace.save(str(path), level=level)
         return tl.load(str(path))
 
 
-def _second_generation(loaded: tl.Trace, tmp_path, name: str) -> tl.Trace:
+def _second_generation(
+    loaded: tl.Trace, tmp_path, name: str, *, level: str = "portable"
+) -> tl.Trace:
     """Re-save the LOADED trace plainly and load again (settle stability)."""
 
     path = tmp_path / f"{name}_gen2.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        loaded.save(str(path))
+        loaded.save(str(path), level=level)
         return tl.load(str(path))
 
 
@@ -521,7 +525,10 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
         if record.edit is not None
     )
     assert live_recipe["resolve_digest"]
-    loaded = _plain_roundtrip(fork, tmp_path, "selection")
+    with pytest.raises(OpaqueCallableError) as caught:
+        fork.save(tmp_path / "nonportable_selection")
+    assert caught.value.fields["code"] == "intervention_spec_not_portable"
+    loaded = _plain_roundtrip(fork, tmp_path, "selection", level="audit")
     assert loaded.intervention_audit == live_audit
     loaded_recipe = next(
         record.edit.selection_recipe
@@ -529,7 +536,7 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
         if record.edit is not None
     )
     assert loaded_recipe == live_recipe
-    gen2 = _second_generation(loaded, tmp_path, "selection")
+    gen2 = _second_generation(loaded, tmp_path, "selection", level="audit")
     assert gen2.intervention_audit == live_audit
 
 
@@ -631,6 +638,7 @@ def _tampered_refuses(
     name: str,
     *,
     field: str,
+    level: str = "portable",
 ) -> ArtifactError:
     """Prove one planted tamper refuses teachingly and stays marker-contained.
 
@@ -654,7 +662,13 @@ def _tampered_refuses(
     path = tmp_path / f"{name}_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace.save(str(path))
+        trace.save(str(path), level=level)
+    return _load_field_refusal(path, field)
+
+
+def _load_field_refusal(path: Path, field: str) -> ArtifactError:
+    """Keep every original typed field, reason and remedy assertion on the load door."""
+
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(path))
     refusal = excinfo.value
@@ -664,6 +678,19 @@ def _tampered_refuses(
     assert field in str(refusal)
     assert "Remedy:" in str(refusal)
     return refusal
+
+
+def _tamper_written_trace(
+    trace: tl.Trace, tmp_path: Path, name: str, *, field: str, mutate
+) -> ArtifactError:
+    """Forge one already-written record so save-side preflight remains fully enforced."""
+
+    path = tmp_path / f"{name}_tampered.tlspec"
+    trace.save(path)
+    record = read_record(path, "trace")
+    mutate(record["fields"])
+    write_record(path, "trace", record)
+    return _load_field_refusal(path, field)
 
 
 def test_tamper_site_key_refuses_typed(tmp_path) -> None:
@@ -690,12 +717,14 @@ def test_tamper_distributed_scope_refuses_typed(tmp_path) -> None:
     assert FORGERY_SURFACE_LEDGER["Trace.provenance.distributed_scope"] == "validated_refuse_typed"
     lifecycle.disarm()
     trace = _tiny_trace()
-    trace._provenance_distributed_scope = "forged_scope_value"
-    refusal = _tampered_refuses(
+    refusal = _tamper_written_trace(
         trace,
         tmp_path,
         "distributed_scope",
         field="Trace.provenance.distributed_scope",
+        mutate=lambda state: state.__setitem__(
+            "_provenance_distributed_scope", "forged_scope_value"
+        ),
     )
     assert refusal.fields["code"] == "artifact_distributed_scope_invalid"
 
@@ -705,12 +734,12 @@ def test_tamper_timing_provenance_refuses_typed(tmp_path) -> None:
 
     assert FORGERY_SURFACE_LEDGER["Trace.grad_fn_timing_provenance"] == "validated_refuse_typed"
     trace = _backward_trace()
-    object.__setattr__(trace, "grad_fn_timing_provenance", "forged_clock_source")
-    refusal = _tampered_refuses(
+    refusal = _tamper_written_trace(
         trace,
         tmp_path,
         "timing",
         field="Trace.grad_fn_timing_provenance",
+        mutate=lambda state: state.__setitem__("grad_fn_timing_provenance", "forged_clock_source"),
     )
     assert refusal.fields["code"] == "artifact_grad_fn_timing_provenance_invalid"
 
@@ -720,14 +749,14 @@ def test_tamper_checkpoint_witness_refuses_typed(tmp_path) -> None:
 
     assert FORGERY_SURFACE_LEDGER["Trace.checkpoint_invocation_witness"] == "validated_refuse_typed"
     trace = _checkpoint_trace()
-    witness = dict(trace.checkpoint_invocation_witness)
-    witness["token_count"] = "forty-two"  # type-forged: count is not even an int
-    object.__setattr__(trace, "checkpoint_invocation_witness", witness)
-    refusal = _tampered_refuses(
+    refusal = _tamper_written_trace(
         trace,
         tmp_path,
         "checkpoint",
         field="Trace.checkpoint_invocation_witness",
+        mutate=lambda state: state["checkpoint_invocation_witness"].__setitem__(
+            "token_count", "forty-two"
+        ),
     )
     assert refusal.fields["code"] == "artifact_checkpoint_witness_invalid"
 
@@ -745,6 +774,7 @@ def test_tamper_intervention_audit_refuses_typed(tmp_path) -> None:
         tmp_path,
         "audit",
         field="Trace.intervention_audit",
+        level="audit",
     )
     assert refusal.fields["code"] == "artifact_intervention_audit_invalid"
 
@@ -890,17 +920,14 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
 
     # Layer 2 (load-side M-C2, unchanged): write the SAME capture honestly,
     # then tamper the marker into the persisted metadata on disk.
-    import pickle as _pickle
-
     trace._options_structure_only = False
     honest_path = tmp_path / "structure_only_payload_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace.save(str(honest_path))
-    metadata_path = honest_path / "metadata.pkl"
-    state = _pickle.loads(metadata_path.read_bytes())
-    state["_options_structure_only"] = True
-    metadata_path.write_bytes(_pickle.dumps(state))
+    record = read_record(honest_path, "trace")
+    record["fields"]["_options_structure_only"] = True
+    write_record(honest_path, "trace", record)
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(honest_path))
     refusal = excinfo.value
@@ -962,22 +989,22 @@ def test_real_v7_artifact_refuses_as_2x() -> None:
 
 
 def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
-    """A fresh save stamps tlspec_version 11; the v7 fixture stays 7."""
+    """A fresh save stamps tlspec_version 12; the v7 fixture stays 7."""
 
     trace = _tiny_trace()
     state, _, _ = scrub_for_save(trace)
-    assert state["tlspec_version"] == TLSPEC_VERSION == 11
+    assert state["tlspec_version"] == TLSPEC_VERSION == 12
     path = tmp_path / "fresh_v11.tlspec"
     trace.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.tlspec_version == 11
+    assert loaded.tlspec_version == 12
     assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
 
 
 def test_newer_than_runtime_version_refuses_typed() -> None:
-    """A claimed tlspec_version=12 state refuses as newer-than-runtime."""
+    """A claimed tlspec_version=13 state refuses as newer-than-runtime."""
 
     from torchlens._io import read_tlspec_version
 
-    with pytest.raises(ArtifactError, match="only supports up to 11"):
-        read_tlspec_version({"tlspec_version": 12}, cls_name="Trace")
+    with pytest.raises(ArtifactError, match="only supports up to 12"):
+        read_tlspec_version({"tlspec_version": 13}, cls_name="Trace")

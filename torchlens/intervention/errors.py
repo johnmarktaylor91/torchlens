@@ -3,6 +3,7 @@
 from typing import Literal
 
 from .._errors import KeywordConflictError, SelectionError
+from .._io.format_errors import OpaqueCallableError as OpaqueCallableError
 from .._selection.errors import (
     AmbiguousSiteError as AmbiguousSiteError,
     BindingPreflightError as BindingPreflightError,
@@ -145,10 +146,6 @@ class UntrustedCallableError(ReplayPreconditionError):
     text (R65). The prose-plus-fields constructor is inherited from
     :class:`ReplayPreconditionError`.
     """
-
-
-class OpaqueCallableError(ConfigurationError, ValueError):
-    """Raised when an executable intervention save would require opaque code."""
 
 
 SpecPortabilityError = OpaqueCallableError

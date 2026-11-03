@@ -13,11 +13,13 @@ from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import tensor_references
 from safetensors.torch import load_file
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import ArtifactError, streaming as streaming_module
+from torchlens._io import ArtifactError
+from torchlens._io.format3 import payloads as payloads_module
 from torchlens._io.streaming import BundleStreamWriter
 from torchlens._io.streaming_async import (
     AsyncWriteEngine,
@@ -132,8 +134,10 @@ def test_deferred_snapshot_preserves_value_at_call_time(tmp_path: Path) -> None:
     writer.submit_blob("0000000001", tensor, kind="out", label="probe")
     tensor.add_(41.0)
     writer._drain_async()
+    writer._seal_payload_chunks()
     entry = writer.get_entry("0000000001")
-    written = load_file(writer.tmp_path / entry.relative_path)["data"]
+    key = writer.get_tensor_reference("0000000001")["key"]
+    written = load_file(writer.tmp_path / entry.relative_path)[key]
     assert torch.equal(written, expected)
     writer.abort("test cleanup")
 
@@ -154,17 +158,20 @@ def test_duplicate_blob_id_refuses_while_write_is_still_queued(tmp_path: Path) -
 
 
 def test_async_and_sync_bundles_are_byte_identical(tmp_path: Path) -> None:
-    """Async writes produce the same blobs, ids, order, and hashes as sync."""
+    """Async writes produce the same blob ids, chunk keys, and chunk hashes as sync."""
 
     x = torch.randn(4, 8)
     tl.trace(_model(), x, storage=tl.to_disk(tmp_path / "async.tlspec"))
     tl.trace(_model(), x, storage=tl.to_disk(tmp_path / "sync.tlspec", async_writes=False))
-    async_entries = _manifest(tmp_path / "async.tlspec")["tensors"]
-    sync_entries = _manifest(tmp_path / "sync.tlspec")["tensors"]
-    assert [e["blob_id"] for e in async_entries] == [e["blob_id"] for e in sync_entries]
-    assert [e["blob_id"] for e in async_entries] == sorted(e["blob_id"] for e in async_entries)
-    assert {e["blob_id"]: e["sha256"] for e in async_entries} == {
-        e["blob_id"]: e["sha256"] for e in sync_entries
+    async_manifest = _manifest(tmp_path / "async.tlspec")
+    sync_manifest = _manifest(tmp_path / "sync.tlspec")
+    async_refs = tensor_references(tmp_path / "async.tlspec")
+    sync_refs = tensor_references(tmp_path / "sync.tlspec")
+    assert async_refs, "expected streamed payloads"
+    assert async_refs == sync_refs
+    chunks = {ref["blob"] for ref in async_refs.values()}
+    assert {chunk: async_manifest["files"][chunk] for chunk in chunks} == {
+        chunk: sync_manifest["files"][chunk] for chunk in chunks
     }
     loaded_async = tl.load(tmp_path / "async.tlspec")
     loaded_sync = tl.load(tmp_path / "sync.tlspec")
@@ -204,7 +211,7 @@ def test_record_refuses_explicit_async_writes(tmp_path: Path) -> None:
 class _FailingSaveFile:
     """save_file stand-in that breaks on one configured call."""
 
-    def __init__(self, fail_on_call: int, real=streaming_module.save_file) -> None:
+    def __init__(self, fail_on_call: int, real=payloads_module.save_file) -> None:
         self.calls = 0
         self.fail_on_call = fail_on_call
         self.real = real
@@ -217,11 +224,11 @@ class _FailingSaveFile:
 
 
 def _count_sync_blobs(tmp_path: Path) -> int:
-    """Return the blob count a sync streamed capture of the test model writes."""
+    """Return the payload count a sync streamed capture of the test model writes."""
 
     reference = tmp_path / "reference.tlspec"
     tl.trace(_model(), torch.randn(4, 8), storage=tl.to_disk(reference, async_writes=False))
-    return len(_manifest(reference)["tensors"])
+    return len(tensor_references(reference))
 
 
 @pytest.mark.parametrize("fail_position", ["second", "last"])
@@ -234,11 +241,14 @@ def test_injected_write_failure_is_typed_and_marks_partial(
     the forward already finished, so only the drain barrier can catch it.
     """
 
+    # A one-byte chunk cap gives every payload its own chunk file, so the
+    # n-th chunk write is the n-th payload (the last one lands at staging).
+    monkeypatch.setenv("TORCHLENS_PAYLOAD_CHUNK_BYTES", "1")
     n_blobs = _count_sync_blobs(tmp_path)
     assert n_blobs >= 3
     fail_on_call = 2 if fail_position == "second" else n_blobs
     fake = _FailingSaveFile(fail_on_call)
-    monkeypatch.setattr(streaming_module, "save_file", fake)
+    monkeypatch.setattr(payloads_module, "save_file", fake)
 
     bundle = tmp_path / "broken.tlspec"
     with pytest.raises((ArtifactError, Exception)) as excinfo:
@@ -284,25 +294,26 @@ def test_finalize_waits_for_every_slow_pending_write(
     every blob with intact hashes and loadable payloads.
     """
 
-    real_save_file = streaming_module.save_file
+    real_save_file = payloads_module.save_file
 
     def slow_save_file(tensors, filename) -> None:
         time.sleep(0.02)
         real_save_file(tensors, filename)
 
-    monkeypatch.setattr(streaming_module, "save_file", slow_save_file)
+    monkeypatch.setenv("TORCHLENS_PAYLOAD_CHUNK_BYTES", "1")
+    monkeypatch.setattr(payloads_module, "save_file", slow_save_file)
     bundle = tmp_path / "slow.tlspec"
     x = torch.randn(4, 8)
     tl.trace(_model(), x, storage=tl.to_disk(bundle))
 
     manifest = _manifest(bundle)
-    assert manifest["tensors"], "expected streamed blobs"
+    assert tensor_references(bundle), "expected streamed blobs"
     from torchlens._utils.hashing import sha256_file
 
-    for entry in manifest["tensors"]:
-        blob_path = bundle / entry["relative_path"]
+    for ref in tensor_references(bundle).values():
+        blob_path = bundle / ref["blob"]
         assert blob_path.exists()
-        assert sha256_file(blob_path) == entry["sha256"]
+        assert sha256_file(blob_path) == manifest["files"][ref["blob"]]["sha256"]
     loaded = tl.load(bundle)
     reference = tl.trace(_model(), x)
     for index in range(len(loaded._layer_list)):
@@ -314,13 +325,14 @@ def test_streamed_capture_backpressure_peak_respects_budget(
 ) -> None:
     """A real streamed capture against a slow disk keeps pending bytes bounded."""
 
-    real_save_file = streaming_module.save_file
+    real_save_file = payloads_module.save_file
 
     def slow_save_file(tensors, filename) -> None:
         time.sleep(0.01)
         real_save_file(tensors, filename)
 
-    monkeypatch.setattr(streaming_module, "save_file", slow_save_file)
+    monkeypatch.setenv("TORCHLENS_PAYLOAD_CHUNK_BYTES", "1")
+    monkeypatch.setattr(payloads_module, "save_file", slow_save_file)
     budget = 4096
     engines: list[AsyncWriteEngine] = []
     original_init = AsyncWriteEngine.__init__
@@ -339,4 +351,4 @@ def test_streamed_capture_backpressure_peak_respects_budget(
     assert len(engines) == 1
     # Every payload here is <= budget, so the bound must hold exactly.
     assert engines[0].peak_pending_bytes <= budget
-    assert _manifest(bundle)["tensors"]
+    assert tensor_references(bundle)

@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
@@ -217,11 +218,12 @@ def test_tampered_basis_refuses_at_load(tmp_path: Path) -> None:
     session = _edited(_ROTATION[:2], tl.scale(2.0))
     path = tmp_path / "tampered.tlspec"
     tl.io.save_intervention(session, path, level="portable")
-    spec_json = path / "spec.json"
+    spec_json = path / "intervention.json"
     text = spec_json.read_text(encoding="utf-8")
     digest = _basis_digest(_ROTATION[:2].contiguous())
     assert digest in text
     spec_json.write_text(text.replace(digest, "0" * 64), encoding="utf-8")
+    redigest(path, "intervention.json")
     with pytest.raises(Exception) as excinfo:
         tl.io.load_intervention_spec(path)
     error = _coded(excinfo.value)
@@ -258,6 +260,7 @@ def test_reader_without_the_registry_entry_refuses_typed(
         return constructors
 
     monkeypatch.setattr(helpers_module, "_builtin_constructors", _older)
+    redigest(path, "intervention.json")
     with pytest.raises(Exception) as excinfo:
         tl.io.load_intervention_spec(path)
     assert _coded(excinfo.value).fields["code"] == "intervention_helper_unknown"
@@ -277,6 +280,6 @@ def _coded(error: BaseException) -> Any:
 def test_saved_spec_json_carries_the_fields(tmp_path: Path) -> None:
     path = tmp_path / "fields.tlspec"
     tl.io.save_intervention(_edited(_ROTATION[:4], tl.scale(2.0)), path, level="portable")
-    text = json.dumps(json.loads((path / "spec.json").read_text(encoding="utf-8")))
+    text = json.dumps(json.loads((path / "intervention.json").read_text(encoding="utf-8")))
     for field in ("subspace_edit", "basis_sha256", "origin_sha256", "source_dtype", _ORIGIN):
         assert field in text

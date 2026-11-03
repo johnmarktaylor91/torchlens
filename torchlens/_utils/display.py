@@ -6,6 +6,7 @@ plus environment checks (Jupyter detection, parallel-processing guard).
 
 import multiprocessing as mp
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -489,14 +490,29 @@ def _vprint(trace: "Trace", message: str) -> None:
         print(f"[torchlens] {message}")
 
 
+def _phase_bucket(description: str) -> str:
+    """Return the snake_case timing key of a progress description.
+
+    ``"  Step 0: Materialize capture events"`` becomes
+    ``"materialize_capture_events"``: the step number is dropped and the rest
+    lowercased with non-alphanumerics joined by underscores.
+    """
+
+    text = re.sub(r"^\s*Step\s+[\d.]+:\s*", "", description)
+    return re.sub(r"[^0-9a-z]+", "_", text.lower()).strip("_")
+
+
 @contextmanager
-def _vtimed(trace: "Trace", description: str) -> Iterator[None]:
+def _vtimed(trace: "Trace", description: str, *, bucket: str | None = None) -> Iterator[None]:
     """Context manager that prints a timed progress message if verbose mode is enabled.
 
     Prints ``[torchlens] description...`` on entry, then appends `` done (X.XXs)``
-    on exit.
+    on exit. The elapsed time lands in ``trace._phase_timings`` under
+    ``bucket``: a postprocess step passes its
+    ``torchlens._postprocess._pipeline.PIPELINE`` step name; a stage outside the
+    pipeline keeps its description as a snake_case key.
     """
-    bucket = f"postprocess:{description.strip()}"
+    bucket = bucket or _phase_bucket(description)
     if not trace._options_verbose:
         with _timed_phase(trace, bucket):
             yield

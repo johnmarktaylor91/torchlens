@@ -75,10 +75,7 @@ _ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
     # varies exactly with forward_peak_memory (set iff a CPU delta read 0).
     "_cost_forward_peak_memory_reason",
 )
-_ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
-    "created_at",
-    "rng_state_digests",
-)
+_ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = ("created_at", "rng_state_digests")
 
 MODEL_LOG_FIELD_ORDER = [
     # General info
@@ -512,6 +509,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "min_distance_to_output",
     "max_distance_to_output",
     "is_buffer",
+    "is_constant",
     "address",
     "buffer_pass",
     "buffer_source",

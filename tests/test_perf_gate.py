@@ -610,10 +610,10 @@ def test_emit_tensor_grad_event_populates_profile_buckets() -> None:
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     timings = trace._phase_timings
-    assert timings["backward_grad_event:ensure_stream"]["count"] >= 1
-    assert timings["backward_grad_event:ensure_pass"]["count"] >= 1
-    assert timings["backward_grad_event:payload"]["count"] >= 1
-    assert timings["backward_grad_event:append"]["count"] >= 1
+    assert timings["backward_grad_event_ensure_stream"]["count"] >= 1
+    assert timings["backward_grad_event_ensure_pass"]["count"] >= 1
+    assert timings["backward_grad_event_payload"]["count"] >= 1
+    assert timings["backward_grad_event_append"]["count"] >= 1
 
 
 def test_loop_frontier_uses_deque_fifo_order() -> None:

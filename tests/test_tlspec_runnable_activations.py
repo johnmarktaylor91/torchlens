@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import pickle
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import read_record, read_runnable
 from torch import nn
 
 import torchlens as tl
@@ -188,12 +188,9 @@ def _manifest(path: Path) -> dict[str, Any]:
 
 
 def _metadata(path: Path) -> dict[str, Any]:
-    """Read trusted test-produced sparse metadata for invariant checks."""
+    """Inspect the authoritative JSON record cells without invoking pickle."""
 
-    with (path / "metadata.pkl").open("rb") as handle:
-        value = pickle.load(handle)  # noqa: S301 - created in this test process
-    assert isinstance(value, dict)
-    return value
+    return {kind: read_record(path, kind) for kind in _manifest(path)["records"]}
 
 
 def _physical_outs(trace: tl.Trace) -> tuple[torch.Tensor | None, ...]:
@@ -241,7 +238,7 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
     trace.save(path, level="runnable", include_activations=True)
 
     manifest = _manifest(path)
-    activation_layer = manifest["run"]["payload_layers"]["activations"]
+    activation_layer = read_runnable(path)["payload_layers"]["activations"]
     members = activation_layer["members"]
     selected_labels = {str(op.label) for op in trace._layer_list if bool(op.has_saved_activation)}
     assert activation_layer["present"] is True
@@ -251,12 +248,12 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
     assert {member["slot_id"] for member in members} == {
         f"slot:{label}" for label in selected_labels
     }
-    entries = [entry for entry in manifest["tensors"] if entry["kind"] == "runnable_activation"]
-    assert {entry["kind"] for entry in manifest["tensors"]} == {"runnable_activation"}
-    assert {entry["blob_id"] for entry in entries} == {member["blob_id"] for member in members}
-    assert_sparse_core_has_no_tensor_payload(manifest["run"])
+    entries = manifest["runnable"]["activations_tensors"]
+    assert set(entries) == {member["blob_id"] for member in members}
+    assert all(ref["blob"].startswith("runnable/activations-") for ref in entries.values())
+    assert_sparse_core_has_no_tensor_payload(read_runnable(path))
     assert_sparse_core_has_no_tensor_payload(_metadata(path))
-    assert all(op.func is None for op in _metadata(path)["_layer_list"])
+    assert "func" not in _metadata(path)["op"]["columns"]
     tl.validation.validate_tlspec(path)
 
 
@@ -270,11 +267,11 @@ def test_include_activations_default_is_absent_and_requires_runnable_level(
     trace.save(path, level="runnable")
 
     manifest = _manifest(path)
-    assert manifest["run"]["payload_layers"]["activations"] == {
+    assert read_runnable(path)["payload_layers"]["activations"] == {
         "present": False,
         "schema": "selected_activation_v2",
     }
-    assert not any(entry["kind"] == "runnable_activation" for entry in manifest["tensors"])
+    assert "activations_tensors" not in manifest["runnable"]
     assert tl.load(path).archived_activations == {}
     with pytest.raises(ValueError, match="set level='runnable' or set include_activations=False"):
         trace.save(tmp_path / "portable.tlspec", include_activations=True)

@@ -7,51 +7,48 @@ import os
 import shutil
 import uuid
 import warnings
-from collections.abc import Callable, Collection, Iterable
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 import torch
-from safetensors.torch import load_file, save_file
 
 from .._errors import InvalidArgumentError
-from .._io._durability import fsync_dir, fsync_file
+from .._io._durability import fsync_dir, fsync_tree
 from .._io._json import read_bounded
-from .._io.manifest import TensorEntry
+from .._io.format3.contract import INTERVENTION_FILE
+from .._io.format3.payloads import PayloadStore
+from .._io.format3.recipe import (
+    RecipeHeader,
+    read_recipe,
+    recipe_placeholders,
+    trace_recipe_context,
+)
+from .._io.format3.writer import EnvelopeSpec, envelope_fields, write_intervention_recipe
+from .._io.format_contract import below_floor_error
+from .._io.format_errors import ArtifactError
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
 from .._selection.resolver import _resolve_sites
-from .._utils.hashing import sha256_file
 from ..intervention._resolver_registry import (
     function_registry_key_from_callable,
     resolve_function_registry_key,
 )
 from ._helper_fingerprint import refuse_changed_staged_helpers
-from ._spec_codec import (
-    _SPEC_FILE,
-    TLSPEC_FORMAT_VERSION,
-    _deserialize_intervention_spec,
-    _serialize_intervention_spec,
-    _target_spec_to_json,
-    _validate_format_version,
-    _validate_spec_json_structure,
-)
-from ._spec_values import (
-    SaveLevel,
-    _coerce_save_level,
-    _SerializedState,
-)
+from ._rerun_predicate import spec_from_recipe
+from ._spec_codec import _target_spec_to_json, _validate_format_version
+from ._spec_values import SaveLevel, _coerce_save_level
 from .errors import (
     DirectActivationWriteWarning,
     DirectWriteSaveError,
     MultiMatchWarning,
+    OpaqueCallableError,
     ReplayPreconditionError,
     SiteResolutionError,
     UntrustedCallableError,
 )
-from .helpers import HELPER_REGISTRY_VERSION
 from .spec_compat import (
     SpecCompat,
     TargetManifestDiff,
@@ -81,8 +78,8 @@ def _reject_symlink_path(path: Path, *, context: str) -> None:
 
 
 _MANIFEST_FILE = "manifest.json"
-_README_FILE = "README.md"
-_TENSOR_DIR = "tensors"
+#: The 2.x spec document; its presence without ``intervention.json`` marks a 2.x spec.
+_LEGACY_SPEC_FILE = "spec.json"
 _BLOB_TENSOR_KEY = "data"
 
 
@@ -93,9 +90,13 @@ def save_intervention(
     level: str | SaveLevel = SaveLevel.EXECUTABLE_WITH_CALLABLES,
     allow_direct_writes: bool = False,
     overwrite: bool = False,
-    _write_tensor_blob_fn: Callable[..., TensorEntry] | None = None,
+    _write_tensor_blob_fn: Callable[..., Any] | None = None,
 ) -> None:
-    """Save a model log's intervention recipe to a ``.tlspec`` directory.
+    """Save a model log's intervention recipe as a ``kind="intervention"`` artifact.
+
+    The directory holds ``manifest.json``, ``intervention.json`` (rules and
+    built-in edits as typed JSON; a user callable is a placeholder) and the
+    recipe's tensors in ``blobs/recipe-<nnnn>.safetensors``.
 
     Parameters
     ----------
@@ -112,7 +113,8 @@ def save_intervention(
     overwrite:
         Whether an existing target directory may be replaced.
     _write_tensor_blob_fn:
-        Test injection hook used to simulate tensor-write crashes.
+        Test injection hook, called with ``tmp_path`` and ``chunks`` after the
+        recipe tensors are written and before publish (simulates a crash).
     """
 
     # WT1 A-IV item 20 (lane A08): the intervention-spec door had NO settled-
@@ -133,69 +135,52 @@ def save_intervention(
     _reject_symlink_path(target_path, context="intervention spec target")
     tmp_path = target_path.parent / f"tmp.{uuid.uuid4().hex}"
     backup_path: Path | None = None
-    tensor_entries: list[TensorEntry] = []
-    state = _SerializedState(tensor_entries=tensor_entries, tensor_refs={})
 
     try:
         if target_path.exists() and not overwrite:
             raise FileExistsError(f"Intervention spec path already exists: {target_path}")
         tmp_path.mkdir(parents=True)
-        (tmp_path / _TENSOR_DIR).mkdir()
 
         spec = getattr(trace, "_intervention_spec", None) or InterventionSpec()
         _sync_spec_records_from_log(spec, trace)
-        serialized_spec = _serialize_intervention_spec(spec, save_level, state)
-        function_keys = _serialize_function_registry_keys(trace)
+        _refuse_unsupported_recipe_tensors(spec)
         target_manifest = _build_target_manifest(trace, spec, save_level)
-        _write_tensor_sidecars(
-            tmp_path,
-            state.tensor_refs,
-            tensor_entries,
-            write_tensor_blob_fn=_write_tensor_blob_fn,
-        )
-
-        # C03 / leverage B7: a spec whose every hook was staged by the
-        # capture-time predicate door carries only DERIVED resolved-label
-        # TARGETS (the predicate door lowers a fired selector into per-site
-        # label targets). Stamp the fact so a reload discloses "the persisted
-        # ADDRESSING is derived" instead of presenting derived labels as
-        # authored addressing. The stamp keys the DOOR, never the metadata
-        # riders: since B7 predicate-door hooks may ALSO carry the rule's
-        # expression provenance (spec_where_repr / spec_rule_id), but that
-        # rider never re-resolves — the addressing is still derived labels.
-        # attach_hooks/do spec-door entries are authored (NOT derived).
-        spec_derived = bool(spec.hook_specs) and all(
-            dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
-            for hook_spec in spec.hook_specs
-        )
-        spec_json = {
-            "format_version": TLSPEC_FORMAT_VERSION,
-            "helper_registry_version": HELPER_REGISTRY_VERSION,
-            "save_level": save_level.value,
-            "executable": save_level != SaveLevel.AUDIT and not _spec_has_opaque(serialized_spec),
-            "append_state": _append_state_for_json(trace),
-            "target_manifest": target_manifest,
-            "helpers": _collect_helpers(serialized_spec),
-            "intervention_spec": serialized_spec,
-            "function_registry_keys": function_keys,
-            "spec_derived": spec_derived,
+        store = PayloadStore(tmp_path)
+        context = {
+            **trace_recipe_context(trace),
+            "function_registry_keys": _serialize_function_registry_keys(trace),
         }
-        _write_json_file(tmp_path / _SPEC_FILE, spec_json)
+        header = RecipeHeader(save_level=save_level.value, **context)
+        intervention_entry, disclosures = write_intervention_recipe(
+            spec, tmp_path, store=store, header=header
+        )
+        chunks = store.close()
+        if _write_tensor_blob_fn is not None:
+            # Test hook: runs after the recipe and its tensors are on disk, before publish.
+            _write_tensor_blob_fn(tmp_path=tmp_path, chunks=chunks)
+        recipe = json.loads((tmp_path / INTERVENTION_FILE).read_text(encoding="utf-8"))
+        if save_level is SaveLevel.PORTABLE:
+            _refuse_unportable_recipe(recipe)
         _TlSpecWriter.write_intervention_manifest(
             path=tmp_path / _MANIFEST_FILE,
             log=trace,
-            spec_json=spec_json,
-            tensor_entries=tensor_entries,
-            legacy_format_version=TLSPEC_FORMAT_VERSION,
+            recipe=recipe,
+            target_manifest=target_manifest,
             save_level=save_level.value,
+            envelope=dict(
+                envelope_fields(
+                    tmp_path,
+                    EnvelopeSpec(
+                        "intervention",
+                        save_level.value,
+                        codecs=store.codecs,
+                        disclosures=disclosures,
+                    ),
+                ),
+                intervention=intervention_entry,
+            ),
         )
-        _write_text_file(tmp_path / _README_FILE, _readme_text(spec_json, tensor_entries))
-        # Blob file data is fsynced at write time (fsync_file), but directory
-        # ENTRIES must be flushed bottom-up: without fsyncing tensors/ first, a
-        # power crash just after publish can leave a durable spec.json whose
-        # tensors/*.safetensors entries were lost (R59; siblings use fsync_tree).
-        _fsync_directory(tmp_path / _TENSOR_DIR)
-        _fsync_directory(tmp_path)
+        fsync_tree(tmp_path)
         if target_path.exists():
             # Re-check overwrite at swap time, not just at save start (R59
             # TOCTOU): a concurrent writer could have created ``target_path``
@@ -232,6 +217,43 @@ def save_intervention(
         raise
 
 
+def _spec_is_predicate_derived(spec: InterventionSpec) -> bool:
+    """Return whether every hook of ``spec`` was staged by the predicate door.
+
+    C03 / leverage B7: such a spec carries only DERIVED resolved-label TARGETS.
+    The recipe stamps the fact so a reload discloses "the persisted ADDRESSING is
+    derived" instead of presenting derived labels as authored addressing. The
+    stamp keys the DOOR, never the metadata riders (spec_where_repr /
+    spec_rule_id never re-resolve).
+    """
+
+    return bool(spec.hook_specs) and all(
+        dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
+        for hook_spec in spec.hook_specs
+    )
+
+
+def _refuse_unportable_recipe(recipe: Mapping[str, Any]) -> None:
+    """Refuse a portable save whose written recipe needs user code to rebuild.
+
+    Portable means it rebuilds without user code: a callable placeholder (or a
+    disclosed, stringified value) leaves the recipe non-executable and breaks
+    that promise.
+    """
+
+    if recipe.get("executable", False):
+        return
+    raise OpaqueCallableError(
+        "A portable intervention spec must rebuild without user code, but this "
+        "recipe holds a user callable (saved only as a placeholder) or a value "
+        "the format cannot carry.",
+        code="intervention_spec_not_portable",
+        remedy=(
+            "save at level='audit' for an audit-only record, or stage the rule with built-in edits"
+        ),
+    )
+
+
 def load_intervention_spec(
     path: str | Path,
     *,
@@ -263,61 +285,96 @@ def load_intervention_spec(
     # CHILD member (spec.json / manifest.json) from redirecting the read out of
     # the attacker-controlled directory. Mirror the trace loader's per-member
     # symlink rejection before opening either file.
-    _reject_symlink_path(spec_path / _SPEC_FILE, context="intervention spec.json")
+    _reject_symlink_path(spec_path / INTERVENTION_FILE, context="intervention.json")
     _reject_symlink_path(spec_path / _MANIFEST_FILE, context="intervention manifest.json")
-    data = _read_json_file(spec_path / _SPEC_FILE)
-    _validate_format_version(data.get("format_version"), path=spec_path)
-    _validate_spec_json_structure(data, spec_path)
+    _refuse_2x_spec_layout(spec_path)
     manifest = _read_json_file(spec_path / _MANIFEST_FILE)
-    manifest_entries = manifest.get("tensor_entries", [])
-    if not isinstance(manifest_entries, list):
-        raise ReplayPreconditionError(
-            f"{spec_path / _MANIFEST_FILE} field 'tensor_entries' must be a list, "
-            f"got {type(manifest_entries).__name__}"
+    recipe = read_recipe(spec_path)
+    spec = _spec_with_recipe_metadata(recipe, spec_path)
+    compat = manifest.get("intervention_compat_metadata")
+    target_manifest = compat.get("target_manifest", []) if isinstance(compat, dict) else []
+    if not isinstance(target_manifest, list):
+        raise ArtifactError(
+            f"The intervention manifest at {spec_path} carries a target_manifest that is "
+            f"not an array ({type(target_manifest).__name__}).",
+            code="manifest_schema_invalid",
+            remedy="re-save the spec with save_intervention; do not hand-edit the manifest",
         )
-    tensor_entries = [TensorEntry.from_dict(entry) for entry in manifest_entries]
-    tensors = _load_tensor_refs(spec_path, tensor_entries)
-    spec_payload = data["intervention_spec"]
-    spec = _deserialize_intervention_spec(
-        spec_payload,
-        tensors,
-        trust_custom_callables=trust_custom_callables,
-        allowed_custom_callable_modules=allowed_custom_callable_modules,
-    )
-    metadata = dict(spec.metadata)
-    metadata.update(
-        {
-            "format_version": data.get("format_version"),
-            "helper_registry_version": data.get("helper_registry_version"),
-            "save_level": data.get("save_level"),
-            "executable": bool(data.get("executable", False)),
-            "target_manifest": data.get("target_manifest", []),
-            "function_registry_keys": data.get("function_registry_keys", []),
-            "append_state": data.get("append_state", {}),
-            "loaded_from_tlspec": str(spec_path),
-            # C03 / leverage B7: disclose reloads whose persisted ADDRESSING
-            # is derived per-site labels (predicate-door lowering); legacy
-            # artifacts without the stamp settle by the same door-keyed
-            # derivation over the loaded hooks (an expression-provenance
-            # rider never flips the stamp).
-            "spec_derived": bool(
-                data.get(
-                    "spec_derived",
-                    bool(spec.hook_specs)
-                    and all(
-                        dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
-                        for hook_spec in spec.hook_specs
-                    ),
-                )
-            ),
-        }
-    )
+    metadata = {**spec.metadata, "target_manifest": target_manifest}
     spec.metadata = metadata
     _verify_loaded_function_keys(
-        data.get("function_registry_keys", []),
+        recipe.get("function_registry_keys", []),
         trust_custom_callables=trust_custom_callables,
         allowed_custom_callable_modules=allowed_custom_callable_modules,
     )
+    return spec
+
+
+def _refuse_2x_spec_layout(spec_path: Path) -> None:
+    """Refuse a torchlens 2.x intervention spec (``spec.json``, no ``intervention.json``).
+
+    A 2.x spec is never read: format ``1`` refuses through the spec format table
+    and the 2.29-2.36 format ``2`` refuses here, both with the one 2.x error
+    (``artifact_version_below_floor``).
+    """
+
+    legacy = spec_path / _LEGACY_SPEC_FILE
+    if (spec_path / INTERVENTION_FILE).exists() or not legacy.exists():
+        return
+    _reject_symlink_path(legacy, context="intervention spec.json")
+    format_version = _read_json_file(legacy).get("format_version")
+    _validate_format_version(format_version, path=spec_path)
+    raise below_floor_error(
+        observed=f"intervention format_version={format_version}",
+        path=str(spec_path),
+        code="artifact_version_below_floor",
+    )
+
+
+def _load_trace_recipe_spec(path: str | Path) -> InterventionSpec:
+    """Return the staged spec a saved trace's ``intervention.json`` describes.
+
+    The trace reader attaches it as the loaded trace's ``_intervention_spec``,
+    so the rerun guard can tell a replayable recipe from one with
+    placeholders.
+
+    Parameters
+    ----------
+    path:
+        Trace artifact directory holding ``intervention.json``.
+
+    Returns
+    -------
+    InterventionSpec
+        The spec, with ``metadata["recipe_placeholders"]`` and
+        ``metadata["executable"]`` set.
+    """
+
+    return load_intervention_spec(path)
+
+
+def _spec_with_recipe_metadata(recipe: Mapping[str, Any], root: Path) -> InterventionSpec:
+    """Rebuild the spec of a decoded recipe and stamp its persistence metadata."""
+
+    spec = spec_from_recipe(recipe)
+    spec.metadata = {
+        **spec.metadata,
+        "format_version": recipe.get("format_version"),
+        "helper_registry_version": recipe.get("helper_registry_version"),
+        "save_level": recipe.get("save_level"),
+        "executable": bool(recipe.get("executable", False)),
+        "target_manifest": [],
+        "function_registry_keys": recipe.get("function_registry_keys", []),
+        "append_state": recipe.get("append_state", {}),
+        "loaded_from_tlspec": str(root),
+        # C03 / leverage B7: disclose reloads whose persisted ADDRESSING is
+        # derived per-site labels (predicate-door lowering).
+        "spec_derived": bool(recipe.get("spec_derived", False)),
+        "recipe_placeholders": [
+            {"position": item.position, "qualname": item.qualname}
+            for item in recipe_placeholders(recipe)
+        ],
+    }
     return spec
 
 
@@ -348,67 +405,40 @@ def _append_state_for_json(log: Any) -> dict[str, Any]:
     }
 
 
-def _resolve_intervention_tensor_path(spec_path: Path, relative_path: str) -> Path:
-    """Resolve one manifest tensor sidecar path under the spec directory.
-
-    This mirrors the anti-traversal / anti-symlink guarantees the portable trace
-    loader gets from ``resolve_bundle_blob_path`` + ``_reject_symlink_path`` (see
-    ``torchlens/_io/paths.py`` and ``torchlens/_io/bundle.py``). The intervention
-    sidecar loader is reached by a DEFAULT ``tl.load`` on an attacker-controlled
-    intervention-shaped ``.tlspec`` directory, so an attacker-set
-    ``relative_path`` must never read a file outside ``spec_path`` and must never
-    follow an in-bundle symlink. The checksum gate is NOT a defense here: the
-    attacker also controls ``entry.sha256`` and can make it match the
-    out-of-bundle file, so containment must be enforced BEFORE the checksum and
-    the safetensors read.
+def _refuse_unsupported_recipe_tensors(spec: InterventionSpec) -> None:
+    """Refuse a recipe tensor the payload codec cannot store (sparse, nested, meta).
 
     Parameters
     ----------
-    spec_path:
-        Trusted intervention spec directory root (already non-symlink checked).
-    relative_path:
-        Manifest-provided sidecar path relative to ``spec_path``.
-
-    Returns
-    -------
-    Path
-        Absolute, containment-checked, non-symlink sidecar path.
+    spec:
+        Staged spec about to be written.
 
     Raises
     ------
-    ReplayPreconditionError
-        If ``relative_path`` is absolute, contains ``".."``, resolves outside
-        ``spec_path``, or targets an in-bundle symlink.
+    InvalidArgumentError
+        ``intervention_tensor_unsupported`` naming the first such tensor.
     """
 
-    candidate_rel = Path(relative_path)
-    if candidate_rel.is_absolute():
-        raise ReplayPreconditionError(
-            f"Intervention spec rejected absolute tensor relative_path {relative_path!r}."
-        )
-    if ".." in candidate_rel.parts:
-        raise ReplayPreconditionError(
-            f"Intervention spec rejected parent traversal in tensor relative_path {relative_path!r}."
-        )
-    candidate = spec_path / candidate_rel
-    # Reject an in-bundle symlink FILE (or symlinked final component) before we
-    # resolve/read it, so a symlink that points back inside the bundle is also
-    # refused rather than silently followed.
-    _reject_symlink_path(candidate, context="intervention tensor sidecar")
-    # Containment against the spec ROOT (not a resolved ``tensors/`` subdir),
-    # so a symlinked intermediate directory that redirects the sidecar outside
-    # the spec is caught here: ``candidate.resolve()`` follows the symlink out
-    # and ``relative_to`` fails.
-    allowed_root = spec_path.resolve()
-    resolved = candidate.resolve()
-    try:
-        resolved.relative_to(allowed_root)
-    except ValueError as exc:
-        raise ReplayPreconditionError(
-            "Intervention spec rejected tensor path traversal outside spec directory: "
-            f"{relative_path!r}."
-        ) from exc
-    return resolved
+    stack: list[Any] = [spec.value]
+    for hook_spec in spec.hook_specs:
+        helper = hook_spec.helper
+        if helper is not None:
+            stack.extend([helper.args, [item for _, item in helper.kwargs]])
+    stack.extend(value_spec.value for value_spec in spec.target_value_specs)
+    while stack:
+        item = stack.pop()
+        if isinstance(item, torch.Tensor):
+            decision = is_supported_for_save(item, strict=True)
+            if not isinstance(decision, Ok):
+                raise InvalidArgumentError(
+                    f"Unsupported tensor in the intervention recipe: {decision}",
+                    code="intervention_tensor_unsupported",
+                    remedy="use dense, codec-supported tensors in the intervention spec",
+                )
+        elif isinstance(item, list | tuple):
+            stack.extend(item)
+        elif isinstance(item, dict):
+            stack.extend(item.values())
 
 
 def _enforce_direct_write_policy(
@@ -760,213 +790,6 @@ def _verify_loaded_function_keys(
             continue
 
 
-def _write_tensor_sidecars(
-    tmp_path: Path,
-    tensor_refs: dict[str, torch.Tensor],
-    tensor_entries: list[TensorEntry],
-    *,
-    write_tensor_blob_fn: Callable[..., TensorEntry] | None,
-) -> None:
-    """Write safetensors sidecars for serialized tensors.
-
-    Parameters
-    ----------
-    tmp_path:
-        Temporary spec directory.
-    tensor_refs:
-        Mapping from tensor ID to tensor payload.
-    tensor_entries:
-        Manifest entry accumulator.
-    write_tensor_blob_fn:
-        Optional test injection writer.
-    """
-
-    writer = write_tensor_blob_fn or _write_tlspec_tensor_blob
-    for tensor_id, tensor in tensor_refs.items():
-        decision = is_supported_for_save(tensor, strict=True)
-        if not isinstance(decision, Ok):
-            raise InvalidArgumentError(
-                f"Unsupported tensor for intervention save {tensor_id}: {decision}",
-                code="intervention_tensor_unsupported",
-                remedy="use dense, codec-supported tensors in the intervention spec",
-                tensor_id=str(tensor_id),
-            )
-        tensor_entries.append(
-            writer(
-                tmp_path=tmp_path,
-                blob_id=tensor_id,
-                tensor=tensor,
-                kind="intervention_value",
-                label=tensor_id,
-            )
-        )
-
-
-def _write_tlspec_tensor_blob(
-    *,
-    tmp_path: Path,
-    blob_id: str,
-    tensor: torch.Tensor,
-    kind: str,
-    label: str,
-) -> TensorEntry:
-    """Write one intervention tensor sidecar.
-
-    Parameters
-    ----------
-    tmp_path:
-        Temporary spec directory.
-    blob_id:
-        Tensor identifier.
-    tensor:
-        Tensor payload.
-    kind:
-        Logical tensor kind.
-    label:
-        Human-readable label.
-
-    Returns
-    -------
-    TensorEntry
-        Manifest entry.
-    """
-
-    contiguous = tensor.contiguous()
-    if contiguous.device.type != "cpu":
-        contiguous = contiguous.cpu()
-    relative_path = Path(_TENSOR_DIR) / f"{blob_id}.safetensors"
-    blob_path = tmp_path / relative_path
-    save_file({_BLOB_TENSOR_KEY: contiguous}, str(blob_path))
-    fsync_file(blob_path)
-    return TensorEntry(
-        blob_id=blob_id,
-        kind=kind,
-        label=label,
-        relative_path=relative_path.as_posix(),
-        backend="safetensors",
-        shape=[int(dim) for dim in contiguous.shape],
-        dtype=str(contiguous.dtype).replace("torch.", ""),
-        device_at_save=str(tensor.device),
-        layout=str(contiguous.layout).replace("torch.", ""),
-        bytes=int(contiguous.numel() * contiguous.element_size()),
-        sha256=sha256_file(blob_path),
-        requires_grad=bool(tensor.requires_grad),
-    )
-
-
-def _load_tensor_refs(spec_path: Path, entries: list[TensorEntry]) -> dict[str, torch.Tensor]:
-    """Load tensor refs from safetensors sidecars.
-
-    Parameters
-    ----------
-    spec_path:
-        Spec directory.
-    entries:
-        Tensor manifest entries.
-
-    Returns
-    -------
-    dict[str, torch.Tensor]
-        Loaded tensors by blob ID.
-    """
-
-    tensors: dict[str, torch.Tensor] = {}
-    for entry in entries:
-        path = _resolve_intervention_tensor_path(spec_path, entry.relative_path)
-        if sha256_file(path) != entry.sha256:
-            raise ReplayPreconditionError(f"Tensor sidecar checksum mismatch: {entry.blob_id}")
-        tensor = load_file(str(path))[_BLOB_TENSOR_KEY]
-        if entry.requires_grad:
-            tensor.requires_grad_(True)
-        tensors[entry.blob_id] = tensor
-    return tensors
-
-
-def _collect_helpers(spec_payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Collect helper payloads for the top-level helper index.
-
-    Parameters
-    ----------
-    spec_payload:
-        Serialized intervention spec.
-
-    Returns
-    -------
-    list[dict[str, Any]]
-        Helper payloads.
-    """
-
-    helpers: list[dict[str, Any]] = []
-
-    def visit(value: Any) -> None:
-        """Append helper leaves while walking serialized data."""
-
-        if isinstance(value, dict) and "__helper__" in value:
-            helpers.append(value["__helper__"])
-        elif isinstance(value, dict):
-            for item in value.values():
-                visit(item)
-        elif isinstance(value, list):
-            for item in value:
-                visit(item)
-
-    visit(spec_payload)
-    return helpers
-
-
-def _spec_has_opaque(spec_payload: dict[str, Any]) -> bool:
-    """Return whether serialized spec data contains audit-only opaque payloads.
-
-    Parameters
-    ----------
-    spec_payload:
-        Serialized spec.
-
-    Returns
-    -------
-    bool
-        ``True`` when opaque payloads are present.
-    """
-
-    encoded = json.dumps(spec_payload, sort_keys=True)
-    return "opaque_audit" in encoded or "__opaque_audit__" in encoded
-
-
-def _write_json_file(path: Path, data: dict[str, Any]) -> None:
-    """Write and fsync canonical JSON.
-
-    Parameters
-    ----------
-    path:
-        File path.
-    data:
-        JSON payload.
-    """
-
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2, sort_keys=True)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-
-
-def _write_text_file(path: Path, text: str) -> None:
-    """Write and fsync text.
-
-    Parameters
-    ----------
-    path:
-        File path.
-    text:
-        Text payload.
-    """
-
-    with path.open("w", encoding="utf-8") as handle:
-        handle.write(text)
-        handle.flush()
-        os.fsync(handle.fileno())
-
-
 def _read_json_file(path: Path) -> dict[str, Any]:
     """Read JSON object data from an UNTRUSTED intervention-spec directory.
 
@@ -1016,33 +839,6 @@ def _fsync_directory(path: Path) -> None:
     """
 
     fsync_dir(path, strict=True)
-
-
-def _readme_text(spec_json: dict[str, Any], tensor_entries: list[TensorEntry]) -> str:
-    """Build the human-readable spec README.
-
-    Parameters
-    ----------
-    spec_json:
-        Serialized spec payload.
-    tensor_entries:
-        Tensor manifest entries.
-
-    Returns
-    -------
-    str
-        README text.
-    """
-
-    return (
-        "# TorchLens intervention spec\n\n"
-        f"- format_version: {spec_json['format_version']}\n"
-        f"- helper_registry_version: {spec_json['helper_registry_version']}\n"
-        f"- save_level: {spec_json['save_level']}\n"
-        f"- executable: {spec_json['executable']}\n"
-        f"- targets: {len(spec_json['target_manifest'])}\n"
-        f"- tensor_sidecars: {len(tensor_entries)}\n"
-    )
 
 
 __all__ = [

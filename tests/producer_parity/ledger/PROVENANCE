@@ -4035,3 +4035,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 79eb84b6b82c7eb481cce501a2922077d44557a1 (dirty)
 recorded: 2026-11-03T12:57:15.778303+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family mp-fiq2-final-b on 4563daa9adae32d41ed77e0c81388b6ba987c0ba
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4563daa9adae32d41ed77e0c81388b6ba987c0ba (dirty)
+recorded: 2026-11-03T14:14:56.767942+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family mp-fiq2-final-b on 4563daa9adae32d41ed77e0c81388b6ba987c0ba
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4563daa9adae32d41ed77e0c81388b6ba987c0ba (dirty)
+recorded: 2026-11-03T14:15:03.215327+00:00

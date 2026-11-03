@@ -28,12 +28,12 @@ glossary documents:
   cases too;
 * two edits on one site apply in order, an edit on a view site stays inside
   its cone, and a seeded stochastic edit reproduces;
-* an intervened capture persists as documented: the loaded trace carries
-  the same replaced-op set and fire records, its ``recipe`` is empty because
-  ``trace.save()`` does not persist the intervention spec, and its replay
-  refuses by the door ``run_intervention_spec_not_persisted``
-  (:data:`RECIPE_PERSISTS` flips the check when the saved format decides to
-  carry the spec).
+* an intervened capture persists its recipe (io.1): the loaded trace carries
+  the same replaced-op set, fire records and recipe rules; a recipe of
+  built-in edits reruns on the loaded trace and reproduces the captured
+  output, and a recipe holding a user callable (saved as a placeholder)
+  refuses the rerun by the door ``run_intervention_spec_not_persisted``. The
+  per-door cells live in ``test_f7_intervention_persistence.py``.
 """
 
 from __future__ import annotations
@@ -54,12 +54,8 @@ if TYPE_CHECKING:
     from tests.behaviour.harness import Cell
 
 SEED = 0
-#: Whether ``trace.save()`` persists the intervention recipe. ``False`` is the
-#: documented state (door ``run_intervention_spec_not_persisted`` in
-#: ``torchlens/intervention/_staged_spec_persistence.py``); flip it when the
-#: saved format decides to carry the spec and the loaded-trace checks assert
-#: an equal recipe and a reproducing replay instead.
-RECIPE_PERSISTS = False
+#: The refusal of a rerun whose loaded recipe holds a callable placeholder.
+NOT_PERSISTED = "run_intervention_spec_not_persisted"
 _VIEW_FUNCS = frozenset(
     {
         "view",
@@ -372,19 +368,29 @@ def _self_hook_outputs(cell: Cell, trace: Any, labels: set[str]) -> set[str]:
     }
 
 
-def _recipe_is_empty(recipe: Any) -> bool:
-    """Return whether a frozen recipe carries no targets and no fire records."""
+def _persisted_rules(recipe: Any) -> list[tuple[str, str | None]]:
+    """Return each rule of a frozen recipe as its site and its built-in edit.
 
-    return not recipe.targets and not recipe.records
+    A rule whose edit is a user callable reads ``None``: the saved format keeps
+    a placeholder for it (position and qualified name), never the callable, so
+    the live and loaded rules agree on the site and on the absence of a
+    replayable edit.
+    """
+
+    rows = []
+    for spec in recipe.hook_specs:
+        helper = spec.helper
+        builtin = helper is not None and helper.portability == "builtin"
+        rows.append((repr(spec.site_target), repr(helper) if builtin else None))
+    return rows
 
 
 def _after_intervene(cell: Cell) -> None:
     """Selected ops record a replaced value, and the edit persists through save and load.
 
-    The persisted part follows the documented saved format: replaced-op set and
-    fire records survive, the recipe does not (``loaded.recipe`` is empty) and
-    the loaded trace's replay refuses by the typed door. :data:`RECIPE_PERSISTS`
-    selects the other reading once the format carries the spec.
+    The loaded trace carries the live replaced-op set, fire records and recipe
+    rules (io.1); its rerun reproduces the captured output, or refuses by the
+    typed door when the recipe holds a user callable.
     """
 
     trace = cell.require_trace()
@@ -410,19 +416,14 @@ def _after_intervene(cell: Cell) -> None:
             _fire_facts(trace[label]) == _fire_facts(loaded[label]),
             f"{label}: fire records differ after load",
         )
-    live_rules, loaded_rules = _rule_facts(trace.recipe), _rule_facts(loaded.recipe)
-    if RECIPE_PERSISTS:
-        cell.expect(
-            live_rules == loaded_rules,
-            f"recipe differs after load: live {live_rules!r:.160} vs loaded {loaded_rules!r:.160}",
-        )
-    else:
-        cell.expect(
-            _recipe_is_empty(loaded.recipe),
-            f"trace.save() does not persist the recipe, yet loaded.recipe holds {loaded_rules!r:.160}",
-        )
+    live_rules, loaded_rules = _persisted_rules(trace.recipe), _persisted_rules(loaded.recipe)
+    cell.expect(
+        live_rules == loaded_rules,
+        f"recipe differs after load: live {live_rules!r:.160} vs loaded {loaded_rules!r:.160}",
+    )
     before = None if cell.case.has("stochastic") else cell.output_leaves(trace)
-    _expect_loaded_replay(cell, loaded, before)
+    holds_callable = any(edit is None for _, edit in live_rules)
+    _expect_loaded_rerun(cell, loaded, before, holds_callable=holds_callable)
     if before is None:
         return
     torch.manual_seed(SEED)
@@ -430,34 +431,36 @@ def _after_intervene(cell: Cell) -> None:
     cell.expect_same_leaves(before, cell.output_leaves(trace), "replay of the intervened trace")
 
 
-def _expect_loaded_replay(cell: Cell, loaded: Any, before: list[Any] | None) -> None:
-    """A loaded intervened trace replays as the saved format documents.
+def _expect_loaded_rerun(
+    cell: Cell, loaded: Any, before: list[Any] | None, *, holds_callable: bool
+) -> None:
+    """A loaded intervened trace reruns its persisted recipe (io.1).
 
-    Without a persisted recipe (:data:`RECIPE_PERSISTS` false) ``loaded.run``
-    must refuse by the door ``run_intervention_spec_not_persisted``: a run that
-    goes through would return un-intervened numbers under intervened records.
-    With a persisted recipe it must reproduce the captured output (``before``;
-    ``None`` for a stochastic case, whose output is not comparable).
+    A recipe of built-in edits must rerun and reproduce the captured output
+    (``before``; ``None`` for a stochastic case, whose output is not
+    comparable). A recipe holding a user callable must refuse by the door
+    ``run_intervention_spec_not_persisted``: a rerun without the callable would
+    return numbers that do not match the trace's records.
     """
 
     torch.manual_seed(SEED)
     try:
         loaded.run(cell.model, cell.fresh_inputs())
     except TorchLensError as exc:
-        if _error_code(exc) != "run_intervention_spec_not_persisted":
+        if _error_code(exc) != NOT_PERSISTED:
             raise
         cell.expect(
-            not RECIPE_PERSISTS,
-            "the loaded trace refuses run() as not persisted although the recipe persists",
+            holds_callable,
+            f"the loaded recipe holds only built-in edits, yet run() refused: {exc}",
         )
         return
     cell.expect(
-        RECIPE_PERSISTS,
-        "the loaded intervened trace ran without its recipe instead of refusing by "
-        "run_intervention_spec_not_persisted",
+        not holds_callable,
+        f"the loaded recipe holds a callable placeholder, yet run() went through instead of "
+        f"refusing by {NOT_PERSISTED}",
     )
-    if before is not None:
-        cell.expect_same_leaves(before, cell.output_leaves(loaded), "replay of the loaded trace")
+    if before is not None and not holds_callable:
+        cell.expect_same_leaves(before, cell.output_leaves(loaded), "rerun of the loaded trace")
 
 
 # --- claimed rows: fork_do ----------------------------------------------------

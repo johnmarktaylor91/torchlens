@@ -177,18 +177,17 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # rides the tip's debloated bundle (union measures 4600) -- the lane's
     # 4660 raise is unnecessary and the ceiling burns back down.
     # 4650 -> 4700 (2026-09-02 W051-IO / T102 lint-size settle): the save
-    # path gains the write/read-symmetry portability preflight (the canonical
-    # metadata.pkl bytes dry-run through the loader's default-deny unpickler
-    # before anything is written) and the load path the manifest anchors
-    # (stamp / n_layers checked against the pickled root state, AUD-CODE
-    # 3.0b). Both bodies live in their own modules (_portability_preflight,
-    # _artifact_anchors); bundle.py carries only the two call seams and the
+    # path gained the write/read-symmetry portability preflight (since replaced
+    # by the 3.0 writer's reload check, format3/writer.py::reload_check) and the
+    # load path the manifest anchors (stamp / n_layers checked against the
+    # pickled root state, AUD-CODE 3.0b). The anchor body lives in its own
+    # module (_artifact_anchors); bundle.py carries only the call seams and the
     # persisted-row-count disclosure (+27 measured at settle). Conscious
     # raise, F41 precedent; PRE-SPRINT BASELINE 4450 and the debloat target
     # are unchanged. Harness bundles phase 2 moved the bundle-container
     # loaders to _io/bundle_container.py and re-keyed the row back down to
     # the 4450 baseline (4700 -> 4450).
-    "torchlens/_io/bundle.py": 4350,
+    "torchlens/_io/bundle.py": 3850,
     "torchlens/_io/runnable_load.py": 3850,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature

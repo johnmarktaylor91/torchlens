@@ -128,11 +128,11 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
             {
                 "_construction_done",
                 "activation_transform",
-                "arg_expressions",
                 "args_template",
                 # edge_substitutions / edge_replacement_stamps and site_key
                 # left this ledger at the tlspec v8 coordinated bump: all
-                # three now persist with load validation.
+                # three now persist with load validation. arg_expressions
+                # left it at the tlspec v12 bump.
                 "func",
                 "grad_fn",
                 "grad_fn_handle",

@@ -795,7 +795,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
   `successor_of`, `escalates`, `fed_by`, `selected_by`; member kind: `episode_member`. Each kind's
   params are a
-  closed set; rows persist in `bundle.json` and every load re-checks them. On a pair row `from` is
+  closed set; rows persist in the bundle artifact (`relations.json` in the 3.0 format) and every
+  load re-checks them. On a pair row `from` is
   always the LATER member. Rows are ordering and topology claims: members joined by a directed
   path of ordering kinds are not comparison operands.
 
@@ -1068,7 +1069,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
   must use `replayable=True`; this flag supplies replay templates even when no intervention
-  is planned.
+  is planned. In the 3.0 format the descriptor is `runnable/descriptor.json` and the state is
+  safetensors files beside it, listed by the manifest's `runnable` object; no callable is ever
+  pickled ([saved_format_3.md](../maintainers/saved_format_3.md), section 7).
 
 **Readiness**
 : The non-executing runnable state `ready` or `unavailable`.
@@ -1620,6 +1623,22 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 ## Persistence, containers, and namespaces
 
+`tl.io.detect_tlspec_format(path)`
+: Inspects a saved-artifact directory without loading its payloads. Returns `"v3"` when the
+  root manifest names the 3.0 format, `"pre_3"` for TorchLens 2.x save markers, or `"unknown"`
+  when no TorchLens save markers are present. Symlinked metadata paths refuse. Detection does
+  not validate the artifact; use `tl.validation.validate_tlspec(path)` for validation.
+
+`tl.types.UnencodableValue`
+: The stand-in a loaded 3.0 artifact carries where the save met a value outside the saved
+  format's vocabulary (a user object in a module attribute, a custom metadata value). Frozen,
+  with `type_name` (the value's `module.qualname`), `repr_text` (its repr text, bounded)
+  and `at` (the record, row and column it sat in). The load attaches one advisory,
+  `unencodable_values_stringified`, to the trace's capture advisories when the artifact's
+  manifest discloses such values. A record cell that fails its typed schema refuses
+  `record_schema_invalid`.
+
+
 **Save / load**
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
@@ -1629,12 +1648,20 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (`load_path_symlink_rejected` at load), a symlinked parent directory passes on both sides,
   and save and load use the same rule; `storage=tl.to_disk(...)` and `save_intervention`
   apply it to their own targets (documented as is, JMT, Sun 1 Nov 2026).
-  The staged intervention spec is session-only: `Trace.save` keeps the intervened
-  values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
-  (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
-  staged after loading) refuses `run_intervention_spec_not_persisted` rather than rerun without
-  the recorded intervention (the recipe travels through `save_intervention`); the replay and
-  `run(inputs=...)` doors cannot run an analysis artifact at all.
+  A saved value with no typed encoding is written as text and counted in the manifest's
+  `disclosures`; it loads back as `tl.types.UnencodableValue`, a frozen stand-in carrying
+  `type_name` (the original type's dotted name), `repr_text` (its `repr`, cut at 256
+  characters) and `at` (where it was in the artifact). A saved cell that fails its type check
+  on load refuses `record_schema_invalid`.
+  `Trace.save` writes the staged intervention spec as the typed recipe `intervention.json`
+  beside the intervened values and their per-op provenance (`save_intervention` writes the same
+  recipe as an artifact of its own). A loaded trace whose recipe holds only built-in edits reruns
+  it through every legacy rerun door (`run(model, x)` plain, append or chunked, a fork's `run`,
+  `do(engine="rerun")`, and an edit staged after loading). A custom callable is saved as a
+  callable placeholder (its position and qualified name, never its code), and a recipe holding one
+  refuses `run_intervention_spec_not_persisted` naming the rule, rather than rerun without the
+  recorded intervention; the replay and `run(inputs=...)` doors cannot run an analysis artifact
+  at all.
   A rerun replays the capture's recorded `save=` request on its own graph, so it saves the same
   sites a fresh capture would even after a staged edit inserts ops. A trace restored from pickle
   carries no recorded request and re-saves by the capture's raw op indices, which is exact only
@@ -4791,6 +4818,7 @@ alphabetical order.
 | `Op.is_buffer` | Stored flag marking this Op as a buffer boundary; `is_buffer_source` exposes it |
 | `Op.is_buffer_source` | Whether this Op represents a buffer boundary (overwrites a buffer) |
 | `Op.is_compute_op` | Whether this Op executed a torch function rather than being a boundary sentinel |
+| `Op.is_constant` | Whether this Op is a constant, a closure constant or a literal producer, stamped by the shared constants rule |
 | `Op.is_final_output` | Whether this Op is a final model output |
 | `Op.is_in_conditional` | Whether this Op participates in any conditional role |
 | `Op.is_in_conditional_body` | Whether this Op sits inside the body of a conditional arm |

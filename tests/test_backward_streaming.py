@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import safetensors  # noqa: F401
 import torch
+from _format3_envelope import read_record
 from torch import nn
 
 import torchlens as tl
-from torchlens._io.manifest import Manifest
 from torchlens.options import CaptureOptions
 
 
@@ -80,16 +81,22 @@ def _logged_backward_stream(
     return trace, expected
 
 
+def _saved_grad_cells(bundle_path: Path) -> list[Any]:
+    """Return the non-empty ``grad`` cells of the saved op record (3.0 layout)."""
+
+    table = read_record(bundle_path, "op")
+    return [cell for cell in table["columns"]["grad"] if cell is not None]
+
+
 def test_log_backward_streams_grads_to_disk(tmp_path: Path) -> None:
     """Gradient streaming should write grad blobs into the bundle."""
 
     bundle_path = tmp_path / "backward_stream.tl"
     trace, _expected = _logged_backward_stream(bundle_path)
-    manifest = Manifest.read(bundle_path / "manifest.json")
 
     assert bundle_path.exists()
     assert trace.autograd.has_backward_pass
-    assert any(entry.kind == "grad" for entry in manifest.tensors)
+    assert _saved_grad_cells(bundle_path)
     assert len(trace.saved_grad_ops) > 0
 
 
@@ -109,8 +116,7 @@ def test_streamed_bundle_honors_per_call_save_grads_override(tmp_path: Path) -> 
 
     trace.log_backward(trace[trace.output_layers[0]].out.sum(), save_grads=True)
 
-    manifest = Manifest.read(bundle_path / "manifest.json")
-    assert any(entry.kind == "grad" for entry in manifest.tensors)
+    assert _saved_grad_cells(bundle_path)
 
 
 @pytest.mark.smoke
