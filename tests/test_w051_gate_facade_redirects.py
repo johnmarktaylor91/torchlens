@@ -112,3 +112,19 @@ def test_did_you_mean_stays_plain_for_typos() -> None:
         tl.trce  # noqa: B018 - the typo IS the test
     assert type(excinfo.value) is AttributeError
     assert "  candidates" in str(excinfo.value)
+
+
+# The root verbs removed in 02d4fea77 (do, push, push_from, run) and the edit
+# helper swap_with are Trace methods or torchlens.intervention.helpers names;
+# each gets a teaching row so the old root spelling names its home.
+@pytest.mark.parametrize("name", ["do", "push", "push_from", "run", "swap_with"])
+def test_removed_root_verb_redirects(name: str) -> None:
+    """A removed root verb raises the typed redirect naming its canonical home."""
+
+    from torchlens._errors import FacadeTeachingError
+
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        getattr(tl, name)
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert tl._REDIRECTS[name] in str(excinfo.value)
+    assert not hasattr(tl, name) and name not in dir(tl)

@@ -31,7 +31,7 @@ class _DeepConvChain(nn.Module):
         return self.body(x)
 
 
-@pytest.mark.heavy
+@pytest.mark.slow
 def test_geometric_invariants_and_queries_survive_a_450_block_chain() -> None:
     """The synthetic trigger: invariants and a receptive-field query on the deep chain."""
 

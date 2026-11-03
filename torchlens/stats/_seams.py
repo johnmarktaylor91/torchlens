@@ -136,7 +136,7 @@ class NarrationObserver:
     >>> echo = tl.stats.narrate(tl.func("relu"))
     >>> isinstance(echo, NarrationObserver)
     True
-    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=echo))
+    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(hooks=echo))
     >>> len(echo.lines)
     1
     """
@@ -222,7 +222,7 @@ def narrate(
     --------
     >>> lines = []
     >>> echo = tl.stats.narrate(tl.func("relu"), sink=lines.append)
-    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=echo))
+    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(hooks=echo))
     >>> len(lines), "->" in lines[0]
     (1, True)
     """
