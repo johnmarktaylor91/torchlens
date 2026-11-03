@@ -213,7 +213,7 @@ def adopt_minted_parameter_label(trace: Any, param: Any, sources: tuple[Any, ...
     for source in sources:
         if isinstance(source, torch.Tensor) and not isinstance(source, torch.nn.Parameter):
             label = get_tensor_label(source)
-            if label in internal_sources and _same_storage(source, param):
+            if label is not None and label in internal_sources and _same_storage(source, param):
                 set_tensor_label(param, label)
                 return
 
