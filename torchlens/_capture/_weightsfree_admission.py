@@ -30,14 +30,6 @@ from typing import Any, Final
 import torch
 
 from .._errors import WeightsfreeIntegrityError
-from .._utils._torch_compat import (
-    get_device_context_type,
-    get_torch_function_stack_surgery,
-    warm_lazy_torch_imports,
-)
-from ..backends.torch._weightsfree_ctx import factory_device_scope
-from ..backends.torch.completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
-from ..backends.torch.wrappers import _get_active_device
 
 __all__ = [
     "MetaAdmissionRecord",
@@ -245,6 +237,7 @@ def _first_settlement_violation(trace: Any) -> str | None:
             f"declared parameter totals disagree: trace.num_params={total} "
             f"vs root module accounting {module_totals}"
         )
+    from ..backends.torch.completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
 
     if trace in _HOST_ESCAPE_MUTABLE_WRITEBACK:
         return (
@@ -346,6 +339,9 @@ def weightsfree_forward_scope(trace: Any) -> Iterator[None]:
         return
     import torch as _torch
 
+    from .._utils._torch_compat import warm_lazy_torch_imports
+    from ..backends.torch._weightsfree_ctx import factory_device_scope
+
     register_admission(trace, record)
     _META_ACTIVE.add(trace)
     try:
@@ -445,6 +441,12 @@ def _absorbed_ambient_device_context() -> Iterator[None]:
     missing, a caller-active context refuses typed with the exit-the-context
     remedy (SOL's fallback rule).
     """
+
+    from .._utils._torch_compat import (
+        get_device_context_type,
+        get_torch_function_stack_surgery,
+    )
+    from ..backends.torch.wrappers import _get_active_device
 
     if _get_active_device() is None:
         yield
