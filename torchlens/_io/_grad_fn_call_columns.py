@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from .format_contract import BlobRef
 from .format_errors import ArtifactError
@@ -137,7 +137,7 @@ def _read_optional(column: Any, count: int, code: str, name: str) -> list[Any]:
     mask = column[1]
     if type(mask) is not bytes or len(mask) != count or any(flag > 1 for flag in mask):
         raise _corrupt(f"null mask of {name!r} is malformed")
-    return [None if flag else value for value, flag in zip(values, mask)]
+    return [None if flag else value for value, flag in zip(values, mask, strict=True)]
 
 
 def _read_payload(column: Any, values: list[Any], name: str) -> None:
@@ -166,6 +166,31 @@ def _read_payload(column: Any, values: list[Any], name: str) -> None:
         raise _corrupt(f"references {name!r} hold unused ids")
 
 
+def _read_optional_fields(optional: Any, count: int) -> dict[str, list[Any]]:
+    """Decode every optional int and float column of a table."""
+
+    if type(optional) is not dict or set(optional) != {*_OPTIONAL_INTS, *_OPTIONAL_FLOATS}:
+        raise _corrupt("optional columns are malformed")
+    return {
+        name: _read_optional(column, count, _INT64 if name in _OPTIONAL_INTS else _FLOAT64, name)
+        for name, column in optional.items()
+    }
+
+
+def _read_sparse(sparse: Any, fields: dict[str, list[Any]], count: int) -> None:
+    """Fill the sparse payload and ``fire_record`` values into ``fields``, in place."""
+
+    if type(sparse) is not dict or not set(sparse) <= set(_SPARSE):
+        raise _corrupt("sparse values are malformed")
+    for name, entries in sparse.items():
+        if type(entries) is not dict:
+            raise _corrupt(f"sparse {name!r} is not a dict")
+        for position, value in entries.items():
+            if type(position) is not int or not 0 <= position < count or value is None:
+                raise _corrupt(f"sparse {name!r} names an invalid call")
+            fields[name][position] = value
+
+
 def _read_states(columns: GradFnCallColumns) -> list[dict[str, Any]]:
     """Rebuild the pickle state of every call a table holds (untrusted input, all checked)."""
 
@@ -182,28 +207,13 @@ def _read_states(columns: GradFnCallColumns) -> list[dict[str, Any]]:
         "call_index": list(_read(columns.call_index, count, _INT64, "call_index")),
         "grad_fn_label": [labels[index] for index in label_index],
     }
-    if type(columns.optional) is not dict or set(columns.optional) != {
-        *_OPTIONAL_INTS,
-        *_OPTIONAL_FLOATS,
-    }:
-        raise _corrupt("optional columns are malformed")
-    for name, column in columns.optional.items():
-        code = _INT64 if name in _OPTIONAL_INTS else _FLOAT64
-        fields[name] = _read_optional(column, count, code, name)
+    fields.update(_read_optional_fields(columns.optional, count))
     fields.update({name: [None] * count for name in _SPARSE})
-    if type(columns.sparse) is not dict or not set(columns.sparse) <= set(_SPARSE):
-        raise _corrupt("sparse values are malformed")
-    for name, entries in columns.sparse.items():
-        if type(entries) is not dict:
-            raise _corrupt(f"sparse {name!r} is not a dict")
-        for position, value in entries.items():
-            if type(position) is not int or not 0 <= position < count or value is None:
-                raise _corrupt(f"sparse {name!r} names an invalid call")
-            fields[name][position] = value
+    _read_sparse(columns.sparse, fields, count)
     if type(columns.refs) is not dict or not set(columns.refs) <= set(_PAYLOADS):
         raise _corrupt("reference columns are malformed")
-    for name, column in columns.refs.items():
-        _read_payload(column, fields[name], name)
+    for name, ref_column in columns.refs.items():
+        _read_payload(ref_column, fields[name], name)
     fixed = {"_source_trace_ref": None, "tlspec_version": columns.tlspec_version}
     return [{**fixed, **{name: v[i] for name, v in fields.items()}} for i in range(count)]
 
@@ -227,8 +237,8 @@ def unpack_grad_fn_calls_state(state: dict[str, Any], record_type: type) -> None
     call_states = _read_states(columns)
     keys = _read(columns.keys, columns.count, _INT64, "keys")
     calls: dict[int, Any] = {}
-    for key, call_state in zip(keys, call_states):
-        call = record_type.__new__(record_type)
+    for key, call_state in zip(keys, call_states, strict=True):
+        call = cast(Any, record_type).__new__(record_type)  # as pickle: cls.__new__(cls)
         call.__setstate__(call_state)
         calls[key] = call
     if len(calls) != len(keys):
@@ -254,7 +264,7 @@ def unpack_grad_fn_call_refs_state(state: dict[str, Any], record_type: type) -> 
     positions = _read(refs.owner_index, refs.count, _INT64, "owner_index")
     keys = _read(refs.keys, refs.count, _INT64, "keys")
     resolved: list[Any] = []
-    for position, key in zip(positions, keys):
+    for position, key in zip(positions, keys, strict=True):
         if not 0 <= position < len(owners):
             raise _corrupt("a pass reference names no grad_fn")
         mapping = getattr(getattr(owners[position], "calls", None), "_dict", None)

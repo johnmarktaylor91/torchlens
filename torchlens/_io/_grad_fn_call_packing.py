@@ -108,8 +108,7 @@ def _pack_payload(values: list[Any], sparse: dict[int, Any]) -> RefColumn | None
         kind = parts[1] if parts[1] is not None else kind
     if all(arity == _ABSENT for arity in arities):
         return None
-    packed = _ints(arities)
-    assert packed is not None  # small ints
+    packed = struct.pack(f"<{len(arities)}{_INT64}", *arities)  # tuple sizes: always int64
     return kind or "", packed, _ID_SEPARATOR.join(ids).encode("utf-8")
 
 
@@ -150,7 +149,9 @@ def _accessor_calls(accessor: Any, label: Any) -> dict[Any, Any] | None:
         expected = [call for _key, call in sorted(calls.items())]
     except TypeError:
         return None
-    if len(expected) != len(ordered) or any(a is not b for a, b in zip(expected, ordered)):
+    if len(expected) != len(ordered) or any(
+        a is not b for a, b in zip(expected, ordered, strict=True)
+    ):
         return None
     return calls
 
@@ -172,7 +173,8 @@ def _pack_calls(calls: dict[Any, Any], proto: int) -> GradFnCallColumns | None:
     if type(version) is not int or keys is None or indices is None or None in optional.values():
         return None
     labels: dict[str, int] = {}
-    label_index = _ints([labels.setdefault(row["grad_fn_label"], len(labels)) for row in rows])
+    positions = [labels.setdefault(row["grad_fn_label"], len(labels)) for row in rows]
+    label_index = struct.pack(f"<{len(positions)}{_INT64}", *positions)  # small, always int64
     sparse: dict[str, dict[int, Any]] = {name: {} for name in _SPARSE}
     refs = {}
     for name in _PAYLOADS:
@@ -182,7 +184,6 @@ def _pack_calls(calls: dict[Any, Any], proto: int) -> GradFnCallColumns | None:
     for position, row in enumerate(rows):
         if row["fire_record"] is not None:
             sparse["fire_record"][position] = row["fire_record"]
-    assert label_index is not None  # label positions are small ints
     return GradFnCallColumns(
         count=len(rows),
         tlspec_version=version,
@@ -242,7 +243,10 @@ class GradFnCallPacker:
         if type(calls) is not list or not calls:
             return None
         entries = [self._calls.get(id(call)) for call in calls]
-        if any(entry is None or entry[0] is not call for entry, call in zip(entries, calls)):
+        if any(
+            entry is None or entry[0] is not call
+            for entry, call in zip(entries, calls, strict=True)
+        ):
             return None
         found: list[tuple[Any, int, int]] = entries  # type: ignore[assignment]
         if any(id(self._owners[entry[1]]) in self._open for entry in found):

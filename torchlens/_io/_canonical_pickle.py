@@ -49,7 +49,7 @@ class _CanonicalMetadataPickler(pickle._Pickler):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._grad_fn_calls = GradFnCallPacker(self.memo)
+        self._grad_fn_calls = GradFnCallPacker(self.memo)  # type: ignore[attr-defined]
 
     def save_reduce(self, *args: Any, obj: Any = None, **kwargs: Any) -> None:
         """Save one reduction, then tell the grad_fn-call packer that ``obj`` is complete."""
