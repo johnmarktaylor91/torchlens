@@ -58,7 +58,7 @@ def buried_wrapper_references(current: Any) -> list[_Reference]:
     """
 
     found: list[_Reference] = []
-    ledger = _state._decorated_to_orig
+    ledger, _ = _state.wrap_epoch_ledgers()
     seen: set[int] = set()
     stack: list[Any] = [current]
     visited = 0
@@ -131,8 +131,9 @@ def rebase_buried_wrapper(current: Any) -> bool:
     references = buried_wrapper_references(current)
     if not references:
         return False
+    ledger, _ = _state.wrap_epoch_ledgers()
     for holder, kind, key, wrapper in references:
-        orig = _state._decorated_to_orig[id(wrapper)]
+        orig = ledger[id(wrapper)]
         try:
             if kind == "wrapped":
                 holder.__wrapped__ = orig
