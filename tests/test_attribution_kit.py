@@ -214,7 +214,7 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "active_feature_indices",
     "adjacency_matrix",
     "build_graph",
-    "capture_outcome",
+    "capture_status",
     "constants",
     "decoder_bias",
     "demeaned_logits",
