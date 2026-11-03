@@ -82,27 +82,45 @@ def site_deltas(
         for layer in node.layer_refs.values()
     }
     for node_name in supergraph.topological_order:
-        node = supergraph.nodes[node_name]
-        reference_layer = node.layer_refs.get(baseline_name)
-        if reference_layer is None:
-            continue
-        member_passes = {
-            name: _ops_by_pass(node.layer_refs[name]) for name in members if name in node.layer_refs
-        }
-        reference_passes = _ops_by_pass(reference_layer)
-        for pass_number, reference_op in reference_passes.items():
-            reference = _tensor_field(reference_op, on)
-            if reference is None:
-                continue
-            site = str(node_name) if len(reference_passes) == 1 else f"{node_name}:{pass_number}"
-            candidates = {
-                name: _tensor_field(passes[pass_number], on) if pass_number in passes else None
-                for name, passes in member_passes.items()
-            }
-            site_values = _member_distances(reference, candidates, baseline_name, metric, site)
-            if site_values:
-                values[site] = site_values
+        values.update(
+            _node_site_values(
+                str(node_name), supergraph.nodes[node_name], metric, baseline_name, on, members
+            )
+        )
     return SiteDeltas(values=values, node_for_label=node_for_label)
+
+
+def _node_site_values(
+    node_name: str,
+    node: Any,
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    baseline_name: str,
+    on: Literal["out", "grad"],
+    members: Sequence[str],
+) -> dict[str, dict[str, float]]:
+    """Return one supergraph node's per-site values: one site, or one per baseline pass."""
+
+    reference_layer = node.layer_refs.get(baseline_name)
+    if reference_layer is None:
+        return {}
+    member_passes = {
+        name: _ops_by_pass(node.layer_refs[name]) for name in members if name in node.layer_refs
+    }
+    reference_passes = _ops_by_pass(reference_layer)
+    values: dict[str, dict[str, float]] = {}
+    for pass_number, reference_op in reference_passes.items():
+        reference = _tensor_field(reference_op, on)
+        if reference is None:
+            continue
+        site = node_name if len(reference_passes) == 1 else f"{node_name}:{pass_number}"
+        candidates = {
+            name: _tensor_field(passes[pass_number], on) if pass_number in passes else None
+            for name, passes in member_passes.items()
+        }
+        site_values = _member_distances(reference, candidates, baseline_name, metric, site)
+        if site_values:
+            values[site] = site_values
+    return values
 
 
 def _ops_by_pass(layer: Any) -> dict[int, Any]:

@@ -21,6 +21,7 @@ import torchlens as tl
 from torchlens.bundle._aligned_sites import site_row_key
 from torchlens.bundle._deltas import _tensor_field
 from torchlens.bundle._site_deltas import site_deltas
+from torchlens.errors import MultiMatchWarning
 from torchlens.intervention._metrics import relative_l2
 
 
@@ -50,11 +51,13 @@ def _relu_label(trace: tl.Trace) -> str:
 def _zero_relu_bundle() -> tl.Bundle:
     clean = _clean_trace()
     ablated = clean.fork("ablated")
-    ablated.do(
-        tl.module("relu"),
-        tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
-    )
+    # The one module is two sites (its two passes): the selector fans out to both.
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        ablated.do(
+            tl.module("relu"),
+            tl.zero_ablate(),
+            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        )
     return tl.Bundle({"clean": clean, "ablated": ablated}, baseline="clean")
 
 
