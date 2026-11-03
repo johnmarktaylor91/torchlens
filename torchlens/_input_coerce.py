@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from ._errors import ArgumentTypeError
+from ._utils.arg_handling import rebuild_tuple_like
 
 
 def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
@@ -259,8 +260,6 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
         arg_type = type(input_args)
         if arg_type is tuple:
             return tuple(coerced_items)
-        from ._utils.arg_handling import rebuild_tuple_like
-
         rebuilt = rebuild_tuple_like(arg_type, coerced_items)
         if rebuilt is not None:
             return rebuilt
