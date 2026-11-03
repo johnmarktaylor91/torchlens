@@ -25,7 +25,7 @@ def test_glance_is_the_core_grammar() -> None:
     """glance renders exactly the record's core line (one grammar)."""
 
     tensor = torch.arange(24, dtype=torch.float32).reshape(4, 6)
-    stats = tensor_stats(tensor, identity=f"glance:{tuple(tensor.shape)}:{tensor.dtype}")
+    stats = tensor_stats(tensor, _identity=f"glance:{tuple(tensor.shape)}:{tensor.dtype}")
     assert glance(tensor) == render_core_line(stats)
 
 

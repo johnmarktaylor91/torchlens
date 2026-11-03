@@ -159,7 +159,7 @@ class NarrationObserver:
             address = self._address(ctx)
             # Never break a forward from an echo: degrade to the typed token.
             core = fail_open(
-                lambda: render_core_line(tensor_stats(out, identity=address), style=self.style),
+                lambda: render_core_line(tensor_stats(out, _identity=address), style=self.style),
                 lambda error: f"(echo unavailable: {type(error).__name__})",
             )
             line = f"{address} -> {core}" if address else core

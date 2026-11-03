@@ -5974,7 +5974,6 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `hops=` | keyword of `tl.neighborhood` (default `1`) |
 | `idempotent=` | constructor keyword of `tl.agent.AgentToolSpec` (default `True`) |
 | `identifier=` | keyword of `tl.bridge.brain_score.activations_extractor` (keyword-only; default `None`): Brain-Score activations identifier; defaults to the model class name, matching `PytorchWrapper` |
-| `identity=` | keyword of `tl.stats.tensor_stats` (keyword-only; default `None`): Stable record identity (op label / site key) seeding the gathered sampler so sampled families are deterministic per record |
 | `ids=` | constructor keyword of `tl.transformer.TokenAxis` (default `None`): Optional tokenizer ids aligned with `tokens` |
 | `image=` | keyword of `ReceptiveFieldView.show` (keyword-only; default `None`): Optional source image override; keyword of `Trace.annotate` (keyword-only; default `None`): Optional local image path used by the existing `NodeSpec.image` render hook; keyword of `tl.attribution.grad_cam` (keyword-only; default `None`): Optional source image override for the rendered overlay; keyword of `tl.bridge.transformers.trace_image` (required): PIL image or non-empty list of PIL images |
 | `images=` | keyword of `tl.viz.image_scatter` (keyword-only; default `None`): Optional PIL images to paste at scatter positions; keyword of `tl.viz.montage` (required): Input images to render |
