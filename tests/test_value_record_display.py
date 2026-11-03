@@ -142,7 +142,23 @@ def test_html_and_text_cards_have_identical_rows(captured) -> None:
             assert f'<th scope="row">{escape(line[2:11].strip())}</th>' in html
             assert f"<td>{escape(line[12:])}</td>" in html
         assert '<table class="tl-grid-table"' not in html
+        assert html.count("<style>") == 1
         assert len(html) < 20_000
+
+
+def test_nested_record_cards_share_one_stylesheet(captured) -> None:
+    """A notebook card tree includes the record stylesheet only once."""
+
+    from torchlens.report._notebook._value_cards import op_value_card, param_value_card
+    from torchlens.report._notebook.cardtree import CardCollection, render_card_html
+
+    trace, _ = captured
+    tree = CardCollection(
+        children=(op_value_card(trace["tanh_1:2"]), param_value_card(trace.params["fc.weight"]))
+    )
+    html = render_card_html(tree)
+    assert html.count("<style>") == 1
+    assert html.count('<table class="tl-record-facts">') == 2
 
 
 def test_value_words_keep_sampled_and_nonfinite_evidence() -> None:
