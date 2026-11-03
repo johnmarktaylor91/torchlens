@@ -470,7 +470,6 @@ torchlens/_semantic/logit_lens.py::_reduce_projection_row	91
 torchlens/_semantic/logit_lens.py::logit_lens	72
 torchlens/_semantic/logit_lens.py::logit_lens_predictions	121
 torchlens/_semantic/patching.py	1159
-torchlens/_semantic/patching.py::_model_input_home_role	62
 torchlens/_semantic/patching.py::_require_effective_patch	62
 torchlens/_semantic/patching.py::_run_patch	80
 torchlens/_semantic/patching.py::activation_patch_residual_stream	129

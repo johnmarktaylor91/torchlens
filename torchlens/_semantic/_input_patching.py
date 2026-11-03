@@ -19,6 +19,12 @@ from torch import nn
 from .._record_type import record_type
 
 
+def _input_op_by_label(log: Any, label: str) -> Any | None:
+    """Return the trace's input op whose label is ``label``, or ``None``."""
+
+    return next((op for op in getattr(log, "input_ops", ()) if str(op.label) == label), None)
+
+
 def _model_input_home_role(log: Any, facet_name: str, address: str) -> str | None:
     """Return the recorded input address when a whole-tensor facet homes on a model input.
 
@@ -56,10 +62,7 @@ def _model_input_home_role(log: Any, facet_name: str, address: str) -> str | Non
     if home is None or record_type(home, None) != "input":
         return None
     home_label = str(getattr(home, "label", ""))
-    home_op = next(
-        (op for op in getattr(log, "input_ops", ()) if str(op.label) == home_label),
-        None,
-    )
+    home_op = _input_op_by_label(log, home_label)
     if home_op is None:
         raise ValueError(
             f"Facet {facet_name!r} on module {address!r} homes on model input "
