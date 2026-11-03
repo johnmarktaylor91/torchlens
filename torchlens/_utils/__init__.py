@@ -8,6 +8,7 @@ submodules import without torch.
 
 from __future__ import annotations
 
+import importlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -41,7 +42,5 @@ def __getattr__(name: str) -> Any:
     """
 
     if name in __all__:
-        from . import _onramp
-
-        return getattr(_onramp, name)
+        return getattr(importlib.import_module("._onramp", __name__), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
