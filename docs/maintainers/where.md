@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1410 modules, 631507 lines, 0 modules without a docstring.
+83 packages, 1411 modules, 631869 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -58,7 +58,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6868 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6394 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8492 |
-| `torchlens.backends.tinygrad` | tinygrad backend preview. | 8 | 4018 |
+| `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4380 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 108 | 53697 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 7812 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
@@ -1218,7 +1218,7 @@ TensorFlow backend preview exports. (13 modules, 8492 lines)
 
 ### `torchlens.backends.tinygrad`
 
-tinygrad backend preview. (8 modules, 4018 lines)
+tinygrad backend preview. (9 modules, 4380 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1226,9 +1226,10 @@ tinygrad backend preview. (8 modules, 4018 lines)
 | `_captures` | Capture records the tinygrad backend keeps for validation and derived gradients. | 61 |
 | `_derived_grads` | Derived-gradient helpers for the tinygrad preview backend. | 268 |
 | `_execution_guard` | Execution guard for tinygrad preview capture. | 78 |
-| `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 317 |
-| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 127 |
-| `backend` | UOp-snapshot tinygrad backend preview. | 3122 |
+| `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 241 |
+| `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 323 |
+| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 144 |
+| `backend` | UOp-snapshot tinygrad backend preview. | 3220 |
 | `capabilities` | Registry-backed capability exports for the tinygrad backend preview. | 38 |
 
 ### `torchlens.backends.torch`
