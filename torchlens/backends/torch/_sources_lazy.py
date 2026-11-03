@@ -13,7 +13,6 @@ import torch
 
 from ..._capture._lazy_contexts import LazyContextHistory, tensor_fields
 from ._tl import set_tensor_label
-from .buffer_writes import buffer_version_key
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -25,15 +24,16 @@ def log_source_tensor_lazy(
     t: torch.Tensor,
     source: str,
     extra_addr: str | None,
-) -> None:
+) -> str:
     """Label an input or buffer of a lean module read and defer its context.
 
     Matches ``log_source_tensor_predicate`` on a pass with deferred contexts:
     source events are not selected there (no ``include_source_events``), halt
     is off and a lean journal appends no shell event for an unkept source, so
     the lasting effects are the counters, the label, the input/buffer lists,
-    the buffer version key and the context, which is deferred with the same
-    inputs.
+    and the context, which is deferred with the same inputs. Returns the
+    label; the caller journals a buffer's version key (``buffer_writes`` sits
+    in the package import cycle, which this module stays out of).
     """
 
     if source not in {"input", "buffer"}:
@@ -47,8 +47,6 @@ def log_source_tensor_lazy(
     tensor_label = f"{source}_{type_index}_raw"
     set_tensor_label(t, tensor_label)
     (self.input_layers if source == "input" else self.buffer_layers).append(tensor_label)
-    if source == "buffer":
-        graph_ws.buffer_version_keys[tensor_label] = buffer_version_key(t)
     module_frame = state.module_stack[-1] if state.module_stack else None
     data = {
         "label": tensor_label,
@@ -68,3 +66,4 @@ def log_source_tensor_lazy(
     history.defer(
         "input" if source == "input" else "buffer", data, state.event_index, None, elapsed
     )
+    return tensor_label

@@ -122,7 +122,9 @@ def log_source_tensor(
         if history is None:
             log_source_tensor_predicate(self, t, source, extra_address)
         else:
-            log_source_tensor_lazy(self, history, t, source, extra_address)
+            label = log_source_tensor_lazy(self, history, t, source, extra_address)
+            if source == "buffer":
+                self._raw_graph_ws.buffer_version_keys[label] = buffer_version_key(t)
 
 
 def log_closure_constant_if_known(self: "Trace", t: torch.Tensor) -> bool:
