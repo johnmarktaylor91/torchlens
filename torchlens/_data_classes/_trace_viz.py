@@ -317,7 +317,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         self._node_overlay_name = name
         return self
 
-    def animate_ops(self: "Trace", site: Any) -> str:
+    def animate(self: "Trace", site: Any) -> str:
         """Return a minimal HTML animation for repeated ops at ``site``.
 
         Parameters
@@ -337,7 +337,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             If the requested site cannot be resolved.
         """
 
-        return _doors.visualization()._trace_draw.animate_ops(self, site=site)
+        return _doors.visualization()._trace_draw.animate(self, site=site)
 
     @property
     def nonfinite_ops(self: "Trace") -> tuple[str, ...]:

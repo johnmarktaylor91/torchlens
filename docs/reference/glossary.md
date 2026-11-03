@@ -4411,7 +4411,7 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `Trace.add_node_overlay` | Register external per-node overlay scores, under a name, for later rendering |
-| `Trace.animate_ops` | Return a minimal HTML animation of the repeated ops at a site |
+| `Trace.animate` | Return a minimal HTML animation of the repeated ops at a site |
 | `Trace.annotate` | Attach user-owned annotation data or an image to the graph nodes picked by a selector |
 | `Trace.archived_activations` | Mapping of label to inspection-only activation payloads from a runnable archive |
 | `Trace.attention_blocks` | Yield the Modules that have an available query-projection facet |

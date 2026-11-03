@@ -458,7 +458,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "show": lambda t: t.show(kind="graph", path=str(out / "shown")),
         "draw_backward": lambda t: t.draw_backward(path=str(out / "bwd")),
         "draw_combined": lambda t: t.draw_combined(path=str(out / "cmb")),
-        "animate_ops": lambda t: t.animate_ops(t._layer_list[0].layer_label),
+        "animate": lambda t: t.animate(t._layer_list[0].layer_label),
     }
 
 

@@ -54,6 +54,7 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "validate_saved_outs": (
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),
+    "animate_ops": "use trace.animate(site) -- Trace.animate_ops was renamed",
     "conditional_then_entry_edges": (
         "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
     ),

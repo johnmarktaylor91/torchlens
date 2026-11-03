@@ -184,8 +184,8 @@ def draw(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.draw
     )
 
 
-def animate_ops(trace: Trace, site: Any) -> str:
-    """Body of ``Trace.animate_ops``; the method docstring is the contract."""
+def animate(trace: Trace, site: Any) -> str:
+    """Body of ``Trace.animate``; the method docstring is the contract."""
 
     label = str(getattr(site, "layer_label", site))
     base_label = label.split(":", 1)[0]
@@ -411,7 +411,7 @@ def visualization_field_audit(trace: Trace) -> TorchLensRenderAudit:
 
 
 __all__ = [
-    "animate_ops",
+    "animate",
     "draw",
     "draw_backward",
     "draw_combined",

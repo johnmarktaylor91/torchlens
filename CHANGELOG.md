@@ -5,6 +5,9 @@
 
 ### Behavior changes
 
+- **draw**: `Trace.animate_ops(site)` is now `Trace.animate(site)` (velocity walk names.1: the
+  animation is its own method and `VisualizationOptions.animate` is gone). The old spelling
+  refuses with the typed `facade_redirect` error naming `trace.animate(site)`.
 - **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
   (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
   the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old

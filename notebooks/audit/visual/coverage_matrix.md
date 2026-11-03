@@ -140,7 +140,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `plumbing` | vis_outpath / vis_fileformat / vis_save_only / return_graph / vis_graph_overrides and the draw() short-form params (view, depth, renderer, layout, node_style) have no visual identity of their own. |
 | `show:dispatcher` | Trace.show(kind='graph'/'repr') dispatches to draw()/repr(). method='html' returns Trace._repr_html_() -- see the html_repr entry. |
 | `html_repr` | Trace._repr_html_() is a bespoke HTML identity card (layers/ops/save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz render, so it cannot appear in this PDF. |
-| `animate_ops` | Trace.animate_ops() returns an HTML play/pause widget for repeated-pass ops; interactive HTML, out of scope for a static PDF. |
+| `animate` | Trace.animate() returns an HTML play/pause widget for repeated-pass ops; interactive HTML, out of scope for a static PDF. |
 | `code_panel:callable` | code_panel=<callable> reuses the same panel box styling as the string modes; only the text source differs. |
 
 ## Page inventory

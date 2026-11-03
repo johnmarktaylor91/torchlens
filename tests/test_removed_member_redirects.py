@@ -62,6 +62,7 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
     ("Trace", "conditional_then_entry_edges", "graph.conditional_arm_entry_edges"),
     ("Trace", "conditional_elif_entry_edges", "graph.conditional_arm_entry_edges"),
     ("Trace", "conditional_else_entry_edges", "graph.conditional_arm_entry_edges"),
+    ("Trace", "animate_ops", "animate"),
     ("Bundle", "replay", "do"),
     ("Bundle", "rerun", "run"),
     ("VisualizationOptions", "mode", "view"),
