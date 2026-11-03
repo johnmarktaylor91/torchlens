@@ -561,6 +561,7 @@ map is the binding list; this table says when each fires in the 3.0 reader and w
 | a tensor dtype safetensors cannot carry | `metadata_value_unportable` | writer |
 | include flags contradict the level | `save_payload_level_conflict` | writer (`save_policy`) |
 | target exists / rename fails / reload check disagrees | `bundle_save_failed` | writer |
+| portable intervention save with a callable edit | `intervention_spec_not_portable` | writer |
 | rerun of a recipe with a `callable_placeholder` | `run_intervention_spec_not_persisted` (row text rewritten) | intervention guard |
 | a 3.0 door not yet built | `bundle_save_failed` / `bundle_load_failed` | stubs |
 
@@ -587,27 +588,28 @@ label-string cross references (section 3); no inline tensors (section 6); `type`
 its dotted name; `record` as the tag for TorchLens value objects; the runnable and bundle
 layouts and the recipe `format_version` (sections 2, 7, 8); no `schema_digest`.
 
-Where this page extends the contract page, each with the exact change:
+Corrections this design made to the contract's first draft, each with the exact change, since
+folded into `contract.py` and the contract page so the two documents now agree:
 
 1. Blob keys are opaque (`t<k>`), chunks are per codec (`blobs/<codec>-<nnnn>.safetensors`)
    with the contract's 256 MiB cap; not per field family under `<record>.<row>.<field>` keys.
    Reason: the streaming writer does not know the row at write time and safetensors keys
    cannot be renamed (section 6). Builders: `payloads.py` owns the key counter; the record
    cell carries the key; `relabel_blob` edits the cell only.
-2. `RECORD_TYPE_ALLOWLIST_SOURCE` becomes the writer contract's `component_specs`
-   (`torchlens._io.field_registry.component_spec_tables`), not `torchlens._io._safe_unpickle`,
+2. `RECORD_TYPE_ALLOWLIST_SOURCE` is the writer contract's `component_specs`
+   (`torchlens._io.field_registry.component_spec_tables`), not the restricted unpickler module,
    which this design deletes (section 10). Same classes; a digested, surviving source.
 3. Manifest gains the optional `disclosures` object (section 2) so `tl.load` can attach the
    `unencodable_values_stringified` advisory and `tl.io.inspect` can show the count without
    decoding every cell.
 4. The intervention recipe's rule-level `callable_placeholder` is also allowed inside
    `args`/`kwargs` of a built-in edit (a callable argument), with `position` as
-   `<rule index>.<arg path>` (section 8); the contract page (e) places it at the edit's
+   `<rule index>.<arg path>` (section 8); the contract page (e) first placed it at the edit's
    `portability` only. Both forms refuse rerun with the same code.
 
 Everything else in `contract.py` and the contract page (names, codes, levels, record index, planned
 and live-side keys, io.2 settle-at-save, `PHASE_TIMING_KEY_SOURCE`, the 2.x refusal rule,
-`record_schema_invalid` provisional) is adopted as written.
+`record_schema_invalid`) is adopted as written.
 
 ## 16. Build order
 

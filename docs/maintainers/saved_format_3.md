@@ -5,7 +5,10 @@ files. Nothing in the directory is pickled, and the reader never executes anythi
 This page is the contract the writer, reader and runnable component are built against; the
 constants it names live in `torchlens/_io/format3/contract.py`, and
 `tests/test_format3_contract.py` pins them to the generated field page
-`docs/maintainers/persisted_fields.md`. Until the three doors land, the functions in
+`docs/maintainers/persisted_fields.md`. The package layout and the deletion table are the design
+page `saved_format_3_design.md`: `contract.py`, `schema.py`, `values.py`, `payloads.py`,
+`writer.py`, `reader.py`, `validate.py`, `runnable.py`, each under 800 lines; grammar validators
+are schema nodes, cross-record validators live in `validate.py`. Until the three doors land, the functions in
 `torchlens/_io/format3/` refuse typed and name the module that fills each.
 
 What the format replaces: the `metadata.pkl` of the pickle writer (a restricted-unpickler
@@ -23,8 +26,7 @@ safetensors payload codecs, the writer identity stamp and the writer contract di
   records/trace.json                 one object: the trace record
   records/op.json                    one columnar table per record kind (twelve files)
   records/layer.json ... records/param.json
-  blobs/<family>-<NNNN>.safetensors  every tensor payload; families: out, grad, transformed_out,
-                                     transformed_grad, saved_args, buffer, annotation, recipe
+  blobs/<codec>-<nnnn>.safetensors   every tensor payload, one file series per codec id
   annotations.json                   the annotation and sidecar namespaces, when present
   intervention.json                  the intervention recipe, when the trace carries one
   runnable/                          the runnable component (section 7), at the runnable and
@@ -53,6 +55,7 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `files` | object | every file in the directory except `manifest.json`, by relative path: `{"sha256": hex, "bytes": N}` |
 | `model_signature`, `model_fingerprint` | string | as the tlspec 11 manifest stamps them |
 | `runnable`, `intervention` | object | present with the component; component schema versions and file paths |
+| `disclosures` | object | optional; `{"count": N, "first": [up to 16 field paths]}` when the artifact holds N > 0 unencodable disclosures (section 4), absent when none; when present the loader attaches the load advisory `unencodable_values_stringified` |
 
 ### Version floor and refusals
 
@@ -66,6 +69,10 @@ contract written in this format, so the 3.0 reader reads nothing older than itse
 - `format_version` above 3, or `tlspec_version` above the runtime's, refuses
   `artifact_version_above_runtime`.
 - `tlspec_version` below the floor refuses `artifact_version_below_floor`.
+
+`tl.io.detect_tlspec_format(path)` returns `"v3"` for a directory with a 3.0 manifest, `"pre_3"`
+for a 2.x save (a `metadata.pkl` or a manifest without `format`), and `"unknown"` for a directory
+that is not a TorchLens save at all.
 
 ### Digest relation
 
@@ -159,15 +166,16 @@ A tensor is written as one entry of a safetensors file under `blobs/` and refere
 record as a typed object:
 
 ```json
-{"$tl": "tensor", "blob": "blobs/out-0001.safetensors", "key": "op.17.out",
+{"$tl": "tensor", "blob": "blobs/torch_safetensors_v1-0001.safetensors", "key": "t17",
  "dtype": "float32", "shape": [1, 16, 28, 28], "device": "cuda:0", "requires_grad": false,
  "codec": "torch_safetensors_v1"}
 ```
 
-- `blob` is the file's path relative to the artifact root; `key` is the entry name inside it,
-  `<record>.<row>.<field>` followed by the container path for nested payloads
-  (`op.17.saved_args.0.1`). Files are packed by family up to 256 MiB each, so a lazy load reads
-  one file per tensor group and a digest check stays one file long.
+- `blob` is the file's path relative to the artifact root, one series of files per codec id
+  (`blobs/<codec>-<nnnn>.safetensors`, 256 MiB cap per file); `key` is an opaque entry name
+  `t<k>`, monotone per artifact, and every tensor lives in exactly one file. The record cell
+  carries the key, so the writer can stream tensors before finalization renumbers and relabels
+  the ops; safetensors reads one entry by offset whatever else the file holds.
 - `dtype` is the torch dtype name without its prefix (`float32`, `bfloat16`, `bool`,
   `float8_e4m3fn`). A complex tensor is stored as its real view with `"complex": true`.
 - `device` is the device at capture as a string; the reader materializes on CPU unless asked
@@ -216,8 +224,10 @@ A user object no rule covers is stringified with a disclosure, never pickled:
 ```
 
 `repr` keeps at most 256 characters (`contract.UNENCODABLE_REPR_LIMIT`), `repr_length` is the
-full length and `at` is the field path. The reader materializes it as a private frozen record
-with those four fields whose `repr` is the saved text; it carries no public name.
+full length and `at` is the field path. The reader materializes it as an `UnencodableValue`, a
+public frozen record with those four fields whose `repr` is the saved text, so a user can test for
+it with `isinstance`. A loaded artifact whose manifest carries `disclosures` gets the load
+advisory `unencodable_values_stringified`, in the same list as the capture advisories.
 
 ## 5. The intervention recipe
 
@@ -240,15 +250,21 @@ writes the same file in its own directory: one grammar, two homes.
 
 - An edit is the `Edit` identity under the value rules: `name`, `args`, `kwargs`, `portability`,
   `signal`, `is_batch_independent`, `is_compatible_with_append`, `metadata`, `selection_recipe`.
-  A tensor argument (a steering vector, a patch source) is a tensor reference into
-  `blobs/recipe-NNNN.safetensors`. Every built-in edit of the registered vocabulary
+  A tensor argument (a steering vector, a patch source) is a tensor reference into the
+  artifact's `blobs/`. Every built-in edit of the registered vocabulary
   (`scale`, `zero_ablate`, `steer`, `patch_from`, `clip_norm`, `set_affine_coordinates`,
   the subspace and stochastic edits, and the rest the helper registry names) saves this way and
   rebuilds through the same registry `tl.load` uses today.
 - A rule whose edit holds a user callable saves without it: the edit's `portability` is
   `callable_placeholder` and it carries
-  `{"$tl": "callable_placeholder", "position": 2, "qualname": "mymod.f", "repr_length": 61}`.
-  The manifest's `intervention.executable` is false. The rule loads as an audit-only edit.
+  `{"$tl": "callable_placeholder", "position": 2, "qualname": "mymod.f", "repr_length": 61}`
+  with the rule index as `position`. A callable found inside a built-in edit's `args` or
+  `kwargs` is replaced in place by the same object with `position` set to
+  `"<rule index>.<argument path>"` (`"0.kwargs.transform"`). Either way the manifest's
+  `intervention.executable` is false and the rule loads as an audit-only edit.
+- Such a recipe is written only at the audit level: `save_intervention(level="portable")` on a
+  recipe holding a user callable, or a value the format cannot carry, refuses at save time with
+  `intervention_spec_not_portable`; the remedy is `level="audit"` or built-in edits.
 - A loaded trace whose recipe holds a placeholder refuses every rerun door
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`) with
   `run_intervention_spec_not_persisted`; the message names the rule position and the callable's
@@ -281,8 +297,14 @@ One table for the writer and the reader. Codes are rows of
 | payload tensor the codec cannot hold | `metadata_value_unportable` | writer |
 | explicit payload flag contradicts the level | `save_payload_level_conflict` | writer |
 | target exists without `overwrite` | `bundle_save_failed` | writer |
+| portable save of a recipe holding a user callable or a value the format cannot carry | `intervention_spec_not_portable` | writer |
 | rerun of a loaded trace whose recipe holds a callable placeholder | `run_intervention_spec_not_persisted` | rerun doors |
 | a door called before its lane filled it | `bundle_save_failed`, `bundle_load_failed` | the stubs |
+
+`record_schema_invalid` and `intervention_spec_not_portable` (ruled 2 Nov 2026) join the error
+contract table in the change that adds their raise sites, the reader and the writer respectively.
+Until the reader lands, `contract.PROVISIONAL_REFUSALS` maps the record-level code to
+`manifest_schema_invalid`, the code a builder raises meanwhile.
 
 Two behaviours stay as they are today and apply to the JSON reader: the save preflight reloads
 every save once through the reader before publishing it, and the checked load validates every
@@ -318,7 +340,7 @@ A portable save of a tiny CNN (`conv2d`, `relu`, `linear`), excerpts:
 {"record": "op", "tlspec_version": 12, "rows": 3,
  "columns": {"label": ["conv2d_1_1", "relu_1_2", "linear_1_3"],
              "is_constant": [false, false, false],
-             "out": [{"$tl": "tensor", "blob": "blobs/out-0001.safetensors", "key": "op.0.out",
+             "out": [{"$tl": "tensor", "blob": "blobs/torch_safetensors_v1-0001.safetensors", "key": "t0",
                       "dtype": "float32", "shape": [1, 8, 26, 26], "device": "cpu",
                       "requires_grad": true, "codec": "torch_safetensors_v1"}, {"...": {}}, {"...": {}}]}}
 ```
@@ -347,7 +369,8 @@ rule 0 is the `scale` edit of section 5 and rule 1 is
 with `"executable": false` at the top of the file and in the manifest's `intervention` object.
 `records/op.json` carries `is_edited` true and the `edits` fire records for both ops; loading
 succeeds, and `run(model, x)` refuses `run_intervention_spec_not_persisted` naming rule 1 and
-`experiments.hooks.clamp_top`.
+`experiments.hooks.clamp_top`. This recipe is the audit-level form: the same intervention saved
+with `save_intervention(level="portable")` refuses `intervention_spec_not_portable` at save time.
 
 ## 9. Loaded equals live
 

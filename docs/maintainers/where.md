@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1376 modules, 634948 lines, 0 modules without a docstring.
+85 packages, 1376 modules, 634955 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 52 | 35442 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 10 | 3359 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 10 | 3366 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10969 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -471,12 +471,12 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (10 modules, 3359 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (10 modules, 3366 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 |
-| `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 258 |
+| `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 265 |
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 476 |
 | `reader` | The 3.0 reader: manifest first, then every record validated against the contract. | 85 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 671 |

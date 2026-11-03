@@ -24,6 +24,7 @@ from torchlens._io.format_errors import ArtifactError
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PAGE = REPO_ROOT / "docs" / "maintainers" / "persisted_fields.md"
 REFUSAL_DOC = REPO_ROOT / "docs" / "reference" / "error_refusal_contract.md"
+CONTRACT_PAGE = REPO_ROOT / "docs" / "maintainers" / "saved_format_3.md"
 
 _RECORD_ROW = re.compile(r"^\| `([a-z_]+)` \| `([A-Za-z0-9_.]+)` \| (\d+) \| (\d+) \|$", re.M)
 _KEY_ROW = re.compile(r"^\| `([A-Za-z0-9_]+)` \| ", re.M)
@@ -105,6 +106,21 @@ def test_every_refusal_code_is_a_documented_row() -> None:
     assert not set(contract.PROVISIONAL_REFUSALS) & documented, (
         "a provisional spelling became a documented code; move it to REFUSAL_CODES"
     )
+
+
+def test_ruled_spellings_are_on_the_contract_page() -> None:
+    """Every ruled name the contract module carries is spelled on the public contract page."""
+
+    text = CONTRACT_PAGE.read_text(encoding="utf-8")
+    ruled = (
+        contract.UNENCODABLE_VALUE_TYPE,
+        contract.UNENCODABLE_LOAD_ADVISORY,
+        *(f'"{label}"' for label in contract.FORMAT_DETECTION_LABELS),
+        *contract.PROVISIONAL_REFUSALS,
+        "intervention_spec_not_portable",
+    )
+    missing = [name for name in ruled if name not in text]
+    assert not missing, missing
 
 
 def test_envelope_constants_match_the_writer_contract() -> None:

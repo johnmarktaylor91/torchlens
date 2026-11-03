@@ -174,6 +174,13 @@ UNENCODABLE_FIELDS: Final[tuple[str, ...]] = ("type", "repr", "repr_length", "at
 UNENCODABLE_REPR_LIMIT: Final = 256
 #: Fields of a ``callable_placeholder`` in a saved intervention recipe.
 CALLABLE_PLACEHOLDER_FIELDS: Final[tuple[str, ...]] = ("position", "qualname", "repr_length")
+#: Public type an ``unencodable`` disclosure loads as (ruled 2 Nov 2026).
+UNENCODABLE_VALUE_TYPE: Final = "UnencodableValue"
+#: Load advisory attached when the manifest carries ``disclosures`` (ruled 2 Nov 2026).
+UNENCODABLE_LOAD_ADVISORY: Final = "unencodable_values_stringified"
+#: Labels ``tl.io.detect_tlspec_format`` returns: a 3.0 save, a 2.x save, not a
+#: TorchLens save (ruled 2 Nov 2026).
+FORMAT_DETECTION_LABELS: Final[tuple[str, ...]] = ("v3", "pre_3", "unknown")
 
 #: Refusal codes the writer and reader raise, by situation. Every value is a
 #: row of ``docs/reference/error_refusal_contract.md``; situations whose row
