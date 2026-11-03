@@ -632,12 +632,10 @@ def test_component_directory_is_written_once(tmp_path: Path) -> None:
 def test_complex_tensor_round_trips_as_its_real_view(tmp_path: Path) -> None:
     """A complex tensor is stored as its real view and decoded back exactly."""
 
-    import itertools
-
     value = torch.randn(3, dtype=torch.complex64)
     files: dict[str, Any] = {}
     (tmp_path / "runnable").mkdir()
-    sink = runnable_families.FamilySink(tmp_path, files, itertools.count())
+    sink = runnable_families.FamilySink(tmp_path, files, [0])
     paths, references = runnable_families.write_family(
         sink, "state_dict", [("w", value)], chunked=True
     )

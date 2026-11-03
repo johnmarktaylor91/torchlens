@@ -326,7 +326,7 @@ manifest object lists the component versions and files.
   most 256 MiB (a larger tensor gets a file of its own). `buffers.safetensors` holds the
   non-persistent buffer values. `activations-NNNN.safetensors` holds the capture-selected
   activations when the save archived them. Every tensor is one opaque key `t<k>` in one file, as in
-  section 3 (numbered from `t0` within the component; a reference names its file and key); tensors that share storage (tied weights, view activations) are written as separate
+  section 3 (numbered on the artifact's shared counter; a reference names its file and key); tensors that share storage (tied weights, view activations) are written as separate
   copies, and a complex tensor is stored as its real view with `"complex": true`.
 - The `runnable` manifest object is closed. Required: `descriptor`, `descriptor_version`,
   `call_recipe_version`, `callable_ref_version`, `initializer_policy_version`,

@@ -30,7 +30,6 @@ attestation and path faithfulness checks prove exactly what they proved before.
 
 from __future__ import annotations
 
-import itertools
 import json
 import os
 from collections.abc import Mapping, Sequence
@@ -248,6 +247,8 @@ def write_runnable(
     *,
     include_weights: bool = True,
     include_activations: bool = False,
+    counter: list[int] | None = None,
+    prepared: tuple[Any, list[Any], list[Any], list[Any]] | None = None,
 ) -> RunnableWrite:
     """Write the runnable component of a trace into an artifact directory.
 
@@ -264,6 +265,11 @@ def write_runnable(
         Write the capture-time state dict family.
     include_activations:
         Write the capture-selected activation family.
+    counter:
+        Shared artifact tensor-key counter, or a fresh counter when omitted.
+    prepared:
+        Already stamped descriptor and buffer, weight and activation specifications;
+        omit to prepare them from the live trace.
 
     Returns
     -------
@@ -285,10 +291,14 @@ def write_runnable(
             f"The runnable component directory {component_dir} already exists.",
             "write the runnable component once, into a fresh artifact directory",
         )
-    descriptor, buffer_specs, weight_specs, activation_specs = _stamped_descriptor(
-        trace, include_weights=include_weights, include_activations=include_activations
+    descriptor, buffer_specs, weight_specs, activation_specs = (
+        prepared
+        if prepared is not None
+        else _stamped_descriptor(
+            trace, include_weights=include_weights, include_activations=include_activations
+        )
     )
-    sink = _create_component(root, descriptor)
+    sink = _create_component(root, descriptor, counter=counter)
     manifest: dict[str, Any] = {"descriptor": DESCRIPTOR_PATH, **manifest_versions()}
     layers = descriptor.payload_layers
     _write_families(
@@ -303,7 +313,9 @@ def write_runnable(
     return RunnableWrite(manifest=manifest, files=sink.files)
 
 
-def _create_component(root: Path, descriptor: Any) -> FamilySink:
+def _create_component(
+    root: Path, descriptor: Any, *, counter: list[int] | None = None
+) -> FamilySink:
     """Create ``runnable/`` owner-only, write the descriptor and return the family sink."""
 
     component_dir = root / RUNNABLE_DIR
@@ -312,7 +324,11 @@ def _create_component(root: Path, descriptor: Any) -> FamilySink:
     _write_private_text(
         root / DESCRIPTOR_PATH, canonical_json_text(sparse_descriptor_to_json(descriptor))
     )
-    return FamilySink(root, {DESCRIPTOR_PATH: file_row(root, DESCRIPTOR_PATH)}, itertools.count())
+    return FamilySink(
+        root,
+        {DESCRIPTOR_PATH: file_row(root, DESCRIPTOR_PATH)},
+        counter if counter is not None else [0],
+    )
 
 
 def _write_families(
