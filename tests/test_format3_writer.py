@@ -634,13 +634,14 @@ def test_pruning_retains_complete_orphan_records_or_no_shells(
         assert bool(trace._orphan_logs) is keep_orphans
         if keep_orphans:
             assert all(isinstance(op.label, str) for op in trace._orphan_logs)
-        else:
-            path = tmp_path / "pruned.tlspec"
-            trace.save(path)
-            loaded = tl.load(path)
-            try:
-                assert loaded._orphan_logs == ()
-            finally:
-                loaded.cleanup()
+        path = tmp_path / "orphans.tlspec"
+        trace.save(path)
+        loaded = tl.load(path)
+        try:
+            assert [op.label for op in loaded._orphan_logs] == [
+                op.label for op in trace._orphan_logs
+            ]
+        finally:
+            loaded.cleanup()
     finally:
         trace.cleanup()
