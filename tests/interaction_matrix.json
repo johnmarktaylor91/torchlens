@@ -166,7 +166,7 @@
  },
  "plain_trace_kwargs": [
   "model",
-  "input_args",
+  "inputs",
   "extra_positional",
   "input_kwargs",
   "input_shape",
@@ -261,7 +261,7 @@
    "status": "asymmetry",
    "asymmetry": "A05",
    "confidence": "high",
-   "note": "Paddle and MLX accept halt=; jax, tinygrad and tf refuse it typed."
+   "note": "Paddle and MLX accept stop_after=; jax, tinygrad and tf refuse it typed."
   },
   {
    "a": "backend",
@@ -613,7 +613,7 @@
    "evidence": "docs/reference/error_refusal_contract.md",
    "code": "model_door_binding_refused",
    "confidence": "medium",
-   "note": "halt= is a tl.trace option; the binding is capture-free and tl.trace refuses it as the model."
+   "note": "stop_after= is a tl.trace option; the binding is capture-free and tl.trace refuses it as the model."
   },
   {
    "a": "bind",
@@ -1469,7 +1469,7 @@
    "status": "asymmetry",
    "asymmetry": "A02",
    "confidence": "medium",
-   "note": "tl.extract has no halt= and always runs the full forward."
+   "note": "tl.extract has no stop_after= and always runs the full forward."
   },
   {
    "a": "extract",
@@ -2467,7 +2467,7 @@
    "status": "composes",
    "evidence": "tests/test_interaction_battery.py::test_save_x_storage_reads_back_the_saved_values",
    "confidence": "high",
-   "note": "Exhaustive layers_to_save='all' with disk storage keeps payloads in RAM until postprocess and still counts against save_budget."
+   "note": "Exhaustive save='all' with disk storage keeps payloads in RAM until postprocess and still counts against save_budget."
   },
   {
    "a": "save",
@@ -2548,7 +2548,7 @@
     "backend",
     "halt"
    ],
-   "summary": "halt= works on torch, Paddle (live) and MLX (static-label) but jax, tinygrad and tf refuse it typed.",
+   "summary": "stop_after= works on torch, Paddle (live) and MLX (static-label) but jax, tinygrad and tf refuse it typed.",
    "evidence": "docs/backends.md",
    "recommendation": "document",
    "ruling": "pending"
@@ -2790,7 +2790,7 @@
     "halt",
     "storage"
    ],
-   "summary": "halt= composes with streaming to disk (tests/test_fastlog_halt.py::test_fastlog_halt_finalizes_disk_storage) but chunk_size refuses halt with a codeless ChunkedForwardConfigError, and stop_after refuses chunking (stop_after_chunked_conflict).",
+   "summary": "stop_after= composes with streaming to disk (tests/test_fastlog_halt.py::test_fastlog_halt_finalizes_disk_storage) but refuses chunking (stop_after_chunked_conflict).",
    "evidence": "tests/test_chunk_size.py::test_chunk_size_guarded_combinations",
    "recommendation": "document",
    "ruling": "pending"
@@ -2861,7 +2861,7 @@
   {
    "id": "A36",
    "pair": [],
-   "summary": "The model input is spelled input_args on trace, record and validate, x on extract and legacy run(model, x), inputs= on the unified run, and input_size= for declared shapes.",
+   "summary": "The model input is spelled inputs on trace, record and validate, x on extract and legacy run(model, x), inputs= on the unified run, and input_size= for declared shapes.",
    "evidence": "docs/agent-reference/common-patterns.md",
    "recommendation": "close",
    "ruling": "pending"

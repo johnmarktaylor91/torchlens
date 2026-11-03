@@ -144,7 +144,6 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_options_backward_ready": "capture_config",
     "_options_inference_only": "capture_config",
     "_options_chunk_size": "capture_config",
-    "_module_filter": "capture_config",
     "_options_emit_nvtx": "capture_config",
     "_options_on_nonfinite": "capture_config",
     "track_nonfinite": "capture_config",

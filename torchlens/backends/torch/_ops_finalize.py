@@ -3,7 +3,6 @@
 import contextlib
 import warnings
 from collections.abc import Callable
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -48,8 +47,6 @@ __all__ = (
     "_cache_trace_predicate_context",
     "_pop_trace_predicate_context",
     "_evaluate_trace_save_predicate",
-    "_module_filter_namespace",
-    "_note_module_filter_suppression",
     "_make_layer_log_entry",
     "_raise_if_nonfinite_requested",
     "_record_nonfinite_if_requested",
@@ -162,36 +159,6 @@ def _evaluate_trace_save_predicate(
     return spec, ctx
 
 
-def _module_filter_namespace(fields_dict: dict[str, Any]) -> SimpleNamespace:
-    """Build the legacy-shaped compatibility namespace ``module_filter`` sees.
-
-    The documented compatibility surface (producer unification 2.6): the
-    filter runs ONLY inside the exhaustive commit pipeline, and the namespace
-    carries the legacy key names WITHOUT ``fire_results`` (popped before the
-    filter today — preserved exactly). The decomposed producer builds this
-    same namespace lazily from its draft.
-    """
-
-    return SimpleNamespace(**fields_dict)
-
-
-def _note_module_filter_suppression(
-    self: "Trace", keep_by_predicate: bool, save_this_activation: bool
-) -> None:
-    """Count a payload the save selection picked but ``module_filter`` alone dropped.
-
-    Disclosure counter for the third save gate: a capture whose EVERY selected
-    payload was suppressed here warns at the trace entry
-    (``module_filter_zero_saved``) instead of returning a silently
-    payload-free trace.
-    """
-
-    if save_this_activation and not keep_by_predicate:
-        self.__dict__["_tl_module_filter_suppressed"] = (
-            int(self.__dict__.get("_tl_module_filter_suppressed", 0)) + 1
-        )
-
-
 def _make_layer_log_entry(
     self: "Trace",
     t: torch.Tensor,
@@ -223,10 +190,6 @@ def _make_layer_log_entry(
 
     fire_results = tuple(fields_dict.pop("fire_results", ()))
 
-    keep_by_predicate = True
-    module_filter = getattr(self, "_module_filter", None)
-    if module_filter is not None:
-        keep_by_predicate = bool(module_filter(_module_filter_namespace(fields_dict)))
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     raw_index = cast(int, fields_dict["raw_index"])
     predicate_spec, predicate_ctx = _evaluate_trace_save_predicate(self, fields_dict, t)
@@ -239,11 +202,10 @@ def _make_layer_log_entry(
         capture_session.escrow_candidate(
             raw_index,
             t,
-            retain_activation=not (keep_by_predicate and save_this_activation),
+            retain_activation=not save_this_activation,
             raw_label=fields_dict.get("_label_raw"),
         )
-    _note_module_filter_suppression(self, keep_by_predicate, save_this_activation)
-    if keep_by_predicate and save_this_activation:
+    if save_this_activation:
         if predicate_spec is None or predicate_ctx is None:
             with _timed_phase(self, "clone_save:activation_fields"):
                 _save_activation_fields(
