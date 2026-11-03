@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
 from _format3_envelope import copy_artifact, save_tiny, set_cell
+from torch import nn
 
 import torchlens as tl
 from torchlens._io.format3.decode import Decoder
@@ -30,7 +32,7 @@ def saved(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return root
 
 
-def _forged_cell(saved: Path, target: Path, column: str, value: Any) -> Path:
+def _forged_cell(saved: Path, target: Path, column: str, value: Any, record: str = "trace") -> Path:
     """Copy an artifact, replace one cell and restamp its manifest digests.
 
     Parameters
@@ -38,12 +40,14 @@ def _forged_cell(saved: Path, target: Path, column: str, value: Any) -> Path:
     saved, target:
         Original artifact and mutation destination.
     column, value:
-        Trace column and decoded replacement value.
+        Column and decoded replacement value.
+    record:
+        Record table whose first row is edited.
     """
 
     root = copy_artifact(saved, target)
-    cell = ValueEncoder().encode(value, at=f"trace[0].{column}")
-    set_cell(root, "trace", column, 0, cell)
+    cell = ValueEncoder().encode(value, at=f"{record}[0].{column}")
+    set_cell(root, record, column, 0, cell)
     return root
 
 
@@ -288,3 +292,306 @@ def test_family_node_checks_do_not_require_record_construction() -> None:
         Decoder(defer_records=True).decode("invented", at="trace[2].grad_fn_timing_provenance")
     assert caught.value.fields["code"] == "artifact_grad_fn_timing_provenance_invalid"
     assert caught.value.fields["at"] == "trace[2].grad_fn_timing_provenance"
+
+
+@pytest.fixture(scope="module")
+def saved_backward(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Save a trace with a real backward-pass record.
+
+    Parameters
+    ----------
+    tmp_path_factory:
+        Isolated test directory factory.
+    """
+
+    root = tmp_path_factory.mktemp("family-backward") / "trace"
+    trace = tl.trace(
+        nn.Linear(3, 2),
+        torch.ones(1, 3),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
+    try:
+        trace.log_backward(trace[trace.output_layers[0]].out.sum())
+        trace.save(root)
+    finally:
+        trace.cleanup()
+    return root
+
+
+def _audit(kind: str, **changes: Any) -> dict[str, Any]:
+    """Return one minimal audit row with optional single-field mutations.
+
+    Parameters
+    ----------
+    kind, changes:
+        Row variant and overwritten fields.
+    """
+
+    if kind == "EVENT":
+        return {
+            "kind": kind,
+            "schema": "intervention_event_v2",
+            "event_id": "event",
+            "transaction_id": "transaction",
+            "door": "selection",
+            "selection_repr": "selected",
+            "parent_event_id": None,
+            "lane": "capture",
+            "status": "armed",
+            "fire_count": 0,
+            "edit_names": [],
+            "site_keys": [],
+            "zero_fire_rule_ids": [],
+            "rules": [],
+            "error": None,
+            "event_digest": "a" * 64,
+            **changes,
+        }
+    target = {
+        "ACT": {"sites": []},
+        "EDGE": {"edges": []},
+        "PARAM": {"params": [], "disclosure": ""},
+    }[kind]
+    return {
+        "kind": kind,
+        "edit": "edit",
+        "resolve_digest": "a" * 64,
+        "selection_repr": "",
+        **target,
+        **changes,
+    }
+
+
+def _flops(**changes: Any) -> dict[str, Any]:
+    """Return a coherent counted backward record with optional mutations.
+
+    Parameters
+    ----------
+    changes:
+        Overwritten fields.
+    """
+
+    return {
+        "convention": "",
+        "executed_flops": 3,
+        "rows": [("node", 1, None, 2, None)],
+        "uncounted_ops": [],
+        "unattributed": [("other", 1)],
+        **changes,
+    }
+
+
+@pytest.mark.parametrize(
+    "record,column,value,code,path",
+    [
+        ("trace", "annotations", {"logged_values": {1: 2}}, "annotations", ".logged_values<key 1>"),
+        (
+            "trace",
+            "annotations",
+            {"distributed": {"boundaries": [{}]}},
+            "annotations",
+            ".distributed.boundaries[0]",
+        ),
+        (
+            "trace",
+            "_graph_structure_evidence",
+            {"claims": {}, "discharge": "absent"},
+            "structure_evidence",
+            ".claims",
+        ),
+        ("trace", "_cost_forward_peak_memory_reason", 5, "forward_peak_memory", ""),
+        ("trace", "backward_peak_memory_reason", "", "backward_peak_memory", ""),
+        (
+            "trace",
+            "intervention_audit",
+            [_audit("ACT", patch_source={})],
+            "intervention_audit",
+            "[0].patch_source",
+        ),
+        (
+            "trace",
+            "intervention_audit",
+            [_audit("EDGE", edit=None)],
+            "intervention_audit",
+            "[0].edit",
+        ),
+        (
+            "trace",
+            "intervention_audit",
+            [_audit("PARAM", disclosure=False)],
+            "intervention_audit",
+            "[0].disclosure",
+        ),
+        (
+            "trace",
+            "intervention_audit",
+            [_audit("EVENT", schema="other")],
+            "intervention_audit",
+            "[0].schema",
+        ),
+        (
+            "trace",
+            "intervention_audit",
+            [_audit("EVENT", event_id="")],
+            "intervention_audit",
+            "[0].event_id",
+        ),
+        (
+            "trace",
+            "intervention_audit",
+            [_audit("EVENT", fire_count=True)],
+            "intervention_audit",
+            "[0].fire_count",
+        ),
+        (
+            "trace",
+            "intervention_audit",
+            [_audit("EVENT", event_digest="a" * 64 + "\n")],
+            "intervention_audit",
+            "[0].event_digest",
+        ),
+        (
+            "trace",
+            "intervention_audit",
+            [_audit("EVENT", rules=[None])],
+            "intervention_audit",
+            "[0].rules[0]",
+        ),
+        ("op", "annotations", {"collective": {}}, "annotations", ".collective"),
+        ("op", "annotations", {"save_mode": "borrow"}, "annotations", ".save_mode"),
+        ("op", "annotations", {"saved_out_version": True}, "annotations", ".saved_out_version"),
+        (
+            "op",
+            "annotations",
+            {"varying_across_passes": {1: 2}},
+            "annotations",
+            ".varying_across_passes<key 1>",
+        ),
+        ("op", "annotations", {"dedup_source_id": True}, "annotations", ".dedup_source_id"),
+        (
+            "op",
+            "annotations",
+            {"dedup_reference_label": 2},
+            "annotations",
+            ".dedup_reference_label",
+        ),
+        ("op", "episode_step", True, "episode_step", ""),
+        (
+            "backward_pass",
+            "_executed_flops_record",
+            _flops(executed_flops=True),
+            "executed_flops_record",
+            ".executed_flops",
+        ),
+        (
+            "backward_pass",
+            "_executed_flops_record",
+            _flops(rows=[("node", 0, None, 2, None)]),
+            "executed_flops_record",
+            ".rows[0][1]",
+        ),
+        (
+            "backward_pass",
+            "_executed_flops_record",
+            _flops(executed_flops=10),
+            "executed_flops_record",
+            "",
+        ),
+        (
+            "backward_pass",
+            "_executed_flops_record",
+            _flops(rows=[("node", 1, None, None, None)]),
+            "executed_flops_record",
+            ".rows[0][3]",
+        ),
+    ],
+)
+def test_remaining_family_cells_refuse_with_paths(
+    saved_backward: Path,
+    tmp_path: Path,
+    record: str,
+    column: str,
+    value: Any,
+    code: str,
+    path: str,
+) -> None:
+    """Record-cell forgeries retain the family code and precise nested path.
+
+    Parameters
+    ----------
+    saved_backward, tmp_path:
+        Baseline artifact and isolated mutation directory.
+    record, column, value, code, path:
+        Mutated cell, expected refusal family and nested diagnostic path.
+    """
+
+    loaded = tl.load(saved_backward)
+    loaded.cleanup()
+    root = _forged_cell(saved_backward, tmp_path / "forged", column, value, record)
+    with pytest.raises(ArtifactError) as caught:
+        tl.load(root)
+    assert caught.value.fields["code"] == f"artifact_{code}_invalid"
+    assert caught.value.fields["at"] == f"{record}[0].{column}{path}"
+    assert caught.value.fields["field"] in str(caught.value)
+    assert "Remedy:" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "record,column,value",
+    [
+        ("trace", "annotations", {"logged_values": {"user": object.__name__}, "user": 1}),
+        ("trace", "intervention_audit", [_audit("ACT")]),
+        ("trace", "intervention_audit", [_audit("EDGE")]),
+        ("trace", "intervention_audit", [_audit("PARAM")]),
+        ("trace", "intervention_audit", [_audit("EVENT")]),
+        (
+            "op",
+            "annotations",
+            {
+                "save_mode": "copy",
+                "saved_out_version": -1,
+                "dedup_source_id": -1,
+                "dedup_source_version": -2,
+                "dedup_reference_label": "",
+                "varying_across_passes": {},
+            },
+        ),
+        (
+            "op",
+            "annotations",
+            {
+                "collective": dict.fromkeys(
+                    ("kind", "func", "correlation", "group", "events", "roles", "witness"), None
+                )
+                | {"schema": "collective_boundary_v1", "user": True}
+            },
+        ),
+        ("op", "episode_step", None),
+        ("backward_pass", "_executed_flops_record", _flops()),
+        (
+            "backward_pass",
+            "_executed_flops_record",
+            _flops(executed_flops=None, rows=[("", 1, "", None, 0)]),
+        ),
+    ],
+)
+def test_remaining_valid_cells_load(
+    saved_backward: Path,
+    tmp_path: Path,
+    record: str,
+    column: str,
+    value: Any,
+) -> None:
+    """Open annotations and grammar-valid audit and counted rows remain accepted.
+
+    Parameters
+    ----------
+    saved_backward, tmp_path:
+        Baseline artifact and isolated mutation directory.
+    record, column, value:
+        Table and replacement cell.
+    """
+
+    root = _forged_cell(saved_backward, tmp_path / "valid", column, value, record)
+    loaded = tl.load(root)
+    loaded.cleanup()
