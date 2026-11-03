@@ -69,7 +69,7 @@ from .hooks import _validate_live_site_target, is_facet_target, lower_record_sit
 from .injection import injected_ops as _injected_op_records
 from .save import save_intervention as _save_intervention_recipe
 from .spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_autograd_nodes
-from .types import InterventionSpec, TargetSpec
+from .types import Edit, InterventionSpec, TargetSpec
 
 
 def _prepare_do(
@@ -507,6 +507,19 @@ def record_do_intervention_event(  # noqa: PLR0913 - trace stands in for self on
     )
 
 
+def _stages_as_set_value(value_or_hook: Any, engine: str) -> bool:
+    """Whether ``do`` stores ``value_or_hook`` as a set value (static or one-shot callable).
+
+    An ``Edit`` is a hook spec: under ``engine="set_only"`` it is staged as a
+    sticky hook that the next propagating ``do`` or ``run`` fires, never
+    called as a one-shot value.
+    """
+
+    if value_or_hook is None or isinstance(value_or_hook, Edit):
+        return False
+    return engine == "set_only" or not callable(value_or_hook)
+
+
 def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     hooks_or_site: Any,
@@ -578,7 +591,7 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             engine=engine,
             strict=strict,
         )
-    if value_or_hook is not None and (engine == "set_only" or not callable(value_or_hook)):
+    if _stages_as_set_value(value_or_hook, engine):
         set_site(
             trace,
             hooks_or_site,

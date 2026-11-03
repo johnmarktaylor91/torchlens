@@ -183,6 +183,28 @@ def test_set_only_do_stages_and_a_later_do_propagates_both(
     assert torch.equal(trace["linear_3_5"].out, baseline)
 
 
+def test_set_only_do_stages_an_edit_as_a_hook_and_a_later_do_fires_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A set-only ``do`` with an ``Edit`` stages a sticky hook, not a one-shot value."""
+
+    model, x, trace = _chain()
+    fork = trace.fork()
+    baseline = fork["linear_3_5"].out.clone()
+    replays = _count_calls(monkeypatch, replay_module, "_run_replay")
+
+    fork.do("relu_1_2", tl.scale(2.0), intervention=_SET_ONLY)
+
+    assert replays["_run_replay"] == 0
+    assert torch.equal(fork["linear_3_5"].out, baseline)
+    assert list(fork.layers["relu_1_2"].ops[0].edits or ())
+
+    fork.do("tanh_1_4", tl.scale(0.5))
+
+    assert replays["_run_replay"] == 1
+    assert torch.allclose(fork["linear_3_5"].out, _hand(model, x, relu=2.0, tanh=0.5), atol=1e-6)
+
+
 # ---------------------------------------------------------------------------
 # 3. differentiable=True forks with grad; rerun and set_only ignore it
 # ---------------------------------------------------------------------------

@@ -23,6 +23,9 @@
 - **intervention**: `Trace.set`, `Layer.set` and `Op.set` are removed (decision walk api.1, 2 Nov 2026).
   Stage a one-shot replacement with `trace.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))`
   (on a layer, `layer.do(value, intervention=...)`). The set-only route is unchanged; `do()` gains no new keyword.
+  A set-only `do` given an `Edit` helper (`tl.zero_ablate()`, `tl.scale(2.0)`, ...) stages it as a sticky hook that
+  the next propagating `do` or `run` fires, the way `attach_hooks` did; only static values and plain callables are
+  stored as one-shot set values.
   The old `Trace.set` and `Layer.set` refuse with the typed `facade_redirect` error naming the replacement. The
   `intervention_direction_invalid` refusals that only `set(..., direction=)` raised are gone with it; the code still
   covers `Rule(direction=)`.
