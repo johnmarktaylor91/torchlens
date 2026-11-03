@@ -61,6 +61,7 @@ _SEED_KEYS: tuple[tuple[str, str], ...] = (
     ("_layer_list", "op"),
     ("_layer_logs", "layer"),
     ("_module_logs", "module"),
+    ("_io_module_accessor_state", "module"),
     ("_param_logs", "param"),
     ("_grad_fn_logs", "grad_fn"),
     ("_backward_pass_logs", "backward_pass"),
