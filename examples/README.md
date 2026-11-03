@@ -8,7 +8,7 @@ then come here.
 
 | Folder | What it holds | How long |
 | --- | --- | --- |
-| [`quick/`](quick/README.md) | One-screen recipes: pluck an activation, find the first NaN, render the graph, extract layers or a whole dataset, ablate one layer, save and load a trace, build an RDM. | Under 30 seconds each, offline on a CPU. |
+| [`quick/`](quick/README.md) | One-screen recipes: pluck an activation, find the first NaN, render the graph, extract layers or a whole dataset, ablate one layer, save and load a trace, build an RDM. | Under 30 seconds each, offline on a CPU, except `paris_vs_rome.py` (downloads GPT-2 small, about three minutes). |
 | [`workflows/`](workflows/README.md) | Full analyses: ablation grids, causal tracing, paired-prompt patching, steering, custom hooks, fork and replay, neuroscience extraction, TransformerLens migration. | Longer reads; each runs offline on a CPU. |
 | [`methods/`](methods/README.md) | Recent interpretability methods run end to end: tuned lens, distributed alignment search, function vectors, CLIP head readouts, CKA and RSA, attribution graphs with transcoders, and more. | Seconds to about ten minutes on a laptop CPU; some download a public checkpoint on first run. |
 | [`replications/`](replications/README.md) | Scripts that re-test published findings on GPT-2 small (induction heads, IOI name movers, causal tracing) and print a verdict against a rule fixed before the first run. | Downloads GPT-2 small (about 550 MB) on first use. |

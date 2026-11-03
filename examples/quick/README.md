@@ -11,4 +11,9 @@ Read these in this order if you are new to TorchLens:
 7. [`save_load.ipynb`](save_load.ipynb) - Round-trip a torch materialized-payload `.tlspec` bundle.
 8. [`cog_neuro_rdm.ipynb`](cog_neuro_rdm.ipynb) - Build a compact model RDM for cognitive neuroscience workflows.
 
+One script sits beside the notebooks: [`paris_vs_rome.py`](paris_vs_rome.py) is the
+README's combined example made runnable. It patches each GPT-2 small attention head from a
+France prompt into an Italy prompt and finds the two heads that make the model answer " Paris".
+It downloads GPT-2 small (about 550 MB) on first use and takes about three minutes on a CPU.
+
 Each notebook is deterministic, CPU-friendly, and designed to run end-to-end with papermill in under 30 seconds.
