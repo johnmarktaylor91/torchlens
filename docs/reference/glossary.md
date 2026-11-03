@@ -3842,13 +3842,17 @@ describe each surface in depth.
 | --- | --- |
 | `AbsenceReason.detail` | Human-readable explanation of the absence |
 | `AbsenceReason.remedy` | Optional capture instruction for actionable missing-payload cases |
+| `AttentionRecording.__iter__` | Iterate the recorded attention-module names in first-call order |
+| `AttentionRecording.__len__` | The number of distinct attention modules recorded |
 | `Attribution.target_repr` | Compact representation of the scalarization target |
 | `AttributionGraph.capture_status` | The capture's completeness verdict, as the trace reports it |
 | `AttributionGraph.frozen_sites` | Labels of the sites held at their captured values |
 | `AttributionGraph.has_demeaned_logits` | Whether a logit node's value is its logit minus the mean logit |
+| `BindReport.door` | The door the call was bound through (`"call"` or `"generate"`) |
 | `BindReport.duration_s` | Wall time of the bound call in seconds, or `None` when it was not measured |
 | `BindReport.execution_effect` | How a bound call's helpers act: always `"values_replaced_after_execution"` (outputs are replaced after each op runs) |
 | `BindReport.fire_records` | The `FireRecord` objects of every firing during the bound call |
+| `BindReport.fires` | One plain-dict row per firing during the bound call (`fire_records` carries the typed objects) |
 | `BindReport.module_aliases` | Canonical module address to the other addresses the same module object is registered under |
 | `BindReport.resolved_static_targets` | Rule id to the module addresses its static anchor resolved to at bind time |
 | `BindReport.rule_fire_counts` | Rule id to the number of times it fired during the bound call |
@@ -3909,8 +3913,10 @@ describe each surface in depth.
 | `FamilyEvidence.policy` | `exact`, `sampled`, `unavailable`, or nonfinite presence-only `verdict`; unavailable evidence carries a reason |
 | `FamilyEvidence.is_sampled` | Whether this family rode the seeded gathered sample |
 | `FireRecord.call_label` | Label of the call the firing belongs to, or `None` when it is not a call-level site |
+| `FireRecord.replaced` | Whether the firing replaced the tensor at its site, or `None` when not recorded |
 | `FireRecord.target_label` | Label of the op the firing edited |
 | `FireRecord.timing` | Whether the firing ran before (`"pre"`) or after (`"post"`) its op, or `None` when not recorded |
+| `FireRecord.tuple_index` | Position of the edited output in the op's gradient tuple for backward firings, or `None` |
 | `GraphNode.token_id` | Token id: the input token at ``position`` (token nodes) or the target vocabulary id (logit nodes) |
 | `HeadScores.eligible_rows` | field of `HeadScores` |
 | `HeadScores.module_addresses` | field of `HeadScores` |
@@ -3918,6 +3924,7 @@ describe each surface in depth.
 | `HeadWeightViews.num_kv_heads` | field of `HeadWeightViews` |
 | `HistoryView.run_record` | field of `HistoryView` |
 | `InputProvenance.has_semantic_values` | True only when the values are caller-supplied real data. Gates derived-semantics claims |
+| `InterventionValidationReport.__bool__` | Truth value of the report: `True` when every axis passes |
 | `InterventionValidationReport.passed` | Return the aggregate pass/fail result |
 | `LogitLens.entries` | Per-layer projections in block execution order |
 | `LogitLens.final_logits` | The model's captured real output logits when readable, else ``None`` |
@@ -3947,8 +3954,10 @@ describe each surface in depth.
 | `PlanSite.transform_seconds` | Measured live transform time at the probe batch (D-15: the probe executes the transform chain; post-transform bytes and time are measured, never derived) |
 | `PlanSite.transformed_bytes` | Post-transform bytes at the probe batch, when a transform ran |
 | `PlanSite.transformed_shape` | Post-transform shape at the probe batch, when a transform ran |
+| `Population.__len__` | The number of members in the population |
 | `ProjectionSource.has_fused_qkv` | Whether the role is a column slice of a fused QKV weight |
 | `RandomizationTest.module_addresses` | Randomized modules, top (output side) first |
+| `ReadRow.alias_group` | Ordinal of the `(node, slot)` alias group whose sites share one gradient, or `None` when unshared |
 | `ReadRow.frozen_reached` | Whether a requested freeze actually fired in the target's backward cone; `None` when no backward touched the site |
 | `ReadRow.is_detached` | ``True`` when ``value`` is a detached copy (always true in v1 for carried tensors) |
 | `ReadRow.is_frozen_requested` | field of `ReadRow` |
@@ -3957,20 +3966,26 @@ describe each surface in depth.
 | `ReadRow.policy_digest` | Digest of the resolved frozen policy this row was measured under |
 | `ReadRow.reduction` | Named scalar reduction that produced `score`, or `None` |
 | `ReadRow.retention` | `'saved'` or `'unsaved'` payload retention at the site |
+| `ReadRow.sample_id` | Nullable sample identity for dataset-mean rows (always `None` in v1) |
 | `ReadRow.status_reason` | Closed reason detail for the row's status (for example `not_upstream_of_target`), or `None` |
 | `ReadRow.target_id` | Stable id of the target this row answers, or `None` for target-free rows |
+| `ReadTable.__iter__` | Iterate the row keys `(target_id, kind, address)` in table order |
+| `ReadTable.__len__` | The number of rows in the table |
 | `ReadTable.aggregate_targets` | Fold multi-target rows into one row per address, explicitly |
 | `ReadTable.collapse_alias_groups` | Explicitly collapse alias groups to one row per `(node, slot)` |
 | `ReadTable.column` | Return one row field as `key -> value` |
 | `ReadTable.is_rescorable` | Whether the table can be re-scored against its live trace |
 | `ReadTable.status_counts` | Return the status histogram over all rows |
 | `ReadTable.trace_token` | Return the trace validity token captured at read time |
+| `Recording.__iter__` | Iterate the retained activation records |
+| `Recording.__len__` | The number of retained activation records |
 | `Recording.by_pass` | Map from pass number to indexes of its retained records |
 | `Recording.orphan_records` | Records that arrived without a matching pass, kept for diagnosis |
 | `RegionBoundary.exits` | The region's exit edges, ordered by consuming-op execution order then occurrence order |
 | `RegionEdge.addresses` | The canonical edge occurrence addresses |
 | `RegionEdge.nested` | Whether any occurrence address has a nested (container) argument |
 | `RegionInstance.exits` | The exit edges of this pass instance; they commit atomically |
+| `RegionTarget.boundary` | The typed, ordered entry/exit `RegionBoundary` of the region |
 | `RegionTarget.region_digest` | Stable digest over members and exit addresses (audit identity) |
 | `RegionTarget.source_slice` | The `TraceSlice` this region was derived from |
 | `Relationship.DIFF_MODEL` | Evidence level: the bundle members come from different models |
@@ -3980,6 +3995,7 @@ describe each surface in depth.
 | `Relationship.SHARED_ARCHITECTURE` | Evidence level: the members' models share an architecture |
 | `Relationship.SHARED_GRAPH_DIFFERENT_INPUT` | Evidence level: the members share a graph but ran on different inputs |
 | `Relationship.SHARED_GRAPH_SAME_INPUT` | Evidence level: the members share a graph and ran on the same input |
+| `Relationship.UNKNOWN` | Evidence level: the relationship between the members could not be established |
 | `RunningStats.compute` | Return the finalized spine statistics (`RunningStatsResult`) |
 | `RunningStats.merge` | Fold another spine into this one |
 | `RunningStatsResult.num_finite` | field of `RunningStatsResult` |
@@ -4057,6 +4073,7 @@ describe each surface in depth.
 | `ValidationFailure.reduction_depth` | Reduction depth of the failing op used to scale the tolerance, or `None` |
 | `ValidationFailure.saved_dtype` | Dtype of the saved tensor, or `None` |
 | `ValidationFailure.saved_shape` | Shape of the saved tensor, or `None` |
+| `ValidationStatus.__bool__` | Truth value only for completed results: `True` for `passed`, `False` for `failed`; `TypeError` otherwise |
 | `ValidationStatus.passed` | Return whether replay validation ran and passed |
 | `VisualizationOptions.size_scale` | UNSTABLE size-channel scale transform (``"sqrt"``/``"linear"``); see ``Trace.draw`` |
 | `VisualizationOptions.graph` | Which graph the picture draws: ``"forward"`` (default), ``"backward"`` or ``"combined"`` |
