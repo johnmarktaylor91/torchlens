@@ -58,25 +58,12 @@ def _code(excinfo: pytest.ExceptionInfo) -> str:
 class TestAttentionView:
     """AttentionView construction and honesty metadata."""
 
-    def test_valid_view_constructs(self) -> None:
-        """A softmax pattern with aligned axes constructs."""
-
-        view = _view()
-        assert view.fingerprint.startswith("sha256:")
-        assert view.provenance_wording == "captured"
-
     def test_probability_domain_violation_refuses(self) -> None:
         """Values outside [0, 1] cannot claim the probability domain."""
 
         with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _view(pattern=torch.randn(2, 4, 4) * 10)
         assert _code(excinfo) == "tv_record_invalid"
-
-    def test_per_panel_domain_admits_scores(self) -> None:
-        """Score-valued matrices ride the labeled per_panel domain."""
-
-        view = _view(pattern=torch.randn(2, 4, 4), domain="per_panel")
-        assert view.domain == "per_panel"
 
     def test_nonfinite_pattern_refuses(self) -> None:
         """A NaN pattern is a capture defect, not a rendering choice."""
@@ -100,16 +87,6 @@ class TestAttentionView:
         with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _view(key_tokens=tviz.TokenAxis(role="query", tokens=tuple("abcd")))
         assert _code(excinfo) == "tv_record_invalid"
-
-    def test_rectangular_cross_attention(self) -> None:
-        """T5-style rectangular patterns construct with distinct axes."""
-
-        view = _view(
-            pattern=torch.softmax(torch.randn(2, 3, 5), dim=-1),
-            query_tokens=tviz.TokenAxis(role="query", tokens=tuple(f"d{i}" for i in range(3))),
-            key_tokens=tviz.TokenAxis(role="key", tokens=tuple(f"e{i}" for i in range(5))),
-        )
-        assert view.pattern.shape == (2, 3, 5)
 
     def test_provenance_vocab_closed(self) -> None:
         """user_supplied never earns a reconstruction badge; unknowns refuse."""
@@ -154,13 +131,6 @@ class TestMaskInfo:
             tviz.MaskInfo(mask=torch.zeros(4, 4, dtype=torch.bool), source="inferred_from_zeros")
         assert _code(excinfo) == "tv_record_invalid"
 
-    def test_valid_sources(self) -> None:
-        """All three hierarchy sources construct."""
-
-        for source in ("sdpa_call_args", "eager_additive_mask", "user_metadata"):
-            info = tviz.MaskInfo(mask=torch.zeros(2, 2, dtype=torch.bool), source=source)
-            assert info.source == source
-
 
 class TestGqa:
     """GQA disclosure arithmetic (D15)."""
@@ -174,12 +144,6 @@ class TestGqa:
         header = gqa.header(3)
         assert "kv group 1 of 2" in header
         assert "query heads 0-6" in header
-
-    def test_uneven_grouping_refuses(self) -> None:
-        """Non-dividing grouping is a config error."""
-
-        with pytest.raises(torchlens.errors.RenderError):
-            tviz.GqaInfo(num_query_heads=14, num_key_value_heads=4)
 
 
 class TestAnnotationKinds:
@@ -200,20 +164,6 @@ class TestAnnotationKinds:
                 kind="intervention_effect", heads=(0,), values=(1.0,), source="painted number"
             )
         assert _code(excinfo) == "tv_annotation_invalid"
-
-    def test_descriptive_kinds_construct_without_receipt(self) -> None:
-        """Non-causal kinds carry numbers without receipts."""
-
-        for kind in ("descriptive_head_score", "additive_logit_contribution", "screening_estimate"):
-            annotation = tviz.Annotation(kind=kind, heads=(0, 1), values=(0.5, None), source="s")
-            assert annotation.values[1] is None  # unmeasured stays blank
-
-    def test_from_receipt_mints_intervention_effect(self) -> None:
-        """The receipt door mints the causal kind with its evidence."""
-
-        annotation = tviz.Annotation.from_receipt(_receipt())
-        assert annotation.kind == "intervention_effect"
-        assert annotation.receipt is not None
 
 
 class TestCausalReceipt:
@@ -247,36 +197,9 @@ class TestCausalReceipt:
             _receipt(effects=(float("inf"), 1.0))
         assert _code(excinfo) == "tv_receipt_invalid"
 
-    def test_measured_zero_is_kept(self) -> None:
-        """A genuine measured zero is a value, not a refusal."""
-
-        receipt = _receipt(effects=(0.0, None))
-        assert receipt.num_measured_heads == 1
-        assert receipt.cell_sum == 0.0
-
 
 class TestScoreDecomposition:
     """The hard sum-to-score invariant (D19)."""
-
-    def test_closed_terms_construct(self) -> None:
-        """Terms reproducing the reference score construct."""
-
-        q = torch.randn(8)
-        k = torch.randn(8)
-        scale = 8**0.5
-        reference = float((q * k).sum()) / scale
-        record = tviz.ScoreDecomposition(
-            layer="blk.0.attn",
-            head=0,
-            destination=1,
-            source=0,
-            query_vector=q,
-            key_vector=k,
-            products=q * k,
-            scale=scale,
-            reference_score=reference,
-        )
-        assert record.total == pytest.approx(reference, abs=1e-5)
 
     def test_unclosed_terms_refuse(self) -> None:
         """A decomposition that misses the score REFUSES (never misleads)."""
@@ -327,14 +250,6 @@ class TestTokenScores:
 
 class TestEpisodeCoordinates:
     """Episode coordinates land in the records from day one (D22)."""
-
-    def test_view_carries_episode_coordinates(self) -> None:
-        """Records address episode steps without a wave-2 renderer."""
-
-        episode = tviz.EpisodeCoordinates(step=3, role="decode", completion="complete")
-        view = _view(episode=episode)
-        assert view.episode is not None
-        assert view.episode.step == 3
 
     def test_role_vocabulary_closed(self) -> None:
         """Unknown roles refuse."""

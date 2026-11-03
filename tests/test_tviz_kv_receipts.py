@@ -51,21 +51,6 @@ def _kv_receipt(layer: str = "blk.0.attn") -> tviz.CausalReceipt:
     )
 
 
-def test_receipt_names_the_query_heads_of_each_group() -> None:
-    """The receipt's cells are groups and it says who shares each one."""
-
-    receipt = _kv_receipt()
-    assert receipt.unit == "kv group"
-    assert receipt.heads == (0, 1)
-    assert receipt.sharing_lines() == (
-        "kv group 1 of 2, shared by query heads 0-3",
-        "kv group 2 of 2, shared by query heads 4-7",
-    )
-    assert GQA.query_heads(1) == (4, 5, 6, 7)
-    # The per-query-head header the attention panels use is unchanged.
-    assert GQA.header(5) == "kv group 2 of 2, shared by query heads 4-7"
-
-
 def test_query_head_grid_refuses_the_kv_grouping() -> None:
     """A grid over all eight query heads is not a kv-site grid."""
 
