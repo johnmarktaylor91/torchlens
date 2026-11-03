@@ -28,6 +28,11 @@ from torchlens.intervention.injection import (
 from torchlens.intervention.types import FunctionRegistryKey
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
+# The injected hooks here are user callables: format 3 writes a recipe holding a
+# callable placeholder only at the audit level (saved_format_3.md section 5); the
+# portable default refuses intervention_spec_not_portable. The injected family
+# itself persists in the op record table at every non-runnable level.
+_SAVE_LEVEL = "audit"
 
 
 class _Chain(nn.Module):
@@ -81,7 +86,7 @@ def test_round_trip_preserves_identity_payloads_and_query_split(chain, tmp_path)
     logged = _logged_trace(chain)
     live = logged.injected_ops
     path = str(tmp_path / "logged.tlspec")
-    logged.save(path)
+    logged.save(path, level=_SAVE_LEVEL)
     loaded = tl.load(path)
     restored = loaded.injected_ops
     assert len(restored) == len(live) == 5
@@ -123,7 +128,7 @@ def test_load_degrades_to_unattested_and_replay_attests(chain, tmp_path) -> None
     assert live_report.passed
     assert {row.status for row in live_report.rows} == {"attested"}
     path = str(tmp_path / "logged.tlspec")
-    logged.save(path)
+    logged.save(path, level=_SAVE_LEVEL)
     loaded = tl.load(path)
     assert {record.attestation for record in loaded.injected_ops} == {"unattested"}
     assert {record.attestation_reason for record in loaded.injected_ops} == {None}
@@ -139,9 +144,9 @@ def test_resave_of_loaded_logged_trace_round_trips(chain, tmp_path) -> None:
     logged = _logged_trace(chain)
     first = str(tmp_path / "one.tlspec")
     second = str(tmp_path / "two.tlspec")
-    logged.save(first)
+    logged.save(first, level=_SAVE_LEVEL)
     loaded = tl.load(first)
-    loaded.save(second)
+    loaded.save(second, level=_SAVE_LEVEL)
     reloaded = tl.load(second)
     assert [r.provenance for r in reloaded.injected_ops] == [
         r.provenance for r in logged.injected_ops
@@ -198,7 +203,7 @@ def test_untrusted_and_missing_callable_arms_degrade_never_refuse(chain, tmp_pat
         records[2] = dataclasses.replace(records[2], callable_ref=missing)
         state["records"] = records
         path = str(tmp_path / "arms.tlspec")
-        logged.save(path)
+        logged.save(path, level=_SAVE_LEVEL)
         loaded = tl.load(path)
         reasons = {r.label: r.attestation_reason for r in loaded.injected_ops}
         assert reasons[records[3].label] == "callable_untrusted"
@@ -233,7 +238,7 @@ def test_replay_divergence_is_the_tripwire_verdict(chain, tmp_path) -> None:
     assert [row.reason for row in report.diverged] == ["replay_value_mismatch"]
     # the tampered claim also fails after a save/load cycle
     path = str(tmp_path / "tampered.tlspec")
-    logged.save(path)
+    logged.save(path, level=_SAVE_LEVEL)
     loaded_report = attest_injected_ops(tl.load(path))
     assert not loaded_report.passed
 
@@ -243,7 +248,7 @@ def test_include_outs_false_persists_identity_only(chain, tmp_path) -> None:
 
     logged = _logged_trace(chain)
     path = str(tmp_path / "noouts.tlspec")
-    logged.save(path, include_outs=False)
+    logged.save(path, include_outs=False, level=_SAVE_LEVEL)
     loaded = tl.load(path)
     restored = loaded.injected_ops
     assert len(restored) == 5
@@ -282,7 +287,7 @@ def test_multi_output_slots_round_trip_and_attest(chain, tmp_path) -> None:
     slots = sorted(r.provenance.output_slot for r in logged.injected_ops if "chunk" in r.func_name)
     assert slots == [0, 1]
     path = str(tmp_path / "chunk.tlspec")
-    logged.save(path)
+    logged.save(path, level=_SAVE_LEVEL)
     loaded = tl.load(path)
     report = attest_injected_ops(loaded)
     assert report.passed
@@ -299,8 +304,8 @@ def test_ordinary_validation_unchanged_after_round_trip(chain, tmp_path) -> None
     spec = tl.when(tl.func("relu"), _sae_like)
     base = tl.trace(model, x, intervene=spec)
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
-    logged.save(str(tmp_path / "l.tlspec"))
-    base.save(str(tmp_path / "b.tlspec"))
+    logged.save(str(tmp_path / "l.tlspec"), level=_SAVE_LEVEL)
+    base.save(str(tmp_path / "b.tlspec"), level=_SAVE_LEVEL)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         logged_verdict = logged.validate_forward_pass(model(x))
@@ -328,7 +333,7 @@ def test_loaded_record_types_are_the_live_types(chain, tmp_path) -> None:
 
     logged = _logged_trace(chain)
     path = str(tmp_path / "types.tlspec")
-    logged.save(path)
+    logged.save(path, level=_SAVE_LEVEL)
     loaded = tl.load(path)
     for record in loaded.injected_ops:
         assert isinstance(record, InjectedOp)

@@ -18,6 +18,10 @@ from torchlens.intervention.injection import attest_injected_ops
 transformers = pytest.importorskip("transformers")
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
+# The SAE hook is a user callable: format 3 writes its recipe (a callable
+# placeholder) only at the audit level; the portable default refuses
+# intervention_spec_not_portable. The injected family persists either way.
+_SAVE_LEVEL = "audit"
 
 
 def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
@@ -44,7 +48,7 @@ def test_gpt2_mlp_sae_injection_persists_and_attests(tmp_path) -> None:
     host_sites = {record.provenance.host_site_key for record in records}
     assert all(isinstance(key, str) and key.startswith("s1|") for key in host_sites)
     path = str(tmp_path / "gpt2_sae.tlspec")
-    logged.save(path)
+    logged.save(path, level=_SAVE_LEVEL)
     loaded = tl.load(path)
     restored = loaded.injected_ops
     assert len(restored) == len(records)
@@ -79,7 +83,7 @@ def test_torchvision_block_splice_injection_persists_and_attests(tmp_path) -> No
     func_names = {record.func_name for record in records}
     assert {"mean", "tanh", "add"} & func_names
     path = str(tmp_path / "resnet_splice.tlspec")
-    logged.save(path)
+    logged.save(path, level=_SAVE_LEVEL)
     loaded = tl.load(path)
     assert len(loaded.injected_ops) == len(records)
     report = attest_injected_ops(loaded)
