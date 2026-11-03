@@ -13,6 +13,7 @@ import types
 import pytest
 import torch
 
+from torchlens import _state
 from torchlens._errors import TorchLensWarning
 from torchlens.backends.torch import backward as tl_backward
 from torchlens.backends.torch.wrappers import wrap_torch
@@ -63,6 +64,42 @@ def test_uninstall_autograd_wrappers_preserves_foreign_patches() -> None:
         if pristine_grad is not None:
             torch.autograd.grad = pristine_grad
         tl_backward._AUTOGRAD_WRAPPERS_INSTALLED = False
+        tl_backward.install_autograd_wrappers()
+
+
+def test_unwrap_torch_reports_autograd_burial_after_full_teardown() -> None:
+    """Through ``unwrap_torch`` the autograd burial is reported LAST, with the
+    namespace wrappers already restored and the decorated flag down: raised
+    under warnings-as-errors it must not abort the rest of the teardown."""
+
+    import warnings
+
+    from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+
+    _ensure_wrapped()
+    tl_backward.install_autograd_wrappers()
+    inner_backward = torch.autograd.backward
+    cos_wrapper = torch.cos
+    assert id(cos_wrapper) in _state._decorated_to_orig
+
+    def foreign_backward(*args, **kwargs):
+        return inner_backward(*args, **kwargs)
+
+    torch.autograd.backward = foreign_backward
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            with pytest.raises(TorchLensWarning, match="torch.autograd.backward"):
+                unwrap_torch()
+        assert not _state._is_decorated
+        assert torch.cos is _state._decorated_to_orig[id(cos_wrapper)]
+        assert torch.autograd.backward is foreign_backward
+    finally:
+        pristine_backward = tl_backward._ORIGINAL_AUTOGRAD_BACKWARD
+        if pristine_backward is not None:
+            torch.autograd.backward = pristine_backward
+        tl_backward._AUTOGRAD_WRAPPERS_INSTALLED = False
+        wrap_torch()
         tl_backward.install_autograd_wrappers()
 
 
