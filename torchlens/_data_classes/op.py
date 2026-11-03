@@ -2986,7 +2986,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         return _op_save._copy_with_shallow_fields(self, extra_shallow_fields, _store=_store)
 
-    def save_activation(
+    def _save_activation(
         self,
         t: torch.Tensor,
         t_args: list[Any] | tuple[Any, ...],

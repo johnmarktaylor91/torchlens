@@ -436,7 +436,7 @@ def test_fast_sparse_iterations_refresh_saved_activations(tmp_path: Path) -> Non
 
     The refresh gate was built from bare layer labels while descriptor calls
     carry pass-qualified labels ('linear_1_1:1'), so the in-loop
-    ``save_activation`` never fired and every fast iteration returned
+    ``_save_activation`` never fired and every fast iteration returned
     iteration-1 payloads on a trace labeled verified.
     """
 

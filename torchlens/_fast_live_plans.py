@@ -528,7 +528,7 @@ def save_payload_paused(session: Any, op: Any, value: torch.Tensor) -> None:
 
     session.collection_paused = True
     try:
-        op.save_activation(
+        op._save_activation(
             value,
             (),
             {},

@@ -258,15 +258,15 @@ def test_saved_activation_identity_dedup_rejects_key_collision() -> None:
 
 
 def test_op_save_activation_identity_dedup_reuses_same_source() -> None:
-    """Replay/slow ``Op.save_activation`` uses identity dedup for the same source."""
+    """Replay/slow ``Op._save_activation`` uses identity dedup for the same source."""
 
     trace = tl.trace(torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU()), torch.ones(1, 2))
     trace._out_identity_cache.clear()
     source = torch.randn(1, 2)
     first_op, second_op = trace._layer_list[:2]
 
-    first_op.save_activation(source, (), {}, save_args=False)
-    second_op.save_activation(source, (), {}, save_args=False)
+    first_op._save_activation(source, (), {}, save_args=False)
+    second_op._save_activation(source, (), {}, save_args=False)
 
     assert first_op.out is second_op.out
     assert second_op.annotations["dedup_reference_label"] == first_op._layer_label_raw

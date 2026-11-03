@@ -64,7 +64,7 @@
   DTensor topologies (C2) refuse typed; merged replay does not exist.
 - `CaptureOptions(save_budget=...)` is a per-device ceiling on retained activation bytes, default
   `"auto"` = half of measurable available memory. Exhaustive, predicate, and deferred
-  `Op.save_activation()` paths pre-admit the primary source-sized RAM copy before allocation, then
+  `Op._save_activation()` paths pre-admit the primary source-sized RAM copy before allocation, then
   reconcile alias-aware physical storage. Transform
   deltas and cross-device temporaries cannot always be known pre-allocation, so this is not a general
   OOM guarantee. Predicate disk-only saves are exempt; exhaustive

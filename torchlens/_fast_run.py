@@ -178,7 +178,7 @@ class _FastSparseSession:
         # Key the refresh gate by EVERY lookup spelling of a saved entry:
         # descriptor calls carry pass-qualified labels ('linear_1_1:1') while
         # ``layer_label`` is the bare final label, so a bare-label-only set
-        # made the in-loop ``save_activation`` refresh dead code -- every fast
+        # made the in-loop ``_save_activation`` refresh dead code -- every fast
         # iteration returned iteration-1 payloads on a verified trace.
         self.saved_labels = frozenset(
             key
@@ -435,7 +435,7 @@ class _FastSparseSession:
             if op_label in self.saved_labels:
                 op = self.target._layer_dict_all_keys.get(op_label)
                 if op is not None:
-                    op.save_activation(
+                    op._save_activation(
                         value,
                         (),
                         {},
@@ -1358,7 +1358,7 @@ class _FastLiveSession:
             input_ops = boundary_label_rows(input_labels, self.target.__getitem__)
             for op, value in zip(input_ops, input_leaves, strict=True):
                 if op is not None and bool(getattr(op, "has_saved_activation", False)):
-                    op.save_activation(value, (), {}, False)
+                    op._save_activation(value, (), {}, False)
 
     def _refresh_boundary_payloads(
         self,
@@ -1411,7 +1411,7 @@ class _FastLiveSession:
                 )
                 self._poison_and_raise(failed)
             if isinstance(value, torch.Tensor) and bool(getattr(op, "has_saved_activation", False)):
-                op.save_activation(value, (), {}, False)
+                op._save_activation(value, (), {}, False)
         # Same rule as capture (_capture/trace.py): the transformed raw output
         # is stored when an output transform exists; the save scope is
         # otherwise untouched, so a sparse save stays sparse on a rerun.

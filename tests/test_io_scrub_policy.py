@@ -378,7 +378,6 @@ _OP_METHOD_EXCLUSIONS: dict[str, str] = {
     "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
-    "save_activation": "capture-internal payload writer",
 }
 
 _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
