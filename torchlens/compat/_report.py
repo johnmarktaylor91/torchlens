@@ -9,21 +9,19 @@ import multiprocessing
 import textwrap
 import threading
 from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 from torch import nn
 
 from torchlens._distributed import DistributedFinding, detect_distributed_state
+from torchlens._doctor_types import DoctorCheck, Severity, Status
 from torchlens._robustness import _iter_tensors
 from torchlens._utils._torch_compat import (
     get_dynamo_optimized_module_type,
     get_fp8_dtypes,
     get_fx_graph_module_type,
 )
-
-if TYPE_CHECKING:
-    from torchlens.report._doctor import DoctorCheck, Severity, Status
 
 
 def _model_checks(model: nn.Module, inputs: Any) -> tuple[DoctorCheck, ...]:
@@ -178,8 +176,6 @@ def _hf_transformers_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     detected = _class_in_namespace(model, ("transformers",))
     details = (
         "Hugging Face-style module detected; eager forward capture is supported when the "
@@ -216,8 +212,6 @@ def _accelerate_dispatch_row(model: nn.Module) -> DoctorCheck:
     DoctorCheck
         Report row.
     """
-
-    from torchlens.report._doctor import DoctorCheck
 
     device_map = getattr(model, "hf_device_map", None)
     detected = bool(device_map)
@@ -285,8 +279,6 @@ def _accelerate_offload_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     detected = False
     buffers_offloaded = False
     for module in _iter_modules(model):
@@ -352,8 +344,6 @@ def _bitsandbytes_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     detected = bool(getattr(model, "is_loaded_in_8bit", False)) or bool(
         getattr(model, "is_loaded_in_4bit", False)
     )
@@ -405,8 +395,6 @@ def _gptq_awq_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     quant_config = getattr(getattr(model, "config", None), "quantization_config", None)
     method = (
         quant_config.get("quant_method")
@@ -451,8 +439,6 @@ def _cuda_graphs_row(model: nn.Module) -> DoctorCheck:
     DoctorCheck
         Report row.
     """
-
-    from torchlens.report._doctor import DoctorCheck
 
     from .._utils import _torch_compat
 
@@ -506,8 +492,6 @@ def _serving_engine_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     detected = _class_in_namespace(model, _SERVING_NAMESPACES) or any(
         _class_in_namespace(module, _SERVING_NAMESPACES) for module in _iter_modules(model)
     )
@@ -551,8 +535,6 @@ def _peft_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     detected = "peft." in _class_identity(model) or any(
         "peft." in _class_identity(module) for module in _iter_modules(model)
     )
@@ -588,8 +570,6 @@ def _tied_parameters_row(model: nn.Module) -> DoctorCheck:
     DoctorCheck
         Report row.
     """
-
-    from torchlens.report._doctor import DoctorCheck
 
     seen: dict[int, str] = {}
     duplicates: list[str] = []
@@ -670,8 +650,6 @@ def _multi_gpu_rng_row() -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     try:
         device_count = torch.cuda.device_count()
     except Exception:
@@ -708,8 +686,6 @@ def _data_parallel_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     detected = isinstance(model, nn.DataParallel)
     status: Status = "pass"
     details = (
@@ -745,8 +721,6 @@ def _ddp_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     detected = _class_in_namespace(model, ("torch.nn.parallel.distributed",))
     details = (
         "DistributedDataParallel detected; TorchLens unwraps the rank-local .module and "
@@ -778,8 +752,6 @@ def _fsdp_row(model: nn.Module) -> DoctorCheck:
     DoctorCheck
         Report row.
     """
-
-    from torchlens.report._doctor import DoctorCheck
 
     detected = _class_in_namespace(
         model, ("torch.distributed.fsdp", "torch.distributed._composable.fsdp")
@@ -884,8 +856,6 @@ def _distributed_row(
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     if finding is None:
         return DoctorCheck(key, label, "pass", "ok", False, clear_details, "")
     details = finding.detail
@@ -920,8 +890,6 @@ def _deepspeed_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     detected = _class_in_namespace(model, ("deepspeed",))
     status: Status = "scope" if detected else "pass"
     details = (
@@ -953,8 +921,6 @@ def _torch_compile_row(model: nn.Module) -> DoctorCheck:
     DoctorCheck
         Report row.
     """
-
-    from torchlens.report._doctor import DoctorCheck
 
     from .._capture_state_helpers import compiled_plain_callable_sites
     from .._utils import _torch_compat
@@ -1067,8 +1033,6 @@ def _fx_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     graph_module_type = get_fx_graph_module_type()
     detected = graph_module_type is not None and isinstance(model, graph_module_type)
     status: Status = "scope" if detected else "pass"
@@ -1104,8 +1068,6 @@ def _lightning_row(model: nn.Module) -> DoctorCheck:
     DoctorCheck
         Report row.
     """
-
-    from torchlens.report._doctor import DoctorCheck
 
     has_training_step = callable(getattr(model, "training_step", None))
     is_lightning = _class_in_namespace(model, ("pytorch_lightning", "lightning.pytorch"))
@@ -1144,8 +1106,6 @@ def _functorch_row(model: nn.Module) -> DoctorCheck:
     DoctorCheck
         Report row.
     """
-
-    from torchlens.report._doctor import DoctorCheck
 
     detected = _forward_references_functorch(model)
     status: Status = "known_broken" if detected else "pass"
@@ -1230,8 +1190,6 @@ def _quantized_row(model: nn.Module, input_value: Any) -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     quantized_input = any(
         getattr(tensor, "is_quantized", False) for tensor in _iter_tensors(input_value)
     )
@@ -1278,8 +1236,6 @@ def _fp8_dtype_row(model: nn.Module, input_value: Any) -> DoctorCheck:
     the row's ``detected=False`` never claims a capture contains no fp8, and the
     passing detail says which scopes were checked.
     """
-
-    from torchlens.report._doctor import DoctorCheck
 
     fp8_dtypes = get_fp8_dtypes(force_probe=True)
     if not fp8_dtypes:
@@ -1373,8 +1329,6 @@ def _device_context_row() -> DoctorCheck:
         Report row.
     """
 
-    from torchlens.report._doctor import DoctorCheck
-
     return DoctorCheck(
         "device_context_factory",
         "DeviceContext factory injection",
@@ -1401,7 +1355,6 @@ def _mechanical_belt_row() -> DoctorCheck:
 
     from torchlens import _state
     from torchlens.backends.torch.belt import belt_report
-    from torchlens.report._doctor import DoctorCheck
 
     if not _state._is_decorated:
         return DoctorCheck(
@@ -1466,8 +1419,6 @@ def _single_thread_row() -> DoctorCheck:
     DoctorCheck
         Report row.
     """
-
-    from torchlens.report._doctor import DoctorCheck
 
     current_process = multiprocessing.current_process().name
     current_thread = threading.current_thread().name
