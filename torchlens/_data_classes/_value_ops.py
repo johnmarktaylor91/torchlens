@@ -8,7 +8,7 @@ from typing import Any
 
 from .._utils._display_card import render_card
 from .._utils._display_keys import display_key
-from .._utils._display_numbers import format_duration, format_exact_count, format_iec_bytes, plural
+from .._utils._display_numbers import format_duration, format_exact_count, format_iec_bytes
 from .._utils.fail_open import fail_open
 from ._value_state import (
     METADATA_ONLY,
@@ -53,7 +53,9 @@ def _graph(op: Any) -> str:
     graph = " -> ".join(parts)
     downstream = getattr(op, "output_descendants", None)
     if downstream is not None:
-        graph += f" ({plural(len(downstream), 'operation')} downstream)"
+        count = len(downstream)
+        noun = "operation" if count == 1 else "operations"
+        graph += f" ({format_exact_count(count)} {noun} downstream)"
     return graph
 
 

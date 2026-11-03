@@ -150,9 +150,14 @@ def payload_core(record: Any, *, identity: str | None = None, max_width: int | N
 def trace_of(record: Any) -> Any:
     """Owning trace when reachable, including detached module records."""
 
-    trace = getattr(record, "_source_trace", None) or getattr(record, "trace", None)
+    trace = getattr(record, "_source_trace", None)
     return (
-        trace if trace is not None else fail_open(lambda: record.source_trace, lambda _error: None)
+        trace
+        if trace is not None
+        else fail_open(
+            lambda: getattr(record, "trace", None) or getattr(record, "source_trace", None),
+            lambda _error: None,
+        )
     )
 
 
