@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1357 modules, 630200 lines, 0 modules without a docstring.
+84 packages, 1357 modules, 630207 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 8482 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 6 | 3841 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12305 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12312 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 18 | 5789 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
@@ -1753,7 +1753,7 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (8 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12305 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12312 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1766,7 +1766,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12305
 | `_forward_query` | Exact per-unit projective queries via membership transposition. | 642 |
 | `_gradient` | Autograd-backed receptive-field probes with capture-side-effect suppression. | 903 |
 | `_gradient_forward` | Saved-graph double-VJP probes for projective receptive fields. | 454 |
-| `_influence` | Unit-level influence as a selection: the ENGINE, with no public spelling yet. | 601 |
+| `_influence` | Unit-level influence as a selection: the ENGINE, with no public spelling yet. | 608 |
 | `_layer_fields` | Layer receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 46 |
 | `_op_fields` | Receptive and projective field views for ''Op''. | 52 |
 | `_path` | Executed-DAG endpoint resolution and directed path slicing. | 340 |

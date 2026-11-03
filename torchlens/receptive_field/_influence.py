@@ -516,6 +516,22 @@ def _product_mask(
 # ---------------------------------------------------------------------------
 
 
+def _refuse_over_probe_budget(seed_units: int, target_sites: int, probe_budget: int) -> None:
+    """Refuse typed, before any probe runs, when the gradient method would exceed its budget."""
+
+    total = seed_units * target_sites
+    if total > probe_budget:
+        raise _unresolvable(
+            "influence_probe_budget",
+            f"the gradient method would run {total} autograd probes ({seed_units} seed "
+            f"unit(s) x {target_sites} target site(s)), over probe_budget={probe_budget}. "
+            "Narrow the seed or the targets, raise probe_budget=, or use the geometric method.",
+            code="selection_unresolvable",
+            probes=total,
+            probe_budget=probe_budget,
+        )
+
+
 def _gradient_influence(
     trace: Any,
     seeds: tuple[tuple[Any, Site], ...],
@@ -523,7 +539,7 @@ def _gradient_influence(
     node: _InfluenceTerm,
 ) -> Selection:
     """OR one autograd probe per (seed unit, target site) into exact entries."""
-    # Complexity (C): one typed budget refusal plus the per-probe fold is one cohesive step.
+    # Complexity (C): the per-probe fold with its typed shape check is one cohesive step.
 
     probes = tuple(
         (seed_op, tuple(int(value) for value in coordinates))
@@ -531,16 +547,7 @@ def _gradient_influence(
         for coordinates in entry._mask._dense_ro().nonzero()
     )
     total = len(probes) * len(targets)
-    if total > node.probe_budget:
-        raise _unresolvable(
-            "influence_probe_budget",
-            f"the gradient method would run {total} autograd probes ({len(probes)} seed "
-            f"unit(s) x {len(targets)} target site(s)), over probe_budget={node.probe_budget}. "
-            "Narrow the seed or the targets, raise probe_budget=, or use the geometric method.",
-            code="selection_unresolvable",
-            probes=total,
-            probe_budget=node.probe_budget,
-        )
+    _refuse_over_probe_budget(len(probes), len(targets), node.probe_budget)
     shapes = {target.label: _site_shape(target) for target in targets}
     supports = {
         target.label: torch.zeros(shapes[target.label], dtype=torch.bool) for target in targets
