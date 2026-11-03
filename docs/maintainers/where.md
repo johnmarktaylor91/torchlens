@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1411 modules, 631740 lines, 0 modules without a docstring.
+83 packages, 1412 modules, 632041 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -47,7 +47,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._visualization.lenses.audit` | The lens validation harness (themes memo build item 17). | 5 | 1896 |
 | `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 271 |
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 3 | 176 |
-| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 14 | 4871 |
+| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 15 | 5172 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 240 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 14632 |
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2408 |
@@ -1000,7 +1000,7 @@ Relocated cross-layer vocabulary closures (L0 BASIS; private home). (3 modules, 
 
 ### `torchlens.agent`
 
-torchlens.agent -- the read-only agent inspection surface (agent ). (14 modules, 4871 lines)
+torchlens.agent -- the read-only agent inspection surface (agent ). (15 modules, 5172 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1012,12 +1012,13 @@ torchlens.agent -- the read-only agent inspection surface (agent ). (14 modules,
 | `_envelope` | Canonical serializer and the one agent-surface envelope (agent ). | 188 |
 | `_fold` | The recurrence fold: the agent surface's default structural view. | 341 |
 | `_guide_text` | The curated agent guide, shipped in the wheel as a module constant. | 99 |
+| `_init_block` | ''torchlens agent init'': point a project's agent instruction file at the agent index. | 262 |
 | `_overview` | Structured overview records and dump views (agent -3.4). | 366 |
 | `_query` | query_sites: structured site discovery over persisted facts. | 539 |
 | `_registry` | The ONE tool registry: names, schemas, budgets, handlers, transports. | 1022 |
 | `_schemas` | The shipped schema registry: Draft 2020-12 files, fetchable at runtime. | 74 |
 | `_stats` | payload_stats: bounded numbers over saved tensors, never the tensors. | 577 |
-| `cli` | The TorchLens CLI: one registry, tiered process shapes (agent ). | 368 |
+| `cli` | The TorchLens CLI: one registry, tiered process shapes (agent ). | 407 |
 
 ### `torchlens.appliances`
 

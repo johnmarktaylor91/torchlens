@@ -1,0 +1,10 @@
+{
+  "name": "torchlens",
+  "description": "Teaches coding agents the TorchLens call to reach for first: capture, steer, ablate, patch, compare and draw a PyTorch model's activations.",
+  "author": {
+    "name": "JohnMark Taylor"
+  },
+  "homepage": "https://github.com/johnmarktaylor91/torchlens",
+  "repository": "https://github.com/johnmarktaylor91/torchlens",
+  "license": "Apache-2.0"
+}
