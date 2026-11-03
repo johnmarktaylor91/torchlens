@@ -31,8 +31,8 @@ DIGEST_KEY = "helper_tensor_digests"
 
 _REMEDY = (
     "Remedy: re-stage the edit so it takes the tensor's new value on purpose "
-    "(detach and attach_hooks() again, or capture fresh with tl.trace(model, x, "
-    "intervene=...)), or "
+    "(remove it with clear_edits(site) and stage it again with do(), or capture "
+    "fresh with tl.trace(model, x, intervene=...)), or "
     "restore the tensor's captured value"
 )
 

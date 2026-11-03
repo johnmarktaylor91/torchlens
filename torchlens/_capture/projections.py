@@ -40,7 +40,8 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
-from ._record_stores import _GradFnContextMap, _StorageBackend
+from ._record_stores import _GradFnContextMap, _RetainedRecordKeys, _StorageBackend
+from ._sparse_shell import _sparse_function_ref
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -75,10 +76,7 @@ def _resolve_storage_intent(options: _RecordingConfig) -> StorageIntent:
 
     if options.streaming is None or options.streaming.path is None:
         return StorageIntent(in_ram=True, on_disk=False)
-    return StorageIntent(
-        in_ram=options.streaming.retain_in_memory,
-        on_disk=True,
-    )
+    return StorageIntent(in_ram=options.streaming.retain_in_memory, on_disk=True)
 
 
 def _empty_recording(options: _RecordingConfig) -> Recording:
@@ -146,6 +144,12 @@ class RecordingState:
     prepared_params: dict[int, tuple[weakref.ref[torch.nn.Parameter], bool]] = field(
         default_factory=dict
     )
+    # Live indexes the module-boundary retention step reads on EVERY module
+    # exit: the latest op context per raw label (last-wins, like a dict built
+    # over ``all_contexts``) and the retained records' keys. Rebuilding both
+    # per exit made that step quadratic in model size.
+    op_context_by_raw_label: dict[str, RecordContext] = field(default_factory=dict)
+    retained_keys: _RetainedRecordKeys = field(default_factory=_RetainedRecordKeys)
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -164,6 +168,8 @@ class RecordingState:
         """Append an event context to the bounded sliding window."""
 
         self.all_contexts.append(ctx)
+        if ctx.kind == "op" and ctx.raw_label is not None:
+            self.op_context_by_raw_label[ctx.raw_label] = ctx
         window_size = self.options.lookback or self.options.history_size
         if window_size == 0:
             return
@@ -325,7 +331,7 @@ def _read_field(source: Any, name: str, default: Any = None) -> Any:
 
     if source is None:
         return default
-    if isinstance(source, Mapping):
+    if type(source) is dict or isinstance(source, Mapping):
         return source.get(name, default)
     return getattr(source, name, default)
 
@@ -615,32 +621,6 @@ def _sparse_freeze_values(
         modules=modules,
         is_scalar_bool=is_scalar_bool,
         bool_value=bool_value,
-    )
-
-
-def _sparse_function_ref(ctx: RecordContext, function: FunctionCallRef | None) -> FunctionCallRef:
-    """Return the sparse commit's function facet (name-only SHELL fallback)."""
-
-    return function or FunctionCallRef(
-        func=None,
-        func_name=ctx.func_name,
-        func_qualname=None,
-        func_call_id=None,
-        code_context=(),
-        func_duration=None,
-        flops_forward=None,
-        flops_backward=None,
-        func_rng_states=None,
-        func_autocast_state=None,
-        arg_names=(),
-        num_args_total=0,
-        num_pos_args=0,
-        num_kwargs=0,
-        non_tensor_pos_args=(),
-        non_tensor_kwargs=(),
-        func_non_tensor_args=(),
-        is_inplace=False,
-        func_config=(),
     )
 
 
@@ -1276,10 +1256,7 @@ def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
 
     if save_mode != "reference" or not isinstance(payload, torch.Tensor):
         return {}
-    return {
-        "save_mode": "reference",
-        "saved_out_version": tensor_version_or_none(payload),
-    }
+    return {"save_mode": "reference", "saved_out_version": tensor_version_or_none(payload)}
 
 
 class LiveOpView:

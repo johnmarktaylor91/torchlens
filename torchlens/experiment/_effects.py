@@ -34,7 +34,7 @@ class EffectsView:
 
     Examples
     --------
-    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> base = tl.trace(model, x)
     >>> bundle = tl.experiment.sweep_sites(
     ...     base, candidates={"conv": "conv2d_1_1", "relu": "relu_1_2"}, edit=tl.zero_ablate(),
     ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="none",

@@ -406,8 +406,7 @@ def chrome_trace_diff(bundle: Any, path: str | Path) -> Path:
     Examples
     --------
     >>> import tempfile, pathlib
-    >>> capture = tl.options.CaptureOptions(replayable=True)
-    >>> bundle = tl.Bundle({"a": tl.trace(model, x, capture=capture), "b": tl.trace(model, x, capture=capture)})
+    >>> bundle = tl.Bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
     >>> with tempfile.TemporaryDirectory() as tmp:
     ...     out = tl.export.chrome_trace_diff(bundle, pathlib.Path(tmp) / "diff.json")
     ...     text = out.read_text(encoding="utf-8")

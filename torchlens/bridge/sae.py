@@ -692,7 +692,7 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
     Parameters
     ----------
     model_or_log:
-        Live ``nn.Module`` (captured here with ``replayable=True``)
+        Live ``nn.Module`` (captured here with a plain ``tl.trace``)
         or an already-captured intervention-ready ``Trace``.
     inputs:
         Model inputs, required when ``model_or_log`` is a module and refused

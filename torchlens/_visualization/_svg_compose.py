@@ -26,6 +26,10 @@ from ._render_common import (
 )
 from ._render_flow import _resolve_svg_image_path
 from .code_panel import compose_graph_with_code_panel
+from .render_execution import surface_layout_stderr
+
+#: Upper bound for one detached Graphviz render, matching a draw's forward render.
+_DETACHED_RENDER_TIMEOUT_S = 120
 
 
 def _render_graph_only_svg(
@@ -44,6 +48,35 @@ def _render_graph_only_svg(
         cwd=str(image_root) if image_root else None,
     )
     return _inline_svg_local_images(completed.stdout.decode("utf-8"), image_root)
+
+
+def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None) -> bytes:
+    """Render a drawing's DOT source to bytes the way ``draw`` renders it.
+
+    A drawing's producer injects this (bound to the trace's image root) as the
+    renderer its notebook display and ``save`` to another format use: the
+    same bounded Graphviz child as ``draw``, with the bundled font, so the
+    key's table, sized to its words in that face, fits them; relative node
+    images resolved against ``image_root`` while it exists; Graphviz stderr
+    surfaced as the usual layout warning; and an SVG's local image references
+    embedded as data URIs, so the picture never links a file under the temp
+    folder. Failures propagate; ``Drawing`` maps them to its typed refusal.
+    """
+
+    root = Path(image_root) if image_root and Path(image_root).is_dir() else None
+    completed = _render_utils.run_bounded_subprocess(
+        ["dot", f"-T{fileformat}"],
+        timeout=_DETACHED_RENDER_TIMEOUT_S,
+        check=True,
+        capture_output=True,
+        input=dot.encode("utf-8"),
+        cwd=str(root) if root else None,
+    )
+    surface_layout_stderr(completed.stderr, engine="dot")
+    payload = bytes(completed.stdout)
+    if fileformat != "svg":
+        return payload
+    return _inline_svg_local_images(payload.decode("utf-8"), root).encode("utf-8")
 
 
 def _inline_svg_file_local_images(svg_path: str, image_root: Path | None = None) -> None:
@@ -343,4 +376,5 @@ __all__ = [
     "_normalize_svg_root_viewbox",
     "_render_graph_only_svg",
     "_write_composed_code_panel",
+    "render_detached_dot",
 ]

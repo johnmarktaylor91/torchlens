@@ -33,7 +33,7 @@ class TargetManifestDiff:
     Examples
     --------
     >>> import pathlib, tempfile
-    >>> edited = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True),
+    >>> edited = tl.trace(model, x,
     ...     intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
     >>> with tempfile.TemporaryDirectory() as d:
     ...     path = pathlib.Path(d) / "spec.tlspec"
@@ -67,7 +67,7 @@ class SpecCompat:
     Examples
     --------
     >>> import pathlib, tempfile
-    >>> edited = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True),
+    >>> edited = tl.trace(model, x,
     ...     intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
     >>> with tempfile.TemporaryDirectory() as d:
     ...     path = pathlib.Path(d) / "spec.tlspec"
@@ -300,7 +300,7 @@ def check_spec_compat(spec: InterventionSpec, trace: Any) -> SpecCompat:
     Examples
     --------
     >>> import pathlib, tempfile
-    >>> edited = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True),
+    >>> edited = tl.trace(model, x,
     ...     intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
     >>> with tempfile.TemporaryDirectory() as d:
     ...     path = pathlib.Path(d) / "spec.tlspec"
