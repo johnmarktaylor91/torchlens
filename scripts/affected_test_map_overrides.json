@@ -1,0 +1,2305 @@
+{
+  "_doc": [
+    "Reviewed additions to the affected-test map, read by scripts/build_affected_test_map.py.",
+    "Each row's tests rank first for that module (after the hand-pinned rows); the builder",
+    "fills any remaining slot from its static ranking. Rows come from a per-test line-coverage",
+    "run over the not-slow tests of the IO, capture, record, replay, visualization and validation",
+    "territories: a greedy cover of the module's function-body lines executed by those tests.",
+    "A stale row (renamed module or test, empty reason) stops the build; regenerate or delete it."
+  ],
+  "modules": {
+    "torchlens/_capture/_annotations_travel.py": {
+      "tests": [
+        "tests/test_episode_truth_travel_policy.py",
+        "tests/test_fast_rerun_intervene.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 53 body lines between them, the static list executed 48"
+    },
+    "torchlens/_capture/_episode_coupling.py": {
+      "tests": [
+        "tests/test_attested_coupling_flip.py",
+        "tests/test_attested_coupling_evidence.py",
+        "tests/test_w051_episode_binding.py",
+        "tests/test_gc.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 160 body lines between them, the static list executed 126"
+    },
+    "torchlens/_capture/_episode_derivation.py": {
+      "tests": [
+        "tests/test_w051_episode_chain_positions.py",
+        "tests/test_episode_derivation_declared.py",
+        "tests/composition_expectations/test_proofnet_episode_options.py",
+        "tests/test_episode_truth_four_clause.py",
+        "tests/test_w051_episode_binding.py",
+        "tests/test_attested_coupling_flip.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 237 body lines between them, the static list executed 229"
+    },
+    "torchlens/_capture/_episode_join.py": {
+      "tests": [
+        "tests/test_episode_join_arms.py",
+        "tests/test_w051_episode_entry_basis.py",
+        "tests/test_episode_join_persistence.py",
+        "tests/test_attested_coupling_flip.py",
+        "tests/test_w051_capt2_episode_step_input_from.py",
+        "tests/test_attested_coupling_evidence.py",
+        "tests/test_w051_episode_join_grading.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 503 body lines between them, the static list executed 497"
+    },
+    "torchlens/_capture/_episode_ledger.py": {
+      "tests": [
+        "tests/test_episode_capture.py",
+        "tests/test_schema_v9_c07x_episode.py",
+        "tests/test_episode_differential_oracle.py",
+        "tests/composition_expectations/test_proofnet_episode_options.py",
+        "tests/test_episode_derivation_declared.py",
+        "tests/test_episode_truth_refusals.py",
+        "tests/test_episode_join_persistence.py",
+        "tests/test_w051_capt2_episode_step_input_from.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 627 body lines between them, the static list executed 615"
+    },
+    "torchlens/_capture/_episode_ledger_anchors.py": {
+      "tests": [
+        "tests/test_w051_episode_binding.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 63 body lines between them, the static list executed 50"
+    },
+    "torchlens/_capture/_flops_shape_rules.py": {
+      "tests": [
+        "tests/test_flops3_rules.py",
+        "tests/test_grouping_call_sites.py",
+        "tests/test_replay_gap_value_proofs.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 99 body lines between them, the static list executed 96"
+    },
+    "torchlens/_capture/_forward_helpers.py": {
+      "tests": [
+        "tests/test_fastlog/test_orchestrator.py",
+        "tests/test_forward_peak_pair_rerun.py",
+        "tests/oracles/test_legacy_peak_memory_bounds.py",
+        "tests/test_dynamo_fake_guard.py",
+        "tests/test_validation.py",
+        "tests/test_w051_gate_plan_check.py",
+        "tests/test_fastlog_partial.py",
+        "tests/test_fastlog_halt.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 233 body lines between them, the static list executed 189"
+    },
+    "torchlens/_capture/_input_records.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_r67_input_structure.py",
+        "tests/test_capopts_truth_save_grads.py",
+        "tests/test_save_budget.py",
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_tlspec_runnable_r65_walker_parity.py",
+        "tests/test_io_streaming.py",
+        "tests/test_zero_match_disclosures.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 154 body lines between them, the static list executed 127"
+    },
+    "torchlens/_capture/_nonfinite_prefix.py": {
+      "tests": [
+        "tests/test_observe_kit_labels.py",
+        "tests/test_capture_settlement.py",
+        "tests/test_backend_constants_rule.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 105 body lines between them, the static list executed 101"
+    },
+    "torchlens/_capture/_retention.py": {
+      "tests": [
+        "tests/test_capopts_truth_save_grads.py",
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_backward_p3_payloads.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 15 body lines between them, the static list executed 5"
+    },
+    "torchlens/_capture/_run_setup.py": {
+      "tests": [
+        "tests/test_pristine_evidence.py",
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_bound_method_root_contract.py",
+        "tests/test_fastlog_inline.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 243 body lines between them, the static list executed 212"
+    },
+    "torchlens/_capture/_structure_evidence.py": {
+      "tests": [
+        "tests/test_weightsfree_admission.py",
+        "tests/test_structure_only_entry.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 53 body lines between them, the static list executed 4"
+    },
+    "torchlens/_capture/_structure_only_entry.py": {
+      "tests": [
+        "tests/test_structure_only_entry.py",
+        "tests/test_nonfinite_record.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 84 body lines between them, the static list executed 79"
+    },
+    "torchlens/_capture/_trace_capture_error.py": {
+      "tests": [
+        "tests/test_capture_settlement.py",
+        "tests/test_hon_crash_notes.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 40 body lines between them, the static list executed 34"
+    },
+    "torchlens/_capture/_weightsfree_admission.py": {
+      "tests": [
+        "tests/test_w051_gate_weightsfree_admission.py",
+        "tests/test_weightsfree_admission.py",
+        "tests/test_weightsfree_fabrication.py",
+        "tests/test_weightsfree_discharge.py",
+        "tests/test_weightsfree_witness_settlement.py",
+        "tests/test_global_state_inventory.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 140 body lines between them, the static list executed 137"
+    },
+    "torchlens/_capture/arg_positions.py": {
+      "tests": [
+        "tests/test_argpos_hardening.py",
+        "tests/test_flops3_rules.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 117 body lines between them, the static list executed 108"
+    },
+    "torchlens/_capture/compute_record.py": {
+      "tests": [
+        "tests/test_flops1_backward_dispatch.py",
+        "tests/test_numbers_truth_compute.py",
+        "tests/test_flops3_rules.py",
+        "tests/test_fp8_guard.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 178 body lines between them, the static list executed 119"
+    },
+    "torchlens/_capture/finalize/arms.py": {
+      "tests": [
+        "tests/test_capture_settlement.py",
+        "tests/test_capture_outcome_gates.py",
+        "tests/test_capture_failure_reporting.py",
+        "tests/test_record_grad_defaults.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 168 body lines between them, the static list executed 162"
+    },
+    "torchlens/_capture/finalize/epilogue.py": {
+      "tests": [
+        "tests/test_episode_join_arms.py",
+        "tests/test_capopts_truth_stop_after.py",
+        "tests/test_capopts_truth_module_filter.py",
+        "tests/test_decoration.py",
+        "tests/test_io_bundle.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 128 body lines between them, the static list executed 33"
+    },
+    "torchlens/_capture/finalize/settle.py": {
+      "tests": [
+        "tests/test_capture_outcome_gates.py",
+        "tests/test_train_mode/test_patterns.py",
+        "tests/test_run_until.py",
+        "tests/test_capture_outcome_matrix.py",
+        "tests/test_fastlog_inline.py",
+        "tests/test_save_budget.py",
+        "tests/test_capture_unification_p5.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 188 body lines between them, the static list executed 118"
+    },
+    "torchlens/_capture/flops.py": {
+      "tests": [
+        "tests/test_flops2_backward_attribution.py",
+        "tests/test_validation.py",
+        "tests/test_flops3_rules.py",
+        "tests/test_themes_stage0.py",
+        "tests/test_trace_boundary_ops_multipass.py",
+        "tests/test_conditional_branches.py",
+        "tests/test_validation_exemption_tightening.py",
+        "tests/test_misc_capture.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 250 body lines between them, the static list executed 179"
+    },
+    "torchlens/_capture/outcome.py": {
+      "tests": [
+        "tests/test_capture_settlement.py",
+        "tests/test_capture_outcome_gates.py",
+        "tests/test_capture_outcome_preview_halt.py",
+        "tests/test_capopts_truth_chunk_options.py",
+        "tests/test_append_streaming.py",
+        "tests/test_distributed_armed_capture_isolation.py",
+        "tests/test_capture_outcome_authority.py",
+        "tests/test_fastlog_halt.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 263 body lines between them, the static list executed 217"
+    },
+    "torchlens/_capture/predicates.py": {
+      "tests": [
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_predicate_training_error_codes.py",
+        "tests/test_fastlog_halt.py",
+        "tests/test_save_union_lookup.py",
+        "tests/test_capture_unification_p4.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 158 body lines between them, the static list executed 148"
+    },
+    "torchlens/_capture/prepare/cache.py": {
+      "tests": [
+        "tests/test_capture_cache_atomic_commit.py",
+        "tests/test_r58_capture_cache_rce.py",
+        "tests/test_grind_b4_lane_p.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 229 body lines between them, the static list executed 216"
+    },
+    "torchlens/_capture/prepare/chunked.py": {
+      "tests": [
+        "tests/test_chunk_size.py",
+        "tests/test_io_scrub_policy.py",
+        "tests/test_capopts_truth_chunk_options.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 199 body lines between them, the static list executed 5"
+    },
+    "torchlens/_capture/prepare/dispatch.py": {
+      "tests": [
+        "tests/test_backend_registry.py",
+        "tests/test_refusal_gate_codes.py",
+        "tests/backend_parity/test_trace_option_honesty.py",
+        "tests/test_snoop_core.py",
+        "tests/test_grouping_stamp.py",
+        "tests/test_capture_pure_observer.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 115 body lines between them, the static list executed 111"
+    },
+    "torchlens/_capture/prepare/door.py": {
+      "tests": [
+        "tests/test_chunk_size.py",
+        "tests/composition_expectations/test_proofnet_m1_product_verb.py",
+        "tests/test_capopts_truth_stop_after.py",
+        "tests/test_capopts_truth_batchnorm_warn.py",
+        "tests/test_r58_capture_cache_rce.py",
+        "tests/test_bound_method_root_contract.py",
+        "tests/test_episode_capture.py",
+        "tests/test_capopts_truth_failed_capture_release.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 533 body lines between them, the static list executed 293"
+    },
+    "torchlens/_capture/prepare/request.py": {
+      "tests": [
+        "tests/test_capopts_truth_cache_key.py",
+        "tests/test_chunk_size.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 125 body lines between them, the static list executed 124"
+    },
+    "torchlens/_capture/prepare/resolve.py": {
+      "tests": [
+        "tests/test_zero_match_disclosures.py",
+        "tests/test_backward_intervention.py",
+        "tests/test_w051_bind_fixwave.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_intervention_phase3.py",
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_predicate_review_regressions.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 271 body lines between them, the static list executed 105"
+    },
+    "torchlens/_capture/projections.py": {
+      "tests": [
+        "tests/test_explorer_watch_riders.py",
+        "tests/test_fastlog_inline.py",
+        "tests/test_fastlog/test_storage_modes.py",
+        "tests/test_fastlog_backward.py",
+        "tests/test_intervention_phase4c.py",
+        "tests/test_fastlog_halt.py",
+        "tests/test_validation.py",
+        "tests/test_fastlog/test_dry_run.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 542 body lines between them, the static list executed 383"
+    },
+    "torchlens/_capture/projectors.py": {
+      "tests": [
+        "tests/test_run_until.py",
+        "tests/test_capture_unification_p7.py",
+        "tests/test_tlspec_runnable_io_tree_contract.py",
+        "tests/test_capture_pure_observer.py",
+        "tests/test_fastlog_inline.py",
+        "tests/test_tlspec_runnable_r41_crossthread_witness.py",
+        "tests/test_train_mode/test_patterns.py",
+        "tests/test_fastlog/test_storage_modes.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 350 body lines between them, the static list executed 219"
+    },
+    "torchlens/_capture/run.py": {
+      "tests": [
+        "tests/test_capture_settlement.py",
+        "tests/test_input_walk_inert_authority.py",
+        "tests/test_tlspec_runnable_execution.py",
+        "tests/test_fastlog_inline.py",
+        "tests/test_aggregate_cache.py",
+        "tests/test_runnable_fp32_precision_policy.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 253 body lines between them, the static list executed 250"
+    },
+    "torchlens/_capture/run_entry.py": {
+      "tests": [
+        "tests/producer_parity/test_ledger.py",
+        "tests/test_validate_save_options.py",
+        "tests/test_persist_honesty_streamed_settlement.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_model_state_hygiene.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 133 body lines between them, the static list executed 104"
+    },
+    "torchlens/_capture/salient_args.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_rf_remediation_status.py",
+        "tests/test_inplace_functional_mutation.py",
+        "tests/test_fast_run_live_sites.py",
+        "tests/test_tlspec_alloc_preflight_fake.py",
+        "tests/test_buffer_datamodel.py",
+        "tests/test_norm_zero_weight_proof.py",
+        "tests/test_themes_stage0.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 218 body lines between them, the static list executed 65"
+    },
+    "torchlens/_capture/session.py": {
+      "tests": [
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_module_save_live_retention.py",
+        "tests/test_capopts_truth_save_grads.py",
+        "tests/test_leverage_div_honesty.py",
+        "tests/test_backward_p3_payloads.py",
+        "tests/producer_parity/test_fastlog_late_buffer_probe.py",
+        "tests/test_save_union_lookup.py",
+        "tests/test_inplace_output_grads.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 453 body lines between them, the static list executed 432"
+    },
+    "torchlens/_capture/stop.py": {
+      "tests": [
+        "tests/test_snoop_failure.py",
+        "tests/test_fastlog/test_dispatch_smoke.py",
+        "tests/test_record_grad_defaults.py",
+        "tests/test_fastlog_halt.py",
+        "tests/test_observe_kit_labels.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 107 body lines between them, the static list executed 73"
+    },
+    "torchlens/_capture/structure_only.py": {
+      "tests": [
+        "tests/test_structure_only_discharge.py",
+        "tests/test_structure_only_capabilities.py",
+        "tests/test_weightsfree_discharge.py",
+        "tests/test_hf_structure_only_text.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 194 body lines between them, the static list executed 166"
+    },
+    "torchlens/_io/_alloc_belt.py": {
+      "tests": [
+        "tests/test_unpickle_c_path.py",
+        "tests/test_r63_construct_deny.py",
+        "tests/test_r7_torch_type_io_rce.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 94 body lines between them, the static list executed 93"
+    },
+    "torchlens/_io/_durability.py": {
+      "tests": [
+        "tests/test_io_platform_save_paths.py",
+        "tests/test_r59_writer_toctou.py",
+        "tests/test_safe_unpickle_stream_bounds.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 39 body lines between them, the static list executed 38"
+    },
+    "torchlens/_io/_forgery_identity_facts.py": {
+      "tests": [
+        "tests/test_schema_v9_c07x_episode.py",
+        "tests/test_w051_io_artifact_anchors.py",
+        "tests/test_measure_host_peak_opt_in.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 97 body lines between them, the static list executed 49"
+    },
+    "torchlens/_io/_json.py": {
+      "tests": [
+        "tests/test_tlspec_parse_depth_guard.py",
+        "tests/test_tlspec_parse_fuzz.py",
+        "tests/test_io_durability_bounds.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 101 body lines between them, the static list executed 97"
+    },
+    "torchlens/_io/_load_validators.py": {
+      "tests": [
+        "tests/test_w051_io_artifact_anchors.py",
+        "tests/test_flops2_persisted_counts.py",
+        "tests/test_surgery_live_regions.py",
+        "tests/test_schema_v9_audit_rows.py",
+        "tests/test_io_plain_pickle.py",
+        "tests/test_measure_host_peak_opt_in.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 223 body lines between them, the static list executed 122"
+    },
+    "torchlens/_io/_portability_preflight.py": {
+      "tests": [
+        "tests/test_w051_io_portability_preflight.py",
+        "tests/test_episode_capture.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 119 body lines between them, the static list executed 118"
+    },
+    "torchlens/_io/_pre3_module_paths.py": {
+      "tests": [
+        "tests/test_load_refuses_saved_by_2x.py",
+        "tests/test_io_bundle.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 22 body lines between them, the static list executed 21"
+    },
+    "torchlens/_io/_rehydrate_lazy_names.py": {
+      "tests": [
+        "tests/test_tlspec_unified.py",
+        "tests/test_io_pickle.py",
+        "tests/test_episode_capture.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 9 body lines between them, the static list executed 5"
+    },
+    "torchlens/_io/_root_manifest.py": {
+      "tests": [
+        "tests/test_io_bundle.py",
+        "tests/test_fastlog_halt.py",
+        "tests/test_load_refuses_saved_by_2x.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 24 body lines between them, the static list executed 20"
+    },
+    "torchlens/_io/_safe_unpickle.py": {
+      "tests": [
+        "tests/test_unpickle_c_path.py",
+        "tests/test_r27_dotted_walk_rce.py",
+        "tests/test_r33_operator_gadget_carveout.py",
+        "tests/test_tlspec_unpickler_first_party_rce.py",
+        "tests/test_unpickle_c_security.py",
+        "tests/test_r36_tensor_method_smuggling.py",
+        "tests/test_r28_rebuild_dotted_walk_rce.py",
+        "tests/test_safe_unpickle_stream_bounds.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 276 body lines between them, the static list executed 216"
+    },
+    "torchlens/_io/_save_gates.py": {
+      "tests": [
+        "tests/test_prebump_roundtrip_acceptance.py",
+        "tests/test_bundle_outcome_authority.py",
+        "tests/test_edge_substitution.py",
+        "tests/test_distributed_shard_local_marker.py",
+        "tests/test_capture_outcome_gates.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 50 body lines between them, the static list executed 11"
+    },
+    "torchlens/_io/_source_privacy.py": {
+      "tests": [
+        "tests/test_io_conditional_source_privacy.py",
+        "tests/test_io_signature_privacy.py",
+        "tests/test_schema_v9_annotations.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 165 body lines between them, the static list executed 164"
+    },
+    "torchlens/_io/accessor_rebuild.py": {
+      "tests": [
+        "tests/test_tlspec_unified.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 45 body lines between them, the static list executed 44"
+    },
+    "torchlens/_io/bundle.py": {
+      "tests": [
+        "tests/test_io_mediated_allocation_bypass.py",
+        "tests/test_io_bundle.py",
+        "tests/test_io_lazy.py",
+        "tests/test_tlspec_unified.py",
+        "tests/test_io_secio_hardening.py",
+        "tests/composition_expectations/test_proofnet_m1_product_verb.py",
+        "tests/test_io_interrupt_recovery.py",
+        "tests/test_tlspec_runnable_activations.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 1431 body lines between them, the static list executed 887"
+    },
+    "torchlens/_io/bundle_container.py": {
+      "tests": [
+        "tests/test_ledger_exp_grid.py",
+        "tests/test_io_durability_bounds.py",
+        "tests/test_r34_security_io.py",
+        "tests/test_io_bundle.py",
+        "tests/test_r10_container_rce.py",
+        "tests/test_bundle_harness.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 99 body lines between them, the static list executed 91"
+    },
+    "torchlens/_io/bundle_metadata.py": {
+      "tests": [
+        "tests/test_schema_v9_c07x_relations.py",
+        "tests/test_ledger_exp_persistence.py",
+        "tests/test_bundle_harness_spans.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 114 body lines between them, the static list executed 0"
+    },
+    "torchlens/_io/field_registry.py": {
+      "tests": [
+        "tests/test_b2_extract_trace_safetensors.py",
+        "tests/test_io_lazy.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 59 body lines between them, the static list executed 57"
+    },
+    "torchlens/_io/forgery_validation.py": {
+      "tests": [
+        "tests/test_prebump_roundtrip_acceptance.py",
+        "tests/test_schema_v9_audit_rows.py",
+        "tests/test_schema_v9_entry_dark_fields.py",
+        "tests/test_schema_v9_annotations.py",
+        "tests/test_tlspec_unified.py",
+        "tests/test_io_plain_pickle.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 596 body lines between them, the static list executed 343"
+    },
+    "torchlens/_io/format_contract.py": {
+      "tests": [
+        "tests/test_io_bundle.py",
+        "tests/test_schema_v10_contract_and_goldens.py",
+        "tests/test_state_serialization_cert10.py",
+        "tests/test_rehydration_floor.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 79 body lines between them, the static list executed 73"
+    },
+    "torchlens/_io/format_errors.py": {
+      "tests": [
+        "tests/test_storage_refusal_codes.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 10 body lines between them, the static list executed 9"
+    },
+    "torchlens/_io/injection_codec.py": {
+      "tests": [
+        "tests/test_log_injections_s2_persistence.py",
+        "tests/test_log_injections_s2_forgery.py",
+        "tests/test_w051_bind_fixwave.py",
+        "tests/test_io_bundle.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 358 body lines between them, the static list executed 254"
+    },
+    "torchlens/_io/lazy.py": {
+      "tests": [
+        "tests/test_r18p_streaming_lazy.py",
+        "tests/test_report_honesty_lazy_payload.py",
+        "tests/test_io_corruption.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 53 body lines between them, the static list executed 50"
+    },
+    "torchlens/_io/manifest.py": {
+      "tests": [
+        "tests/test_io_corruption.py",
+        "tests/test_io_bundle.py",
+        "tests/test_io_determinism_fixes.py",
+        "tests/test_io_durability_bounds.py",
+        "tests/test_tlspec_parse_fuzz.py",
+        "tests/test_fastlog/test_persistence_recover.py",
+        "tests/test_io_pickle.py",
+        "tests/test_io_runnable_payload_integrity.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 339 body lines between them, the static list executed 324"
+    },
+    "torchlens/_io/paths.py": {
+      "tests": [
+        "tests/test_io_bundle.py",
+        "tests/test_io_durability_bounds.py",
+        "tests/test_io_security.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 29 body lines between them, the static list executed 27"
+    },
+    "torchlens/_io/payload_codec.py": {
+      "tests": [
+        "tests/test_io_bundle.py",
+        "tests/test_io_rollup_hardening_r10r60.py",
+        "tests/test_backend_registry.py",
+        "tests/test_io_runnable_payload_integrity.py",
+        "tests/test_io_determinism_fixes.py",
+        "tests/test_io_pickle.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 40 body lines between them, the static list executed 31"
+    },
+    "torchlens/_io/rehydrate.py": {
+      "tests": [
+        "tests/test_io_lazy.py",
+        "tests/test_io_pickle.py",
+        "tests/test_io_determinism_fixes.py",
+        "tests/test_r34_security_io.py",
+        "tests/test_w051_bind_fixwave.py",
+        "tests/test_tlspec_unified.py",
+        "tests/test_grind_b4_lane_p.py",
+        "tests/test_tlspec_runnable_execution.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 686 body lines between them, the static list executed 456"
+    },
+    "torchlens/_io/runnable.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_r71_witness_obligations.py",
+        "tests/test_tlspec_runnable_producer.py",
+        "tests/test_runnable_r36_regressions.py",
+        "tests/test_tlspec_runnable_r69_input_contract.py",
+        "tests/test_runnable_load_parse_hardening.py",
+        "tests/test_ecosystem_rt_rider_runnable_real.py",
+        "tests/test_tlspec_runnable_r65_state_metadata_parity.py",
+        "tests/test_completeness_witness_w15_toctou_batch.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 2083 body lines between them, the static list executed 1793"
+    },
+    "torchlens/_io/runnable_coherence.py": {
+      "tests": [
+        "tests/test_runnable_resolver_release_keys.py",
+        "tests/test_tlspec_runnable_r24_idiv_bufwrite.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 33 body lines between them, the static list executed 31"
+    },
+    "torchlens/_io/runnable_load.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_resolver.py",
+        "tests/test_tlspec_runnable_r71_witness_obligations.py",
+        "tests/test_oracle_independence.py",
+        "tests/test_tlspec_runnable_r53_alloc_bomb.py",
+        "tests/test_tlspec_runnable_v2_contract.py",
+        "tests/test_tlspec_runnable_r67_input_structure.py",
+        "tests/test_runnable_load_parse_hardening.py",
+        "tests/test_runnable_resolver_release_keys.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 1715 body lines between them, the static list executed 1456"
+    },
+    "torchlens/_io/save_policy.py": {
+      "tests": [
+        "tests/test_persist_honesty_save_options.py",
+        "tests/test_prebump_roundtrip_acceptance.py",
+        "tests/test_persist_honesty_structure_only.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 59 body lines between them, the static list executed 26"
+    },
+    "torchlens/_io/scrub.py": {
+      "tests": [
+        "tests/test_prebump_roundtrip_acceptance.py",
+        "tests/test_scrub_foreign_container_portability.py",
+        "tests/test_io_scrub_policy.py",
+        "tests/test_persist_honesty_real_model.py",
+        "tests/test_io_bundle.py",
+        "tests/test_r18o_scrub.py",
+        "tests/test_prerelease_registrar.py",
+        "tests/test_io_determinism_fixes.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 557 body lines between them, the static list executed 509"
+    },
+    "torchlens/_io/streaming.py": {
+      "tests": [
+        "tests/test_io_streaming.py",
+        "tests/test_streaming_async.py",
+        "tests/test_r59_writer_toctou.py",
+        "tests/test_storage_refusal_codes.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 281 body lines between them, the static list executed 280"
+    },
+    "torchlens/_io/tlspec.py": {
+      "tests": [
+        "tests/test_compare_gate_roundtrip.py",
+        "tests/test_r59_writer_toctou.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_r18n_bundle_save_atomic.py",
+        "tests/test_io_corruption.py",
+        "tests/test_ledger_exp_persistence.py",
+        "tests/test_schema_v9_c07x_relations.py",
+        "tests/test_w051_bind_fixwave.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 349 body lines between them, the static list executed 314"
+    },
+    "torchlens/_visualization/_backward_inventory.py": {
+      "tests": [
+        "tests/test_combined_visualization.py",
+        "tests/test_backward_visualization.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 40 body lines between them, the static list executed 34"
+    },
+    "torchlens/_visualization/_bundle_graph.py": {
+      "tests": [
+        "tests/test_multi_trace_followons.py",
+        "tests/test_bundle_harness_spans.py",
+        "tests/test_renderer_skins_backward_bundle.py",
+        "tests/test_bundle_selected_by.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 213 body lines between them, the static list executed 12"
+    },
+    "torchlens/_visualization/_condensed_flow.py": {
+      "tests": [
+        "tests/test_viz_fold_honesty.py",
+        "tests/test_vizr2_boundary_bundle.py",
+        "tests/test_collapse_power_patterns.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 209 body lines between them, the static list executed 205"
+    },
+    "torchlens/_visualization/_draw_validation.py": {
+      "tests": [
+        "tests/test_render_bugs.py",
+        "tests/test_node_modes.py",
+        "tests/test_container_visualization.py",
+        "tests/test_themes_skins.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 40 body lines between them, the static list executed 27"
+    },
+    "torchlens/_visualization/_edge_multiplicity.py": {
+      "tests": [
+        "tests/test_vizmech_fanin_labels.py",
+        "tests/test_collapse_rolling_suffix_linearity.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 63 body lines between them, the static list executed 61"
+    },
+    "torchlens/_visualization/_edit_highlighter.py": {
+      "tests": [
+        "tests/test_intervention_render_marks.py",
+        "tests/test_annotations_b1.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 106 body lines between them, the static list executed 105"
+    },
+    "torchlens/_visualization/_edit_marks.py": {
+      "tests": [
+        "tests/test_intervention_render_marks.py",
+        "tests/test_rank_layout_omissions.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_r18j_recurrent_render.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 182 body lines between them, the static list executed 177"
+    },
+    "torchlens/_visualization/_encoding.py": {
+      "tests": [
+        "tests/test_encoding_size.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_themes_encoding_fixes.py",
+        "tests/test_themes_stage0.py",
+        "tests/test_encoding_stack.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 583 body lines between them, the static list executed 566"
+    },
+    "torchlens/_visualization/_expansion_manifest.py": {
+      "tests": [
+        "tests/test_vizr_render_leans.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 40 body lines between them, the static list executed 0"
+    },
+    "torchlens/_visualization/_header_block.py": {
+      "tests": [
+        "tests/test_encoding_channels.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_vizfix_skin_ink_and_legend.py",
+        "tests/test_param_log.py",
+        "tests/test_themes_skins.py",
+        "tests/test_encoding_stack.py",
+        "tests/test_vizr_render_leans.py",
+        "tests/test_r18l_viz_rank.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 214 body lines between them, the static list executed 173"
+    },
+    "torchlens/_visualization/_label_format.py": {
+      "tests": [
+        "tests/test_r18j_recurrent_render.py",
+        "tests/test_format_helpers.py",
+        "tests/test_node_label_dtype.py",
+        "tests/test_shape_summary_row.py",
+        "tests/test_viz_render_identity_oracle.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 113 body lines between them, the static list executed 102"
+    },
+    "torchlens/_visualization/_legend.py": {
+      "tests": [
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_vizfix_skin_ink_and_legend.py",
+        "tests/test_backward_visualization.py",
+        "tests/test_mutated_parameter_visualization.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 107 body lines between them, the static list executed 94"
+    },
+    "torchlens/_visualization/_rank_layout_internal/layout.py": {
+      "tests": [
+        "tests/test_render_bugs.py",
+        "tests/test_mutated_parameter_visualization.py",
+        "tests/test_node_modes.py",
+        "tests/test_render_frame_membership.py",
+        "tests/test_r18l_viz_rank.py",
+        "tests/test_vizmech_axis_gate.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_surgery_visuals_realism.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 418 body lines between them, the static list executed 383"
+    },
+    "torchlens/_visualization/_render_common.py": {
+      "tests": [
+        "tests/test_render_bugs.py",
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/visualization/test_sibling_order_clusters.py",
+        "tests/test_buffer_visibility.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 51 body lines between them, the static list executed 45"
+    },
+    "torchlens/_visualization/_render_dot.py": {
+      "tests": [
+        "tests/test_encoding_channels.py",
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_render_bugs.py",
+        "tests/test_rank_layout_omissions.py",
+        "tests/test_collapse_power_patterns.py",
+        "tests/test_vizr_render_leans.py",
+        "tests/test_encoding_stack.py",
+        "tests/test_arch_spine_registries.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 935 body lines between them, the static list executed 783"
+    },
+    "torchlens/_visualization/_render_edges.py": {
+      "tests": [
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_render_bugs.py",
+        "tests/test_container_visualization.py",
+        "tests/test_vizmech_fanin_labels.py",
+        "tests/test_node_modes.py",
+        "tests/test_vizfix_skin_ink_and_legend.py",
+        "tests/test_buffer_visibility.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 696 body lines between them, the static list executed 616"
+    },
+    "torchlens/_visualization/_render_entrypoints.py": {
+      "tests": [
+        "tests/test_render_bugs.py",
+        "tests/test_backward_visualization.py",
+        "tests/test_combined_visualization.py",
+        "tests/test_io_scrub_policy.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 307 body lines between them, the static list executed 0"
+    },
+    "torchlens/_visualization/_render_flow.py": {
+      "tests": [
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_container_visualization.py",
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/visualization/test_sibling_order_clusters.py",
+        "tests/test_render_bugs.py",
+        "tests/test_skip_fn.py",
+        "tests/test_io_scrub_policy.py",
+        "tests/test_loop_module_rolling.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 938 body lines between them, the static list executed 603"
+    },
+    "torchlens/_visualization/_render_leaf.py": {
+      "tests": [
+        "tests/test_render_bugs.py",
+        "tests/test_conditional_branches.py",
+        "tests/test_collapse_rolling_suffix_linearity.py",
+        "tests/test_container_visualization.py",
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_combined_visualization.py",
+        "tests/test_r18j_recurrent_render.py",
+        "tests/test_backward_visualization.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 656 body lines between them, the static list executed 527"
+    },
+    "torchlens/_visualization/_render_module_scope.py": {
+      "tests": [
+        "tests/test_render_frame_membership.py",
+        "tests/test_render_bugs.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_feature_maps_c2.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 63 body lines between them, the static list executed 36"
+    },
+    "torchlens/_visualization/_render_nodes.py": {
+      "tests": [
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_semantic_io_a3.py",
+        "tests/test_loop_module_rolling.py",
+        "tests/test_repgeom.py",
+        "tests/test_backward_visualization.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_render_bugs.py",
+        "tests/test_auto_collapse_hardening.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 703 body lines between them, the static list executed 484"
+    },
+    "torchlens/_visualization/_render_ordering.py": {
+      "tests": [
+        "tests/visualization/test_sibling_order_clusters.py",
+        "tests/test_vizr_render_counters.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_viz_fold_honesty.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 264 body lines between them, the static list executed 261"
+    },
+    "torchlens/_visualization/_render_regions.py": {
+      "tests": [
+        "tests/test_render_bugs.py",
+        "tests/test_combined_visualization.py",
+        "tests/test_container_visualization.py",
+        "tests/visualization/test_sibling_order_clusters.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 152 body lines between them, the static list executed 133"
+    },
+    "torchlens/_visualization/_render_utils.py": {
+      "tests": [
+        "tests/test_render_bugs.py",
+        "tests/test_multi_trace_followons.py",
+        "tests/test_vizr_layout_and_outpath.py",
+        "tests/test_draw_headless.py",
+        "tests/test_encoding_channels.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 136 body lines between them, the static list executed 118"
+    },
+    "torchlens/_visualization/_segment_descriptors.py": {
+      "tests": [
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_collapse_segment_prefix.py",
+        "tests/test_viz_cluster_honesty.py",
+        "tests/test_annotations_b1.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 156 body lines between them, the static list executed 153"
+    },
+    "torchlens/_visualization/_summary_internal/_builder.py": {
+      "tests": [
+        "tests/test_weightsfree_disclosure.py",
+        "tests/test_capture_unification_p2.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 21 body lines between them, the static list executed 12"
+    },
+    "torchlens/_visualization/_summary_internal/_discoverability.py": {
+      "tests": [
+        "tests/test_semantic_io_a3.py",
+        "tests/test_gc.py",
+        "tests/test_intervention_phase13.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 151 body lines between them, the static list executed 122"
+    },
+    "torchlens/_visualization/_svg_compose.py": {
+      "tests": [
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_annotations_b1.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 63 body lines between them, the static list executed 37"
+    },
+    "torchlens/_visualization/_trace_collapse.py": {
+      "tests": [
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_exception_taxonomy_records.py",
+        "tests/oracles/test_legacy_collapse_priority.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 38 body lines between them, the static list executed 0"
+    },
+    "torchlens/_visualization/_trace_draw.py": {
+      "tests": [
+        "tests/test_backward_visualization.py",
+        "tests/test_io_scrub_policy.py",
+        "tests/test_intervention_phase13.py",
+        "tests/test_viz_refusal_provocations.py",
+        "tests/test_fastlog/test_preview_smoke.py",
+        "tests/test_encoding_size.py",
+        "tests/test_node_modes.py",
+        "tests/test_viz_render_identity_oracle.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 250 body lines between them, the static list executed 0"
+    },
+    "torchlens/_visualization/auto_collapse.py": {
+      "tests": [
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_vizr2_boundary_bundle.py",
+        "tests/test_scaling_ladder.py",
+        "tests/test_collapse_segment_prefix.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_viz_fold_honesty.py",
+        "tests/test_annotations_b1.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 713 body lines between them, the static list executed 689"
+    },
+    "torchlens/_visualization/code_panel.py": {
+      "tests": [
+        "tests/test_code_panel.py",
+        "tests/test_loop_module_rolling.py",
+        "tests/test_exception_taxonomy.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 200 body lines between them, the static list executed 182"
+    },
+    "torchlens/_visualization/collapse_fallback.py": {
+      "tests": [
+        "tests/test_vizr_render_leans.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_collapse_power_ceiling.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 56 body lines between them, the static list executed 38"
+    },
+    "torchlens/_visualization/collapse_ladder.py": {
+      "tests": [
+        "tests/test_render_substrate_collapse_parity.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_annotations_b1.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 229 body lines between them, the static list executed 228"
+    },
+    "torchlens/_visualization/collapse_optimizer.py": {
+      "tests": [
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_collapse_power_ceiling.py",
+        "tests/test_collapse_segment_prefix.py",
+        "tests/test_annotations_b1.py",
+        "tests/test_render_substrate_collapse_parity.py",
+        "tests/test_collapse_power_perf.py",
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_render_substrate_themes.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 1759 body lines between them, the static list executed 1736"
+    },
+    "torchlens/_visualization/collapse_plan.py": {
+      "tests": [
+        "tests/test_leverage_div_plans_harvest.py",
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_auto_collapse_hardening.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 140 body lines between them, the static list executed 128"
+    },
+    "torchlens/_visualization/fastlog_live.py": {
+      "tests": [
+        "tests/test_fastlog/test_dry_run.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 88 body lines between them, the static list executed 0"
+    },
+    "torchlens/_visualization/fastlog_preview.py": {
+      "tests": [
+        "tests/test_r18j_recurrent_render.py",
+        "tests/test_fastlog/test_preview_fidelity.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_fastlog/test_preview_smoke.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 158 body lines between them, the static list executed 150"
+    },
+    "torchlens/_visualization/lenses/_resolve.py": {
+      "tests": [
+        "tests/test_browser_packets_fixd03_f12.py",
+        "tests/test_themes_refusals.py",
+        "tests/test_themes_skins.py",
+        "tests/test_themes_families_budget.py",
+        "tests/test_themes_nonfinite.py",
+        "tests/test_themes_filter.py",
+        "tests/test_surgery_visuals_marks.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 287 body lines between them, the static list executed 282"
+    },
+    "torchlens/_visualization/node_spec.py": {
+      "tests": [
+        "tests/test_intervention_render_marks.py",
+        "tests/test_surgery_visuals_marks.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_node_spec_api.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 150 body lines between them, the static list executed 143"
+    },
+    "torchlens/_visualization/overlays.py": {
+      "tests": [
+        "tests/test_leverage_div_honesty.py",
+        "tests/test_r18j_recurrent_render.py",
+        "tests/test_exception_taxonomy_records.py",
+        "tests/test_viz_render_identity_oracle.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 132 body lines between them, the static list executed 130"
+    },
+    "torchlens/_visualization/render_execution.py": {
+      "tests": [
+        "tests/test_render_substrate_vizfix.py",
+        "tests/test_vizr_render_leans.py",
+        "tests/test_rolled_draw_sibling_counts.py",
+        "tests/test_render_substrate_disclosures.py",
+        "tests/test_viz_rank_geometry.py",
+        "tests/test_vizr2_boundary_bundle.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 92 body lines between them, the static list executed 87"
+    },
+    "torchlens/_visualization/render_ir.py": {
+      "tests": [
+        "tests/test_render_bugs.py",
+        "tests/test_backward_visualization.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_combined_visualization.py",
+        "tests/test_encoding_stack.py",
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_render_ir_region_scan_linearity.py",
+        "tests/test_renderer_protocol.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 480 body lines between them, the static list executed 430"
+    },
+    "torchlens/_visualization/renderer_registry.py": {
+      "tests": [
+        "tests/test_arch_spine_registries.py",
+        "tests/test_themes_stage0.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 24 body lines between them, the static list executed 21"
+    },
+    "torchlens/_visualization/source_graph.py": {
+      "tests": [
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_io_scrub_policy.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 39 body lines between them, the static list executed 24"
+    },
+    "torchlens/_visualization/themes.py": {
+      "tests": [
+        "tests/test_viz_render_identity_oracle.py",
+        "tests/test_renderer_skins_backward_bundle.py",
+        "tests/test_collapse_power_tokens.py",
+        "tests/test_themes.py",
+        "tests/test_encoding_size.py"
+      ],
+      "why": "visualization: per-test line coverage; these files execute 99 body lines between them, the static list executed 85"
+    },
+    "torchlens/backends/torch/_aten_capture.py": {
+      "tests": [
+        "tests/test_aten_profile.py",
+        "tests/test_checkpoint_invocation_tokens.py",
+        "tests/test_identity_shims.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 213 body lines between them, the static list executed 212"
+    },
+    "torchlens/backends/torch/_backward_markers.py": {
+      "tests": [
+        "tests/test_flops2_backward_attribution.py",
+        "tests/test_flops4_multiroot_markers.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 35 body lines between them, the static list executed 34"
+    },
+    "torchlens/backends/torch/_backward_roots.py": {
+      "tests": [
+        "tests/test_flops4_multiroot_markers.py",
+        "tests/test_doctor.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 23 body lines between them, the static list executed 22"
+    },
+    "torchlens/backends/torch/_callable_location.py": {
+      "tests": [
+        "tests/test_validation.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 14 body lines between them, the static list executed 0"
+    },
+    "torchlens/backends/torch/_completeness_boundaries.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
+        "tests/test_fast_run_faithfulness.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_tlspec_runnable_escape_matrix.py",
+        "tests/test_tlspec_runnable_r29_input_metadata_class.py",
+        "tests/test_append_streaming.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 89 body lines between them, the static list executed 65"
+    },
+    "torchlens/backends/torch/_completeness_cross_thread.py": {
+      "tests": [
+        "tests/test_r49_private_c_op_surface.py",
+        "tests/test_tlspec_runnable_r39_witness_exec.py",
+        "tests/test_tlspec_runnable_r41_crossthread_witness.py",
+        "tests/test_intervention_hardening_cert10.py",
+        "tests/test_r47_crossthread_op_surface.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 111 body lines between them, the static list executed 107"
+    },
+    "torchlens/backends/torch/_completeness_dispatch.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_r67_storage_metadata.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_tlspec_runnable_r85_storage_integrity.py",
+        "tests/test_tlspec_runnable_exception_control_flow.py",
+        "tests/test_completeness_witness_w15_toctou_batch.py",
+        "tests/test_tlspec_runnable_escape_matrix.py",
+        "tests/test_append_streaming.py",
+        "tests/test_completeness_boundary_credit.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 252 body lines between them, the static list executed 190"
+    },
+    "torchlens/backends/torch/_completeness_dispatch_names.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_escape_witness.py",
+        "tests/test_validation.py",
+        "tests/test_tlspec_runnable_r65_state_metadata_parity.py",
+        "tests/test_tlspec_runnable_escape_matrix.py",
+        "tests/test_lazy_materialize_census.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_framework_filename_verdict_bound.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 157 body lines between them, the static list executed 122"
+    },
+    "torchlens/backends/torch/_completeness_escape_state.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_execution.py",
+        "tests/test_scoped_patching_escape_detection.py",
+        "tests/test_valmem2_parameter_references.py",
+        "tests/test_tlspec_runnable_escape_matrix.py",
+        "tests/test_tlspec_alloc_preflight_fake.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 91 body lines between them, the static list executed 81"
+    },
+    "torchlens/backends/torch/_completeness_finalize.py": {
+      "tests": [
+        "tests/test_completeness_witness.py",
+        "tests/test_deepcopy_capture_identity.py",
+        "tests/test_distributed_honesty.py",
+        "tests/test_weightsfree_witness_settlement.py",
+        "tests/test_tlspec_runnable_execution.py",
+        "tests/test_scoped_patching_escape_detection.py",
+        "tests/test_tlspec_runnable_r67_storage_metadata.py",
+        "tests/test_aten_profile.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 234 body lines between them, the static list executed 223"
+    },
+    "torchlens/backends/torch/_completeness_metadata.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_r67_storage_metadata.py",
+        "tests/test_tlspec_runnable_r79_session_leak.py",
+        "tests/test_tlspec_runnable_r65_state_metadata_parity.py",
+        "tests/test_tlspec_runnable_r75_data_alias_layout.py",
+        "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
+        "tests/test_deepcopy_capture_identity.py",
+        "tests/test_tlspec_runnable_r65_torch_rng.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 257 body lines between them, the static list executed 220"
+    },
+    "torchlens/backends/torch/_completeness_origins.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_r53_uninit_alloc.py",
+        "tests/test_tlspec_runnable_r79_session_leak.py",
+        "tests/test_tlspec_runnable_r85_storage_integrity.py",
+        "tests/test_tlspec_runnable_r65_state_metadata_parity.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 166 body lines between them, the static list executed 159"
+    },
+    "torchlens/backends/torch/_completeness_patches.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
+        "tests/test_w1f3_observer_failopen.py",
+        "tests/test_tlspec_runnable_r67_storage_metadata.py",
+        "tests/test_tlspec_runnable_r81_buffer_rung.py",
+        "tests/test_tlspec_runnable_r41_crossthread_witness.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_append_streaming.py",
+        "tests/test_r47_crossthread_op_surface.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 276 body lines between them, the static list executed 232"
+    },
+    "torchlens/backends/torch/_completeness_storage.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_r41_crossthread_witness.py",
+        "tests/test_tlspec_runnable_escape_matrix.py",
+        "tests/test_tlspec_runnable_r67_storage_metadata.py",
+        "tests/test_source_provenance_validation.py",
+        "tests/test_append_streaming.py",
+        "tests/test_deepcopy_capture_identity.py",
+        "tests/test_hon_crash_notes.py",
+        "tests/test_structure_only_teaching.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 244 body lines between them, the static list executed 126"
+    },
+    "torchlens/backends/torch/_failed_session.py": {
+      "tests": [
+        "tests/test_capture_failure_reporting.py",
+        "tests/test_capture_outcome_gates.py",
+        "tests/test_rescue_rerun.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 66 body lines between them, the static list executed 64"
+    },
+    "torchlens/backends/torch/_held_refs.py": {
+      "tests": [
+        "tests/test_release_model.py",
+        "tests/test_snoop_failure.py",
+        "tests/test_scoped_patching_escape_detection.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 78 body lines between them, the static list executed 49"
+    },
+    "torchlens/backends/torch/_held_refs_capture.py": {
+      "tests": [
+        "tests/test_stale_reference_holders.py",
+        "tests/test_capture_pure_observer.py",
+        "tests/test_detached_reference_capture_outcomes.py",
+        "tests/test_tlspec_runnable_r41_crossthread_witness.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 128 body lines between them, the static list executed 125"
+    },
+    "torchlens/backends/torch/_held_tensor_scan.py": {
+      "tests": [
+        "tests/test_source_provenance_validation.py",
+        "tests/test_capture_pure_observer.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 105 body lines between them, the static list executed 55"
+    },
+    "torchlens/backends/torch/_identity_shim_views.py": {
+      "tests": [
+        "tests/test_r55_entry_and_context.py",
+        "tests/test_wrap_state_compat.py",
+        "tests/test_identity_shims.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 20 body lines between them, the static list executed 15"
+    },
+    "torchlens/backends/torch/_model_prep_containers.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_producer.py",
+        "tests/test_capopts_truth_failed_capture_release.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 26 body lines between them, the static list executed 4"
+    },
+    "torchlens/backends/torch/_module_aliases.py": {
+      "tests": [
+        "tests/test_grouping_call_sites.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 36 body lines between them, the static list executed 15"
+    },
+    "torchlens/backends/torch/_module_arg_stubs.py": {
+      "tests": [
+        "tests/test_robustness_pr2.py",
+        "tests/test_grouping_call_sites.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 20 body lines between them, the static list executed 14"
+    },
+    "torchlens/backends/torch/_module_boundary_adoption.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_rescue_rerun.py",
+        "tests/test_torch_func_transforms.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 39 body lines between them, the static list executed 33"
+    },
+    "torchlens/backends/torch/_ops_activations.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_io_streaming.py",
+        "tests/test_robustness_pr2.py",
+        "tests/test_stats_save_stats.py",
+        "tests/test_distributed_funcol_boundaries.py",
+        "tests/test_w3_capture_hardening.py",
+        "tests/test_hf_structure_only_text.py",
+        "tests/test_backward_grad_integrity.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 327 body lines between them, the static list executed 220"
+    },
+    "torchlens/backends/torch/_ops_arguments.py": {
+      "tests": [
+        "tests/test_legacy_tensor_constructors.py",
+        "tests/test_surgery_live_regions.py",
+        "tests/test_valmem3_saved_arg_offload.py",
+        "tests/test_deepcopy_capture_identity.py",
+        "tests/test_tlspec_runnable_r79_session_leak.py",
+        "tests/test_storage_context_replay.py",
+        "tests/test_validation.py",
+        "tests/behaviour/test_cell_tmp.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 198 body lines between them, the static list executed 162"
+    },
+    "torchlens/backends/torch/_ops_autograd.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_producer.py",
+        "tests/test_autograd_saved_bytes.py",
+        "tests/test_arg_kwargs_extraction.py",
+        "tests/test_flops3_rules.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 157 body lines between them, the static list executed 113"
+    },
+    "torchlens/backends/torch/_ops_capture_records.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_capture_unification_p5.py",
+        "tests/test_schema_lockstep.py",
+        "tests/test_param_ref_pairing.py",
+        "tests/test_deferred_payload_clone.py",
+        "tests/test_w3_capture_hardening.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 234 body lines between them, the static list executed 219"
+    },
+    "torchlens/backends/torch/_ops_container_base.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_output_honesty.py",
+        "tests/test_validation.py",
+        "tests/test_multi_output_modules.py",
+        "tests/test_fastlog_inline.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 159 body lines between them, the static list executed 129"
+    },
+    "torchlens/backends/torch/_ops_containers.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_output_honesty.py",
+        "tests/test_runnable_r36_regressions.py",
+        "tests/test_multi_output_modules.py",
+        "tests/test_output_boundary_guards.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 338 body lines between them, the static list executed 234"
+    },
+    "torchlens/backends/torch/_ops_emission.py": {
+      "tests": [
+        "tests/test_rescue_rerun.py",
+        "tests/test_hf_structure_only_text.py",
+        "tests/test_r28_validation_identity_witness.py",
+        "tests/test_buffer_datamodel.py",
+        "tests/test_intervention_phase3.py",
+        "tests/test_r29_capval_hardening.py",
+        "tests/test_fastlog/test_dispatch_smoke.py",
+        "tests/test_torchscript_metadata_only_perturbation.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 142 body lines between them, the static list executed 99"
+    },
+    "torchlens/backends/torch/_ops_exhaustive.py": {
+      "tests": [
+        "tests/test_r29_capval_hardening.py",
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_w3_capture_hardening.py",
+        "tests/test_call_fingerprint.py",
+        "tests/test_fast_run_live_sites.py",
+        "tests/test_validation.py",
+        "tests/test_tl_lifecycle.py",
+        "tests/test_capture_unification_p4.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 227 body lines between them, the static list executed 219"
+    },
+    "torchlens/backends/torch/_ops_finalize.py": {
+      "tests": [
+        "tests/test_fp8_guard.py",
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_snoop_failure.py",
+        "tests/test_capopts_truth_module_filter.py",
+        "tests/test_nonfinite_record.py",
+        "tests/test_livecheck_module_exit_only.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 185 body lines between them, the static list executed 114"
+    },
+    "torchlens/backends/torch/_ops_interventions.py": {
+      "tests": [
+        "tests/test_livecheck_module_exit_only.py",
+        "tests/test_distributed_honesty.py",
+        "tests/test_surgery_visuals_realism.py",
+        "tests/test_fp8_guard.py",
+        "tests/test_intervention_phase4c.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 346 body lines between them, the static list executed 334"
+    },
+    "torchlens/backends/torch/_ops_payload_stream.py": {
+      "tests": [
+        "tests/test_save_budget.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 12 body lines between them, the static list executed 0"
+    },
+    "torchlens/backends/torch/_ops_predicate_events.py": {
+      "tests": [
+        "tests/test_prehook_provenance.py",
+        "tests/test_snoop_core.py",
+        "tests/test_argpos_hardening.py",
+        "tests/test_fastlog_halt.py",
+        "tests/test_tlspec_runnable_r79_session_leak.py",
+        "tests/test_w3_capture_hardening.py",
+        "tests/test_explorer_watch_op_tier.py",
+        "tests/test_fastlog_postfunc_parity.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 254 body lines between them, the static list executed 229"
+    },
+    "torchlens/backends/torch/_ops_predicates.py": {
+      "tests": [
+        "tests/test_fastlog_halt.py",
+        "tests/test_intervention_phase4b.py",
+        "tests/test_capture_unification_p7.py",
+        "tests/test_intervention_phase4c.py",
+        "tests/test_livecheck_module_exit_only.py",
+        "tests/test_s2_trace_golden.py",
+        "tests/test_fastlog/test_dispatch_smoke.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 136 body lines between them, the static list executed 113"
+    },
+    "torchlens/backends/torch/_ops_retention.py": {
+      "tests": [
+        "tests/test_save_budget.py",
+        "tests/test_set_buffer_provenance.py",
+        "tests/test_predicate_training_error_codes.py",
+        "tests/test_schema_lockstep.py",
+        "tests/test_validate_save_options.py",
+        "tests/test_io_streaming.py",
+        "tests/test_capture_unification_p4.py",
+        "tests/test_surgery_visuals_realism.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 259 body lines between them, the static list executed 164"
+    },
+    "torchlens/backends/torch/_ops_shared_fields.py": {
+      "tests": [
+        "tests/test_completeness_witness.py",
+        "tests/test_set_buffer_provenance.py",
+        "tests/test_out_versions_by_child.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 164 body lines between them, the static list executed 157"
+    },
+    "torchlens/backends/torch/_output_tensors.py": {
+      "tests": [
+        "tests/test_weightsfree_fabrication.py",
+        "tests/test_torchnative_flops_crosscheck.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 16 body lines between them, the static list executed 14"
+    },
+    "torchlens/backends/torch/_outputs.py": {
+      "tests": [
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_buffer_sole_output.py",
+        "tests/test_tlspec_runnable_output_honesty.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_input_boundary_guards.py",
+        "tests/test_hon_capture_refusals.py",
+        "tests/test_stale_reference_holders.py",
+        "tests/test_fastlog_halt.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 271 body lines between them, the static list executed 136"
+    },
+    "torchlens/backends/torch/_param_fingerprint.py": {
+      "tests": [
+        "tests/test_gc.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 10 body lines between them, the static list executed 0"
+    },
+    "torchlens/backends/torch/_predicate_boundary_replacements.py": {
+      "tests": [
+        "tests/test_module_alias_doors.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 70 body lines between them, the static list executed 0"
+    },
+    "torchlens/backends/torch/_predicate_forward.py": {
+      "tests": [
+        "tests/test_save_union_lookup.py",
+        "tests/test_fastlog_halt.py",
+        "tests/test_snoop_failure.py",
+        "tests/test_fastlog_partial.py",
+        "tests/test_completeness_witness.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 217 body lines between them, the static list executed 201"
+    },
+    "torchlens/backends/torch/_quantized_flops.py": {
+      "tests": [
+        "tests/test_robustness_pr2.py",
+        "tests/test_validation.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 23 body lines between them, the static list executed 0"
+    },
+    "torchlens/backends/torch/_replacement_op_fields.py": {
+      "tests": [
+        "tests/test_validation.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 8 body lines between them, the static list executed 0"
+    },
+    "torchlens/backends/torch/_script_boundary.py": {
+      "tests": [
+        "tests/test_torchscript_boundary.py",
+        "tests/test_decoration.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 68 body lines between them, the static list executed 67"
+    },
+    "torchlens/backends/torch/_session_cleanup.py": {
+      "tests": [
+        "tests/test_grouping_call_sites.py",
+        "tests/test_model_prep_hardening.py",
+        "tests/test_wrong_trace_cache_cluster.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 112 body lines between them, the static list executed 111"
+    },
+    "torchlens/backends/torch/_session_forwards.py": {
+      "tests": [
+        "tests/test_capture_settlement.py",
+        "tests/test_model_state_hygiene.py",
+        "tests/test_fast_run_live_sites.py",
+        "tests/test_torch_func_transforms.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 56 body lines between them, the static list executed 36"
+    },
+    "torchlens/backends/torch/_storage_overlap.py": {
+      "tests": [
+        "tests/test_fast_run_direct_forward.py",
+        "tests/test_r28_capture_attribution.py",
+        "tests/test_schema_lockstep.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 58 body lines between them, the static list executed 42"
+    },
+    "torchlens/backends/torch/_tl.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_tl_meta.py",
+        "tests/test_save_path_detach_matrix.py",
+        "tests/test_parameter_inplace_mutation.py",
+        "tests/test_tlspec_runnable_r83_label_anchoring.py",
+        "tests/test_fp8_guard.py",
+        "tests/test_fast_run_direct_forward.py",
+        "tests/test_deepcopy_capture_identity.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 303 body lines between them, the static list executed 269"
+    },
+    "torchlens/backends/torch/_tl_collective.py": {
+      "tests": [
+        "tests/test_distributed_funcol_boundaries.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 4 body lines between them, the static list executed 3"
+    },
+    "torchlens/backends/torch/_torch_ops_calls.py": {
+      "tests": [
+        "tests/test_completeness_boundary_credit.py",
+        "tests/test_r47_crossthread_op_surface.py",
+        "tests/test_completeness_witness.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 86 body lines between them, the static list executed 41"
+    },
+    "torchlens/backends/torch/_trace_backward.py": {
+      "tests": [
+        "tests/test_persist_honesty_outcome_recording.py",
+        "tests/test_stats_save_stats.py",
+        "tests/test_backward_grad_integrity.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 36 body lines between them, the static list executed 16"
+    },
+    "torchlens/backends/torch/_transform_wrappers.py": {
+      "tests": [
+        "tests/test_torch_func_transforms.py",
+        "tests/test_capture_guard_transactionality.py",
+        "tests/test_decoration.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 212 body lines between them, the static list executed 131"
+    },
+    "torchlens/backends/torch/_weightsfree_ctx.py": {
+      "tests": [
+        "tests/test_weightsfree_admission.py",
+        "tests/test_surgery_live_bind.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 7 body lines between them, the static list executed 6"
+    },
+    "torchlens/backends/torch/_weightsfree_transparency.py": {
+      "tests": [
+        "tests/test_w051_gate_plan_check.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 23 body lines between them, the static list executed 0"
+    },
+    "torchlens/backends/torch/aliasing.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_out_versions_by_child.py",
+        "tests/test_fp8_guard.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 108 body lines between them, the static list executed 103"
+    },
+    "torchlens/backends/torch/backend.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_tlspec_runnable_execution.py",
+        "tests/test_prehook_provenance.py",
+        "tests/test_wrap_state_compat.py",
+        "tests/test_gen1_generation_record.py",
+        "tests/test_site_key.py",
+        "tests/test_run_input_tree_binding.py",
+        "tests/test_param_as_input.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 196 body lines between them, the static list executed 140"
+    },
+    "torchlens/backends/torch/backward.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_backward_grad_integrity.py",
+        "tests/test_fastlog_backward.py",
+        "tests/test_capture_pure_observer.py",
+        "tests/test_checkpoint_invocation_tokens.py",
+        "tests/test_backward_intervention.py",
+        "tests/test_backward_p2_projections.py",
+        "tests/test_implicit_boundary_tightening.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 1717 body lines between them, the static list executed 1649"
+    },
+    "torchlens/backends/torch/belt.py": {
+      "tests": [
+        "tests/test_mechanical_belt.py",
+        "tests/test_capture_guard_transactionality.py",
+        "tests/test_capture_admission_ordering.py",
+        "tests/test_bound_method_root_contract.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 148 body lines between them, the static list executed 143"
+    },
+    "torchlens/backends/torch/bound_root.py": {
+      "tests": [
+        "tests/test_bound_method_root_contract.py",
+        "tests/test_quickstart_lazy_acceptance.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 29 body lines between them, the static list executed 28"
+    },
+    "torchlens/backends/torch/buffer_writes.py": {
+      "tests": [
+        "tests/test_quickstart_lazy_acceptance.py",
+        "tests/test_buffer_datamodel.py",
+        "tests/test_share_memory_buffer_provenance.py",
+        "tests/test_weightsfree_fabrication.py",
+        "tests/test_runnable_state_rollback.py",
+        "tests/test_distributed_funcol_boundaries.py",
+        "tests/test_tlspec_runnable_r77_buffer_universe.py",
+        "tests/test_tlspec_runnable_r81_buffer_rung.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 596 body lines between them, the static list executed 543"
+    },
+    "torchlens/backends/torch/completeness_witness.py": {
+      "tests": [
+        "tests/test_tlspec_runnable_exception_control_flow.py",
+        "tests/test_distributed_honesty.py",
+        "tests/test_aten_profile.py",
+        "tests/test_tlspec_runnable_escape_matrix.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_tlspec_runnable_r85_storage_integrity.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 109 body lines between them, the static list executed 71"
+    },
+    "torchlens/backends/torch/escape_detection.py": {
+      "tests": [
+        "tests/test_scoped_patching_escape_detection.py",
+        "tests/test_dynamo_fake_guard.py",
+        "tests/test_intervention_error_catalog.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 184 body lines between them, the static list executed 180"
+    },
+    "torchlens/backends/torch/identity_shims.py": {
+      "tests": [
+        "tests/test_identity_shims.py",
+        "tests/test_wrap_state_compat.py",
+        "tests/test_robustness_pr4.py",
+        "tests/test_capture_guard_transactionality.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 303 body lines between them, the static list executed 296"
+    },
+    "torchlens/backends/torch/model_prep.py": {
+      "tests": [
+        "tests/test_state_hygiene_oracles.py",
+        "tests/test_schema_lockstep.py",
+        "tests/test_validation.py",
+        "tests/test_conditional_branches.py",
+        "tests/producer_parity/test_p4_completeness.py",
+        "tests/test_model_prep_hardening.py",
+        "tests/test_robustness_pr1.py",
+        "tests/test_model_state_hygiene.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 1076 body lines between them, the static list executed 614"
+    },
+    "torchlens/backends/torch/param_mutation.py": {
+      "tests": [
+        "tests/test_forward_created_parameters.py",
+        "tests/test_record_to_trace_op_parity.py",
+        "tests/test_parameter_inplace_mutation.py",
+        "tests/test_tlspec_runnable_r79_session_leak.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 122 body lines between them, the static list executed 57"
+    },
+    "torchlens/backends/torch/prehook_provenance.py": {
+      "tests": [
+        "tests/test_prehook_provenance.py",
+        "tests/test_validation.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 504 body lines between them, the static list executed 498"
+    },
+    "torchlens/backends/torch/rescue.py": {
+      "tests": [
+        "tests/test_rescue_rerun.py",
+        "tests/test_torch_func_transforms.py",
+        "tests/test_weightsfree_fabrication.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_robustness_pr2.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 315 body lines between them, the static list executed 309"
+    },
+    "torchlens/backends/torch/sources.py": {
+      "tests": [
+        "tests/test_capture_unification_p7.py",
+        "tests/test_validation.py",
+        "tests/test_fastlog_halt.py",
+        "tests/test_s2_trace_golden.py",
+        "tests/test_snoop_core.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 368 body lines between them, the static list executed 284"
+    },
+    "torchlens/backends/torch/structure_only_belt.py": {
+      "tests": [
+        "tests/test_structure_only_teaching.py",
+        "tests/test_weightsfree_admission.py",
+        "tests/test_structure_only_bridge.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 278 body lines between them, the static list executed 259"
+    },
+    "torchlens/backends/torch/tensor_tracking.py": {
+      "tests": [
+        "tests/test_inplace_output_grads.py",
+        "tests/test_fastlog_backward.py",
+        "tests/test_capture_pure_observer.py",
+        "tests/test_parameter_inplace_mutation.py",
+        "tests/test_arg_hash_determinism.py",
+        "tests/test_capopts_truth_save_grads.py",
+        "tests/test_param_ref_pairing.py",
+        "tests/test_explorer_watch_riders.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 574 body lines between them, the static list executed 456"
+    },
+    "torchlens/backends/torch/wrappers.py": {
+      "tests": [
+        "tests/test_deferred_payload_clone.py",
+        "tests/test_capture_guard_transactionality.py",
+        "tests/test_completeness_witness_w15_toctou_batch.py",
+        "tests/test_forward_created_parameters.py",
+        "tests/test_decoration.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_global_state_inventory.py",
+        "tests/test_wrap_state_compat.py"
+      ],
+      "why": "capture: per-test line coverage; these files execute 940 body lines between them, the static list executed 776"
+    },
+    "torchlens/intervention/_replay_context.py": {
+      "tests": [
+        "tests/test_w051_replay_fork_validation.py",
+        "tests/test_intervention_phase7.py",
+        "tests/test_surgery_live_regions.py"
+      ],
+      "why": "replay: per-test line coverage; these files execute 46 body lines between them, the static list executed 44"
+    },
+    "torchlens/intervention/_replay_sites.py": {
+      "tests": [
+        "tests/test_surgery_live_regions.py",
+        "tests/test_replay_source_and_stochastic_origins.py",
+        "tests/test_intervention_phase6.py"
+      ],
+      "why": "replay: per-test line coverage; these files execute 44 body lines between them, the static list executed 26"
+    },
+    "torchlens/intervention/replay.py": {
+      "tests": [
+        "tests/test_intervention_phase6.py",
+        "tests/test_surgery_live_regions.py",
+        "tests/test_run_until.py",
+        "tests/test_grad_site_doors.py",
+        "tests/test_replay_pass_qualified.py",
+        "tests/test_intervention_phase8b.py",
+        "tests/test_replay_source_and_stochastic_origins.py",
+        "tests/test_circ4_fast_patch.py"
+      ],
+      "why": "replay: per-test line coverage; these files execute 549 body lines between them, the static list executed 483"
+    },
+    "torchlens/io/__init__.py": {
+      "tests": [
+        "tests/test_io_corruption.py",
+        "tests/test_load_refuses_saved_by_2x.py",
+        "tests/test_intervention_phase13.py",
+        "tests/test_io_lazy.py",
+        "tests/test_r28_rebuild_dotted_walk_rce.py",
+        "tests/test_b2_extract_trace_safetensors.py",
+        "tests/test_bridge_pyreft.py",
+        "tests/test_tlspec_detection.py"
+      ],
+      "why": "io: per-test line coverage; these files execute 63 body lines between them, the static list executed 46"
+    },
+    "torchlens/recording/__init__.py": {
+      "tests": [
+        "tests/test_fastlog/test_persistence_recover.py",
+        "tests/test_explorer_watch_op_tier.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 15 body lines between them, the static list executed 14"
+    },
+    "torchlens/recording/_record_one_shot.py": {
+      "tests": [
+        "tests/test_gen1_generation_record.py",
+        "tests/backend_conformance/test_capability_truth.py",
+        "tests/test_fastlog_partial.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 119 body lines between them, the static list executed 107"
+    },
+    "torchlens/recording/_recorder.py": {
+      "tests": [
+        "tests/test_capture_settlement.py",
+        "tests/test_explorer_watch_op_tier.py",
+        "tests/test_snoop_failure.py",
+        "tests/test_explorer_watch_riders.py",
+        "tests/test_fastlog_partial.py",
+        "tests/test_train_mode/test_patterns.py",
+        "tests/test_livecheck_module_exit_only.py",
+        "tests/test_fastlog/test_public_api_smoke.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 427 body lines between them, the static list executed 366"
+    },
+    "torchlens/recording/_recorder_streaming.py": {
+      "tests": [
+        "tests/test_fastlog/test_ddp_unwrap.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 14 body lines between them, the static list executed 0"
+    },
+    "torchlens/recording/_storage_resolver.py": {
+      "tests": [
+        "tests/test_fastlog_postfunc_parity.py",
+        "tests/test_fastlog/test_storage_modes.py",
+        "tests/test_explorer_watch_op_tier.py",
+        "tests/test_explorer_watch_p2_reduce_only.py",
+        "tests/test_explorer_watch_p1_summary_role.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 139 body lines between them, the static list executed 65"
+    },
+    "torchlens/recording/_validation.py": {
+      "tests": [
+        "tests/test_fastlog/test_storage_smoke.py",
+        "tests/test_snoop_refusals.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 20 body lines between them, the static list executed 14"
+    },
+    "torchlens/recording/exceptions.py": {
+      "tests": [
+        "tests/test_fastlog_partial.py",
+        "tests/test_fastlog/test_preview_smoke.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 9 body lines between them, the static list executed 8"
+    },
+    "torchlens/recording/options.py": {
+      "tests": [
+        "tests/test_exception_taxonomy_records.py",
+        "tests/test_fastlog_backward.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 181 body lines between them, the static list executed 82"
+    },
+    "torchlens/recording/storage_disk.py": {
+      "tests": [
+        "tests/test_fastlog_postfunc_parity.py",
+        "tests/test_fastlog/test_storage_modes.py",
+        "tests/test_fastlog/test_persistence_recover.py",
+        "tests/test_fastlog_reason_redaction.py",
+        "tests/test_r34_security_io.py",
+        "tests/test_streaming_async.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 233 body lines between them, the static list executed 197"
+    },
+    "torchlens/recording/storage_ram.py": {
+      "tests": [
+        "tests/test_gen1_generation_record.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 31 body lines between them, the static list executed 19"
+    },
+    "torchlens/recording/types.py": {
+      "tests": [
+        "tests/test_capture_unification_p7.py",
+        "tests/test_record_grad_defaults.py",
+        "tests/test_factcore_safety_tranche.py",
+        "tests/test_fastlog_partial.py",
+        "tests/test_fastlog/test_dry_run.py",
+        "tests/test_fastlog/test_public_api_smoke.py",
+        "tests/test_persist_honesty_outcome_recording.py",
+        "tests/test_recording_raw_metadata.py"
+      ],
+      "why": "record: per-test line coverage; these files execute 381 body lines between them, the static list executed 180"
+    },
+    "torchlens/validation/__init__.py": {
+      "tests": [
+        "tests/test_io_mediated_allocation_bypass.py",
+        "tests/test_tlspec_unified.py",
+        "tests/test_tlspec_runnable_v2_contract.py",
+        "tests/test_load_refuses_saved_by_2x.py",
+        "tests/test_tlspec_parse_fuzz.py",
+        "tests/test_io_runnable_payload_integrity.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 440 body lines between them, the static list executed 189"
+    },
+    "torchlens/validation/_autograd_grad_replay.py": {
+      "tests": [
+        "tests/test_autograd_grad_boundary.py",
+        "tests/test_validation.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 195 body lines between them, the static list executed 19"
+    },
+    "torchlens/validation/_backward_state.py": {
+      "tests": [
+        "tests/test_backward_validation_failure_record.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_parameter_inplace_mutation.py",
+        "tests/test_backward_validation_module_keys.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 72 body lines between them, the static list executed 55"
+    },
+    "torchlens/validation/_edge_boundary.py": {
+      "tests": [
+        "tests/test_edge_substitution.py",
+        "tests/test_surgery_live_regions.py",
+        "tests/test_validation_hardening.py",
+        "tests/test_interv_honesty_depth2_tripwire.py",
+        "tests/test_w051_replay_fork_validation.py",
+        "tests/test_capture_unification_p3b.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 140 body lines between them, the static list executed 139"
+    },
+    "torchlens/validation/_grad_flags.py": {
+      "tests": [
+        "tests/test_fp8_guard.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 9 body lines between them, the static list executed 4"
+    },
+    "torchlens/validation/_invariants_backward_domain.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_autograd_grad_boundary.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 137 body lines between them, the static list executed 135"
+    },
+    "torchlens/validation/_invariants_backward_flow.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_backward_p7_validation.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 187 body lines between them, the static list executed 175"
+    },
+    "torchlens/validation/_invariants_backward_graph.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_backward_p5_modules.py",
+        "tests/test_backward_p2_projections.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 165 body lines between them, the static list executed 158"
+    },
+    "torchlens/validation/_invariants_buffers.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
+        "tests/test_intervention_phase7.py",
+        "tests/test_loop_boundary_hardening.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 135 body lines between them, the static list executed 133"
+    },
+    "torchlens/validation/_invariants_conditional_base.py": {
+      "tests": [
+        "tests/test_conditional_invariants.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
+        "tests/test_validation.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 168 body lines between them, the static list executed 115"
+    },
+    "torchlens/validation/_invariants_conditional_modules.py": {
+      "tests": [
+        "tests/test_conditional_invariants.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_validation.py",
+        "tests/test_postprocess_r14a_regressions.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 259 body lines between them, the static list executed 196"
+    },
+    "torchlens/validation/_invariants_conditionals.py": {
+      "tests": [
+        "tests/test_conditional_invariants.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 177 body lines between them, the static list executed 68"
+    },
+    "torchlens/validation/_invariants_entry.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
+        "tests/test_validation_module_call_counts.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 193 body lines between them, the static list executed 169"
+    },
+    "torchlens/validation/_invariants_equivalence.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
+        "tests/test_call_site_contract.py",
+        "tests/test_validation_key_forgery.py",
+        "tests/test_ancestry_closure_invariant.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 372 body lines between them, the static list executed 362"
+    },
+    "torchlens/validation/_invariants_modules_params.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
+        "tests/test_capture_unification_p7.py",
+        "tests/test_validation_index_domain_in_range.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 173 body lines between them, the static list executed 169"
+    },
+    "torchlens/validation/_invariants_payloads.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
+        "tests/test_oracle_independence.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 301 body lines between them, the static list executed 297"
+    },
+    "torchlens/validation/_invariants_primitive_ops.py": {
+      "tests": [
+        "tests/test_aten_profile.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_report_lane_trace_ops_count.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 123 body lines between them, the static list executed 121"
+    },
+    "torchlens/validation/_invariants_sites.py": {
+      "tests": [
+        "tests/test_site_key_portability.py",
+        "tests/test_validation.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 60 body lines between them, the static list executed 56"
+    },
+    "torchlens/validation/_layer_grad_report.py": {
+      "tests": [
+        "tests/test_backward_validation_module_keys.py",
+        "tests/test_validate_consolidated.py",
+        "tests/test_inplace_output_grads.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 125 body lines between them, the static list executed 123"
+    },
+    "torchlens/validation/_live_model_state.py": {
+      "tests": [
+        "tests/test_parameter_inplace_mutation.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 28 body lines between them, the static list executed 25"
+    },
+    "torchlens/validation/_loaded_callables.py": {
+      "tests": [
+        "tests/test_validation_after_load.py",
+        "tests/test_edge_substitution.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 55 body lines between them, the static list executed 54"
+    },
+    "torchlens/validation/_norm_running_var_proof.py": {
+      "tests": [
+        "tests/test_replay1_bn_running_var_proof.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 48 body lines between them, the static list executed 4"
+    },
+    "torchlens/validation/_operand_value_proofs.py": {
+      "tests": [
+        "tests/test_replay_gap_value_proofs.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 147 body lines between them, the static list executed 63"
+    },
+    "torchlens/validation/_replay_grad_fidelity.py": {
+      "tests": [
+        "tests/test_edge_substitution.py",
+        "tests/test_replay_grad_fidelity.py",
+        "tests/test_validation_perturbation_units.py",
+        "tests/test_set_buffer_provenance.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 43 body lines between them, the static list executed 32"
+    },
+    "torchlens/validation/_replay_storage_context.py": {
+      "tests": [
+        "tests/test_geometry_buffer_provenance.py",
+        "tests/test_validation.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 29 body lines between them, the static list executed 11"
+    },
+    "torchlens/validation/_saved_outs_steps.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_torch_func_transforms.py",
+        "tests/test_validation_completeness_pass_grained.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 99 body lines between them, the static list executed 64"
+    },
+    "torchlens/validation/_sdpa_value_proofs.py": {
+      "tests": [
+        "tests/test_replay_gap_value_proofs.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 64 body lines between them, the static list executed 11"
+    },
+    "torchlens/validation/_shift_probe.py": {
+      "tests": [
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_validation_hardening.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 21 body lines between them, the static list executed 19"
+    },
+    "torchlens/validation/_stock_layer_grads.py": {
+      "tests": [
+        "tests/test_backward_validation_module_keys.py",
+        "tests/test_inplace_output_grads.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 68 body lines between them, the static list executed 66"
+    },
+    "torchlens/validation/_trace_checks.py": {
+      "tests": [
+        "tests/test_capture_unification_p5.py",
+        "tests/test_validation_after_load.py",
+        "tests/test_param_log.py",
+        "tests/test_backend_registry.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 72 body lines between them, the static list executed 0"
+    },
+    "torchlens/validation/_value_predicates.py": {
+      "tests": [
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_validation_exemption_tightening.py",
+        "tests/test_norm_zero_weight_proof.py",
+        "tests/test_replay_gap_value_proofs.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 29 body lines between them, the static list executed 28"
+    },
+    "torchlens/validation/backward.py": {
+      "tests": [
+        "tests/test_backward_validation_failure_record.py",
+        "tests/test_backward_validation_walker_guards.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_pristine_evidence.py",
+        "tests/test_append_validator.py",
+        "tests/test_backward_validation_module_keys.py",
+        "tests/test_parameter_inplace_mutation.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 309 body lines between them, the static list executed 280"
+    },
+    "torchlens/validation/consolidated.py": {
+      "tests": [
+        "tests/test_validate_leaves_model_untouched.py",
+        "tests/test_autograd_grad_boundary.py",
+        "tests/test_validate_consolidated.py",
+        "tests/test_w051_capt2_validate_forward_invariant.py",
+        "tests/test_validate_save_options.py",
+        "tests/test_rf_remediation_status.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 196 body lines between them, the static list executed 152"
+    },
+    "torchlens/validation/core.py": {
+      "tests": [
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_validation.py",
+        "tests/test_r28_capture_attribution.py",
+        "tests/test_validation_rung1_class3.py",
+        "tests/test_edge_substitution.py",
+        "tests/test_validation_hardening.py",
+        "tests/test_validation_uninitialized_dest.py",
+        "tests/test_validation_after_load.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 1485 body lines between them, the static list executed 1130"
+    },
+    "torchlens/validation/diagnostics.py": {
+      "tests": [
+        "tests/test_validation_diagnostics.py",
+        "tests/test_validation.py",
+        "tests/test_validate_consolidated.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 132 body lines between them, the static list executed 131"
+    },
+    "torchlens/validation/exemptions.py": {
+      "tests": [
+        "tests/validation_goldens/test_validation_exemption_hardening.py",
+        "tests/test_validation_hardening.py",
+        "tests/test_validation_bool_exemption.py",
+        "tests/test_validation.py",
+        "tests/test_validation_exemption_tightening.py",
+        "tests/test_validation_exemption_table.py",
+        "tests/test_validation_uninitialized_dest.py",
+        "tests/test_norm_zero_weight_proof.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 773 body lines between them, the static list executed 725"
+    },
+    "torchlens/validation/invariants.py": {
+      "tests": [
+        "tests/test_ancestry_closure_invariant.py",
+        "tests/test_postprocess_executor.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 5 body lines between them, the static list executed 4"
+    },
+    "torchlens/validation/status.py": {
+      "tests": [
+        "tests/test_validation.py",
+        "tests/test_surgery_live_injections.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "why": "validation: per-test line coverage; these files execute 141 body lines between them, the static list executed 133"
+    }
+  }
+}

@@ -18,7 +18,10 @@ that map statically from the source tree:
    and counts as code). Helper modules a test imports from ``tests/``
    contribute their references, and ``conftest.py`` references reach every
    test in the conftest's directory tree;
-4. candidates for each module are ranked: pinned entries, test files whose name
+4. candidates for each module are ranked: pinned entries, reviewed override
+   rows from ``scripts/affected_test_map_overrides.json`` (tests that per-test
+   line coverage shows executing the module's code paths, most of them through
+   the public API where no static reference exists), test files whose name
    contains the module's stem and that reference it, direct users by reference
    count, at most two stem-named files without a reference (shortest name
    first), users reached through one level of torchlens-internal imports,
@@ -29,7 +32,13 @@ that map statically from the source tree:
 5. a module no test reaches takes its closest ancestor subpackage's list, else
    its importers' lists, else (for a package) its submodules' lists, else the
    root package's list; a directory whose modules all share one list collapses
-   to a single ``dir/*`` key.
+   to a single ``dir/*`` key;
+6. paths whose reach no short list covers (conftests and the plugins they
+   register, ``pyproject.toml``, the root package and its lazy facade, schema
+   and format-contract modules, registries and the error modules) are written
+   to ``inner.tier.paths`` with the rule that selected them; the selector runs
+   the ``inner.tier`` marker tier (smoke) for them instead of a file list.
+   Their ``inner.map`` lists stay, for readers that predate ``inner.tier``.
 
 Only the standard library is used; torch is never imported.
 
