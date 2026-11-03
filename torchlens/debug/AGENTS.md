@@ -69,7 +69,7 @@ back. `HealthReport` and `FlopsCrossCheck` are defined here but exported from `t
 
 ## _graph.py
 - `lineage(...)` -> `LineageReport`; `compare(...)` diffs two traces;
-  `dead_neurons(trace, dim=..., threshold=...)` scans saved activations.
+  `dead_neurons(trace, dim=..., max_activation=...)` scans saved activations.
 
 ## _dtype_range.py
 - `dtype_range(...)` -> `DTypeRangeReport`: overflow headroom, subnormal
