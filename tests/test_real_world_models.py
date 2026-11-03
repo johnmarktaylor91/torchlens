@@ -27,6 +27,7 @@ torchvision = pytest.importorskip("torchvision")
 import example_models  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK  # noqa: E402
 from torchlens._visualization import show_model_graph  # noqa: E402
 from torchlens.validation import validate_forward_pass  # noqa: E402
 
@@ -2554,9 +2555,37 @@ def test_deberta():
     )
     model = transformers.DebertaV2Model(config).eval()
     model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
-    # DebertaV2's disentangled attention builds relative-position buckets via
-    # a bare torch.arange/to() cast with no graph/source provenance (known
-    # limitation, same pattern as test_styletts).
+    if HAS_SCRIPT_FUNCTION_CALL_HOOK:
+        # DebertaV2's disentangled attention computes its scale in the
+        # torch.jit.script helper scaled_size_sqrt. With the ScriptFunction
+        # call hook, TorchLens records that call as one jitscript boundary op
+        # (warning contract code torchscript_boundary), so the scale tensor has
+        # graph provenance: no provenance disclosure, and the boundary op
+        # replays by calling the scripted function again.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            show_model_graph(
+                model,
+                [],
+                model_kwargs,
+                rolled=False,
+                visualization=tl.options.VisualizationOptions(
+                    container_path=opj(VIS_OUTPUT_DIR, "encoder-only", "deberta")
+                ),
+            )
+        codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
+        messages = [str(w.message) for w in caught]
+        assert "torchscript_boundary" in codes, f"expected the boundary disclosure; got: {messages}"
+        assert not any("no graph/source provenance" in m for m in messages), messages
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = validate_forward_pass(model, [], model_kwargs)
+        messages = [str(w.message) for w in caught]
+        assert result, f"validate_forward_pass returned False; got: {messages}"
+        return
+    # Without the hook the scripted helper runs below the wrappers: its output
+    # reaches the graph with no graph/source provenance (known limitation, same
+    # pattern as test_styletts).
     with pytest.warns(UserWarning, match="no graph/source provenance"):
         show_model_graph(
             model,
@@ -2567,14 +2596,10 @@ def test_deberta():
                 container_path=opj(VIS_OUTPUT_DIR, "encoder-only", "deberta")
             ),
         )
-    # Some transformers releases implement DebertaV2's relative-position
-    # bucketing with torch.jit.script; a jit.script-compiled region executes
-    # outside normal eager dispatch, so TorchLens's completeness witness
-    # correctly flags the capture incomplete (CaptureGapWarning,
-    # capture_verified=False) and validate_forward_pass honestly returns
-    # False rather than blessing a partial capture -- expected, honest
-    # behavior for that environment, not a capture bug. Other releases (no
-    # jit.script path hit) capture completely and validate True.
+    # The jit.script-compiled region executes outside normal eager dispatch, so
+    # TorchLens's completeness witness flags the capture incomplete
+    # (CaptureGapWarning, capture_verified=False) and validate_forward_pass
+    # honestly returns False rather than blessing a partial capture.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = validate_forward_pass(model, [], model_kwargs)
