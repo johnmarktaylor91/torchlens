@@ -458,6 +458,9 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
 
     kind = _record_kind(type(obj))
     path = None if kind is None else _SPELLING_PATHS[kind].get(name)
+    if path is None and kind == "Layer":
+        # An Op-only member reads through the layer's group, which delegates to its pass.
+        path = _SPELLING_PATHS["Op"].get(name)
     try:
         if path is None:
             return getattr(obj, name)

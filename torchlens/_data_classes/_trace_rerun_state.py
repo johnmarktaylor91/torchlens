@@ -588,7 +588,7 @@ def refresh_appended_tensor_metadata(trace: Trace, layer: Any) -> None:
             "transformed_gradient_memory",
         ),
     ):
-        value = getattr(layer, tensor_field, None)
+        value = record_member(layer, tensor_field, None)
         if isinstance(value, torch.Tensor):
             from .._utils.tensor_utils import get_memory_amount
 

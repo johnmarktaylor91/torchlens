@@ -758,8 +758,8 @@ def _validate_append_tensor_pair(old_layer: Any, new_layer: Any, field_name: str
 
     if record_member(old_layer, "is_buffer", False) or record_member(new_layer, "is_buffer", False):
         return
-    old_value = getattr(old_layer, field_name, None)
-    new_value = getattr(new_layer, field_name, None)
+    old_value = record_member(old_layer, field_name, None)
+    new_value = record_member(new_layer, field_name, None)
     if old_value is None and new_value is None:
         return
     if not isinstance(old_value, torch.Tensor) or not isinstance(new_value, torch.Tensor):
@@ -807,7 +807,7 @@ def _validate_append_grad_pair(
 
     grad_fields = ("grad", "transformed_grad")
     has_any_grad = any(
-        isinstance(getattr(layer, field_name, None), torch.Tensor)
+        isinstance(record_member(layer, field_name, None), torch.Tensor)
         for layer in (old_layer, new_layer)
         for field_name in grad_fields
     )

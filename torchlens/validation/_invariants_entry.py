@@ -301,7 +301,7 @@ def _module_claims(layer: Op) -> list[str]:
         "output_of_module_calls",
         "atomic_module_call",
     ):
-        value = getattr(layer, attr_name, None)
+        value = record_member(layer, attr_name, None)
         if isinstance(value, str):
             if value:
                 claims.append(value)

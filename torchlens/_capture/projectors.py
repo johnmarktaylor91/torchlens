@@ -15,7 +15,7 @@ from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
 from .._record_type import record_type
-from .._utils._record_group_table import record_member
+from .._utils._record_group_table import op_attr, record_member
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
@@ -428,9 +428,9 @@ class RefreshProjector:
                 continue
             if field_name in dynamic or field_name not in held:
                 self._set_refreshed_field(layer, field_name, copy_value(new_state.get(field_name)))
-        for field_name in _RERUN_EXTRA_OP_FIELDS:
-            if hasattr(new_layer, field_name) and (field_name in dynamic or field_name not in held):
-                self._set_refreshed_field(layer, field_name, copy_value(new_state.get(field_name)))
+        for extra in _RERUN_EXTRA_OP_FIELDS:
+            if hasattr(new_layer, op_attr(extra)) and (extra in dynamic or extra not in held):
+                self._set_refreshed_field(layer, extra, copy_value(new_state.get(extra)))
         layer.source_trace = self.target
 
     def _set_refreshed_field(self, layer: Any, field_name: str, value: Any) -> None:
