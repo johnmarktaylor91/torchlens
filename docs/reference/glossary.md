@@ -444,7 +444,6 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | CAM token grid and layer-choice evidence | `grid_route`, `feature_map`, `derived`, `prefix_tokens`, `grid_evidence`, `layer_source`, `caller`, `trace`, `layer_reason` | unstable -- no deprecation shim owed |
 | CAM resolution evidence | `native_map_resolution`, `rendered_map_resolution`, `upsampling`, `bilinear_display_only` | unstable -- no deprecation shim owed |
 | Graph overlay bridge and controls | `overlay`, `source`, `reduce`, `abs_sum`, `abs_mean`, `sum`, `max` | unstable -- no deprecation shim owed |
-
 | F06 wrapping contract | `noise_tunnel`, `attribute`, `method`, `method_kwargs` | unstable -- no deprecation shim owed |
 | F06 noise tunnel controls and evidence | `num_samples`, `stdevs`, `reduce`, `noise_bank`, `mean_square`, `variance`, `stdevs_resolved`, `residual_of_means` | unstable -- no deprecation shim owed |
 | F06 GradientShap controls | `gradient_shap`, `baselines`, `draw_bank`, `store_draws` | unstable -- no deprecation shim owed |
@@ -503,7 +502,6 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | Appliance on the `trace.using` door | `trace.using("mi")`, `head_scores`, `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
 | Per-query-head patching under grouped-query attention | `patch_query_heads_grid`, `site`, `heads`, `effect_site` | unstable -- no deprecation shim owed |
 | Component edge graph (heads and MLPs as nodes, q/k/v split receivers) | `component_graph`, `ComponentGraph`, `ComponentSender`, `ComponentReceiver`, `ComponentEdge`, `nodes`, `receivers`, `edges`, `layer_index`, `head`, `senders`, `contribution`, `identity_receipt`, `input_label`, `norm_address`, `module_address`, `patch_edges`, `corrupted_graph` | unstable -- no deprecation shim owed |
-
 | Edge attribution patching over the component graph | `edge_scores`, `corrupted_input`, `metric`, `method`, `eap`, `eap_ig`, `steps`, `example_reduction`, `mean`, `sum` | unstable -- no deprecation shim owed |
 | Circuit faithfulness areas | `circuit_performance_ratio`, `circuit_model_difference`, `faithfulness`, `fractions`, `log_scale` | unstable -- no deprecation shim owed |
 | Fixed-period induction score | `FixedPeriodInduction`, `head_scores(..., kind=FixedPeriodInduction(period=n))`, `period` | unstable -- no deprecation shim owed |
@@ -2998,14 +2996,14 @@ deprecation shim owed*
   pass. Calls made inside TorchLens's own GradFn posthooks are not recorded;
   gradient-saving copies from its tensor hooks appear as zero-arithmetic calls.
 
-**BackwardStatus.executed_flops / executed_flops_per_pass / uncounted_ops / counting_convention** — *unstable — no deprecation shim owed*
+**BackwardStatus.executed_flops / executed_flops_per_pass / uncounted_op_counts / convention** — *unstable — no deprecation shim owed*
 : `tl.report.backward_status(trace)` in the `backward_observed` state counts
   the backward that ran over each pass's `aten_ops`: `executed_flops`
   is exact for the matmul and convolution families at fma2
-  (`counting_convention`, FlopCounterMode's convention), or `None` when a
+  (`convention`, FlopCounterMode's convention), or `None` when a
   pass has no record on this object. `executed_flops_per_pass` pairs each
   pass index with its count; a `create_graph=True` gradient and the backward
-  through it are separate passes. `uncounted_ops` names every recorded op
+  through it are separate passes. `uncounted_op_counts` names every recorded op
   kind outside the counted families with its call count, never zeroed or
   estimated. `grad_disabled` still reads `0` and `grad_enabled_unobserved`
   still reads unknown; the hypothetical `backward_estimate` is unchanged.
