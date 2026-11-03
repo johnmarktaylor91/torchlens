@@ -640,7 +640,7 @@ def _collapsed_container_leaf_nodes(
     lines by node name, so nodes mode can add the container role to them.
     """
 
-    if show_containers not in {"collapsed", "auto", "nodes"} or vis_mode != "unrolled":
+    if show_containers not in {"collapsed", "nodes"} or vis_mode != "unrolled":
         return {}
     hidden: dict[str, str] = {}
     for leaves in _container_leaf_groups(entries_to_plot, vis_mode=vis_mode).values():

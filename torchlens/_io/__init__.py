@@ -19,11 +19,6 @@ resolves here unchanged.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
-
-import torch
-
 from .format_contract import (
     MIN_TLSPEC_VERSION,
     MIN_TORCHLENS_VERSION_TEXT,
@@ -81,40 +76,5 @@ __all__ = [
     "coerce_container_typed_state",
     "default_fill_state",
     "read_tlspec_version",
-    "materialize_nested",
     "validate_prerelease_state",
 ]
-
-
-def materialize_nested(
-    trace: Any,
-    *,
-    map_location: str | torch.device = "cpu",
-    payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
-) -> None:
-    """Replace any remaining nested portable blob refs on a loaded model log.
-
-    This function is a no-op unless the model log was loaded with
-    ``lazy=True, materialize_nested=False``. In the default load mode, nested
-    tensors are already materialized.
-
-    Parameters
-    ----------
-    trace:
-        Model log loaded from a portable bundle.
-    map_location:
-        Target device for the materialized nested tensors.
-    payload_hints:
-        Optional backend payload hints used during materialization.
-
-    Examples
-    --------
-    >>> import torchlens as tl
-    >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
-    >>> tl.io.materialize_nested(log)
-    >>> log.save("demo_bundle_copy")
-    """
-
-    from .rehydrate import rehydrate_nested as _rehydrate_nested
-
-    _rehydrate_nested(trace, map_location=map_location, payload_hints=payload_hints)

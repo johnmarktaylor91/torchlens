@@ -1,12 +1,18 @@
-"""Trace validation and replay mixin."""
+"""Trace validation, run and backward mixin: thin methods over the record-rebuild destinations.
+
+The validation, run and backward bodies live in ``validation/_trace_checks.py``,
+``intervention/_trace_run.py`` and ``backends/torch/_trace_backward.py``; the methods here keep the
+public signatures and docstrings and forward through ``_doors``. The log-entry removal helpers and
+the capture-side private methods stay here until the fold step pulls the shell into ``trace.py``.
+"""
 
 from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, Any, Literal, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 import torch
-from torch import nn
 
 if TYPE_CHECKING:
+    from .._runnable import RunResult
     from ..validation.status import ValidationStatus
     from .trace import Trace
 
@@ -14,16 +20,8 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType
-from .._errors import (
-    InvalidArgumentError,
-    KeywordConflictError,
-    PayloadUnavailableError,
-    RecordBindingError,
-)
-from .._runnable import DivergencePolicy, RunProvider, RunResult
-from ..errors import RunCapabilityUnavailableError, StateBindingError
-from ..options import ReplayOptions, merge_replay_options
-from ._staged_spec import _staged_user_entries
+from ..options import ReplayOptions
+from . import _doors
 from ._trace_pristine import derive_pristine
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
@@ -37,37 +35,22 @@ from .cleanup import (
 )
 from .op import Op
 
+#: Sentinel default of ``Trace.run``'s ``input_transform`` / ``output_transform``: reuse the stored
+#: transform. Defined here (L1) so the thin method's signature and ``intervention/_trace_run.py``
+#: compare against the same object; the fold step moves it with the method.
+_USE_STORED_TRANSFORM = object()
 
-def _refuse_loaded_backward_capture(trace: "Trace", entry_point: str) -> None:
-    """Refuse live backward capture on a bundle-loaded analysis trace.
 
-    WT1 A-IV item 21 (lane A08): a loaded trace carries no live autograd
-    handles tied to its recorded forward, so ``log_backward`` used to hook
-    whatever FOREIGN graph the caller's loss came from, half-mutate the trace
-    (backward passes and grad_fns from an unrelated forward), and die with an
-    untyped ``AttributeError`` -- after which ``draw_backward`` silently
-    rendered that wrong graph. Refuse typed BEFORE any mutation.
-    """
+def _stateful_run_warning_was_emitted(trace: Any) -> bool:
+    """Whether ``trace`` already carried its once-only stateful-run warning."""
 
-    try:
-        loaded_from_bundle = trace._loaded_from_bundle
-    except AttributeError:
-        loaded_from_bundle = False
-    if not loaded_from_bundle:
-        return
-    from .._runnable import RunnableErrorCode
+    return bool(trace.__dict__.get("_stateful_run_warning_emitted", False))
 
-    raise RunCapabilityUnavailableError(
-        f"{entry_point}() is unavailable on a bundle-loaded Trace: the loaded "
-        "artifact carries no live autograd graph tied to its recorded "
-        "forward, so a backward here would capture whatever unrelated graph "
-        "the loss came from and record a wrong backward pass. Re-capture "
-        "live (tl.trace(model, x, capture=tl.options.CaptureOptions("
-        "backward_ready=True))) and call log_backward on that Trace, or inspect the "
-        "backward metadata this artifact already persisted.",
-        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-        detection_stage="loaded_backward_capture",
-    )
+
+def _mark_stateful_run_warning_emitted(trace: Any) -> None:
+    """Record on ``trace`` that its once-only stateful-run warning was emitted."""
+
+    trace.__dict__["_stateful_run_warning_emitted"] = True
 
 
 def _materialize_layer_mirrors_for_removed(
@@ -95,223 +78,6 @@ def _materialize_layer_mirrors_for_removed(
             materialize_layer_mirrors(layer_log)
 
 
-_USE_STORED_TRANSFORM = object()
-_JAX_VALIDATION_REPLAY_BACKEND = "jax"
-_MLX_VALIDATION_REPLAY_BACKEND = "mlx"
-_TINYGRAD_VALIDATION_REPLAY_BACKEND = "tinygrad"
-
-
-def _apply_run_save_selection(result: Any, selected: Any) -> Any:
-    """Apply the run-time save= retention selection to one settled RunResult.
-
-    Retention/presentation ONLY (L4 sec 4): verification breadth is untouched
-    (every contract check already ran at settlement), the attestation aggregate
-    is unchanged, and input/output boundary nodes keep their payloads exactly
-    like the capture-time selection machinery. ``None`` (save= omitted) is
-    today's behavior byte-for-byte.
-    """
-
-    if selected is None:
-        return result
-    from .._capture.projectors import RefreshProjector
-
-    for layer in result.trace._layer_list:
-        if layer.type in ("input", "output"):
-            continue
-        if layer.layer_label in selected:
-            continue
-        RefreshProjector._clear_payload(layer)
-    return result
-
-
-def _refuse_state_compromised_live_run(trace: Any) -> None:
-    """Refuse live/fast execution after a failed declared-state restore (L4 5.4).
-
-    The session-scoped STATE-COMPROMISED latch means a prior run()'s restore
-    failed mid-bracket, so the LIVE MODEL's declared state is unknown -- every
-    door that reads the live model (default live, fast live, legacy rerun)
-    refuses typed. Loaded-sparse runs of a saved artifact stay legal: they
-    execute against staged clones and never read the live model.
-    """
-
-    runnable_state = getattr(trace, "_runnable", None)
-    compromised = getattr(runnable_state, "state_compromised", None)
-    if compromised is None:
-        return
-
-    raise StateBindingError(
-        "A prior run() failed while RESTORING this trace's live model state "
-        f"(stopped at state entry {compromised.get('state_dict_name')!r}), so the "
-        "live model's declared state is unknown and live/fast execution would "
-        "misreport. Remedy: reload known-good weights onto the model (or "
-        "re-capture / re-stage state), then run again",
-        code="run_state_restore_failed",
-        detection_stage="state_restore",
-        **dict(compromised),
-    )
-
-
-def _warn_stateful_live_run_once(trace: Any, model: nn.Module) -> None:
-    """Warn once when a live rerun has an obvious model-state mutation risk.
-
-    Parameters
-    ----------
-    trace:
-        Source Trace carrying the once-only warning marker.
-    model:
-        Live model that is about to be re-executed.
-    """
-
-    if trace.__dict__.get("_stateful_run_warning_emitted", False):
-        return
-    if not model.training:
-        return
-    running_stat_risk: tuple[str, tuple[str, ...]] | None = None
-    for module_name, module in model.named_modules():
-        if not isinstance(module, nn.modules.batchnorm._BatchNorm) or not module.training:
-            continue
-        buffers = getattr(module, "_buffers", {})
-        running_stat_buffers = tuple(
-            name
-            for name in ("running_mean", "running_var", "num_batches_tracked")
-            if buffers.get(name) is not None
-        )
-        if bool(getattr(module, "track_running_stats", False)) and running_stat_buffers:
-            running_stat_risk = (module_name or "<root>", running_stat_buffers)
-            break
-    if running_stat_risk is None:
-        return
-    import warnings
-
-    module_name, buffer_names = running_stat_risk
-    warnings.warn(
-        "run() detected training-mode BatchNorm running-stat buffers "
-        f"{', '.join(buffer_names)} on module {module_name!r}; re-executing the live model can "
-        "mutate them. Use eval() for immutable feature extraction or clone the model explicitly "
-        "when isolated training-mode state is required.",
-        UserWarning,
-        stacklevel=3,
-    )
-    trace.__dict__["_stateful_run_warning_emitted"] = True
-
-
-def _warn_pending_value_edits_on_new_input_run(
-    trace: Any, *, staged_spec_applies: bool = False
-) -> None:
-    """Disclose that value-edits on this trace do not apply to a new-input run.
-
-    There are two legitimate intervention paths: (1) edit a SAVED value and
-    push the effect downstream on the captured DAG (``do()``/``push_from``/
-    direct writes), and (2) intervene on a FRESH execution (``engine="rerun"``
-    with a model and input, or a new capture with ``intervene=``). A
-    ``run(inputs=...)`` on a trace carrying path-1 edits is a fresh execution:
-    the edits say nothing about the new inputs, so the run is coherent but the
-    edits have NO effect on it. That combination tripped a real user flow, so
-    it is disclosed plainly instead of silently returning an un-edited
-    verified run.
-
-    Parameters
-    ----------
-    trace:
-        Live Trace about to be re-executed on new inputs.
-    staged_spec_applies:
-        True when this run is the guarded fast live engine applying the
-        trace's staged intervention spec. The capture-time or rerun firing
-        audit and the ``RERUN_PROPAGATED`` state are then that intervention's
-        own trail, not an inert value edit, so only ``do()``/``push``/direct
-        writes disclose.
-    """
-
-    from .._trace_state import TraceState
-
-    state = getattr(trace, "state", None)
-    audit = getattr(trace, "intervention_audit", None) or ()
-    if staged_spec_applies:
-        has_value_edits = (
-            state in {TraceState.REPLAY_PROPAGATED, TraceState.DIRECT_WRITE_DIRTY}
-            or any(isinstance(row, dict) and row.get("door") == "do" for row in audit)
-            or bool(trace._has_direct_writes)
-        )
-    else:
-        has_value_edits = (
-            state
-            in {
-                TraceState.REPLAY_PROPAGATED,
-                TraceState.RERUN_PROPAGATED,
-                TraceState.DIRECT_WRITE_DIRTY,
-            }
-            or bool(audit)
-            or bool(trace._has_direct_writes)
-        )
-    if not has_value_edits:
-        return
-    import warnings
-
-    from ..intervention.errors import PendingValueEditsWarning
-
-    warnings.warn(
-        "run(inputs=...) is a FRESH execution of the live model, but this trace "
-        "carries value-edits (do()/push/direct writes) applied to its SAVED "
-        "values -- those edits do NOT apply to a new-input run and its result "
-        "reflects the un-edited model. To intervene on new inputs, rerun with "
-        "hooks (do(..., engine='rerun', model=..., inputs=...)) or capture the new "
-        "input with intervene=.",
-        PendingValueEditsWarning,
-        stacklevel=3,
-    )
-
-
-def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
-    """Return whether loaded non-torch replay validation cannot run.
-
-    Parameters
-    ----------
-    trace:
-        Trace-like object being checked.
-
-    Returns
-    -------
-    bool
-        True for loaded non-torch traces whose backend runtime replay
-        capture lists were stripped by portable save.
-    """
-
-    if not bool(getattr(trace, "_loaded_from_bundle", False)):
-        return False
-    backend = str(trace._provenance_backend)
-    if backend == _MLX_VALIDATION_REPLAY_BACKEND:
-        return True
-    if backend == _JAX_VALIDATION_REPLAY_BACKEND:
-        return not bool(getattr(trace, "jax_equation_captures", ()))
-    if backend == _TINYGRAD_VALIDATION_REPLAY_BACKEND:
-        return not bool(getattr(trace, "tinygrad_uop_captures", ()))
-    return False
-
-
-def _refuse_stats_capture(trace: Any, purpose: str) -> None:
-    """Refuse replay and validation on a ``save="stats"`` trace.
-
-    A reduce-and-discard trace kept no payloads, so a replay has nothing to
-    start from and validation nothing to compare; refusing is the honest
-    outcome (a missing payload must never read as a pass).
-    """
-
-    from ..stats._capture_stats import is_stats_capture
-
-    if not is_stats_capture(trace):
-        return
-
-    action = "validation" if purpose == "validation_entry" else "replay"
-    raise PayloadUnavailableError(
-        f"this trace was captured with save='stats', which keeps no activation payloads, "
-        f"so {action} has nothing to check against",
-        code="stats_capture_not_replayable",
-        remedy="capture again keeping payloads, tl.trace(model, x, save='all'), and run "
-        f"{action} on that trace; tl.validate(model, x, scope='forward') runs its own full capture",
-        purpose=purpose,
-    )
-
-
 class TraceValidationMixin(_TraceMixinBase):
     """``Trace`` validation surface: forward replay, backward checks, and re-capture."""
 
@@ -334,23 +100,10 @@ class TraceValidationMixin(_TraceMixinBase):
             Forwarded unchanged to
             :func:`torchlens._capture.trace.save_new_outs`.
         """
-        from .._capture.finalize.settle import save_new_outs as _impl
-        from .._capture.outcome import require_capture_capability
-        from .._capture_state_helpers import unwrap_compiled_model
-
-        # N3/N5: a live refresh re-drives the FULL native forward against the
-        # recorded graph, which a halted/failed/unproven capture cannot honor.
-        require_capture_capability(self, "live_replay")
-        from .._capture.structure_only import require_structure_only_capability
-
-        require_structure_only_capability(self, "live_replay")
-        _refuse_stats_capture(self, "live_replay")
-        model = unwrap_compiled_model(model)
-
-        return _impl(
+        return _doors.validation()._trace_checks.save_new_outs(
             self,
-            model=model,
-            input_args=input_args,
+            model,
+            input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
@@ -387,43 +140,15 @@ class TraceValidationMixin(_TraceMixinBase):
             ``True`` if validation succeeds. Loaded non-torch traces whose
             runtime replay captures were stripped return an explicit
             unavailable status instead of a pass/fail bool.
+
+        Notes
+        -----
+        Every op replays under its recorded RNG state; like ``tl.trace``, the
+        call restores the caller's global RNG streams on return and on error.
         """
-        from .._capture.outcome import require_capture_capability
-        from .._runnable import refuse_poisoned_trace
-        from ..backends.registry import get_backend_spec
-
-        if isinstance(ground_truth_output_tensors, torch.Tensor):
-            ground_truth_output_tensors = [ground_truth_output_tensors]
-
-        refuse_poisoned_trace(self, "validation")
-        # N2: refusing ENTRY for failed/unproven captures is not a check
-        # exemption -- the tripwire bodies stay byte-untouched, the halted
-        # exemption neither widens nor narrows, and legacy UNATTESTED
-        # artifacts deliberately keep entry OPEN (the tripwire stays armed).
-        require_capture_capability(self, "validation_entry")
-        from .._capture.structure_only import require_structure_only_capability
-
-        require_structure_only_capability(self, "validation_entry")
-        _refuse_stats_capture(self, "validation_entry")
-        status = self.validation_replay_status
-        if bool(getattr(self, "_loaded_from_bundle", False)) and not status.is_available:
-            setattr(self, "_validation_replay_status", status)
-            return status
-        spec = get_backend_spec(self._provenance_backend)
-        validation_result = spec.validate_trace(
-            self,
-            ground_truth_output_tensors=ground_truth_output_tensors,
-            verbose=verbose,
-            validate_metadata=validate_metadata,
+        return _doors.validation()._trace_checks.validate_forward_pass(
+            self, ground_truth_output_tensors, verbose=verbose, validate_metadata=validate_metadata
         )
-        if spec.name == "torch":
-            from ..validation.status import ValidationStatus
-
-            if isinstance(validation_result, ValidationStatus):
-                setattr(self, "_validation_replay_status", validation_result)
-                if validation_result.state in {"passed", "failed"}:
-                    return validation_result.passed
-        return validation_result
 
     @property
     def validation_replay_status(self: "Trace") -> "ValidationStatus":
@@ -435,23 +160,7 @@ class TraceValidationMixin(_TraceMixinBase):
             Status object distinguishing live replay validation from loaded
             traces whose runtime replay captures were stripped during save.
         """
-
-        from ..backends.registry import get_backend_spec
-        from ..validation.status import ValidationStatus
-
-        cached_status = getattr(self, "_validation_replay_status", None)
-        if isinstance(cached_status, ValidationStatus):
-            return cached_status
-        backend = str(self._provenance_backend)
-        if _loaded_non_torch_validation_replay_unavailable(self):
-            return ValidationStatus.unavailable_loaded_runtime_stripped(
-                backend=backend,
-                payload_load_status=getattr(self, "payload_load_status", None),
-            )
-        spec = get_backend_spec(backend)
-        if not spec.capabilities.has_validation_replay:
-            return ValidationStatus.unavailable_unsupported(backend=backend)
-        return ValidationStatus.available_live(backend=backend)
+        return _doors.validation()._trace_checks.validation_replay_status(self)
 
     @property
     def is_pristine(self: "Trace") -> bool | None:
@@ -494,19 +203,7 @@ class TraceValidationMixin(_TraceMixinBase):
         Trace
             This model log, mutated in place.
         """
-
-        from .._capture.outcome import require_capture_capability
-
-        require_capture_capability(self, "live_replay")
-        from .._capture.structure_only import require_structure_only_capability
-
-        require_structure_only_capability(self, "live_replay")
-        _refuse_stats_capture(self, "live_replay")
-        replay_options = merge_replay_options(replay=replay)
-
-        from ..intervention.replay import push as _impl
-
-        return _impl(self, replay=replay_options)
+        return _doors.intervention()._trace_run.push(self, replay=replay)
 
     def push_from(
         self: "Trace",
@@ -528,19 +225,7 @@ class TraceValidationMixin(_TraceMixinBase):
         Trace
             This model log, mutated in place.
         """
-
-        from .._capture.outcome import require_capture_capability
-
-        require_capture_capability(self, "live_replay")
-        from .._capture.structure_only import require_structure_only_capability
-
-        require_structure_only_capability(self, "live_replay")
-        _refuse_stats_capture(self, "live_replay")
-        replay_options = merge_replay_options(replay=replay)
-
-        from ..intervention.replay import push_from as _impl
-
-        return _impl(self, site, replay=replay_options)
+        return _doors.intervention()._trace_run.push_from(self, site, replay=replay)
 
     def run(
         self: "Trace",
@@ -658,473 +343,23 @@ class TraceValidationMixin(_TraceMixinBase):
         required. Live-state mutation can also change the captured graph and
         trigger the normal graph-change tripwire.
         """
-
-        from ..intervention._zero_fire import check_zero_fire_policy, zero_fire_policy_scope
-
-        zero_fire_policy = None if on_zero_fire is MISSING else check_zero_fire_policy(on_zero_fire)
-        if seed is not None:
-            # r77 nit + r79 hardening: validate ``seed`` at the run door so junk
-            # raises the typed precondition lane instead of escaping as torch's
-            # raw ``RuntimeError``. r79 extends the r77 non-int check to the two
-            # escapes r78 found: ``bool`` (an int subclass that
-            # ``Generator.manual_seed`` rejects) and an int outside torch's
-            # accepted long range (pybind overflow). The failed call is
-            # transactional either way (global torch RNG untouched).
-            from .._runnable.state import validate_run_seed
-
-            validate_run_seed(seed)
-        # R06: the settled-outcome gate is the FIRST authority on run(). The
-        # outcome sidecar lives in ``__dict__`` and survives cleanup()-husking,
-        # while the ``self._runnable`` read below trips the husk
-        # ``TraceCleanedUpError`` (and the analysis-load arm its capability
-        # refusal) BEFORE any N-gate could evaluate -- so callers branching on
-        # ``fields["code"] == "N3"`` (the documented contract) missed both husk
-        # classes. Pre-refuse only the statuses EVERY provider row refuses
-        # (FAILED / ABORTED_NONFINITE / UNKNOWN); HALTED stays with the
-        # provider-specific gates because the loaded-sparse row allows it.
-        from .._capture.outcome import (
-            CaptureStatus,
-            outcome_for,
-            refuse_streamed_trace_run,
-            require_capture_capability,
+        return _doors.intervention()._trace_run.run(
+            self,
+            model,
+            x,
+            inputs=inputs,
+            seed=seed,
+            fast=fast,
+            carry_state=carry_state,
+            until=until,
+            save=save,
+            on_divergence=on_divergence,
+            chunk_paths=chunk_paths,
+            replay=replay,
+            input_transform=input_transform,
+            output_transform=output_transform,
+            on_zero_fire=on_zero_fire,
         )
-        from .._runnable.execution import refuse_truncated_rerun, run_live_trace
-
-        settled_outcome = outcome_for(self)
-        if settled_outcome is None:
-            # A cleanup()-husked trace loses the stamped sidecar; the outcome
-            # property derives the honest UNKNOWN the structural lattice
-            # mandates for it.
-            settled_outcome = getattr(self, "outcome", None)
-        if settled_outcome is not None and settled_outcome.status in (
-            CaptureStatus.FAILED,
-            CaptureStatus.ABORTED_NONFINITE,
-            CaptureStatus.UNKNOWN,
-        ):
-            require_capture_capability(self, "live_replay")
-            from .._capture.structure_only import require_structure_only_capability
-
-            require_structure_only_capability(self, "live_replay")
-            _refuse_stats_capture(self, "live_replay")
-        # Episode join gate (lane F40c), AFTER the R06 outcome authority:
-        # whole-episode replay is an episode-dependent claim across every
-        # join, so a MEASURED broken join (exogenous or declared crossing)
-        # refuses typed. Narrow by design: unmeasured/legacy episode
-        # artifacts keep their shipped replay behavior.
-        from .._capture._episode_join import refuse_broken_join_claim
-
-        refuse_broken_join_claim(self)
-        # Coupled-episode replay gate (lane F42), beside the join gate: a
-        # COUPLED product's ledger attests one PERTURBED execution, and no
-        # run provider re-arms the capture-time intervention, so no engine
-        # can derive a fresh ledger -- the verdict's refusal arm. Uncoupled
-        # episode products keep their shipped replay behavior.
-        from .._capture._episode_coupling import refuse_coupled_replay
-
-        refuse_coupled_replay(self)
-        refuse_streamed_trace_run(self)  # IO-8: a to_disk trace's payloads are its bundle
-        refuse_truncated_rerun(self)
-        readiness = self._runnable.readiness
-        loaded_provider = getattr(readiness, "provider", None)
-        use_unified_provider = inputs is not MISSING or (
-            not isinstance(model, nn.Module)
-            and loaded_provider
-            in {
-                RunProvider.LOADED_SPARSE,
-                RunProvider.LOADED_ANALYSIS,
-            }
-        )
-        if use_unified_provider:
-            # C03 honesty gate: the unified provider is a FRESH verified
-            # execution and never installs the staged intervention spec, while
-            # the legacy run(model, x) surface DOES (rerun.py reads
-            # _intervention_spec). Silently returning an un-intervened run for
-            # a trace that carries staged hooks/value replacements was a
-            # measured silent wrong answer (surgery memo, build item 1); it is
-            # a typed refusal now. Settled under both OP1 branches.
-            # D1 carve-out (2026-08-19): sticky hooks the selection-do() plan
-            # attached are engine-owned residue of an edit ALREADY applied to
-            # this trace's saved values (audit-recorded and propagated); their
-            # inertness on a new-input run is the PendingValueEditsWarning
-            # DISCLOSURE at the run door below, never a refusal.
-            staged_user_hooks, staged_value_specs = _staged_user_entries(self)
-            # The guarded fast LIVE engine applies the staged spec at real
-            # module boundaries (``_fast_live_steer``), so the gate's reason
-            # does not hold there; loaded providers and the ordinary live
-            # provider still never install it and keep refusing.
-            fast_live_applies_spec = fast and loaded_provider not in {
-                RunProvider.LOADED_SPARSE,
-                RunProvider.LOADED_ANALYSIS,
-            }
-            if (staged_user_hooks or staged_value_specs) and not fast_live_applies_spec:
-                from ..intervention.errors import EngineDispatchError
-
-                staged_hooks = len(staged_user_hooks)
-                staged_values = len(staged_value_specs)
-                raise EngineDispatchError(
-                    "run(inputs=...) is a fresh verified execution and does NOT "
-                    "apply this trace's staged intervention spec "
-                    f"({staged_hooks} sticky hook(s), {staged_values} value "
-                    "replacement(s) staged); running would silently return an "
-                    "un-intervened result. To run WITH the intervention, use "
-                    "the legacy intervened rerun trace.run(model, x) or capture "
-                    "fresh with tl.trace(model, x, intervene=...); to run "
-                    "WITHOUT it, detach the staged spec first "
-                    "(trace.clear_hooks() or detach_hooks(site=/handle=)).",
-                    code="run_staged_spec_unapplied",
-                    remedy="apply the spec via run(model, x) / tl.trace(..., "
-                    "intervene=...), or detach the staged hooks before "
-                    "run(inputs=...)",
-                )
-            if inputs is not MISSING:
-                if model is not None or x is not None:
-                    raise KeywordConflictError(
-                        "Pass inputs= without the legacy model/x arguments",
-                        code="run_legacy_arguments_conflict",
-                        remedy="pass only inputs= on the unified run surface",
-                    )
-                run_inputs = inputs
-            else:
-                if x is not None:
-                    raise KeywordConflictError(
-                        "Loaded sparse run accepts one input tree",
-                        code="run_legacy_arguments_conflict",
-                        remedy="pass one input tree, preferably via inputs=",
-                    )
-                run_inputs = model
-            if chunk_paths is not None or replay is not None:
-                raise KeywordConflictError(
-                    "Sparse/unified run does not accept legacy rerun options",
-                    code="run_legacy_options_conflict",
-                    remedy="drop chunk_paths/replay from the unified run call",
-                )
-            if fast and DivergencePolicy(on_divergence) is not DivergencePolicy.RAISE:
-                raise InvalidArgumentError(
-                    "fast=True always fails closed and requires on_divergence='raise'",
-                    code="run_fast_divergence_policy_invalid",
-                    remedy="use on_divergence='raise' with fast=True, or drop fast=",
-                    argument="on_divergence",
-                )
-            if fast and carry_state:
-                raise InvalidArgumentError(
-                    "carry_state=True cannot combine with fast=True: fast mode's "
-                    "cached-oracle contract already forbids declared-state mutation",
-                    code="run_fast_carry_state_unsupported",
-                    remedy="drop carry_state= (fast mode never restores state it "
-                    "forbids mutating) or drop fast=",
-                    argument="carry_state",
-                )
-            if (
-                fast
-                and until is not None
-                and loaded_provider in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
-            ):
-                # The live fast tier stops its native forward at a saved
-                # module; a loaded artifact's fast tier compiles the
-                # full recorded path.
-                raise InvalidArgumentError(
-                    "until= combines with fast=True only on a live trace; a loaded "
-                    "artifact's fast tier compiles the full recorded path",
-                    code="run_fast_until_unsupported",
-                    remedy="drop until= or drop fast=, or run the live trace",
-                    argument="until",
-                )
-            if fast and save is not None:
-                from .._runnable import RunnableErrorCode
-
-                raise RunCapabilityUnavailableError(
-                    "run-time save= does not compose with fast=True yet: the fast "
-                    "tier's hook site-set is scoped by the ORIGINAL capture save= "
-                    "selection (an explicit matrix entry is required; silence "
-                    "would be undefined behavior)",
-                    code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                    detection_stage="fast_run_save_pending",
-                    remedy="drop save= with fast=True, or re-capture with the "
-                    "desired save= selection",
-                )
-            run_save_labels: Any = None
-            if save is not None:
-                from .._runnable.transaction import _resolve_run_save_labels
-
-                run_save_labels = _resolve_run_save_labels(self, save, until)
-            if carry_state and loaded_provider in {
-                RunProvider.LOADED_SPARSE,
-                RunProvider.LOADED_ANALYSIS,
-            }:
-                raise InvalidArgumentError(
-                    "carry_state=True requires a live model: the loaded provider "
-                    "mutates STAGED CLONES, never a live model, so there is no "
-                    "model for state to carry into (a silent no-op would "
-                    "misreport what persisted)",
-                    code="run_carry_state_requires_live_model",
-                    remedy="drop carry_state= on loaded traces, or run the live model",
-                    argument="carry_state",
-                )
-            from .._capture.outcome import require_capture_capability
-
-            if loaded_provider is RunProvider.LOADED_SPARSE:
-                # N3 (loaded-sparse split): HALTED stays ALLOWED here -- the
-                # loaded provider executes exactly the recorded taken-path
-                # prefix DAG under pause_logging(), so the live-replay failure
-                # mode cannot occur; failed/unproven captures still refuse.
-                require_capture_capability(self, "loaded_sparse_run")
-                from .._capture.structure_only import require_structure_only_capability
-
-                require_structure_only_capability(self, "live_replay")
-                _refuse_stats_capture(self, "live_replay")
-                if fast:
-                    from .._fast_run import run_fast_loaded_trace
-
-                    return run_fast_loaded_trace(self, run_inputs, seed=seed)
-                from .._runnable.execution import run_loaded_sparse_trace
-
-                return _apply_run_save_selection(
-                    run_loaded_sparse_trace(
-                        self,
-                        run_inputs,
-                        seed=seed,
-                        on_divergence=DivergencePolicy(on_divergence),
-                        until=until,
-                    ),
-                    run_save_labels,
-                )
-            if loaded_provider is RunProvider.LOADED_ANALYSIS:
-                # R06: a HALTED analysis load refuses N5 first -- the generic
-                # analysis refusal's remedy ("save a runnable artifact") is a
-                # dead end N4 forbids for halted captures.
-                require_capture_capability(self, "live_replay")
-                from .._capture.structure_only import require_structure_only_capability
-
-                require_structure_only_capability(self, "live_replay")
-                _refuse_stats_capture(self, "live_replay")
-                from .._runnable.execution import raise_analysis_run_unavailable
-
-                raise_analysis_run_unavailable(self)
-            # N3/N5 (live provider): the live run -- fast=True included --
-            # re-drives the full native forward, which halted/failed/unproven
-            # captures cannot honor.
-            require_capture_capability(self, "live_replay")
-            from .._capture.structure_only import require_structure_only_capability
-
-            require_structure_only_capability(self, "live_replay")
-            _refuse_stats_capture(self, "live_replay")
-            from .._runnable.execution import run_live_trace
-            from .._runnable.transaction import _LiveRunOptions
-
-            _refuse_state_compromised_live_run(self)
-            staged_spec = getattr(self, "_intervention_spec", None)
-            _warn_pending_value_edits_on_new_input_run(
-                self,
-                staged_spec_applies=bool(fast)
-                and loaded_provider not in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
-                and (
-                    bool(
-                        getattr(staged_spec, "hook_specs", ())
-                        or getattr(staged_spec, "target_value_specs", ())
-                    )
-                    # A previous fast run's own RERUN_PROPAGATED trail is a
-                    # fresh execution, not a value edit (repeated training
-                    # steps through run(inputs=..., fast=True)).
-                    or (getattr(self, "last_run", None) or {}).get("engine") == "guarded_fast"
-                ),
-            )
-            source_ref = self._source_model_ref
-            live_model = source_ref() if source_ref is not None else None
-            if live_model is not None:
-                _warn_stateful_live_run_once(self, live_model)
-
-            if fast:
-                from .._fast_live_steer import refuse_unfired_fast_run
-                from .._fast_run import run_fast_live_trace
-
-                with zero_fire_policy_scope(zero_fire_policy):
-                    fast_result = run_fast_live_trace(self, run_inputs, seed=seed, until=until)
-                    refuse_unfired_fast_run(self)
-                return fast_result
-
-            return _apply_run_save_selection(
-                run_live_trace(
-                    self,
-                    run_inputs,
-                    seed=seed,
-                    on_divergence=on_divergence,
-                    options=_LiveRunOptions(carry_state=carry_state, until=until),
-                ),
-                run_save_labels,
-            )
-
-        if fast:
-            raise KeywordConflictError(
-                "fast=True is available only with the unified inputs= surface",
-                code="run_fast_requires_inputs",
-                remedy="call trace.run(inputs=..., fast=True) instead of the legacy surface",
-                argument="fast",
-            )
-        if carry_state:
-            raise KeywordConflictError(
-                "carry_state= is a unified-run option and cannot mix with the "
-                "legacy run surface (which never snapshot-restores state)",
-                code="run_legacy_options_conflict",
-                remedy="call trace.run(inputs=..., carry_state=True) instead of the legacy surface",
-                argument="carry_state",
-            )
-        if until is not None:
-            raise KeywordConflictError(
-                "until= is a unified-run option and cannot mix with the legacy run surface",
-                code="run_legacy_options_conflict",
-                remedy="call trace.run(inputs=..., until=...) instead of the legacy surface",
-                argument="until",
-            )
-        if save is not None:
-            raise KeywordConflictError(
-                "save= is a unified-run option and cannot mix with the legacy run surface",
-                code="run_legacy_options_conflict",
-                remedy="call trace.run(inputs=..., save=...) instead of the legacy surface",
-                argument="save",
-            )
-        _refuse_state_compromised_live_run(self)
-        from ..intervention._intervened_rerun_guard import (
-            refuse_unpersisted_intervention_rerun,
-        )
-
-        refuse_unpersisted_intervention_rerun(self, loaded_provider)
-
-        # N3/N5 (legacy live rerun surface): same live-provider rule.
-        from .._capture.outcome import require_capture_capability
-
-        require_capture_capability(self, "live_replay")
-        from .._capture.structure_only import require_structure_only_capability
-
-        require_structure_only_capability(self, "live_replay")
-        _refuse_stats_capture(self, "live_replay")
-
-        run_model: nn.Module | None
-        if isinstance(model, nn.Module):
-            run_model = model
-            user_input = x
-        else:
-            source_ref = self._source_model_ref
-            user_input = model
-            if x is not None:
-                raise KeywordConflictError(
-                    "Pass either run(model, x) or run(new_user_input), not both",
-                    code="run_legacy_arguments_conflict",
-                    remedy="pass run(model, x) or run(new_user_input), never both forms",
-                )
-            transformed_input = self._apply_rerun_transform(user_input, transform=input_transform)
-            run_model = source_ref() if source_ref is not None else None
-            if run_model is None:
-                raise RecordBindingError(
-                    "This Trace does not retain a live model reference",
-                    code="run_source_model_collected",
-                    remedy="pass the model explicitly as trace.run(model, input)",
-                )
-        replay_options = merge_replay_options(replay=replay)
-        if isinstance(model, nn.Module):
-            transformed_input = self._apply_rerun_transform(user_input, transform=input_transform)
-        _warn_stateful_live_run_once(self, run_model)
-
-        from ..intervention.rerun import run as _impl
-
-        resolved_output_transform = self._resolve_rerun_output_transform(output_transform)
-        # Guarded fast engine first for a steered rerun: a native forward with
-        # the staged spec applied at real module boundaries, saving the saved
-        # sites and the boundary ops, guarded by the sealed call fingerprint.
-        # Any typed refusal (ineligible save scope or target, a real
-        # divergence) falls back to the capture rerun below, with the code in
-        # ``last_run``. A trace with nothing staged keeps the capture rerun.
-        from .._fast_live_steer import stages_user_entries
-
-        fast_refused: str | None = None
-        with zero_fire_policy_scope(zero_fire_policy):
-            if (
-                chunk_paths is None
-                and not replay_options.append
-                and replay_options.chunk_size is None
-                and stages_user_entries(self)
-            ):
-                from .._fast_live_steer import refuse_unfired_fast_run
-                from .._fast_run import try_guarded_fast_rerun
-
-                fast_done, fast_refused = try_guarded_fast_rerun(
-                    self, run_model, transformed_input, output_transform=resolved_output_transform
-                )
-                if fast_done:
-                    self.input = user_input
-                    refuse_unfired_fast_run(self)
-                    return self
-            result = _impl(
-                self,
-                run_model,
-                transformed_input,
-                replay=replay_options,
-                chunk_paths=chunk_paths,
-                output_transform=resolved_output_transform,
-                fast_refused=fast_refused,
-            )
-        # Atomic swap rebuilds Trace state; restore raw_input to the new
-        # user-supplied value so visualization / save-load report the
-        # current input rather than the prior trace's.
-        result.input = user_input
-        return result
-
-    def _apply_rerun_transform(
-        self: "Trace",
-        user_input: Any,
-        *,
-        transform: Callable[[Any], Any] | bool | object,
-    ) -> Any:
-        """Apply the stored or explicit input transform for ``rerun``.
-
-        Parameters
-        ----------
-        user_input:
-            New user input supplied to ``rerun``.
-        transform:
-            Sentinel to reuse the stored transform, ``False`` to bypass, or an
-            explicit callable to use for this rerun.
-
-        Returns
-        -------
-        Any
-            Model-ready rerun input.
-        """
-
-        stored_transform = getattr(self, "_transform", None)
-        if transform is _USE_STORED_TRANSFORM and stored_transform is not None:
-            return stored_transform(user_input)
-        if transform is False:
-            return user_input
-        if callable(transform):
-            return transform(user_input)
-        return user_input
-
-    def _resolve_rerun_output_transform(
-        self: "Trace",
-        output_transform: Callable[[Any], Any] | bool | object,
-    ) -> Callable[[Any], Any] | None:
-        """Resolve the output transform callable for ``rerun``.
-
-        Parameters
-        ----------
-        output_transform:
-            Sentinel to reuse the stored output transform, ``False`` to bypass,
-            or an explicit callable to use for this rerun.
-
-        Returns
-        -------
-        Callable[[Any], Any] | None
-            Output transform to apply to the fresh model output, or ``None``.
-        """
-
-        stored_transform = getattr(self, "_output_transform", None)
-        if output_transform is _USE_STORED_TRANSFORM:
-            return stored_transform
-        if output_transform is False:
-            return None
-        if callable(output_transform):
-            return output_transform
-        return None
 
     def check_metadata_invariants(self: "Trace") -> bool:
         """Run metadata invariant checks on this completed model log.
@@ -1134,19 +369,7 @@ class TraceValidationMixin(_TraceMixinBase):
         bool
             ``True`` if all invariants pass.
         """
-        # N2: refusing ENTRY for failed/unproven captures is not a check
-        # exemption -- the tripwire bodies stay byte-untouched, and legacy
-        # UNATTESTED artifacts deliberately keep entry OPEN.
-        from .._capture.outcome import require_capture_capability
-
-        require_capture_capability(self, "validation_entry")
-        from .._capture.structure_only import require_structure_only_capability
-
-        require_structure_only_capability(self, "validation_entry")
-        _refuse_stats_capture(self, "validation_entry")
-        from ..validation.invariants import check_metadata_invariants as _impl
-
-        return _impl(self)
+        return _doors.validation()._trace_checks.check_metadata_invariants(self)
 
     def cleanup(self: "Trace") -> None:
         """Delete log data, break cycles, and free cached GPU memory.
@@ -1257,24 +480,7 @@ class TraceValidationMixin(_TraceMixinBase):
         Trace
             This model log, for chaining.
         """
-        from .._capture.outcome import require_capture_capability
-        from ..backends._backend_protocol import refuse_backward_capture_unsupported
-        from ..backends.registry import get_backend_spec
-
-        # N3: the backward projection assumes a structurally complete captured
-        # forward graph; HALTED stays allowed (the autograd graph of a halted
-        # capture IS the captured prefix).
-        require_capture_capability(self, "backward")
-        from .._capture.structure_only import require_structure_only_capability
-
-        require_structure_only_capability(self, "backward_grads")
-        _refuse_stats_capture(self, "backward_grads")
-        _refuse_loaded_backward_capture(self, "log_backward")
-        spec = get_backend_spec(self._provenance_backend)
-        refuse_backward_capture_unsupported(spec)
-        from ..backends.torch.backward import log_backward as _impl
-
-        return cast("Trace", _impl(self, loss, **backward_kwargs))
+        return _doors.backends_torch()._trace_backward.log_backward(self, loss, **backward_kwargs)
 
     def backward(self: "Trace", loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` and populate this Trace with backward metadata.
@@ -1302,21 +508,7 @@ class TraceValidationMixin(_TraceMixinBase):
         Any
             Backward recording context manager.
         """
-        from .._capture.outcome import require_capture_capability
-        from ..backends._backend_protocol import refuse_backward_capture_unsupported
-        from ..backends.registry import get_backend_spec
-
-        require_capture_capability(self, "backward")
-        from .._capture.structure_only import require_structure_only_capability
-
-        require_structure_only_capability(self, "backward_grads")
-        _refuse_stats_capture(self, "backward_grads")
-        _refuse_loaded_backward_capture(self, "recording_backward")
-        spec = get_backend_spec(self._provenance_backend)
-        refuse_backward_capture_unsupported(spec)
-        from ..backends.torch.backward import recording_backward as _impl
-
-        return _impl(self)
+        return _doors.backends_torch()._trace_backward.capture_backward(self)
 
     def disarm_triggers(self: "Trace") -> None:
         """Detach this Trace from global autograd backward interception.
@@ -1327,9 +519,7 @@ class TraceValidationMixin(_TraceMixinBase):
             Future plain ``loss.backward()`` or ``torch.autograd.*`` calls will
             not record into this Trace.
         """
-        from ..backends.torch.backward import disarm_triggers as _impl
-
-        _impl(self)
+        _doors.intervention()._trace_run.disarm_triggers(self)
 
     def _remove_log_entry(
         self: "Trace",

@@ -6,17 +6,14 @@ recording every tensor autograd packs for backward, never from TorchLens. Per
 op, a storage counts once (by data pointer) and a view counts in full, which is
 the per-op band's definition; the trace, module and call doors sum those bands.
 
-Capture runs floating Parameters with ``requires_grad=True`` unless
-``backward_ready=True`` (the counts describe the captured forward), so the
-default-capture recount sets the same flag on a copy of the model, and the
-``backward_ready=True`` case is recounted on the model exactly as the user
-froze it. These are the I1 oracles the census
+Capture never changes a Parameter's ``requires_grad`` (the counts describe the
+captured forward), so every case, default capture or ``backward_ready=True``, is
+recounted on the model exactly as the user froze it. These are the I1 oracles the census
 (``tests/oracles/data/legacy_quantities.tsv``) names for those doors.
 """
 
 from __future__ import annotations
 
-import copy
 from collections.abc import Callable
 
 import pytest
@@ -73,15 +70,6 @@ def _recount(model: Grad, x: torch.Tensor) -> tuple[dict[str, tuple[int | None, 
     return bands, sum(pinned.values())
 
 
-def _as_flagged(model: Grad) -> Grad:
-    """A copy of ``model`` with the flag capture forces on floating Parameters."""
-
-    flagged = copy.deepcopy(model)
-    for param in flagged.parameters():
-        param.requires_grad_(True)
-    return flagged
-
-
 def _sum(values: list[int | None]) -> int:
     return sum(value or 0 for value in values)
 
@@ -93,23 +81,21 @@ def test_autograd_saved_bytes_on_every_door(variant: str) -> None:
     x = torch.randn(2, 4)  # the input does not require grad
     if variant != "trainable":
         model.a.requires_grad_(False)
-    reference = model if variant == "frozen_backward_ready" else _as_flagged(model)
-    bands, pinned = _recount(reference, x)
-    if variant == "frozen_backward_ready":
+    bands, pinned = _recount(model, x)
+    if variant == "trainable":
+        # addmm saves its 2x4 input (32 B); the ReLU its 2x8 output (64 B); the
+        # second addmm its 2x8 input and weight.t() (64 + 64).
+        assert bands == {"linear_1_1": (32, 1), "relu_1_2": (64, 1), "linear_2_3": (128, 2)}
+    else:
         # Eager: the frozen Linear and the ReLU after it build no graph; the
         # second Linear saves only its 2x8 float input (its weight needs no
-        # input gradient), 64 B.
+        # input gradient), 64 B. Default capture now saves the same.
         assert bands == {
             "linear_1_1": (None, None),
             "relu_1_2": (None, None),
             "linear_2_3": (64, 1),
         }
-        capture = CaptureOptions(backward_ready=True)
-    else:
-        # Under the flag: addmm saves its 2x4 input (32 B); the ReLU its 2x8
-        # output (64 B); the second addmm its 2x8 input and weight.t() (64 + 64).
-        assert bands == {"linear_1_1": (32, 1), "relu_1_2": (64, 1), "linear_2_3": (128, 2)}
-        capture = CaptureOptions()
+    capture = CaptureOptions(backward_ready=variant == "frozen_backward_ready")
     trace = tl.trace(model, x, capture=capture)
     try:
         for op in trace.compute_ops:
