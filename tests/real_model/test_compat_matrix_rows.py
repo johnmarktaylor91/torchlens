@@ -14,7 +14,8 @@ measured on.
   ``docs/reference/tensor_parallel_design.md``). Both torch-native ``parallelize_module`` and
   transformers' DTensor-native ``tp_plan="auto"`` loading are covered.
 * ``flash_attention_4``: capture plus validation on a CUDA device that the FlashAttention 4
-  package supports; skipped elsewhere with the reason.
+  package supports; skipped elsewhere with the reason. It is a known capture gap today (strict
+  xfail), and a companion test pins that the trace is marked unverified rather than silent.
 """
 
 from __future__ import annotations
@@ -247,10 +248,15 @@ def _flash_attention_4_ready() -> str:
     return ""
 
 
-@pytest.mark.cuda
-@pytest.mark.heavy
-def test_flash_attention_4_capture_and_validate() -> None:
-    """A Llama on ``attn_implementation="flash_attention_4"`` traces exactly and replays."""
+_FA4_GAP = (
+    "capture gap: FlashAttention 4 allocates its output with torch.empty and fills it from a "
+    "CuTe kernel below the torch function layer, so the trace records the allocation instead of "
+    "the attention; validation fails (the tripwire) and the trace is marked unverified"
+)
+
+
+def _fa4_llama() -> tuple[torch.nn.Module, torch.Tensor]:
+    """Build a bf16 two-layer Llama on ``flash_attention_4`` on CUDA, or skip with the reason."""
 
     reason = _flash_attention_4_ready()
     if reason:
@@ -263,7 +269,16 @@ def test_flash_attention_4_capture_and_validate() -> None:
     model = model.to("cuda").eval()
     assert model.config._attn_implementation == "flash_attention_4"
     input_ids = torch.randint(0, 128, (1, 16), generator=torch.Generator().manual_seed(1))
-    input_ids = input_ids.to("cuda")
+    return model, input_ids.to("cuda")
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=_FA4_GAP)
+def test_flash_attention_4_capture_and_validate() -> None:
+    """A Llama on ``attn_implementation="flash_attention_4"`` traces exactly and replays."""
+
+    model, input_ids = _fa4_llama()
     with torch.no_grad():
         direct = model(input_ids=input_ids).logits
     trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
@@ -273,3 +288,24 @@ def test_flash_attention_4_capture_and_validate() -> None:
     finally:
         trace.cleanup()
     assert tl.validate(model, (), {"input_ids": input_ids}, scope="forward") is True
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+def test_flash_attention_4_capture_gap_is_flagged_not_silent() -> None:
+    """Until the gap is closed, a ``flash_attention_4`` trace says it is unverified.
+
+    The kernel's writes are invisible to capture, so the completeness witness must account for
+    them as unexplained dispatch events and mark the trace unverified. If this starts failing
+    because the gap was closed, drop the xfail on the test above and this test together.
+    """
+
+    model, input_ids = _fa4_llama()
+    with pytest.warns(tl.errors.CaptureGapWarning):
+        trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
+    try:
+        assert trace.provenance.verified is False
+        assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
+        assert trace.completeness_diagnostics
+    finally:
+        trace.cleanup()
