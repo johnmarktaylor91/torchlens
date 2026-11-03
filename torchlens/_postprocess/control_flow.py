@@ -5,7 +5,7 @@ Step 5 (_mark_conditional_branches) runs a six-phase conditional pipeline:
     5b. Classify terminal bools into branch/non-branch contexts.
     5c. Materialize dense conditional events from structural AST keys.
     5d. Backward-flood IF edges from branch-participating bools only.
-    5e. Attribute executed ops to THEN/ELIF/ELSE arms across every forward edge.
+    5e. Attribute executed ops to THEN/ELIF/ELSE/FALLTHROUGH arms across every forward edge.
     5f. Materialize derived compatibility views from primary structures.
 Step 6 (_fix_buffer_layers): Connects buffer sources, merges re-logged reads of
     one buffer version (same module, same parent, same recorded version), and

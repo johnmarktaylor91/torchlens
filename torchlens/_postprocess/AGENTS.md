@@ -94,6 +94,12 @@ then derives legacy THEN/ELIF/ELSE views. Canonical structures are:
 - `Trace.graph.conditional_edge_call_indices`
 - `conditional_arm_children` on `Op` and `Layer`
 
+Arm kinds are `then`, `elif_N`, `else` and `fallthrough`. The AST indexer records a
+`fallthrough` arm for the statements after an `if` chain with no `else` whose every arm ends
+(`_ast_predicates.fallthrough_statements`; conservative: `return`, `raise`, `break`,
+`continue`, or a nested `if` ending on both sides). It is walked as an arm, so `if`s in the
+after-code nest under it. It has no legacy child view: read `conditional_arm_children`.
+
 ## equivalence_class module suffix
 
 Module containment comes from op-creation stack snapshots, and op creation appends

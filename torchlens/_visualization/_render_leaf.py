@@ -1901,12 +1901,17 @@ def _format_arm_entry_text(
     return f"{branch_text}@{_get_conditional_reference_text(conditional_id, trace)}"
 
 
+#: Drawn text and sort rank of the non-elif arm kinds; the fall-through arm never reads as ELSE.
+_BRANCH_KIND_TEXT = {"then": "THEN", "else": "ELSE", "fallthrough": "FALLTHROUGH"}
+_BRANCH_KIND_RANK = {"then": 0, "else": 10**6, "fallthrough": 10**6 + 1}
+
+
 def _format_branch_kind_text(branch_kind: str) -> str:
     """Format a branch-kind token as display text.
 
     Args:
         branch_kind:
-            Stored branch kind such as ``"then"``, ``"elif_1"``, or ``"else"``.
+            Stored branch kind: ``"then"``, ``"elif_N"``, ``"else"`` or ``"fallthrough"``.
 
     Returns
     -------
@@ -1918,10 +1923,8 @@ def _format_branch_kind_text(branch_kind: str) -> str:
     ValueError
         If ``branch_kind`` is not recognized.
     """
-    if branch_kind == "then":
-        return "THEN"
-    if branch_kind == "else":
-        return "ELSE"
+    if branch_kind in _BRANCH_KIND_TEXT:
+        return _BRANCH_KIND_TEXT[branch_kind]
     if branch_kind.startswith("elif_"):
         return f"ELIF {int(branch_kind.split('_', 1)[1])}"
     raise ValueError(f"Unrecognized branch kind: {branch_kind}")
@@ -1980,20 +1983,16 @@ def _branch_kind_sort_key(branch_kind: str) -> int:
 
     Args:
         branch_kind:
-            Stored branch kind such as ``"then"``, ``"elif_1"``, or ``"else"``.
+            Stored branch kind: ``"then"``, ``"elif_N"``, ``"else"`` or ``"fallthrough"``.
 
     Returns
     -------
     int
         Sort rank for the branch kind.
     """
-    if branch_kind == "then":
-        return 0
     if branch_kind.startswith("elif_"):
         return int(branch_kind.split("_", 1)[1])
-    if branch_kind == "else":
-        return 10**6
-    return 10**9
+    return _BRANCH_KIND_RANK.get(branch_kind, 10**9)
 
 
 def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trace") -> str:
