@@ -803,7 +803,7 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/_capture/projections.py", "_CAPTURE_POLICY_CACHE"),
         ("torchlens/_capture/projectors.py", "_REFRESH_SOURCES"),
         ("torchlens/_capture/salient_args.py", "_EXTRACTORS"),
-        ("torchlens/_constants.py", "_TORCHVISION_FUNCS_CACHE"),
+        ("torchlens/_torchvision_ops.py", "_TORCHVISION_FUNCS_CACHE"),
         # Lazy once-per-process snapshot of a bare nn.Module()'s instance
         # attributes (the capture-cache attr filter's torch-internal
         # exclusion set, r3 R39-1). Clearing only re-derives from the running

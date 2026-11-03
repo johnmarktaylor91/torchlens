@@ -103,6 +103,3 @@ def _sparse_state_bytes_equal(current: torch.Tensor, baseline: torch.Tensor) -> 
         part.shape == other.shape and _state_bytes_equal(part, other)
         for part, other in zip(current_parts, baseline_parts, strict=True)
     )
-
-
-__all__ = ["_state_bytes_equal", "_whole_storage_uint8"]

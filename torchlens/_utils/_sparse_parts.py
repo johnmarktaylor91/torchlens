@@ -77,6 +77,3 @@ def sparse_with_values(t: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
     return torch.sparse_compressed_tensor(
         compressed, plain, values, t.shape, layout=t.layout, device=t.device
     )
-
-
-__all__ = ["sparse_component_tensors", "sparse_with_values"]

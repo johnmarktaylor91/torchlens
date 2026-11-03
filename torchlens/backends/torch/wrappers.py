@@ -32,9 +32,10 @@ from torch.overrides import handle_torch_function, has_torch_function_unary  # n
 from ... import _state
 from ..._capture.arg_positions import _ensure_schema_tensor_position_corrections
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
+from ..._constants import get_orig_torch_funcs
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureNotActiveError
+from ..._torchvision_ops import _get_torchvision_funcs
 from ..._utils._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     dynamo_is_compiling,

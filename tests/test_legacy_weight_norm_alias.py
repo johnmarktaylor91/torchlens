@@ -3,8 +3,8 @@
 ``torch/nn/utils/weight_norm.py`` binds ``from torch import _weight_norm`` at
 ``import torch`` time, and its ``WeightNorm`` forward pre-hook calls that module
 global on every forward. Before the alias was tracked in
-``_torch_submodule_aliases._TORCH_SUBMODULE_ALIAS_TARGETS`` the wrapped
-``torch._weight_norm`` never reached it: ``tl.trace`` recorded the op only through the mode rescue re-run
+``_TORCH_SUBMODULE_ALIAS_TARGETS`` the wrapped ``torch._weight_norm`` never
+reached it: ``tl.trace`` recorded the op only through the mode rescue re-run
 (``capture_verified=False``), the validation capture (no rescue) dropped it, and
 validation failed ``bfs_completeness`` for a direct child while a nested one
 passed with the op missing.
