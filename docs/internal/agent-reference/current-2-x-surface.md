@@ -96,7 +96,7 @@
   (`recording_backward_not_requested`). A `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
   `inference_only=True` (`Trace.options.inference_only`, `outcome.inference_only`), and a later
-  `log_backward()` refuses naming that cause. The implied flag is cleared when the forward
+  `backward()` refuses naming that cause. The implied flag is cleared when the forward
   re-enables grad (`torch.enable_grad()` inside it) and an output carries autograd history;
   an explicit `inference_only=True` is never cleared.
   A backward run through such a capture records the ATen calls it dispatched on
@@ -158,7 +158,7 @@
   A swallowed halt/nonfinite signal (broad `except:` in user code) raises
   `tl.errors.StopSignalSwallowedError` at the capture boundary and settles
   FAILED, never COMPLETE. Refresh re-arms `on_nonfinite='raise'`. Halted analysis
-  `Trace.save` works (the transient-leak refusal is fixed); halted `log_backward`
+  `Trace.save` works (the transient-leak refusal is fixed); halted `backward`
   and loaded-sparse `run()` remain allowed.
 - QUERYABLE NONFINITE RECORD (spellings DOCUMENTED-UNSTABLE): `trace.nonfinite_ops`
   returns the pass-qualified labels of ops whose output held NaN/Inf and
@@ -580,7 +580,7 @@
   retained gradient storage once. `measure_host_peak_memory` is a session-time knob
   (`FieldPolicy.DROP`) that reruns and refreshes inherit.
 - ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
-  installs a dispatch mode for the forward (and for `log_backward()` with `backward_ready=True`)
+  installs a dispatch mode for the forward (and for `backward()` with `backward_ready=True`)
   and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`
   rows; `CaptureOptions(aten_ops="values")` additionally keeps what each call returned in
   `AtenOp.out` (a tensor, a tuple per `output_tensor_facts`, or `None`), as detached snapshots under
@@ -1395,7 +1395,7 @@
   nodes; spliced outputs are identical with it off. `bridge.sae.register(name, sae, site=)`
   / `unregister(name)` (DOCUMENTED-UNSTABLE) make an SAE's latents the facet family `name`:
   `tl.facet(name).latent(k)` (or a list) is edited at the doors `tl.head` serves
-  (`Trace.set`, `Trace.do`, `fork().do`) as
+  (`Trace.do`, `fork().do`) as
   `site + decode(z') - decode(z)` (the reconstruction error stays), and
   `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
   op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out. A bare

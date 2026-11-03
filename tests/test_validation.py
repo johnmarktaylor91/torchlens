@@ -5632,7 +5632,7 @@ def _make_backward_log() -> Trace:
     model = _SimpleFF()
     x = torch.randn(2, 5, requires_grad=True)
     log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads="all", seed=42))
-    log.log_backward(log[log.output_layers[0]].out.sum())
+    log.backward(log[log.output_layers[0]].out.sum())
     return log
 
 
@@ -6336,7 +6336,7 @@ def test_backward_invariants_exempt_dead_branch_layers() -> None:
             save="all",
         )
         try:
-            log.log_backward(log.output_ops[0].out.sum())
+            log.backward(log.output_ops[0].out.sum())
             dead = next(layer for layer in log._layer_list if layer.label.startswith("mean"))
             assert dead.grad_fn_object_id is not None
             assert dead.grad_fn is None
@@ -6371,7 +6371,7 @@ def test_dead_branch_exemption_does_not_disarm_contributing_backpointers() -> No
         save="all",
     )
     try:
-        log.log_backward(log.output_ops[0].out.sum())
+        log.backward(log.output_ops[0].out.sum())
         victim = next(layer for layer in log._layer_list if layer.label.startswith("linear"))
         assert victim.grad_fn is not None
         victim.grad_fn = None

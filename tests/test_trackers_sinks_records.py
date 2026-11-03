@@ -43,7 +43,7 @@ def _sketch_of(values: torch.Tensor, descriptor: HistogramDescriptor | None = No
 
     kernel = Histogram(descriptor or HistogramDescriptor())
     kernel.update(values)
-    return kernel.result()
+    return kernel.compute()
 
 
 class TestTagGrammar:

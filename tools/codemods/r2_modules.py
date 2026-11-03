@@ -261,9 +261,9 @@ PIN_EDITS: dict[str, tuple[tuple[str, str], ...]] = {
         ),
         (
             "# After\nfrom torchlens.visualization import draw_backward\n\n"
-            "loss = trace[trace.output_layers[0]].out.sum()\ntrace.log_backward(loss)\n"
+            "loss = trace[trace.output_layers[0]].out.sum()\ntrace.backward(loss)\n"
             'dot = draw_backward(\n    trace, visualization=tl.options.VisualizationOptions(container_path="backward")\n)\n',
-            "# After\nloss = trace[trace.output_layers[0]].out.sum()\ntrace.log_backward(loss)\n"
+            "# After\nloss = trace[trace.output_layers[0]].out.sum()\ntrace.backward(loss)\n"
             'dot = trace.draw_backward(path="backward")\n',
         ),
     ),

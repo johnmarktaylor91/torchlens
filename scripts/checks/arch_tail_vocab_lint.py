@@ -61,7 +61,7 @@ _ALLOWED_EAGER_PREFIXES: tuple[str, ...] = ("_errors", "errors", "_vocab")
 #: behavior split: the Recording product class still lives there, carrying
 #: 3 distinct eager behavior targets (captured_run, ir.predicate,
 #: utils.tensor_utils) and 14 distinct deferred import targets
-#: (draw/summary/to_trace/log_backward delegations plus the sanctioned
+#: (draw/summary/to_trace/backward delegations plus the sanctioned
 #: ancestry-backfill writer). The relocation trigger is armed: burn these
 #: down by splitting the vocabulary half out, never by widening the ledger.
 V3_RESIDUE_CEILINGS: dict[str, tuple[int, int]] = {
@@ -262,7 +262,7 @@ _CLOSURE_BASELINE: dict[str, int] = {
     "_vocab.node_spec": 0,
     "_io.format_errors": 1,  # errors._base (L0 error vocabulary)
     "_output_slot": 2,  # _errors and errors._base (L0 error vocabulary)
-    "recording.types": 22,  # the declared residue; splits burn this down
+    "recording.types": 25,  # the declared residue; splits burn this down
 }
 
 

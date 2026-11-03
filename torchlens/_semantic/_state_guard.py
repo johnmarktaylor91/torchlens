@@ -95,7 +95,7 @@ class _CounterfactualStateGuard:
 
         The copy is equality-gated on purpose: an unconditional ``copy_``
         bumps the autograd version counter of every parameter consumed by an
-        earlier captured forward, so the later ``log_backward`` on the clean
+        earlier captured forward, so the later ``backward`` on the clean
         and corrupted baselines raised "modified by an inplace operation" on
         ANY model with parameters (attribution patching was unusable outside
         zero-parameter toys). A value-equal tensor needs no write and keeps

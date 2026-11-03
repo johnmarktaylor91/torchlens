@@ -353,8 +353,7 @@ def _tensor_outputs(log: Any) -> tuple[torch.Tensor, ...]:
         raise ValueError(
             "SAE splice needs saved tensor model outputs to compare runs; "
             "this capture retained none. Capture with the default exhaustive "
-            "save (tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "replayable=True)))."
+            "save (tl.trace(model, x))."
         )
     return outputs
 
@@ -472,7 +471,7 @@ def _sequence_start(site: str, out: torch.Tensor, exclude_bos: bool) -> int:
 
 
 def _clean_trace(model_or_log: Any, inputs: Any) -> Any:
-    """Return the clean intervention-ready trace the experiment forks from.
+    """Return the clean trace the experiment forks from.
 
     Parameters
     ----------
@@ -496,13 +495,8 @@ def _clean_trace(model_or_log: Any, inputs: Any) -> Any:
         if inputs is None:
             raise TypeError("SAE splice from a live model requires `inputs`.")
         from .._user_public_impls import trace as _capture_trace
-        from ..options import CaptureOptions
 
-        return _capture_trace(
-            model_or_log,
-            inputs,
-            capture=CaptureOptions(replayable=True),
-        )
+        return _capture_trace(model_or_log, inputs)
     if inputs is not None:
         raise TypeError(
             "SAE splice from an existing Trace takes no `inputs`; the fork replays the captured "

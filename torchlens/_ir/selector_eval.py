@@ -453,7 +453,7 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
     if kind == "facet":
         return SelectorCapabilityError(
             "tl.facet(...) / tl.head(...) selectors resolve through intervention mutators "
-            "(Trace.set, Trace.do) and, on a finished trace, as a bare selector "
+            "(Trace.do) and, on a finished trace, as a bare selector "
             "through trace[selector]; not through "
             f"{where}{' (find_sites, composite selectors)' if lifecycle == 'site' else ''}.",
             code="facet_selector_unsupported",
@@ -1597,7 +1597,7 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
         return shorthand
     # An ``Op``/``Layer`` RECORD is the most precise site spelling a user can
     # hold (AUD-CODE 4.10, W051-REPLAY out-of-fence item 1). Lower it to its
-    # PASS-QUALIFIED ``Op.label`` selector(s) here, so the ``set()`` door,
+    # PASS-QUALIFIED ``Op.label`` selector(s) here, so the ``set_only`` do door,
     # ``_resolve_sites(record)`` and the mutator site validation all address
     # exactly the pass(es) the record names -- never the bare ``layer_label``
     # (the LAST pass of a multi-pass layer) the live arm below would pick.

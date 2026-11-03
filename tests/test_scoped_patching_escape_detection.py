@@ -339,7 +339,7 @@ def test_record_fastlog_uses_same_guard_and_backward_boundary_is_explicit() -> N
     assert recording.escape_diagnostics == []
     trace = tl.trace(Model(), torch.randn(3, requires_grad=True))
     assert trace.autograd.escape_detector_backward_coverage == "not_armed"
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     assert trace.autograd.has_backward_pass is True
 
 

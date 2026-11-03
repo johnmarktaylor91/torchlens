@@ -307,7 +307,7 @@ def _resolve_facet_sites(
 ) -> tuple[Any, ...]:
     """Resolve a facet selector on a finished trace to the facets it reads.
 
-    The facets are the ones the write doors (``Trace.set``, ``attach_hooks``,
+    The facets are the ones the write doors (``attach_hooks``,
     ``do``) resolve for the same selector, each the ``Facet`` that
     ``record.facets[...]`` serves, so its ``.value`` is the slice an edit at
     those doors receives (a head's slice, an SAE latent's encoder activation).
@@ -621,7 +621,7 @@ def _iter_sites(log: Trace, universe: str) -> Sequence[Site]:
     if resolved != "node":
         raise SiteResolutionError(f"unknown site universe {universe!r}.")
     if not log._autograd_has_backward_pass:
-        raise SiteResolutionError("Backward selectors require log_backward() to run first.")
+        raise SiteResolutionError("Backward selectors require backward() to run first.")
     return tuple(log._grad_fn_logs.values())
 
 

@@ -192,10 +192,7 @@ class Session:
             self.model,
             inputs,
             input_kwargs=input_kwargs,
-            capture=torchlens.options.CaptureOptions(
-                replayable=True,
-                name=f"session_{index}",
-            ),
+            capture=torchlens.options.CaptureOptions(name=f"session_{index}"),
         )
         metadata = {"index": index, "name": log.name}
         setattr(log, "session_invocation", metadata)

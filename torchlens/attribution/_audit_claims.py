@@ -218,10 +218,9 @@ def _validate_settings(request: _AuditRequest) -> None:
 
 
 def _trace_once(request: _AuditRequest) -> Any:
-    """Trace the model once, eval mode, no grad, intervention-ready."""
+    """Trace the model once, eval mode, no grad."""
 
     from .._user_public_impls import trace as _capture_trace
-    from ..options import CaptureOptions
 
     inputs = request.inputs
     positional = [inputs] if isinstance(inputs, Tensor) else list(inputs)
@@ -230,7 +229,6 @@ def _trace_once(request: _AuditRequest) -> Any:
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,
-            capture=CaptureOptions(replayable=True),
         )
 
 

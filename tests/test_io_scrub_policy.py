@@ -147,6 +147,30 @@ def test_backward_source_fields_are_in_the_privacy_belt(include_source: bool) ->
         assert scrubbed_state["backward_docstring"] is None
 
 
+def test_module_source_paths_are_relativized_on_save(tmp_path: Path) -> None:
+    """Module source files reach the bundle as basenames, never host paths.
+
+    Fail-before: the owner dispatch matched Module records on the Trace's private
+    ``_source_class_docstring`` spelling, so a Module never entered the privacy
+    belt and a capture with ``save_source_context=True`` wrote every module's
+    absolute ``class``/``init``/``forward`` source path into ``metadata.pkl``.
+    """
+
+    spec = tmp_path / "module_paths.tlspec"
+    _build_live_log().save(str(spec))
+    metadata = pickle.loads((spec / "metadata.pkl").read_bytes())
+    modules = list(metadata["_io_module_accessor_state"])
+    assert modules, "no Module records were saved"
+    checked = 0
+    for row, module in enumerate(modules):
+        for column in ("class_source_file", "init_source_file", "forward_source_file"):
+            value = getattr(module, column)
+            assert value is not None, f"module[{row}].{column} was not captured"
+            assert "/" not in value and "\\" not in value, f"module[{row}].{column}: {value!r}"
+            checked += 1
+    assert checked
+
+
 def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: Path) -> None:
     """B8-20: a ``functools.partial`` transform's bound arg values are not persisted.
 
@@ -327,13 +351,10 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "using": "appliance door: returns what a registered factory builds; it writes nothing "
     "on the trace (each appliance's own reads are its owner's to sweep)",
     "clear_edits": "mutates the live model's hook registry",
-    "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
-    "log_backward": "autograd execution; writes gradient state",
     "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
     "remove": "removal scrub (mutates the graph)",
     "push": "replay/push engine; execution, not presentation",
     "push_from": "replay/push engine; execution, not presentation",
@@ -356,7 +377,6 @@ _OP_METHOD_EXCLUSIONS: dict[str, str] = {
 
 _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
 }
 
 _PARAM_METHOD_EXCLUSIONS: dict[str, str] = {}

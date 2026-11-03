@@ -1154,7 +1154,7 @@ def test_wiped_grad_fn_registry_on_detached_trace_fails_invariants() -> None:
         capture=CaptureOptions(save_grads="all"),
         save="all",
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     check_metadata_invariants(trace)
     assert trace._backward_pass_logs, "backward evidence precondition"
     assert len(trace.autograd.backward_passes) >= 1

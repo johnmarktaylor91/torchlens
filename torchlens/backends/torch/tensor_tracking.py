@@ -146,7 +146,7 @@ def _is_state_entangled(trace: Any) -> bool:
 def _owning_backward_is_running(*candidates: Any) -> bool:
     """Return whether one of ``candidates`` holds its managed backward bracket now.
 
-    A state-entangled trace records only its own managed passes (``log_backward``,
+    A state-entangled trace records only its own managed passes (``backward``,
     ``trace.backward()``, or a plain ``.backward()`` whose roots match the trace):
     any other backward that reaches its hooks came in through the model's
     autograd history and is not this trace's.
@@ -516,7 +516,7 @@ def _install_tensor_grad_hook(
         ):
             return None
         # A managed backward directed at a FORK RELATIVE (a fork's
-        # ``log_backward`` over the shared forward tensors) owns this
+        # ``backward`` over the shared forward tensors) owns this
         # gradient: recording it here would silently mutate the hook trace's
         # projection with a pass the user directed at the fork. Fork
         # relatives share one label space, so the observation redirects to
@@ -546,7 +546,7 @@ def _install_tensor_grad_hook(
         prebuilt = _emit_tensor_grad_event(active_trace, grad, tensor_label)
         # Gate the legacy layer-slot write on the ACTIVE per-call policy,
         # not the deprecated ``save_grads`` attribute: a per-call
-        # ``log_backward(..., save_grads=False)`` sets the policy while
+        # ``backward(..., save_grads=False)`` sets the policy while
         # the attribute can stay truthy, and the attribute-keyed gate
         # kept retaining full grad payloads the caller disabled.
         # The event-sidecar payloads are handed down for REUSE: the
@@ -666,7 +666,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
     """Return an active backward pass index, opening an implicit pass if needed."""
 
     current_task_id = _current_backward_graph_task_id()
-    pass_index = getattr(trace, "_active_backward_pass_index", None)
+    pass_index = getattr(trace, "_active_backward_pass_number", None)
     if pass_index is not None:
         prior_task_id = _IMPLICIT_BACKWARD_TASK_IDS.get(trace)
         if (
@@ -682,7 +682,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
         else:
             return int(pass_index)
     pass_index = int(trace._num_backward_passes) + 1
-    trace._active_backward_pass_index = pass_index
+    trace._active_backward_pass_number = pass_index
     trace._implicit_backward_pass_open = True
     if current_task_id is not None:
         _IMPLICIT_BACKWARD_TASK_IDS[trace] = current_task_id
@@ -695,7 +695,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
     if "implicit_backward_pass" not in trace._warned_once:
         warnings.warn(
             "TorchLens observed gradients outside a managed backward trigger; recording an "
-            "implicit backward pass. Use trace.log_backward(), trace.backward(), or a TorchLens "
+            "implicit backward pass. Use trace.backward() or a TorchLens "
             "autograd trigger for precise pass boundaries.",
             RuntimeWarning,
             stacklevel=3,
@@ -1059,7 +1059,7 @@ class _GradPayloadContext:
         self.has_op = True
         self.grad_kind = "grad_output"
         self.pass_index = pass_index
-        self.backward_pass_index = pass_index
+        self.backward_pass_number = pass_index
         self.shape = op.shape
         self.dtype = op.dtype
         self.tensor_device = getattr(op, "output_device", None)
@@ -1115,7 +1115,7 @@ class _ParamGradPayloadContext:
         self.has_op = False
         self.grad_kind = "param_grad"
         self.pass_index = pass_index
-        self.backward_pass_index = pass_index
+        self.backward_pass_number = pass_index
         self.shape = param.shape
         self.dtype = param.dtype
         self.tensor_device = None
@@ -1141,7 +1141,7 @@ class _FastlogGradPayloadContext:
         self.has_op = True
         self.grad_kind = "grad_output"
         self.pass_index = pass_index
-        self.backward_pass_index = pass_index
+        self.backward_pass_number = pass_index
         self.shape = ctx.shape
         self.dtype = ctx.dtype
         self.tensor_device = ctx.tensor_device
@@ -1158,7 +1158,7 @@ def _public_fastlog_label(ctx: Any) -> str:
 def _current_backward_pass(trace: "Trace") -> int | None:
     """Return the currently active backward pass index, if any."""
 
-    pass_index = getattr(trace, "_active_backward_pass_index", None)
+    pass_index = getattr(trace, "_active_backward_pass_number", None)
     return None if pass_index is None else int(pass_index)
 
 

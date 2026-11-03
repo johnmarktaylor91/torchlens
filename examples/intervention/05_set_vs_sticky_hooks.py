@@ -1,8 +1,9 @@
-"""Choose between ``set`` and a sticky hook staged by ``do``.
+"""Choose between a ``set_only`` ``do`` and a sticky hook staged by ``do``.
 
 What this demonstrates
 ----------------------
-``set`` records a concrete one-shot replacement. ``do(site, hook)`` records a
+``do`` with the ``set_only`` engine records a concrete one-shot replacement
+without propagating it. ``do(site, hook)`` records a
 sticky callable/helper recipe that can be replayed or rerun repeatedly, and
 propagates it in the same call.
 
@@ -43,17 +44,21 @@ def main() -> None:
     torch.manual_seed(5)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    log = tl.trace(model, x)
     relu_shape = log.find_sites(tl.func("relu")).first().out.shape
 
     set_log = log.fork("set")
-    set_log.set(tl.func("relu"), torch.zeros(relu_shape), confirm_mutation=True).push()
+    set_log.do(
+        tl.func("relu"),
+        torch.zeros(relu_shape),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    ).push()
 
     hook_log = log.fork("hook")
     hook_log.do(tl.func("relu"), tl.zero_ablate())
 
     assert torch.allclose(set_log.output_ops[-1].out, hook_log.output_ops[-1].out)
-    assert set_log.state_history[-2]["op"] == "set"
+    assert "set" in [entry["op"] for entry in set_log.state_history]
     assert "do" in [row["op"] for row in hook_log.state_history]
 
 

@@ -52,7 +52,7 @@ def _grad_fn_call_matches_backward_filter(call: Any, pass_filter: BackwardPassFi
 
     if pass_filter is None:
         return True
-    return getattr(call, "backward_pass_index", None) in pass_filter
+    return getattr(call, "backward_pass_number", None) in pass_filter
 
 
 def _grad_fn_matches_backward_filter(
@@ -356,7 +356,7 @@ def _forward_correspondence_node_name(op: "Layer | None") -> str | None:
     Scoped to the MULTI-PASS case only (r18j gate rework): for a recurrent
     aggregate ``Layer`` the specific forward *pass* a grad_fn maps to is not
     recoverable from current metadata (all passes share ``op_label`` and
-    ``backward_pass_index``), so historically every grad_fn attached to ONE
+    ``backward_pass_number``), so historically every grad_fn attached to ONE
     aggregate node -- return ``None`` and let the caller SKIP the edge rather than
     emit that ambiguous aggregate endpoint. Omitting an unprovable correspondence
     is honest.
@@ -2265,9 +2265,9 @@ def _node_gradient_passes(layer: Any) -> set[int]:
     if grads is None:
         return set()
     return {
-        int(record.backward_pass_index)
+        int(record.backward_pass_number)
         for record in grads
-        if getattr(record, "backward_pass_index", None) is not None and record.is_saved
+        if getattr(record, "backward_pass_number", None) is not None and record.is_saved
     }
 
 

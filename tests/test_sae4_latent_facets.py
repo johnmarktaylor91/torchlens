@@ -2,7 +2,7 @@
 
 ``tl.bridge.sae.register("res", sae, site="fc1")`` makes the SAE's latents the
 facet family ``"res"`` at ``fc1``; ``tl.facet("res").latent(k)`` addresses
-latent ``k`` at the doors a ``tl.head`` selector serves (``Trace.set``,
+latent ``k`` at the doors a ``tl.head`` selector serves (set_only ``Trace.do``,
 ``attach_hooks``, ``Trace.do``, ``fork().do``) and
 ``trace["fc1"].facets["res[k]"]`` reads it. An edit adds the decoder-space
 change of the edited latents to the site and leaves the reconstruction error
@@ -150,7 +150,11 @@ _DOORS = {
     "trace_do": lambda trace, site, hook: trace.do(site, hook, intervention=_IN_PLACE),
     "fork_do": lambda trace, site, hook: trace.fork("door").do(site, hook),
     "tl_do": lambda trace, site, hook: trace.do(site, hook, intervention=_IN_PLACE),
-    "set": lambda trace, site, hook: trace.fork("door").set(site, hook).push(),
+    "set": lambda trace, site, hook: (
+        trace.fork("door")
+        .do(site, hook, intervention=tl.options.InterventionOptions(engine="set_only"))
+        .push()
+    ),
 }
 
 
@@ -318,7 +322,15 @@ def test_a_latent_set_is_one_simultaneous_write(setup) -> None:
 
 def test_set_writes_a_latent_value(setup) -> None:
     model, x, _sae = setup
-    edited = _trace(model, x).fork("pin").set(tl.facet("res").latent(1), torch.full((2,), 4.0))
+    edited = (
+        _trace(model, x)
+        .fork("pin")
+        .do(
+            tl.facet("res").latent(1),
+            torch.full((2,), 4.0),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
+    )
     expected = [[h[j] + (4.0 - _latents(h)[1]) * W_DEC[1][j] for j in range(4)] for h in X]
     edited.push()
     torch.testing.assert_close(_site_out(edited), torch.tensor(expected), **TOL)

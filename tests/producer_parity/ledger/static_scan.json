@@ -7416,6 +7416,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "is_output_parent",
+  "file": "torchlens/debug/_graph.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/debug/_graph.py",

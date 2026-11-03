@@ -399,7 +399,7 @@ def register(name: str, sae: Any, *, site: Any) -> None:
 
     After ``tl.bridge.sae.register("res", sae, site="blocks.4")``,
     ``tl.facet("res").latent(3442)`` addresses latent 3442 wherever a
-    ``tl.head`` selector works (``Trace.set``, ``attach_hooks``, ``do``,
+    ``tl.head`` selector works (``attach_hooks``, ``do``,
     ``fork().do``), and ``trace["blocks.4"].facets["res[3442]"]`` reads it.
     Registration is process-wide and seen by traces captured before it.
 

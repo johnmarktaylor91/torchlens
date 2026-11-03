@@ -167,7 +167,7 @@ def _has_saved_gradients(trace: Trace) -> tuple[bool, str | None]:
         if len(trace.autograd.backward_passes) == 0:
             return False, "forward-only trace; no backward pass was captured"
         if len(trace.saved_grad_ops) == 0:
-            return False, "no saved gradients; re-trace with save_grads=True and log_backward()"
+            return False, "no saved gradients; re-trace with save_grads=True and backward()"
     except ValueError as exc:
         return False, str(exc)
     return True, None

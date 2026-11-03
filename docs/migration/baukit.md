@@ -85,8 +85,8 @@ RESULT = (list(features["out"].shape), torch.equal(features["out"], seen["out"])
 | Save edited trace recipe | `save_intervention(..., level=...)` | TorchLens has first-class recipe persistence. |
 | Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, reconstruction_ready=True)` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |
 
-Editing an activation after capture, the TorchLens spelling of baukit's `edit_output`: capture
-with `replayable=True`, fork, apply an edit at the site, and read the downstream output.
+Editing an activation after capture, the TorchLens spelling of baukit's `edit_output`: capture,
+fork, apply an edit at the site, and read the downstream output.
 
 ```python
 # migration-test: tool=torchlens expected=(True, True)
@@ -97,7 +97,7 @@ import torchlens as tl
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 x = torch.randn(2, 4)
-trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(model, x)
 edited = trace.fork("zeroed")
 edited.do(tl.module("1"), tl.zero_ablate())  # the ReLU output becomes all zeros
 head_out = edited[edited.output_layers[0]].out

@@ -59,7 +59,7 @@ class _CustomModel(nn.Module):
         return _DoubleFn.apply(x).sum()
 
 
-def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
+def _backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Return a Trace with backward metadata captured.
 
     Parameters
@@ -76,7 +76,7 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """
 
     trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
 
@@ -98,14 +98,14 @@ def _log_two_backward_passes(model: nn.Module, x: torch.Tensor) -> tl.Trace:
 
     trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss, retain_graph=True)
-    trace.log_backward(loss)
+    trace.backward(loss, retain_graph=True)
+    trace.backward(loss)
     return trace
 
 
 def test_draw_backward_renders(tmp_path: Path) -> None:
     """draw_backward returns DOT source and writes a non-empty output file."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
     outpath = tmp_path / "backward_graph"
 
     dot = trace.draw(
@@ -136,7 +136,7 @@ def test_backward_graph_bwd_filter_limits_visible_passes(tmp_path: Path) -> None
     assert "bwd 2" in dot
 
 
-def test_draw_backward_errors_without_log_backward() -> None:
+def test_draw_backward_errors_without_backward() -> None:
     """draw_backward errors clearly before explicit backward capture."""
     trace = tl.trace(
         _LinearReluModel(),
@@ -144,5 +144,5 @@ def test_draw_backward_errors_without_log_backward() -> None:
         capture=CaptureOptions(save_grads="all"),
     )
 
-    with pytest.raises(ValueError, match="call log_backward\\(loss\\) first"):
+    with pytest.raises(ValueError, match="call backward\\(loss\\) first"):
         trace.draw(graph="backward")

@@ -13,7 +13,7 @@ states:
   counterfactual "what would one training backward cost" is requestable
   in every grad state through :func:`backward_estimate` (the named door),
   always labeled hypothetical.
-- ``backward_observed``: ``log_backward`` recorded backward passes --
+- ``backward_observed``: ``backward`` recorded backward passes --
   timing is measured where fire timings exist, and the executed backward
   compute is COUNTED over the ATen calls that backward dispatched (each
   pass's ``BackwardPass.aten_ops``), exact for the matmul and

@@ -215,7 +215,7 @@ def _visible_backward_calls_by_pass(
         for call in grad_fn_handle.calls.values():
             if not _grad_fn_call_matches_backward_filter(call, pass_filter):
                 continue
-            pass_index = getattr(call, "backward_pass_index", None)
+            pass_index = getattr(call, "backward_pass_number", None)
             if pass_index is None:
                 continue
             calls_by_pass[int(pass_index)].append((grad_fn_handle, call))

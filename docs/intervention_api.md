@@ -88,8 +88,8 @@ portable selector after discovery.
 
 ## Forward Helpers
 
-Forward helpers return `Edit` objects that can be passed to `set`,
-`do`, live capture `hooks=...`, replay, or rerun.
+Forward helpers return `Edit` objects that can be passed to `do` (including
+the `set_only` engine), live capture `hooks=...`, replay, or rerun.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
@@ -222,7 +222,7 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 
 | Method | Use |
 | --- | --- |
-| `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
+| `log.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))` | Record a one-shot tensor or callable replacement and mark the recipe stale, without propagating it. |
 | `log.do(site, hook)` | Add a sticky helper/callable hook to the recipe and dispatch to `push`, `run` (with `model=`/`inputs=`), or `set_only` (stage without running; pass a `tl.when(site, hook)` recipe to stage a sticky hook). |
 | `log.clear_edits(site)` | Remove the sticky hooks staged at `site` (or by handle id with `log.clear_edits(handle=...)`). Removal takes effect at once, like a torch hook handle: a rerun or backward pass in progress skips the removed hooks from the next hook site it reaches, and the site firing at that moment finishes its queued hooks first. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
@@ -286,7 +286,7 @@ ran inside whatever came next, typically the next fork).
 
 `Trace.draw(intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
-`log.set(...)` or `log.do(...)`. Each edited node gets a purple ring and a
+`log.do(...)`. Each edited node gets a purple ring and a
 last row naming the edit (`Δ zero_ablate`), and the header names the edits;
 `show_cone=True` (off by default) adds a translucent purple underlay
 under the arrows and node outlines the edit changed downstream. Capture-time `intervene=...` calls record

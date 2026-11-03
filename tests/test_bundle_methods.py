@@ -78,7 +78,7 @@ def test_bundle_call_accessors_resolve_listed_labels() -> None:
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
     bundle = tl.Bundle({"first": trace, "second": trace}, baseline="first")
 
     module_label = next(iter(bundle.module_calls))

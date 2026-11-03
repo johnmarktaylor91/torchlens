@@ -203,6 +203,8 @@ def _edge_trace(request: _AuditRequest, inputs: Any) -> Any:
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,
+            # replayable=True stays: the edge audit reads EdgeUseRecords, which only a
+            # replayable capture records (edge_provenance_unavailable otherwise).
             capture=CaptureOptions(replayable=True),
             save="all",
         )
