@@ -14,7 +14,10 @@ other TorchLens class also defines (``Module.total_flops_forward``,
 ``Buffer.activation_memory``) is rewritten only when the receiver looks like
 an Op or Layer (``op``, ``layer``, ``trace.layers[...]``, ``self`` inside the
 record classes, ...). Skipped sites and string-literal uses
-(``getattr(x, "flops_forward")``) are listed for review instead.
+(``hasattr(x, "flops_forward")``) are listed for review instead; a
+``getattr(x, "<former name>", default)`` becomes ``record_member(...)``, also
+for a removed member: its typed refusal is an ``AttributeError``, so the plain
+``getattr`` would return ``default`` silently.
 
 Markdown files and notebooks get a narrower textual rewrite: ``Op.<name>``,
 ``Layer.<name>`` and the same receiver shapes as above.
@@ -109,6 +112,22 @@ def build_moves(groups: set[str]) -> dict[str, tuple[str, str]]:
         moves.pop(name, None)
         print(f"clash: {name} differs between Op and Layer; rewrite by hand", file=sys.stderr)
     return moves
+
+
+def build_removed(groups: set[str]) -> frozenset[str]:
+    """Return the removed former names when ``removed`` is among ``groups``.
+
+    A removed member has no read spelling (an attribute read is rewritten by
+    hand), but ``getattr(x, name, default)`` on it must read through the
+    helper: the refusal subclasses ``AttributeError`` and would otherwise be
+    swallowed as ``default``.
+    """
+
+    if "removed" not in groups:
+        return frozenset()
+    return frozenset(
+        old for rows in load_table().values() for old, group, _ in rows if group == "removed"
+    )
 
 
 #: Former names per record class, for ``Op.<name>`` / ``Layer.<name>`` text spellings.
@@ -213,8 +232,10 @@ class _Finder(ast.NodeVisitor):
         moves: dict[str, tuple[str, str]],
         shared: set[str],
         imported: frozenset[str] = frozenset(),
+        removed: frozenset[str] = frozenset(),
     ) -> None:
         self.moves = moves
+        self.removed = removed
         self.imported = imported
         self.shared = shared
         self.edits: list[tuple[int, int, str, str]] = []
@@ -250,7 +271,7 @@ class _Finder(ast.NodeVisitor):
             and func.id in {"getattr", "hasattr", "setattr", "delattr"}
             and len(node.args) >= 2
             and isinstance(node.args[1], ast.Constant)
-            and node.args[1].value in self.moves
+            and (node.args[1].value in self.moves or node.args[1].value in self.removed)
         ):
             if func.id == "getattr" and func.end_lineno and func.end_col_offset:
                 self.edits.append((func.end_lineno, func.end_col_offset, "getattr", HELPER))
@@ -270,14 +291,18 @@ def _helper_import(path: Path) -> str:
 
 
 def rewrite_python(
-    text: str, moves: dict, shared: set[str], path: Path | None = None
+    text: str,
+    moves: dict,
+    shared: set[str],
+    path: Path | None = None,
+    removed: frozenset[str] = frozenset(),
 ) -> tuple[str, list]:
     """Return the rewritten module text and its skipped sites."""
 
     tree = ast.parse(text)
     if KEEP_FLAT in text:
         return text, []
-    finder = _Finder(moves, shared, _imported_names(tree))
+    finder = _Finder(moves, shared, _imported_names(tree), removed)
     finder.visit(tree)
     lines = text.splitlines(keepends=True)
     if finder.uses_helper and path is not None and f"import {HELPER}" not in text:
@@ -345,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report", action="store_true")
     args = parser.parse_args(argv)
     moves = build_moves(set(args.groups.split(",")))
+    removed = build_removed(set(args.groups.split(",")))
     load_record_names(set(args.groups.split(",")))
     shared = other_class_members(REPO) & set(moves)
     pending = 0
@@ -355,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
         skipped: list = []
         if path.suffix == ".py":
             try:
-                new, skipped = rewrite_python(text, moves, shared, path)
+                new, skipped = rewrite_python(text, moves, shared, path, removed)
             except SyntaxError:
                 continue
         elif path.suffix == ".ipynb":

@@ -60,7 +60,7 @@ def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
     mapping: dict[int, str] = {}
     ranks: dict[int, int] = {}
     for layer in trace._layer_list:
-        grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
+        grad_fn_object_id = record_member(layer, "grad_fn_object_id", None)
         if grad_fn_object_id is None:
             continue
         candidate_rank = _layer_grad_fn_pairing_rank(layer)

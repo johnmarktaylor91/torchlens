@@ -485,7 +485,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     for grad_id in grad_fn_logs:
         register_grad_id(grad_id)
     for grad_fn in grad_fn_logs.values():
-        register_grad_id(getattr(grad_fn, "grad_fn_object_id", None))
+        register_grad_id(getattr(grad_fn, "grad_fn_object_id", None))  # record-groups: flat
         register_grad_id(getattr(grad_fn, "creator_object_id", None))
         for next_id in getattr(grad_fn, "next_grad_fn_ids", ()) or ():
             register_grad_id(next_id)
