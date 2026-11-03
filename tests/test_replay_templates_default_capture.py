@@ -14,6 +14,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
 pytestmark = pytest.mark.filterwarnings("ignore::torchlens.errors.InterventionWarning")
 
@@ -224,11 +225,13 @@ def test_structure_only_capture_records_no_templates_and_refuses_replay() -> Non
     assert trace.is_replayable is False
     assert trace.options.save_arg_templates is False
     assert all(op.args_template is None for op in trace.ops)
-    with pytest.raises(tl.errors.ReplayPreconditionError) as info:
+    # The structure-only capability door refuses first, before the template
+    # precondition, and it already names the remedy without the flag.
+    with pytest.raises(StructureOnlyCapabilityError) as info:
         trace.fork().do(tl.module("fc2"), tl.zero_ablate())
     message = str(info.value)
+    assert "structure_only_replay_unsupported" in message
     assert "structure_only" in message
-    assert "tl.trace(model, inputs)" in message
     assert "replayable=True" not in message
 
 
