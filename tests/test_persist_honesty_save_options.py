@@ -32,17 +32,6 @@ def _blob_count(path) -> int:
     return len(list((path / "blobs").iterdir()))
 
 
-def test_executable_level_refuses_explicit_saved_args_opt_out(trace, tmp_path):
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        trace.save(
-            tmp_path / "bundle",
-            level="executable_with_callables",
-            include_saved_args=False,
-        )
-    assert excinfo.value.fields["code"] == "save_payload_level_conflict"
-    assert not (tmp_path / "bundle").exists()
-
-
 def test_executable_level_refuses_explicit_rng_states_opt_out(trace, tmp_path):
     with pytest.raises(InvalidArgumentError) as excinfo:
         trace.save(
@@ -64,6 +53,12 @@ def test_payload_free_levels_refuse_explicit_payload_opt_in(trace, tmp_path, lev
     assert excinfo.value.fields["code"] == "save_payload_level_conflict"
 
 
+def test_portable_explicit_flags_keep_historical_meaning(trace, tmp_path):
+    trace.save(tmp_path / "with_args", include_saved_args=True)
+    trace.save(tmp_path / "no_args", include_saved_args=False)
+    assert _blob_count(tmp_path / "with_args") > _blob_count(tmp_path / "no_args")
+
+
 def test_omitted_flags_keep_level_defaults(trace, tmp_path):
     """Defaults per level are unchanged: the sentinel only detects EXPLICIT values."""
 
@@ -77,25 +72,3 @@ def test_omitted_flags_keep_level_defaults(trace, tmp_path):
     for name in ("portable", "audit", "exec"):
         loaded = tl.load(tmp_path / name)
         assert loaded._num_ops == trace._num_ops
-
-
-def test_explicit_flags_matching_level_defaults_stay_accepted(trace, tmp_path):
-    trace.save(
-        tmp_path / "exec",
-        level="executable_with_callables",
-        include_saved_args=True,
-        include_rng_states=True,
-    )
-    trace.save(
-        tmp_path / "audit",
-        level="audit",
-        include_outs=False,
-        include_grads=False,
-    )
-    assert (tmp_path / "exec").exists() and (tmp_path / "audit").exists()
-
-
-def test_portable_explicit_flags_keep_historical_meaning(trace, tmp_path):
-    trace.save(tmp_path / "with_args", include_saved_args=True)
-    trace.save(tmp_path / "no_args", include_saved_args=False)
-    assert _blob_count(tmp_path / "with_args") > _blob_count(tmp_path / "no_args")

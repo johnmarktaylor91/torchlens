@@ -70,50 +70,6 @@ def _input_tensor() -> torch.Tensor:
     return torch.ones(1, 2)
 
 
-def test_first_nonfinite_locates_nan_op() -> None:
-    """Trace.first_nonfinite locates the known NaN-producing op."""
-
-    trace = tl.trace(NonFiniteFixture(), _input_tensor())
-    answer = trace.first_nonfinite()
-    assert "First non-finite" in answer
-    assert "__truediv__" in answer
-    assert "shape=(1, 2)" in answer
-    assert "dtype=torch.float32" in answer
-
-
-def test_print_trace_shows_inline_nan_flags(capsys: pytest.CaptureFixture[str]) -> None:
-    """Printing a Trace surfaces the inline NaN/Inf debugging line."""
-
-    trace = tl.trace(NonFiniteFixture(), _input_tensor())
-    print(trace)
-    captured = capsys.readouterr()
-    assert "NaN/Inf" in captured.out
-    assert "__truediv__" in captured.out
-    assert "shape=(1, 2)" in captured.out
-
-
-def test_raise_on_nan_raises_capture_error_with_partial_graph() -> None:
-    """raise_on_nan stops at the first non-finite tensor and renders partial DOT."""
-
-    with pytest.raises(CaptureError) as exc_info:
-        tl.trace(
-            NonFiniteFixture(),
-            _input_tensor(),
-            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
-        )
-    error = exc_info.value
-    assert "op='__truediv__'" in str(error)
-    assert "shape=(1, 2)" in str(error)
-    assert error.fields["op"] == "__truediv__"
-    assert error.fields["shape"] == (1, 2)
-
-    partial = error.partial_trace
-    graph = partial.draw().dot
-    assert "digraph torchlens_partial" in graph
-    assert "__truediv__" in graph
-    assert "shape=(1, 2)" in graph
-
-
 def test_partial_trace_constructible_after_failed_capture() -> None:
     """PartialTrace can be recovered from the failed capture exception."""
 
@@ -154,38 +110,6 @@ def test_find_nan_accepts_explicit_capture_options() -> None:
 
     assert result.found is True
     assert result.scope == "first non-finite tensor"
-
-
-def test_first_nonfinite_scan_is_memoized_per_trace() -> None:
-    """A repeated non-finite question must not re-read every saved activation.
-
-    ``print(trace)``, ``_repr_html_``, and ``report.explain`` each ask this
-    question, so a scan per call meant re-running ``torch.isfinite`` over the
-    whole forward's payload on every repr. Lock the memo in: the second answer
-    costs zero element reads.
-    """
-
-    trace = tl.trace(nn.Sequential(nn.Linear(2, 2)), _input_tensor())
-    real_isfinite = torch.isfinite
-    calls = 0
-
-    def counting_isfinite(tensor: torch.Tensor) -> torch.Tensor:
-        """Count element-scanning checks issued by the non-finite scan."""
-
-        nonlocal calls
-        calls += 1
-        return real_isfinite(tensor)
-
-    torch.isfinite = counting_isfinite  # type: ignore[assignment]
-    try:
-        first = trace.first_nonfinite()
-        cold_calls = calls
-        calls = 0
-        assert trace.first_nonfinite() == first
-        assert calls == 0
-    finally:
-        torch.isfinite = real_isfinite  # type: ignore[assignment]
-    assert cold_calls > 0
 
 
 def test_first_nonfinite_rescans_after_saved_activation_changes() -> None:

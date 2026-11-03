@@ -120,7 +120,7 @@ def test_fast_door_on_a_fork_applies_a_module_target_after_one_recapture() -> No
     model = _model()
     ready = tl.trace(model, _inputs(0), capture=CaptureOptions(replayable=True))
     fork = ready.fork()
-    fork.attach_hooks(tl.module("fc1"), tl.zero_ablate(), confirm_mutation=True)
+    fork._attach_hooks(tl.module("fc1"), tl.zero_ablate(), confirm_mutation=True)
 
     with pytest.raises(RunCapabilityUnavailableError) as unsteered:
         fork.run(inputs=_inputs(1), fast=True)
@@ -137,7 +137,7 @@ def test_fast_door_refuses_a_function_target_typed() -> None:
     model = _model()
     ready = tl.trace(model, _inputs(0), capture=CaptureOptions(replayable=True))
     fork = ready.fork()
-    fork.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    fork._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
 
     with pytest.raises(RunCapabilityUnavailableError) as refused:
         fork.run(inputs=_inputs(1), fast=True)

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._data_classes._lookup_kinds import op_at
+from .._data_classes.func_call_location import display_frame
 from .._utils._multipass_access import is_multipass_layer
 
 if TYPE_CHECKING:
@@ -41,7 +42,11 @@ def _ordered_ops(trace: Trace) -> list[Op]:
 
 
 def _source_line(op: Op) -> str | None:
-    """Return the first source location for an op.
+    """Return the source location of the line that ran an op.
+
+    The location is the innermost recorded frame outside torch's own code
+    (:func:`torchlens._data_classes.func_call_location.display_frame`), the
+    same line an op's card shows.
 
     Parameters
     ----------
@@ -54,10 +59,9 @@ def _source_line(op: Op) -> str | None:
         ``"file:line"`` or ``None`` when no source context is present.
     """
 
-    context = getattr(op, "code_context", None) or ()
-    if not context:
+    location = display_frame(getattr(op, "code_context", None))
+    if location is None:
         return None
-    location = context[0]
     file_name = getattr(location, "file", None)
     line_number = getattr(location, "line_number", None)
     if file_name is None or line_number is None:
@@ -286,3 +290,58 @@ def _op_from_label(trace: Trace, label: str) -> Op | None:
 
     op, _ = _resolve_op(trace, label)
     return op
+
+
+def _nonfinite_kind(tensor: torch.Tensor) -> str:
+    """Classify non-finite values in a tensor.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor to inspect.
+
+    Returns
+    -------
+    str
+        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
+    """
+
+    if not torch.is_floating_point(tensor) and not torch.is_complex(tensor):
+        return "none"
+    has_nan = bool(torch.isnan(tensor).any().item())
+    has_inf = bool(torch.isinf(tensor).any().item())
+    if has_nan and has_inf:
+        return "nan+inf"
+    if has_nan:
+        return "nan"
+    if has_inf:
+        return "inf"
+    return "none"
+
+
+def _module_address(op: Op) -> str | None:
+    """Return the containing module address recorded for an op.
+
+    Parameters
+    ----------
+    op:
+        Operation whose module metadata should be read.
+
+    Returns
+    -------
+    str | None
+        Atomic module address or the innermost containing module address.
+    """
+
+    atomic_address = getattr(op, "atomic_module_address", None)
+    if isinstance(atomic_address, str):
+        return atomic_address
+    # Live (mid-capture) ops have no atomic_module_address yet; the fallback
+    # reads the innermost module CALL label ("0:1"), which carries the pass
+    # qualifier -- strip it so the field keeps its ADDRESS contract.
+    module = getattr(op, "module", None)
+    if isinstance(module, tuple) and module and isinstance(module[0], str):
+        return module[0].rsplit(":", 1)[0]
+    if isinstance(module, str):
+        return module.rsplit(":", 1)[0]
+    return None

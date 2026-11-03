@@ -308,6 +308,14 @@ class ModuleCall:
 
     ``ops`` stores **pass-qualified** labels (e.g. ``"conv2d_1_1:1"``)
     that resolve to individual Op entries.
+
+    Examples
+    --------
+    >>> call = tl.trace(model, x).modules["0"].calls[0]
+    >>> type(call).__name__
+    'ModuleCall'
+    >>> call.forward_pre_hook_effects
+    ()
     """
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -1205,6 +1213,12 @@ class Module:
     For single-pass modules, per-pass fields (``input_layers``,
     ``output_layers``, ``forward_args``, ``forward_kwargs``) are accessible
     directly via ``_single_pass_or_error()`` delegation to ``ops[0]``.
+
+    Examples
+    --------
+    >>> module = tl.trace(model, x).modules["0"]
+    >>> type(module).__name__, module.address, len(module.calls)
+    ('Module', '0', 1)
     """
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {

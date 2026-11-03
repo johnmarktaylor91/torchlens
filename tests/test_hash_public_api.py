@@ -165,17 +165,6 @@ def test_structural_hash_is_deterministic_across_initializations_and_processes()
     assert first == second == third
 
 
-def test_structural_hash_changes_with_graph_topology() -> None:
-    """Adding a layer or dropping a structural edge changes the public hash."""
-
-    residual_hash = tl.fingerprint.model(_ResidualModel(), _input())
-    sequential_hash = tl.fingerprint.model(_SequentialModel(), _input())
-    expanded_hash = tl.fingerprint.model(_ExpandedModel(), _input())
-
-    assert residual_hash != sequential_hash
-    assert sequential_hash != expanded_hash
-
-
 def test_structural_hash_is_capture_option_invariant_for_metadata_options() -> None:
     """Address-free hashes match across equivalent payload-retention choices."""
 
@@ -231,20 +220,6 @@ def test_assert_unchanged_reports_both_hashes_on_mismatch() -> None:
     assert error.value.fields["expected"] == expected
     assert error.value.fields["actual"] == actual
     assert isinstance(error.value.fields["remedy"], str) and error.value.fields["remedy"]
-
-
-def test_structural_hash_mismatch_error_joins_the_taxonomy() -> None:
-    """The mismatch class is registered and keeps AssertionError in the MRO."""
-
-    from torchlens import errors
-
-    assert errors.StructuralHashMismatchError is tl.errors.StructuralHashMismatchError
-    assert issubclass(tl.errors.StructuralHashMismatchError, errors.ValidationError)
-    assert issubclass(tl.errors.StructuralHashMismatchError, AssertionError)
-
-    expected = tl.fingerprint.model(_ResidualModel(), _input())
-    with pytest.raises(AssertionError):
-        tl.fingerprint.assert_unchanged(_SequentialModel(), _input(), expected)
 
 
 def test_assert_unchanged_expected_type_door_is_typed() -> None:

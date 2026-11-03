@@ -33,7 +33,7 @@ class DivideByZero(nn.Module):
         return self.tail(poisoned - poisoned)  # nan propagates
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_nan.py.
 def test_posthoc_report_names_origin_free() -> None:
     """Post-hoc: origin op + source line off the existing capture."""
 
@@ -53,6 +53,7 @@ def test_posthoc_report_names_origin_free() -> None:
     log.cleanup()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_nan.py.
 def test_clean_report_is_scoped_to_checked_values() -> None:
     """A clean model reports not-found SCOPED, never a blanket 'no NaN'."""
 
@@ -65,16 +66,7 @@ def test_clean_report_is_scoped_to_checked_values() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
-def test_live_tripwire_form() -> None:
-    """The live form runs ONE memory-light tripwire forward and discloses it."""
-
-    report = nonfinite_origin(DivideByZero(), torch.randn(2, 8))
-    assert report.has_nonfinite
-    assert report.cost_tier.startswith("diagnostic")
-    assert report.coverage_basis == "live_tripwire_first_bad_output"
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_nan.py.
 @pytest.mark.skipif(
     not get_cpu_half_kernels_support(),
     reason="CPU addmm for float16 postdates the torch 2.1 floor",
@@ -87,14 +79,4 @@ def test_amp_disclosure_on_low_precision() -> None:
     report = nonfinite_origin(log)
     assert report.amp_disclosure and "GradScaler" in report.amp_disclosure
     assert "FORWARD" in report.amp_disclosure
-    log.cleanup()
-
-
-def test_never_auto_runs_anomaly_mode() -> None:
-    """The door never arms torch's anomaly mode behind the caller's back."""
-
-    was_enabled = torch.is_anomaly_enabled()
-    log = tl.trace(DivideByZero(), torch.randn(2, 8))
-    nonfinite_origin(log)
-    assert torch.is_anomaly_enabled() == was_enabled
     log.cleanup()

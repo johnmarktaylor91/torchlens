@@ -59,6 +59,15 @@ class PatchGrid:
     ``receipts["corrupted_metric"]``; a cell's effect is its value minus
     ``corrupted_metric`` (the run every cell patches into), which is what
     :func:`torchlens.transformer.receipt_from_patch_grid` plots.
+
+    Examples
+    --------
+    >>> grid = PatchGrid(axes=("layer",), coordinates={"layer": ("h.0", "h.1")},
+    ...                  values=torch.zeros(2))
+    >>> grid.axes
+    ('layer',)
+    >>> tuple(grid.values.shape)
+    (2,)
     """
 
     axes: tuple[str, ...]
@@ -138,6 +147,20 @@ def patch_grid(  # noqa: PLR0913 -- the memo-normative driver signature (section
         ``values`` are the patched-run metrics; the receipts carry the fire
         ledger, the cost disclosure and the unpatched baselines
         ``clean_metric`` and ``corrupted_metric``.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=1, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> a, b = torch.randint(0, 32, (2, 1, 6))
+    >>> grid = tl.mechinterp.patch_grid(lm, a, b,
+    ...                       lambda t: t.modules["lm_head"].out[0, -1, 3], positions=[1])
+    patching grid: ... cell... x ~...s/rerun ~= ...s total
+    >>> grid.axes, tuple(grid.values.shape)
+    (('layer', 'position'), (1, 1))
     """
 
     _validate_grid_request(engine, axes, sites)
@@ -376,7 +399,22 @@ def _cell_hook(
 def patch_residual_grid(
     model: Any, clean_input: Any, corrupted_input: Any, metric: Any, **kwargs: Any
 ) -> PatchGrid:
-    """Preset: the classic [layer, position] residual-stream grid."""
+    """Preset: the classic [layer, position] residual-stream grid.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=1, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> a, b = torch.randint(0, 32, (2, 1, 6))
+    >>> grid = tl.mechinterp.patch_residual_grid(lm, a, b,
+    ...                       lambda t: t.modules["lm_head"].out[0, -1, 3], positions=[1])
+    patching grid: ... cell... x ~...s/rerun ~= ...s total
+    >>> grid.axes, tuple(grid.values.shape)
+    (('layer', 'position'), (1, 1))
+    """
 
     return patch_grid(
         model,
@@ -392,7 +430,22 @@ def patch_residual_grid(
 def patch_heads_grid(
     model: Any, clean_input: Any, corrupted_input: Any, metric: Any, **kwargs: Any
 ) -> PatchGrid:
-    """Preset: the [layer, head] z-patching grid."""
+    """Preset: the [layer, head] z-patching grid.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=1, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> a, b = torch.randint(0, 32, (2, 1, 6))
+    >>> grid = tl.mechinterp.patch_heads_grid(lm, a, b,
+    ...                       lambda t: t.modules["lm_head"].out[0, -1, 3], heads=[0])
+    patching grid: ... cell... x ~...s/rerun ~= ...s total
+    >>> grid.axes, tuple(grid.values.shape)
+    (('layer', 'head'), (1, 1))
+    """
 
     return patch_grid(
         model,

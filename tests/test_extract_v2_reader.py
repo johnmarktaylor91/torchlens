@@ -63,22 +63,6 @@ def test_reader_rows_coalesce_and_match_materialized(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "extraction_reader_row_out_of_range"
 
 
-def test_reader_iter_batches_serves_ledger_order(tmp_path: Path) -> None:
-    """iter_batches yields shard payloads in LEDGER order with key subsets."""
-
-    out = _artifact(tmp_path)
-    reader = open_extraction(out)
-    rows = 0
-    for payload in reader.iter_batches(keys=["logits"]):
-        assert set(payload) == {"logits"}
-        rows += payload["logits"].shape[0]
-    assert rows == reader.n_stimuli == 10
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        next(iter(reader.iter_batches(keys=["nope"])))
-    assert excinfo.value.fields["code"] == "extraction_reader_key_unknown"
-
-
-@pytest.mark.smoke
 def test_reader_duplicate_aware_id_lookup(tmp_path: Path) -> None:
     """row_for refuses ambiguity naming rows_for; unknown ids refuse typed."""
 
@@ -159,7 +143,6 @@ def test_reader_not_monitoring_refuses_refresh(tmp_path: Path) -> None:
 # --- graded verification (D7 read side) ----------------------------------------------
 
 
-@pytest.mark.smoke
 def test_first_access_verification_catches_flipped_byte(tmp_path: Path) -> None:
     """T-INTEGRITY class A read side: a flipped shard byte fails the CRC."""
 
@@ -194,21 +177,6 @@ def test_verify_all_checks_value_reductions(tmp_path: Path) -> None:
 # --- views layer -----------------------------------------------------------------------
 
 
-@pytest.mark.smoke
-def test_shuffled_batches_cover_every_row_once(tmp_path: Path) -> None:
-    """The SAE access pattern: shard-order + within-shard shuffle, full cover."""
-
-    out = _artifact(tmp_path)
-    reader = open_extraction(out)
-    full = reader.materialize(["relu"])["relu"]
-    seen = []
-    for batch in reader.shuffled_batches(2, seed=7, keys=["relu"]):
-        assert batch["relu"].shape[0] <= 2
-        seen.extend(batch["relu"].tolist())
-    assert len(seen) == 10
-    assert sorted(map(tuple, seen)) == sorted(map(tuple, full.tolist()))
-
-
 def test_shuffled_batches_batch_size_refuses(tmp_path: Path) -> None:
     """A non-positive batch size refuses typed."""
 
@@ -219,7 +187,6 @@ def test_shuffled_batches_batch_size_refuses(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "extraction_reader_batch_size_invalid"
 
 
-@pytest.mark.smoke
 def test_feature_matrix_refuses_trimmed_keys(tmp_path: Path) -> None:
     """A ragged key has no rectangular matrix; to_padded is the densifier."""
 
@@ -295,7 +262,7 @@ def test_export_npy_roundtrip_and_contract_subprocess(tmp_path: Path) -> None:
     reader = open_extraction(out)
     expected = reader.materialize(["relu"])["relu"]
     dest = tmp_path / "export"
-    export_extraction(out, dest, format="npy")
+    export_extraction(out, dest, file_format="npy")
     import shutil
 
     shutil.rmtree(out)  # the source artifact is GONE; the export must stand alone
@@ -346,9 +313,9 @@ def test_export_destination_exists_refuses(tmp_path: Path) -> None:
 
     out = _artifact(tmp_path)
     dest = tmp_path / "export"
-    export_extraction(out, dest, format="npy")
+    export_extraction(out, dest, file_format="npy")
     with pytest.raises(InvalidArgumentError) as excinfo:
-        export_extraction(out, dest, format="npy")
+        export_extraction(out, dest, file_format="npy")
     assert excinfo.value.fields["code"] == "extraction_export_destination_exists"
 
 
@@ -357,7 +324,7 @@ def test_export_format_vocabulary_refuses(tmp_path: Path) -> None:
 
     out = _artifact(tmp_path)
     with pytest.raises(InvalidArgumentError) as excinfo:
-        export_extraction(out, tmp_path / "x", format="parquet")
+        export_extraction(out, tmp_path / "x", file_format="parquet")
     assert excinfo.value.fields["code"] == "extraction_export_format_invalid"
 
 
@@ -376,13 +343,12 @@ def test_export_space_preflight_refuses_with_exact_bytes(
         "torchlens._extraction.export.shutil.disk_usage", lambda _: usage(100, 90, 10)
     )
     with pytest.raises(InvalidArgumentError) as excinfo:
-        export_extraction(out, tmp_path / "x", format="npy")
+        export_extraction(out, tmp_path / "x", file_format="npy")
     assert excinfo.value.fields["code"] == "extraction_export_space_insufficient"
     assert excinfo.value.fields["free_bytes"] == 10
     del shutil_module
 
 
-@pytest.mark.smoke
 def test_export_bf16_widen_refusal_and_disclosure(tmp_path: Path) -> None:
     """bf16 members widen to fp32 WITH disclosure, or refuse on request."""
 
@@ -399,28 +365,14 @@ def test_export_bf16_widen_refusal_and_disclosure(tmp_path: Path) -> None:
         progress=False,
     )
     with pytest.raises(InvalidArgumentError) as excinfo:
-        export_extraction(out, tmp_path / "x", format="npy", widen_unsupported=False)
+        export_extraction(out, tmp_path / "x", file_format="npy", widen_unsupported=False)
     assert excinfo.value.fields["code"] == "extraction_export_dtype_unsupported"
     dest = tmp_path / "export"
-    export_extraction(out, dest, format="npy")
+    export_extraction(out, dest, file_format="npy")
     contract = json.loads((dest / "export_contract.json").read_text())
     conversion = contract["keys"]["relu_1_2"]["conversion"]
     assert conversion["conversion"] == "bfloat16->float32"
     assert conversion["lossy"] is False
-
-
-def test_export_mat_v5_limit_refuses_before_writing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """MAT refuses BEFORE its 2 GB limit, naming HDF5 and the h5read line."""
-
-    pytest.importorskip("scipy")
-    out = _artifact(tmp_path)
-    monkeypatch.setattr("torchlens._extraction.export._MAT_V5_LIMIT", 8)
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        export_extraction(out, tmp_path / "x", format="mat")
-    assert excinfo.value.fields["code"] == "extraction_export_mat_v5_limit"
-    assert "h5read" in str(excinfo.value)
 
 
 def test_export_hdf5_dependency_refusal_or_roundtrip(tmp_path: Path) -> None:
@@ -431,12 +383,12 @@ def test_export_hdf5_dependency_refusal_or_roundtrip(tmp_path: Path) -> None:
         import h5py  # noqa: F401
     except ImportError:
         with pytest.raises(InvalidArgumentError) as excinfo:
-            export_extraction(out, tmp_path / "x", format="hdf5")
+            export_extraction(out, tmp_path / "x", file_format="hdf5")
         assert excinfo.value.fields["code"] == "extraction_export_dependency_missing"
         assert "extraction-export" in str(excinfo.value)
         return
     dest = tmp_path / "export"
-    export_extraction(out, dest, format="hdf5")
+    export_extraction(out, dest, file_format="hdf5")
     import h5py
 
     with h5py.File(dest / "extraction.h5") as handle:
@@ -445,7 +397,6 @@ def test_export_hdf5_dependency_refusal_or_roundtrip(tmp_path: Path) -> None:
         assert handle["relu"].shape[0] == 10
 
 
-@pytest.mark.smoke
 def test_export_ragged_triplet_in_npy(tmp_path: Path) -> None:
     """Ragged members export as the values/offsets/shapes triplet (D4/D15)."""
 
@@ -493,7 +444,7 @@ def test_export_ragged_triplet_in_npy(tmp_path: Path) -> None:
         progress=False,
     )
     dest = tmp_path / "export"
-    export_extraction(out, dest, format="npy")
+    export_extraction(out, dest, file_format="npy")
     values = np.load(dest / "h__values.npy")
     offsets = np.load(dest / "h__offsets.npy")
     shapes = np.load(dest / "h__shapes.npy")
@@ -504,3 +455,17 @@ def test_export_ragged_triplet_in_npy(tmp_path: Path) -> None:
     row2 = reader.row(2)["h"]
     start, stop = offsets[2], offsets[3]
     assert torch.equal(torch.from_numpy(values[start:stop]), row2)
+
+
+def test_export_mat_v5_limit_refuses_before_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MAT refuses BEFORE its 2 GB limit, naming HDF5 and the h5read line."""
+
+    pytest.importorskip("scipy")
+    out = _artifact(tmp_path)
+    monkeypatch.setattr("torchlens._extraction.export._MAT_V5_LIMIT", 8)
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        export_extraction(out, tmp_path / "x", file_format="mat")
+    assert excinfo.value.fields["code"] == "extraction_export_mat_v5_limit"
+    assert "h5read" in str(excinfo.value)

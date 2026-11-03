@@ -22,7 +22,15 @@ from ..errors import CaptureError, TorchLensError
 
 
 class CaptureStatus(str, Enum):
-    """Terminal status vocabulary for one capture product."""
+    """Terminal status vocabulary for one capture product.
+
+    Examples
+    --------
+    >>> CaptureStatus("stopped") is CaptureStatus.STOPPED
+    True
+    >>> tl.trace(model, x).outcome.status.value
+    'complete'
+    """
 
     COMPLETE = "complete"
     STOPPED = "stopped"
@@ -33,7 +41,18 @@ class CaptureStatus(str, Enum):
 
 
 class CapturePhase(str, Enum):
-    """Failure phase attribution (FAILED outcomes only)."""
+    """Failure phase attribution (FAILED outcomes only).
+
+    Examples
+    --------
+    >>> CapturePhase("forward") is CapturePhase.FORWARD
+    True
+    >>> failed = tl.types.CaptureOutcome(
+    ...     tl.types.CaptureStatus.FAILED, phase=CapturePhase.FORWARD
+    ... )
+    >>> failed.phase.value
+    'forward'
+    """
 
     FORWARD = "forward"
     FINALIZE = "finalize"
@@ -42,7 +61,18 @@ class CapturePhase(str, Enum):
 
 
 class FailureOrigin(str, Enum):
-    """Diagnostic failure origin (FAILED outcomes only; never capability-steering)."""
+    """Diagnostic failure origin (FAILED outcomes only; never capability-steering).
+
+    Examples
+    --------
+    >>> FailureOrigin("user_op") is FailureOrigin.USER_OP
+    True
+    >>> failed = tl.types.CaptureOutcome(
+    ...     tl.types.CaptureStatus.FAILED, origin=FailureOrigin.USER_OP
+    ... )
+    >>> failed.origin.value
+    'user_op'
+    """
 
     USER_OP = "user_op"
     TORCHLENS = "torchlens"
@@ -82,6 +112,16 @@ class CaptureOutcome:
         True when reconstructed from structural evidence, not a settle stamp.
     settlement_note:
         Secondary-failure / demotion / provenance disclosure, string-only.
+
+    Examples
+    --------
+    >>> outcome = tl.trace(model, x).outcome
+    >>> outcome.status is tl.types.CaptureStatus.COMPLETE
+    True
+    >>> outcome.is_partial
+    False
+    >>> CaptureOutcome(tl.types.CaptureStatus.STOPPED, reason="halt").is_partial
+    True
     """
 
     status: CaptureStatus
@@ -150,6 +190,11 @@ class CaptureOutcomeError(TorchLensError, ValueError):
     ``InvalidArgumentError`` for its other three refusal reasons) are all
     ``ValueError``-lineage, so a caller's natural ``except ValueError`` used
     to catch three of the door's four refusals and silently miss the N-gate.
+
+    Examples
+    --------
+    >>> issubclass(CaptureOutcomeError, tl.errors.TorchLensError)
+    True
     """
 
 
@@ -162,6 +207,13 @@ class StopSignalSwallowedError(CaptureError, RuntimeError):
     ``RuntimeError`` lineage (R64-4): it reports an invalid runtime state at
     the capture boundary, like its ``CaptureNotActiveError`` sibling; it was one
     of only two concrete publicly-raised classes with no builtin lineage.
+
+    Examples
+    --------
+    >>> issubclass(StopSignalSwallowedError, tl.errors.CaptureError)
+    True
+    >>> issubclass(StopSignalSwallowedError, tl.errors.TorchLensError)
+    True
     """
 
 

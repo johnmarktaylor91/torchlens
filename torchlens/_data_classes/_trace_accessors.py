@@ -10,6 +10,7 @@ from .._errors import AmbiguousOpLookupError
 from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
+from ._lookup_kinds import converted, module_call_for_key, output_op
 from ._nonfinite import nonfinite_op_labels
 from .op import Op
 
@@ -340,8 +341,6 @@ class TraceOpAccessor(Accessor[Op]):
             return super().__getitem__(key)
         except KeyError:
             # A module, module-call or buffer key names its output Op here.
-            from ._lookup_kinds import converted, output_op
-
             resolved = converted(self, key, output_op)
             if resolved is None:
                 raise
@@ -634,8 +633,6 @@ class TraceModuleCallAccessor(Accessor[Any]):
                 f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
                 f"position or a call-qualified label like '{key}:1'."
             )
-        from ._lookup_kinds import converted, module_call_for_key
-
         return converted(self, key, module_call_for_key)  # an op label names its call
 
 

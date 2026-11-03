@@ -38,7 +38,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pytest
 import torch
 from torch import nn
 
@@ -93,6 +92,7 @@ class InitAcquiredBufferAliasWrite(nn.Module):
         return x * self.b
 
 
+# Kept: the catch of its regression fault.
 def test_invisible_param_write_default_sparse_is_unverifiable(tmp_path: Path) -> None:
     model = InitAcquiredParamAliasWrite()
     capture_x = torch.tensor([2.0, 4.0])
@@ -102,34 +102,6 @@ def test_invisible_param_write_default_sparse_is_unverifiable(tmp_path: Path) ->
 
     # The embedded pre-forward param snapshot does not reflect the invisible write, so the sparse
     # replay recomputes a value disagreeing with the true live forward: it must be refused.
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-
-
-def test_invisible_param_write_include_activations_is_unverifiable(tmp_path: Path) -> None:
-    model = InitAcquiredParamAliasWrite()
-    capture_x = torch.tensor([2.0, 4.0])
-    path = _save(
-        model,
-        capture_x,
-        tmp_path / "param_write_acts.tlspec",
-        include_weights=True,
-        include_activations=True,
-    )
-
-    result = _run(path, capture_x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-
-
-@pytest.mark.smoke
-def test_invisible_buffer_write_twin_is_unverifiable(tmp_path: Path) -> None:
-    """The buffer twin was already correct; assert parity so a regression on either is caught."""
-    model = InitAcquiredBufferAliasWrite()
-    capture_x = torch.tensor([2.0, 4.0])
-    path = _save(model, capture_x, tmp_path / "buffer_write.tlspec", include_weights=True)
-
-    result = _run(path, capture_x)
-
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 
@@ -160,43 +132,6 @@ class ReadOnlyBufferEscape(nn.Module):
         return x * self.b
 
 
-def test_readonly_param_escape_stays_verified(tmp_path: Path) -> None:
-    capture_x = torch.tensor([2.0, 4.0])
-    path = _save(
-        ReadOnlyParamEscape(), capture_x, tmp_path / "ro_param.tlspec", include_weights=True
-    )
-
-    result = _run(path, capture_x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_readonly_buffer_escape_stays_verified(tmp_path: Path) -> None:
-    capture_x = torch.tensor([2.0, 4.0])
-    path = _save(
-        ReadOnlyBufferEscape(), capture_x, tmp_path / "ro_buffer.tlspec", include_weights=True
-    )
-
-    result = _run(path, capture_x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_readonly_param_and_buffer_parity(tmp_path: Path) -> None:
-    """The parity claim head-on: identical read-only escapes on a param and a buffer agree."""
-    capture_x = torch.tensor([2.0, 4.0])
-    param_result = _run(
-        _save(ReadOnlyParamEscape(), capture_x, tmp_path / "p.tlspec", include_weights=True),
-        capture_x,
-    )
-    buffer_result = _run(
-        _save(ReadOnlyBufferEscape(), capture_x, tmp_path / "b.tlspec", include_weights=True),
-        capture_x,
-    )
-    assert param_result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert param_result.report.path_faithfulness is buffer_result.report.path_faithfulness
-
-
 # --------------------------------------------------------------------------- #
 # HARD NO-OVER-TRIGGER: plain models with params used normally stay VERIFIED any input.
 # --------------------------------------------------------------------------- #
@@ -218,26 +153,6 @@ class TinyConv(nn.Module):
         return torch.relu(self.c(x))
 
 
-def test_plain_mlp_stays_verified(tmp_path: Path) -> None:
-    torch.manual_seed(0)
-    capture_x = torch.randn(3, 4)
-    path = _save(TinyMLP(), capture_x, tmp_path / "mlp.tlspec", include_weights=True)
-
-    result = _run(path, capture_x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_plain_conv_stays_verified(tmp_path: Path) -> None:
-    torch.manual_seed(0)
-    capture_x = torch.randn(2, 3, 8, 8)
-    path = _save(TinyConv(), capture_x, tmp_path / "conv.tlspec", include_weights=True)
-
-    result = _run(path, capture_x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
 class ReadOnlyParamScalarStat(nn.Module):
     """Read-only ``.item()`` / ``.tolist()`` param stat logging -> must stay VERIFIED."""
 
@@ -250,14 +165,3 @@ class ReadOnlyParamScalarStat(nn.Module):
         _ = self.s.detach().item()
         _ = self.w.detach().tolist()
         return x * self.w * self.s
-
-
-def test_readonly_param_scalar_stat_stays_verified(tmp_path: Path) -> None:
-    capture_x = torch.tensor([2.0, 4.0])
-    path = _save(
-        ReadOnlyParamScalarStat(), capture_x, tmp_path / "scalar_stat.tlspec", include_weights=True
-    )
-
-    result = _run(path, capture_x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

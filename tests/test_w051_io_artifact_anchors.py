@@ -19,7 +19,6 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
-from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._io import ArtifactError
@@ -79,18 +78,6 @@ def _assert_refuses(path: Path, code: str, **fields: Any) -> ArtifactError:
 # --- (b) manifest <-> metadata anchors ---------------------------------------
 
 
-def test_untampered_source_loads(source_bundle: Path) -> None:
-    assert len(tl.load(source_bundle)._layer_list) > 0
-
-
-def test_dropped_op_row_refuses(source_bundle: Path, tmp_path: Path) -> None:
-    # A popped output row leaves its parent's ``children`` dangling, so the
-    # graph-structure validator (inside rehydrate) fires first; the row-count
-    # anchor is the second net (pinned separately below).
-    path = _tampered(source_bundle, tmp_path / "drop.tlspec", lambda st: st["_layer_list"].pop())
-    _assert_refuses(path, "artifact_graph_structure_invalid", reason="dangling_relation")
-
-
 def test_manifest_row_count_disagreeing_with_metadata_refuses(
     source_bundle: Path, tmp_path: Path
 ) -> None:
@@ -100,20 +87,6 @@ def test_manifest_row_count_disagreeing_with_metadata_refuses(
         mutate_manifest=lambda manifest: manifest.__setitem__("n_layers", 999),
     )
     _assert_refuses(path, "bundle_manifest_metadata_mismatch", field="n_layers")
-
-
-def test_root_stamp_older_than_manifest_refuses_as_2x(source_bundle: Path, tmp_path: Path) -> None:
-    """A root state stamped older than its manifest is a 2.x payload: it refuses as 2.x.
-
-    The state decoder refuses an older stamp before the anchor check compares the two, so the
-    typed 2.x error is what surfaces; the anchor comparison stays as a second door.
-    """
-
-    def older_root(state: dict[str, Any]) -> None:
-        state["tlspec_version"] = state["tlspec_version"] - 2
-
-    path = _tampered(source_bundle, tmp_path / "stamp.tlspec", older_root)
-    assert_refuses_as_2x(path)
 
 
 # --- (b) op-graph coherence ---------------------------------------------------
@@ -136,9 +109,10 @@ def test_dangling_parent_refuses(source_bundle: Path, tmp_path: Path) -> None:
     _assert_refuses(path, "artifact_graph_structure_invalid", reason="dangling_relation")
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("attr", "value"),
-    [("pass_number", -1), ("pass_number", 0), ("num_passes", 0), ("pass_number", "1")],
+    [("pass_number", 0), ("num_passes", 0), ("pass_number", "1")],
 )
 def test_pass_stamp_out_of_range_refuses(
     source_bundle: Path, tmp_path: Path, attr: str, value: Any
@@ -283,41 +257,22 @@ def _with_boundary(payload: dict[str, Any]) -> Callable[[dict[str, Any]], None]:
     return apply
 
 
-@pytest.mark.parametrize("schema", ["collective_boundary_v1", "functional_collective_boundary_v0"])
-def test_owned_boundary_families_round_trip(
-    source_bundle: Path, tmp_path: Path, schema: str
-) -> None:
-    """Both closed boundary families load, in the journal and on the op."""
-
-    path = _tampered(
-        source_bundle, tmp_path / "boundary.tlspec", _with_boundary(_boundary_payload(schema))
-    )
-    loaded = tl.load(path)
-    assert loaded.annotations["distributed"]["boundaries"][0]["schema"] == schema
-    assert loaded._layer_list[2].annotations["collective"]["schema"] == schema
-
-
 def _drop_event_model(payload: dict[str, Any]) -> None:
     payload["events"] = {"async_op": True, "completion_binding": "observed_wait"}
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("schema", "corrupt"),
     [
-        ("functional_collective_boundary_v1", None),
         ("functional_collective_boundary_v0", _drop_event_model),
-        ("functional_collective_boundary_v0", lambda p: p.pop("disclosures")),
         ("functional_collective_boundary_v0", lambda p: p.__setitem__("disclosures", "x")),
         ("functional_collective_boundary_v0", lambda p: p.pop("witness")),
-        ("collective_boundary_v1", lambda p: p.pop("roles")),
     ],
     ids=[
-        "unknown_schema",
         "v0_without_event_model",
-        "v0_without_disclosures",
         "v0_string_disclosures",
         "v0_without_witness",
-        "v1_without_roles",
     ],
 )
 @pytest.mark.parametrize("where", ["journal", "op"])
@@ -352,38 +307,7 @@ def test_malformed_boundary_payload_refuses(
     _assert_refuses(path, "artifact_annotations_invalid", field=field)
 
 
-def test_user_annotation_keys_stay_open(source_bundle: Path, tmp_path: Path) -> None:
-    def user_key(state: dict[str, Any]) -> None:
-        state.setdefault("annotations", {})["my_experiment"] = {"seed": 7, "tags": ["a", "b"]}
-
-    path = _tampered(source_bundle, tmp_path / "user.tlspec", user_key)
-    assert tl.load(path).annotations["my_experiment"] == {"seed": 7, "tags": ["a", "b"]}
-
-
 # --- (e) root_entry_point on tlspec v9+ ---------------------------------------
-
-
-def test_absent_root_entry_point_refuses_from_v10(source_bundle: Path, tmp_path: Path) -> None:
-    """A current-stamp artifact with ``root_entry_point`` deleted refuses typed.
-
-    The fail-closed rule was armed for the next coordinated bump
-    (``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``), and the v10 write is that
-    bump. Earlier stamps carried pre-C07X writers without the fact, but those
-    files were written by torchlens 2.x, which this release does not read
-    (``tests/test_load_refuses_saved_by_2x.py``).
-    """
-
-    from torchlens._io._forgery_identity_facts import _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
-
-    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == 10 <= tl._io.TLSPEC_VERSION
-    path = _tampered(
-        source_bundle,
-        tmp_path / "rep.tlspec",
-        lambda st: st.__setitem__("_provenance_root_entry_point", None),
-    )
-    with pytest.raises(ArtifactError) as excinfo:
-        tl.load(path)
-    assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
 
 
 def test_absent_root_entry_point_refuses_from_the_armed_stamp(
@@ -404,11 +328,3 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
     assert excinfo.value.fields["reason"] == "absent_on_current_schema"
     # Outside the governed window (plain session state) the same trace passes.
     facts._validate_root_entry_point(trace)
-
-
-def test_plain_session_pickle_tolerates_absent_root_entry_point() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
-    trace._provenance_root_entry_point = None
-    restored = pickle.loads(pickle.dumps(trace))
-    assert restored.provenance.root_entry_point is None

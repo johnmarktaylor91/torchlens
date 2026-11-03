@@ -419,6 +419,21 @@ def register(name: str, sae: Any, *, site: Any) -> None:
     InvalidArgumentError
         ``sae_family_name_invalid`` for a malformed name,
         ``sae_family_name_taken`` when the name is registered already.
+
+    Examples
+    --------
+    >>> class TinySae:
+    ...     def encode(self, h):
+    ...         return torch.relu(h)
+    ...     def decode(self, z):
+    ...         return z
+    >>> tl.bridge.sae.register("demo_register", TinySae(), site="2")
+    >>> try:
+    ...     tl.bridge.sae.register("demo_register", TinySae(), site="2")
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
+    >>> tl.bridge.sae.unregister("demo_register")
     """
 
     from .._semantic import _families
@@ -453,6 +468,21 @@ def unregister(name: str) -> None:
     ------
     InvalidArgumentError
         ``sae_family_unknown`` when nothing is registered under ``name``.
+
+    Examples
+    --------
+    >>> class TinySae:
+    ...     def encode(self, h):
+    ...         return torch.relu(h)
+    ...     def decode(self, z):
+    ...         return z
+    >>> tl.bridge.sae.register("demo_unregister", TinySae(), site="2")
+    >>> tl.bridge.sae.unregister("demo_unregister")
+    >>> try:
+    ...     tl.bridge.sae.unregister("demo_unregister")
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     from .._semantic import _families

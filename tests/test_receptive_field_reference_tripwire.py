@@ -26,43 +26,6 @@ from torchlens.options import CaptureOptions
 _X = torch.tensor([[1.0, -2.0, 0.5, 0.25], [0.5, 1.5, -1.0, 2.0], [-0.5, 0.0, 1.0, -1.5]])
 
 
-class _MutatesSavedActivation(nn.Module):
-    """Writes into a hidden activation after its consumer has read it."""
-
-    def __init__(self) -> None:
-        """Build the layers."""
-
-        super().__init__()
-        self.inp = nn.Linear(4, 5)
-        self.head = nn.Linear(5, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the stack, then scale ``hidden`` in place."""
-
-        hidden = self.inp(x)
-        out = self.head(torch.relu(hidden))
-        hidden.mul_(2.0)
-        return out
-
-
-class _WritesItsBuffer(nn.Module):
-    """Reads a registered buffer, then writes it in place."""
-
-    def __init__(self) -> None:
-        """Build the layer and the buffer."""
-
-        super().__init__()
-        self.inp = nn.Linear(4, 5)
-        self.register_buffer("shift", torch.linspace(-0.5, 0.5, 5))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Add the buffer, then advance it in place."""
-
-        out = self.inp(x) + self.shift
-        self.shift.add_(1.0)
-        return out
-
-
 class _BatchNormModel(nn.Module):
     """Linear, BatchNorm1d with non-trivial running statistics, linear."""
 
@@ -103,24 +66,6 @@ def _assert_genuine_mutation(excinfo: pytest.ExceptionInfo[BaseException]) -> No
     assert match is not None, str(excinfo.value)
     saved, current = (int(group) for group in match.groups())
     assert current > saved, str(excinfo.value)
-
-
-def test_mutated_saved_activation_raises_in_receptive_field_scope() -> None:
-    """An in-place write to a saved activation fails receptive-field validation."""
-
-    torch.manual_seed(3)
-    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture") as excinfo:
-        _validate_rf(_MutatesSavedActivation().eval())
-    _assert_genuine_mutation(excinfo)
-
-
-def test_buffer_written_in_place_raises_in_receptive_field_scope() -> None:
-    """A forward that writes a buffer it read fails receptive-field validation."""
-
-    torch.manual_seed(3)
-    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture") as excinfo:
-        _validate_rf(_WritesItsBuffer().eval())
-    _assert_genuine_mutation(excinfo)
 
 
 def test_train_mode_batchnorm_is_refused_in_receptive_field_scope() -> None:

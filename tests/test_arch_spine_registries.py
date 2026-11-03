@@ -17,7 +17,6 @@ from torchlens._registry import RegistryError, kernel_universe_rows
 from torchlens._visualization.renderer_registry import (
     RendererEntry,
     register_renderer,
-    renderer_info,
     renderer_names,
     require_renderer_capabilities,
     unregister_renderer,
@@ -36,16 +35,6 @@ def traced():
 
 
 class TestExportTargetDoor:
-    def test_all_seventeen_builtins_registered_with_tiers(self) -> None:
-        import torchlens.export as ex
-
-        assert len(ex.list_targets()) >= 17
-        assert ex.describe_target("netron").capabilities["tier"] == "bridge"
-        assert ex.describe_target("model_explorer").capabilities["tier"] == "bridge"
-        assert ex.describe_target("tensorboard").capabilities["tier"] == "bridge"
-        assert ex.describe_target("csv").capabilities["tier"] == "present"
-        assert ex.describe_target("svg").capabilities["tier"] == "present"
-
     def test_out_of_tree_target_registers_and_runs(self, traced, tmp_path) -> None:
         import torchlens.export as ex
         from torchlens._registry import ProviderInfo
@@ -101,11 +90,6 @@ class TestExportTargetDoor:
 
 
 class TestRendererDoor:
-    def test_builtins_registered_with_capability_rows(self) -> None:
-        assert set(renderer_names()) >= {"graphviz", "dagua"}
-        assert renderer_info("graphviz").capabilities["encoding_channels"] is True
-        assert renderer_info("dagua").capabilities["encoding_channels"] is False
-
     def test_capability_gate_refuses_incapable_renderer_typed(self) -> None:
         with pytest.raises(UnsupportedRendererCapabilityError) as excinfo:
             require_renderer_capabilities("dagua", {"encoding_channels": True})

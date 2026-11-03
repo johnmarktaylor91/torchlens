@@ -1,6 +1,6 @@
 """Trace check functions reached from the records through ``_data_classes._doors.validation``.
 
-``Trace.validate_forward_pass``, ``Trace.check_metadata_invariants``, ``Trace.save_new_outs`` and the
+``Trace.validate_forward_pass``, ``Trace.check_metadata_invariants``, ``Trace._save_new_outs`` and the
 ``Trace.validation_replay_status`` property are the thin methods. Validation is LOCKED: the bodies
 moved verbatim and no check changed.
 """
@@ -68,7 +68,7 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
     return False
 
 
-def save_new_outs(  # noqa: PLR0913  (the thin Trace.save_new_outs shell keeps this documented call shape; the fold removes the duplicate site)
+def save_new_outs(  # noqa: PLR0913  (the thin Trace._save_new_outs shell keeps this documented call shape; the fold removes the duplicate site)
     trace: Trace,
     model: torch.nn.Module,
     inputs: torch.Tensor | list[Any],
@@ -79,7 +79,7 @@ def save_new_outs(  # noqa: PLR0913  (the thin Trace.save_new_outs shell keeps t
     backward_ready: bool | None = None,
     _run_until_plan: Any | None = None,
 ) -> None:
-    """Body of ``Trace.save_new_outs``; the method carries the documented contract."""
+    """Body of ``Trace._save_new_outs``; the method carries the documented contract."""
     # N3/N5: a live refresh re-drives the FULL native forward against the
     # recorded graph, which a halted/failed/unproven capture cannot honor.
     require_capture_capability(trace, "live_replay")

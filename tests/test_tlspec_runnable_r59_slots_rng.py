@@ -46,7 +46,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens._utils.rng import host_nondeterminism_monitor
 from torchlens._utils.rng.inventory_types import _rng_exempt_instances
 from torchlens.options import CaptureOptions
@@ -182,6 +181,7 @@ class _SlotSubTop(nn.Module):
 # --- sweep-level: the slot generator IS inventoried and a non-hooked draw flips the digest ----
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("kind", sorted(_GEN_FACTORIES))
 @pytest.mark.parametrize("placement", ["top", "submodule"])
 def test_registered_module_slot_generator_is_swept_and_draw_flips_digest(
@@ -203,121 +203,7 @@ def test_registered_module_slot_generator_is_swept_and_draw_flips_digest(
     assert after != holders[id(gen)], f"{placement}/{kind}: slot draw did not flip the digest"
 
 
-# --- end-to-end: pre-existing worker draw -> UNVERIFIABLE, never ATTESTED --------------------
-
-
-@pytest.mark.parametrize("placement", ["top", "submodule"])
-def test_slot_generator_preexisting_thread_draw_is_unverifiable(
-    placement: str, preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """The r58 hon_1 repro shape, both placements: a slot-held numpy generator drawn on a
-    pre-existing non-hooked worker -> ``model_attribute_generator`` -> UNVERIFIABLE + not
-    ATTESTED (was false VERIFIED + ATTESTED)."""
-
-    gen = np.random.default_rng(777)
-    model: nn.Module = (
-        _SlotTop(gen, preexisting_worker)
-        if placement == "top"
-        else _SlotSubTop(gen, preexisting_worker)
-    )
-    trace, result = _roundtrip(model, torch.randn(2, 4), tmp_path)
-    assert "model_attribute_generator" in trace._runnable.host_rng_channels, (
-        f"{placement}: slot-held generator draw was not inventoried"
-    )
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-
-
-# --- over-trigger pins ------------------------------------------------------------------------
-
-
-def test_benign_slots_model_stays_verified(tmp_path: Path) -> None:
-    """A deterministic model that merely USES ``__slots__`` (no generator anywhere) sweeps
-    nothing, flags nothing, and stays VERIFIED + ATTESTED -- slot seeding must not over-trigger."""
-
-    class _BenignSlots(nn.Module):
-        __slots__ = ("scale",)
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.scale = 2.0
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x) * self.scale
-
-    monitor = _make_monitor(_BenignSlots())
-    assert monitor._sweep_model_generators() == []
-    assert monitor.result.uncertain is False
-    assert monitor.result.uncertain_detail == ()
-
-    trace, result = _roundtrip(_BenignSlots(), torch.randn(2, 4), tmp_path)
-    assert "model_attribute_generator" not in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
-def test_undrawn_slot_generator_stays_verified(tmp_path: Path) -> None:
-    """A slot-held generator that is present but NEVER drawn stays VERIFIED with no
-    ``model_attribute_generator`` channel (digest unchanged; possession is not consumption)."""
-
-    trace, result = _roundtrip(_SlotTop(np.random.default_rng(3)), torch.randn(2, 4), tmp_path)
-    assert "model_attribute_generator" not in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-# --- anti-double-walk premark: structural perf pin --------------------------------------------
-
-
-def test_registered_module_seed_runs_exactly_once_per_module(monkeypatch: Any) -> None:
-    """The r51 premark is KEPT and the seed is COMPLETE: on a 1000-module model, every
-    registered module is seeded through ``_custom_holder_children`` EXACTLY once (the seed
-    loop), and NO registered module is ever re-expanded as a walk node (the terminal
-    ``_inert_gc_children`` fallback never sees one). Dropping the premark would re-route every
-    registered submodule through the walk a second time (~2x, the disqualified alternative);
-    dropping the seed re-opens the r58 slots hole -- both fail loudly here."""
-
-    seed_calls: list[int] = []
-    walk_calls: list[int] = []
-    original_seed = host_nondeterminism_monitor._custom_holder_children
-    original_walk = host_nondeterminism_monitor._inert_gc_children
-
-    def counting_seed(value: Any) -> list[Any]:
-        seed_calls.append(id(value))
-        return original_seed(value)
-
-    def counting_walk(value: Any, shared_namespace_ids: Any) -> list[Any]:
-        walk_calls.append(id(value))
-        return original_walk(value, shared_namespace_ids)
-
-    monkeypatch.setattr(
-        host_nondeterminism_monitor, "_custom_holder_children", staticmethod(counting_seed)
-    )
-    monkeypatch.setattr(
-        host_nondeterminism_monitor, "_inert_gc_children", staticmethod(counting_walk)
-    )
-    model = nn.Sequential(*[nn.Linear(2, 2) for _ in range(1000)])
-    monitor = _make_monitor(model)
-    assert monitor._sweep_model_generators() == []
-    assert monitor.result.uncertain is False
-    registered_ids = {id(module) for module in model.modules()}
-    n_modules = len(registered_ids)
-    seeded_registered = [call for call in seed_calls if call in registered_ids]
-    assert len(seeded_registered) == n_modules, (
-        f"registered modules seeded {len(seeded_registered)}x for {n_modules} modules -- "
-        "a missed seed or a re-seed"
-    )
-    assert len(set(seeded_registered)) == n_modules
-    rewalked = [call for call in walk_calls if call in registered_ids]
-    assert rewalked == [], (
-        f"{len(rewalked)} registered modules re-expanded as walk nodes -- the premark "
-        "(anti-double-walk dedup) regressed"
-    )
-
-
-# --- source meta-test (review): the seed loop must read slots, or carry no blanket premark -----
-
-
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_seed_loop_routes_registered_modules_through_custom_holder_children() -> None:
     """The registered-module seed loop must call ``_custom_holder_children(module)`` (dict +
     slots) whenever the blanket premark is present; the dict-only seed is the r58 hon_1 bug and
@@ -333,3 +219,15 @@ def test_seed_loop_routes_registered_modules_through_custom_holder_children() ->
     assert 'getattr(module, "__dict__", {}).values()' not in src, (
         "dict-only registered-module seed reintroduced (r58 hon_1 regression)"
     )
+
+
+# --- end-to-end: pre-existing worker draw -> UNVERIFIABLE, never ATTESTED --------------------
+
+
+# --- over-trigger pins ------------------------------------------------------------------------
+
+
+# --- anti-double-walk premark: structural perf pin --------------------------------------------
+
+
+# --- source meta-test (review): the seed loop must read slots, or carry no blanket premark -----

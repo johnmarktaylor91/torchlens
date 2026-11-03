@@ -13,16 +13,11 @@ Fit a direction from positive and negative prompts at one layer, then steer with
 ### In repeng
 
 repeng trains a control vector from a dataset of contrastive pairs and applies it through a
-`ControlModel`. This block is not executed here (it needs a tokenizer and a real checkpoint);
-check the call against your repeng version:
-
-```text
-from repeng import ControlModel, ControlVector, DatasetEntry
-
-model = ControlModel(base_model, layer_ids=[0])
-vector = ControlVector.train(model, tokenizer, dataset)   # dataset: list of DatasetEntry
-model.set_control(vector, coeff=4.0)
-```
+`ControlModel`. You wrap the base model with `ControlModel(base_model, layer_ids=[0])`, train a
+vector with `ControlVector.train(model, tokenizer, dataset)` from a list of `DatasetEntry`
+pairs, and switch it on with `model.set_control(vector, coeff=4.0)`. Training needs a tokenizer
+and a real checkpoint, so this is described here rather than run; check the calls against your
+repeng version.
 
 ### In TorchLens
 

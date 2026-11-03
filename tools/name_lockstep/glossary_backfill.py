@@ -10,6 +10,12 @@ gets a new row in the last ``### Keywords`` table, which stays sorted by spellin
 describe the code as it is (kind, default and the docstring's meaning); they rename nothing.
 
 Usage: ``PYTHONPATH=tools python -m name_lockstep.glossary_backfill DUMP.json [--glossary P]``.
+
+``--prune-records`` (no dump needed) drops every record class (``records.py``) from the owner
+runs of the keyword rows: records are built by TorchLens, so no keyword row names their
+constructors; a ``field and constructor keyword of`` clause keeps its owners as ``field of``.
+``--prune-stale`` drops, from the rows naming them, the keywords the dumped code no longer
+takes (a removed or renamed parameter) before the backfill adds the new spellings.
 """
 
 from __future__ import annotations
@@ -20,11 +26,12 @@ import importlib.util
 import json
 import re
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
-from name_lockstep.glossary_params import _KEYWORD_ROW, missing
+from name_lockstep.glossary_params import _KEYWORD_ROW, _OWNER_RUN, _SPAN, _names, missing, stale
+from name_lockstep.records import is_record, record_classes
 
 _RST_LITERAL = re.compile(r"``([^`]+)``")
 _SPHINX_ROLE = re.compile(
@@ -33,6 +40,9 @@ _SPHINX_ROLE = re.compile(
 _INHERITED = " and the classes that inherit that constructor"
 _PARENTHETICAL = re.compile(r"\s*\(([^()]*)\)")
 _ID_LINT = Path(__file__).resolve().parents[2] / "scripts" / "checks" / "id_lint.py"
+#: A clause boundary inside a keyword row's meaning cell.
+_CLAUSE_SPLIT = re.compile(r";\s+(?=(?:field and )?(?:constructor )?keyword of `)")
+_CLAUSE_HEAD = re.compile(r"^(field and )?(constructor )?keyword of ")
 
 
 @functools.cache
@@ -203,6 +213,179 @@ def backfill(glossary: str, rows: list[dict[str, Any]]) -> tuple[str, int, int]:
     return "\n".join(lines) + "\n", extended, len(added)
 
 
+def _prune_clause(clause: str, gone: Callable[[str], bool]) -> list[str]:
+    """Return the clauses that replace one clause once ``gone`` owners leave its run."""
+
+    head = _CLAUSE_HEAD.match(clause)
+    run = _OWNER_RUN.match(clause[head.end() - len("keyword of ") :]) if head else None
+    if head is None or run is None:
+        return [clause]
+    owners = [span.strip() for span in _SPAN.findall(run.group(1))]
+    kept = [o for o in owners if not gone(o.removesuffix("()"))]
+    if len(kept) == len(owners):
+        return [clause]
+    tail = clause[head.end() - len("keyword of ") + run.end() :].strip()
+    out: list[str] = []
+    if head.group(1):
+        dropped = [o for o in owners if o not in kept]
+        out.append("field of " + ", ".join(f"`{o}`" for o in dropped))
+    if kept:
+        out.append(f"{head.group(0)}{', '.join(f'`{o}`' for o in kept)} {tail}".rstrip())
+    return out
+
+
+def _prune(glossary: str, gone: Callable[[str, str], bool]) -> tuple[str, int, int]:
+    """Return the glossary with every owner ``gone(keyword, owner)`` out of the keyword rows.
+
+    A ``field and constructor keyword of`` clause keeps its dropped owners as ``field of``; a
+    row whose every clause named only dropped owners is removed.
+    """
+
+    lines: list[str] = []
+    edited = removed = 0
+    for line in glossary.splitlines():
+        match = _KEYWORD_ROW.match(line.strip())
+        if not match:
+            lines.append(line)
+            continue
+        name = match.group(1)
+        clauses = _CLAUSE_SPLIT.split(match.group(2).strip())
+        kept = [
+            c
+            for clause in clauses
+            for c in _prune_clause(clause, lambda o, name=name: gone(name, o))
+        ]
+        if kept == clauses:
+            lines.append(line)
+        elif kept:
+            lines.append(f"| `{name}=` | {'; '.join(kept)} |")
+            edited += 1
+        else:
+            removed += 1
+    return "\n".join(lines) + "\n", edited, removed
+
+
+def prune_records(glossary: str) -> tuple[str, int, int]:
+    """Return the glossary with no keyword row naming a record class, plus edit counts.
+
+    Parameters
+    ----------
+    glossary
+        Glossary text; its records section says which classes are records.
+
+    Returns
+    -------
+    tuple[str, int, int]
+        New text, rows edited, rows removed (every clause named only records).
+    """
+
+    records = record_classes(glossary)
+    return _prune(glossary, lambda _name, owner: is_record(owner, records))
+
+
+def prune_stale(glossary: str, rows: list[dict[str, Any]]) -> tuple[str, int, int]:
+    """Return the glossary with no keyword row naming a keyword its callable lacks.
+
+    Parameters
+    ----------
+    glossary
+        Glossary text.
+    rows
+        Every dumped row (the code's public parameters).
+
+    Returns
+    -------
+    tuple[str, int, int]
+        New text, rows edited, rows removed.
+    """
+
+    aliases = {row["callable"]: row["aliases"] for row in rows}
+    gone: dict[str, list[list[str]]] = {}
+    for callable_, name in stale(rows, glossary):
+        gone.setdefault(name, []).append(aliases[callable_])
+    return _prune(glossary, lambda name, owner: any(_names(owner, a) for a in gone.get(name, [])))
+
+
+_ENTRY_ROW = re.compile(r"^\|\s*`([^`=]+)`\s*\|", re.M)
+
+
+def _entry_names(glossary: str) -> list[str]:
+    """Return every spelling the glossary gives an entry row (keyword rows excluded)."""
+
+    return [m.group(1) for m in _ENTRY_ROW.finditer(glossary) if not m.group(1).endswith("*")]
+
+
+def gone_owners(
+    glossary: str, rows: list[dict[str, Any]], keep: Iterable[str] = ()
+) -> dict[str, int]:
+    """Return the keyword-row owners no dumped callable answers to, with their row counts.
+
+    An owner the glossary still lists as a name (an entry row of its own, as a facade
+    taking only ``**kwargs`` has) is not gone, whatever the dump says.
+
+    Parameters
+    ----------
+    glossary
+        Glossary text.
+    rows
+        Every dumped row (the code's public parameters).
+    keep
+        Owner spellings to keep whatever the dump says (a facade taking ``**kwargs``).
+
+    Returns
+    -------
+    dict[str, int]
+        Owner spelling to the number of keyword rows naming it.
+    """
+
+    aliases = [row["aliases"] for row in rows]
+    aliases.append([*_entry_names(glossary), *keep])
+    counts: dict[str, int] = {}
+    for line in glossary.splitlines():
+        match = _KEYWORD_ROW.match(line.strip())
+        if not match:
+            continue
+        for clause in _CLAUSE_SPLIT.split(match.group(2).strip()):
+            head = _CLAUSE_HEAD.match(clause)
+            run = _OWNER_RUN.match(clause[head.end() - len("keyword of ") :]) if head else None
+            if head is None or run is None:
+                continue
+            for span in _SPAN.findall(run.group(1)):
+                owner = span.strip().removesuffix("()")
+                if not any(_names(owner, a) for a in aliases):
+                    counts[owner] = counts.get(owner, 0) + 1
+    return counts
+
+
+def prune_gone(
+    glossary: str, rows: list[dict[str, Any]], keep: Iterable[str] = ()
+) -> tuple[str, int, int]:
+    """Return the glossary with no keyword row naming a callable the dump no longer has.
+
+    A removed method or class leaves its owner spelling in the rows it used to own;
+    ``prune_stale`` cannot see it (no dumped callable answers to the spelling), so this
+    pass drops those owners. Measure with ``gone_owners`` first: a spelling the dump
+    writes differently would be dropped too.
+
+    Parameters
+    ----------
+    glossary
+        Glossary text.
+    rows
+        Every dumped row (the code's public parameters).
+    keep
+        Owner spellings to keep whatever the dump says.
+
+    Returns
+    -------
+    tuple[str, int, int]
+        New text, rows edited, rows removed.
+    """
+
+    gone = gone_owners(glossary, rows, keep)
+    return _prune(glossary, lambda _name, owner: owner in gone)
+
+
 def _name(line: str) -> str:
     """Return the keyword a keyword row spells."""
 
@@ -234,13 +417,49 @@ def main(argv: list[str] | None = None) -> int:
     """Backfill the glossary in place from a dump; print what changed."""
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("dump", type=Path)
+    parser.add_argument("dump", type=Path, nargs="?")
     parser.add_argument("--glossary", type=Path, default=Path("docs/reference/glossary.md"))
+    parser.add_argument(
+        "--prune-records", action="store_true", help="drop record classes from keyword rows"
+    )
+    parser.add_argument(
+        "--prune-stale",
+        action="store_true",
+        help="drop keywords the dumped code no longer takes from the rows naming them",
+    )
+    parser.add_argument(
+        "--prune-gone",
+        action="store_true",
+        help="drop owners no dumped callable answers to (a removed method or class)",
+    )
+    parser.add_argument(
+        "--list-gone", action="store_true", help="print the owners --prune-gone would drop"
+    )
+    parser.add_argument(
+        "--keep", action="append", default=[], metavar="OWNER", help="never drop this owner"
+    )
     args = parser.parse_args(argv)
-    rows = json.loads(args.dump.read_text(encoding="utf-8"))
-    text, extended, added = backfill(args.glossary.read_text(encoding="utf-8"), rows)
+    if args.dump is None and not args.prune_records:
+        parser.error("a dump or --prune-records is needed")
+    text = args.glossary.read_text(encoding="utf-8")
+    if args.prune_records:
+        text, edited, removed = prune_records(text)
+        print(f"pruned record owners from {edited} keyword rows; removed {removed} rows")
+    if args.dump is not None:
+        rows = json.loads(args.dump.read_text(encoding="utf-8"))
+        if args.list_gone:
+            for owner, count in sorted(gone_owners(text, rows, args.keep).items()):
+                print(f"{count}\t{owner}")
+            return 0
+        if args.prune_stale:
+            text, edited, removed = prune_stale(text, rows)
+            print(f"pruned stale keywords from {edited} keyword rows; removed {removed} rows")
+        if args.prune_gone:
+            text, edited, removed = prune_gone(text, rows, args.keep)
+            print(f"pruned gone owners from {edited} keyword rows; removed {removed} rows")
+        text, extended, added = backfill(text, rows)
+        print(f"extended {extended} keyword rows; added {added} keyword rows")
     args.glossary.write_text(text, encoding="utf-8")
-    print(f"extended {extended} keyword rows; added {added} keyword rows")
     return 0
 
 

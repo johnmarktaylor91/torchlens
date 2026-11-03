@@ -1,4 +1,4 @@
-"""Mistral row for the per-family facet tests (U12.2).
+"""Mistral row for the per-family facet tests.
 
 The R0 deep sweep (``r0/test_realism_randinit_sweep.py``) pins per-family
 facet floors for fourteen families; Mistral, named with them in August, had

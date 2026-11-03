@@ -154,7 +154,7 @@ def _cell(row: StatsTableRow, column: str) -> str:
     row_cell = _ROW_CELLS.get(column)
     if row_cell is not None:
         return row_cell(row)
-    stats = row.stats
+    stats = row.value_stats
     if stats is None:
         return ""
     stats_cell = _STATS_CELLS.get(column)

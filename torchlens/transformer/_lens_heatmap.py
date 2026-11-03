@@ -306,6 +306,20 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     -------
     Artifact
         The written file plus every rendered disclosure line.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> from types import SimpleNamespace as NS
+    >>> entries = [NS(layer_index=i, address=f"blocks.{i}", logits=torch.randn(1, 3, 6))
+    ...            for i in range(2)]
+    >>> result = NS(entries=entries, lens_source="model_head", is_validated=True,
+    ...             facet="resid_post")
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.viz.logit_lens(result, pathlib.Path(tmp) / "lens.png")
+    ...     written = saved.paths[0].exists()
+    >>> written
+    True
     """
 
     n_positions = _validate_request(result, value, target_token_id, tokens)

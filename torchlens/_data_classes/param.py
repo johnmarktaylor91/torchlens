@@ -170,6 +170,12 @@ class Param:
     Captures static parameter identity (address, shape, dtype, trainability)
     and links to the module that owns it.  Does NOT store the parameter tensor
     itself -- only a ``_param_ref`` reference for lazy grad access.
+
+    Examples
+    --------
+    >>> param = tl.trace(model, x).params["0.weight"]
+    >>> type(param).__name__, param.address, tuple(param.shape)
+    ('Param', '0.weight', (4, 3, 3, 3))
     """
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {

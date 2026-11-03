@@ -32,6 +32,7 @@ from .._selection.errors import AmbiguousSiteError
 from .._selection.selectors import BaseSelector
 from .._selection.target import FrozenTargetSpec, TargetSpec
 from ._lookup_keys import _give_user_feedback_about_lookup_key
+from ._lookup_kinds import named_record
 from .op import Op
 
 
@@ -214,7 +215,6 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
 
     if isinstance(ix, str):
         from .._trace_selector_helpers import canonical_module_site_key
-        from ._lookup_kinds import named_record
 
         ix = canonical_module_site_key(self, ix) or ix
         if (record := _layer_label_lookup(self, ix)) is not None:

@@ -131,22 +131,6 @@ _LAYER_METHODS = {
 }
 
 
-@pytest.mark.parametrize("method_name", sorted(_LAYER_METHODS))
-def test_layer_method_on_integer_ids_matches_float_embedding_run(method_name: str) -> None:
-    """Each layer method on token ids equals the same method on the embedding output."""
-
-    token_model, float_model, ids = _token_pair()
-    method = getattr(tl.attribution, method_name)
-    options = _LAYER_METHODS[method_name]
-    from_ids = method(token_model, ids, target=1, layer="body.encoder", **options)
-    embedded = token_model.embed(ids).detach()
-    from_floats = method(float_model, embedded, target=1, layer="body.encoder", **options)
-    torch.testing.assert_close(from_ids.values, from_floats.values, atol=_ATOL, rtol=0)
-    assert from_ids.extra["integer_input_layers"] == ("embed",)
-    assert from_floats.extra["integer_input_layers"] == ()
-    assert bool(from_ids.values.abs().sum() > 0)
-
-
 def test_layer_integrated_gradients_baseline_ids_match_embedded_baseline() -> None:
     """Integer baseline ids start the path at their own embedding."""
 

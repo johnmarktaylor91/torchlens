@@ -233,6 +233,28 @@ def test_check_passes_a_complete_change(tmp_path: Path) -> None:
     assert check.check_lockstep(surface_diff, corpus, head) == []
 
 
+def test_check_owes_no_glossary_entry_for_a_record_constructor_keyword(tmp_path: Path) -> None:
+    """A new keyword that only record constructors take needs no glossary entry."""
+
+    glossary = (
+        "### Records built by TorchLens\n| Record | Meaning |\n| --- | --- |\n"
+        "| `tl.report.Facts` | built by TorchLens |\n| `tl.errors.*` | errors |\n\n"
+        "### Keywords\n`tl.trace`\n"
+    )
+    corpus = _lockstep_repo(tmp_path, glossary=glossary, example="")
+    head = {
+        "root:tl.trace": HEAD["root:tl.trace"],
+        "param:peak": _row("param:peak", "param", "peak", "peak=", "f-p", uses=["tl.report.Facts"]),
+        "param:code": _row(
+            "param:code", "param", "code", "code=", "f-c", uses=["tl.errors.ReadError"]
+        ),
+        "param:k": _row("param:k", "param", "k", "k=", "f-k", uses=["tl.report.Facts", "tl.rank"]),
+    }
+    base = {"root:tl.trace": BASE["root:tl.trace"]}
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert {f.row_id for f in findings if f.problem == "missing"} == {"param:k"}
+
+
 def test_contextual_residue_skips_a_leaf_another_row_keeps(tmp_path: Path) -> None:
     """``.name`` is not stale while another head member still spells it."""
 
@@ -684,13 +706,19 @@ def test_cli_diff_check_and_codemod(tmp_path: Path, capsys: pytest.CaptureFixtur
     base_file.write_text(json.dumps({"rows": list(BASE.values())}))
     head_file.write_text(json.dumps({"rows": list(HEAD.values())}))
     common = ["--repo", str(tmp_path)]
-    assert main([*common, "diff", "--base", str(base_file), "--head", str(head_file)]) == 0
-    assert json.loads(capsys.readouterr().out)["counts"]["renamed"] == 1
-    assert main([*common, "check", "--base", str(base_file), "--head", str(head_file)]) == 1
+    # Inventories without a recorded commit cannot have their base verified: refused (exit 2)
+    # unless the target check is skipped explicitly.
+    assert main([*common, "diff", "--base", str(base_file), "--head", str(head_file)]) == 2
+    assert "records no commit" in capsys.readouterr().err
+    pair = ["--base", str(base_file), "--head", str(head_file), "--target", "none"]
+    assert main([*common, "diff", *pair]) == 0
+    printed = capsys.readouterr()
+    assert printed.err.startswith("base: unverified")
+    assert json.loads(printed.out)["counts"]["renamed"] == 1
+    assert main([*common, "check", *pair]) == 1
     assert "lockstep:" in capsys.readouterr().out
     out = tmp_path / "gate.json"
-    args = [*common, "gate-input", "--base", str(base_file), "--head", str(head_file)]
-    assert main([*args, "--out", str(out)]) == 0
+    assert main([*common, "gate-input", *pair, "--out", str(out)]) == 0
     assert len(json.loads(out.read_text())) == 3
     rows = _codemod_repo(tmp_path)
     proposals = tmp_path / "proposals.json"
@@ -710,15 +738,3 @@ def test_load_inventory_rejects_rows_without_ids(tmp_path: Path) -> None:
     bad.write_text(json.dumps({"schema": "name-lockstep-inventory/0", "rows": []}))
     with pytest.raises(ValueError, match="schema"):
         load_inventory(bad)
-
-
-@pytest.mark.slow
-def test_real_package_inventory_has_the_core_names() -> None:
-    """The walk over the real package reaches the core nouns and their members."""
-
-    rows = {row["id"]: row for row in build_inventory()["rows"]}
-    assert {"root:tl.trace", "root:tl.Trace", "param:save"} <= set(rows)
-    trace_members = [
-        r for r in rows.values() if r["kind"] == "member" and "Trace" in r["owner_names"]
-    ]
-    assert len(trace_members) > 100

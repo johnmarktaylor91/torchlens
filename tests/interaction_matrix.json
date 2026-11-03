@@ -211,7 +211,7 @@
    "a": "backend",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "backend='torch' is the only backend the net captures; the rows are torch-only edits."
   },
@@ -267,7 +267,7 @@
    "a": "backend",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "backend='torch' is the only backend the net captures; the rows are torch-only edits."
   },
@@ -290,7 +290,7 @@
    "a": "backend",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "backend='torch' is the only backend the net captures; the rows are torch-only edits."
   },
@@ -348,7 +348,7 @@
    "a": "backend",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "backend='torch' is the only backend the net captures; the rows are torch-only edits."
   },
@@ -397,7 +397,7 @@
    "a": "backward",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -451,7 +451,7 @@
    "a": "backward",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -475,7 +475,7 @@
    "a": "backward",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -528,7 +528,7 @@
    "a": "backward",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -565,7 +565,7 @@
    "a": "bind",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -619,7 +619,7 @@
    "a": "bind",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -641,7 +641,7 @@
    "a": "bind",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -697,7 +697,7 @@
    "a": "bind",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -721,14 +721,14 @@
    "a": "bundle",
    "b": "draw",
    "status": "composes",
-   "evidence": "tests/test_multi_trace_followons.py::test_show_bundle_graph_rolled_and_backward_modes",
+   "evidence": "tests/test_multi_trace_followons.py::test_bundle_draw_rolled_and_backward_graphs",
    "confidence": "high"
   },
   {
    "a": "bundle",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -782,7 +782,7 @@
    "a": "bundle",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -805,7 +805,7 @@
    "a": "bundle",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -813,7 +813,7 @@
    "a": "bundle",
    "b": "multipass",
    "status": "composes",
-   "evidence": "tests/test_multi_trace_followons.py::test_show_bundle_graph_rolled_and_backward_modes",
+   "evidence": "tests/test_multi_trace_followons.py::test_bundle_draw_rolled_and_backward_graphs",
    "confidence": "low",
    "note": "Rolled graphs are shown; multi-pass specific Bundle reads are not separately documented."
   },
@@ -860,7 +860,7 @@
    "a": "bundle",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -883,7 +883,7 @@
    "a": "draw",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -936,7 +936,7 @@
    "a": "draw",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -959,7 +959,7 @@
    "a": "draw",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1013,7 +1013,7 @@
    "a": "draw",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1042,7 +1042,7 @@
    "a": "edit_chain",
    "b": "export",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1050,7 +1050,7 @@
    "a": "edit_chain",
    "b": "extract",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1058,7 +1058,7 @@
    "a": "edit_chain",
    "b": "fast_run",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1066,7 +1066,7 @@
    "a": "edit_chain",
    "b": "fork_do",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1074,7 +1074,7 @@
    "a": "edit_chain",
    "b": "halt",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "A halted capture keeps the ops that ran; the row edits a saved site among them or is not applicable when none is floating-point."
   },
@@ -1082,7 +1082,7 @@
    "a": "edit_chain",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1090,7 +1090,7 @@
    "a": "edit_chain",
    "b": "index",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1098,7 +1098,7 @@
    "a": "edit_chain",
    "b": "intervene",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Capture-time rules on distinct sites are merged into one recipe (recipe_a & recipe_b)."
   },
@@ -1106,7 +1106,7 @@
    "a": "edit_chain",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1114,7 +1114,7 @@
    "a": "edit_chain",
    "b": "multipass",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1122,7 +1122,7 @@
    "a": "edit_chain",
    "b": "recipes",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1130,7 +1130,7 @@
    "a": "edit_chain",
    "b": "record",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1138,7 +1138,7 @@
    "a": "edit_chain",
    "b": "reporting",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1146,7 +1146,7 @@
    "a": "edit_chain",
    "b": "rerun",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1154,7 +1154,7 @@
    "a": "edit_chain",
    "b": "save",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1162,7 +1162,7 @@
    "a": "edit_chain",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1170,7 +1170,7 @@
    "a": "edit_chain",
    "b": "storage",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Disk-streamed payloads are materialized by the fork edit on the sites it reads."
   },
@@ -1178,7 +1178,7 @@
    "a": "edit_chain",
    "b": "validate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1356,7 +1356,7 @@
    "a": "export",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1378,7 +1378,7 @@
    "a": "export",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1430,7 +1430,7 @@
    "a": "export",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1475,7 +1475,7 @@
    "a": "extract",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1499,7 +1499,7 @@
    "a": "extract",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1554,7 +1554,7 @@
    "a": "extract",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1592,7 +1592,7 @@
    "a": "fast_run",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1615,7 +1615,7 @@
    "a": "fast_run",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1668,7 +1668,7 @@
    "a": "fast_run",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1700,7 +1700,7 @@
    "a": "fork_do",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1722,7 +1722,7 @@
    "a": "fork_do",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1777,7 +1777,7 @@
    "a": "fork_do",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1800,7 +1800,7 @@
    "a": "halt",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "A halted capture keeps the ops that ran; the row edits a saved site among them or is not applicable when none is floating-point."
   },
@@ -1823,7 +1823,7 @@
    "a": "halt",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "A halted capture keeps the ops that ran; the row edits a saved site among them or is not applicable when none is floating-point."
   },
@@ -1876,7 +1876,7 @@
    "a": "halt",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "A halted capture keeps the ops that ran; the row edits a saved site among them or is not applicable when none is floating-point."
   },
@@ -1900,7 +1900,7 @@
    "a": "hooks",
    "b": "index",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1908,7 +1908,7 @@
    "a": "hooks",
    "b": "intervene",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Capture-time rules on distinct sites are merged into one recipe (recipe_a & recipe_b)."
   },
@@ -1916,7 +1916,7 @@
    "a": "hooks",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1924,7 +1924,7 @@
    "a": "hooks",
    "b": "multipass",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1932,7 +1932,7 @@
    "a": "hooks",
    "b": "recipes",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1940,7 +1940,7 @@
    "a": "hooks",
    "b": "record",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1948,7 +1948,7 @@
    "a": "hooks",
    "b": "reporting",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1956,7 +1956,7 @@
    "a": "hooks",
    "b": "rerun",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1964,7 +1964,7 @@
    "a": "hooks",
    "b": "save",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1972,7 +1972,7 @@
    "a": "hooks",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1980,7 +1980,7 @@
    "a": "hooks",
    "b": "storage",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Disk-streamed payloads are materialized by the fork edit on the sites it reads."
   },
@@ -1988,7 +1988,7 @@
    "a": "hooks",
    "b": "validate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2004,7 +2004,7 @@
    "a": "index",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2059,7 +2059,7 @@
    "a": "index",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2082,7 +2082,7 @@
    "a": "intervene",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Capture-time rules on distinct sites are merged into one recipe (recipe_a & recipe_b)."
   },
@@ -2136,7 +2136,7 @@
    "a": "intervene",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Capture-time rules on distinct sites are merged into one recipe (recipe_a & recipe_b)."
   },
@@ -2159,7 +2159,7 @@
    "a": "mean_ablate",
    "b": "multipass",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2167,7 +2167,7 @@
    "a": "mean_ablate",
    "b": "recipes",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2175,7 +2175,7 @@
    "a": "mean_ablate",
    "b": "record",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2183,7 +2183,7 @@
    "a": "mean_ablate",
    "b": "reporting",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2191,7 +2191,7 @@
    "a": "mean_ablate",
    "b": "rerun",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2199,7 +2199,7 @@
    "a": "mean_ablate",
    "b": "save",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2207,7 +2207,7 @@
    "a": "mean_ablate",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2215,7 +2215,7 @@
    "a": "mean_ablate",
    "b": "storage",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Disk-streamed payloads are materialized by the fork edit on the sites it reads."
   },
@@ -2223,7 +2223,7 @@
    "a": "mean_ablate",
    "b": "validate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2267,7 +2267,7 @@
    "a": "multipass",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2320,7 +2320,7 @@
    "a": "recipes",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2364,7 +2364,7 @@
    "a": "record",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2402,7 +2402,7 @@
    "a": "reporting",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2433,7 +2433,7 @@
    "a": "rerun",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2457,7 +2457,7 @@
    "a": "save",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2480,7 +2480,7 @@
    "a": "steer",
    "b": "storage",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Disk-streamed payloads are materialized by the fork edit on the sites it reads."
   },
@@ -2488,7 +2488,7 @@
    "a": "steer",
    "b": "validate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2510,7 +2510,7 @@
    "summary": "Preview backends give derived gradients through grad_options and trace.derived_grads (tf graph-only captures refuse grad_options; grad_options cannot combine with intervene on paddle, tf or mlx), while true backward capture exists only on torch.",
    "evidence": "docs/backends.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A02",
@@ -2518,7 +2518,7 @@
    "summary": "tl.extract is a thin sugar with keywords model, x, layers and detach_saved_activations only: it takes no backend, halt, recipes, echo, profile, grouping or episode, while tl.trace takes all of them (extract_dataset adds intervene and disk output). Cells citing this: backend x extract, episode x extract, extract x halt, extract x recipes, extract x reporting.",
    "evidence": "torchlens/__init__.py::extract",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A03",
@@ -2529,7 +2529,7 @@
    "summary": "run(inputs=, fast=True) and runnable replay work on torch; preview backends and loaded non-torch artifacts report backend_replay_unsupported.",
    "evidence": "docs/reference/runnable_tlspec_contract.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A04",
@@ -2540,7 +2540,7 @@
    "summary": "fork().do needs capture=CaptureOptions(replayable=True), and preview backends refuse the capture= keyword, so post-hoc edits exist on torch only.",
    "evidence": "docs/backends.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A05",
@@ -2551,7 +2551,7 @@
    "summary": "stop_after= works on torch, Paddle (live) and MLX (static-label) but jax, tinygrad and tf refuse it typed.",
    "evidence": "docs/backends.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A06",
@@ -2562,7 +2562,7 @@
    "summary": "intervene= works fully on torch, as static-label rules on MLX and eager TF, as a helper subset (zero_ablate, scale, add, replace_with) on Paddle, and is refused by jax, tinygrad and graph-only TF.",
    "evidence": "docs/backends.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A07",
@@ -2573,7 +2573,7 @@
    "summary": "recipes= attaches facet recipes on torch and Paddle; tf (and jax, tinygrad, mlx) refuse it typed.",
    "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A08",
@@ -2584,7 +2584,7 @@
    "summary": "Trace.run (re-execution) works on torch; preview traces cannot rerun and loaded non-torch artifacts cannot replay-validate.",
    "evidence": "docs/reference/limitations.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A09",
@@ -2595,7 +2595,7 @@
    "summary": "Preview backends accept static-label save= selectors only, applied as a filter after a full capture (no memory saving); value-dependent predicates, lookback and save_budget are refused.",
    "evidence": "docs/reference/limitations.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A10",
@@ -2606,7 +2606,7 @@
    "summary": "On the Trace path log_backward works after a halt and by default; tl.record installs gradient hooks only with backward_ready, save_grads or default_grad, refuses log_backward without them (recording_backward_not_requested), refuses it on a halted Recording (recording_backward_halted), and rejects save_grads with a disk-only store.",
    "evidence": "docs/reference/capture_outcomes.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A11",
@@ -2617,7 +2617,7 @@
    "summary": "Gradient payloads stream to disk on trace.log_backward, but backward_ready=True refuses disk saves (backward_ready_conflict), chunk_size refuses backward capture, and a disk-only record refuses save_grads (predicate_storage_conflict).",
    "evidence": "tests/test_backward_streaming.py::test_streamed_bundle_honors_per_call_save_grads_override",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A12",
@@ -2628,7 +2628,7 @@
    "summary": "Trace has to_pandas and xarray exports; Bundle offers none, and Bundle summary and agent_json refuse untyped with AttributeError (explain refuses typed with report_subject_unsupported).",
    "evidence": "tests/composition_expectations/test_proofnet_m1_product_verb.py",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A13",
@@ -2639,7 +2639,7 @@
    "summary": "Trace.save on a Trace accepts per-trace payload options and streaming storage; Trace.save on a Bundle accepts only level and overwrite and refuses the rest (bundle_save_option_unsupported).",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A14",
@@ -2650,7 +2650,7 @@
    "summary": "Intervention marks draw on the dot layout; the rank layout (explicit or the automatic choice on high-cost graphs) omits standalone intervention hook nodes and warns.",
    "evidence": "docs/reference/limitations.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A15",
@@ -2661,7 +2661,7 @@
    "summary": "Recording.draw renders a flat event graph and takes bare kwargs; Trace.draw takes VisualizationOptions, collapse, encodings and layouts. Cooked structure needs Recording.to_trace().",
    "evidence": "torchlens/recording/types.py",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A16",
@@ -2672,7 +2672,7 @@
    "summary": "episode= is a tl.trace option; tl.record has no episode arm and refuses it with an untyped TypeError, which the composition table ledgers as a gap.",
    "evidence": "tests/composition_expectations/test_proofnet_episode_options.py::test_episode_kwarg_on_record_is_a_ledgered_untyped_refusal",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A17",
@@ -2683,7 +2683,7 @@
    "summary": "A plain episode product reruns as a fresh execution that drops the ledger to a travel note; a coupled product (episode with intervene) refuses run() on both engines with episode_coupled_replay_underivable.",
    "evidence": "docs/reference/episode_capture.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A18",
@@ -2694,7 +2694,7 @@
    "summary": "Recording.to_pandas returns event columns; xarray, agent_json and analysis save are not offered on a Recording (agent_json and save refuse untyped).",
    "evidence": "tests/composition_expectations/test_proofnet_m1_product_verb.py",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A19",
@@ -2705,7 +2705,7 @@
    "summary": "run(fast=True) on a halted live trace refuses (N5; it silently succeeded before the gate); a loaded sparse artifact's run() still executes exactly the recorded prefix.",
    "evidence": "docs/reference/capture_outcomes.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A20",
@@ -2716,7 +2716,7 @@
    "summary": "The guarded fast rerun applies staged module-selector (tl.module) specs; value replacements and non-module targets use the capture engine, and the explicit fast door refuses function targets (fast_rerun_target_unsupported).",
    "evidence": "docs/guides/fast_paths.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A21",
@@ -2727,7 +2727,7 @@
    "summary": "fast= and carry_state exist only on the unified run(inputs=...) door; legacy run(model, x) refuses fast=True (run_fast_requires_inputs) and mixing option families refuses run_legacy_options_conflict.",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A22",
@@ -2738,7 +2738,7 @@
    "summary": "fork() works on a halted trace but do() and push refuse (N5) because replay needs the full graph.",
    "evidence": "tests/composition_expectations/test_proofnet_edit_product.py",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A23",
@@ -2749,7 +2749,7 @@
    "summary": "Trace has fork and do; a Recording has neither and fork refuses with an untyped AttributeError (ledgered gap).",
    "evidence": "tests/composition_expectations/test_proofnet_m1_product_verb.py",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A24",
@@ -2760,7 +2760,7 @@
    "summary": "do() on the replay/push engine handles activation, edge, parameter and region edits; the rerun engine refuses edge, parameter and region edits (edge_intervention_engine_unsupported, param_substitution_engine_unsupported, region_engine_unsupported).",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A25",
@@ -2771,7 +2771,7 @@
    "summary": "A batch-coherent edit (permute_batch, self-sourced mean_ablate) refuses chunked_replay_batch_coupling on a trace captured with chunk_size; the same edit is accepted on an unchunked trace.",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A26",
@@ -2782,7 +2782,7 @@
    "summary": "Live rerun, refresh, push and run of a halted trace refuse (N5); loaded sparse run() is allowed and executes exactly the recorded prefix.",
    "evidence": "docs/reference/capture_outcomes.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A27",
@@ -2793,7 +2793,7 @@
    "summary": "stop_after= composes with streaming to disk (tests/test_fastlog_halt.py::test_fastlog_halt_finalizes_disk_storage) but refuses chunking (stop_after_chunked_conflict).",
    "evidence": "tests/test_chunk_size.py::test_chunk_size_guarded_combinations",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A28",
@@ -2804,7 +2804,7 @@
    "summary": "A bare label works on single-pass layers; on a multi-pass layer trace['label'] returns a Layer, op-level reads need a pass qualifier, and do and attach_hooks refuse the bare label (multipass_bare_label_ambiguous).",
    "evidence": "tests/test_replay_pass_qualified.py::test_bare_multipass_label_refuses_in_do_and_resolve_sites",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A30",
@@ -2815,7 +2815,7 @@
    "summary": "intervene= composes with streaming to disk (tests/test_surgery_live_injections.py::test_streamed_to_disk_intervene_capture_settles_and_loads) but chunk_size refuses intervene with a codeless ChunkedForwardConfigError.",
    "evidence": "tests/test_chunk_size.py::test_chunk_size_guarded_combinations",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A31",
@@ -2826,7 +2826,7 @@
    "summary": "tl.record captures repeated calls, but Recording.to_trace() refuses a multi-pass Recording (recording_multipass_not_convertible), so recurrent models cannot be cooked into a Trace.",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A32",
@@ -2837,7 +2837,7 @@
    "summary": "tl.trace takes recipes=; tl.record takes no recipes keyword, so facet recipes cannot be attached on the sparse path.",
    "evidence": "torchlens/recording/_record_one_shot.py",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A33",
@@ -2848,7 +2848,7 @@
    "summary": "trace(storage=tl.to_disk(...)) writes asynchronously by default and honors async_writes; tl.record streaming stays synchronous and refuses an explicit async_writes=True.",
    "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "document"
   },
   {
    "id": "A35",
@@ -2856,7 +2856,7 @@
    "summary": "The same capture concepts (random_seed, backward_ready, save_grads, detach_saved_activations) are flat keywords on tl.record but live inside capture=CaptureOptions(...) on tl.trace, and save= takes a selector, list or SaveOptions on trace but a predicate on record.",
    "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A36",
@@ -2864,7 +2864,7 @@
    "summary": "The model input is spelled inputs on trace, record and validate, x on extract and legacy run(model, x), inputs= on the unified run, and input_size= for declared shapes.",
    "evidence": "docs/internal/agent-reference/common-patterns.md",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A37",
@@ -2872,7 +2872,7 @@
    "summary": "Which sites to keep is spelled save= on trace and record, and layers on extract. CaptureOptions configures capture mechanics.",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A38",
@@ -2880,7 +2880,7 @@
    "summary": "Predicate type errors are twin codes with different lineages: tl.trace halt_predicate_type_invalid (ArgumentTypeError, TypeError) and intervention_predicate_type_invalid, versus tl.record recording_halt_predicate_type_invalid and recording_intervention_predicate_type_invalid (InvalidArgumentError, ValueError).",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A40",
@@ -2888,7 +2888,7 @@
    "summary": "Disk output is spelled storage=tl.to_disk(path) on trace and record, output_dir= on extract_dataset, and path inside streaming options.",
    "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A41",
@@ -2896,7 +2896,7 @@
    "summary": "Rerun has two doors with different option sets: legacy run(model, x) applies a staged spec and re-arms capture predicates, unified run(inputs=...) refuses a staged spec (run_staged_spec_unapplied) unless fast=True, and carry_state, fast and until are unified-only.",
    "evidence": "docs/guides/fast_paths.md",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A42",
@@ -2904,7 +2904,7 @@
    "summary": "`grad_transform` is both a `tl.trace` keyword and a field of `SaveOptions` and `RecordingOptions`, so one setting has two doors on the same call.",
    "evidence": "surface inventory option heuristics",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A43",
@@ -2912,7 +2912,7 @@
    "summary": "`show_model_graph`, `draw_backward` and `draw_combined` take `VisualizationOptions` and also flat keywords of the same names (`collapse`, `depth`, `node_style`, `view` ...).",
    "evidence": "surface inventory option heuristics",
    "recommendation": "document",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A44",
@@ -2920,7 +2920,7 @@
    "summary": "`draw_combined` takes `show_buffer_layers` where `VisualizationOptions` and `Trace.draw` spell the setting `show_buffers`.",
    "evidence": "surface inventory option heuristics",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A45",
@@ -2928,7 +2928,7 @@
    "summary": "Gradient saving is `save_grads` on `CaptureOptions` and `RecordingOptions` but `save_raw_gradients` on `SaveOptions` and `RecordingOptions`.",
    "evidence": "surface inventory option heuristics",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A46",
@@ -2936,7 +2936,7 @@
    "summary": "Every options class is passed through a slot named after its group (`capture=`, `save=`, `replay=`, `streaming=`, `visualization=`) except `EchoOptions`, which `EchoSession` takes as `options=`; and `RecordingOptions` and `HtmlReportOptions` are public option classes that `tl.options` does not export.",
    "evidence": "surface inventory option heuristics",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   }
  ]
 }

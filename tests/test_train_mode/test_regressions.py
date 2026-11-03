@@ -27,7 +27,7 @@ def test_a1_save_new_outs_output_layer_keeps_grad(two_layer_mlp: TwoLayerMlp) ->
     trace = tl.trace(two_layer_mlp, x, capture=CaptureOptions(seed=0))
     output_label = trace.output_layers[0]
 
-    trace.save_new_outs(
+    trace._save_new_outs(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         save=[output_label],

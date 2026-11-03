@@ -12,8 +12,21 @@
 - `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state
 - FIELD_ORDER constants in `constants.py` define canonical field sets; update both class
   fields and constants when adding fields
-- NumPy-format docstrings on all functions
-- Type hints on all functions
+- Docstrings (standard ruled 2026-10-13): NumPy format on every function, method and
+  class; a one-line summary that says what the object is for on its own; one runnable
+  `Examples` section on every public function and class (gate:
+  `tests/test_docstring_examples.py`, census: `python tools/docstring_examples.py census`,
+  committed at `docs/maintainers/docstring_examples_census.md`). Examples run as doctests
+  in the ambient namespace the docs pages assume: `tl` (torchlens), `torch`, `nn`, a small
+  eval-mode `model` and a matching input `x`; everything else an example uses it defines
+  itself. An example that needs an optional dependency starts with
+  `>>> # requires: <module>` and is skipped where that module is absent. A module the
+  enforcing CI environment lacks is listed in `OPTIONAL_EXAMPLE_MODULES` in that test file
+  and installed by a nightly leg (`bridges-real` or the LIT leg) that runs its examples with
+  a PASSED floor, so every example runs somewhere. Keep shown output
+  deterministic (print a shape, a count or a bool rather than a tensor repr).
+- Type hints on all functions; public signatures name TorchLens types (`Trace`, `Layer`,
+  `Op`, option dataclasses) rather than `Any`.
 - Import order: stdlib -> third-party -> local (enforced by ruff)
 - Line length: 100
 - `tl.receptive_field` is lazy; entity-level `receptive_field` / `projective_field` siblings

@@ -19,6 +19,7 @@ from .._io import FieldPolicy
 from .._pass_tokens import split_pass_token
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_views import _layer_log_to_row
+from ._lookup_kinds import converted, layer_for_key, scoped_op_by_lookup_key
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -180,8 +181,6 @@ class OpAccessor(Accessor["Op"]):
                 op_log.raw_label,
             }:
                 return op_log
-        from ._lookup_kinds import scoped_op_by_lookup_key
-
         return scoped_op_by_lookup_key(self._dict.values(), key)  # module-call or buffer key
 
 
@@ -261,17 +260,15 @@ class LayerAccessor(Accessor["Layer"]):
                 f"Layer lookup '{key}' is ambiguous across {len(matches)} Layers: {listed}. "
                 f"Use the full Layer label, e.g. {matches[0].layer_label!r}."
             )
-        from ._lookup_kinds import converted, layer_for_key
-
         return converted(self, key, layer_for_key)  # a module or buffer key names its Layer
 
     def _suggest(self, key: str) -> list[str]:
         """Return similar layer labels from the source Trace."""
         source_ref = getattr(self, "_source_ref", None)
         source = source_ref() if source_ref is not None else None
-        if source is not None and hasattr(source, "find_layers"):
-            return source.find_layers(str(key))
-        return []
+        if source is None:
+            return []
+        return list(source._suggest_layer_labels(str(key)))
 
     def _trace_filtered(self, impl: str) -> "LayerAccessor":
         """Return the Trace-level layer filter ``impl`` restricted to this collection."""

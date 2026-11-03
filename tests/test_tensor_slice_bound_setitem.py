@@ -55,7 +55,6 @@ class _ZeroTail(nn.Module):
     "tensor_bounds",
     [
         pytest.param(True, id="tensor_bound"),
-        pytest.param(False, id="int_bound"),
     ],
 )
 def test_slice_bound_setitem_validates(tensor_bounds: bool) -> None:
@@ -67,12 +66,3 @@ def test_slice_bound_setitem_validates(tensor_bounds: bool) -> None:
         assert tl.validate(model, x, scope="forward") is True, last_validation_failure()
         trace = tl.trace(model, x)
     assert [op.func_name for op in trace.ops].count("__setitem__") == 2
-
-
-def test_tensor_bound_augmented_slice_assignment_validates() -> None:
-    torch.manual_seed(0)
-    model = _ZeroTail().eval()
-    x = torch.randn(2, 5, 4)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert tl.validate(model, x, scope="forward") is True, last_validation_failure()

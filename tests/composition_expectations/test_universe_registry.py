@@ -300,7 +300,7 @@ def test_capture_options_private_filter_both_directions() -> None:
     # 48 -> 49 (T82d re-reconcile, F44): union of the landed
     # track_device_memory and the F44 log_injections options. As of T85
     # (F01-AMENDED landed) both parents carry log_injections; pins agree.
-    # 49 -> 50: U40.1 CaptureOptions.carry_state.
+    # 49 -> 50: CaptureOptions.carry_state.
     # 50 -> 51: measure.2 CaptureOptions.measure_host_peak_memory.
     # 51 -> 57: the options restructure (C2, JMT's rulings of 2026-11-01): the train
     # pinned 49 and the C2 base 59; the merged class carries 57 public fields.

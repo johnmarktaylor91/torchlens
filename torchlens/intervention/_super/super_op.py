@@ -15,7 +15,15 @@ if TYPE_CHECKING:
 
 
 class SuperOp(Super["Op"], _TensorBearing):
-    """View of a single site across all bundle members."""
+    """View of a single site across all bundle members.
+
+    Examples
+    --------
+    >>> bundle = tl.Bundle({"a": tl.trace(model, x), "b": tl.trace(model, torch.randn(1, 3, 8, 8))})
+    >>> site = bundle.at(tl.func("relu"))
+    >>> isinstance(site, SuperOp), sorted(site.members)
+    (True, ['a', 'b'])
+    """
 
     def __init__(
         self,
@@ -81,7 +89,16 @@ class SuperLayer(SuperOp):
 
 
 class SuperAtenOp(Super["AtenOp"]):
-    """Positional, coverage-qualified alignment of one ATen slot across members."""
+    """Positional, coverage-qualified alignment of one ATen slot across members.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))
+    >>> row = list(trace["relu_1_2"].aten_ops)[0]
+    >>> slot = SuperAtenOp(label="slot_0", decomposition_slot=0, members={"a": row}, bundle_member_names=["a"])
+    >>> slot.decomposition_slot, sorted(slot.members)
+    (0, ['a'])
+    """
 
     def __init__(
         self,

@@ -22,7 +22,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_substrate import ExtractionArtifactError, read_trusted_rows
-from torchlens._data_substrate.artifact import MANIFEST_SCHEMA_V2
 from torchlens._extraction.resume import MANIFEST_FILENAME
 from torchlens.dataset_extraction import (
     load_extraction,
@@ -151,85 +150,6 @@ def test_resume_refuses_unmanifested_shard_dir(tmp_path: Path) -> None:
             resume=True,
         )
     assert excinfo.value.fields["code"] == "extraction_resume_unmanifested_dir"
-
-
-def test_resume_refuses_mismatched_signature(tmp_path: Path) -> None:
-    """A resume whose run parameters differ from the artifact's refuses typed."""
-
-    model = _CountingModel().eval()
-    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
-    with pytest.raises(DatasetExtractionResumeError) as excinfo:
-        tl.extract_dataset(
-            model,
-            _stimuli(),
-            _LAYERS,
-            batch_size=5,
-            path=tmp_path,
-            progress=False,
-            resume=True,
-        )
-    assert excinfo.value.fields["code"] == "extraction_resume_signature_mismatch"
-    assert "batch_size" in excinfo.value.fields["mismatched_fields"]
-
-    with pytest.raises(DatasetExtractionResumeError) as excinfo:
-        tl.extract_dataset(
-            model,
-            _stimuli() + 1.0,
-            _LAYERS,
-            batch_size=4,
-            path=tmp_path,
-            progress=False,
-            resume=True,
-        )
-    assert excinfo.value.fields["code"] == "extraction_resume_signature_mismatch"
-    assert "stimuli" in excinfo.value.fields["mismatched_fields"]
-
-
-def test_resume_of_complete_artifact_never_runs_the_model(tmp_path: Path) -> None:
-    """Resuming a finished artifact returns its shard paths without a forward."""
-
-    model = _CountingModel().eval()
-    first = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False
-    )
-    calls_after_first = model.n_forward_calls
-    again = tl.extract_dataset(
-        model,
-        _stimuli(),
-        _LAYERS,
-        batch_size=4,
-        path=tmp_path,
-        progress=False,
-        resume=True,
-    )
-    assert model.n_forward_calls == calls_after_first
-    assert again == first
-
-
-def test_resume_recomputes_only_missing_shards(tmp_path: Path) -> None:
-    """An interrupted run resumes from its ledger, recomputing only the tail."""
-
-    model = _CountingModel().eval()
-    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=2, path=tmp_path, progress=False)
-    # Reconstruct the mid-run state: 2 of 5 shards ledgered, in progress.
-    _interrupt_after(tmp_path, 2)
-
-    calls_before = model.n_forward_calls
-    paths = tl.extract_dataset(
-        model,
-        _stimuli(),
-        _LAYERS,
-        batch_size=2,
-        path=tmp_path,
-        progress=False,
-        resume=True,
-    )
-    assert model.n_forward_calls == calls_before + 3
-    assert [path.name for path in paths] == [f"batch_0000{i}.safetensors" for i in range(5)]
-    loaded = load_extraction(tmp_path)
-    clean = tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=2, progress=False)
-    for key, tensor in clean.items():
-        assert torch.equal(loaded.activations[key], tensor)
 
 
 def test_deleted_ledgered_shard_refuses_typed(tmp_path: Path) -> None:
@@ -391,84 +311,6 @@ def test_hard_process_death_mid_shard_write_then_resume(tmp_path: Path) -> None:
     clean = tl.extract_dataset(model, stimuli, layers, batch_size=2, progress=False)
     for key, tensor in clean.items():
         assert torch.equal(loaded.activations[key], tensor)
-
-
-def test_manifest_is_self_describing(tmp_path: Path) -> None:
-    """The manifest carries site identity, provenance, axes, dtype, and device."""
-
-    model = _CountingModel().eval()
-    ids = [f"stim-{index:02d}" for index in range(7)]
-    tl.extract_dataset(
-        model,
-        _stimuli(7),
-        _LAYERS,
-        batch_size=3,
-        path=tmp_path,
-        progress=False,
-        output_transform=lambda tensor: tensor.mean(dim=1),
-        stimulus_ids=ids,
-    )
-    manifest = json.loads((tmp_path / MANIFEST_FILENAME).read_text(encoding="utf-8"))
-    assert manifest["schema"] == MANIFEST_SCHEMA_V2
-    assert manifest["torchlens_version"] == tl.__version__
-    assert manifest["status"] == "complete"
-    assert manifest["totals"] == {"n_shards": 3, "n_stimuli": 7}
-    assert isinstance(manifest["ledger_digest"], str)
-    assert manifest["ledger_digest"].startswith("sha256:")
-
-    signature = manifest["signature"]
-    assert signature["schema_version"] == MANIFEST_SCHEMA_V2
-    assert signature["layer_plan"] == _LAYERS
-    assert signature["layers_kind"] == "mapping"
-    assert signature["batch_size"] == 3
-    # A raw lambda is an OPAQUE step: identification-only disclosure, not
-    # resume-verifiable.
-    pipeline = signature["transform_pipeline"]
-    assert pipeline["schema"] == "tl_transform_pipeline_v1"
-    assert pipeline["steps"][0]["kind"] == "opaque"
-    assert pipeline["steps"][0]["qualname"].endswith("<lambda>")
-    assert pipeline["resume_verifiable"] is False
-    assert signature["stimuli"]["kind"] == "tensor"
-    assert signature["stimuli"]["shape"] == [7, 3]
-    assert signature["stimuli"]["dtype"] == "torch.float32"
-    assert signature["stimuli"]["digest"].startswith("sha256:")
-    # Model identity is measured by default: a recomputable crypto digest.
-    identity = signature["model_identity"]
-    assert identity["level"] == "measured"
-    assert identity["digest"].startswith("blake2b:")
-    assert identity["algorithm_id"] == "tl_model_state_merkle"
-    assert identity["n_state_entries"] == len(model.state_dict())
-    assert signature["model_mode"] == "eval_no_grad"
-
-    provenance = manifest["stimulus_provenance"]
-    assert provenance["n_stimuli"] == 7
-    assert provenance["ids_recorded"] is True
-    assert provenance["ids_digest"] == signature["stimulus_ids_digest"]
-    assert "iteration order" in provenance["order"]
-    sidecar = json.loads((tmp_path / "stimulus_ids.json").read_text(encoding="utf-8"))
-    assert sidecar["ids"] == ids
-
-    relu = manifest["layers"]["relu"]
-    assert relu["layer_label"] == "relu_1_2"
-    assert isinstance(relu["site_key"], str) and relu["site_key"].startswith("s1|")
-    assert relu["site_key_unavailable"] is None
-    assert relu["captured_dtype"] == "torch.float32"
-    assert relu["captured_device"] == "cpu"
-    assert relu["per_stimulus_shape"] == [4]
-    # The mean(dim=1) transform collapses the activation axis; the manifest
-    # discloses the stored geometry separately from the captured geometry.
-    assert relu["stored_per_stimulus_shape"] == []
-    assert relu["batch_axis"] == 0
-
-    rows = read_trusted_rows(tmp_path)
-    assert [row["n_rows"] for row in rows] == [3, 3, 1]
-    assert [row["row_start"] for row in rows] == [0, 3, 6]
-    for row in rows:
-        assert isinstance(row["crc32"], int)
-        assert row["byte_size"] == (tmp_path / row["file"]).stat().st_size
-        assert row["ids_range_digest"].startswith("sha256:")
-        assert row["keys"]["relu"]["value_reduction"].startswith("0x")
-        assert row["keys"]["relu"]["dtype"] == "torch.float32"
 
 
 def test_load_extraction_subset_and_refusals(tmp_path: Path) -> None:

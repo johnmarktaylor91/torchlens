@@ -50,7 +50,20 @@ class AnswerRow:
 
 @dataclass(frozen=True)
 class PromptInspection:
-    """Structured prompt inspection (record first, rendering second)."""
+    """Structured prompt inspection (record first, rendering second).
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> report = tl.mechinterp.inspect_prompt(trace, answer=3)
+    >>> isinstance(report, PromptInspection), len(report.input_ids)
+    (True, 6)
+    """
 
     input_ids: tuple[int, ...]
     pieces: tuple[str, ...] | None
@@ -174,6 +187,18 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
     contributions:
         Append the top DLA contributors for ``answer`` (needs the residual
         stream retained; refuses with the plan otherwise).
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> report = tl.mechinterp.inspect_prompt(trace, answer=3, k=3)
+    >>> report.answers[0].token_id, len(report.k)
+    (3, 3)
     """
 
     anchor = resolve_lm_head(trace)
@@ -269,6 +294,18 @@ def test_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
     ``prompt + answer[:-1]`` in ONE forward and each answer token is scored
     at its own position (boundary-checked -- the forward length proves the
     concatenation happened).
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> ids = torch.randint(0, 32, (1, 6))
+    >>> report = tl.mechinterp.test_prompt(lm, ids, answer=3)
+    >>> report.answers[0].token_id
+    3
     """
 
     import torchlens as tl
