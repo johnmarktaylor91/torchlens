@@ -1563,7 +1563,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/receptive_field/_layer_fields.py", "__all__"),
         ("torchlens/receptive_field/_op_fields.py", "__all__"),
         ("torchlens/receptive_field/_trace_tables.py", "__all__"),
-        ("torchlens/recording/_trace_preview.py", "__all__"),
         ("torchlens/report/_narrate.py", "__all__"),
         ("torchlens/report/_trace_facts.py", "__all__"),
         ("torchlens/report/_trace_summary.py", "__all__"),

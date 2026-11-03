@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1358 modules, 630146 lines, 0 modules without a docstring.
+84 packages, 1356 modules, 630120 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25056 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1496 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4553 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 78 | 37310 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 78 | 37302 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
@@ -75,7 +75,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 1980 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
-| `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5241 |
+| `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5228 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 69 | 34307 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
@@ -86,7 +86,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 20 | 11483 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 18 | 5789 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 17 | 5784 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 33 | 13585 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 6903 |
@@ -281,7 +281,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (78 modules, 37310 lines)
+Core data structures for representing a logged forward pass. (78 modules, 37302 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -291,7 +291,7 @@ Core data structures for representing a logged forward pass. (78 modules, 37310 
 | `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 278 |
 | `_compaction` | Freeze-seam Op metadata compaction ( fold of the standalone pass). | 87 |
 | `_container_labels` | Pure value helpers for container views. | 78 |
-| `_doors` | Doors from the records to the packages above them (Rule F). | 147 |
+| `_doors` | Doors from the records to the packages above them (Rule F). | 139 |
 | `_fork_lineage` | Fork lineage: the ''fork'' verb's record-side helpers and the parent-chain test. | 91 |
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 179 |
@@ -1544,7 +1544,7 @@ Experimental Dagua rendering bridge exports. (2 modules, 950 lines)
 
 ### `torchlens.export`
 
-Static export helpers for TorchLens logs. (15 modules, 5241 lines)
+Static export helpers for TorchLens logs. (14 modules, 5228 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1561,7 +1561,6 @@ Static export helpers for TorchLens logs. (15 modules, 5241 lines)
 | `_netron_records` | Netron export projection records (netron ). | 504 |
 | `_registry` | The export-target registry: ONE L7 door for every exporter ( item 17). | 125 |
 | `_report` | The single-file offline HTML trace report (B5, treescope memo s6). | 722 |
-| `_trace_tables` | Transitional bridge: the trace tables live in :mod:'torchlens.stats._trace_tables'. | 13 |
 | `_trackers` | Tracker-sink export targets (bridge tier; subpackage promotion, item 18). | 507 |
 
 ### `torchlens.export._model_explorer`
@@ -1799,7 +1798,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 13
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (18 modules, 5789 lines)
+Lightweight predicate-recording namespace for TorchLens. (17 modules, 5784 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1811,7 +1810,6 @@ Lightweight predicate-recording namespace for TorchLens. (18 modules, 5789 lines
 | `_recorder` | Public Recorder context manager for fastlog sessions. | 866 |
 | `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 50 |
 | `_storage_resolver` | Storage resolution for fastlog tensor payloads. | 410 |
-| `_trace_preview` | Trace preview functions reached from the records through ''_data_classes._doors.recording'' (record rebuild destination; empty until its... | 5 |
 | `_validation` | Validation helpers for public fastlog APIs. | 100 |
 | `cleanup` | Cleanup helpers for partial fastlog bundles. | 61 |
 | `dry_run` | Dry-run tracing API for fastlog predicates. | 71 |
