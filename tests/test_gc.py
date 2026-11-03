@@ -10,6 +10,7 @@ cache root twice now.
 """
 
 import gc
+import os
 import tracemalloc
 import weakref
 
@@ -35,6 +36,21 @@ from torchlens.errors import TraceCaptureError
 # ---------------------------------------------------------------------------
 # Test models
 # ---------------------------------------------------------------------------
+
+
+_TORCHLENS_DIR = os.path.dirname(os.path.abspath(tl.__file__)) + os.sep
+
+
+def _torchlens_growth(stats: list[tracemalloc.StatisticDiff]) -> int:
+    """Net bytes of blocks allocated in the torchlens package's own source files.
+
+    A frame belongs to torchlens when its file lies under the installed package
+    directory. A substring test on the path would also count every allocation of a
+    checkout whose path names torchlens (the virtualenv's torch, pytest), which is
+    other code's growth and depends on what ran earlier in the process.
+    """
+
+    return sum(s.size_diff for s in stats if s.traceback[0].filename.startswith(_TORCHLENS_DIR))
 
 
 class _SimpleLinear(nn.Module):
@@ -149,7 +165,7 @@ class TestTraceGC:
 
         # Compare: filter to torchlens allocations
         stats = after.compare_to(baseline, "lineno")
-        tl_growth = sum(s.size_diff for s in stats if "torchlens" in str(s.traceback))
+        tl_growth = _torchlens_growth(stats)
         # Allow up to 256KB of noise (caches, interned strings, etc.)
         assert tl_growth < 256 * 1024, f"Memory grew by {tl_growth} bytes across 5 sessions"
 
@@ -176,7 +192,7 @@ class TestTraceGC:
         tracemalloc.stop()
 
         stats = after.compare_to(baseline, "lineno")
-        tl_growth = sum(s.size_diff for s in stats if "torchlens" in str(s.traceback))
+        tl_growth = _torchlens_growth(stats)
         assert tl_growth < 256 * 1024, f"Memory grew by {tl_growth} bytes across 5 save_new_outs"
         trace.cleanup()
 
