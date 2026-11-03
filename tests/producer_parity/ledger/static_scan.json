@@ -388,7 +388,7 @@
   "field": "kind",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 10,
   "via_getattr": false
  },
  {
@@ -6499,14 +6499,6 @@
   "ambiguous": false,
   "field": "step_index",
   "file": "torchlens/backends/torch/_predicate_boundary_replacements.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/backends/torch/_predicate_forward.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
