@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
 
+from ._display import _call_message, _output_message, _pass_message
 from ._errors import (
     AmbiguousCallError,
     AmbiguousPassError,
@@ -67,32 +68,19 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     if isinstance(handle, Layer):
         _require_trace_owner(trace, handle.source_trace, handle.layer_label)
         if handle.num_passes != 1 or len(handle.ops) != 1:
-            passes = ", ".join(f"layer.ops[{index}]" for index in handle.ops)
-            raise AmbiguousPassError(
-                f"Layer {handle.layer_label!r} has {handle.num_passes} passes: {passes}."
-            )
+            raise AmbiguousPassError(_pass_message(handle))
         return handle.ops[0]
 
     if isinstance(handle, ModuleCall):
         _require_trace_owner(trace, handle._source_trace, handle.label)
         if len(handle.output_ops) != 1:
-            candidates = ", ".join(
-                f"module_call.output_ops[{index}]={label!r}"
-                for index, label in enumerate(handle.output_ops)
-            )
-            raise MultiOutputModuleError(
-                f"ModuleCall {handle.label!r} has {len(handle.output_ops)} output ops; "
-                f"select one candidate explicitly: {candidates or 'none'}."
-            )
+            raise MultiOutputModuleError(_output_message(handle, trace))
         return resolve_graph_point(trace, handle.output_ops[0])
 
     if isinstance(handle, Module):
         _require_trace_owner(trace, handle._source_trace, handle.address)
         if handle.num_calls != 1 or len(handle.calls) != 1:
-            calls = ", ".join(f"module.calls[{index}]" for index in handle.calls)
-            raise AmbiguousCallError(
-                f"Module {handle.address!r} has {handle.num_calls} calls: {calls}."
-            )
+            raise AmbiguousCallError(_call_message(handle))
         return resolve_graph_point(trace, handle.calls[0])
 
     raise ReceptiveFieldError(

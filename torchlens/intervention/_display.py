@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from typing import TYPE_CHECKING, Any
 
 from .._utils._display_card import LIST_LIMIT, render_card
@@ -72,9 +73,23 @@ def recipe_repr(recipe: Recipe, selector_type: type[Any]) -> str:
             and edit.startswith("tl.")
             and not any(token in spelling for token in ("<", "...", "tl.Edit("))
             and len(spelling) <= 100
+            and _public_names_only(spelling)
         ):
             return spelling
     return f"Recipe: {plural(len(recipe.rules), 'rule')}"
+
+
+def _public_names_only(spelling: str) -> bool:
+    """Reject unbound literals such as inf and nan without evaluating display text."""
+
+    return fail_open(
+        lambda: all(
+            node.id == "tl"
+            for node in ast.walk(ast.parse(spelling, mode="eval"))
+            if isinstance(node, ast.Name)
+        ),
+        lambda _error: False,
+    )
 
 
 @display_guard

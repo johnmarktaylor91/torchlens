@@ -72,6 +72,8 @@ def test_recipe_spelling_rebuilds_exactly_or_discloses_rule_count() -> None:
     merged = recipe & tl.when(tl.func("tanh"), tl.scale(2.0))
     assert repr(merged) == "Recipe: 2 rules"
     assert str(merged).startswith("Recipe: 2 rules\n  rule 1")
+    for factor in (float("inf"), float("nan")):
+        assert repr(tl.when(tl.func("relu"), tl.scale(factor))) == "Recipe: 1 rule"
 
 
 def test_tensor_printouts_never_read_elements(monkeypatch: pytest.MonkeyPatch) -> None:

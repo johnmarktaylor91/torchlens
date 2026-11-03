@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1449 modules, 648210 lines, 0 modules without a docstring.
+83 packages, 1451 modules, 648268 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -25,7 +25,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 54 | 35874 |
 | `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 5 | 484 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11645 |
-| `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5951 |
+| `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 14 | 5966 |
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1519 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 516 |
@@ -33,7 +33,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14908 |
-| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10461 |
+| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10463 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 12 | 7083 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
@@ -75,14 +75,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 3 | 972 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5524 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3046 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 75 | 36150 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 75 | 36165 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1935 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 425 |
 | `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 9066 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4150 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2597 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12850 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 23 | 12876 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 20 | 6142 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
@@ -534,7 +534,7 @@ Internal backend-neutral IR for TorchLens capture unification. (23 modules, 1164
 
 ### `torchlens._merged`
 
-Cross-rank trace merging (merge-ranks tier (c), rung ). (13 modules, 5951 lines)
+Cross-rank trace merging (merge-ranks tier (c), rung ). (14 modules, 5966 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -543,11 +543,12 @@ Cross-rank trace merging (merge-ranks tier (c), rung ). (13 modules, 5951 lines)
 | `_boundary_membership` | Group-membership and tensor-role parse rules for ''collective_boundary_v1''. | 307 |
 | `_boundary_rules` | Per-boundary parse rules for ''collective_boundary_v1'' rank evidence. | 564 |
 | `_derive_steps` | Evidence stages of the merge derivation that need no join records. | 667 |
+| `_display` | Bounded candidate text for merged-rank lookup refusals. | 19 |
 | `_engine` | The merge derivation: audit-first joining, delta alignment, witnesses. | 625 |
 | `_enums` | Frozen vocabulary for cross-rank merged traces (merge-ranks rung ). | 216 |
 | `_errors` | Typed errors for cross-rank merged traces. | 165 |
 | `_evidence` | Rank-core evidence extraction for the merge engine. | 556 |
-| `_presenter` | ''MergedTrace'': a presenter over lazy rank handles + the join table. | 937 |
+| `_presenter` | ''MergedTrace'': a presenter over lazy rank handles + the join table. | 933 |
 | `_relation_table` | The per-kind relation table the merge derivation checks at each join key. | 213 |
 | `_rules` | Shared identity, boundary and provenance rules over rank-core evidence. | 344 |
 | `_witness` | The totalized per-join witness verdict (design-merge-ranks-c v5, 3.3; demote-only). | 236 |
@@ -692,7 +693,7 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14
 
 ### `torchlens._selection`
 
-Selection: naming sites and resolving them on a trace. (21 modules, 10461 lines)
+Selection: naming sites and resolving them on a trace. (21 modules, 10463 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -700,7 +701,7 @@ Selection: naming sites and resolving them on a trace. (21 modules, 10461 lines)
 | `_display` | Metadata-only cards for selections and their resolved sites. | 144 |
 | `_module_facet_fold` | ''module(address) & facet'': folding a module scope into a facet selector. | 50 |
 | `_site_record` | ''Site.record'': the record a selection row names, through a weak trace link. | 105 |
-| `_site_refusals` | Site-query refusals: the argument checks, the fan-out bound, and the no-match and multi-pass refusals. | 160 |
+| `_site_refusals` | Site-query refusals: the argument checks, the fan-out bound, and the no-match and multi-pass refusals. | 162 |
 | `align` | Cross-run selection alignment (L6 stage 4a). | 269 |
 | `compare` | Comparative selection producers: differential and cross-pass (L6 producer wave). | 995 |
 | `do_plan` | The ''do(selection, edit)'' plan builder for :mod:'torchlens._selection.selection'. | 170 |
@@ -1631,7 +1632,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3046 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (75 modules, 36150 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (75 modules, 36165 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1641,7 +1642,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_binding_calls` | Pure call and output probes for the bound-model rule lane. | 54 |
 | `_content_identity` | Content identity for intervention rule terms. | 193 |
 | `_directions` | Contrastive directions built natively from paired traces. | 642 |
-| `_display` | Bounded intervention displays, separate from content identity and execution. | 198 |
+| `_display` | Bounded intervention displays, separate from content identity and execution. | 213 |
 | `_do_target_doors` | Region and slice target doors of ''do'', reached from ''_trace_edits.apply_do_mutation''. | 55 |
 | `_edit_guards` | Call guards shared by the trace edit verbs (''do'', ''set'', hook attachment). | 123 |
 | `_edit_repr` | Public-spelling ''repr'' for ''tl.Edit'' (the ''Edit'' dataclass). | 155 |
@@ -1804,11 +1805,12 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (8 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12850 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (23 modules, 12876 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Lazy public namespace for TorchLens receptive-field analysis. | 453 |
+| `_display` | Bounded choices for receptive-field endpoint refusals. | 38 |
 | `_engine` | Whole-graph geometric receptive-field solver. | 1652 |
 | `_engine_descriptor` | Public descriptor materialization for geometric receptive-field states. | 182 |
 | `_engine_forward` | Target-anchored projective-field descriptor solver. | 816 |
@@ -1820,7 +1822,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12850
 | `_influence` | Unit-level influence as a selection: the ENGINE behind the field views' ''.of''. | 583 |
 | `_layer_fields` | Layer receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 46 |
 | `_op_fields` | Receptive and projective field views for ''Op''. | 52 |
-| `_path` | Executed-DAG endpoint resolution and directed path slicing. | 340 |
+| `_path` | Executed-DAG endpoint resolution and directed path slicing. | 328 |
 | `_query` | Exact per-unit receptive-field queries over the captured operation DAG. | 1329 |
 | `_rules` | Extensible receptive-field operation-rule registry. | 535 |
 | `_set_query` | Index-set seeded geometric queries: one walk for a whole block of units. | 221 |

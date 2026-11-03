@@ -132,7 +132,9 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
         return
     pass_indices = sorted(int(getattr(site, "pass_number", 1) or 1) for site in matched)
     raise AmbiguousSiteError(
-        multipass_bare_label_message(matched[0].short_layer_label, pass_indices),
+        multipass_bare_label_message(
+            getattr(matched[0], "short_layer_label", layer_label), pass_indices
+        ),
         code="multipass_bare_label_ambiguous",
         layer_label=layer_label,
         pass_indices=tuple(pass_indices),

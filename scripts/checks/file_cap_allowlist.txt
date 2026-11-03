@@ -304,7 +304,7 @@ torchlens/_merged/_artifact.py::_check_degraded_cache_coherence	140
 torchlens/_merged/_artifact.py::load_merged	296
 torchlens/_merged/_artifact.py::save_merged	206
 torchlens/_merged/_engine.py::derive_merge	76
-torchlens/_merged/_presenter.py	893
+torchlens/_merged/_presenter.py	889
 torchlens/_observability/_artifact.py::HistoryWriter._columns_for	65
 torchlens/_observability/_chassis.py::ObserverEvent.__post_init__	78
 torchlens/_observability/_collector.py	1042
@@ -1288,7 +1288,7 @@ torchlens/receptive_field/_gradient.py::_select_inputs	71
 torchlens/receptive_field/_gradient.py::gradient_for_unit	171
 torchlens/receptive_field/_gradient_forward.py::_build_projective_result	72
 torchlens/receptive_field/_gradient_forward.py::projective_gradient_for_unit	89
-torchlens/receptive_field/_path.py::resolve_graph_point	78
+torchlens/receptive_field/_path.py::resolve_graph_point	65
 torchlens/receptive_field/_query.py	1329
 torchlens/receptive_field/_query.py::_build_box	163
 torchlens/receptive_field/_query.py::_map_passthrough	64
