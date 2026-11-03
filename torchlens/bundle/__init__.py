@@ -994,10 +994,10 @@ class Bundle:
         ``graph`` picks the picture: ``"forward"`` (default), ``"backward"`` or
         ``"combined"`` draw the bundle's union op graph for that pass, and ``"diff"``
         draws the ``members`` pair (default: the baseline and the next member) side by
-        side with their aligned sites coloured by ``metric`` distance over the ``on``
-        tensor field (``"out"`` or ``"grad"``). ``nodes="members"`` draws one node per
-        member and one edge per relation row (``graph`` must stay ``"forward"``);
-        ``rolled`` draws the rolled (per-layer) graph instead of every op.
+        side, one node per op (each pass of a repeated layer apart), coloured by
+        ``metric`` distance over ``on`` (``"out"`` or ``"grad"``). ``nodes="members"``
+        draws one node per member and one edge per relation row (``graph`` must stay
+        ``"forward"``); ``rolled`` draws the rolled (per-layer) graph instead of every op.
 
         ``path`` is the output file, as on ``Trace.draw``: its extension picks the format
         and ``file_format`` (default ``"pdf"``, ``"svg"`` for diff) applies only to a path
@@ -1200,7 +1200,7 @@ class Bundle:
         baseline: str | Trace | None = None,
         on: Literal["out", "grad"] = "out",
     ) -> str:
-        """Compute one per-node comparison once and store it on the supergraph.
+        """Store one per-node comparison on the supergraph (a layer's passes joined in order).
 
         Returns the stored name (the metric's name unless ``name`` is given);
         :meth:`stored_comparison` reads it back without recomputing.

@@ -10,7 +10,9 @@ first contact with fused reality is a teaching message, not a KeyError.
 Accepted forms: full 2.x names (``blocks.3.attn.hook_z``), 3.x bridge-cache
 names (the two generations have DIFFERENT vocabularies -- measured), the
 4.x ``TransformerBridge`` canonical names (``blocks.3.attn.o.hook_in``,
-``blocks.3.ln2.hook_in``), tuple forms (``("z", 3)``), and compact forms
+``blocks.3.ln2.hook_in``), nnterp's ``StandardizedTransformer`` accessor
+spellings (``layers_output[3]``, ``attentions_output[3]``, ``logits``),
+tuple forms (``("z", 3)``), and compact forms
 (``"k6"``). Rows may carry a ``scope`` (attention / mlp modules only), an
 embedding ``role`` (token / position, decided by table size against the
 unembedding vocabulary), and an ``only_if_facet`` / ``unless_facet``
@@ -72,8 +74,8 @@ class AliasResolution:
     remedy:
         The action that unblocks the caller (always present off ``real``).
     generation:
-        Which TLens generation vocabulary matched (``2.x`` / ``3.x-bridge`` /
-        ``4.x``).
+        Which vocabulary matched (TLens ``2.x`` / ``3.x-bridge`` / ``4.x``, or
+        ``nnterp``).
     """
 
     query: str
@@ -345,8 +347,9 @@ def resolve_alias(trace: Any, name: Any) -> AliasResolution:
     trace:
         A finished torchlens trace.
     name:
-        Full TLens name (2.x, 3.x-bridge or 4.x canonical), tuple form
-        ``(facet, layer)``, or compact ``"k6"``.
+        Full TLens name (2.x, 3.x-bridge or 4.x canonical), nnterp accessor
+        spelling (``"mlps_output[2]"``), tuple form ``(facet, layer)``, or
+        compact ``"k6"``.
 
     Returns
     -------
@@ -408,9 +411,31 @@ def _resolve(trace: Any, query: _Query) -> AliasResolution:
     return _resolve_on(homes[0], query, facet)
 
 
+def _report_layer_count(trace: Any, rows: list[dict[str, Any]]) -> int:
+    """Return the executed layer count ``alias_report`` instantiates ``{L}`` rows over.
+
+    The count is the most home modules any per-layer row has (never fewer than the
+    attention modules exposing the head vocabulary). Counting attention modules alone
+    dropped every per-layer row where no module declares the per-head ``result``
+    facet, as under fused SDPA attention; a row with fewer homes than the count now
+    answers ``structurally_absent`` for the missing layers instead of vanishing.
+    """
+
+    counts = [len(_attention_modules(trace))]
+    for row in rows:
+        if "{L}" not in str(row["tlens"]):
+            continue
+        facet = str(row["facet"])
+        query = _Query(str(row["tlens"]), facet, 0, str(row["generation"]), row)
+        counts.append(len(_layer_candidates(trace, query, _homes_for(trace, query, facet))))
+    return max(counts)
+
+
 def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution]:
     """GENERATE the per-trace TLens-name coverage matrix (never hand-written).
 
+    ``generation="nnterp"`` gives the same matrix in nnterp's accessor
+    spellings, i.e. this trace's sites under their nnterp names.
     Every translation row of the requested generation is instantiated for
     every executed layer and resolved against THIS trace; the result is the
     coverage matrix for the model in front of the user (published per R0
@@ -422,10 +447,10 @@ def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution
         refuse(
             code="mi_translation_generation_unknown",
             message=f"No translation rows carry generation {generation!r}.",
-            remedy='pass generation="2.x", "3.x-bridge" or "4.x"',
+            remedy='pass generation="2.x", "3.x-bridge", "4.x" or "nnterp"',
             generation=generation,
         )
-    n_layers = len(_attention_modules(trace))
+    n_layers = _report_layer_count(trace, rows)
     report = []
     for row in rows:
         pattern = str(row["tlens"])

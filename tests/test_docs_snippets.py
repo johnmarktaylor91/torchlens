@@ -526,6 +526,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_hooks.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/from_torchinfo.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/coming_from_torchsnooper.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/cross_engine.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/from_nnsight.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/from_thingsvision.md": _MIGRATIONS_TEST_EXECUTED,
     "reference/neuro.md": (

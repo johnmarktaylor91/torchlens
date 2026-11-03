@@ -274,6 +274,8 @@ pages:
     section: relation
   - path: migration/comparison.md
     section: relation
+  - path: migration/cross_engine.md
+    section: relation
   - path: migration/from_bertviz_ecco.md
     section: relation
   - path: migration/from_captum.md

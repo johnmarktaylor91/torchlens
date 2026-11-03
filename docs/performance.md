@@ -95,7 +95,7 @@ with the partial capture on `exc.partial_trace`.
 | Knob | Faster setting | Tradeoff |
 | --- | --- | --- |
 | Payload selection | `save=tl.func(...)` or `save=tl.in_module(...)` | Unsaved activations cannot be read later. |
-| Source text | `capture=CaptureOptions(save_source_context=False)` | File/line identity remains, but source text is not loaded. |
+| Source text | `capture=CaptureOptions(save_source_context=False)` (the default) | File/line identity is stored, but no source text: it is read from the file when you look at it, so it reflects the file on disk at read time, and a file changed or removed since capture shows that reason instead of text. `save_source_context=True` snapshots the text at capture. |
 | Window payloads | `lookback_payload_policy="metadata_only"` | `tl.followed_by(...)` can select metadata without retaining raw tensors. |
 | Retroactive payloads | `lookback_payload_policy="detached_raw"` | Enables payload recovery for recent matched ops at bounded memory cost. |
 | Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. The model output the forward returns stays in memory (the output op may alias it), and a later `trace.run(...)` re-captures every payload into RAM while the bundle keeps the original capture. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |

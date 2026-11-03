@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
-from .._debug_report import FoundReport, Report
+from .._debug_report import FoundReport, Report, at_source
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
@@ -64,6 +64,14 @@ class BisectNanReport(FoundReport):
             message=self.message,
         )
 
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card: the summary, then the op and its line."""
+
+        findings = [self.message] if self.message else []
+        if self.found and self.label is not None:
+            findings.append(f"first {self.kind}: {self.label}{at_source(self.source_line)}")
+        return findings
+
 
 @dataclass(frozen=True)
 class FindNanReport(FoundReport):
@@ -116,12 +124,28 @@ class FindNanReport(FoundReport):
     message: str
     label_status: str = "final"
 
-    _prints_repr = True
-
     def _report_subject(self) -> str:
         """What this report examined (the card's subject)."""
 
         return str(self.scope)
+
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card: the op, its line, its module."""
+
+        if not self.found:
+            return [self.message] if self.message else []
+        func = f" ({self.func_name})" if self.func_name else ""
+        findings = [f"first {self.kind}: {self.label}{func}{at_source(self.source_line)}"]
+        if self.module_address:
+            findings.append(f"module: {self.module_address}")
+        if self.shape is not None or self.dtype is not None:
+            shape = "x".join(str(size) for size in self.shape) if self.shape else "scalar"
+            findings.append(f"output: {shape} {self.dtype or ''}".rstrip())
+        if self.uncertainty_zone:
+            findings.append(
+                f"uncertainty zone (unsaved ancestors): {', '.join(self.uncertainty_zone)}"
+            )
+        return findings
 
     @property
     def first_bad_thing(self) -> Any:
@@ -149,6 +173,8 @@ class FindNanReport(FoundReport):
 
     def __repr__(self) -> str:
         """Return a compact notebook-oriented diagnostic representation.
+
+        ``print(report)`` shows the multi-line card instead (:meth:`card`).
 
         Returns
         -------
@@ -699,7 +725,9 @@ class NonfiniteReport(Report):
 
         findings = []
         if self.origin_label is not None:
-            findings.append(f"origin: {self.origin_label} ({self.kind})")
+            findings.append(
+                f"origin: {self.origin_label} ({self.kind}){at_source(self.source_line)}"
+            )
         findings.extend(f"non-finite: {label}" for label in self.nonfinite_labels)
         if self.scope_note:
             findings.append(self.scope_note)

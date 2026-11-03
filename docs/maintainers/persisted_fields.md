@@ -953,10 +953,10 @@ Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handl
 | `_call_line` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
 | `_code_context` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
 | `_code_context_labeled` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
-| `_func_docstring` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
-| `_func_signature` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
+| `_func_docstring` | scalar | required: every level | keep | fact | `FuncCallLocation.func_docstring`, `FuncCallLocation.func_signature` |
+| `_func_signature` | scalar | required: every level | keep | fact | `FuncCallLocation.func_docstring`, `FuncCallLocation.func_signature` |
 | `_num_context_lines` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
-| `_num_context_lines_requested` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
+| `_num_context_lines_requested` | scalar | required: every level | keep | fact | `FuncCallLocation.func_docstring`, `FuncCallLocation.func_signature` |
 | `_source_context` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
 | `_source_loaded` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
 | `call_line` | computed | required: every level | keep | fact | `FuncCallLocation.call_line` (field) |

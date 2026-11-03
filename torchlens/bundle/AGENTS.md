@@ -30,5 +30,6 @@ verb; each logic body is a function `f(self: Bundle, ...)` in a sibling module:
 | `_operations.py` | `do`, `fork`, `run`, `map`, the chronology ledger rows, the effect-table read |
 | `_draw.py` | `draw` and the `show` dispatcher (merged graph, strip, repr, html) |
 | `_comparisons.py` | `compare`, `rank_changes`, the comparability matrix, per-site diffs, relationship evidence; stored comparisons |
+| `_deltas.py` | metric and lookup primitives (`_distance_value`, `_tensor_field`, which joins a multi-pass layer's passes in pass order) and the per-pass sites behind `draw(graph="diff")` (`site_deltas`, `SiteDeltas`) |
 | `_relation_carriage.py` | relation table construction, removal cascades, `relate`, episode status, upstream/downstream |
 | `_save.py` | `save` (the package's one deferred `_io` import) |

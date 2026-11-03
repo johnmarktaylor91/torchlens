@@ -236,25 +236,29 @@ class _ReusedRelu(nn.Module):
         return self.relu(self.relu(self.bn(self.conv(x))) + x)
 
 
-def test_stored_comparison_reads_the_most_changed_pass_of_a_multi_pass_layer() -> None:
-    """A multi-pass supergraph node gets its largest per-pass distance, not a refusal."""
+def test_stored_comparison_joins_the_passes_of_a_multi_pass_layer() -> None:
+    """A multi-pass supergraph node reads the metric over its passes joined in pass order."""
 
     torch.manual_seed(0)
     trace = _trace(_Recurrent(), torch.randn(2, 4))
     fork = trace.fork()
     fork.do(tl.label(_first_interior_op(trace)), tl.zero_ablate())
     pair = tl.Bundle({"base": trace, "edited": fork}, baseline="base")
-    fork_rows = dict(pair.compare("base", "edited", metric="relative_l2"))
 
     stored = pair.stored_comparison(pair.store_comparison("relative_l2"))
 
     tanh_label = str(next(op for op in trace.ops if op.func_name == "tanh").layer_label)
     tanh_nodes = [name for name in stored if name.startswith("tanh_")]
     assert len(tanh_nodes) == 1
-    per_pass = [fork_rows[f"{tanh_label}:{k}"] for k in (1, 2, 3)]
+    joined = _distance_value(
+        torch.cat([trace[f"{tanh_label}:{k}"].out.reshape(-1) for k in (1, 2, 3)]),
+        torch.cat([fork[f"{tanh_label}:{k}"].out.reshape(-1) for k in (1, 2, 3)]),
+        "relative_l2",
+        site=tanh_nodes[0],
+    )
     assert stored[tanh_nodes[0]]["base"] == 0.0
-    assert stored[tanh_nodes[0]]["edited"] == pytest.approx(max(per_pass))
-    assert max(per_pass) > 0.0
+    assert stored[tanh_nodes[0]]["edited"] == pytest.approx(joined)
+    assert joined > 0.0
 
 
 def test_diff_drawing_of_a_reused_module_does_not_refuse(tmp_path: Path) -> None:

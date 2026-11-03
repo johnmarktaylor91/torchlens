@@ -327,7 +327,7 @@ def test_site_key_reaches_to_pandas() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Operation-witness selector (deepest operation frame, cc[-2])
+# Operation-witness selector (deepest operation frame, cc[-1])
 # ---------------------------------------------------------------------------
 
 
@@ -346,13 +346,14 @@ def test_witness_selects_deepest_operation_frame() -> None:
     outer = _Frame("model.py", 10)
     inner = _Frame("model.py", 42)
     call_site = _Frame("driver.py", 7)
-    # Live contexts are ordered shallow-to-deep and END with the trace
-    # call-site entry: the operation frame is [-2], NEVER [0] (the outermost
-    # forward line, which false-joins nested branch sites).
-    assert operation_witness(_StubOp([outer, inner, call_site])) == ("model.py", 42)
-    assert operation_witness(_StubOp([inner, call_site])) == ("model.py", 42)
-    # Degenerate single-entry context (not producible by tl.trace) falls
-    # back to its only frame; absent context is witness-absence.
+    # Contexts are ordered outermost to innermost, like a traceback, and
+    # START with the trace call-site entry: the operation frame is [-1],
+    # NEVER [0] (the call site) or [1] (the outermost forward line, which
+    # false-joins nested branch sites).
+    assert operation_witness(_StubOp([call_site, outer, inner])) == ("model.py", 42)
+    assert operation_witness(_StubOp([call_site, inner])) == ("model.py", 42)
+    # A single-entry context is its own operation frame; absent context is
+    # witness-absence.
     assert operation_witness(_StubOp([inner])) == ("model.py", 42)
     assert operation_witness(_StubOp([])) is None
     assert operation_witness(_StubOp(None)) is None
@@ -369,15 +370,15 @@ def test_witness_on_real_capture_is_operation_frame() -> None:
         context = list(op.code_context or ())
         assert len(context) >= 2
         witness = operation_witness(op)
-        # The selected frame is the deepest OPERATION frame [-2] -- never the
-        # appended trace call-site entry [-1], and never the outermost
-        # forward line [0] (the false-join class the selector exists to
-        # refuse; module-invoked ops legitimately witness torch-library
-        # frames here).
-        assert witness == (context[-2].file, context[-2].line_number)
-        assert witness != (context[-1].file, context[-1].line_number)
+        # The selected frame is the deepest OPERATION frame [-1] -- never the
+        # leading trace call-site entry [0], and never the outermost forward
+        # line [1] (the false-join class the selector exists to refuse;
+        # module-invoked ops legitimately witness torch-library frames here).
+        assert witness == (context[-1].file, context[-1].line_number)
+        assert witness != (context[0].file, context[0].line_number)
+        assert context[0].file == __file__  # the call site is this test's trace line
         if len(context) >= 3:
-            assert witness != (context[0].file, context[0].line_number)
+            assert witness != (context[1].file, context[1].line_number)
         checked += 1
     assert checked == 6
 

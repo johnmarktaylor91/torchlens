@@ -1055,6 +1055,12 @@ _CUDA_DARK = (
 )
 
 DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
+    "test_debug_findings_source_lines.py::test_compare_cpu_against_cuda": (
+        "[2026-11-03] compare of a CPU run against a CUDA run (payloads moved to "
+        "the CPU before comparing): needs a CUDA device; dark on CPU-only CI, "
+        "executed on the owner's GPU box (its dtype sibling "
+        "test_compare_across_dtypes_compares_in_the_wider_dtype runs everywhere)"
+    ),
     "test_valmem_validation_memory.py::test_forward_validation_weight_copies_on_an_accelerator": (
         "[2026-10-17] forward-validation weight-copy counter on an accelerator: "
         "the snapshot-on-host claim is only observable with a device-resident "

@@ -39,6 +39,9 @@ class AuditFinding:
         Offending module addresses.
     follow_up:
         Call users can run to inspect the issue further.
+    source_line:
+        ``"file:line"`` of the user code that ran the offending op, when the
+        finding names one op and its location was recorded.
     """
 
     severity: AuditSeverity
@@ -47,6 +50,7 @@ class AuditFinding:
     ops: tuple[str, ...]
     modules: tuple[str, ...]
     follow_up: str
+    source_line: str | None = None
 
 
 @dataclass(frozen=True)
