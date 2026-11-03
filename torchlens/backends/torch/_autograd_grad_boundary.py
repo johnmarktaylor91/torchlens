@@ -468,6 +468,7 @@ def _leaf_recorder(
     decorated = _backward_recorder(backward_pass, leaf, inner)
 
     def call() -> None:
+        """Run the inner call under this leaf's recorded boundary op."""
         decorated(
             previous,
             backward_pass.tensors,
@@ -527,6 +528,7 @@ def record_autograd_backward_boundary(
     result: list[Any] = []
 
     def run_engine() -> None:
+        """Run the engine pass and keep its return value."""
         result.append(engine())
 
     inner: Callable[[], None] = run_engine

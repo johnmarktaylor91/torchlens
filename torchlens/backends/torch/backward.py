@@ -3939,7 +3939,6 @@ def install_autograd_wrappers() -> None:
 
     def wrapped_backward(*args: Any, **kwargs: Any) -> Any:
         """Route ``torch.autograd.backward`` through TorchLens when roots match."""
-
         original = closure_original_backward
         forward_op_count_at_trigger = _active_forward_op_count_at_trigger()
         roots = _autograd_roots_from_call(args, kwargs, "tensors")
@@ -3952,6 +3951,7 @@ def install_autograd_wrappers() -> None:
             return original(*args, **kwargs)
 
         def engine() -> Any:
+            """Run the original backward call as one captured engine pass."""
             return _capture_autograd_engine_call(
                 roots,
                 run,
