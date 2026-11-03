@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1413 modules, 632542 lines, 0 modules without a docstring.
+83 packages, 1413 modules, 632555 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25106 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1520 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4663 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 86 | 37313 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 86 | 37321 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
@@ -43,7 +43,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 72 | 43159 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
-| `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2298 |
+| `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2303 |
 | `torchlens._visualization.lenses.audit` | The lens validation harness (themes memo build item 17). | 5 | 1896 |
 | `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 271 |
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 3 | 176 |
@@ -285,7 +285,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (86 modules, 37313 lines)
+Core data structures for representing a logged forward pass. (86 modules, 37321 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -374,7 +374,7 @@ Core data structures for representing a logged forward pass. (86 modules, 37313 
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3579 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1083 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 189 |
-| `trace` | Trace: the top-level container for a fully logged forward pass. | 3491 |
+| `trace` | Trace: the top-level container for a fully logged forward pass. | 3499 |
 
 ### `torchlens._data_substrate`
 
@@ -948,12 +948,12 @@ Text helpers for ''Trace'' objects: the compact repr and the provenance block. (
 
 ### `torchlens._visualization.lenses`
 
-TorchLens semantic lenses: the themes roster and its honesty machinery. (7 modules, 2298 lines)
+TorchLens semantic lenses: the themes roster and its honesty machinery. (7 modules, 2303 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 102 |
-| `_budget` | The visible-detail budget resolver (knob N10, themes memo section 3). | 339 |
+| `_budget` | The visible-detail budget resolver (knob N10, themes memo section 3). | 344 |
 | `_families` | View-aware source-family resolution for performance lenses (knob N16). | 246 |
 | `_filter` | The general display filter (knob N9, themes memo section 6). | 332 |
 | `_nonfinite` | The six-state nonfinite status pattern channel (knob N6, themes memo). | 277 |
