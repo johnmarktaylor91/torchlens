@@ -7384,6 +7384,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "step_index",
+  "file": "torchlens/debug/_grad_scale_proof.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/debug/_graph.py",
@@ -7420,7 +7428,7 @@
   "field": "kind",
   "file": "torchlens/debug/_nan.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 8,
   "via_getattr": false
  },
  {
@@ -7443,6 +7451,14 @@
   "ambiguous": false,
   "field": "step_index",
   "file": "torchlens/debug/_nan_backward.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/debug/_unit_axis.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -9372,7 +9388,7 @@
   "field": "kind",
   "file": "torchlens/report/_summary_result.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
