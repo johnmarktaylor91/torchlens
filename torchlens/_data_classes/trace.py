@@ -266,13 +266,10 @@ class ResolvedPostprocessing:
 class ConditionalEvent:
     """Structured metadata for one conditional event in user source code."""
 
-    # Declared so the scrubber walks this record field-by-field instead of
-    # persisting it verbatim: ``source_file`` is the ABSOLUTE path of the user's
-    # forward-defining module, and without a spec the source-path relativizer never
-    # ran, leaking host paths at every save level including ``include_source=False``
-    # (B8-18). The scrubber applies the source-privacy policy to ``source_file`` via
-    # ``_apply_conditional_source_policy``; every other field is portable structural
-    # metadata. Declared ``ClassVar`` so ``@dataclass`` does not treat it as a field.
+    # Declared so the scrubber walks this record field-by-field: ``source_file`` is the
+    # ABSOLUTE forward-module path, and without a spec the relativizer never ran, leaking
+    # host paths at every save level (B8-18). ``_apply_conditional_source_policy`` scrubs
+    # it; every other field is portable. ``ClassVar`` so ``@dataclass`` ignores it.
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "id": FieldPolicy.KEEP,
         "kind": FieldPolicy.KEEP,
@@ -3069,6 +3066,7 @@ class Trace(TraceLike):
         seed: int | None = None,
         backward_ready: bool | None = None,
         _run_until_plan: Any | None = None,
+        _staged_plan: Any | None = None,
     ) -> None:
         """Re-run the model with new inputs, saving only outs."""
         return _doors.validation()._trace_checks.save_new_outs(
@@ -3081,6 +3079,7 @@ class Trace(TraceLike):
             seed=seed,
             backward_ready=backward_ready,
             _run_until_plan=_run_until_plan,
+            _staged_plan=_staged_plan,
         )
 
     def validate_forward_pass(
