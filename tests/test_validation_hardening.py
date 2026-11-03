@@ -35,6 +35,7 @@ import warnings
 import pytest
 import torch
 import torch.nn as nn
+from _record_fakes import FlatGroups, FlatNamespace
 from _validation_capture import _capture, _quiet_validate
 from example_models import BufferRewriteModel
 
@@ -701,7 +702,7 @@ def test_addcmul_zero_annihilator_refuses_unproved_cases() -> None:
     output still fails validation.
     """
 
-    class _FakeAddcmulOp:
+    class _FakeAddcmulOp(FlatGroups):
         func_name = "addcmul"
         out = torch.zeros(2)  # a finite saved output
 
@@ -769,7 +770,7 @@ def test_nan_multiplication_proof_still_covers_plain_mul() -> None:
 
     from torchlens.validation.exemptions import _posthoc_value_proof_decision
 
-    class _FakeMulOp:
+    class _FakeMulOp(FlatGroups):
         func_name = "mul"
         saved_kwargs: dict = {}
 
@@ -832,7 +833,7 @@ def test_check_norm_zero_weight_annihilates_never_exempts_weight_or_bias() -> No
     weight or bias themselves, and never fires when weight is nonzero.
     """
 
-    class _FakeBatchNormOp:
+    class _FakeBatchNormOp(FlatGroups):
         out = torch.zeros(2)  # a finite saved output
 
         def __init__(self, weight) -> None:
@@ -942,7 +943,7 @@ def test_sdpa_zero_query_decision_scoped_correctly() -> None:
 
     from torchlens.validation.exemptions import _sdpa_zero_query_decision
 
-    class _FakeSdpaOp:
+    class _FakeSdpaOp(FlatGroups):
         out = torch.zeros(2)  # a finite saved output
 
         def __init__(self, query) -> None:
@@ -987,7 +988,7 @@ def test_linear_zero_input_annihilates_weight_perturbation() -> None:
 
     from torchlens.validation.exemptions import _linear_zero_weight_input_decision
 
-    class _FakeLinearOp:
+    class _FakeLinearOp(FlatGroups):
         out = torch.zeros(2)  # a finite saved output
 
         def __init__(self, input_value, weight_value) -> None:
@@ -1047,7 +1048,7 @@ def test_softmax_singleton_dim_decision_scoped_correctly() -> None:
 
     from torchlens.validation.exemptions import _softmax_singleton_dim_decision
 
-    class _FakeSoftmaxOp:
+    class _FakeSoftmaxOp(FlatGroups):
         def __init__(self, out_shape, dim) -> None:
             self.saved_args = (None,)
             self.saved_kwargs = {"dim": dim}
@@ -1133,7 +1134,7 @@ def test_layer_norm_singleton_shape_decision_scoped_correctly() -> None:
 
     from torchlens.validation.exemptions import _layer_norm_singleton_shape_decision
 
-    class _FakeLayerNormOp:
+    class _FakeLayerNormOp(FlatGroups):
         out = torch.zeros(2)  # a finite saved output
 
         def __init__(self, normalized_shape) -> None:
@@ -1213,7 +1214,7 @@ def test_annihilator_and_singleton_proofs_refuse_a_non_finite_saved_output() -> 
     )
 
     def fake(out: torch.Tensor, positions: dict, **extra) -> SimpleNamespace:
-        return SimpleNamespace(
+        return FlatNamespace(
             out=out,
             parent_arg_positions={"args": positions, "kwargs": {}},
             saved_kwargs=extra.pop("saved_kwargs", {}),

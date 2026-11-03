@@ -225,7 +225,7 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
         "kwargs_template",
         "_edge_uses",
     ):
-        if hasattr(new_layer, field_name):
+        if hasattr(new_layer, op_attr(field_name)):
             if field_name not in copies:
                 copies[field_name] = copy_rerun_value(trace, new_layer_state.get(field_name))
             value = copies[field_name]

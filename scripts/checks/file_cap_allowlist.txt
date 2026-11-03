@@ -100,7 +100,7 @@ torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	842
 torchlens/_data_classes/interface.py::_getitem_after_pass	123
 torchlens/_data_classes/interface.py::_str_after_pass	63
-torchlens/_data_classes/layer.py	1752
+torchlens/_data_classes/layer.py	1764
 torchlens/_data_classes/module.py	2636
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
@@ -571,7 +571,7 @@ torchlens/_visualization/_rank_layout_internal/layout.py	1145
 torchlens/_visualization/_rank_layout_internal/layout.py::_compute_topological_layout	159
 torchlens/_visualization/_rank_layout_internal/layout.py::_run_neato_with_fallbacks	84
 torchlens/_visualization/_rank_layout_internal/layout.py::render_rank_layout	392
-torchlens/_visualization/_render_common.py	965
+torchlens/_visualization/_render_common.py	971
 torchlens/_visualization/_render_dot.py	1926
 torchlens/_visualization/_render_dot.py::_emit_and_finish_forward	193
 torchlens/_visualization/_render_dot.py::_finalize_forward_ir	93

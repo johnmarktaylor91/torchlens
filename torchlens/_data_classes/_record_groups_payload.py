@@ -167,7 +167,7 @@ class LayerPayload(_LayerGroup):
     def transformed_grad(self) -> Any:
         """Transformed gradient of the single pass, for single-pass layers."""
 
-        return self._record._single_pass_or_error("transformed_grad")
+        return self._record._payload_transformed_grad
 
     @property
     def transformed_grad_dtype(self) -> Any:
@@ -185,7 +185,7 @@ class LayerPayload(_LayerGroup):
     def transformed_out(self) -> Any:
         """Transformed output of the single pass, for single-pass layers."""
 
-        return self._record._single_pass_or_error("transformed_out")
+        return self._record._payload_transformed_out
 
     @property
     def transformed_out_dtype(self) -> Any:

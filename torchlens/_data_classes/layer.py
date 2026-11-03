@@ -625,6 +625,18 @@ class Layer(_SelectionOperand):
         return LayerGraph(self)
 
     @property
+    def _payload_transformed_out(self) -> Any:
+        """Transformed output of the single pass (computed, so not a stored Layer column)."""
+
+        return self._single_pass_or_error("transformed_out")
+
+    @property
+    def _payload_transformed_grad(self) -> Any:
+        """Transformed gradient of the single pass (computed, so not a stored Layer column)."""
+
+        return self._single_pass_or_error("transformed_grad")
+
+    @property
     def payload(self) -> LayerPayload:
         """Saved transformed payloads of this Layer (``layer.payload.transformed_out``)."""
 

@@ -301,6 +301,12 @@ class BoundaryNode:
 
         return self
 
+    @property
+    def module_context(self) -> "BoundaryNode":
+        """Answer ``node.module_context.<leaf>`` (``is_atomic_module``) from own fields."""
+
+        return self
+
 
 GraphNode = BaseGraphNode | BoundaryNode | FocusNode
 CollapseFn = Callable[["Module"], bool]

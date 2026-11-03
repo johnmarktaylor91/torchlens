@@ -16,6 +16,7 @@ from typing import Any, cast
 import pytest
 import torch
 import torch.nn as nn
+from _record_fakes import FlatNamespace
 
 import torchlens as tl
 import torchlens._capture.run_entry as run_entry
@@ -625,7 +626,7 @@ def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
     saved_parent = live_param.detach().clone()
     saved_param = live_param.detach().clone()
     input_args = {"args": [saved_parent, saved_param], "kwargs": {}}
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         is_inplace=False,
         _param_logs=[SimpleNamespace(handle=live_param)],
         parent_arg_positions={"args": {0: "input_1"}, "kwargs": {}},
@@ -640,7 +641,7 @@ def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
     with torch.no_grad():
         live_param.add_(1.0)
     stale_args = {"args": [stale_snapshot], "kwargs": {}}
-    stale_layer = SimpleNamespace(
+    stale_layer = FlatNamespace(
         is_inplace=False,
         _param_logs=[SimpleNamespace(handle=live_param)],
         parent_arg_positions={"args": {}, "kwargs": {}},
@@ -1029,7 +1030,7 @@ def test_posthoc_perturb_constant_check_supports_complex_outputs() -> None:
     dtypes without raising and returns a structured decision.
     """
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         func_name="fft",
         saved_args=(torch.ones(4, dtype=torch.complex64),),
         saved_kwargs={},
@@ -1060,7 +1061,7 @@ def _cast_layer(source: torch.Tensor, target: object) -> SimpleNamespace:
     """
 
     out = source.to(target) if isinstance(target, torch.dtype) else source
-    return SimpleNamespace(
+    return FlatNamespace(
         func_name="to",
         saved_args=(source, target),
         saved_kwargs={},
@@ -1110,19 +1111,19 @@ def test_pure_out_kwarg_destination_perturbation_is_exempt_only_when_pure() -> N
 
     from torchlens.validation.core import _perturbed_parents_only_occupy_out_kwarg
 
-    pure_out = SimpleNamespace(
+    pure_out = FlatNamespace(
         parent_arg_positions={"args": {0: "data_1"}, "kwargs": {"out": "dest_1"}}
     )
     assert _perturbed_parents_only_occupy_out_kwarg(pure_out, ["dest_1"]) is True
     # The data parent stays strict even on the same op.
     assert _perturbed_parents_only_occupy_out_kwarg(pure_out, ["data_1"]) is False
 
-    also_positional = SimpleNamespace(
+    also_positional = FlatNamespace(
         parent_arg_positions={"args": {0: "dest_1"}, "kwargs": {"out": "dest_1"}}
     )
     assert _perturbed_parents_only_occupy_out_kwarg(also_positional, ["dest_1"]) is False
 
-    other_kwarg = SimpleNamespace(
+    other_kwarg = FlatNamespace(
         parent_arg_positions={"args": {}, "kwargs": {"out": "dest_1", "src": "dest_1"}}
     )
     assert _perturbed_parents_only_occupy_out_kwarg(other_kwarg, ["dest_1"]) is False
@@ -1149,7 +1150,7 @@ def test_validation_recompute_selects_dict_output_by_container_path() -> None:
 
         return {"hidden": x.relu(), "logits": x.sigmoid()}
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         func=return_dict,
         func_rng_states=None,
         func_autocast_state=None,
@@ -2260,7 +2261,7 @@ def _backstop_op(
 ) -> SimpleNamespace:
     """Build a minimal layer-op stand-in for the completeness backstop census."""
 
-    return SimpleNamespace(
+    return FlatNamespace(
         func_call_id=func_call_id,
         transform_kind=transform_kind,
         func_name=func_name,
@@ -4008,7 +4009,7 @@ def _make_deep_numeric_layer(
     suffices and keeps the predicate tests fast and capture-independent.
     """
 
-    return SimpleNamespace(
+    return FlatNamespace(
         func_name=func_name,
         saved_args=saved_args,
         saved_kwargs=saved_kwargs or {},
@@ -7953,7 +7954,7 @@ def test_plain_trace_mistral_has_no_functionless_replacement():
 def _where_layer(saved_args, saved_kwargs, dtype=torch.int64):
     """Build a minimal ``where`` op layer mock for the one-arg index discriminator."""
 
-    return SimpleNamespace(
+    return FlatNamespace(
         func_name="where",
         saved_args=saved_args,
         saved_kwargs=saved_kwargs,
@@ -8362,7 +8363,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     from torchlens.validation._invariants_backward_flow import _is_func_call_id_exempt
 
     base = {"is_input": False, "is_output": False, "is_buffer": False, "func": None}
-    genuine = SimpleNamespace(
+    genuine = FlatNamespace(
         func_name="intervention_replacement",
         is_edited=True,
         is_internal_source=False,
@@ -8371,7 +8372,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     assert _is_func_call_id_exempt(genuine) is True
 
     # Same func_name but NOT flagged as replaced -> not a genuine replacement.
-    not_replaced = SimpleNamespace(
+    not_replaced = FlatNamespace(
         func_name="intervention_replacement",
         is_edited=False,
         is_internal_source=False,
@@ -8381,7 +8382,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
 
     # Same func_name + replaced but IS an internal source -> not a genuine
     # user replacement (internal sources carry func_name "none" in practice).
-    internal = SimpleNamespace(
+    internal = FlatNamespace(
         func_name="intervention_replacement",
         is_edited=True,
         is_internal_source=True,

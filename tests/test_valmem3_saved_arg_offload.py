@@ -27,6 +27,7 @@ from unittest import mock
 
 import pytest
 import torch
+from _record_fakes import FlatGroups
 from torch import nn
 
 import torchlens as tl
@@ -304,7 +305,7 @@ def test_offload_is_off_for_same_and_outside_a_validation_session() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _FakeOp:
+class _FakeOp(FlatGroups):
     def __init__(self, saved_args: list[Any], saved_kwargs: dict[str, Any]) -> None:
         self.saved_args = saved_args
         self.saved_kwargs = saved_kwargs

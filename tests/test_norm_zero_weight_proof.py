@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pytest
 import torch
+from _record_fakes import FlatGroups
 from _validation_capture import _quiet_validate
 from torch import nn
 from torch.nn import functional as F
@@ -36,7 +37,7 @@ class _ConvThenNorm(nn.Module):
         return self.norm(self.conv(x)) + x.mean()
 
 
-class _FakeNormOp:
+class _FakeNormOp(FlatGroups):
     """Minimal op carrying the fields the proof reads."""
 
     def __init__(
