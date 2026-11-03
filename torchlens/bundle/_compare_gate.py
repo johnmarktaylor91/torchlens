@@ -392,6 +392,14 @@ def _require_lined_up(
         if left_graph is not None and right_graph is not None
         else "a graph-shape hash is missing, so line-up cannot be checked"
     )
+    left_shapes = _input_shapes(left)
+    right_shapes = _input_shapes(right)
+    if left_shapes is not None and right_shapes is not None and left_shapes != right_shapes:
+        graph_note += (
+            f"; their inputs also differ in shape ({left_name}: {list(left_shapes)}, "
+            f"{right_name}: {list(right_shapes)}), and inputs of different shapes "
+            "(such as prompts with different token counts) usually run different graphs"
+        )
     if left_digest is not None and right_digest is not None:
         raise BundleComparisonError(
             f"Bundle operation {operation!r} refuses: member pair "
@@ -425,4 +433,24 @@ def _require_lined_up(
         left_member=left_name,
         right_member=right_name,
         unproven_members=unproven,
+    )
+
+
+def _input_shapes(trace: Trace) -> tuple[tuple[int, ...] | None, ...] | None:
+    """Return the recorded input-op shapes for a refusal message, if readable.
+
+    Shapes come from op metadata, so they survive payload-free artifacts.
+    ``None`` means the trace exposes no input ops; the message then omits
+    the shape note rather than guessing.
+    """
+
+    try:
+        input_ops = list(trace.input_ops)
+    except Exception:  # noqa: BLE001 - a message detail, never a decision input
+        return None
+    if not input_ops:
+        return None
+    return tuple(
+        tuple(shape) if (shape := getattr(op, "shape", None)) is not None else None
+        for op in input_ops
     )

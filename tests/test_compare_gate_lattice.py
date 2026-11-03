@@ -187,6 +187,59 @@ def test_leg1_identity_cross_input_lined_up_graphs_compare() -> None:
     assert bundle.rank_changes(k=3)
 
 
+class _PerToken(nn.Module):
+    """A per-token loop: the graph grows with the input length, like a prompt."""
+
+    def __init__(self) -> None:
+        """Initialize the shared token projection."""
+
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Sum the projection of every row, one op chain per row.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(tokens, 4)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape ``(4,)``.
+        """
+
+        total = torch.zeros(4)
+        for row in x:
+            total = total + self.proj(row)
+        return total
+
+
+def test_leg1c_different_length_inputs_name_the_shapes() -> None:
+    """LEG1c: inputs of different lengths run different graphs; the refusal says why.
+
+    A per-token loop records one op chain per row, so a 3-row and a 2-row
+    input do not line up. The refusal names both input shapes instead of
+    blaming control flow alone.
+    """
+
+    model = _PerToken()
+    generator = torch.Generator().manual_seed(14)
+    left = _capture(model, torch.randn(3, 4, generator=generator))
+    right = _capture(model, torch.randn(2, 4, generator=generator))
+    bundle = tl.Bundle({"a": left, "b": right}, baseline="a")
+
+    assert left._provenance_fingerprint != right._provenance_fingerprint
+    with pytest.raises(BundleComparisonError) as excinfo:
+        bundle.compare("a", "b")
+    message = str(excinfo.value)
+    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+    assert "differ in shape" in message
+    assert "[3, 4]" in message.replace("(", "[").replace(")", "]")
+    assert "[2, 4]" in message.replace("(", "[").replace(")", "]")
+
+
 def test_leg1b_identity_divergent_branches_refuse_on_line_up() -> None:
     """LEG1b: one model object, different inputs, DIFFERENT control-flow paths.
 
@@ -217,6 +270,7 @@ def test_leg1b_identity_divergent_branches_refuse_on_line_up() -> None:
             "b",
         }
         assert "do not line up" in str(excinfo.value)
+        assert "differ in shape" not in str(excinfo.value)
 
     # Same branch on different inputs: the graphs line up again and compare.
     generator = torch.Generator().manual_seed(13)
