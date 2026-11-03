@@ -152,6 +152,14 @@ paddle = ["paddlepaddle>=3.3,<3.4"]
 # spellings can never drift.
 tf = ["tensorflow>=2.16"]
 tensorflow = ["torchlens[tf]"]
+# Nightly-only conformance extras (FORKS F-I, JMT 2026-11-03): the ecosystem
+# roster rows load pretrained checkpoints through these libraries. Never in
+# the base install nor any rollup; only the nightly preview-backend legs
+# install them. Pinned exact, to releases at least two weeks old at the time
+# of the pin. mlx-lm stays at 0.26.x because later releases require
+# mlx>=0.29, outside the mlx extra's band.
+conformance-mlx = ["mlx-lm==0.26.4"]
+conformance-tf = ["keras-hub==0.32.0"]
 # tensorboard backs the tl.export.tensorboard exporter (SummaryWriter comes
 # from torch.utils.tensorboard, which requires the `tensorboard` dist at call
 # time). The extra gives the exporter a declared install path, so its test
