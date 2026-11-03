@@ -58,7 +58,7 @@ def __getattr__(name: str) -> Any:
     """Lazily resolve re-exported Model Explorer names from the L8 bridge."""
 
     if name in _MODEL_EXPLORER_LAZY_NAMES:
-        from . import _model_explorer as _me
+        from . import _model_explorer as _me  # deferred: cycle export
 
         value = getattr(_me, name)
         globals()[name] = value
@@ -89,7 +89,7 @@ def model_explorer(trace: Any, path: str | Path, **kwargs: Any) -> Path:
         Written JSON path.
     """
 
-    from ._model_explorer import model_explorer as _impl
+    from ._model_explorer import model_explorer as _impl  # deferred: cycle export
 
     return _impl(trace, path, **kwargs)
 
@@ -116,7 +116,7 @@ def model_explorer_diff(members: Any, path: str | Path, **kwargs: Any) -> Path:
         Written collection path.
     """
 
-    from ._model_explorer import model_explorer_diff as _impl
+    from ._model_explorer import model_explorer_diff as _impl  # deferred: cycle export
 
     return _impl(members, path, **kwargs)
 
@@ -142,7 +142,7 @@ def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
         Path of the payload handed to the viewer.
     """
 
-    from ._model_explorer import model_explorer_serve as _impl
+    from ._model_explorer import model_explorer_serve as _impl  # deferred: cycle export
 
     return _impl(source, **kwargs)
 
@@ -278,7 +278,7 @@ def html(
         Written HTML path.
     """
 
-    from ._report import write_report
+    from ._report import write_report  # deferred: cycle export
 
     return write_report(trace, path, arrays=arrays, graph=graph, options=options)
 

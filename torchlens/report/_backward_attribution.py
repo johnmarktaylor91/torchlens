@@ -235,7 +235,7 @@ def _has_op_in_pass(trace: Any, object_id: int, pass_index: int) -> bool:
 def _checkpoint_evidence(trace: Any) -> str:
     """``"observed"``, ``"none_observed"`` or ``"unknown"`` from the witness."""
 
-    from ._cost_backward import recompute_observation
+    from ._cost_backward import recompute_observation  # deferred: cycle report
 
     return recompute_observation(trace)
 

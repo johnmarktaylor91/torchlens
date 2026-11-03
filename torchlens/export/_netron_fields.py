@@ -98,7 +98,7 @@ def build_leaf_attrs(
         Attributes in their final alphabetical display order.
     """
 
-    from ._netron_records import NetronAttr
+    from ._netron_records import NetronAttr  # deferred: cycle export
 
     attrs: list[NetronAttr] = []
     dtype = getattr(entry, "dtype", None)
@@ -142,7 +142,7 @@ def rolled_variance_attrs(members: list[Any], *, feedback_sources: list[str]) ->
     checker rejects) are disclosed by the ``recurrence`` attribute.
     """
 
-    from ._netron_records import NetronAttr
+    from ._netron_records import NetronAttr  # deferred: cycle export
 
     attrs: list[NetronAttr] = []
     dtypes: list[str] = []

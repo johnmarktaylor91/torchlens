@@ -799,7 +799,7 @@ def _validate_profile_args(
     if top_k is not None and (not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 0):
         raise ValueError("top_k must be a non-negative integer or None.")
     if group_by is not None:
-        from ._profile_source_line import PROFILE_GROUP_BY_KEYS
+        from ._profile_source_line import PROFILE_GROUP_BY_KEYS  # deferred: cycle report
 
         if group_by not in PROFILE_GROUP_BY_KEYS:
             raise ValueError("group_by must be 'source_line' or None.")
@@ -923,7 +923,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
 
     _validate_profile_args(level, sort_by, k, group_by)
 
-    from ._compute_truth import compute_aggregation
+    from ._compute_truth import compute_aggregation  # deferred: cycle report
 
     pd = _require_pandas()
     aggregation = compute_aggregation(trace)
@@ -944,7 +944,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
         },
     )
     if group_by == "source_line":
-        from ._profile_source_line import group_rows_by_source_line
+        from ._profile_source_line import group_rows_by_source_line  # deferred: cycle report
 
         rows, row_evidence = group_rows_by_source_line(
             rows, list(trace._layer_list), row_evidence, _weakest_evidence

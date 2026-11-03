@@ -491,7 +491,7 @@ def backward_estimate(trace: Trace) -> BackwardEstimate:
     hypothetical and never enters an actual-cost slot.
     """
 
-    from ._compute_truth import classify_row
+    from ._compute_truth import classify_row  # deferred: cycle report
 
     multiplier = BACKWARD_MULTIPLIER_TABLE["mac_family"]
     total = 0.0

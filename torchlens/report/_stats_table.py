@@ -251,7 +251,7 @@ class StatsTable:
 def _row_state(op: Any) -> tuple[str, str | None]:
     """Classify one op's payload availability (typed, never a hollow zero)."""
 
-    from ._agent_json import _payload_state
+    from ._agent_json import _payload_state  # deferred: cycle report
 
     state = _payload_state(op)
     if state == "present":
@@ -307,7 +307,7 @@ def build_stats_table(
 
     import torch
 
-    from ._factcore import capture_fingerprint
+    from ._factcore import capture_fingerprint  # deferred: cycle report
 
     rows: list[StatsTableRow] = []
     scanned_elements = 0

@@ -397,6 +397,7 @@ def _joined_result_or_none(trace: Trace) -> Any | None:
     """Return the trace's session-time join result iff it reached joined."""
 
     try:
+        # deferred: optional dependency
         from .._observability._native_profile import join_result_for
     except ImportError:  # pragma: no cover - torn install without the substrate
         return None

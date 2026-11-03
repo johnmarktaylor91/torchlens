@@ -98,7 +98,7 @@ def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
     entries = _iter_layers(trace)
     episode_ledger = _episode_ledger(trace)
     if episode_ledger is not None:
-        from ._episode import EpisodeExportContext, build_episode_graphs
+        from ._episode import EpisodeExportContext, build_episode_graphs  # deferred: cycle export
 
         graphs = build_episode_graphs(
             trace,

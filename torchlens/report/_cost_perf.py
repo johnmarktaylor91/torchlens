@@ -489,7 +489,7 @@ def roofline(
         from headline bound counts (hinted, still listed).
     """
 
-    from ._compute_truth import classify_row
+    from ._compute_truth import classify_row  # deferred: cycle report
 
     rows: list[RooflineRow] = []
     coverage = dict.fromkeys(ROOFLINE_REASONS, 0)
@@ -698,7 +698,7 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
     the join remedy.
     """
 
-    from ._compute_truth import classify_row
+    from ._compute_truth import classify_row  # deferred: cycle report
 
     rows: list[InstrumentedRateRow] = []
     any_applicable = False

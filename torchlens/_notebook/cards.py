@@ -79,7 +79,7 @@ def _bridge_sentinel(obj: Any) -> str | None:
     """
 
     try:
-        from ..bridge.treescope import consume_repr_suppression
+        from ..bridge.treescope import consume_repr_suppression  # deferred: cycle bridge
 
         if consume_repr_suppression(obj):
             return BRIDGE_SENTINEL_HTML

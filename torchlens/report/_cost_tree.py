@@ -350,7 +350,7 @@ class _TreeBuilder:
         backward column sums to the executed count exactly.
         """
 
-        from ._cost_backward import backward_status
+        from ._cost_backward import backward_status  # deferred: cycle report
 
         status = backward_status(self.trace)
         self.backward_state = status.state

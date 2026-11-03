@@ -59,6 +59,7 @@ def capability_snapshot() -> dict[str, bool]:
 
     snapshot = get_torch_capability_snapshot()
     try:
+        # deferred: optional dependency
         from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
     except ImportError:
         return snapshot

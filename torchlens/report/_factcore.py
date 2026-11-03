@@ -402,7 +402,7 @@ def _pruned_params(trace: Any) -> PrunedParamFacts | None:
 def _memory(trace: Any) -> MemoryFacts:
     """Derive the D8 payload-scope figures."""
 
-    from ._agent_json import _payload_state
+    from ._agent_json import _payload_state  # deferred: cycle report
 
     at_capture_bytes = 0
     at_capture_saved = 0

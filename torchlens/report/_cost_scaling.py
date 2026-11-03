@@ -197,7 +197,7 @@ def padding_waste(
     linear_live = sum(lengths) / (batch * padded_length)
     quadratic_live = sum(length * length for length in lengths) / (batch * padded_length**2)
 
-    from ._compute_truth import classify_row
+    from ._compute_truth import classify_row  # deferred: cycle report
 
     waste_by_class = dict.fromkeys(POSITION_SCALING_CLASSES, 0)
     unclassified = 0
