@@ -4127,7 +4127,7 @@ The sections above describe each surface in depth.
 | `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
 | `GradReceptiveField.cross_batch_influence` | Whether the influence crosses batch elements |
 | `GradReceptiveField.io_role` | The far end of the probe, the space `support_mask` covers: the source (model input name or op label) for a receptive probe, the target op label for a projective probe; `source_key` / `target_key` read it direction-stably |
-| `GradReceptiveField.nonfinite_count` | Number of NaN or Inf gradient entries; nonzero makes validation indeterminate |
+| `GradReceptiveField.num_nonfinite` | Number of NaN or Inf gradient entries; nonzero makes validation indeterminate |
 | `GradReceptiveField.rtol` | Relative tolerance for the support threshold |
 | `GradReceptiveField.signed_grad` | The signed gradient, kept so a sign-disagreeing adjoint can be checked |
 | `GradReceptiveField.source_key` | Return the direction-stable key of the source graph point |
@@ -6459,7 +6459,6 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `noise_std=` | keyword of `tl.attribution.infidelity` (keyword-only; default `0.003`): Gaussian scale, disclosed in every result (default 0.003); keyword of `tl.attribution.road_curve` (keyword-only; default `0.01`): Standard deviation of the noise added to imputed values (default 0.01, the authors' reference value); `0` imputes without noise |
 | `non_mac_flops=` | constructor keyword of `tl.report.FlopsReport` (required) |
 | `nondeterministic_sources=` | constructor keyword of `tl.types.RunReport` (required) |
-| `nonfinite_count=` | constructor keyword of `tl.receptive_field.GradReceptiveField` (required) |
 | `nonfinite_evidence=` | constructor keyword of `tl.stats.TensorStats` (required) |
 | `nonfinite_labels=` | constructor keyword of `tl.debug.NonfiniteReport`, `tl.report.HealthFacts` (required) |
 | `nonfinite_ops=` | constructor keyword of `tl.debug.DeterminismReport` (required): Labels whose payloads carried NaN/Inf in run 1 (recorded separately; matching non-finite masks still count as agreement under `exact`) |
@@ -6488,6 +6487,7 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `num_joins=` | field and constructor keyword of `MergeReport` |
 | `num_key_value_heads=` | constructor keyword of `tl.bridge.transformers.AttentionCall` (required): Key/value heads before grouped-query expansion; constructor keyword of `tl.transformer.GqaInfo` (required): Number of key/value heads (groups); shared storage is never presented as independent heads |
 | `num_multiplied_ops=` | field and constructor keyword of `BackwardEstimate` |
+| `num_nonfinite=` | constructor keyword of `tl.receptive_field.GradReceptiveField` (required): Number of NaN or Inf gradient entries; nonzero makes validation indeterminate |
 | `num_pages=` | field and constructor keyword of `SavedFigure` |
 | `num_pairs=` | constructor keyword of `tl.intervention.Direction` (required) |
 | `num_params=` | constructor keyword of `tl.report.SixNDFacts` (required); constructor keyword of `tl.types.Module` (default `0`): Total parameter count; constructor keyword of `tl.types.Param` (required): Number of scalar elements in the parameter |

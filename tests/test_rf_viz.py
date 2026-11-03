@@ -146,7 +146,7 @@ def _gradient(descriptor: ReceptiveField) -> GradReceptiveField:
         cross_batch_influence=False,
         atol=0.0,
         rtol=0.0,
-        nonfinite_count=0,
+        num_nonfinite=0,
         warnings=(),
     )
 
