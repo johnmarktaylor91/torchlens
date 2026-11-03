@@ -111,6 +111,7 @@ _LAZY_ATTRS = {
     "steer": ("torchlens.intervention.helpers", "steer"),
     "sweep": ("torchlens.intervention.sweep", "sweep"),
     "trace": ("torchlens._user_funcs", "trace"),
+    "draw": ("torchlens._user_funcs", "draw"),
     # Built-in activation transforms (transforms memo s7 home; the submodule
     # spelling tl.transforms is DOCUMENTED-UNSTABLE — the collision with the
     # input-side transform= slot is a named naming-sprint item).
@@ -214,12 +215,12 @@ _REDIRECTS: dict[str, str] = {
     "Macs": "use torchlens.types.Macs",
     "brainpipe": "use torchlens.neuro (plan_extraction, ExtractionPlan, PlanSite, export_npz)",
     "Buffer": "use torchlens.types.Buffer",
-    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw (trace.draw(vis_renderer='dagua'))",
+    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
     "check_spec_compat": "use torchlens.intervention.check_spec_compat",
     "cleanup_tmp": "use torchlens.io.cleanup_tmp",
-    "draw_backward": "use torchlens.Trace.draw_backward (trace.draw_backward())",
-    "draw_combined": "use torchlens.Trace.draw_combined (trace.draw_combined())",
+    "draw_backward": "use torchlens.Trace.draw (trace.draw(graph='backward'))",
+    "draw_combined": "use torchlens.Trace.draw (trace.draw(graph='combined'))",
     "draw_model_graph": "use torchlens.Trace.draw (trace.draw())",
     "FuncCallLocation": "use torchlens.types.FuncCallLocation",
     "get_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
@@ -252,7 +253,7 @@ _REDIRECTS: dict[str, str] = {
     "render_graph": "use torchlens.Trace.draw (trace.draw())",
     "render_lines_to_html": "removed from the public surface; use torchlens.Trace.draw (trace.draw())",
     "render_model_graph": "use torchlens.Trace.draw (trace.draw())",
-    "render_trace_with_dagua": "use torchlens.Trace.draw (trace.draw(vis_renderer='dagua'))",
+    "render_trace_with_dagua": "use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
     "replay": "use torchlens.Trace.do (do is the one intervention verb)",
     "replay_from": "use torchlens.Trace.do (do is the one intervention verb)",
     "rerun": "use torchlens.Trace.do with engine='rerun'",
@@ -495,9 +496,9 @@ def pluck(
         Layer label, module path, pass-qualified label, or unique substring.
         Resolves strictly to one result; ambiguous lookups refuse typed.
     stop_after:
-        Stop-early site, passed to the capture as
-        ``CaptureOptions(stop_after=...)``: the forward halts inclusively after
-        the site, and an unsupported spelling refuses typed. ``None`` reads the
+        Stop-early site or predicate, passed to the capture as
+        ``trace(stop_after=...)``: the forward halts inclusively after the
+        site, and an unsupported spelling refuses typed. ``None`` reads the
         ambient ``tl.experimental.stop_after`` site, if one is active.
 
     Returns
@@ -512,16 +513,9 @@ def pluck(
         ``activation_not_saved`` if it produced no saved tensor.
     """
 
-    from ._extract_refusals import CaptureOptions
-
-    # an explicit site rides the capture options, where the trace
+    # an explicit site rides the door's stop_after=, where the trace
     # validates it; without one the trace reads the ambient site itself.
-    capture = (
-        CaptureOptions(layers_to_save=[layer])
-        if stop_after is None
-        else CaptureOptions(layers_to_save=[layer], stop_after=stop_after)
-    )
-    trace = _resolve_top_level("trace")(model, inputs, capture=capture)
+    trace = _resolve_top_level("trace")(model, inputs, save=[layer], stop_after=stop_after)
     return _out_from_log(trace, layer)
 
 
@@ -623,10 +617,8 @@ def _extract_layers_with_trace(
             model, x, layers, facet_plan, detach_saved_activations=detach_saved_activations
         )
     layer_plan = _normalize_extract_layers(layers)
-    capture = CaptureOptions(
-        layers_to_save=list(layer_plan.values()), detach_saved_activations=detach_saved_activations
-    )
-    trace = _resolve_top_level("trace")(model, x, capture=capture)
+    capture = CaptureOptions(detach_saved_activations=detach_saved_activations)
+    trace = _resolve_top_level("trace")(model, x, capture=capture, save=list(layer_plan.values()))
     outputs: dict[str, _torch.Tensor] = {}
     views: dict[str, _Any] = {}
     if isinstance(layers, _Mapping):
@@ -684,6 +676,7 @@ def extract(
 
 __all__ = [
     "trace",
+    "draw",
     "release_model",
     "clear_cache",
     "export",

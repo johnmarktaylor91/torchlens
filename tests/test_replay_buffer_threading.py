@@ -71,7 +71,8 @@ def _traced_buf_loop() -> tuple[BufLoop, torch.Tensor, tl.Trace]:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", replayable=True),
+        capture=tl.options.CaptureOptions(replayable=True),
+        save="all",
     )
     return model, x, log
 
@@ -163,7 +164,8 @@ def test_inplace_activation_op_does_not_corrupt_origin_readback() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", replayable=True),
+        capture=tl.options.CaptureOptions(replayable=True),
+        save="all",
     )
     fork = log.fork()
     edit = torch.full((2, 4), 5.0)
@@ -239,7 +241,8 @@ def test_hook_edit_on_initial_buffer_read_applies_and_records(registered: bool) 
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", replayable=True),
+        capture=tl.options.CaptureOptions(replayable=True),
+        save="all",
     )
     site = log._layer_dict_all_keys["buffer_1:1"]
     assert site.is_buffer and not tuple(site.parents or ())

@@ -632,21 +632,22 @@ def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
     from .lenses._resolve import draw_with_lens
 
     result = draw_with_lens(trace, "surgery", **user_kwargs)
-    if not user_kwargs.get("return_graph", False):
-        outpath = user_kwargs.get("path")
-        if outpath is None:
-            # A bare draw chose a collision-safe name: the census
-            # rides beside the file that was actually written.
-            from ._render_utils import DEFAULT_DRAW_STEM
+    if hasattr(result, "dot"):
+        result = str(result)  # the DOT source, as every surgery caller reads it
+    outpath = user_kwargs.get("path")
+    if outpath is None:
+        # A bare draw chose a collision-safe name: the census
+        # rides beside the file that was actually written.
+        from ._render_utils import DEFAULT_DRAW_STEM
 
-            try:
-                written: str | None = trace._last_render_geometry.output_path
-            except AttributeError:  # renderer that records no geometry (dagua)
-                written = None
-            outpath = os.path.splitext(written)[0] if written else DEFAULT_DRAW_STEM
-        census_path = f"{outpath}.census.txt"
-        with open(census_path, "w", encoding="ascii", errors="replace") as census_file:
-            census_file.write(surgery_census(trace).to_text())
+        try:
+            written: str | None = trace._last_render_geometry.output_path
+        except AttributeError:  # renderer that records no geometry (dagua)
+            written = None
+        outpath = os.path.splitext(written)[0] if written else DEFAULT_DRAW_STEM
+    census_path = f"{outpath}.census.txt"
+    with open(census_path, "w", encoding="ascii", errors="replace") as census_file:
+        census_file.write(surgery_census(trace).to_text())
     return result
 
 

@@ -60,7 +60,11 @@ def test_conv_support_is_exact_and_matches_geometric_hull() -> None:
         model.weight.fill_(1.0)
     inputs = torch.randn(2, 1, 7, 7, requires_grad=True)
     capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
     target = _op(trace, "conv2d")
     input_op = next(op for op in trace._layer_list if op.is_input)
 
@@ -90,7 +94,11 @@ def test_trace_input_accessor_resolves_for_empirical_rf_queries() -> None:
         model.weight.fill_(1.0)
     inputs = torch.ones(1, 1, 5, 5, requires_grad=True)
     capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
     target = _op(trace, "conv2d")
     accessor_input = trace.input_ops[0]
 
@@ -105,8 +113,7 @@ def test_trace_input_accessor_resolves_for_empirical_rf_queries() -> None:
     source_trace = tl.trace(
         model,
         torch.ones(1, 1, 5, 5, requires_grad=True),
-        capture=capture,
-        save_mode="reference",
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
     )
     source_target = _op(source_trace, "conv2d")
     source_gradient = source_target.receptive_field.probe_grad(
@@ -133,7 +140,11 @@ def test_effective_mask_and_indices_use_deterministic_flat_ties() -> None:
         model.weight.fill_(1.0)
     inputs = torch.randn(1, 1, 5, 5, requires_grad=True)
     capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
     target = _op(trace, "conv2d")
     input_op = next(op for op in trace._layer_list if op.is_input)
     result = gradient_for_unit(target, (0, 0, 1, 1), input_op=input_op)
@@ -171,7 +182,11 @@ def test_training_batchnorm_reports_cross_batch_influence() -> None:
         requires_grad=True,
     )
     capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
     target = _op(trace, "batch_norm")
     input_op = next(op for op in trace._layer_list if op.is_input)
 
@@ -203,7 +218,11 @@ def test_reachable_but_none_gradient_raises_typed_error() -> None:
 
     inputs = torch.randn(1, 3, requires_grad=True)
     capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(_DetachedPath(), inputs, capture=capture, save_mode="reference")
+    trace = tl.trace(
+        _DetachedPath(),
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
     target = next(op for op in reversed(trace._layer_list) if not op.is_output)
     input_op = next(op for op in trace._layer_list if op.is_input)
 
@@ -226,7 +245,11 @@ def test_fork_probe_does_not_mint_parent_backward_pass() -> None:
     model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
     inputs = torch.ones(1, 1, 5, 5, requires_grad=True)
     capture = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
-    trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
     fork = trace.fork()
 
     fork_target = _op(fork, "conv2d")

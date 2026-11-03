@@ -5,7 +5,7 @@ Moved verbatim from ``torchlens._user_funcs`` by the capture seam.
 
 import collections.abc
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from torchlens.backends.registry import BackendUnsupportedError
 
@@ -13,9 +13,6 @@ from ..._data_classes.trace import (
     Trace,
 )
 from ..._deprecations import MISSING, MissingType
-from ..._errors import (
-    InvalidArgumentError,
-)
 from ..._literals import (
     OutputDeviceLiteral,
 )
@@ -27,6 +24,7 @@ from ..._postprocess._selective_save import (
 from ..._selection.selectors import BaseSelector
 from ..._trace_selector_helpers import (
     _TRACE_OPTION_FILTERED_NAMES,
+    _resolve_save_transforms,
     _split_save_options_and_predicate,
 )
 from ..._user_funcs_guards import (
@@ -50,10 +48,9 @@ from ...backends.registry import (
 from ...intervention.errors import ChunkedForwardConfigError
 from ...options import (
     CaptureOptions,
-    SaveOptions,
     VisualizationOptions,
+    _SaveTransforms,
     merge_capture_options,
-    merge_save_options,
 )
 from ...recording.options import PredicateFn
 from ...types import _ActivationPostfunc, _GradientPostfunc
@@ -94,7 +91,7 @@ def _trace_mlx_model(
     replayable: bool | MissingType,
     hooks: Any | None | MissingType,
     capture: CaptureOptions | None,
-    save: SaveOptions | None,
+    save: _SaveTransforms | None,
     save_predicate: PredicateFn | BaseSelector | None,
     visualization: VisualizationOptions | None,
     backward_ready: bool | MissingType,
@@ -125,7 +122,7 @@ def _trace_mlx_model(
         resolved_activation_transform = activation_transform
     capture_options = merge_capture_options(
         capture=capture,
-        layers_to_save=layers_to_save,
+        _layers_to_save=layers_to_save,
         input_transform=transform,
         save_raw_input=save_raw_input,
         batch_render=batch_render,
@@ -158,15 +155,17 @@ def _trace_mlx_model(
         cache_dir=MISSING,
         module_filter=module_filter,
         module_identity_mode=module_identity_mode,
-        stop_after=MISSING,
-        raise_on_nan=MISSING,
     )
-    save_options = merge_save_options(
-        save=save,
-        activation_transform=resolved_activation_transform,
-        grad_transform=grad_transform,
-        save_raw_activations=save_raw_activations,
-        save_raw_grads=save_raw_grads,
+    save_options = (
+        save
+        if save is not None
+        else _resolve_save_transforms(
+            capture_options,
+            activation_transform=resolved_activation_transform,
+            grad_transform=grad_transform,
+            save_raw_activations=save_raw_activations,
+            save_raw_grads=save_raw_grads,
+        )
     )
     if capture_options.replayable:
         raise BackendUnsupportedError(
@@ -179,13 +178,6 @@ def _trace_mlx_model(
         raise BackendUnsupportedError(
             "MLX backend does not support pre-attached hooks. "
             "Omit hooks or use the PyTorch backend."
-        )
-    if visualization is not None and visualization.view not in ["none", "rolled", "unrolled"]:
-        raise InvalidArgumentError(
-            f"MLX visualization mode={visualization.view!r} is not supported",
-            code="visualization_mode_invalid",
-            remedy="set visualization.view to 'none', 'rolled', or 'unrolled'",
-            argument="visualization.view",
         )
     if capture_options.save_grads:
         raise BackendUnsupportedError("backward capture is not supported on the mlx backend")
@@ -208,7 +200,7 @@ def _trace_mlx_model(
         model,
         model_input_args,
         model_input_kwargs,
-        layers_to_save=capture_options.layers_to_save,
+        layers_to_save=capture_options._layers_to_save,
         keep_orphans=capture_options.keep_orphans,
         output_device=capture_options.output_device,
         activation_transform=save_options.activation_transform,
@@ -279,14 +271,13 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
             "lookback": kwargs["lookback"],
             "lookback_payload_policy": kwargs["lookback_payload_policy"],
             "storage": kwargs["storage"],
-            "streaming": kwargs["streaming"],
             "inference_only": kwargs.get("inference_only", MISSING),
             "cache": kwargs.get("cache", MISSING),
             "stop_after": kwargs.get("stop_after", MISSING),
-            "raise_on_nan": kwargs.get("raise_on_nan", MISSING),
-            "profile": kwargs.get("profile", MISSING),
+            "on_nonfinite": (
+                kwargs["capture"].on_nonfinite if kwargs.get("capture") is not None else "ignore"
+            ),
             "payload_policy": kwargs.get("payload_policy", MISSING),
-            "save_preview": kwargs.get("save_preview", MISSING),
             "chunk_size": kwargs.get("chunk_size", MISSING),
             "chunk_paths": kwargs.get("chunk_paths", MISSING),
             "save_outs_to": kwargs.get("save_outs_to", MISSING),
@@ -325,7 +316,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # friends raised ``KeyError`` on every call once the sprint removed the
     # flat spelling from ``trace()``'s own signature. ``.get(..., MISSING)``
     # reports "not flatly specified" so ``_trace_mlx_model``'s own
-    # ``merge_capture_options``/``merge_save_options`` calls fall through to
+    # ``merge_capture_options``/``_resolve_save_transforms`` calls fall through to
     # the grouped object's value, exactly like direct/internal callers who
     # still pass the flat spelling.
     activation_transform = kwargs.get("activation_transform", MISSING)
@@ -395,7 +386,7 @@ def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]
         return True
     capture_options = public_trace_kwargs.get("capture")
     if isinstance(capture_options, CaptureOptions) and hasattr(capture_options, option_name):
-        return capture_options.is_field_explicit(option_name)
+        return capture_options._is_field_explicit(option_name)
     return False
 
 
@@ -439,12 +430,6 @@ def _unsupported_trace_option_message(option_name: str, backend_name: str) -> st
             f"backend={backend_name!r} does not yet support payload_policy. "
             "Non-torch payload codec policy is declared but not implemented in this backend "
             "phase; omit the option or use backend='torch'."
-        )
-    if option_name == "save_preview":
-        return (
-            f"backend={backend_name!r} does not yet support save_preview. "
-            "Preview save semantics are declared but not implemented for this backend phase; "
-            "omit the option or use backend='torch'."
         )
     return (
         f"backend={backend_name!r} does not support trace option {option_name!r}; "
@@ -530,7 +515,7 @@ def _enforce_capability_option_gates(
             not requested
             and isinstance(capture_value, CaptureOptions)
             and hasattr(capture_value, option_name)
-            and capture_value.is_field_explicit(option_name)
+            and capture_value._is_field_explicit(option_name)
         ):
             requested = _capability_option_requested(getattr(capture_value, option_name))
         if requested:
@@ -562,22 +547,20 @@ def _reject_unsupported_torch_trace_option_values(capture_options: CaptureOption
         Returns when all explicit values are supported or default-equivalent.
     """
 
-    if capture_options.is_field_explicit("module_identity_mode") and (
+    if capture_options._is_field_explicit("module_identity_mode") and (
         capture_options.module_identity_mode not in {None, "torch_module"}
     ):
         raise BackendUnsupportedError(
             "backend='torch' supports module_identity_mode=None or 'torch_module' only."
         )
-    if capture_options.is_field_explicit("payload_policy") and (
+    if capture_options._is_field_explicit("payload_policy") and (
         capture_options.payload_policy not in {None, "full"}
     ):
         raise BackendUnsupportedError(
             "backend='torch' supports payload_policy=None or 'full' only."
         )
-    if capture_options.is_field_explicit("save_preview") and capture_options.save_preview:
-        raise BackendUnsupportedError("backend='torch' does not support save_preview=True.")
     for option_name in _CONTROL_FLOW.trace_options:
-        if capture_options.is_field_explicit(option_name):
+        if capture_options._is_field_explicit(option_name):
             raise BackendUnsupportedError(
                 f"backend='torch' does not support explicit {option_name}; "
                 "JAX control-flow options are only meaningful with backend='jax'."
@@ -586,24 +569,47 @@ def _reject_unsupported_torch_trace_option_values(capture_options: CaptureOption
 
 _AUTOROUTE_FORWARDED_KWARGS = (
     "input_kwargs",
-    "grad_transform",
-    "save_mode",
-    "reconstruction_ready",
     "capture",
     "save",
     "intervene",
-    "halt",
-    "lookback",
-    "lookback_payload_policy",
+    "stop_after",
     "storage",
-    "streaming",
-    "profile",
     "facets",
     "episode",
-    "grouping",
     "narrate",
     "on_zero_fire",
 )
+
+#: Capture fields the doors used to take as flat keywords, with the flat default
+#: the backend entries still expect when the field was not set explicitly.
+_DOOR_CAPTURE_FLAT_DEFAULTS: Final[dict[str, Any]] = {
+    "grad_transform": MISSING,
+    "save_mode": MISSING,
+    "reconstruction_ready": MISSING,
+    "lookback": 0,
+    "lookback_payload_policy": "metadata_only",
+    "grouping": MISSING,
+    "jax_static_argnums": MISSING,
+    "grad_options": MISSING,
+    "chunk_size": MISSING,
+}
+
+
+def _unfold_door_capture_fields(capture: CaptureOptions | None) -> dict[str, Any]:
+    """Return the former door keywords as flat values read from ``capture=``.
+
+    Only a ``CaptureOptions`` is probed: another options object passed as
+    ``capture=`` (for example a ``ReplayOptions``) contributes no field here and
+    reaches the door's typed refusal unchanged.
+    """
+
+    unfolded: dict[str, Any] = {}
+    for field_name, flat_default in _DOOR_CAPTURE_FLAT_DEFAULTS.items():
+        if isinstance(capture, CaptureOptions) and capture._is_field_explicit(field_name):
+            unfolded[field_name] = getattr(capture, field_name)
+        else:
+            unfolded[field_name] = flat_default
+    return unfolded
 
 
 def _refuse_compiled_callable_root(model: Any) -> None:
@@ -650,6 +656,10 @@ def _autoroute_trace(model: Any, input_args: Any, forwarded: dict[str, Any]) -> 
     # inside the grouped ``capture=`` object, so re-entrant trace() calls
     # inside detectors receive exactly what the user could have passed.
     autoroute_kwargs = {name: forwarded[name] for name in _AUTOROUTE_FORWARDED_KWARGS}
+    # Label/None selections are already carried privately by capture.
+    # Omitting the consumed save value preserves that receipt on re-entry.
+    if autoroute_kwargs["save"] is None:
+        autoroute_kwargs.pop("save")
     for detector in autoroute.input.iter_by_priority():
         result = detector(model, input_args, **autoroute_kwargs)
         if result is not None:
@@ -681,7 +691,9 @@ def _dispatch_trace(
     if (
         backend is None
         and chunk_size in (MISSING, None)
-        and (capture is None or not capture.is_field_explicit("input_transform"))
+        and not (
+            isinstance(capture, CaptureOptions) and capture._is_field_explicit("input_transform")
+        )
     ):
         forwarded = {**public_trace_kwargs, "grouping": grouping, "on_zero_fire": on_zero_fire}
         routed = _autoroute_trace(model, input_args, forwarded)
