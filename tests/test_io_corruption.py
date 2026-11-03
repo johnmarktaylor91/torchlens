@@ -153,7 +153,7 @@ def test_missing_blob_file_raises_with_blob_id(tmp_path: Path) -> None:
     blob_path.unlink()
     with pytest.raises(ArtifactError) as caught:
         load(bundle_path)
-    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+    assert caught.value.fields["code"] == "bundle_blob_missing"
     assert caught.value.file_path == str(blob_path)
 
 

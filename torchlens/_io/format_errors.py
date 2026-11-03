@@ -154,13 +154,14 @@ def refuse_bundle_exists(path: object, *, overwritable: bool = False) -> NoRetur
     )
 
 
-def refuse_missing_blobs(blob_ids: list[str]) -> NoReturn:
+def refuse_missing_blobs(blob_ids: list[str], *, file_path: str | None = None) -> NoReturn:
     """Raise the ``bundle_blob_missing`` refusal for a manifest whose blob files are gone."""
 
     raise ArtifactError(
         f"Bundle manifest references missing blob files for blob_id(s): {', '.join(blob_ids)}.",
         code="bundle_blob_missing",
         remedy="restore the missing blob files, or re-save the bundle from its source capture",
+        file_path=file_path,
     )
 
 
