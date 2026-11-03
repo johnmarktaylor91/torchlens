@@ -135,9 +135,9 @@ outside it and outside CI, so only the script's answer equals CI's (`tests/AGENT
 Tiers by cost (every tier's count: `tests/tiers/collection.json`): `smoke` selects
 ~0.4k tests (384/27,505 collect-only, measured 2026-11-03),
 a coverage-chosen subset of the former ~1.5k-test tier that holds every per-package coverage
-floor (see `tests/AGENTS.md`, "The smoke tier"). The smoke wall (measured 2026-11-03, one
-4-core Linux worker, `-n 4`, one torch thread per worker) took 101s, plus about 70s of
-collection. The size ceiling is `SMOKE_TIER_SIZE_CEILING`
+floor (see `tests/AGENTS.md`, "The smoke tier"). The smoke wall measurement (measured 2026-11-03, one
+4-core Linux worker, `-n 4`, one torch thread per worker) took 80s (~1 min) after about 50s
+of collection. The size ceiling is `SMOKE_TIER_SIZE_CEILING`
 (400) in `tests/conftest.py`. Smoke is NOT
 sub-minute and NOT a per-step gate — per-step verification is the targeted test files for
 the code touched; smoke is the commit-level gate, `not rare and not slow and not heavy`
