@@ -6,9 +6,13 @@ from collections.abc import Mapping, Sequence
 from math import ceil
 from typing import Any
 
-from .._capture.arg_positions import _normalize_func_name
 from .._reshape_blocks import Block, block_decomposition
-from .._rules import ReceptiveFieldRuleContext, _RuleResult, register_rf_rule
+from .._rules import (
+    ReceptiveFieldRuleContext,
+    _normalize_rule_name,
+    _RuleResult,
+    register_rf_rule,
+)
 from ._utils import int_tuple
 
 
@@ -200,7 +204,7 @@ def split(context: ReceptiveFieldRuleContext) -> _RuleResult:
     index = context.op.multi_output_index
     if not isinstance(index, int) or rank == 0:
         return context.unknown("split output index was not captured")
-    name = _normalize_func_name(str(context.op.func_name))
+    name = _normalize_rule_name(str(context.op.func_name))
     dim = context.arg("dim", context.arg(0 if name == "unbind" else 1, 0))
     if not isinstance(dim, int):
         return context.unknown("split dimension was not captured")
