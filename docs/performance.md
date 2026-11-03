@@ -79,8 +79,8 @@ assert gelu_site.out.shape == (2, 4)
 
 When a fastlog forward raises, the default remains `on_forward_error="raise"`. Opt into
 `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
-`on_forward_error="return_partial"` to return a failed partial `Recording` (`return_output=True`
-returns `(None, partial)`). Failed partials set `status="partial_error"`, `failed=True`,
+`on_forward_error="return_partial"` to return a failed partial `Recording` (its `output` refuses
+with `output_forward_failed`). Failed partials set `status="partial_error"`, `failed=True`,
 string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials cannot be converted with `Recording.to_trace()` or used with
@@ -224,7 +224,7 @@ import torchlens as tl
 model = nn.Sequential(nn.Linear(1024, 1024), nn.ReLU()).eval()
 x = torch.randn(128, 1024)
 
-trace = tl.trace(model, x, chunk_size=16, save=tl.func("relu"))
+trace = tl.trace(model, x, save=tl.func("relu"), capture=tl.options.CaptureOptions(chunk_size=16))
 
 assert trace.find_sites(tl.func("relu")).first().out.shape[0] == 128
 ```
@@ -235,7 +235,7 @@ dimension 0, executes one sub-batch at a time, and returns one accumulated in-me
 
 The v1 limits are intentionally narrow: torch backend only, positional inputs only, no
 `backward_ready`, no `save_grads`, no live `hooks=`, no public `intervene=`, and no
-`storage=tl.to_disk(...)`/`streaming=`. Loaded or live chunked traces also reject
+`storage=tl.to_disk(...)`/`storage=`. Loaded or live chunked traces also reject
 `log_backward()` because they do not retain one full-batch autograd graph.
 
 Auto mode splits only when there is exactly one `ndim > 0` tensor leaf under standard Python
@@ -257,7 +257,7 @@ model = MaskedModel().eval()
 tokens = torch.randn(64, 16)
 attention_mask = torch.ones(64, 16)
 
-trace = tl.trace(model, (tokens, attention_mask), chunk_size=8, chunk_paths=["0", "1"])
+trace = tl.trace(model, (tokens, attention_mask), chunk_paths=["0", "1"], capture=tl.options.CaptureOptions(chunk_size=8))
 ```
 
 Unlisted leaves are passed unchanged to every chunk, which is useful for shared masks or bias
@@ -293,9 +293,7 @@ trace = tl.trace(
     model,
     x,
     save=predicate,
-    lookback=4,
-    lookback_payload_policy="detached_raw",
-    storage=tl.to_disk(path),
+    storage=tl.to_disk(path), capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 
 assert trace.find_sites(tl.func("conv2d")).first().out.shape == (1, 2, 3, 3)
@@ -305,9 +303,9 @@ Use disk-backed storage for selected payloads that are too large or numerous to 
 Trace repr, notebook HTML, and JSON explanation do not materialize lazy disk payloads for their
 NaN/Inf summary; those refs are reported as unexamined until you call ``op.materialize_out()``.
 This exemption applies to predicate-selected disk-only payloads. Exhaustive saving
-(``layers_to_save="all"``, the default) keeps RAM copies until postprocess, so combine a narrower
+(``save="all"``, the default) keeps RAM copies until postprocess, so combine a narrower
 ``save=`` with disk streaming to reduce peak retained memory. Note that ``save=`` itself takes a
-predicate, selector, or ``SaveOptions`` — never the string ``"all"``.
+predicate, selector, or ``CaptureOptions`` — never the string ``"all"``.
 Portable `.tlspec/` bundles store manifest data plus tensor sidecars when the backend supports
 materialized payloads; executable Python callables are not portable. Backend-aware manifest schema
 v2 adds `backend`, `backend_runtime`, nullable torch-specific fields, and `payload_policy`.

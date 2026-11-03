@@ -119,7 +119,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Graph rendering | `trace.draw`, `torchlens._visualization.show_model_graph` | `_visualization/`, `_visualization/renderers/`, `_visualization/lenses/` | `visualization/`, `test_draw*.py`, `test_collapse*.py`, `test_theme*.py` |
 | Activation plots and transformer pictures | `tl.viz`, `tl.tviz` | `viz/`, `transformer/` | `test_visual*.py`, `test_tviz*.py` |
 | Static exports | `tl.export` | `export/`, `export/_model_explorer/` | `test_export*.py`, `test_modelexplorer_assets/` |
-| Quickstart ladder | `torchlens._user_funcs.render`, `tl.summary(model, input_size=...)`, `torchlens._quickstart.InputSpec` | `_quickstart/` | `test_quickstart*.py` |
+| Quickstart ladder | `torchlens._user_funcs.draw`, `tl.summary(model, input_shape=...)`, `torchlens._quickstart.InputSpec` | `_quickstart/` | `test_quickstart*.py` |
 | Agent surface | `trace.to_agent_json`, `tl.report.explain`, `tl.bridge.mcp` | `agent/`, `report/`, `bridge/` | `test_agent*.py`, `agent_surface_goldens/` |
 | External tool bridges | `tl.bridge.<tool>`, `tl.callbacks` | `bridge/`, `bridge/lit/`, `callbacks/` | `test_bridges_*.py` |
 | Environment and model report | `tl.report.doctor()` | `report/_doctor.py`, `report/_environment.py`, `compat/_report.py` | `test_doctor*.py`, `test_compat*.py` |

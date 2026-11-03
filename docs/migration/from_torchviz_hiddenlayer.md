@@ -20,7 +20,7 @@ want the values torchviz's `show_saved` prints, capture the forward with `tl.tra
 every op keeps its saved output (`trace[label].out`) and its size in bytes
 (`trace[label].activation_memory`). To draw the backward graph of a captured run, with
 the module that owns each node and a gradient summary on each node, use
-`trace.draw_backward(show_module_paths=True, show_grad_values=True)` after a backward
+`trace.draw(graph="backward", show_module_paths=True, show_grad_values=True)` after a backward
 pass the trace recorded (see `docs/backward.md`).
 
 Their construct:
@@ -66,7 +66,7 @@ chains at draw time with `fold_patterns=`.
 | hiddenlayer's built-in fold set | `trace.draw(fold_patterns="idiomatic")` | Folds `ConvBnRelu`, `ConvBn`, `ConvRelu` and `LinearRelu`. |
 | A fold built from an earlier fold | `{"LinRelu": "linear > relu", "LinRelu2": "LinRelu{2}"}` | An atom naming an earlier pattern inlines it; `{k}` repeats an atom exactly `k` times. |
 | `hl.transforms.Prune(...)` | `trace.draw(skip_fn=...)` | `skip_fn` takes a layer and returns `True` to hide it. |
-| `graph.save(path, format="pdf")` | `trace.draw(path=path, file_format="pdf", vis_save_only=True)` | |
+| `graph.save(path, format="pdf")` | `trace.draw(path=path, file_format="pdf")` | |
 
 `fold_patterns=` cannot be combined with automatic collapse (`collapse=`) and refuses
 with `pattern_collapse_combination_unsupported`. hiddenlayer has had no release since
@@ -89,7 +89,6 @@ dot_source = trace.draw(
     fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
     path=outpath,
     file_format="svg",
-    vis_save_only=True,
-)
+).dot
 RESULT = ("ConvBnRelu" in dot_source, os.path.exists(outpath + ".svg"))
 ```

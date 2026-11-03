@@ -41,8 +41,18 @@ def test_enrich_all_feasible_matches_available_enrichments() -> None:
 def test_record_postprocess_accepts_only_the_live_enrich_steps() -> None:
     """``postprocess=`` names a live ``Recording.enrich`` step; a removed step refuses typed."""
 
-    live = tl.record(_mlp(), torch.randn(1, 4), default_op=True, postprocess="module_path_strings")
+    live = tl.record(
+        _mlp(),
+        torch.randn(1, 4),
+        default_op=True,
+        postprocess="module_path_strings",
+    )
     assert "module_path" in live.records[0].metadata
     with pytest.raises(RecordingConfigError, match="module_path_strings") as info:
-        tl.record(_mlp(), torch.randn(1, 4), default_op=True, postprocess="param_addresses")
+        tl.record(
+            _mlp(),
+            torch.randn(1, 4),
+            default_op=True,
+            postprocess="param_addresses",
+        )
     assert "param_addresses" not in str(info.value).split("must be")[1]

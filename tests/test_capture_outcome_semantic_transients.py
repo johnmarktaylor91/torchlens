@@ -88,7 +88,7 @@ def test_halted_capture_drops_the_semantic_output_scratch() -> None:
     trace = tl.trace(
         _model_with_tokenizer(),
         torch.ones(1, 3),
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
     )
     assert trace.is_stopped is True
     assert _leaked(trace) == []
@@ -199,7 +199,7 @@ def test_plain_pickle_never_carries_the_live_tokenizer(halt: bool) -> None:
     """
 
     model = _model_with_tokenizer()
-    kwargs = {"halt": tl.func("relu")} if halt else {}
+    kwargs = {"stop_after": tl.func("relu")} if halt else {}
     trace = tl.trace(model, torch.ones(1, 3), **kwargs)
     state = trace.__getstate__()
     for name in _SEMANTIC_OUTPUT_TRANSIENT_FIELDS:
@@ -221,12 +221,12 @@ def test_pickle_of_a_halted_trace_stays_tokenizer_free_by_size() -> None:
     plain = tl.trace(
         _HaltableClassifier().eval(),
         torch.ones(1, 3),
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
     )
     with_tok = tl.trace(
         _model_with_tokenizer(),
         torch.ones(1, 3),
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
     )
     tokenizer_bytes = len(pickle.dumps(_Tokenizer()))
     delta = abs(len(pickle.dumps(with_tok)) - len(pickle.dumps(plain)))
@@ -242,7 +242,7 @@ def test_halted_trace_with_tokenizer_saves_and_reloads(tmp_path) -> None:
     trace = tl.trace(
         _model_with_tokenizer(),
         torch.ones(1, 3),
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
     )
     path = tmp_path / "halted_semantic.tlspec"
     trace.save(str(path))

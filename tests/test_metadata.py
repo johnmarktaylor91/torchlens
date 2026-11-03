@@ -633,9 +633,8 @@ def test_output_descendants_complete_when_distances_disabled() -> None:
     trace = trace_fn(
         _SharedMultiOutputModel(),
         torch.ones(1),
-        capture=tl.options.CaptureOptions(
-            compute_input_output_distances=False, layers_to_save="all"
-        ),
+        capture=tl.options.CaptureOptions(compute_input_output_distances=False),
+        save="all",
     )
     expected_outputs = set(trace.output_layers)
     shared = next(op for op in trace.ops if op.func_name == "__mul__")
@@ -650,7 +649,7 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
     trace = trace_fn(
         nn.Sequential(nn.Linear(2, 2), nn.ReLU()),
         torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     expected = len(
         {
@@ -695,7 +694,9 @@ def test_saved_args_not_populated(small_input):
 
 def test_transform(small_input):
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, save=tl.options.SaveOptions(activation_transform=torch.mean))
+    mh = trace_fn(
+        model, small_input, capture=tl.options.CaptureOptions(activation_transform=torch.mean)
+    )
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.transformed_out is not None:
@@ -1495,7 +1496,8 @@ def valid_mh_and_ground_truth():
     mh = trace_fn(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     ground_truth = [mh[label].out.clone() for label in mh.output_layers]
     return mh, ground_truth
@@ -1835,9 +1837,9 @@ class TestConditionalBranchDetection:
             show_model_graph(
                 model,
                 x,
-                view=view,
+                rolled=(view == "rolled"),
                 visualization=tl.options.VisualizationOptions(
-                    save_only=True, container_path=outpath, file_format="dot"
+                    container_path=outpath, file_format="dot"
                 ),
             )
             dot_file = outpath + ".dot"
@@ -1857,9 +1859,8 @@ class TestConditionalBranchDetection:
         with tempfile.TemporaryDirectory() as tmpdir:
             outpath = os.path.join(tmpdir, "cond_then_test")
             mh.draw(
-                vis_mode="unrolled",
+                rolled=False,
                 path=outpath,
-                vis_save_only=True,
                 file_format="dot",
             )
             dot_file = outpath + ".dot"
@@ -1914,7 +1915,8 @@ def test_transpose_positional_args_expose_salient_dims():
     trace = tl.trace(
         _TransposeModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     op = next(o for o in trace._layer_list if "transpose" in o.func_name)
     assert op.func_config.get("dim0") == 0

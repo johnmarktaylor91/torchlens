@@ -144,7 +144,8 @@ def _graph(model: nn.Module) -> tuple[str, list[tuple[str, tuple[str, ...], Any]
         trace = tl.trace(
             model,
             torch.rand(4),
-            capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
+            capture=CaptureOptions(save_args=True, seed=0),
+            save="all",
         )
     try:
         rows = [

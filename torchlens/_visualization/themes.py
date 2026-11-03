@@ -323,15 +323,13 @@ def collapse_tokens(theme: VisualizationTheme) -> CollapseTokens:
     )
 
 
-def resolve_theme(theme: str, *, for_paper: bool = False) -> VisualizationTheme:
+def resolve_theme(theme: str) -> VisualizationTheme:
     """Return a supported visualization theme preset.
 
     Parameters
     ----------
     theme:
         Theme preset name.
-    for_paper:
-        Whether to force the paper preset.
 
     Returns
     -------
@@ -344,7 +342,7 @@ def resolve_theme(theme: str, *, for_paper: bool = False) -> VisualizationTheme:
         If the requested theme is unknown.
     """
 
-    resolved_name = "paper" if for_paper else theme
+    resolved_name = theme
     if resolved_name not in THEME_PRESETS:
         supported = ", ".join(sorted(THEME_PRESETS))
         raise InvalidArgumentError(

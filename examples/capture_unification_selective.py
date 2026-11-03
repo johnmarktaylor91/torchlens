@@ -59,14 +59,14 @@ def main() -> None:
     x = torch.randn(1, 1, 4, 4)
 
     relu_trace = tl.trace(model, x, save=tl.func("relu"))
+    print("model output shape:", relu_trace.output.shape)  # exact live forward return
     print("saved relu ops:", [op.label for op in relu_trace.ops if op.has_saved_activation])
 
     windowed = tl.trace(
         model,
         x,
         save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-        lookback=4,
-        lookback_payload_policy="detached_raw",
+        capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
     )
     print(
         "windowed saves:",

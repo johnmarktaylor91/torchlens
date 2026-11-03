@@ -80,8 +80,8 @@ def _op_record(op) -> tuple:
 
 def _rolled_node_label_line(traced, node_name: str, outpath: str) -> str:
     """Render the rolled graph and return the named node's label line."""
-    graph = traced.draw(vis_mode="rolled", vis_save_only=True, return_graph=True, path=outpath)
-    for line in graph.source.splitlines():
+    graph = traced.draw(rolled=True, path=outpath).dot
+    for line in graph.splitlines():
         if line.strip().startswith(f"{node_name} [label"):
             return line.strip()
     raise AssertionError(f"node {node_name!r} not found in rolled render")
@@ -265,14 +265,12 @@ def test_tied_distinct_modules_rolled_render_shows_both_sites(tmp_path) -> None:
     torch.manual_seed(0)
     traced = trace_fn(_TiedEncoderDecoder(), torch.randn(1, 4))
     graph = traced.draw(
-        vis_mode="rolled",
-        vis_save_only=True,
-        return_graph=True,
+        rolled=True,
         path=str(tmp_path / "tied_rolled"),
-    )
+    ).dot
     label_lines = [
         line.strip()
-        for line in graph.source.splitlines()
+        for line in graph.splitlines()
         if line.strip().startswith("linear_") and "[label" in line
     ]
     assert len(label_lines) == 2, label_lines

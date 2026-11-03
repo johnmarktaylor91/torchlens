@@ -138,7 +138,9 @@ def test_partial_diagnostics_survive_the_scrub() -> None:
     partial = _failed_partial()
     assert len(partial.raw_layers) > 0
     assert isinstance(partial.first_nonfinite(), str)
-    assert isinstance(partial.draw(), str)
+    drawing = partial.draw()
+    assert type(drawing).__name__ == "Drawing"
+    assert str(drawing).startswith("digraph")
 
 
 def test_partial_trace_declares_a_field_policy() -> None:

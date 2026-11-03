@@ -8,7 +8,7 @@ Paddle preview backend: eager dygraph wrapper capture. It fills the backend prot
 - `PaddleBackend.capture_trace()` is the standalone entry; `GradOptions`
   (re-exported from `__init__.py`) drives derived gradients including
   intermediates (`intermediate_derived_grads=True`).
-- Live forward `intervene=` AND `halt=` both ship (the wrapper holds each
+- Live forward `intervene=` AND `stop_after=` both ship (the wrapper holds each
   concrete output before the caller sees it); combining `grad_options=` with
   either refuses typed. Halted traces set `is_stopped` / `stop_reason` /
   `halt_frontier`.
