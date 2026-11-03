@@ -853,6 +853,7 @@ class Param:
             "resolver_status": "resolved",
             "_derived_grad_payload": None,
             "_derived_grad_record_path": None,
+            "_grad_records": [],  # DROP: a 3.0 row has no column; grads reads it
         }
         default_fill_state(state, defaults=param_setstate_defaults)
         # Repair present-but-wrong-typed container fields from legacy states

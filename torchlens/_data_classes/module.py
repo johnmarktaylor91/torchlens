@@ -1876,6 +1876,7 @@ class Module:
             **_MODULE_CONTAINER_DEFAULTS,
             "_buffer_accessor": None,
             "_source_trace_ref": None,
+            "cls": None,  # DROP: a 3.0 row has no column, a live class never reloads
             "class_source_file": None,
             "class_source_line": None,
             "init_source_file": None,

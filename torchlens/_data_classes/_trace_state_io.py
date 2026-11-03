@@ -510,6 +510,10 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         }
     if state["_options_backward_ready"] is None:
         state["_options_backward_ready"] = False
+    # The 3.0 writer stores an empty derived-gradient accessor as its member list ``[]``;
+    # load gives the accessor back, as a live trace holds it.
+    if state.get("_autograd_derived_grads") == []:
+        state["_autograd_derived_grads"] = DerivedGradAccessor()
     # Session-time DROP knobs (``track_nonfinite`` too: a loaded artifact never
     # re-records, so load restores the default and the queryable record falls
     # back to the saved-payload basis).
