@@ -32,15 +32,13 @@ from __future__ import annotations
 from typing import Any
 
 from ..._data_classes._trace_missing_attrs import is_live_trace
-from ..._record_type import first_op
-from ._access import CopyRoot, resolve_copy_root
+from ._access import resolve_copy_root
 from ._axis_labels import sdpa_attention_hint
 from ._card_suppression import card_render_suppressed
-from ._grid import GridBudgets, array_grid_html
+from ._value_cards import layer_value_card, op_value_card
 from .cardtree import (
     Card,
     CardCollection,
-    CardHtml,
     CardKey,
     CardNode,
     CardSection,
@@ -68,7 +66,7 @@ BRIDGE_SENTINEL_HTML = (
 
 #: Value-grid budget inside a card (smaller than the standalone default so
 #: an Op card stays comfortably in the KB band).
-_CARD_GRID_CELL_BUDGET = 1_000
+_CARD_GRID_CELL_BUDGET = 200
 
 
 def _bridge_sentinel(obj: Any) -> str | None:
@@ -102,26 +100,6 @@ def _stats_line(tensor: Any) -> str | None:
         return str(render.render_core_line(stats.tensor_stats(tensor)))
     except Exception:  # noqa: BLE001 - stats are cosmetic on a card; degrade
         return None
-
-
-def _resident_tensor(owner: Any, attribute: str) -> Any | None:
-    """Read a tensor attribute without materializing non-resident payloads.
-
-    Returns the tensor only when the read succeeds and yields a real,
-    non-meta ``torch.Tensor``; anything else (disk-deferred payload, typed
-    refusal, exotic subclass) degrades to ``None`` -- display paths never
-    silently reload from disk (composition row X6).
-    """
-
-    try:
-        import torch
-
-        value = getattr(owner, attribute, None)
-        if type(value) is torch.Tensor and not value.is_meta:
-            return value
-    except Exception:  # noqa: BLE001 - a display read may never raise
-        return None
-    return None
 
 
 def _proof_section(trace_like: Any) -> CardSection:
@@ -167,205 +145,16 @@ def _save_counts(trace_like: Any) -> tuple[int | None, int | None]:
     return total, saved
 
 
-def _trace_of(record: Any) -> Any | None:
-    """Owning trace of a Layer/Op record, when reachable."""
-
-    try:
-        return record.source_trace
-    except Exception:  # noqa: BLE001 - detached records have no trace
-        return None
-
-
-def _root_for(record: Any, explicit_root: str | None) -> CopyRoot:
-    """Resolve the copy root against the record's OWNING TRACE identity.
-
-    A detached record (no trace backref) disables copy-access rather than
-    scanning for the record itself -- ``record['key']`` is not a valid
-    access expression, and a wrong expression is worse than none.
-    """
-
-    trace = _trace_of(record)
-    if trace is None and explicit_root is None:
-        return CopyRoot(None, "disabled", "detached record: no owning trace to index")
-    return resolve_copy_root(trace, explicit_root=explicit_root)
-
-
-def _identity_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
-    """Op identity: label, pass, function, module, site key, access key."""
-
-    label = str(getattr(op, "label", "?"))
-    pass_index = getattr(op, "pass_number", None)
-    num_passes = getattr(op, "num_passes", None)
-    identity = f"{getattr(op, 'func_name', '?')}"
-    if pass_index is not None and num_passes is not None and num_passes > 1:
-        identity += f" (pass {pass_index}/{num_passes})"
-    module = getattr(op, "atomic_module_address", None) or getattr(op, "module", None)
-    nodes: list[CardNode] = [CardText(identity)]
-    if module:
-        nodes.append(CardText(f"module: {module}"))
-    site_key = getattr(op, "site_key", None)
-    if site_key:
-        nodes.append(CardText(f"site: {site_key}", role="muted"))
-    nodes.append(CardKey(root.key_expression(label)))
-    if root.expression is None and root.reason:
-        nodes.append(CardText(f"copy-access disabled: {root.reason}", role="muted"))
-    return tuple(nodes)
-
-
-def _value_zone(op: Any) -> tuple[CardNode, ...]:
-    """Op value zone: stats line + budgeted grid, or the honest reason."""
-
-    if not getattr(op, "has_saved_activation", False):
-        return (CardText("value not saved (capture save= policy)", role="muted"),)
-    tensor = _resident_tensor(op, "out")
-    if tensor is None:
-        return (CardText("value not resident (disk/offloaded payload)", role="muted"),)
-    nodes: list[CardNode] = []
-    line = _stats_line(tensor)
-    if line:
-        nodes.append(CardText(line))
-    try:
-        grid = array_grid_html(tensor, budgets=GridBudgets(cells=_CARD_GRID_CELL_BUDGET))
-        nodes.append(CardHtml(grid.html))
-    except Exception:  # noqa: BLE001 - the grid is optional; the line is not
-        nodes.append(CardText("array view unavailable", role="muted"))
-    return tuple(nodes)
-
-
-def _grad_zone(op: Any) -> tuple[CardNode, ...]:
-    """Grad stats appear ONLY when a gradient was captured (row X7)."""
-
-    if not getattr(op, "has_saved_grad", False):
-        return ()
-    tensor = _resident_tensor(op, "grad")
-    if tensor is None:
-        return ()
-    line = _stats_line(tensor)
-    return (CardText(f"grad: {line}"),) if line else ()
-
-
-def _context_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
-    """Graph neighbors as copyable keys plus cost wrappers UNTOUCHED."""
-
-    nodes: list[CardNode] = []
-    parents = tuple(getattr(op, "parents", ()) or ())
-    children = tuple(getattr(op, "children", ()) or ())
-    if parents:
-        nodes.append(CardText("parents:", role="muted"))
-        nodes.extend(CardKey(root.key_expression(str(p))) for p in parents[:8])
-    if children:
-        nodes.append(CardText("children:", role="muted"))
-        nodes.extend(CardKey(root.key_expression(str(c))) for c in children[:8])
-    costs: list[str] = []
-    for attribute, prefix in (
-        ("num_params", "params"),
-        ("flops_forward", "flops fwd"),
-        ("func_duration", "time"),
-        ("activation_memory", "memory"),
-    ):
-        value = getattr(op, attribute, None)
-        if value is not None:
-            costs.append(f"{prefix}: {value}")
-    if costs:
-        nodes.append(CardText(" | ".join(costs)))
-    return tuple(nodes)
-
-
-def _intervention_badges(op: Any) -> tuple[CardNode, ...]:
-    """Intervention disclosures (row X2): shown whenever evidence exists."""
-
-    nodes: list[CardNode] = []
-    if getattr(op, "is_edited", False):
-        nodes.append(CardText("intervened: value replaced", role="notice"))
-    if getattr(op, "edge_substitutions", None):
-        nodes.append(CardText("intervened: edge substitution", role="notice"))
-    return tuple(nodes)
-
-
 def op_card(op: Any, *, root: str | None = None, kind: str = "op") -> Card:
-    """Assemble the Op card (memo section 5)."""
+    """Render the same identity and rows as the bounded text Op card."""
 
-    resolved_root = _root_for(op, root)
-    trace = _trace_of(op)
-    children: tuple[CardNode, ...] = (
-        *_identity_zone(op, resolved_root),
-        *_intervention_badges(op),
-        *_value_zone(op),
-        *_grad_zone(op),
-        *_context_zone(op, resolved_root),
-    )
-    if trace is not None:
-        children += (_proof_section(trace),)
-    else:
-        children += (CardText("capture facts unavailable (detached record)", role="muted"),)
-    shape = getattr(op, "shape", None)
-    dtype = getattr(op, "dtype", None)
-    title = f"TorchLens Op: {getattr(op, 'label', '?')}"
-    badge = f"{tuple(shape)} {dtype}" if shape is not None else None
-    return Card(title=title, badge=badge, kind=kind, children=children)
+    return op_value_card(op, kind=kind)
 
 
 def layer_card(layer: Any, *, root: str | None = None) -> Card:
-    """Assemble the pass-aware Layer card.
+    """Render the same per-pass facts as the bounded text Layer card."""
 
-    Pass rows are the card's SHAPE: per-pass facts read via ``ops[k]``
-    only. A single-pass layer degenerates to the Op card (ONE code path);
-    pooling across passes is forbidden -- it describes no executed value.
-    """
-
-    num_passes = int(getattr(layer, "num_passes", 1) or 1)
-    if num_passes <= 1:
-        # ``OpAccessor`` indexes by 0-based POSITION (its repr teaches the
-        # basis); the single pass is position 0.
-        return op_card(first_op(layer), root=root, kind="layer")
-    resolved_root = _root_for(layer, root)
-    rows: list[CardNode] = []
-    for pass_index in range(1, num_passes + 1):
-        rows.append(_pass_row(layer, pass_index, num_passes, resolved_root))
-    label = str(getattr(layer, "layer_label", "?"))
-    return Card(
-        title=f"TorchLens Layer: {label}",
-        badge=f"{num_passes} passes",
-        kind="layer",
-        children=tuple(rows) + _layer_proof(layer),
-    )
-
-
-def _pass_row(layer: Any, pass_index: int, num_passes: int, root: CopyRoot) -> CardSection:
-    """One per-pass row, reading exclusively through ``layer.ops[k]``."""
-
-    try:
-        op = layer.ops[pass_index - 1]
-    except Exception:  # noqa: BLE001 - a missing pass renders as data, not a crash
-        return CardSection(
-            title=f"pass {pass_index}/{num_passes}: unavailable",
-            children=(CardText("pass record unavailable", role="notice"),),
-            folded=False,
-        )
-    label = str(getattr(op, "label", "?"))
-    facts: list[CardNode] = [CardKey(root.key_expression(label))]
-    tensor = _resident_tensor(op, "out") if getattr(op, "has_saved_activation", False) else None
-    line = _stats_line(tensor) if tensor is not None else None
-    if line:
-        facts.append(CardText(line))
-    else:
-        shape = getattr(op, "shape", None)
-        dtype = getattr(op, "dtype", None)
-        facts.append(CardText(f"shape {tuple(shape) if shape else '?'} {dtype or ''}"))
-    return CardSection(
-        title=f"pass {pass_index}/{num_passes}: {label}",
-        children=tuple(facts),
-        folded=False,
-    )
-
-
-def _layer_proof(layer: Any) -> tuple[CardNode, ...]:
-    """PROOF row for a Layer card, read from the owning trace."""
-
-    trace = _trace_of(layer)
-    if trace is None:
-        return (CardText("capture facts unavailable (detached record)", role="muted"),)
-    return (_proof_section(trace),)
+    return layer_value_card(layer)
 
 
 def trace_card(trace: Any, *, root: str | None = None) -> Card:

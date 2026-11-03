@@ -1,0 +1,161 @@
+"""Resident-payload probes and bounded value facts for record displays."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .._utils._display_card import REPR_COLS
+from .._utils._display_text import tensor_text
+from .._utils.fail_open import fail_open
+
+NOT_SAVED = "(not saved)"
+FREED = "(freed)"
+METADATA_ONLY = "(metadata only)"
+LAZY_DISK = "(disk-backed: metadata only until read)"
+PREVIEW_BACKEND = "(preview backend: shape/dtype only)"
+EDITED = "(edited)"
+
+
+def _payload_state(op: Any) -> str:
+    """Return resident-now state without reading a materializing payload property."""
+
+    slot = getattr(op, "_slot", None)
+    if callable(slot):
+        if slot("out") is not None:
+            return "present"
+        if slot("out_ref") is not None:
+            return "lazy"
+        return "unsaved"
+    if getattr(op, "out_ref", None) is not None:
+        return "lazy"
+    return "present" if getattr(op, "has_saved_activation", False) else "unsaved"
+
+
+def _device(record: Any) -> Any:
+    """Read captured device metadata without touching a tensor payload."""
+
+    device = getattr(record, "device", None)
+    if device is None:
+        device = getattr(record, "device_ref", None)
+    return device
+
+
+def metadata_text(record: Any, tensor: Any = None) -> str:
+    """Full dtype, shape and captured device, or resident tensor metadata."""
+
+    source = tensor if tensor is not None else record
+    return tensor_text(
+        getattr(source, "dtype", None), getattr(source, "shape", None), _device(source)
+    )
+
+
+def _statistics(tensor: Any, *, compute: bool, identity: str | None) -> Any:
+    """Deferred door into the statistics layer; display failures remain cosmetic."""
+
+    from ..stats._record_values import record_stats
+
+    return fail_open(
+        lambda: record_stats(tensor, compute=compute, identity=identity), lambda _error: None
+    )
+
+
+def value_words(stats: Any, *, compact: bool = False, moments: bool = True) -> str:
+    """Pure record summary over existing evidence, never the glance sparkline."""
+
+    from ..stats._record_values import _summary, render_values
+
+    return (
+        _summary(stats, separator=" ", moments=moments)
+        if compact
+        else render_values(stats, moments=moments)
+    )
+
+
+def _health(stats: Any) -> str:
+    """Evidence that cannot be dropped for width."""
+
+    from ..stats._record_values import value_health
+
+    return value_health(stats)
+
+
+def payload_facts(record: Any) -> tuple[str, Any, str]:
+    """Return metadata, statistics and honesty for one resident output."""
+
+    import torch
+
+    state = _payload_state(record)
+    if state == "lazy":
+        return metadata_text(record), None, LAZY_DISK
+    if state == "unsaved":
+        note = (
+            " (saved at capture; no bytes here)"
+            if getattr(record, "has_saved_activation", False)
+            else ""
+        )
+        return metadata_text(record), None, NOT_SAVED + note
+    slot = getattr(record, "_slot", None)
+    payload = slot("out") if callable(slot) else fail_open(lambda: record.out, lambda _error: None)
+    if payload is None:
+        return metadata_text(record), None, FREED
+    if not isinstance(payload, torch.Tensor):
+        return metadata_text(record), None, PREVIEW_BACKEND
+    stats = _statistics(payload, compute=True, identity=getattr(record, "site_key", None))
+    return metadata_text(record, payload), stats, ""
+
+
+def edited_token(record: Any) -> str:
+    """Expose user interventions without presenting them as observed values."""
+
+    return (
+        EDITED
+        if getattr(record, "is_edited", False) or getattr(record, "edge_substitutions", None)
+        else ""
+    )
+
+
+def value_line(
+    head: str, metadata: str, stats: Any, honesty: str = "", facts: tuple[str, ...] = ()
+) -> str:
+    """Keep identity and honesty, then degrade moments before extrema at 100 columns."""
+
+    health = _health(stats)
+    required = " ".join(part for part in (metadata, honesty, health) if part)
+    base = f"{head}: " + ", ".join((required, *facts))
+    if stats is None:
+        suffix = ", values not computed" if not honesty else ""
+        return base + suffix if len(base + suffix) <= REPR_COLS else base
+    for summary in (
+        value_words(stats, compact=True),
+        value_words(stats, compact=True, moments=False),
+        "values in print()",
+    ):
+        line = f"{base}, {summary}"
+        if len(line) <= REPR_COLS:
+            return line
+    return base
+
+
+def payload_core(record: Any, *, identity: str | None = None, max_width: int | None = None) -> str:
+    """Compatibility door for record-only payload text; no glance grammar."""
+
+    metadata, stats, honesty = payload_facts(record)
+    return " ".join(
+        part for part in (metadata, honesty, _health(stats), value_words(stats)) if part
+    )
+
+
+def trace_of(record: Any) -> Any:
+    """Owning trace when reachable, including detached module records."""
+
+    trace = getattr(record, "_source_trace", None)
+    return (
+        trace if trace is not None else fail_open(lambda: record.source_trace, lambda _error: None)
+    )
+
+
+def resolve_record(record: Any, label: str) -> Any:
+    """Resolve one stored graph key without iterating or scanning a trace."""
+
+    trace = trace_of(record)
+    return fail_open(lambda: trace[label], lambda _error: None) if trace is not None else None

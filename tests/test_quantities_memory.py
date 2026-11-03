@@ -57,7 +57,7 @@ def test_bytes_formatting_and_numeric_behavior() -> None:
 
     assert isinstance(value, tl.types.Quantity)
     assert isinstance(value, int)
-    assert str(value) == "1.2 MB"
+    assert str(value) == "1.18 MiB"
     assert repr(tl.types.Bytes(32)) == "Bytes('32 B')"
     assert f"{value:raw}" == "1234567"
     assert f"{value:.2f MB}" == "1.18 MB"
