@@ -33,6 +33,16 @@ class UnencodableValue:
     at:
         Location of the value in the saved artifact: record kind, row index and
         column name, for example ``op[3].func_args``.
+
+    Examples
+    --------
+    >>> value = tl.types.UnencodableValue(
+    ...     type_name="socket.socket", repr_text="<socket.socket fd=3>", at="op[3].func_args"
+    ... )
+    >>> value.type_name
+    'socket.socket'
+    >>> value.at
+    'op[3].func_args'
     """
 
     type_name: str
