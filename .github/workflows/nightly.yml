@@ -1590,13 +1590,26 @@ jobs:
             floor: "7"
           # The docstring examples of the optional modules no other leg installs
           # (tests/test_docstring_examples.py OPTIONAL_EXAMPLE_MODULES): one cell per module.
-          - leg: examples
-            extras: "dev,neuro,treescope,mcp,lightning,hf,compat-shims,sae"
+          # Three legs, because pip does not resolve compat-shims or sae beside the
+          # others in one environment.
+          - leg: examples-neuro
+            extras: "dev,neuro,treescope,mcp,lightning"
             pkgs: "dagua"
             files: "tests/test_docstring_examples.py::test_optional_examples_run"
-            # rsatoolbox, xarray, treescope, mcp, lightning, timm, torchextractor,
-            # sentence_transformers, sae_lens and dagua.
-            floor: "10"
+            # rsatoolbox, xarray, treescope, mcp, lightning and dagua.
+            floor: "6"
+          - leg: examples-compat
+            extras: "dev,compat-shims"
+            pkgs: "timm"
+            files: "tests/test_docstring_examples.py::test_optional_examples_run"
+            # torchextractor, sentence_transformers and timm.
+            floor: "3"
+          - leg: examples-sae
+            extras: "dev,sae"
+            pkgs: ""
+            files: "tests/test_docstring_examples.py::test_optional_examples_run"
+            # sae_lens.
+            floor: "1"
           # Brain-Score conflicts with [neuro] (docs/reference/neuro.md), so its two
           # example modules get their own leg.
           - leg: brainscore
