@@ -4784,7 +4784,7 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `Trace.__enter__` | Context-manager entry; returns the Trace itself so `with trace:` binds the same object |
-| `Trace.__exit__` | Context-manager exit; calls `Trace.remove`, detaching the most recent single-hook `do` attachment |
+| `Trace.__exit__` | Context-manager exit; detaches the sticky hooks the last `do()` inside the scope staged |
 | `Trace.annotate` | Attach user-owned annotation data or an image to the graph nodes picked by a selector |
 | `Trace.archived_activations` | Mapping of label to inspection-only activation payloads from a runnable archive |
 | `Trace.attention_blocks` | Yield the Modules that have an available query-projection facet |
