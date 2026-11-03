@@ -5,8 +5,8 @@ DOCUMENTED-UNSTABLE pending the naming session):
 
 - `repr(x)` is ONE nestable line: a provenance **envelope** around a
   byte-stable numeric **core**.
-- `str(x)` is a bounded card (at most 8 lines) whose **first line is the
-  repr**; every card names its exits on a `More:` line.
+- `str(x)` is a bounded card with at most ten body rows (twelve for a
+  Trace). Its **first line is the repr**; the `more` row names its exits.
 - Containers point, records show: collection reprs are one-line
   composition cards (`LayerAccessor: 553 layers (539 ops, 14 buffers)`),
   with at most five members and `.head()`, `.search()` and `.to_pandas()`
@@ -69,12 +69,13 @@ First non-finite saved out is in layer truediv_1_4 (op __truediv__, ...), shape=
 dtype=torch.float32, parents=relu_1_2, sub_1_3, source=<file>:14.
 >>> _ = log.health_facts
 >>> log
-Trace _poisoned_1: _Poisoned, 7 layers, NaN/Inf FOUND (.nonfinite_ops)
+Trace _poisoned_1: _Poisoned, 7 layers, 5 ops, NaN/Inf FOUND (.nonfinite_ops)
 ```
 
 The flag says there was a crime; TorchLens hands you the crime scene --
-in the same one-line language as the health report. Trace rendering reads cached health evidence and never scans tensors. Until
-health has been checked it says `NaN/Inf not checked`. A clean, fully
+in the same one-line language as the health report. Trace rendering reads
+cached health evidence and never scans tensors. Until health has been
+checked it says `NaN/Inf not checked`. A clean, fully
 checked capture carries the per-trace proof
 `no NaN/Inf (exact)`.
 

@@ -96,9 +96,8 @@ torchlens/_data_classes/cleanup.py::cleanup	137
 torchlens/_data_classes/container.py	1176
 torchlens/_data_classes/field_policy.py::build_record_field_policy_table	68
 torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
-torchlens/_data_classes/grad_fn.py	840
+torchlens/_data_classes/grad_fn.py	837
 torchlens/_data_classes/interface.py::_getitem_after_pass	121
-torchlens/_data_classes/interface.py::_str_after_pass	63
 torchlens/_data_classes/layer.py	1810
 torchlens/_data_classes/module.py	2626
 torchlens/_data_classes/module.py::Module.__init__	210
@@ -111,7 +110,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	66
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1082
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3477
+torchlens/_data_classes/trace.py	3471
 torchlens/_data_classes/trace.py::Trace.__init__	364
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
@@ -228,7 +227,7 @@ torchlens/_io/runnable.py::_build_call_arguments	68
 torchlens/_io/runnable.py::_build_control_witnesses	129
 torchlens/_io/runnable.py::_build_input_boundary	104
 torchlens/_io/runnable.py::_build_op_slot_drafts	86
-torchlens/_io/runnable.py::_encode_literal	88
+torchlens/_io/runnable.py::_encode_literal	87
 torchlens/_io/runnable.py::_escape_witnesses	292
 torchlens/_io/runnable.py::_host_escape_source_labels	71
 torchlens/_io/runnable.py::_input_binding_for_op	79
@@ -261,10 +260,10 @@ torchlens/_io/runnable_load.py::_validate_structural_witness_discharge	77
 torchlens/_io/runnable_load.py::_validate_terminal_slot_totality	66
 torchlens/_io/runnable_load.py::_verify_runtime_fingerprints	70
 torchlens/_io/runnable_load.py::attach_sparse_run_readiness	178
-torchlens/_io/runnable_load.py::parse_sparse_run_descriptor	111
+torchlens/_io/runnable_load.py::parse_sparse_run_descriptor	109
 torchlens/_io/runnable_load.py::preflight_sparse_run_descriptor	110
 torchlens/_io/save_policy.py::_resolve_include_flags	101
-torchlens/_io/scrub.py	1945
+torchlens/_io/scrub.py	1944
 torchlens/_io/scrub.py::_effective_policy	79
 torchlens/_io/scrub.py::_is_runtime_only_trace_field	67
 torchlens/_io/scrub.py::_rebuild_tuple_value	67
@@ -294,8 +293,8 @@ torchlens/_ir/container.py::reconstruction_is_lossy_by_type	90
 torchlens/_ir/container_registry.py	944
 torchlens/_ir/container_registry.py::ContainerRegistry.register_snapshot	73
 torchlens/_ir/container_registry.py::_build_container_spec_unguarded	81
-torchlens/_ir/op_record.py	1081
-torchlens/_ir/op_record.py::op_record_from_event	144
+torchlens/_ir/op_record.py	1078
+torchlens/_ir/op_record.py::op_record_from_event	143
 torchlens/_ir/op_record_scatter.py::scatter_record_to_cells	202
 torchlens/_ir/selector_eval.py	1676
 torchlens/_kernel_telemetry.py::_payload_from_events	86
@@ -483,7 +482,7 @@ torchlens/_snoop/_stats.py::sampled_stats	67
 torchlens/_state.py	1393
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
-torchlens/_trace_core/op_store.py	1907
+torchlens/_trace_core/op_store.py	1906
 torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
 torchlens/_trace_core/op_store.py::_evict_payloads_in_cell	72
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	140
