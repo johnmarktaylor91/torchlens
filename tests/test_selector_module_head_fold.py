@@ -2,7 +2,7 @@
 
 Walk ruling RC-252: composing a module selector with a head (facet) selector,
 in either order, must mean what ``tl.head(i).in_module(address)`` means wherever
-a selector is accepted: ``trace[sel]``, ``tl.when``, ``do`` and ``attach_hooks``.
+a selector is accepted: ``trace[sel]``, ``tl.when``, ``do`` and ``_attach_hooks``.
 The attention block is the two-head ``MultiHeadSelfAttention`` of the SAE
 multi-call tests, called once here so module scoping is unambiguous.
 """
@@ -98,7 +98,7 @@ def test_folded_selector_writes_at_attach_hooks_and_do() -> None:
 
     hooked = clean.fork("hooked")
     folded_codes = _fanout_codes(
-        lambda: hooked.attach_hooks(tl.module("attn") & tl.head(1), tl.zero_ablate())
+        lambda: hooked._attach_hooks(tl.module("attn") & tl.head(1), tl.zero_ablate())
     )
     hooked.run(model, x)
     assert torch.count_nonzero(hooked.modules["attn"].facets.head(1).q) == 0
@@ -106,7 +106,7 @@ def test_folded_selector_writes_at_attach_hooks_and_do() -> None:
 
     explicit = clean.fork("explicit")
     explicit_codes = _fanout_codes(
-        lambda: explicit.attach_hooks(tl.head(1).in_module("attn"), tl.zero_ablate())
+        lambda: explicit._attach_hooks(tl.head(1).in_module("attn"), tl.zero_ablate())
     )
     explicit.run(model, x)
     assert torch.equal(_output(hooked), _output(explicit))
