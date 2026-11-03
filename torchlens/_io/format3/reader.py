@@ -611,8 +611,8 @@ _HOOK_KINDS: Final = frozenset({"trace", "bundle", "recipe"})
 _TEMPLATE_SLOTS: Final = {
     f"forward_{k}_template": f"_forward_{k}_template" for k in ("args", "kwargs")
 }
+# ``module`` derives its templates from its first call; only ``module_call`` keeps a slot.
 _RESTORED_COMPUTED: Final[dict[str, dict[str, str]]] = {
-    "module": _TEMPLATE_SLOTS,
     "module_call": _TEMPLATE_SLOTS,
     "op": {"arg_expressions": "_arg_expressions_cache"},
 }
