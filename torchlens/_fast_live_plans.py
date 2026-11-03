@@ -60,6 +60,7 @@ __all__ = [
     "build_module_plans",
     "collected_function_output",
     "install_collection_hooks",
+    "install_session_hooks",
     "recorded_module_call_counts",
     "repeats_last_function_output",
     "require_distinct_plan_modules",
