@@ -673,7 +673,7 @@ torchlens/agent/_registry.py::_handle_payload_stats	64
 torchlens/agent/_registry.py::tool_specs	271
 torchlens/agent/_stats.py::_reduced_rows	85
 torchlens/agent/_stats.py::payload_stats_rows	136
-torchlens/agent/cli.py::_build_parser	71
+torchlens/agent/cli.py::_build_parser	63
 torchlens/appliances/_appliances.py::register	75
 torchlens/attribution/_binder.py::_bind_method	141
 torchlens/attribution/_cam.py::grad_cam	157
