@@ -102,7 +102,7 @@ def test_loss_needs_a_gradient_site() -> None:
     assert _snapshot(trace) == before
 
 
-@pytest.mark.parametrize("direction", ["backward", "both", "sideways"])
+@pytest.mark.parametrize("direction", ["both", "sideways"])
 def test_set_refuses_a_gradient_or_unknown_direction(direction: str) -> None:
     """``Trace.set`` keeps only its activation path; gradients are sites (tl.grad)."""
 

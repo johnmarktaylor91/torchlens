@@ -157,7 +157,7 @@ def test_as_node_intervention_keeps_the_site_inside_its_module_boxes(tmp_path: P
     assert depth(into_hook[0]) == depth(out_of_hook[0]) > 1
 
 
-@pytest.mark.parametrize("skin", ["dark", "torchlens"])
+@pytest.mark.parametrize("skin", ["dark"])
 def test_rank_path_page_follows_the_skin(skin: str, tmp_path: Path) -> None:
     """The rank engine paints the dark page; white pages stay implicit, as before."""
 

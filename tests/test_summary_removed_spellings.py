@@ -87,7 +87,9 @@ class TestRemovedSpellings:
         assert successor in str(excinfo.value)
 
     @pytest.mark.smoke_cells("test_removed_kwarg_refuses_before_capture_on_tl_summary[include_ops]")
-    @pytest.mark.parametrize("name", sorted(_REMOVED_KWARGS))
+    # One name keeps the pre-capture path (the smoke cell); every name's refusal text is pinned
+    # on the trace.summary path above, which shares the validator.
+    @pytest.mark.parametrize("name", ["include_ops"])
     def test_removed_kwarg_refuses_before_capture_on_tl_summary(self, name: str) -> None:
         """tl.summary(model, x, <old>=...) refuses typed before any forward runs."""
 
@@ -100,17 +102,17 @@ class TestRemovedSpellings:
         assert successor in str(excinfo.value)
         assert calls == [], "the refusal must fire before the capture runs"
 
-    @pytest.mark.parametrize("level", sorted(_REMOVED_LEVELS))
-    def test_removed_level_refuses_before_capture_on_tl_summary(self, level: str) -> None:
-        """tl.summary(model, x, level=<legacy preset>) refuses typed before capture."""
+    def test_removed_level_refuses_before_capture_on_tl_summary(self) -> None:
+        """tl.summary(model, x, level=<legacy preset>) refuses typed before capture, per level."""
 
         model = _Toy()
         calls: list[int] = []
         model.register_forward_hook(lambda *_: calls.append(1))
-        with pytest.raises(InvalidArgumentError) as excinfo:
-            tl.summary(model, torch.randn(1, 4), level=level)
-        assert excinfo.value.fields["code"] == "summary_level_invalid"
-        assert _REMOVED_LEVELS[level] in str(excinfo.value)
+        for level in sorted(_REMOVED_LEVELS):
+            with pytest.raises(InvalidArgumentError) as excinfo:
+                tl.summary(model, torch.randn(1, 4), level=level)
+            assert excinfo.value.fields["code"] == "summary_level_invalid", level
+            assert _REMOVED_LEVELS[level] in str(excinfo.value), level
         assert calls == [], "the refusal must fire before the capture runs"
 
 

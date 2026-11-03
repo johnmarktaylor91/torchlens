@@ -437,9 +437,15 @@ _ZOO: list[tuple[str, Callable[[], nn.Module]]] = [
 ]
 
 
-@pytest.mark.parametrize(("name", "factory"), _ZOO, ids=[name for name, _ in _ZOO])
-def test_no_escape_and_no_side_effects(name: str, factory: Callable[[], nn.Module]) -> None:
-    """on_failure='return' never raises and never mutates the caller's model."""
+def test_no_escape_and_no_side_effects() -> None:
+    """on_failure='return' never raises and never mutates the caller's model, for every zoo model."""
+
+    for _name, factory in _ZOO:
+        _check_no_escape_and_no_side_effects(factory)
+
+
+def _check_no_escape_and_no_side_effects(factory: Callable[[], nn.Module]) -> None:
+    """One zoo model: a report comes back, its shape is sane, and the model is untouched."""
 
     model = factory()
     snapshot = _state_snapshot(model)

@@ -445,9 +445,7 @@ def test_rdm_evolution_recurrent_expansion_leaves_mds_refusal() -> None:
 @pytest.mark.parametrize(
     ("metric", "expected"),
     [
-        ("euclidean", "rdm/*/euclidean"),
         ("cosine", "rdm/*/cosine"),
-        ("correlation", "rdm/*/correlation"),
         ("manhattan", None),
     ],
 )

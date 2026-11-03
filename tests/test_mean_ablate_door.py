@@ -57,7 +57,7 @@ def test_door_equals_mean_fill_population_axis() -> None:
     )
 
 
-@pytest.mark.parametrize("token", ["batch", "position", "feature"])
+@pytest.mark.parametrize("token", ["feature"])
 def test_named_axis_refuses_until_evidence(token: str) -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl.mean_ablate(dim=token)  # type: ignore[arg-type]

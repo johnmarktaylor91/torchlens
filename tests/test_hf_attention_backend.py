@@ -143,10 +143,16 @@ def _assert_matches_reference(recorded: torch.Tensor, call: dict[str, Any], keep
     assert torch.count_nonzero(recorded[masked]) == 0
 
 
-@pytest.mark.parametrize("mask_case", MASKS)
-@pytest.mark.parametrize("family", sorted(FAMILIES))
-def test_output_matches_sdpa(family: str, mask_case: str) -> None:
-    """Every call passes the SDPA check; model output equals the sdpa backend."""
+def test_output_matches_sdpa() -> None:
+    """Every call passes the SDPA check; model output equals the sdpa backend (every family x mask)."""
+
+    for family in sorted(FAMILIES):
+        for mask_case in MASKS:
+            _check_output_matches_sdpa(family, mask_case)
+
+
+def _check_output_matches_sdpa(family: str, mask_case: str) -> None:
+    """One family and mask case: SDPA-checked calls and output parity with the sdpa backend."""
 
     model = _build(family, "sdpa")
     batch = _inputs(mask_case)

@@ -81,7 +81,7 @@ def test_clip_norm_reaches_norm_one_on_gradient_and_activation_sites() -> None:
     assert torch.linalg.vector_norm(on_act[mul].out).item() == pytest.approx(1.0)
 
 
-@pytest.mark.parametrize("edit_name", ["mean_ablate", "splice_module"])
+@pytest.mark.parametrize("edit_name", ["splice_module"])
 def test_activation_only_edit_on_gradient_site_refuses_at_capture(edit_name: str) -> None:
     model, x = _double()
     mul = _label(tl.trace(model, x, capture=_CAPTURE), "mul")

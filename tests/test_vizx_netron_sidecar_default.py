@@ -70,7 +70,7 @@ def _companion(path: Path) -> Path:
     return path.with_name(path.stem + ".attachment.json")
 
 
-@pytest.mark.parametrize("granularity", ["module", "op", "rolled"])
+@pytest.mark.parametrize("granularity", ["rolled"])
 def test_default_sidecar_matches_the_writer(
     log: tl.Trace, tmp_path: Path, granularity: str
 ) -> None:

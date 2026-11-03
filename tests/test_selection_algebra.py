@@ -244,12 +244,24 @@ _EMPTINESS_BUILDERS = {
 }
 
 
-@pytest.mark.parametrize("left_kind,right_kind", [("ACT", "ACT"), ("PARAM", "PARAM")])
-@pytest.mark.parametrize("operator", ["or", "and", "sub"])
-@pytest.mark.parametrize("left_state", ["no_sites", "element_empty", "nonempty"])
-@pytest.mark.parametrize("right_state", ["no_sites", "element_empty", "nonempty"])
-def test_totality_same_kind_cells(log, left_kind, right_kind, operator, left_state, right_state):
-    """Every same-kind cell composes legally (empties first-class, disclosed)."""
+_STATES = ("no_sites", "element_empty", "nonempty")
+
+
+def test_totality_same_kind_cells(log):
+    """Every same-kind cell composes legally (empties first-class, disclosed).
+
+    One test over all 54 cells (kind x operator x left state x right state); the per-cell
+    parametrization was folded because a few cells carry all the branch coverage.
+    """
+
+    for kind, operator, left_state, right_state in itertools.product(
+        ("ACT", "PARAM"), ("or", "and", "sub"), _STATES, _STATES
+    ):
+        _check_same_kind_cell(log, kind, kind, operator, left_state, right_state)
+
+
+def _check_same_kind_cell(log, left_kind, right_kind, operator, left_state, right_state):
+    """Compose one same-kind cell and check the family rule for its operator."""
 
     left = _EMPTINESS_BUILDERS[(left_kind, left_state)](log)
     right = _EMPTINESS_BUILDERS[(right_kind, right_state)](log)
@@ -268,10 +280,15 @@ def test_totality_same_kind_cells(log, left_kind, right_kind, operator, left_sta
         assert _family(composed) == _family(left)
 
 
-@pytest.mark.parametrize("operator", ["or", "and", "sub"])
-@pytest.mark.parametrize("resolved_state", ["query", "resolved"])
-def test_totality_mixed_kind_cells_refuse(log, operator, resolved_state):
-    """ACT x PARAM refuses typed at both query and resolved levels."""
+def test_totality_mixed_kind_cells_refuse(log):
+    """ACT x PARAM refuses typed at both query and resolved levels, for every operator."""
+
+    for operator, resolved_state in itertools.product(("or", "and", "sub"), ("query", "resolved")):
+        _check_mixed_kind_cell(log, operator, resolved_state)
+
+
+def _check_mixed_kind_cell(log, operator, resolved_state):
+    """One mixed-kind cell refuses with selection_kind_incompatible naming both kinds."""
 
     act = tl.units("relu_1_2", [(0, 0, 1, 1)])
     param = tl.param("c1.weight")
@@ -353,14 +370,14 @@ _JOIN_EXPECTED = {
 }
 
 
-@pytest.mark.parametrize("a,b", list(itertools.product(_RELATIONS, _RELATIONS)))
-def test_join_table_all_cells(a, b):
+def test_join_table_all_cells():
     """JOIN is symmetric with exact as identity — every cell pinned."""
 
-    expected = _JOIN_EXPECTED.get((a, b)) or _JOIN_EXPECTED[(b, a)]
-    assert _join_relation(a, b) == expected
-    assert _join_relation(b, a) == expected
-    assert _meet_relation(a, b) == expected  # meet lattice coincides
+    for a, b in itertools.product(_RELATIONS, _RELATIONS):
+        expected = _JOIN_EXPECTED.get((a, b)) or _JOIN_EXPECTED[(b, a)]
+        assert _join_relation(a, b) == expected, (a, b)
+        assert _join_relation(b, a) == expected, (b, a)
+        assert _meet_relation(a, b) == expected, (a, b)  # meet lattice coincides
 
 
 _DIFFERENCE_EXPECTED = {
@@ -383,11 +400,11 @@ _DIFFERENCE_EXPECTED = {
 }
 
 
-@pytest.mark.parametrize("a,b", list(itertools.product(_RELATIONS, _RELATIONS)))
-def test_difference_table_all_cells_both_orders(a, b):
-    """DIFFERENCE is ordered flip-first: rel(A-B) = join(rel(A), FLIP(rel(B)))."""
+def test_difference_table_all_cells_both_orders():
+    """DIFFERENCE is ordered flip-first: rel(A-B) = join(rel(A), FLIP(rel(B))), every cell."""
 
-    assert _difference_relation(a, b) == _DIFFERENCE_EXPECTED[(a, b)]
+    for a, b in itertools.product(_RELATIONS, _RELATIONS):
+        assert _difference_relation(a, b) == _DIFFERENCE_EXPECTED[(a, b)], (a, b)
 
 
 # ---------------------------------------------------------------------------

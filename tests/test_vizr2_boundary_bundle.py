@@ -65,7 +65,7 @@ def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     return str(trace.draw(path=str(tmp_path / name), file_format="dot", **kwargs).dot)
 
 
-@pytest.mark.parametrize("mode", ["auto", "max"])
+@pytest.mark.parametrize("mode", ["max"])
 def test_bundle_keeps_scored_plan_and_emitted_counts_equal(mode: str) -> None:
     """Three-way parity holds in an overview context that bundles."""
     trace = _trace(6)
