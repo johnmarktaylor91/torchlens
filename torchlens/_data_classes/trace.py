@@ -2768,46 +2768,10 @@ class Trace(TraceLike):
             self, site, value, direction=direction, strict=strict, confirm_mutation=confirm_mutation
         )
 
-    def attach_hooks(
-        self,
-        hooks_or_site: Any,
-        hook: Any = None,
-        *extra_hooks: Any,
-        strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to the current intervention spec."""
-
-        return _doors.intervention()._trace_hooks.attach_hooks(
-            self,
-            hooks_or_site,
-            hook,
-            *extra_hooks,
-            strict=strict,
-            prepend=prepend,
-            confirm_mutation=confirm_mutation,
-        )
-
     def _refuse_chunked_batch_coupling(self, entries: list[Any]) -> None:
         """Forward to ``_doors.intervention()._edit_guards.refuse_chunked_batch_coupling``."""
 
         return _doors.intervention()._edit_guards.refuse_chunked_batch_coupling(self, entries)
-
-    def remove(self) -> None:
-        """Remove the most recent legacy-returned hook attachment."""
-
-        return _doors.intervention()._trace_edits.remove(self)
-
-    def __enter__(self) -> "Trace":
-        """Enter a legacy scoped hook attachment."""
-
-        return self
-
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
-        """Clean up a legacy scoped hook attachment."""
-
-        self.remove()
 
     def clear_edits(
         self,
@@ -3140,14 +3104,6 @@ class Trace(TraceLike):
         """Whether nothing ever intervened on this trace, read from its saved evidence."""
 
         return derive_pristine(self)
-
-    def push(self, replay: "ReplayOptions | None" = None) -> "Trace":
-        """Push the edit downstream through the recorded graph (DAG replay)."""
-        return _doors.intervention()._trace_run.push(self, replay=replay)
-
-    def push_from(self, site: Any, replay: "ReplayOptions | None" = None) -> "Trace":
-        """Push downstream from a pre-mutated site."""
-        return _doors.intervention()._trace_run.push_from(self, site, replay=replay)
 
     def run(
         self,

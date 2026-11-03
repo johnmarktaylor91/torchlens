@@ -38,7 +38,7 @@ from .spec import (
 )
 
 
-def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved method
+def attach_sticky_hooks(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     hooks_or_site: Any,
     hook: Any = None,
@@ -47,7 +47,7 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
     prepend: bool = False,
     confirm_mutation: bool = False,
 ) -> Any:
-    """Attach sticky hooks to the current intervention spec. (the ``Trace.attach_hooks`` body)."""
+    """Attach sticky hooks to the current intervention spec (the staging half of ``Trace.do``)."""
 
     warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
     if isinstance(hooks_or_site, PublicInterventionSpec):
@@ -56,7 +56,7 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
         # arguments have nothing sound to bind to.
         if hook is not None or extra_hooks:
             raise InvalidArgumentError(
-                "attach_hooks(spec) takes the InterventionSpec alone: its "
+                "do(spec) takes the InterventionSpec alone: its "
                 "rules already carry the site and action, so extra hook "
                 "arguments have nothing to bind to",
                 code="spec_door_extra_arguments",
@@ -64,7 +64,7 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
                 "merge them), or use the (site, hook) call shape without a spec",
                 argument="hooks_or_site",
             )
-        entries = entries_from_spec(hooks_or_site, door="attach_hooks")
+        entries = entries_from_spec(hooks_or_site, door="do")
     elif extra_hooks:
         if hook is None:
             raise HookSignatureError("extra hooks require an initial hook argument.")

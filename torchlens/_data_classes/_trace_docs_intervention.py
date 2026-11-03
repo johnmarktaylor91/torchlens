@@ -80,74 +80,6 @@ DOCS: dict[str, str] = {
             This model log, with a stale intervention recipe.
         """
     ),
-    "attach_hooks": (
-        """Attach sticky hooks to the current intervention spec.
-        
-        The site decides which tensor a hook sees: a bare site mounts on the
-        activation, ``tl.grad(site)`` on the gradient of the site's output
-        (fired by ``trace.backward(loss)``), and ``tl.grad(site) | site`` on
-        both. Attaching is registration only: nothing runs until the next
-        forward (activation hooks) or backward (gradient hooks).
-        
-        Raw PyTorch ``register_forward_hook`` remains supported for users who
-        need module-local replacement logic outside this API; during active
-        TorchLens captures, returned replacement tensors are instrumented so the
-        graph can continue through downstream ops.
-        
-        Parameters
-        ----------
-        hooks_or_site:
-            Mapping/list batch input or selector-like site.
-        hook:
-            Optional hook for the ``(site, hook)`` input shape.
-        *extra_hooks:
-            Additional hooks to compose at ``hooks_or_site`` in left-to-right order.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        prepend:
-            Whether new sticky hooks should run before existing sticky hooks.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
-        
-        Returns
-        -------
-        Any
-            Scoped removable hook handle.
-        """
-    ),
-    "remove": (
-        """Remove the most recent legacy-returned hook attachment.
-        
-        Returns
-        -------
-        None
-            Hook specs attached by the last single-hook ``attach_hooks`` call
-            are detached.
-        """
-    ),
-    "__enter__": (
-        """Enter a legacy scoped hook attachment.
-        
-        Returns
-        -------
-        Trace
-            This log, acting as the most recent hook handle.
-        """
-    ),
-    "__exit__": (
-        """Clean up a legacy scoped hook attachment.
-        
-        Parameters
-        ----------
-        exc_type:
-            Exception type, if the body raised.
-        exc:
-            Exception value, if the body raised.
-        traceback:
-            Exception traceback, if the body raised.
-        """
-    ),
     "clear_edits": (
         """Detach sticky hooks by site or handle.
         
@@ -197,12 +129,20 @@ DOCS: dict[str, str] = {
         this trace instead. Replay re-executes forward ops only and refuses a
         gradient edit (``replay_gradient_edit_unsupported``).
         
+        ``do`` is the one editing verb on a trace. A non-callable value sets
+        the site and propagates it; a hook or helper is attached as a sticky
+        rule and propagated; a mapping of sites to edits applies several edits
+        in one propagation; an ``InterventionSpec`` applies its rules.
+        ``InterventionOptions(engine="set_only")`` stages without
+        propagating, and ``InterventionOptions(differentiable=True)`` replays
+        onto a new fork whose outputs stay differentiable.
+        
         Parameters
         ----------
         hooks_or_site:
             Mapping/list batch input or selector-like site.
         value_or_hook:
-            Optional hook for the ``(site, hook)`` input shape.
+            Optional value, hook or helper for the ``(site, edit)`` input shape.
         model:
             Model required when ``engine="rerun"``.
         inputs:
@@ -210,7 +150,8 @@ DOCS: dict[str, str] = {
         intervention:
             Grouped intervention options (``InterventionOptions``: ``engine``
             in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``,
-            ``confirm_mutation``, ``strict``).
+            ``confirm_mutation``, ``strict``, ``allow_changed_params``,
+            ``differentiable``).
         loss:
             Callable of the returned trace giving a scalar loss, for a plan
             with a gradient site: after arming, the door runs

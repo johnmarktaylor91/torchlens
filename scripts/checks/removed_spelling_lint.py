@@ -64,14 +64,15 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
         r"|ModuleInputSnapshot|PreHookEffect|TensorInputObservation|TraceState"
         r"|SaveLevel|zero_grad|scale_grad|clamp_grad|add_grad_noise|clip_grad|hook_grad)\b"
     ),
-    # Removed Trace/Bundle method spellings (canonical: push/push_from/run/
-    # span/conditional_arm_entry_edges). ``validate_saved_outs`` is absent on
+    # Removed Trace/Op/Layer/Bundle method spellings (canonical: do/run/
+    # span/conditional_arm_entry_edges; push, push_from and attach_hooks
+    # folded into do). ``validate_saved_outs`` is absent on
     # purpose: the INTERNAL ``validation.core.validate_saved_outs`` keeps the
     # name (its zero-reference ``validate_trace_saved_outs`` rename re-export
     # was deleted by the F38 punch list); only the top-level spelling was
     # removed, and the ``tl_moved`` row covers it.
     "methods": re.compile(
-        r"\.(?:replay|replay_from|rerun|record_span"
+        r"\.(?:replay|replay_from|rerun|record_span|push|push_from|attach_hooks"
         r"|conditional_then_entry_edges|conditional_elif_entry_edges"
         r"|conditional_else_entry_edges"
         r"|resolve_sites|by_operator|by_module|by_module_and_operator)\s*\("

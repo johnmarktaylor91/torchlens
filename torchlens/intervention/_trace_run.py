@@ -1,6 +1,6 @@
 """Trace run and push functions reached from the records through ``_data_classes._doors.intervention``.
 
-``Trace.run``, ``Trace.push``, ``Trace.push_from`` and ``Trace.disarm_triggers`` are the thin methods;
+``Trace.run`` and ``Trace.disarm_triggers`` are the thin methods;
 the ``_runnable`` / ``_fast_run`` / ``_fast_live_steer`` dispatch lives here.
 """
 
@@ -54,7 +54,7 @@ from .._runnable.state import validate_run_seed
 from .._runnable.transaction import _LiveRunOptions, _resolve_run_save_labels
 from .._runnable.verification import _run_fork_name
 from .._trace_state import TraceState
-from ..backends.torch._trace_backward import _refuse_stats_capture, _require_live_replay
+from ..backends.torch._trace_backward import _refuse_stats_capture
 from ..backends.torch.backward import disarm_triggers as _disarm_triggers_impl
 from ..errors import (
     PathDivergenceError,
@@ -66,7 +66,6 @@ from ..options import ReplayOptions, merge_replay_options
 from ._intervened_rerun_guard import refuse_unpersisted_intervention_rerun
 from ._zero_fire import check_zero_fire_policy, zero_fire_policy_scope
 from .errors import EngineDispatchError, PendingValueEditsWarning
-from .replay import push as _push_impl, push_from as _push_from_impl
 from .rerun import run as _rerun_impl
 
 if TYPE_CHECKING:
@@ -74,8 +73,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "disarm_triggers",
-    "push",
-    "push_from",
     "run",
 ]
 
@@ -293,8 +290,8 @@ def _warn_pending_value_edits_on_new_input_run(
     """Disclose that value-edits on this trace do not apply to a new-input run.
 
     There are two legitimate intervention paths: (1) edit a SAVED value and
-    push the effect downstream on the captured DAG (``do()``/``push_from``/
-    direct writes), and (2) intervene on a FRESH execution (``engine="rerun"``
+    push the effect downstream on the captured DAG (``do()`` or direct
+    writes), and (2) intervene on a FRESH execution (``engine="rerun"``
     with a model and input, or a new capture with ``intervene=``). A
     ``run(inputs=...)`` on a trace carrying path-1 edits is a fresh execution:
     the edits say nothing about the new inputs, so the run is coherent but the
@@ -346,33 +343,6 @@ def _warn_pending_value_edits_on_new_input_run(
         # 4: this helper, run(), the thin Trace.run shell, then the caller's site.
         stacklevel=4,
     )
-
-
-def push(
-    trace: Trace,
-    replay: ReplayOptions | None = None,
-) -> Trace:
-    """Body of ``Trace.push``; the method carries the documented contract."""
-
-    _require_live_replay(trace)
-    replay_options = merge_replay_options(replay=replay)
-
-    return _push_impl(trace, replay=replay_options)
-
-
-def push_from(
-    trace: Trace,
-    site: Any,
-    replay: ReplayOptions | None = None,
-) -> Trace:
-    """Body of ``Trace.push_from``; the method carries the documented contract."""
-
-    require_capture_capability(trace, "live_replay")
-    require_structure_only_capability(trace, "live_replay")
-    _refuse_stats_capture(trace, "live_replay")
-    replay_options = merge_replay_options(replay=replay)
-
-    return _push_from_impl(trace, site, replay=replay_options)
 
 
 def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call shape; the fold removes the duplicate site)

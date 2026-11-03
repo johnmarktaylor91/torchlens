@@ -21,10 +21,14 @@ import uuid
 import warnings
 from collections.abc import Collection
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from .._errors import InvalidArgumentError
 from .._io.manifest import TensorEntry
 from .._io.tlspec import _TlSpecWriter
+from .._ir.selector_eval import selector_from_spec
+from .._selection.selector_base import BaseSelector
+from .._selection.selectors import where
 from ._spec_codec import (
     _SPEC_FILE,
     TLSPEC_FORMAT_VERSION,
@@ -55,12 +59,112 @@ from .save import (
     _write_tensor_sidecars,
     _write_text_file,
 )
-
-if TYPE_CHECKING:
-    from .spec import Recipe
+from .spec import Recipe, Rule
 
 #: Name of the rule-list object inside ``spec.json`` for a recipe artifact.
 _RECIPE_KEY = "recipe"
+
+
+def _write_recipe_manifest(
+    *,
+    path: Path,
+    recipe: Recipe,
+    spec_json: dict[str, Any],
+    tensor_entries: list[TensorEntry],
+    legacy_format_version: str,
+    save_level: str,
+) -> None:
+    """Write the unified manifest of a standalone recipe (``kind: "recipe"``).
+
+    The recipe carries no model and no sites, so the manifest's model fields
+    describe the recipe class itself; ``save_level`` is the public-schema save
+    level and ``legacy_format_version`` the intervention codec version.
+    """
+
+    if save_level == "runnable":
+        raise InvalidArgumentError(
+            "Recipe artifacts do not support save_level='runnable': a recipe "
+            "carries no model to run",
+            code="artifact_save_level_unsupported",
+            remedy="use 'audit', 'executable_with_callables', or 'portable'",
+            artifact_kind="recipe",
+        )
+    compat = {
+        "format_version": spec_json.get("format_version"),
+        "helper_registry_version": spec_json.get("helper_registry_version"),
+        "executable": bool(spec_json.get("executable", False)),
+        "digest": spec_json.get("digest"),
+    }
+    manifest = {
+        "format_version": legacy_format_version,
+        "tensor_entries": [entry.to_dict() for entry in tensor_entries],
+    }
+    manifest.update(
+        _TlSpecWriter.build_manifest(
+            kind="recipe",
+            source=recipe,
+            tensor_entries=tensor_entries,
+            save_level=save_level,
+            spec_compat_info=compat,
+            intervention_compat_metadata=None,
+        )
+    )
+    _TlSpecWriter.write_json(path, manifest)
+
+
+def _write_recipe_tree(
+    tmp_path: Path,
+    recipe: Recipe,
+    save_level: SaveLevel,
+    state: _SerializedState,
+    tensor_entries: list[TensorEntry],
+) -> None:
+    """Fill the temporary ``.tlspec`` directory: tensors, spec, manifest, README, fsync."""
+
+    tmp_path.mkdir(parents=True)
+    (tmp_path / _TENSOR_DIR).mkdir()
+    rules = [_serialize_rule(rule, save_level, state) for rule in recipe.rules]
+    _write_tensor_sidecars(tmp_path, state.tensor_refs, tensor_entries, write_tensor_blob_fn=None)
+    payload = {_RECIPE_KEY: {"rules": rules}}
+    spec_json = {
+        "format_version": TLSPEC_FORMAT_VERSION,
+        "helper_registry_version": HELPER_REGISTRY_VERSION,
+        "save_level": save_level.value,
+        "executable": save_level != SaveLevel.AUDIT and not _spec_has_opaque(payload),
+        "helpers": _collect_helpers(payload),
+        "digest": recipe.digest,
+        **payload,
+    }
+    _write_json_file(tmp_path / _SPEC_FILE, spec_json)
+    _write_recipe_manifest(
+        path=tmp_path / _MANIFEST_FILE,
+        recipe=recipe,
+        spec_json=spec_json,
+        tensor_entries=tensor_entries,
+        legacy_format_version=TLSPEC_FORMAT_VERSION,
+        save_level=save_level.value,
+    )
+    _write_text_file(tmp_path / _README_FILE, _readme_text(spec_json, tensor_entries))
+    _fsync_directory(tmp_path / _TENSOR_DIR)
+    _fsync_directory(tmp_path)
+
+
+def _restore_after_failed_save(tmp_path: Path, target_path: Path, backup_path: Path | None) -> None:
+    """Drop the half-written tree and put a displaced previous recipe back."""
+
+    if tmp_path.exists():
+        shutil.rmtree(tmp_path, ignore_errors=True)
+    if backup_path is not None and not target_path.exists() and backup_path.exists():
+        try:
+            os.rename(backup_path, target_path)
+        except OSError as restore_exc:
+            warnings.warn(
+                f"Could not restore the previous recipe from its backup after a "
+                f"failed save ({restore_exc}). Your prior recipe is NOT lost: it "
+                f"remains at {backup_path}. Move it back to {target_path} to recover it.",
+                UserWarning,
+                stacklevel=3,
+            )
 
 
 def save_recipe(
@@ -102,34 +206,7 @@ def save_recipe(
     try:
         if target_path.exists() and not overwrite:
             raise FileExistsError(f"Recipe path already exists: {target_path}")
-        tmp_path.mkdir(parents=True)
-        (tmp_path / _TENSOR_DIR).mkdir()
-        rules = [_serialize_rule(rule, save_level, state) for rule in recipe.rules]
-        _write_tensor_sidecars(
-            tmp_path, state.tensor_refs, tensor_entries, write_tensor_blob_fn=None
-        )
-        payload = {_RECIPE_KEY: {"rules": rules}}
-        spec_json = {
-            "format_version": TLSPEC_FORMAT_VERSION,
-            "helper_registry_version": HELPER_REGISTRY_VERSION,
-            "save_level": save_level.value,
-            "executable": save_level != SaveLevel.AUDIT and not _spec_has_opaque(payload),
-            "helpers": _collect_helpers(payload),
-            "digest": recipe.digest,
-            **payload,
-        }
-        _write_json_file(tmp_path / _SPEC_FILE, spec_json)
-        _TlSpecWriter.write_recipe_manifest(
-            path=tmp_path / _MANIFEST_FILE,
-            recipe=recipe,
-            spec_json=spec_json,
-            tensor_entries=tensor_entries,
-            legacy_format_version=TLSPEC_FORMAT_VERSION,
-            save_level=save_level.value,
-        )
-        _write_text_file(tmp_path / _README_FILE, _readme_text(spec_json, tensor_entries))
-        _fsync_directory(tmp_path / _TENSOR_DIR)
-        _fsync_directory(tmp_path)
+        _write_recipe_tree(tmp_path, recipe, save_level, state, tensor_entries)
         if target_path.exists():
             if not overwrite:
                 raise FileExistsError(f"Recipe path already exists: {target_path}")
@@ -140,20 +217,34 @@ def save_recipe(
         if backup_path is not None:
             shutil.rmtree(backup_path, ignore_errors=True)
     except BaseException:
-        if tmp_path.exists():
-            shutil.rmtree(tmp_path, ignore_errors=True)
-        if backup_path is not None and not target_path.exists() and backup_path.exists():
-            try:
-                os.rename(backup_path, target_path)
-            except OSError as restore_exc:
-                warnings.warn(
-                    f"Could not restore the previous recipe from its backup after a "
-                    f"failed save ({restore_exc}). Your prior recipe is NOT lost: it "
-                    f"remains at {backup_path}. Move it back to {target_path} to recover it.",
-                    UserWarning,
-                    stacklevel=2,
-                )
+        _restore_after_failed_save(tmp_path, target_path, backup_path)
         raise
+
+
+def _audit_only_recipe(spec_path: Path, save_level: object) -> ReplayPreconditionError:
+    """The typed refusal for a recipe record whose payloads cannot be rebuilt."""
+
+    return ReplayPreconditionError(
+        f"{spec_path} is an audit-only recipe record (save_level={save_level!r}): a "
+        "predicate WHERE term or an opaque callable edit was recorded by repr and cannot "
+        "be rebuilt into a Recipe. Read spec.json for the record; to make a loadable "
+        "recipe, express every WHERE term as a selector (tl.func / tl.in_module / tl.site "
+        "/ tl.label) and every edit as a helper, then save at level 'portable'.",
+        code="recipe_audit_only",
+    )
+
+
+def _manifest_tensor_entries(spec_path: Path) -> list[TensorEntry]:
+    """Read the manifest's tensor entries, refusing a malformed list with the file named."""
+
+    manifest = _read_json_file(spec_path / _MANIFEST_FILE)
+    manifest_entries = manifest.get("tensor_entries", [])
+    if not isinstance(manifest_entries, list):
+        raise ReplayPreconditionError(
+            f"{spec_path / _MANIFEST_FILE} field 'tensor_entries' must be a list, "
+            f"got {type(manifest_entries).__name__}"
+        )
+    return [TensorEntry.from_dict(e) for e in manifest_entries]
 
 
 def load_recipe(
@@ -187,9 +278,6 @@ def load_recipe(
         rebuilt; a malformed ``spec.json`` refuses with the file named.
     """
 
-    from .._ir.selector_eval import selector_from_spec
-    from .spec import Recipe, Rule
-
     spec_path = Path(path)
     _reject_symlink_path(spec_path, context="recipe path")
     _reject_symlink_path(spec_path / _SPEC_FILE, context="recipe spec.json")
@@ -198,23 +286,8 @@ def load_recipe(
     _validate_format_version(data.get("format_version"), path=spec_path)
     rules_payload = _recipe_rules_payload(data, spec_path)
     if not bool(data.get("executable", False)):
-        raise ReplayPreconditionError(
-            f"{spec_path} is an audit-only recipe record (save_level="
-            f"{data.get('save_level')!r}): a predicate WHERE term or an opaque callable "
-            "edit was recorded by repr and cannot be rebuilt into a Recipe. Read "
-            "spec.json for the record; to make a loadable recipe, express every WHERE "
-            "term as a selector (tl.func / tl.in_module / tl.site / tl.label) and every "
-            "edit as a helper, then save at level 'portable'.",
-            code="recipe_audit_only",
-        )
-    manifest = _read_json_file(spec_path / _MANIFEST_FILE)
-    manifest_entries = manifest.get("tensor_entries", [])
-    if not isinstance(manifest_entries, list):
-        raise ReplayPreconditionError(
-            f"{spec_path / _MANIFEST_FILE} field 'tensor_entries' must be a list, "
-            f"got {type(manifest_entries).__name__}"
-        )
-    tensors = _load_tensor_refs(spec_path, [TensorEntry.from_dict(e) for e in manifest_entries])
+        raise _audit_only_recipe(spec_path, data.get("save_level"))
+    tensors = _load_tensor_refs(spec_path, _manifest_tensor_entries(spec_path))
     rules: list[Rule] = []
     for index, rule_payload in enumerate(rules_payload):
         if not isinstance(rule_payload, dict) or "target" not in rule_payload:
@@ -238,9 +311,6 @@ def load_recipe(
 
 def _serialize_rule(rule: Any, save_level: SaveLevel, state: _SerializedState) -> dict[str, Any]:
     """Serialize one rule as its target spec and edit payload."""
-
-    from .._selection.selector_base import BaseSelector
-    from .._selection.selectors import where
 
     target = rule.target if isinstance(rule.target, BaseSelector) else where(rule.target)
     return {

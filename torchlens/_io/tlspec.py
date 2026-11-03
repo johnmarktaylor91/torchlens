@@ -210,66 +210,6 @@ class _TlSpecWriter:
         cls.write_json(path, manifest)
 
     @classmethod
-    def write_recipe_manifest(
-        cls,
-        *,
-        path: Path,
-        recipe: Any,
-        spec_json: dict[str, Any],
-        tensor_entries: list[TensorEntry],
-        legacy_format_version: str,
-        save_level: str,
-    ) -> None:
-        """Write a unified manifest for a standalone recipe (``kind: "recipe"``).
-
-        Parameters
-        ----------
-        path:
-            Destination ``manifest.json`` path.
-        recipe:
-            The ``Recipe`` being saved (no model, no sites: the manifest's
-            model fields describe the recipe class itself).
-        spec_json:
-            Serialized recipe payload.
-        tensor_entries:
-            Persisted tensor entries.
-        legacy_format_version:
-            Intervention codec ``format_version`` the payload follows.
-        save_level:
-            Save level recorded in the public schema.
-        """
-
-        if save_level == "runnable":
-            raise InvalidArgumentError(
-                "Recipe artifacts do not support save_level='runnable': a recipe "
-                "carries no model to run",
-                code="artifact_save_level_unsupported",
-                remedy="use 'audit', 'executable_with_callables', or 'portable'",
-                artifact_kind="recipe",
-            )
-        compat = {
-            "format_version": spec_json.get("format_version"),
-            "helper_registry_version": spec_json.get("helper_registry_version"),
-            "executable": bool(spec_json.get("executable", False)),
-            "digest": spec_json.get("digest"),
-        }
-        manifest = {
-            "format_version": legacy_format_version,
-            "tensor_entries": [entry.to_dict() for entry in tensor_entries],
-        }
-        manifest.update(
-            cls.build_manifest(
-                kind="recipe",
-                source=recipe,
-                tensor_entries=tensor_entries,
-                save_level=save_level,
-                spec_compat_info=compat,
-                intervention_compat_metadata=None,
-            )
-        )
-        cls.write_json(path, manifest)
-
-    @classmethod
     def write_bundle(
         cls,
         *,

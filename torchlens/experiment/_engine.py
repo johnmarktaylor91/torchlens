@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
@@ -36,6 +37,7 @@ from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
 from ..errors.episode import BundleExperimentError
+from ..intervention._trace_hooks import attach_sticky_hooks as _attach_hooks
 
 if TYPE_CHECKING:
     from torch import nn
@@ -339,11 +341,9 @@ def _run_live_candidate(
     from ..intervention.errors import SelectorCapabilityError
 
     try:
-        import time as _time
-
         member = baseline.fork(name=candidate.candidate_id)
-        member.attach_hooks(spec)
-        started = _time.monotonic()
+        _attach_hooks(member, spec)
+        started = time.monotonic()
         member.run(model, x)
         _record_run_envelope(member, spec, started=started)
         return member, "live_hook"

@@ -83,38 +83,6 @@ DOCS: dict[str, str] = {
             pristine reading; otherwise ``True``.
         """
     ),
-    "push": (
-        """Push the edit downstream through the recorded graph (DAG replay).
-        
-        Parameters
-        ----------
-        replay:
-            Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``,
-            ``differentiable``).
-        
-        Returns
-        -------
-        Trace
-            This model log, mutated in place.
-        """
-    ),
-    "push_from": (
-        """Push downstream from a pre-mutated site.
-        
-        Parameters
-        ----------
-        site:
-            Layer pass or selector resolving to one origin. The origin's
-            current out is preserved and used as the override.
-        replay:
-            Grouped replay options (``ReplayOptions``).
-        
-        Returns
-        -------
-        Trace
-            This model log, mutated in place.
-        """
-    ),
     "run": (
         """Execute this Trace through its live or loaded provider.
         

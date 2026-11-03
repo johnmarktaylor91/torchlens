@@ -16,6 +16,7 @@ from .._record_type import record_type
 from .._selection.selectors import facet
 from .._user_funcs import trace
 from ..errors._base import TorchLensError, TorchLensWarning
+from ..intervention._trace_hooks import attach_sticky_hooks as _attach_hooks
 from ..options import CaptureOptions
 from .facets import Facet, MissingGrad
 
@@ -164,11 +165,10 @@ def _stateful_tensors(model: nn.Module) -> list[torch.Tensor]:
 def _fork_rng_devices() -> list[int]:
     """Return the CUDA device ordinals to fork RNG for (empty when CPU-only).
 
-    Gated on ``is_initialized()``, not ``is_available()`` (R36-4): if this
-    process never initialized CUDA, no CUDA generator fed any captured op,
-    and forking RNG for every visible device would allocate the very CUDA
-    contexts (~300-600 MB each) this path does not need -- the exact stale
-    pre-fix gate ``utils/rng.py`` documents.
+    Gated on ``is_initialized()``, not ``is_available()`` (R36-4): a process that
+    never initialized CUDA fed no captured op from a CUDA generator, and forking
+    every visible device's RNG would allocate the very CUDA contexts (~300-600 MB
+    each) this path does not need (the stale gate ``utils/rng.py`` documents).
     """
 
     from .._utils._cuda_probe import _is_cuda_initialized
@@ -889,7 +889,7 @@ def _run_patch(
         return result
 
     patched_log = corrupted_log.fork(name)
-    patched_log.attach_hooks(selector, _tracked_hook)
+    _attach_hooks(patched_log, selector, _tracked_hook)
     guard.reset()
     patched_log.run(model, corrupted_input)
     try:

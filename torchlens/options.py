@@ -161,8 +161,6 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
 )
 _REPLAY_FIELDS: Final[tuple[str, ...]] = (
     "strict",
-    "hooks",
-    "differentiable",
     "append",
     "chunk_size",
     "allow_changed_params",
@@ -172,6 +170,7 @@ _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
     "confirm_mutation",
     "strict",
     "allow_changed_params",
+    "differentiable",
 )
 _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "path",
@@ -243,8 +242,6 @@ _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "strict": "strict",
-    "hooks": "hooks",
-    "differentiable": "differentiable",
     "append": "append",
     "chunk_size": "chunk_size",
     "allow_changed_params": "allow_changed_params",
@@ -254,6 +251,7 @@ _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "confirm_mutation": "confirm_mutation",
     "strict": "strict",
     "allow_changed_params": "allow_changed_params",
+    "differentiable": "differentiable",
 }
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "path": "path",
@@ -1291,11 +1289,6 @@ class ReplayOptions:
     ----------
     strict:
         Whether divergence warnings should raise.
-    hooks:
-        Optional replay hook mapping.
-    differentiable:
-        Whether replay returns a new differentiable Trace over fresh frontier
-        leaves instead of mutating the existing Trace in place.
     append:
         Whether rerun appends a compatible batch chunk.
     chunk_size:
@@ -1315,8 +1308,6 @@ class ReplayOptions:
     """
 
     strict: bool = False
-    hooks: dict[Any, Any] | None = None
-    differentiable: bool = False
     append: bool = False
     chunk_size: int | None = None
     allow_changed_params: bool = False
@@ -1325,8 +1316,6 @@ class ReplayOptions:
     def __init__(  # noqa: PLR0913 -- an options group's constructor takes one keyword per field
         self,
         strict: bool | MissingType = MISSING,
-        hooks: dict[Any, Any] | None | MissingType = MISSING,
-        differentiable: bool | MissingType = MISSING,
         append: bool | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
         allow_changed_params: bool | MissingType = MISSING,
@@ -1336,10 +1325,6 @@ class ReplayOptions:
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
-            "hooks": _resolve_option_value("hooks", hooks, None, specified_fields),
-            "differentiable": _resolve_option_value(
-                "differentiable", differentiable, False, specified_fields
-            ),
             "append": _resolve_option_value("append", append, False, specified_fields),
             "chunk_size": _resolve_option_value("chunk_size", chunk_size, None, specified_fields),
             "allow_changed_params": _resolve_option_value(
@@ -1389,6 +1374,10 @@ class InterventionOptions:
         ``replay_param_changed_since_capture``; ``True`` names the parameters used
         in ``trace.last_run["replayed_with_changed_params"]``. The rerun engine
         always runs the live model and ignores it.
+    differentiable:
+        Replay onto a new fork whose outputs stay differentiable (fresh frontier
+        leaves) and return it, instead of mutating this trace in place. Only the
+        replay engine reads it; rerun and set-only ignore it.
 
     Examples
     --------
@@ -1401,6 +1390,7 @@ class InterventionOptions:
     confirm_mutation: bool = False
     strict: bool = False
     allow_changed_params: bool = False
+    differentiable: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -1409,6 +1399,7 @@ class InterventionOptions:
         confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         allow_changed_params: bool | MissingType = MISSING,
+        differentiable: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen intervention option bundle."""
 
@@ -1421,6 +1412,9 @@ class InterventionOptions:
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
             "allow_changed_params": _resolve_option_value(
                 "allow_changed_params", allow_changed_params, False, specified_fields
+            ),
+            "differentiable": _resolve_option_value(
+                "differentiable", differentiable, False, specified_fields
             ),
         }
         _set_frozen_fields(self, _INTERVENTION_FIELDS, values)

@@ -57,6 +57,7 @@ from . import (
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
+from ._load_validators import MODEL_FREE_TLSPEC_KINDS, load_model_free_tlspec
 from ._pickle_prescan import OpcodeCeilingExceeded
 from ._portability_preflight import preflight_metadata_portability
 from ._pre3_module_paths import modellog_216_error
@@ -2074,24 +2075,14 @@ def _load_unified_tlspec(
     _reject_symlink_path(bundle_path / "metadata.pkl", context="metadata")
     _reject_symlink_path(bundle_path / "blobs", context="blobs directory")
     manifest = _read_manifest_object(bundle_path / "manifest.json")
-    # `kind` predates the "bundle"/"intervention" discriminator on some older
-    # unified manifests (ledgered legacy-manifest tolerance,
-    # test_tlspec_parse_fuzz.py::_OPTIONAL_KEYS): an absent `kind` means a
-    # plain trace, the only kind that existed before the discriminator was
-    # introduced, never an unsupported-kind refusal.
+    # `kind` predates the "bundle"/"intervention" discriminator on some older unified
+    # manifests (ledgered legacy-manifest tolerance, test_tlspec_parse_fuzz.py::_OPTIONAL_KEYS):
+    # an absent `kind` means a plain trace, the only kind that existed before the
+    # discriminator was introduced, never an unsupported-kind refusal.
     kind = manifest.get("kind", "trace")
-    if kind == "intervention":
-        from ..intervention.save import load_intervention_spec
-
-        return load_intervention_spec(
-            bundle_path,
-            trust_custom_callables=trust_custom_callables,
-            allowed_custom_callable_modules=allowed_custom_callable_modules,
-        )
-    if kind == "recipe":
-        from ..intervention._recipe_io import load_recipe
-
-        return load_recipe(
+    if kind in MODEL_FREE_TLSPEC_KINDS:
+        return load_model_free_tlspec(
+            kind,
             bundle_path,
             trust_custom_callables=trust_custom_callables,
             allowed_custom_callable_modules=allowed_custom_callable_modules,

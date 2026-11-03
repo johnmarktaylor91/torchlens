@@ -35,6 +35,7 @@ from .._selection.resolver import _resolve_unchecked
 from .._selection.selectors import CompositeSelector, NotSelector, label
 from ..options import ReplayOptions
 from ._rerun_predicate import raw_live_labels
+from ._trace_hooks import attach_sticky_hooks as _attach_hooks
 from .audit import record_intervention_event, site_keys_for_labels
 from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from .replay import _reset_backward_projection, gradient_edit_replay_text
@@ -365,9 +366,9 @@ def arm_signal_plan(
     assert plan.backward is not None
     site, edit = plan.backward
     if _is_public_recipe(site):
-        handle = trace.attach_hooks(site, strict=strict, confirm_mutation=True)
+        handle = _attach_hooks(trace, site, strict=strict, confirm_mutation=True)
     else:
-        handle = trace.attach_hooks(site, edit, strict=strict, confirm_mutation=True)
+        handle = _attach_hooks(trace, site, edit, strict=strict, confirm_mutation=True)
     backward_handles = tuple(handle.handle_ids)
     attached.extend(backward_handles)
     return backward_handles, forced

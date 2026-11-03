@@ -41,7 +41,6 @@ from ._trace_selection_edits import (
     is_selection_batch,
     push_from_handles,
 )
-from .types import InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -50,6 +49,7 @@ __all__: list[str] = []
 
 from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
 from .._capture_state_helpers import _fingerprint_model_weights, _qualname_for_model
+from .._data_classes import _doors
 from .._ir.selector_eval import normalize_selector_like
 from .._runnable import refuse_poisoned_trace
 from .._selection.selection import Selection, Selector, _trace_edge_records
@@ -66,6 +66,7 @@ from .hooks import _validate_live_site_target, is_facet_target, lower_record_sit
 from .injection import injected_ops as _injected_op_records
 from .save import save_intervention as _save_intervention_recipe
 from .spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_autograd_nodes
+from .types import InterventionSpec, TargetSpec
 
 
 def _prepare_do(
@@ -102,6 +103,13 @@ def _prepare_do(
     plan = signal_plan(hooks_or_site, value_or_hook)
     refuse_invalid_do_loss(loss, plan)
     return hooks_or_site, intervention_options, plan
+
+
+_GRAD_SITE_REMEDY = (
+    "trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
+    "trace.do(tl.grad(site), edit, intervention=InterventionOptions(engine='set_only')) "
+    "then trace.backward(loss)"
+)
 
 
 def ensure_intervention_spec(trace: Trace) -> InterventionSpec:
@@ -171,8 +179,7 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
             f"set(..., direction={direction!r}) no longer edits gradients: a gradient "
             "is addressed as a site, tl.grad(site)",
             code="intervention_direction_invalid",
-            remedy="trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
-            "trace.attach_hooks(tl.grad(site), edit) then trace.backward(loss)",
+            remedy=_GRAD_SITE_REMEDY,
             argument="direction",
         )
     if is_facet_target(site):
@@ -198,7 +205,8 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
                 return cast(torch.Tensor, value(out))
             return cast(torch.Tensor, value)
 
-        trace.attach_hooks(
+        _attach_hooks(
+            trace,
             site,
             _facet_replacement_hook,
             strict=strict,
@@ -233,14 +241,6 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
         direction="forward",
     )
     return trace
-
-
-def remove(trace: Trace) -> None:
-    """Remove the most recent legacy-returned hook attachment. (the ``Trace.remove`` body)."""
-
-    for handle_id in trace._last_hook_handle_ids:
-        clear_edits(trace, handle=handle_id, confirm_mutation=True)
-    trace._last_hook_handle_ids = ()
 
 
 def clear_edits(
@@ -355,7 +355,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     """Run one ``do()`` transaction under its merged options.
 
     :meth:`do` enters the ``allow_changed_params`` scope around this call, so every replay
-    the transaction runs (push, push_from, selection and region doors) sees one opt-in.
+    the transaction runs (handle, site, selection and region doors) sees one opt-in.
 
     Parameters
     ----------
@@ -437,7 +437,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         return trace
     try:
         if selected_engine == "replay":
-            result = push_from_handles(trace, attached_handles, strict=strict_value)
+            result = push_from_handles(trace, attached_handles, options=intervention_options)
         else:
             assert model is not None
             result = cast("Trace", trace.run(model, x, replay=ReplayOptions(strict=strict_value)))
@@ -581,10 +581,8 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
                 "(site, edit) call shape without a spec",
                 argument="value_or_hook",
             )
-        handle = trace.attach_hooks(
-            hooks_or_site,
-            strict=strict,
-            confirm_mutation=confirm_mutation,
+        handle = _attach_hooks(
+            trace, hooks_or_site, strict=strict, confirm_mutation=confirm_mutation
         )
         return "attach_hooks", tuple(handle.handle_ids)
 
@@ -637,7 +635,8 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             confirm_mutation=confirm_mutation,
         )
         return "set", ()
-    handle = trace.attach_hooks(
+    handle = _attach_hooks(
+        trace,
         hooks_or_site,
         value_or_hook,
         strict=strict,
@@ -793,3 +792,9 @@ def target_spec_from_site(trace: Trace, site: Any, *, strict: bool) -> TargetSpe
     if hasattr(site, "layer_label"):
         return TargetSpec("label", str(site.layer_label), strict=strict)
     return TargetSpec("label", site, strict=strict)
+
+
+def _attach_hooks(trace: Trace, *args: Any, **kwargs: Any) -> Any:
+    """Attach sticky hooks through the hooks door, reached through ``_doors`` (it imports this module)."""
+
+    return _doors.intervention()._trace_hooks.attach_sticky_hooks(trace, *args, **kwargs)

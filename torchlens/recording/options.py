@@ -278,9 +278,8 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             remedy="choose a documented lookback payload policy",
             argument="lookback_payload_policy",
         )
-    # Predicate misuse raises the same code and exception class on tl.record
-    # and tl.trace (``_capture/prepare/resolve.py::_refuse_predicate_shapes``),
-    # so one catch handles the pair.
+    # Predicate misuse raises the same code and class on tl.record and tl.trace
+    # (``_capture/prepare/resolve.py::_refuse_predicate_shapes``): one catch for both.
     if intervene is not None and not callable(intervene):
         raise ArgumentTypeError(
             f"intervene received non-callable type {type(intervene).__name__}",

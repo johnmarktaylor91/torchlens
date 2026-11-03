@@ -516,8 +516,7 @@ def _replayed(clean: Any, site: str, name: str, module: nn.Module) -> Any:
     from torchlens.intervention.helpers import splice_module
 
     fork = clean.fork(name)
-    fork.attach_hooks(label_selector(site), splice_module(module, input_route="out"))
-    fork.push()
+    fork.do(label_selector(site), splice_module(module, input_route="out"))
     return fork
 
 

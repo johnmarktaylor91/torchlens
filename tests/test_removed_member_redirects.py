@@ -55,8 +55,12 @@ def owners():
 
 #: (owner class, removed member, live replacement member)
 REMOVED_MEMBERS: list[tuple[str, str, str]] = [
-    ("Trace", "replay", "push"),
-    ("Trace", "replay_from", "push_from"),
+    ("Trace", "replay", "do"),
+    ("Trace", "replay_from", "do"),
+    ("Trace", "push", "do"),
+    ("Trace", "push_from", "do"),
+    ("Trace", "attach_hooks", "do"),
+    ("Trace", "remove", "clear_edits"),
     ("Trace", "rerun", "run"),
     ("Trace", "validate_saved_outs", "validate_forward_pass"),
     ("Trace", "conditional_then_entry_edges", "graph.conditional_arm_entry_edges"),
