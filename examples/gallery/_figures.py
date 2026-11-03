@@ -252,20 +252,42 @@ def draw_cnn_fields(out: Path) -> list[Path]:
     r0, r1, c0, c1 = _bbox(spatial)
     p0, p1, q0, q1 = _bbox(patch)
     f0, f1, g0, g1 = _bbox(projected)
+    identical = bool(np.array_equal(spatial.astype(bool), empirical.astype(bool))) and bool(
+        np.array_equal(projected.astype(bool), changed.astype(bool))
+    )
     # The noise input is shown as faint grey so the measured blue fill and the patch stay visible.
     faint = 0.78 + 0.22 * image.mean(axis=-1)
+    key_box = {"facecolor": "white", "edgecolor": RULE, "alpha": 0.92, "pad": 2.5}
     with plt.rc_context(STYLE):
         fig, (left, right) = plt.subplots(1, 2, figsize=(WIDTH, 5.6), layout="constrained")
         left.imshow(faint, cmap="gray", vmin=0, vmax=1, interpolation="nearest")
         left.imshow(_overlay(empirical, BLUE, 0.45), interpolation="nearest")
+        # The outline is thin and sits one pixel outside the fill, so the fill's own edge stays
+        # visible against it.
         left.add_patch(
-            Rectangle((c0 - 0.5, r0 - 0.5), c1 - c0, r1 - r0, fill=False, edgecolor=VERMILION, lw=2)
+            Rectangle(
+                (c0 - 1.5, r0 - 1.5),
+                c1 - c0 + 2,
+                r1 - r0 + 2,
+                fill=False,
+                edgecolor=VERMILION,
+                lw=1.2,
+            )
+        )
+        left.text(
+            c0 + 0.02 * side,
+            r1 - 0.05 * side,
+            "outline: predicted field\nfill: measured (nonzero gradient)",
+            fontsize=SMALL,
+            color=INK,
+            va="bottom",
+            bbox=key_box,
         )
         left.add_patch(Rectangle((q0 - 0.5, p0 - 0.5), q1 - q0, p1 - p0, color=GREEN))
         left.text(
             (q0 + q1 - 1) / 2,
             p0 - 0.03 * side,
-            f"{q1 - q0} x {p1 - p0} patch zeroed",
+            f"{q1 - q0} x {p1 - p0} patch zeroed\n(for the right panel)",
             color=INK,
             fontsize=SMALL,
             ha="center",
@@ -280,11 +302,27 @@ def draw_cnn_fields(out: Path) -> list[Path]:
             f"(channel {pinned.get('channel', 0)}, centre)",
             loc="left",
         )
-        left.set_xlabel("Pixel")
-        left.set_ylabel("Pixel")
+        left.set_xlabel("Pixel column")
+        left.set_ylabel("Pixel row")
         right.imshow(_overlay(changed, BLUE, 0.45), interpolation="nearest")
         right.add_patch(
-            Rectangle((g0 - 0.5, f0 - 0.5), g1 - g0, f1 - f0, fill=False, edgecolor=VERMILION, lw=2)
+            Rectangle(
+                (g0 - 0.56, f0 - 0.56),
+                g1 - g0 + 0.12,
+                f1 - f0 + 0.12,
+                fill=False,
+                edgecolor=VERMILION,
+                lw=1.2,
+            )
+        )
+        right.text(
+            g0 + 0.3,
+            f1 - 1.0,
+            "outline: predicted reach\nfill: units changed",
+            fontsize=SMALL,
+            color=INK,
+            va="bottom",
+            bbox=key_box,
         )
         right.text(
             (width - 1) / 2,
@@ -308,18 +346,19 @@ def draw_cnn_fields(out: Path) -> list[Path]:
         right.set_title(
             f"{layer} output ({height} x {width} units)\nreach of the green patch", loc="left"
         )
-        right.set_xlabel("Feature-map unit")
-        right.set_ylabel("Feature-map unit")
+        right.set_xlabel("Unit column")
+        right.set_ylabel("Unit row")
         fig.supxlabel(
-            f"Vermilion outline: the geometric prediction (pixels {c0} to {c1 - 1} on both axes; "
-            f"units {g0} to {g1 - 1});\nblue: the measurement (pixels with nonzero gradient; "
-            "units changed by zeroing the green patch)",
+            f"Predicted from the architecture: pixels {c0} to {c1 - 1} on both axes; units {g0} to "
+            f"{g1 - 1}\n(row and column {g0 - 1} lie outside the reach and are unchanged).\n"
+            "Measured: pixels where the unit's gradient is nonzero; units changed by zeroing the patch.",
             fontsize=SMALL,
             color=MUTED,
         )
+        masks = " (identical masks)" if identical else ""
         fig.suptitle(
             "The geometric fields match the measured influence exactly:\n"
-            f"IoU (overlap) {field_iou:.2f} at the input, {projective_iou:.2f} at the output",
+            f"IoU (overlap) {field_iou:.2f} at the input, {projective_iou:.2f} at the output{masks}",
             fontsize=TITLE,
         )
         return _save(fig, out, "cnn_fields")
@@ -523,7 +562,9 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
     low, high = min(sizes), max(sizes)
     with plt.rc_context(STYLE):
         fig, ax = plt.subplots(figsize=(WIDTH + 0.2, 5.8), layout="constrained")
-        for edge, start, end, rad in _edge_geometry(edges):
+        # Thicker (larger-score) edges draw last so their halos do not chop the thin ones.
+        drawn = sorted(_edge_geometry(edges), key=lambda item: abs(float(item[0]["score"])))
+        for edge, start, end, rad in drawn:
             share = (abs(float(edge["score"])) - low) / (high - low) if high > low else 1.0
             width = 0.9 + 2.0 * share
             ax.annotate(
@@ -537,7 +578,7 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
                     "shrinkA": 0,
                     "shrinkB": 0,
                     "connectionstyle": f"arc3,rad={rad:.2f}",
-                    "path_effects": [withStroke(linewidth=width + 2.4, foreground="white")],
+                    "path_effects": [withStroke(linewidth=width + 1.6, foreground="white")],
                 },
                 zorder=4,
             )
@@ -546,8 +587,11 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
             list(range(per_layer)) * layers,
             s=16,
             color="#e2e2de",
+            label="other heads",
             zorder=2,
         )
+        # Class markers sit above the arrows: the arrows end short of every dot, so a dot
+        # never hides an arrowhead, and a passing arrow cannot bite into a class colour.
         for (label, pairs), color in zip(groups.items(), colors, strict=False):
             ax.scatter(
                 [p[0] for p in pairs],
@@ -555,7 +599,7 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
                 s=46,
                 color=color,
                 label=label,
-                zorder=3,
+                zorder=5,
             )
         ax.set(
             xticks=range(layers),
@@ -570,9 +614,9 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
             loc="outside lower center",
             ncol=4,
             fontsize=SMALL,
-            columnspacing=2.4,
-            title=f"Wang's head classes (grey: other heads); arrows: the {len(edges)} largest "
-            f"absolute edge scores,\nwidth by |score| ({low:.2f} thinnest to {high:.2f} thickest)",
+            columnspacing=1.4,
+            title=f"Wang's head classes; arrows: the {len(edges)} largest absolute edge scores, "
+            f"width by |score|\n({low:.2f} thinnest to {high:.2f} thickest)",
             title_fontsize=SMALL,
         )
         count = "All" if joined == len(edges) else f"{joined} of the"
@@ -609,16 +653,16 @@ def _edge_geometry(
         rank_in = seen_in.get(target, 0)
         rank_out = seen_out.get(source, 0)
         seen_in[target], seen_out[source] = rank_in + 1, rank_out + 1
-        offset_in = 0.6 * (rank_in - (fan_in[target] - 1) / 2)
-        offset_out = 0.6 * (rank_out - (fan_out[source] - 1) / 2)
+        offset_in = 0.9 * (rank_in - (fan_in[target] - 1) / 2)
+        offset_out = 0.9 * (rank_out - (fan_out[source] - 1) / 2)
         theta = math.atan2(source[1] - target[1], source[0] - target[0])
         end = (
-            target[0] + 0.32 * math.cos(theta + offset_in),
-            target[1] + 0.32 * math.sin(theta + offset_in),
+            target[0] + 0.22 * math.cos(theta + offset_in),
+            target[1] + 0.22 * math.sin(theta + offset_in),
         )
         start = (
-            source[0] - 0.26 * math.cos(theta - offset_out),
-            source[1] - 0.26 * math.sin(theta - offset_out),
+            source[0] - 0.2 * math.cos(theta - offset_out),
+            source[1] - 0.2 * math.sin(theta - offset_out),
         )
         rad = 0.18 * (rank_in - (fan_in[target] - 1) / 2) + 0.12 * (
             rank_out - (fan_out[source] - 1) / 2
