@@ -250,9 +250,26 @@ def test_from_file_probe_releases_mapping_before_unlink(monkeypatch: pytest.Monk
     live_results: list[weakref.ref[torch.Tensor]] = []
     real_touches = belt._touches_tensor
 
-    def spying_touches(result: Any, func: Any) -> bool:
+    def track(result: Any) -> None:
         if isinstance(result, torch.Tensor):
             live_results.append(weakref.ref(result))
+
+    # The result is seen by the counting mode where the call dispatches
+    # (mode-visible builds) and by the touches check where it does not.
+    class RecordingMode(belt._CountingMode):
+        def __torch_function__(
+            self,
+            func: Any,
+            types_: Any,
+            args: tuple[Any, ...] = (),
+            kwargs: dict[str, Any] | None = None,
+        ) -> Any:
+            result = super().__torch_function__(func, types_, args, kwargs)
+            track(result)
+            return result
+
+    def spying_touches(result: Any, func: Any) -> bool:
+        track(result)
         return real_touches(result, func)
 
     real_unlink = os.unlink
@@ -262,6 +279,7 @@ def test_from_file_probe_releases_mapping_before_unlink(monkeypatch: pytest.Monk
             raise PermissionError(13, "simulated WinError 5: file is mapped", str(path))
         real_unlink(path, *args, **kwargs)
 
+    monkeypatch.setattr(belt, "_CountingMode", RecordingMode)
     monkeypatch.setattr(belt, "_touches_tensor", spying_touches)
     monkeypatch.setattr(belt, "_deferred_probe_paths", [])
     monkeypatch.setattr(os, "unlink", windows_unlink)
