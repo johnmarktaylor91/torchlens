@@ -25,6 +25,7 @@ import ast
 import dataclasses
 import importlib
 import pkgutil
+import re
 from pathlib import Path
 
 import pytest
@@ -144,6 +145,10 @@ class _Walk:
     def __init__(self) -> None:
         self._cache: dict[Path, _Module] = {}
 
+    @property
+    def parsed(self) -> dict[Path, _Module]:
+        return self._cache
+
     def module(self, path: Path) -> _Module:
         if path not in self._cache:
             self._cache[path] = _parse(path)
@@ -215,10 +220,18 @@ def _field_defaults(cls: ast.ClassDef) -> list[tuple[str, ast.expr]]:
     return defaults
 
 
+_DATACLASS_DECORATOR = re.compile(r"^\s*@(?:dataclasses\.)?dataclass\b", re.MULTILINE)
+
+
 def _source_files() -> list[Path]:
+    """Every in-tree module that decorates a class with ``@dataclass`` (text prefilter)."""
     files: list[Path] = []
     for root in _ROOTS:
-        files.extend(p for p in root.rglob("*.py") if "__pycache__" not in p.parts)
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            if _DATACLASS_DECORATOR.search(path.read_text(encoding="utf-8")):
+                files.append(path)
     return sorted(files)
 
 
@@ -238,9 +251,11 @@ def _static_offenders(walk: _Walk) -> list[str]:
     return offenders
 
 
+@pytest.mark.heavy
 def test_static_dataclass_defaults_are_hashable() -> None:
     walk = _Walk()
     offenders = _static_offenders(walk)
+    assert len(walk.parsed) > 300, f"the walk parsed only {len(walk.parsed)} modules"
     assert not offenders, (
         "dataclass field defaults Python 3.11+ rejects as unhashable (use field(default_factory=...)):\n"
         + "\n".join(offenders)
