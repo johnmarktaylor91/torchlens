@@ -264,7 +264,7 @@ def test_lazy_materialize_matches_eager_load_bit_exactly(tmp_path: Path) -> None
 
     eager_tensor = eager_layer.out
     assert isinstance(eager_tensor, torch.Tensor)
-    lazy_tensor = lazy_layer.materialize_out()
+    lazy_tensor = lazy_layer.payload.materialize_out()
 
     assert torch.equal(lazy_tensor, eager_tensor)
 
@@ -280,7 +280,7 @@ def test_lazy_materialize_honors_cuda_map_location(tmp_path: Path) -> None:
     lazy_log = load(bundle_path, lazy=True)
     layer = _first_saved_layer(lazy_log)
 
-    tensor = layer.materialize_out(map_location="cuda")
+    tensor = layer.payload.materialize_out(map_location="cuda")
 
     assert tensor.device.type == "cuda"
 

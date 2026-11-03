@@ -699,8 +699,8 @@ def test_transform(small_input):
     )
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.transformed_out is not None:
-            assert entry.transformed_out.dim() == 0, (
+        if entry.payload.transformed_out is not None:
+            assert entry.payload.transformed_out.dim() == 0, (
                 f"Layer {label} should be scalar after torch.mean transform"
             )
 

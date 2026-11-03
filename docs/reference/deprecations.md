@@ -231,6 +231,8 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.is_transform` | `Op.call.is_func_transform` | removed |
 | `Op.kwargs_template` | `Op.call.kwargs_template` | removed |
 | `Op.macs_forward` | `Op.cost.macs_forward` | removed |
+| `Op.materialize_grad` | `Op.payload.materialize_grad` | removed |
+| `Op.materialize_out` | `Op.payload.materialize_out` | removed |
 | `Op.module_call_depth` | `Op.module_context.call_depth` | removed |
 | `Op.module_call_stack` | `Op.module_context.call_stack` | removed |
 | `Op.module_entry_arg_keys` | `Op.module_context.entry_arg_keys` | removed |
@@ -255,6 +257,12 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.transform_fn_source` | `Op.call.func_transform_fn_source` | removed |
 | `Op.transform_kind` | `Op.call.func_transform_kind` | removed |
 | `Op.transformed_activation_memory` | `Op.cost.transformed_activation_memory` | removed |
+| `Op.transformed_grad` | `Op.payload.transformed_grad` | removed |
+| `Op.transformed_grad_dtype` | `Op.payload.transformed_grad_dtype` | removed |
+| `Op.transformed_grad_shape` | `Op.payload.transformed_grad_shape` | removed |
+| `Op.transformed_out` | `Op.payload.transformed_out` | removed |
+| `Op.transformed_out_dtype` | `Op.payload.transformed_out_dtype` | removed |
+| `Op.transformed_out_shape` | `Op.payload.transformed_out_shape` | removed |
 | `Op.unattributed_tensor_args` | `Op.call.unattributed_tensor_args` | removed |
 | `Op.var_names` | `Op.source.var_names` | removed |
 | `Layer.activation_memory` | `Layer.cost.activation_memory` | removed |
@@ -312,6 +320,12 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Layer.total_macs_total` | `Layer.cost.total_macs` | removed |
 | `Layer.total_param_memory` | `Layer.cost.total_param_memory` | removed |
 | `Layer.transformed_activation_memory` | `Layer.cost.transformed_activation_memory` | removed |
+| `Layer.transformed_grad` | `Layer.payload.transformed_grad` | removed |
+| `Layer.transformed_grad_dtype` | `Layer.payload.transformed_grad_dtype` | removed |
+| `Layer.transformed_grad_shape` | `Layer.payload.transformed_grad_shape` | removed |
+| `Layer.transformed_out` | `Layer.payload.transformed_out` | removed |
+| `Layer.transformed_out_dtype` | `Layer.payload.transformed_out_dtype` | removed |
+| `Layer.transformed_out_shape` | `Layer.payload.transformed_out_shape` | removed |
 
 ## Intervention, Sweep, And Observer Aliases
 

@@ -432,8 +432,8 @@ def save_activation(
         op._internal_set("out", raw_out if store_raw else None)
 
         op._internal_set("transformed_out", None)
-        op.transformed_out_shape = None
-        op.transformed_out_dtype = None
+        op._payload_transformed_out_shape = None
+        op._payload_transformed_out_dtype = None
         op._cost_transformed_activation_memory = None
         if activation_transform is not None:
             transformed_out = op._apply_transform(
@@ -449,25 +449,25 @@ def save_activation(
             op._internal_set("transformed_out", transformed_out)
             op._validate_train_mode_transform_output(
                 raw_out,
-                op.transformed_out,
+                op.payload.transformed_out,
                 transform_kind="activation",
                 transform=activation_transform,
             )
             op._validate_streaming_transform_output(
-                op.transformed_out,
+                op.payload.transformed_out,
                 transform_kind="activation",
                 streaming_active=writer is not None,
             )
-            op.transformed_out_shape = _shape_or_none(op.transformed_out)
-            op.transformed_out_dtype = _dtype_or_none(op.transformed_out)
-            op._cost_transformed_activation_memory = _memory_or_none(op.transformed_out)
+            op._payload_transformed_out_shape = _shape_or_none(op.payload.transformed_out)
+            op._payload_transformed_out_dtype = _dtype_or_none(op.payload.transformed_out)
+            op._cost_transformed_activation_memory = _memory_or_none(op.payload.transformed_out)
         if budget is not None:
             if reduce_only:
                 # No source-sized admission happened (no clone allocated);
                 # charge the retained summary output directly.
-                budget.charge_retained(str(op._layer_label_raw), (op.transformed_out,))
+                budget.charge_retained(str(op._layer_label_raw), (op.payload.transformed_out,))
             else:
-                budget.commit(budget_reservation, (op.out, op.transformed_out))
+                budget.commit(budget_reservation, (op.out, op.payload.transformed_out))
     except Exception as exc:
         if writer is not None:
             writer.abort(f"Failed while saving out for {op._streaming_label}: {exc}")
@@ -531,17 +531,17 @@ def _log_tensor_grad(
     op.gradient_memory = Bytes(get_memory_amount(raw_grad))
     grad_transform = trace._options_grad_transform if trace is not None else None
     op._internal_set("transformed_grad", None)
-    op.transformed_grad_shape = None
-    op.transformed_grad_dtype = None
+    op._payload_transformed_grad_shape = None
+    op._payload_transformed_grad_dtype = None
     op.transformed_gradient_memory = None
     writer = getattr(trace, "_out_writer", None) if trace is not None else None
     if prebuilt is not None:
         raw_payload, transformed_payload = prebuilt
         if grad_transform is not None:
             op._internal_set("transformed_grad", transformed_payload)
-            op.transformed_grad_shape = _shape_or_none(op.transformed_grad)
-            op.transformed_grad_dtype = _dtype_or_none(op.transformed_grad)
-            op.transformed_gradient_memory = _memory_or_none(op.transformed_grad)
+            op._payload_transformed_grad_shape = _shape_or_none(op.payload.transformed_grad)
+            op._payload_transformed_grad_dtype = _dtype_or_none(op.payload.transformed_grad)
+            op.transformed_gradient_memory = _memory_or_none(op.payload.transformed_grad)
         op._internal_set("grad", raw_payload)
         op.has_grad = True
         stream_grad_blobs(op, trace, writer)
@@ -573,18 +573,18 @@ def _log_tensor_grad(
         )
         op._validate_train_mode_transform_output(
             raw_grad,
-            op.transformed_grad,
+            op.payload.transformed_grad,
             transform_kind="grad",
             transform=grad_transform,
         )
         op._validate_streaming_transform_output(
-            op.transformed_grad,
+            op.payload.transformed_grad,
             transform_kind="grad",
             streaming_active=writer is not None,
         )
-        op.transformed_grad_shape = _shape_or_none(op.transformed_grad)
-        op.transformed_grad_dtype = _dtype_or_none(op.transformed_grad)
-        op.transformed_gradient_memory = _memory_or_none(op.transformed_grad)
+        op._payload_transformed_grad_shape = _shape_or_none(op.payload.transformed_grad)
+        op._payload_transformed_grad_dtype = _dtype_or_none(op.payload.transformed_grad)
+        op.transformed_gradient_memory = _memory_or_none(op.payload.transformed_grad)
 
     save_raw_gradients = trace._options_save_raw_grads if trace is not None else True
     store_raw = save_raw_gradients or grad_transform is None
@@ -602,7 +602,7 @@ def _log_tensor_grad(
     )
     op.has_grad = True
     if budget is not None and grad_reservation is not None:
-        budget.commit(grad_reservation, (op.grad, op.transformed_grad))
+        budget.commit(grad_reservation, (op.grad, op.payload.transformed_grad))
     stream_grad_blobs(op, trace, writer)
 
 

@@ -4670,6 +4670,7 @@ alphabetical order.
 | `Op.control_flow` | Conditional-branch facts of this Op: branch membership, terminal bools and arm children (`tl.types.OpControlFlow`) |
 | `Op.cost` | Compute, memory and timing facts of this Op (`tl.types.OpCost`) |
 | `Op.module_context` | Module-nesting facts of this Op: the module calls active around it, the module calls its output feeds and the module calls it is the output of (`tl.types.OpModuleContext`) |
+| `Op.payload` | Saved transformed payloads of this Op and lazy materialization of bundle-backed payloads (`tl.types.OpPayload`) |
 | `Op.cost.activation_memory` | Bytes of this Op's output activation |
 | `Op.cost.arithmetic_intensity` | Theoretical forward FLOPs per byte of ideal memory traffic, or `None` |
 | `Op.cost.autograd_memory` | Bytes of the tensors autograd saved for backward at this Op |
@@ -4767,8 +4768,8 @@ alphabetical order.
 | `Op.lookup_keys` | Alternate keys that resolve to this Op in lookups |
 | `Op.macs_backward` | Backward MACs for this Op; not derivable, so always `None` |
 | `Op.macs_total` | Total MACs for this Op; not derivable, so always `None` |
-| `Op.materialize_grad` | Materialize this Op's saved gradient from a lazy bundle reference |
-| `Op.materialize_out` | Materialize this Op's saved output from a lazy bundle reference |
+| `Op.payload.materialize_grad` | Materialize this Op's saved gradient from a lazy bundle reference |
+| `Op.payload.materialize_out` | Materialize this Op's saved output from a lazy bundle reference |
 | `Op.max_distance_from_input` | Longest graph distance from any model input to this Op |
 | `Op.max_distance_to_output` | Longest graph distance from this Op to any model output |
 | `Op.min_distance_from_input` | Shortest graph distance from any model input to this Op |
@@ -4816,10 +4817,13 @@ alphabetical order.
 | `Op.call.func_transform_fn_name` | Name of the function wrapped by the transform at this boundary Op |
 | `Op.call.func_transform_fn_qualname` | Qualified name of the function wrapped by the transform at this boundary Op |
 | `Op.call.func_transform_fn_source` | Source location of the function wrapped by the transform at this boundary Op |
-| `Op.transformed_grad_dtype` | Dtype of this Op's saved transformed gradient |
-| `Op.transformed_grad_shape` | Shape of this Op's saved transformed gradient |
+| `Op.payload.transformed_grad` | This Op's saved gradient after the trace's gradient transform, or `None` |
+| `Op.payload.transformed_grad_dtype` | Dtype of this Op's saved transformed gradient |
+| `Op.payload.transformed_grad_shape` | Shape of this Op's saved transformed gradient |
 | `Op.transformed_gradient_memory` | Bytes used by this Op's saved transformed gradient |
-| `Op.transformed_out_dtype` | Dtype of this Op's saved transformed output |
+| `Op.payload.transformed_out` | This Op's saved output after the trace's activation transform, or `None` |
+| `Op.payload.transformed_out_dtype` | Dtype of this Op's saved transformed output |
+| `Op.payload.transformed_out_shape` | Shape of this Op's saved transformed output |
 | `Op.type_index` | 1-based position of this Op among Ops of the same type |
 | `Op.call.unattributed_tensor_args` | Tensor arguments that could not be attributed to a parent Op |
 | `Op.source.var_names` | Variable names the Op's result is assigned to at its call site; empty when unresolved |
@@ -4862,6 +4866,7 @@ alphabetical order.
 | `Layer.control_flow` | Conditional-branch facts of this layer: branch membership, terminal bools and arm children (`tl.types.LayerControlFlow`) |
 | `Layer.cost` | Compute, memory and timing facts of this Layer (`tl.types.LayerCost`) |
 | `Layer.module_context` | Module-nesting facts of this layer: its nesting depth, whether it is a single-op module and the modules it is the output of (`tl.types.LayerModuleContext`) |
+| `Layer.payload` | Saved transformed payloads of this layer, read from its single pass (`tl.types.LayerPayload`) |
 | `Layer.cost.activation_memory` | Bytes of the representative pass's output activation |
 | `Layer.cost.autograd_memory` | Bytes autograd saved for backward at the representative pass |
 | `Layer.cost.duration` | Execution time of this layer's function call, for single-pass layers |
@@ -4963,10 +4968,13 @@ alphabetical order.
 | `Layer.control_flow.terminal_bool_for` | The conditional that this terminal boolean decides, or `None` |
 | `Layer.total_gradient_memory` | Sum of gradient memory in bytes across all ops of this layer |
 | `Layer.total_macs_backward` | Always `None`, because backward MACs are not derivable |
-| `Layer.transformed_grad_dtype` | Dtype of the saved transformed gradient, or `None` |
-| `Layer.transformed_grad_shape` | Shape of the saved transformed gradient, or `None` |
+| `Layer.payload.transformed_grad` | Transformed gradient of the single pass, for single-pass layers |
+| `Layer.payload.transformed_grad_dtype` | Dtype of the saved transformed gradient, or `None` |
+| `Layer.payload.transformed_grad_shape` | Shape of the saved transformed gradient, or `None` |
 | `Layer.transformed_gradient_memory` | Bytes used by the saved transformed gradient, or `None` |
-| `Layer.transformed_out_dtype` | Dtype of the saved transformed output, or `None` |
+| `Layer.payload.transformed_out` | Transformed output of the single pass, for single-pass layers |
+| `Layer.payload.transformed_out_dtype` | Dtype of the saved transformed output, or `None` |
+| `Layer.payload.transformed_out_shape` | Shape of the saved transformed output, or `None` |
 | `Layer.type_index` | Index of this layer among layers of the same type, counted from 1 in execution order |
 | `Layer.visualizer_path` | Path of the PNG used as this node's thumbnail in graph renders, or `None` |
 
@@ -5398,6 +5406,12 @@ alphabetical order.
 
 **`tl.types.OpModuleContext`**
 : Module-nesting facts of one Op; `op.module_context` is the instance an Op serves. `OpModuleContext.atomic_module`: the `Module` record for the atomic module this Op is the output of, or `None`; `OpModuleContext.atomic_module_address`: module address, without the pass suffix, of the atomic module this Op outputs from, or `None`; `OpModuleContext.atomic_module_call`: stored `ModuleCall` label for an atomic-module output Op, or `None`; `OpModuleContext.call_depth`: depth of this Op's active `ModuleCall` nesting (the length of `module_call_stack`); `OpModuleContext.call_stack`: root-first labels of the `ModuleCall`s active when this Op ran; `OpModuleContext.entry_arg_keys`: mapping from `ModuleCall` label to the argument keys this Op filled at module entry; `OpModuleContext.input_to_module_calls`: labels of the `ModuleCall` records whose input this Op's output fed; `OpModuleContext.input_to_modules`: module addresses, without the pass suffix, whose input this Op's output fed; `OpModuleContext.is_atomic_module`: whether this Op is the sole operation output of an atomic module call; `OpModuleContext.is_module_input`: whether this Op's output feeds at least one `ModuleCall` as an input; `OpModuleContext.is_module_output`: whether this Op is the output of a `ModuleCall`; `OpModuleContext.output_of_module_calls`: labels of the `ModuleCall` records whose output this Op is; `OpModuleContext.output_of_modules`: module addresses, without the pass suffix, whose output this Op is.
+
+**`tl.types.LayerPayload`**
+: Saved transformed payloads of one Layer; its output and gradient members require a single-pass layer; `layer.payload` is the instance a Layer serves. `LayerPayload.transformed_grad`: transformed gradient of the single pass, for single-pass layers; `LayerPayload.transformed_grad_dtype`: dtype of the saved transformed gradient, or `None`; `LayerPayload.transformed_grad_shape`: shape of the saved transformed gradient, or `None`; `LayerPayload.transformed_out`: transformed output of the single pass, for single-pass layers; `LayerPayload.transformed_out_dtype`: dtype of the saved transformed output, or `None`; `LayerPayload.transformed_out_shape`: shape of the saved transformed output, or `None`.
+
+**`tl.types.OpPayload`**
+: Saved payloads of one Op; `op.payload` is the instance an Op serves. `OpPayload.materialize_grad`: materialize this Op's saved gradient from a lazy bundle reference; `OpPayload.materialize_out`: materialize this Op's saved output from a lazy bundle reference; `OpPayload.transformed_grad`: this Op's saved gradient after the trace's gradient transform, or `None`; `OpPayload.transformed_grad_dtype`: dtype of this Op's saved transformed gradient; `OpPayload.transformed_grad_shape`: shape of this Op's saved transformed gradient; `OpPayload.transformed_out`: this Op's saved output after the trace's activation transform, or `None`; `OpPayload.transformed_out_dtype`: dtype of this Op's saved transformed output; `OpPayload.transformed_out_shape`: shape of this Op's saved transformed output.
 
 **`tl.types.LayerControlFlow`**
 : Conditional-branch facts of one Layer; `layer.control_flow` is the instance a Layer serves. `LayerControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm; `LayerControlFlow.bool_value`: the Python `bool` value of a scalar boolean layer, or `None` otherwise; `LayerControlFlow.branch_stack_ops`: dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it; `LayerControlFlow.depth`: number of distinct conditionals this layer takes part in, derived on read from `in_conditionals`; `LayerControlFlow.elif_children`: dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm; `LayerControlFlow.else_children`: list of labels of this layer's child ops that sit in an `else` arm of a conditional; `LayerControlFlow.entry_children`: list of labels of this layer's child ops whose edge from it enters a conditional arm; `LayerControlFlow.in_conditionals`: ids of the conditionals this layer takes part in, as a test or inside an arm; `LayerControlFlow.is_in_conditional`: whether this layer takes part in any conditional role; `LayerControlFlow.is_in_conditional_body`: whether this layer sits in the body of a conditional arm; `LayerControlFlow.is_in_conditional_evaluation`: whether this layer computes the condition of a conditional arm; `LayerControlFlow.is_scalar_bool`: whether this layer's value is a scalar boolean; `LayerControlFlow.is_terminal_bool`: whether this layer is a scalar boolean that ends inside the model, such as a branch condition; `LayerControlFlow.role_stacks`: list of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under; `LayerControlFlow.terminal_bool_for`: the conditional that this terminal boolean decides, or `None`; `LayerControlFlow.then_children`: list of labels of this layer's child ops that sit in a `then` arm of a conditional.

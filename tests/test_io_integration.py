@@ -156,7 +156,7 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     assert saved_layers
 
     for layer in saved_layers[:3]:
-        tensor = layer.materialize_out()
+        tensor = layer.payload.materialize_out()
         assert isinstance(tensor, torch.Tensor)
         assert layer.out_ref is not None
 
@@ -237,7 +237,7 @@ def test_streaming_keep_outs_in_memory_false_materializes_from_refs(
 
     assert streamed_layer.out is None
     assert streamed_layer.out_ref is not None
-    tensor = streamed_layer.materialize_out()
+    tensor = streamed_layer.payload.materialize_out()
 
     assert isinstance(tensor, torch.Tensor)
     assert isinstance(eager_layer.out, torch.Tensor)

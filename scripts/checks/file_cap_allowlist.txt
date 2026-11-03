@@ -100,12 +100,12 @@ torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	842
 torchlens/_data_classes/interface.py::_getitem_after_pass	123
 torchlens/_data_classes/interface.py::_str_after_pass	63
-torchlens/_data_classes/layer.py	1750
+torchlens/_data_classes/layer.py	1745
 torchlens/_data_classes/module.py	2636
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3579
+torchlens/_data_classes/op.py	3497
 torchlens/_data_classes/op.py::Op.__getattribute__	96
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	88
@@ -367,8 +367,8 @@ torchlens/_postprocess/finalization.py::_finalize_param_logs	71
 torchlens/_postprocess/finalization.py::_finalize_streamed_bundle	70
 torchlens/_postprocess/finalization.py::_reconcile_multipass_layer_fields	77
 torchlens/_postprocess/finalization.py::_reuse_streamed_blob_ids	86
-torchlens/_postprocess/graph_traversal.py	964
-torchlens/_postprocess/graph_traversal.py::_add_output_layers	295
+torchlens/_postprocess/graph_traversal.py	972
+torchlens/_postprocess/graph_traversal.py::_add_output_layers	303
 torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	103
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	132
 torchlens/_postprocess/labeling.py	1123
@@ -558,7 +558,7 @@ torchlens/_visualization/_bundle_graph.py::render_bundle_graph	70
 torchlens/_visualization/_condensed_flow.py	814
 torchlens/_visualization/_condensed_flow.py::_compute_child_condensed_flow_graphs	77
 torchlens/_visualization/_condensed_flow.py::_condensed_edges	65
-torchlens/_visualization/_encoding.py	1851
+torchlens/_visualization/_encoding.py	1852
 torchlens/_visualization/_encoding.py::_coerce_scalar	69
 torchlens/_visualization/_encoding.py::resolve_color_by	91
 torchlens/_visualization/_encoding.py::resolve_size_by	73

@@ -835,8 +835,8 @@ class RefreshProjector:
 
         layer._internal_set("out", None)
         layer._internal_set("transformed_out", None)
-        layer.transformed_out_shape = None
-        layer.transformed_out_dtype = None
+        layer._payload_transformed_out_shape = None
+        layer._payload_transformed_out_dtype = None
         layer._cost_transformed_activation_memory = None
         layer.has_saved_activation = False
         layer.has_out_variations = False

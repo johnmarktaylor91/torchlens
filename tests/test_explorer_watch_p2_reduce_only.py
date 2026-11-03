@@ -16,6 +16,7 @@ import torch
 
 import torchlens as tl
 from torchlens._ir.summary_role import summary
+from torchlens._utils._record_group_table import record_member
 from torchlens.recording import CaptureSpec
 
 
@@ -85,7 +86,7 @@ class TestCloneSkipTrace:
         # Nothing raw retained; summaries landed.
         op = log["linear_1_1"]
         assert op.out is None
-        assert op.transformed_out is not None
+        assert op.payload.transformed_out is not None
 
     def test_retained_summary_never_aliases_live_storage(self) -> None:
         model = _model()
@@ -99,9 +100,9 @@ class TestCloneSkipTrace:
             ),
         )
         retained_ptrs = {
-            op.transformed_out.untyped_storage().data_ptr()
+            op.payload.transformed_out.untyped_storage().data_ptr()
             for op in log.ops
-            if getattr(op, "transformed_out", None) is not None
+            if record_member(op, "transformed_out", None) is not None
         }
         assert not retained_ptrs & set(probe.seen_ptrs)
 
@@ -207,7 +208,7 @@ class TestReduceOnlyBudget:
                 save_raw_activations=False,
             ),
         )
-        assert log["linear_1_1"].transformed_out is not None
+        assert log["linear_1_1"].payload.transformed_out is not None
 
     @pytest.mark.smoke
     def test_budget_below_summary_refuses(self) -> None:

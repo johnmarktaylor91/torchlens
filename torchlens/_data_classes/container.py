@@ -1074,7 +1074,7 @@ def _value_for_op(op: Op, source: str) -> Any:
     if source == "out":
         return getattr(op, "out", None)
     if source == "transformed":
-        return getattr(op, "transformed_out", None)
+        return record_member(op, "transformed_out", None)
     raise InvalidArgumentError(
         f"Unsupported container value source {source!r}",
         code="container_value_source_invalid",

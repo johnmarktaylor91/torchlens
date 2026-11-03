@@ -138,7 +138,7 @@ def test_bytes_retained_per_site_constant_in_batch(kind: str) -> None:
         full_bytes = sum(op.out.nbytes for op in full.ops if isinstance(op.out, torch.Tensor))
         stats_bytes = 0
         for op in reduced.ops:
-            vector = op.transformed_out
+            vector = op.payload.transformed_out
             assert isinstance(vector, torch.Tensor) and vector.numel() == PACKED_SLOTS
             stats_bytes += vector.nbytes
         retained[batch] = (len(reduced.ops), stats_bytes, full_bytes)

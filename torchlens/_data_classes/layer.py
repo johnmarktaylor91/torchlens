@@ -94,6 +94,7 @@ from ._record_groups import LayerControlFlow, LayerCost, MovedMemberField
 from ._record_groups_autograd import LayerAutograd
 from ._record_groups_call import LayerCall
 from ._record_groups_module_context import LayerModuleContext
+from ._record_groups_payload import LayerPayload
 from ._record_groups_source import LayerSource
 from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items
@@ -345,10 +346,10 @@ class Layer(_SelectionOperand):
         multi_output_index: Any
         multi_output_name: Any
         shape: Any
-        transformed_out_shape: Any
+        _payload_transformed_out_shape: Any
         dtype: Any
         dtype_ref: Any
-        transformed_out_dtype: Any
+        _payload_transformed_out_dtype: Any
         device_ref: Any
         backend_address: Any
         resolver_status: Any
@@ -363,8 +364,8 @@ class Layer(_SelectionOperand):
         is_edited: Any
         detach_saved_activations: Any
         save_grads: Any
-        transformed_grad_shape: Any
-        transformed_grad_dtype: Any
+        _payload_transformed_grad_shape: Any
+        _payload_transformed_grad_dtype: Any
         transformed_gradient_memory: Any
         _cost_flops_forward: Any
         _cost_flops_backward: Any
@@ -615,6 +616,12 @@ class Layer(_SelectionOperand):
         """Module-nesting facts of this Layer (``layer.module_context.call_depth``)."""
 
         return LayerModuleContext(self)
+
+    @property
+    def payload(self) -> LayerPayload:
+        """Saved transformed payloads of this Layer (``layer.payload.transformed_out``)."""
+
+        return LayerPayload(self)
 
     @property
     def macs_backward(self) -> Macs | None:
@@ -1067,12 +1074,6 @@ class Layer(_SelectionOperand):
         return self._single_pass_or_error("out")
 
     @property
-    def transformed_out(self) -> Any:
-        """Transformed out on single-pass layers."""
-
-        return self._single_pass_or_error("transformed_out")
-
-    @property
     def has_saved_activation(self) -> bool:
         """Return whether the single pass has a saved out.
 
@@ -1098,12 +1099,6 @@ class Layer(_SelectionOperand):
             Saved grad from the only pass.
         """
         return self._single_pass_or_error("grad")
-
-    @property
-    def transformed_grad(self) -> Any:
-        """Transformed grad on single-pass layers."""
-
-        return self._single_pass_or_error("transformed_grad")
 
     @property
     def has_grad(self) -> bool:

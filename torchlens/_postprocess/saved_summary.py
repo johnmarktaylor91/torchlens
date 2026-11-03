@@ -128,7 +128,7 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
     payloads = [
         payload
         for op in saved_ops
-        for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None))
+        for payload in (getattr(op, "out", None), record_member(op, "transformed_out", None))
     ]
     trace._cost_pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))
 

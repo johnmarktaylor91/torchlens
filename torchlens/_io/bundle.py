@@ -3673,7 +3673,7 @@ def _validate_activation_transform_outputs(
     for layer in trace._layer_list:
         if not getattr(layer, "has_saved_activation", False):
             continue
-        transformed_out = getattr(layer, "transformed_out", None)
+        transformed_out = record_member(layer, "transformed_out", None)
         if transformed_out is None:
             continue
         if not isinstance(transformed_out, torch.Tensor):

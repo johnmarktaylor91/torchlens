@@ -1742,8 +1742,8 @@ def test_trace_activation_transform(default_input1):
     # All saved tensors should be scalar (mean reduces to scalar)
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.transformed_out is not None:
-            assert entry.transformed_out.dim() == 0, (
+        if entry.payload.transformed_out is not None:
+            assert entry.payload.transformed_out.dim() == 0, (
                 f"Layer {label} tensor should be scalar after torch.mean transform"
             )
 

@@ -227,7 +227,7 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
         assert record.grad is None
         assert record.transformed_grad is not None
         assert op.grad is None
-        assert op.transformed_grad is not None
+        assert op.payload.transformed_grad is not None
         expected_backward_memory = sum(
             int(record.transformed_gradient_memory or 0)
             for saved_op in trace.saved_grad_ops

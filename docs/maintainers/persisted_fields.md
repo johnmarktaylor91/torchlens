@@ -744,13 +744,13 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `transform_fn_source` | interned | required: every level | keep | fact | `Op.call.func_transform_fn_source` (field) |
 | `transform_kind` | interned | required: every level | keep | fact | `Op.call.func_transform_kind` (field) |
 | `transformed_activation_memory` | interned | required: every level | keep | fact | `Op.cost.transformed_activation_memory` (field) |
-| `transformed_grad` | payload | optional: `include_grads` (executable_with_callables, portable) | blob | fact | `Op.transformed_grad` (field) |
-| `transformed_grad_dtype` | interned | required: every level | keep | fact | `Op.transformed_grad_dtype` (field) |
-| `transformed_grad_shape` | interned | required: every level | keep | fact | `Op.transformed_grad_shape` (field) |
+| `transformed_grad` | payload | optional: `include_grads` (executable_with_callables, portable) | blob | fact | `Op.payload.transformed_grad` (field) |
+| `transformed_grad_dtype` | interned | required: every level | keep | fact | `Op.payload.transformed_grad_dtype` (field) |
+| `transformed_grad_shape` | interned | required: every level | keep | fact | `Op.payload.transformed_grad_shape` (field) |
 | `transformed_gradient_memory` | interned | required: every level | keep | fact | `Op.transformed_gradient_memory` (field) |
-| `transformed_out` | payload | optional: `include_outs` (executable_with_callables, portable) | blob | fact | `Op.transformed_out` (field) |
-| `transformed_out_dtype` | interned | required: every level | keep | fact | `Op.transformed_out_dtype` (field) |
-| `transformed_out_shape` | interned | required: every level | keep | fact | `Op.transformed_out_shape` (field) |
+| `transformed_out` | payload | optional: `include_outs` (executable_with_callables, portable) | blob | fact | `Op.payload.transformed_out` (field) |
+| `transformed_out_dtype` | interned | required: every level | keep | fact | `Op.payload.transformed_out_dtype` (field) |
+| `transformed_out_shape` | interned | required: every level | keep | fact | `Op.payload.transformed_out_shape` (field) |
 | `type` | interned | required: every level | keep | fact | `Op.type` (field) |
 | `type_index` | interned | required: every level | keep | fact | `Op.type_index` (field) |
 | `unattributed_tensor_args` | interned | required: every level | keep | fact | `Op.call.unattributed_tensor_args` (field) |
@@ -848,11 +848,11 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `total_autograd_memory` | scalar | required: every level | keep | fact | `Layer.cost.total_autograd_memory` (field) |
 | `total_param_memory` | scalar | required: every level | keep | fact | `Layer.cost.total_param_memory` (field) |
 | `transformed_activation_memory` | scalar | required: every level | keep | fact | `Layer.cost.transformed_activation_memory` (field) |
-| `transformed_grad_dtype` | scalar | required: every level | keep | fact | `Layer.transformed_grad_dtype` (field) |
-| `transformed_grad_shape` | scalar | required: every level | keep | fact | `Layer.transformed_grad_shape` (field) |
+| `transformed_grad_dtype` | scalar | required: every level | keep | fact | `Layer.payload.transformed_grad_dtype` (field) |
+| `transformed_grad_shape` | scalar | required: every level | keep | fact | `Layer.payload.transformed_grad_shape` (field) |
 | `transformed_gradient_memory` | scalar | required: every level | keep | fact | `Layer.transformed_gradient_memory` (field) |
-| `transformed_out_dtype` | scalar | required: every level | keep | fact | `Layer.transformed_out_dtype` (field) |
-| `transformed_out_shape` | scalar | required: every level | keep | fact | `Layer.transformed_out_shape` (field) |
+| `transformed_out_dtype` | scalar | required: every level | keep | fact | `Layer.payload.transformed_out_dtype` (field) |
+| `transformed_out_shape` | scalar | required: every level | keep | fact | `Layer.payload.transformed_out_shape` (field) |
 | `type_index` | scalar | required: every level | keep | fact | `Layer.type_index` (field) |
 | `visualizer_path` | scalar | required: every level | keep | fact | `Layer.visualizer_path` (field) |
 

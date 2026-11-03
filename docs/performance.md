@@ -301,7 +301,7 @@ assert trace.find_sites(tl.func("conv2d")).first().out.shape == (1, 2, 3, 3)
 
 Use disk-backed storage for selected payloads that are too large or numerous to keep in memory.
 Trace repr, notebook HTML, and JSON explanation do not materialize lazy disk payloads for their
-NaN/Inf summary; those refs are reported as unexamined until you call ``op.materialize_out()``.
+NaN/Inf summary; those refs are reported as unexamined until you call ``op.payload.materialize_out()``.
 This exemption applies to predicate-selected disk-only payloads. Exhaustive saving
 (``save="all"``, the default) keeps RAM copies until postprocess, so combine a narrower
 ``save=`` with disk streaming to reduce peak retained memory. Note that ``save=`` itself takes a

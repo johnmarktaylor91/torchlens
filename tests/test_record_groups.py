@@ -48,7 +48,15 @@ def trace() -> Iterator[tl.Trace]:
 def test_cost_group_is_applied() -> None:
     """The cost rows are live in the refusal tables of both records."""
 
-    assert {"cost", "control_flow", "call", "source", "autograd", "module_context"} <= ACTIVE_GROUPS
+    assert {
+        "cost",
+        "control_flow",
+        "call",
+        "source",
+        "autograd",
+        "module_context",
+        "payload",
+    } <= ACTIVE_GROUPS
     assert len(_OP_COST_ROWS) == 16
     assert len(_LAYER_COST_ROWS) == 17
     assert {old for old, _, _ in _OP_COST_ROWS} <= set(OP_MOVED_MEMBERS)
@@ -72,6 +80,8 @@ def test_group_classes_are_the_public_types(trace: tl.Trace) -> None:
     assert type(layer.autograd) is tl.types.LayerAutograd
     assert type(op.module_context) is tl.types.OpModuleContext
     assert type(layer.module_context) is tl.types.LayerModuleContext
+    assert type(op.payload) is tl.types.OpPayload
+    assert type(layer.payload) is tl.types.LayerPayload
     assert "flops_forward" in dir(op.cost)
     assert "total_flops_forward" in dir(layer.cost)
     assert "OpCost" in repr(op.cost)
@@ -293,6 +303,30 @@ def test_module_context_group_reads_the_nesting() -> None:
             _ = op.module_call_depth
         with pytest.raises(FacadeTeachingError):
             _ = layer.output_of_modules
+    finally:
+        captured.cleanup()
+
+
+def test_payload_group_reads_the_transformed_output() -> None:
+    """The payload group serves the transformed output on Op and on a single-pass Layer."""
+
+    torch.manual_seed(0)
+    captured = tl.trace(
+        nn.Sequential(nn.Linear(3, 4), nn.ReLU()),
+        torch.ones(2, 3),
+        save="all",
+        capture=tl.options.CaptureOptions(activation_transform=torch.mean),
+    )
+    try:
+        op = captured.ops["relu_1_2"]
+        assert op.payload.transformed_out is op._payload_transformed_out
+        assert op.payload.transformed_out_shape == ()
+        assert captured.layers["relu_1"].payload.transformed_out is op.payload.transformed_out
+        assert op.payload.materialize_out() is op.out
+        with pytest.raises(FacadeTeachingError):
+            _ = op.transformed_out
+        with pytest.raises(FacadeTeachingError):
+            _ = op.materialize_out
     finally:
         captured.cleanup()
 

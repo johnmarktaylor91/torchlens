@@ -1721,7 +1721,9 @@
   `op.autograd.grad_for(bwd=0)`), and `op.module_context` (`tl.types.OpModuleContext`) and
   `layer.module_context` (`tl.types.LayerModuleContext`) hold module nesting
   (`op.module_context.call_stack`, `op.module_context.atomic_module`,
-  `layer.module_context.output_of_modules`); a Layer group reads an
+  `layer.module_context.output_of_modules`), and `op.payload` (`tl.types.OpPayload`) and
+  `layer.payload` (`tl.types.LayerPayload`) hold the transformed payloads and lazy materialization
+  (`op.payload.transformed_out`, `op.payload.materialize_out()`); a Layer group reads an
   Op-only member of its group through the single pass (`layer.control_flow.branch_stack`); a former
   flat spelling such as `op.flops_forward` refuses typed (`facade_redirect`) and names the new one. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,

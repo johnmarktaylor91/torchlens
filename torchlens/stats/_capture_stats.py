@@ -249,7 +249,7 @@ def site_stats(trace: Any) -> dict[str, RunningStats]:
         )
     spines: dict[str, RunningStats] = {}
     for op in trace.ops:
-        vector = op.transformed_out
+        vector = op.payload.transformed_out
         if not isinstance(vector, torch.Tensor) or vector.numel() != PACKED_SLOTS:
             continue
         label = str(op.label)

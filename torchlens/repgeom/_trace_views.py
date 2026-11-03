@@ -14,6 +14,7 @@ import numpy as np
 import torch
 
 from .._record_type import first_op
+from .._utils._record_group_table import record_member
 from ..intervention.errors import MultiMatchWarning
 from ._annotation_gate import (
     _VERB_VOCABULARY,
@@ -445,7 +446,7 @@ def _saved_payload_with_kind(record: Any, label: str, *, verb: str) -> tuple[Any
     out = getattr(record, "out", None)
     if out is not None:
         return out, "raw"
-    transformed = getattr(record, "transformed_out", None)
+    transformed = record_member(record, "transformed_out", None)
     if transformed is None:
         _raise_unsaved_activation(label, verb=verb)
     raw_shape = getattr(record, "shape", None)

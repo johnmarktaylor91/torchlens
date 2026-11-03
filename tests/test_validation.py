@@ -5999,10 +5999,12 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
         capture=CaptureOptions(activation_transform=lambda tensor: tensor.mean(), seed=42),
     )
     try:
-        victim = next(layer for layer in log._layer_list if layer.transformed_out is not None)
-        assert victim.transformed_out_shape == ()
+        victim = next(
+            layer for layer in log._layer_list if layer.payload.transformed_out is not None
+        )
+        assert victim.payload.transformed_out_shape == ()
 
-        victim.transformed_out_shape = (999,)
+        victim._payload_transformed_out_shape = (999,)
 
         with pytest.raises(MetadataInvariantError, match="payload_metadata_invariants"):
             check_metadata_invariants(log)
@@ -6036,7 +6038,7 @@ def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None
     )
     try:
         assert any(layer.out is not None for layer in log._layer_list)
-        assert any(layer.transformed_out is not None for layer in log._layer_list)
+        assert any(layer.payload.transformed_out is not None for layer in log._layer_list)
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -6070,7 +6072,7 @@ def test_payload_metadata_invariant_allows_evicted_grad_metadata() -> None:
             layer for layer in log._layer_list if not layer.is_input and not layer.is_output
         )
         victim.grad = None
-        victim.transformed_grad = None
+        victim._payload_transformed_grad = None
         victim.has_grad = False
         victim._autograd_grad_shape = (2, 3)
         victim._autograd_grad_dtype = torch.float32

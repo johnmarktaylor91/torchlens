@@ -7,6 +7,7 @@ from typing import Any, Literal
 import torch
 
 from .._utils._multipass_access import is_multipass_layer
+from .._utils._record_group_table import record_member
 
 TensorShowMethod = Literal["auto", "heatmap", "channels", "rgb", "hist"]
 HeatmapSigns = Literal["positive", "negative", "absolute_value", "all"]
@@ -41,7 +42,7 @@ def _tensor_from_log(log_entry: Any) -> torch.Tensor | None:
             f"Layer {layer_label!r} is recurrent ({num_passes} passes); show() needs a "
             f"single pass. Select one, for example log['{layer_label}:1'].show()."
         )
-    out = getattr(log_entry, "transformed_out", None)
+    out = record_member(log_entry, "transformed_out", None)
     if isinstance(out, torch.Tensor):
         return out
     out = getattr(log_entry, "out", None)

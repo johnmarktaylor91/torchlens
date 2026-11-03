@@ -954,7 +954,7 @@ def retained_activation_bytes(ops: Any) -> int:
         if not getattr(op, "has_saved_activation", False) or getattr(op, "is_orphan", False):
             continue
         counted_payload = False
-        for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None)):
+        for payload in (getattr(op, "out", None), record_member(op, "transformed_out", None)):
             if not isinstance(payload, torch.Tensor) or payload.is_meta:
                 continue
             counted_payload = True

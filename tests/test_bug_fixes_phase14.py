@@ -373,9 +373,9 @@ def test_view_mutation_output_recomputes_transformed_payload_metadata(
         assert torch.equal(output_op.out, expected_raw)
     else:
         assert output_op.out is None
-    assert torch.equal(output_op.transformed_out, expected_transformed)
-    assert output_op.transformed_out_shape == (6, 3)
-    assert output_op.transformed_out_dtype == expected_transformed.dtype
+    assert torch.equal(output_op.payload.transformed_out, expected_transformed)
+    assert output_op.payload.transformed_out_shape == (6, 3)
+    assert output_op.payload.transformed_out_dtype == expected_transformed.dtype
     assert output_op.cost.transformed_activation_memory == (
         expected_transformed.nelement() * expected_transformed.element_size()
     )

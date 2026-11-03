@@ -199,12 +199,12 @@ def test_bundle_writer_resolves_lazy_conjugate_payloads(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(activation_transform=lambda value: value.conj()),
         save="all",
     )
-    expected = trace.output_ops[0].transformed_out.clone()
+    expected = trace.output_ops[0].payload.transformed_out.clone()
     path = tmp_path / "conjugate.tlspec"
     trace.save(path)
 
     loaded = tl.load(path)
-    assert torch.equal(loaded.output_ops[0].transformed_out, expected)
+    assert torch.equal(loaded.output_ops[0].payload.transformed_out, expected)
 
 
 def test_pickle_preserves_module_and_buffer_hierarchy() -> None:

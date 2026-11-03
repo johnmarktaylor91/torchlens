@@ -331,6 +331,7 @@ _NON_NUMERIC_FIELDS = frozenset(
         "source",
         "autograd",
         "module_context",
+        "payload",
         # Private stored state.
         "_source_trace_ref",
         "_is_in_conditional_body",

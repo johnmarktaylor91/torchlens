@@ -79,8 +79,8 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
     for layer_entry in [*self._layer_list, *self.graph.orphans.values()]:
         if layer_entry.has_saved_activation and layer_entry.out is not None:
             tensors_to_undecorate.append(layer_entry.out)
-        if getattr(layer_entry, "transformed_out", None) is not None:
-            tensors_to_undecorate.append(layer_entry.transformed_out)
+        if record_member(layer_entry, "transformed_out", None) is not None:
+            tensors_to_undecorate.append(layer_entry.payload.transformed_out)
 
         if layer_entry.call.saved_args:
             tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.call.saved_args))

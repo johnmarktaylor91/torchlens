@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
 
@@ -346,7 +347,7 @@ def test_saved_grad_hook_clones_once_and_transforms_once() -> None:
         layer = trace._layer_dict_all_keys.get(label)
         if layer is None or not getattr(layer, "has_grad", False):
             continue
-        transformed_slot = getattr(layer, "transformed_grad", None)
+        transformed_slot = record_member(layer, "transformed_grad", None)
         if transformed_slot is not None:
             assert transformed_slot is event.transformed_payload_ref, (
                 f"{label}: layer transformed_grad is a second clone, not the charged event payload"

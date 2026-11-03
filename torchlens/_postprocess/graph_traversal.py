@@ -456,7 +456,9 @@ def _add_output_layers(
             # traces keep the graph-attached output — it is the very handle
             # backward() differentiates through.
             _parent_payload = (
-                output_node.out if output_node.out is not None else output_node.transformed_out
+                output_node.out
+                if output_node.out is not None
+                else output_node.payload.transformed_out
             )
             _detach_payload = not (
                 torch.is_tensor(_parent_payload) and _parent_payload.autograd.grad_fn is not None
@@ -491,13 +493,19 @@ def _add_output_layers(
             raw_retained = output_node.out is not None
             new_output_node._internal_set("out", actual_output_raw if raw_retained else None)
             new_output_node._internal_set("transformed_out", actual_output_transformed)
-            new_output_node.transformed_out_shape = _shape_or_none(actual_output_transformed)
-            new_output_node.transformed_out_dtype = _dtype_or_none(actual_output_transformed)
+            new_output_node._payload_transformed_out_shape = _shape_or_none(
+                actual_output_transformed
+            )
+            new_output_node._payload_transformed_out_dtype = _dtype_or_none(
+                actual_output_transformed
+            )
             new_output_node._cost_transformed_activation_memory = _memory_or_none(
                 actual_output_transformed
             )
 
-            comparison_output = output_node.out if raw_retained else output_node.transformed_out
+            comparison_output = (
+                output_node.out if raw_retained else output_node.payload.transformed_out
+            )
             actual_comparison = actual_output_raw if raw_retained else actual_output_transformed
             if (
                 comparison_output is not None

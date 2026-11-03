@@ -1629,8 +1629,8 @@ def _fold_op_grad_events(
         op.gradient_memory = Bytes(event.memory or 0)
         op._internal_set("grad", payload)
         op._internal_set("transformed_grad", transformed_payload)
-        op.transformed_grad_shape = _shape_or_none(transformed_payload)
-        op.transformed_grad_dtype = _dtype_or_none(transformed_payload)
+        op._payload_transformed_grad_shape = _shape_or_none(transformed_payload)
+        op._payload_transformed_grad_dtype = _dtype_or_none(transformed_payload)
         op.transformed_gradient_memory = _memory_or_none(transformed_payload)
         state.saved_grad_labels.add(op.layer_label)
         for payload_key, payload_memory in _retained_grad_payload_refs(

@@ -192,7 +192,7 @@ def test_lazy_materialize_rejects_tampered_relative_path(tmp_path: Path) -> None
     layer.out_ref = replace(ref, relative_path="../outside_materialize.safetensors")
 
     with pytest.raises(ArtifactError, match="Bundle rejected"):
-        layer.materialize_out()
+        layer.payload.materialize_out()
 
 
 def test_extra_blob_with_manifest_sha_collision_raises(tmp_path: Path) -> None:

@@ -639,9 +639,9 @@ def test_streamed_bundle_blob_ids_never_alias_an_orphan_shifted_stream(tmp_path:
     trace = tl.trace(model, x, storage=tl.to_disk(bundle_path))
 
     output_op = trace.output_ops[0]
-    assert tuple(output_op.materialize_out().shape) == (2, 3)
-    assert torch.equal(output_op.materialize_out(), expected)
+    assert tuple(output_op.payload.materialize_out().shape) == (2, 3)
+    assert torch.equal(output_op.payload.materialize_out(), expected)
     refs = [op.out_ref.blob_id for op in trace.ops if op.out_ref is not None]
     assert len(refs) == len(set(refs))
     loaded = tl.load(bundle_path)
-    assert torch.equal(loaded.output_ops[0].materialize_out(), expected)
+    assert torch.equal(loaded.output_ops[0].payload.materialize_out(), expected)

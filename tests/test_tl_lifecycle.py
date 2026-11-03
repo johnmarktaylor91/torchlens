@@ -106,7 +106,7 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
 
     for layer in log._layer_list:
         _assert_tensor_tree_clean(layer.out)
-        _assert_tensor_tree_clean(getattr(layer, "transformed_out", None))
+        _assert_tensor_tree_clean(record_member(layer, "transformed_out", None))
         _assert_tensor_tree_clean(record_member(layer, "saved_args", None))
         _assert_tensor_tree_clean(record_member(layer, "saved_kwargs", None))
 

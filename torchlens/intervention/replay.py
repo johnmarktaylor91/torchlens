@@ -394,8 +394,8 @@ def _clear_op_gradient_projection(site: Op) -> None:
     site._autograd_grad_shape = None
     site._autograd_grad_dtype = None
     site.gradient_memory = Bytes(0)
-    site.transformed_grad_shape = None
-    site.transformed_grad_dtype = None
+    site._payload_transformed_grad_shape = None
+    site._payload_transformed_grad_dtype = None
     site.transformed_gradient_memory = Bytes(0)
 
 

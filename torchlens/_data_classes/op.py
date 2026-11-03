@@ -54,7 +54,6 @@ from .._errors import (
 )
 from .._io import (
     TLSPEC_VERSION,
-    ArtifactError,
     FieldPolicy,
     coerce_container_typed_state,
     default_fill_state,
@@ -130,6 +129,7 @@ from ._record_groups import OpControlFlow, OpCost
 from ._record_groups_autograd import OpAutograd
 from ._record_groups_call import OpCall
 from ._record_groups_module_context import OpModuleContext
+from ._record_groups_payload import OpPayload
 from ._record_groups_source import OpSource
 from ._state_adapter import state_items, state_restore
 from .container import (
@@ -1149,9 +1149,11 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
         Bytes(get_memory_amount_from_metadata(tensor, shape, dtype)),
     )
     entry._internal_set("has_saved_activation", True)
-    entry._internal_set("transformed_out_shape", _shape_or_none(entry.transformed_out))
-    entry._internal_set("transformed_out_dtype", _dtype_or_none(entry.transformed_out))
-    entry._internal_set("transformed_activation_memory", _memory_or_none(entry.transformed_out))
+    entry._internal_set("transformed_out_shape", _shape_or_none(entry.payload.transformed_out))
+    entry._internal_set("transformed_out_dtype", _dtype_or_none(entry.payload.transformed_out))
+    entry._internal_set(
+        "transformed_activation_memory", _memory_or_none(entry.payload.transformed_out)
+    )
 
 
 def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
@@ -1279,20 +1281,20 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _call_args_template: Any
         _call_kwargs_template: Any
         shape: Any
-        transformed_out_shape: Any
+        _payload_transformed_out_shape: Any
         dtype: Any
-        transformed_out_dtype: Any
-        transformed_out: Any
+        _payload_transformed_out_dtype: Any
+        _payload_transformed_out: Any
         has_out_variations: Any
         out_versions_by_child: Any
         grad: Any
-        transformed_grad: Any
+        _payload_transformed_grad: Any
         save_grads: Any
         has_grad: Any
         _autograd_grad_shape: Any
-        transformed_grad_shape: Any
+        _payload_transformed_grad_shape: Any
         _autograd_grad_dtype: Any
-        transformed_grad_dtype: Any
+        _payload_transformed_grad_dtype: Any
         func: Any
         _call_call_id: Any
         func_name: Any
@@ -1990,6 +1992,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return OpModuleContext(self)
 
     @property
+    def payload(self) -> OpPayload:
+        """Saved transformed payloads and lazy materialization (``op.payload.transformed_out``)."""
+
+        return OpPayload(self)
+
+    @property
     def macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None``."""
 
@@ -2567,96 +2575,6 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             prepend=prepend,
             confirm_mutation=confirm_mutation,
         )
-
-    def materialize_out(
-        self,
-        *,
-        map_location: str | torch.device = "cpu",
-        payload_hints: Any | None = None,
-    ) -> Any:
-        """Materialize this layer's saved out from a lazy bundle ref.
-
-        Parameters
-        ----------
-        map_location:
-            Target device for the materialized tensor.
-        payload_hints:
-            Optional backend payload hints used during materialization.
-
-        Returns
-        -------
-        Any
-            Materialized out payload.
-
-        Raises
-        ------
-        ArtifactError
-            If no out ref is available for this layer.
-
-        Examples
-        --------
-        >>> import torchlens as tl
-        >>> trace = tl.load("demo_bundle", lazy=True)
-        >>> tensor = trace["linear_1_1"].materialize_out()
-        >>> tensor.shape
-        torch.Size([2, 3])
-        """
-
-        current_out = self._slot("out")
-        if current_out is not None:
-            return current_out
-        if self.out_ref is None:
-            raise ArtifactError("no out_ref to materialize from")
-        self._internal_set(
-            "out",
-            self.out_ref.materialize(map_location=map_location, payload_hints=payload_hints),
-        )
-        return self.out
-
-    def materialize_grad(
-        self,
-        *,
-        map_location: str | torch.device = "cpu",
-        payload_hints: Any | None = None,
-    ) -> Any:
-        """Materialize this layer's saved grad from a lazy bundle ref.
-
-        Parameters
-        ----------
-        map_location:
-            Target device for the materialized tensor.
-        payload_hints:
-            Optional backend payload hints used during materialization.
-
-        Returns
-        -------
-        Any
-            Materialized grad payload.
-
-        Raises
-        ------
-        ArtifactError
-            If no grad ref is available for this layer.
-
-        Examples
-        --------
-        >>> import torchlens as tl
-        >>> trace = tl.load("demo_bundle", lazy=True)
-        >>> grad = trace["linear_1_1"].materialize_grad()
-        >>> grad.shape
-        torch.Size([2, 3])
-        """
-
-        grad = self._slot("grad")
-        if grad is not None:
-            return grad
-        if self.grad_ref is None:
-            raise ArtifactError("no grad_ref to materialize from")
-        self._internal_set(
-            "grad",
-            self.grad_ref.materialize(map_location=map_location, payload_hints=payload_hints),
-        )
-        return self.grad
 
     def __tl_state_items__(self) -> Any:
         """Yield live state ``(field_name, value)`` pairs in declared order.

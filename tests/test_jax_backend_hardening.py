@@ -667,14 +667,14 @@ def test_jax_sharded_array_lazy_and_op_materialize_accept_payload_hints(
     lazy_op = _first_saved_op(lazy_loaded)
     assert lazy_op.out_ref is not None
     direct_value = lazy_op.out_ref.materialize()
-    op_value = lazy_op.materialize_out()
+    op_value = lazy_op.payload.materialize_out()
 
     override_loaded = tl.load(path, lazy=True)
     override_op = _first_saved_op(override_loaded)
     assert override_op.out_ref is not None
     override_op._internal_set("grad_ref", override_op.out_ref)
     override_op._internal_set("grad", None)
-    grad_value = override_op.materialize_grad(payload_hints=hint)
+    grad_value = override_op.payload.materialize_grad(payload_hints=hint)
 
     for value in (direct_value, op_value, grad_value):
         _assert_named_sharding(value, axis_name="x", device_count=device_count)

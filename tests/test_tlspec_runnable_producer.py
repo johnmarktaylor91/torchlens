@@ -339,12 +339,12 @@ def test_runnable_sparse_core_contains_no_tensor_payload_family(tmp_path: Path) 
     assert all(op.func is None for op in metadata["_layer_list"])
     for op in metadata["_layer_list"]:
         assert op.out is None
-        assert op.transformed_out is None
+        assert op.payload.transformed_out is None
         assert op.call.saved_args is None
         assert op.call.saved_kwargs is None
         assert op.out_versions_by_child in (None, {})
         assert op.grad is None
-        assert op.transformed_grad is None
+        assert op.payload.transformed_grad is None
 
 
 def test_runnable_preflight_rejects_unregistered_tensor_constant(tmp_path: Path) -> None:

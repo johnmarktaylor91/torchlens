@@ -16,6 +16,7 @@ from torchlens._data_classes._record_groups import OpControlFlow, OpCost
 from torchlens._data_classes._record_groups_autograd import OpAutograd
 from torchlens._data_classes._record_groups_call import OpCall
 from torchlens._data_classes._record_groups_module_context import OpModuleContext
+from torchlens._data_classes._record_groups_payload import OpPayload
 from torchlens._data_classes._record_groups_source import OpSource
 from torchlens._utils._record_group_table import op_attr
 
@@ -63,3 +64,9 @@ class FakeRecord(SimpleNamespace):
         """The real module-context group over this fake."""
 
         return OpModuleContext(self)
+
+    @property
+    def payload(self) -> OpPayload:
+        """The real payload group over this fake."""
+
+        return OpPayload(self)

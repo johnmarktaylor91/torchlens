@@ -19,6 +19,7 @@ from ._data_classes._record_groups import LayerControlFlow, LayerCost, OpControl
 from ._data_classes._record_groups_autograd import LayerAutograd, OpAutograd
 from ._data_classes._record_groups_call import LayerCall, OpCall
 from ._data_classes._record_groups_module_context import LayerModuleContext, OpModuleContext
+from ._data_classes._record_groups_payload import LayerPayload, OpPayload
 from ._data_classes._record_groups_source import LayerSource, OpSource
 from ._data_classes._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
 from ._data_classes._trace_groups_capture import TraceHealth, TraceSettings, TraceSource
@@ -72,9 +73,11 @@ __all__ = [
     "OpSource",
     "OpAutograd",
     "OpModuleContext",
+    "OpPayload",
     "LayerSource",
     "LayerAutograd",
     "LayerModuleContext",
+    "LayerPayload",
     "LayerCall",
     "NarrationEvent",
     "RunnableDiagnostic",

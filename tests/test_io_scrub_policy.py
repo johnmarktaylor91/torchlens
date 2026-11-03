@@ -458,8 +458,8 @@ def _op_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "get_children": lambda o: o.get_children(),
         "get_parents": lambda o: o.get_parents(),
         "grad_for": lambda o: o.autograd.grad_for(bwd=0),
-        "materialize_grad": lambda o: o.materialize_grad(),
-        "materialize_out": lambda o: o.materialize_out(),
+        "materialize_grad": lambda o: o.payload.materialize_grad(),
+        "materialize_out": lambda o: o.payload.materialize_out(),
         "show": lambda o: o.show(),
         "to_pandas": lambda o: o.to_pandas(),
     }

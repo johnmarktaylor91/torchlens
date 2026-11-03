@@ -1071,7 +1071,7 @@ def test_grad_transform_applied() -> None:
     trace.backward(_output_loss(trace))
     assert all(
         torch.equal(
-            trace[label].transformed_grad,
+            trace[label].payload.transformed_grad,
             torch.zeros_like(trace[label].grad),
         )
         for label in trace.saved_grad_ops.keys()
@@ -1097,10 +1097,10 @@ def test_flat_transform_kwargs_populate_transformed_payloads() -> None:
 
     trace.backward(_output_loss(trace), retain_graph=True)
 
-    assert relu_op.transformed_out is not None
-    assert relu_op.transformed_out.dtype == torch.float16
-    assert relu_op.transformed_grad is not None
-    assert relu_op.transformed_grad.dtype == torch.float16
+    assert relu_op.payload.transformed_out is not None
+    assert relu_op.payload.transformed_out.dtype == torch.float16
+    assert relu_op.payload.transformed_grad is not None
+    assert relu_op.payload.transformed_grad.dtype == torch.float16
 
 
 def test_module_log_grad_aggregation() -> None:
