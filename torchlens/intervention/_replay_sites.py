@@ -91,7 +91,8 @@ def _unmet_log_precondition(log: Trace) -> str | None:
     if not getattr(log, "_tracing_finished", False):
         return "replay requires a completed Trace"
     if not (
-        getattr(log, "is_replayable", False) or getattr(log, "_options_save_arg_templates", False)
+        getattr(log, "is_replayable", False)
+        or getattr(getattr(log, "options", None), "save_arg_templates", False)
     ):
         return (
             "replay requires per-op argument templates, and this trace has none (a "

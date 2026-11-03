@@ -573,7 +573,7 @@ def _next_operation_hint(trace: Trace) -> str:
         return "spec stale; call replay() or rerun() to propagate"
     if not (
         getattr(trace, "is_replayable", False)
-        or getattr(trace, "_options_save_arg_templates", False)
+        or getattr(getattr(trace, "options", None), "save_arg_templates", False)
     ):
         return "not intervention-ready; no replay templates (pass model= and inputs= to do())"
     return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"

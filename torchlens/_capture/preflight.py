@@ -285,7 +285,7 @@ def cone_preflight(trace: Any, origins: Any) -> dict[str, Any]:
         "live_lane_ops": total_ops,
         "replay_ready": bool(
             getattr(trace, "is_replayable", False)
-            or getattr(trace, "_options_save_arg_templates", False)
+            or getattr(getattr(trace, "options", None), "save_arg_templates", False)
         ),
         "notes": (
             "replay recomputes exactly the planned labels; the live lane "
