@@ -1346,6 +1346,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_merged/_errors.py", "__all__"),
         ("torchlens/_merged/_evidence.py", "__all__"),
         ("torchlens/_merged/_presenter.py", "__all__"),
+        ("torchlens/neuro/_conflicts.py", "__all__"),
         ("torchlens/neuro/_datasets.py", "__all__"),
         ("torchlens/neuro/_rdms.py", "__all__"),
         ("torchlens/report/_notebook/__init__.py", "__all__"),
