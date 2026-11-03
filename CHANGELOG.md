@@ -843,6 +843,88 @@
 
 <!-- version list -->
 
+## v2.37.1 (2026-11-03)
+
+### Bug Fixes
+
+- **export**: Keep tracker table cells primitive when pandas maps nullable columns
+  ([`0c4c8bc`](https://github.com/johnmarktaylor91/torchlens/commit/0c4c8bcb7d46ff80b8bb987677e1b3591cbf1a76),
+  [`848b86a`](https://github.com/johnmarktaylor91/torchlens/commit/848b86a36f8a079cc578d56c68c1b469b941d328))
+
+pandas 3 keeps a nullable extension dtype through `Series.map`, so a missing cell came back as
+  `pd.NA` and broke the primitive-only contract that strict tracker tables such as the W&B export
+  need. Each tracker column is now built as an object series from the scalarized cells.
+
+- **compat**: Extend the `torch._C._nn.linear` runnable alias through torch 2.15
+  ([`b583576`](https://github.com/johnmarktaylor91/torchlens/commit/b583576d2968e4dbe75327e2ed51277f48038812))
+
+torch 2.15 still exposes `torch.nn.functional.linear` as the `torch._C._nn.linear` builtin, so a
+  capture on 2.15 recorded the private path. The alias now covers torch 2.15.
+
+### Continuous Integration
+
+- **release**: Refuse an unapproved major version at release and commit time
+  ([`7093285`](https://github.com/johnmarktaylor91/torchlens/commit/70932851ad703e08eeeadbfd48ba70fc4fc36935),
+  [`0da1a5b`](https://github.com/johnmarktaylor91/torchlens/commit/0da1a5b54788dec328861cfbfa5261337d859040),
+  [`f9892a5`](https://github.com/johnmarktaylor91/torchlens/commit/f9892a5a91a367dd1f704cd5f8ffdefc8726a0db),
+  [`c5ca42c`](https://github.com/johnmarktaylor91/torchlens/commit/c5ca42ceb46320d54152f9da1e5b96320e07cdca),
+  [`570640d`](https://github.com/johnmarktaylor91/torchlens/commit/570640d094d7b3c5bc66da6dc1647f6b1e2875bf))
+
+The release job computes the next version before `semantic-release version` runs and fails unless
+  `.github/MAJOR_RELEASE_APPROVED` names exactly that version. The commit-msg and pre-push hooks
+  accept major markers only while that file exists, and the environment override is removed. The
+  guard step is tested against real python-semantic-release on a scratch repository and by name in
+  the smoke job.
+
+- Cap python-dateutil below 3 on the numpy 1.26 legs
+  ([`a62befd`](https://github.com/johnmarktaylor91/torchlens/commit/a62befd1deaaabd087cbed482b78fd0c2e31372b))
+
+- **oracle**: Regenerate the plain_cnn disk goldens for the blob-id floor
+  ([`b29cd18`](https://github.com/johnmarktaylor91/torchlens/commit/b29cd1856f7f29ad56454ac7f509eecb4af648cb))
+
+
+## v2.37.0 (2026-11-02)
+
+### Features
+
+- **validation**: Report a degenerate forward as `degenerate_forward`
+  ([`92b8598`](https://github.com/johnmarktaylor91/torchlens/commit/92b859834fd4d1c58da87efa711ee4a99edbfda4),
+  [`4b5bf2f`](https://github.com/johnmarktaylor91/torchlens/commit/4b5bf2f073f9068bfa253eaf9c5dac758a2dc8f4),
+  [`193e8f3`](https://github.com/johnmarktaylor91/torchlens/commit/193e8f36685559182fb59d09462c4be89221d0ec))
+
+A forward whose final outputs are entirely NaN or infinite, or whose gradient is identically zero,
+  cannot show that its recorded graph matches the computation. Validation now fails it with the
+  `degenerate_forward` label (kinds `non_finite_output` and `zero_gradient`) instead of a misleading
+  perturbation failure, and `Trace.validate_forward_pass` runs the same check.
+
+- **capture**: Record an autograd.Function that leaves torch as one boundary op
+  ([`debb6944`](https://github.com/johnmarktaylor91/torchlens/commit/debb6944a1b8d014b905f25d5b488cb9e6b2c746),
+  [`8ae4a2f`](https://github.com/johnmarktaylor91/torchlens/commit/8ae4a2f5ab1981e8712b69e996654a71e3b50cba))
+
+A custom torch.autograd.Function whose forward hands its tensors to another library (a numpy or
+  dlpack round trip, as DGL does) is now logged as one op that replays through the Function's own
+  apply, with a `foreign_kernel_boundary` warning, instead of failing the completeness check. An
+  ordinary custom Function is unchanged, and a plain round trip outside a Function still fails.
+
+### Bug Fixes
+
+- **validation and capture**: Validate real models that failed on 2.36.x
+  ([merge `ac4e653`](https://github.com/johnmarktaylor91/torchlens/commit/ac4e6536811d1cde6c40a8838cfbab34acaff855))
+
+About forty fixes found by running validation over the Model Menagerie's hardest models. Capture
+  now keeps the op behind `Tensor.__index__` slice bounds, binds in-place writes through views and
+  `x[idx] += y` to the right base version, treats tensors held on plain objects of a module as
+  buffers, keeps a collapsed Function's argument provenance, patches module-level references to
+  wrapped torch callables (`from torch import cat` style), and no longer fails on an unhashable
+  non-tensor argument or a string positional input. Validation proves more inputs inert after
+  perturbation instead of failing them (saved zero values, unit-base exponents, single-key
+  attention, all-True boolean masks, empty matrix products, broadcast set-item overwrites, pinned
+  expand sizes, packed RNN batch sizes), keeps Parameter and grad-tracked inputs as leaves in its
+  input copies, replays autograd.grad against the unperturbed input, and records a typed failure for
+  every forward that does not pass. Receptive and projective field queries accept empty inputs and
+  walk deep graphs without recursion.
+
+
 ## v2.36.3 (2026-10-31)
 
 ### Bug Fixes

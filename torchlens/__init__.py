@@ -21,7 +21,7 @@ if _TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-__version__ = "2.36.3"
+__version__ = "2.37.1"
 
 if _TYPE_CHECKING:
     from ._data_classes.trace import Trace
