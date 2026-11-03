@@ -155,7 +155,7 @@ from ._pickle_prescan import (
     prescan_stream,
     scan_opcodes,
 )
-from ._pre3_module_paths import refuse_pre_3_module_path
+from .format_contract import refuse_pre_3_module_path
 from .format_errors import ArtifactTooOldError
 
 __all__ = ["SafeBundleUnpickler"]

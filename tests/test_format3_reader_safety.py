@@ -206,7 +206,7 @@ FOREIGN_TAGS = [
 @pytest.mark.parametrize("tag", FOREIGN_TAGS)
 def test_tag_outside_the_vocabulary_refuses(saved, tmp_path, tripwires, tag):
     cell = _tagged(tag, type="os.system", args=["id"], fields={}, items=[], name="x")
-    _refuses(_with_cell(saved, tmp_path / "tag", cell), tripwires)
+    _refuses(_with_cell(saved, tmp_path / "tag", cell), tripwires, code="record_schema_invalid")
 
 
 def test_pickle_bytes_inside_a_bytes_cell_stay_bytes(saved, tmp_path, tripwires):
@@ -413,6 +413,16 @@ def test_wrong_file_digest_refuses(saved, tmp_path, tripwires):
         _refuses(copy, tripwires)
 
 
+@pytest.mark.parametrize(
+    "relpath", ["extra.bin", "blobs/planted.safetensors", "records/extra.json"]
+)
+def test_unlisted_file_in_the_artifact_refuses(saved, tmp_path, tripwires, relpath):
+    copy = copy_artifact(saved, tmp_path / ("unlisted-" + relpath.replace("/", "_")))
+    (copy / relpath).parent.mkdir(parents=True, exist_ok=True)
+    (copy / relpath).write_bytes(b"\x00")
+    _refuses(copy, tripwires, code="bundle_metadata_integrity_refused")
+
+
 def test_wrong_record_digest_refuses(saved, tmp_path, tripwires):
     copy = copy_artifact(saved, tmp_path / "recdigest")
     manifest = read_manifest(copy)
@@ -494,3 +504,26 @@ def test_symlinked_record_file_refuses(saved, tmp_path, tripwires):
     target.unlink()
     target.symlink_to(real)
     _refuses(copy, tripwires)
+
+
+def test_tag_refusal_carries_the_ruled_cell_code(saved, tmp_path, tripwires):
+    """A cell that fails its type check refuses with the ruled ``record_schema_invalid``."""
+
+    cell = _tagged(FOREIGN_TAGS[0], type="os.system", args=["id"], fields={}, items=[], name="x")
+    error = _refuses(_with_cell(saved, tmp_path / "ruled", cell), tripwires)
+    assert error.fields["code"] == "record_schema_invalid"
+
+
+def test_recursion_during_rehydration_refuses_typed(saved, monkeypatch):
+    """A record graph that exhausts the interpreter stack surfaces typed, never raw."""
+
+    import torchlens as tl
+    from torchlens._io.format3 import reader
+
+    def explode(*args, **kwargs):
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(reader, "load_trace", explode)
+    with pytest.raises(ArtifactError) as info:
+        tl.load(saved)
+    assert info.value.fields["code"] == "rehydrate_recursion_limit"

@@ -1229,13 +1229,13 @@ def _build_unified_bundle(tmp_path: Path) -> Path:
     Returns
     -------
     Path
-        Saved bundle directory that detects as ``v2.0_unified``.
+        Saved bundle directory that detects as ``v3``.
     """
 
     trace = _build_conv_log()
     bundle_path = tmp_path / "unified_bundle.tlspec"
     trace.save(bundle_path)
-    assert detect_tlspec_format(bundle_path) == "v2.0_unified"
+    assert detect_tlspec_format(bundle_path) == "v3"
     return bundle_path
 
 

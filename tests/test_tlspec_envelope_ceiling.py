@@ -55,21 +55,30 @@ def test_validation_entry_raises_typed_not_bare_valueerror() -> None:
 
 
 def _reference_manifest_dict() -> dict:
-    """The manifest of a freshly saved tiny trace (the current writer's own)."""
+    """A minimal valid manifest in the shape ``Manifest.from_dict`` reads.
 
-    import json
-    import tempfile
-    from pathlib import Path
+    The 3.0 artifact reader parses its own manifest and runs no torch-version policy;
+    ``Manifest`` and ``enforce_version_policy`` still gate the fastlog recovery manifest, so
+    the reference is a fastlog-shaped dict at the current format version.
+    """
 
     import torch
-    from torch import nn
 
-    import torchlens as tl
-
-    with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / "trace.tlspec"
-        tl.trace(nn.Linear(2, 2), torch.randn(1, 2)).save(path)
-        return json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    return {
+        "tlspec_version": TLSPEC_VERSION,
+        "torchlens_version": "3.0.0",
+        "torch_version": torch.__version__,
+        "python_version": "3.10.0",
+        "platform": "linux-x86_64",
+        "created_at": "2026-01-01T00:00:00Z",
+        "bundle_format": "fastlog-directory",
+        "n_layers": 0,
+        "n_out_blobs": 0,
+        "n_grad_blobs": 0,
+        "n_auxiliary_blobs": 0,
+        "tensors": [],
+        "unsupported_tensors": [],
+    }
 
 
 def test_manifest_policy_gate_raises_typed() -> None:

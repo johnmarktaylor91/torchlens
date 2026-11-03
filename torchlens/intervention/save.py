@@ -17,7 +17,6 @@ import torch
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_dir, fsync_tree
 from .._io._json import read_bounded
-from .._io._pre3_module_paths import pre_3_artifact_error
 from .._io.format3.contract import INTERVENTION_FILE
 from .._io.format3.payloads import PayloadStore
 from .._io.format3.recipe import (
@@ -29,6 +28,7 @@ from .._io.format3.recipe import (
     recipe_placeholders,
 )
 from .._io.format3.writer import EnvelopeSpec, envelope_fields, write_intervention_recipe
+from .._io.format_contract import below_floor_error
 from .._io.format_errors import ArtifactError
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
@@ -330,8 +330,8 @@ def _refuse_2x_spec_layout(spec_path: Path) -> None:
     _reject_symlink_path(legacy, context="intervention spec.json")
     format_version = _read_json_file(legacy).get("format_version")
     _validate_format_version(format_version, path=spec_path)
-    raise pre_3_artifact_error(
-        f"intervention format_version={format_version}",
+    raise below_floor_error(
+        observed=f"intervention format_version={format_version}",
         path=str(spec_path),
         code="artifact_version_below_floor",
     )

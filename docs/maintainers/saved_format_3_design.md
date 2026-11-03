@@ -49,10 +49,12 @@ build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `v
 | `schema.py` | per-record schema derived at import from `STORAGE_BINDINGS` (`_data_classes/_schema_bindings.py`), field annotations and the writer contract's `component_specs`; nested-family sub-schemas (section 9); schema digest | 600 | writer |
 | `values.py` | the typed-value codec: Python value to tagged JSON and back, both directions in one module so tags stay symmetric; dtype table; disclosure builder | 450 | writer |
 | `decode.py` | the decoder half of the value codec: tagged JSON back to Python values through the closed vocabulary, field and name checks per tag, `record` construction; split from `values.py` because the encoder and its tables fill that module's budget | 400 | reader |
+| `_families.py` | the generic applier of the family grammar nodes in `schema.FAMILIES` (section 9): node shapes, closed vocabularies and within-cell constraints checked on each decoded cell before record construction; split from `decode.py` for its budget | 400 | reader |
 | `payloads.py` | safetensors chunk writer and reader with opaque keys; `LazyActivationRef` rebuilt on (chunk, key) | 450 | writer |
 | `writer.py` | `write_trace`, `write_bundle`, `write_intervention_recipe`: include-flag resolution (reuses `save_policy.py`), privacy and barcode policies carried over from `scrub.py`, record-table emission, manifest, reload check, atomic publish | 750 | writer |
 | `recipe.py` | the intervention recipe (section 8): rule and value encoding with callable placeholders at rule level and in edit arguments, recipe tensors on the shared key counter, typed rebinding at load; `write_intervention_recipe` and the trace writer call it | 700 | writer |
 | `reader.py` | `read_manifest`, `validate_artifact`, `load_trace`, `load_bundle`, `load_intervention_recipe`: manifest first, digests, record tables through the decoder, record construction, accessor rebuild, grouping settlement | 750 | reader |
+| `route.py` | the `bundle.load` switch into the 3.0 format: the root test and the door dispatch, kept outside `bundle.py` and its import cycle | 100 | reader |
 | `validate.py` | cross-record invariants after decode (section 9): site keys, structure-only coherence, checkpoint windows, edge carriers, graph structure, kernel relations, identity facts, injection provenance, evidence facts | 600 | reader |
 | `runnable.py` | thin adapter: descriptor JSON and state chunks under `runnable/`; delegates to `_io/runnable.py` (producer) and `_io/runnable_load.py` (loader), which keep their frozen contracts | 200 | runnable |
 
@@ -125,7 +127,7 @@ columnar:
 - The column set is `persisted_field_names(record)` from `_io/field_registry.py` (the
   bindings), filtered by level: a `required` key is a column at every level; an `optional` key
   with a payload flag is a column iff that flag is on in `payload_policy`; a forbidden column
-  refuses (`record_schema_invalid`, provisional); absent optional columns are absent, never
+  refuses (`record_schema_invalid`); absent optional columns are absent, never
   null-filled. The reader refuses a column it does not know (`unknown_persisted_field`).
   Within the 3 major the one forward-compatibility rule is: a key the schema marks as added
   after the file's `tlspec_version` may be absent (this is how the writer stream's tlspec 12
@@ -161,7 +163,7 @@ Plain JSON carries `null`, `bool`, finite `number` (ints within 2^53), `string`,
 (Python `list`), and `object` with string keys (Python `dict` whose keys are all `str` and
 none equal to the marker). Everything else is an object with the marker key `$tl` whose value
 is a tag from `TYPED_VALUE_TAGS` (contract page (d), adopted). The tag set is closed; a tag the
-decoder does not know refuses `record_schema_invalid` (provisional spelling, section 14) naming
+decoder does not know refuses `record_schema_invalid` naming
 the record, row and column.
 
 | Tag | Payload fields | Decodes to |
@@ -226,11 +228,11 @@ expected goes the same way (tensors in PAYLOAD and tensor-typed columns go to bl
 inside a user mapping in a `value` column is a disclosure too, per contract page (c)).
 
 Disclosure: the manifest `disclosures.count` and the first 16 `at` paths; `tl.load` attaches
-an advisory `unencodable_values_stringified` (spelling awaiting a ruling, section 14) to the loaded
+an advisory `unencodable_values_stringified` (ruled, section 14) to the loaded
 trace's capture advisories, so a user who saved a trace with custom attributes learns on load
 that they came back as text. The decoder returns the disclosure object (a small frozen
-dataclass in `values.py` with the four fields and a `__repr__` that shows them; its public
-name is the contract's spelling item 2, `UnencodableValue` proposed) in place of
+dataclass in `decode.py` with the four fields and a `__repr__` that shows them; its public
+name is `tl.types.UnencodableValue`, ruled) in place of
 the value, so `op.module_attributes["x"]` is a visible stand-in and never silently `None`.
 
 Precedent: `scrub._stringify_value` and the manifest keys `custom_attributes_disclosure` and
@@ -401,7 +403,7 @@ Delete outright once the reader stream's `load_trace` reads the golden set:
 | `torchlens/_io/_portability_preflight.py` | gone | dry-run unpickle before publish |
 | `torchlens/_io/state_keys.py` | 307 | shadow filter for pickled setstate key sets |
 | `torchlens/_io/_inline_tensor.py` | 275 | pickle reduce of small tensors |
-| `torchlens/_io/_pre3_module_paths.py` | 183 | pre-3 module-path probe in pickle globals (the 2.x refusal stays, section 14, by a cheaper test) |
+| `torchlens/_io/_pre3_module_paths.py` | gone | pre-3 module-path probe in pickle globals (the 2.x refusal stays, section 14, by a cheaper test) |
 | `torchlens/_io/_canonical_pickle.py` | 103 | deterministic pickler |
 | `torchlens/_io/_artifact_anchors.py` | 91 | manifest-vs-metadata anchors (manifest `files` digests replace them) |
 | `torchlens/_io/_rehydrate_lazy_names.py` | 53 | lazy name table for rehydrate |
@@ -555,7 +557,7 @@ map is the binding list; this table says when each fires in the 3.0 reader and w
 | `save_level` unknown | `artifact_save_level_invalid` | reader |
 | a `files` digest or byte count disagrees, or a record file is not an object with `columns`/`rows` | `bundle_metadata_integrity_refused` | reader |
 | a column not in the schema | `unknown_persisted_field` | decoder |
-| a cell of the wrong kind, an unknown `$tl` tag, a tag payload missing a field, a name outside a table | `record_schema_invalid` (provisional; see below) | decoder |
+| a cell of the wrong kind, an unknown `$tl` tag, a tag payload missing a field, a name outside a table | `record_schema_invalid` | decoder |
 | a nested family fails its sub-schema | the family's `artifact_<family>_invalid` | decoder |
 | a cross-record invariant fails | its existing code (`artifact_structure_only_incoherent`, `artifact_site_key_invalid`, ...) | `validate.py` |
 | a referenced chunk or key is missing, or safetensors refuses the file | `bundle_load_failed` | payloads |
@@ -566,17 +568,16 @@ map is the binding list; this table says when each fires in the 3.0 reader and w
 | rerun of a recipe with a `callable_placeholder` | `run_intervention_spec_not_persisted` (row text rewritten) | intervention guard |
 | a 3.0 door not yet built | `bundle_save_failed` / `bundle_load_failed` | stubs |
 
-Spellings awaiting a maintainer ruling (not used in code until ruled; builders use the
-provisional mapping):
+Spellings ruled by the maintainer (all in code; `PROVISIONAL_REFUSALS` is empty):
 
-- `record_schema_invalid`: a record cell fails the typed schema. Provisional today:
-  `manifest_schema_invalid` (`PROVISIONAL_REFUSALS`). Recommend the new code: the user's remedy
-  differs (a cell, not the manifest) and the row text can name record, row and column.
-- `unencodable_values_stringified`: the load advisory when `disclosures.count > 0`.
-  Recommend adding it to the capture advisory vocabulary rather than a warning category.
-- `detect_tlspec_format` return values `v3` and `pre_3` replacing the four `v2.*` labels and
-  `unknown`. Recommend: the function is public (`tl.io.detect_tlspec_format`), so the label
-  change is a public word change and needs the lockstep edits.
+- Ruled: `record_schema_invalid` is the code for a record cell that fails the typed schema
+  (a row of the public refusal contract; the message names record, row and column).
+- Ruled: `tl.types.UnencodableValue` is the public stand-in type (type name, repr text, where
+  it was).
+- Ruled: `unencodable_values_stringified` is the load advisory when `disclosures.count > 0`,
+  in the same list as the capture advisories.
+- Ruled: `tl.io.detect_tlspec_format` returns `v3`, `pre_3`, or `unknown` for a folder
+  that is not a TorchLens save. The four `v2.*` labels are removed.
 
 ## 15. Where this design and the contract page differed
 
@@ -607,7 +608,7 @@ folded into `contract.py` and the contract page so the two documents now agree:
 
 Everything else in `contract.py` and the contract page (names, codes, levels, record index, planned
 and live-side keys, io.2 settle-at-save, `PHASE_TIMING_KEY_SOURCE`, the 2.x refusal rule,
-`record_schema_invalid` provisional) is adopted as written.
+`record_schema_invalid`) is adopted as written.
 
 ## 16. Build order
 

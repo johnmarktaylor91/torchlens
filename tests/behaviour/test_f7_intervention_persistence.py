@@ -35,18 +35,6 @@ SAVE_VALIDATORS = frozenset({"preflight_reload", "reload_check", "validate_artif
 LOAD_VALIDATORS = frozenset(
     {"validate_artifact", "check_version_window", "verify_file_bytes", "validate_records"}
 )
-#: Product bug owned by the format-reader lane: every ``tl.load`` of a 3.0 trace
-#: raises in ``Trace.__setstate__`` (``layer.ops`` arrives as the writer's
-#: flattened member list, and the reader rebuilds only ``module.ops``,
-#: ``module.params`` and ``grad_fn.calls``). Narrow on purpose: only that
-#: ``AttributeError`` is expected; any other failure fails, and a pass fails
-#: (strict) so the mark goes when the reader is fixed.
-READER_WAIT = pytest.mark.xfail(
-    raises=AttributeError,
-    strict=True,
-    reason="format-reader lane: tl.load of a 3.0 trace raises AttributeError in "
-    "Trace.__setstate__ (layer.ops is not rebuilt as an accessor)",
-)
 
 
 class _Toy(torch.nn.Module):
@@ -128,20 +116,27 @@ def _save(model: _Toy, inputs: torch.Tensor, spec: Any, root: Path) -> Saved:
 
 
 @pytest.fixture(scope="module")
-def builtin_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> Saved:
-    return _save(model, inputs, _builtin_spec(), tmp_path_factory.mktemp("f7") / "builtin")
+def builtin_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> Iterator[Saved]:
+    saved = _save(model, inputs, _builtin_spec(), tmp_path_factory.mktemp("f7") / "builtin")
+    try:
+        yield saved
+    finally:
+        saved.live.cleanup()
 
 
 @pytest.fixture(scope="module")
-def callable_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> Saved:
-    return _save(model, inputs, _callable_spec(), tmp_path_factory.mktemp("f7") / "callable")
+def callable_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> Iterator[Saved]:
+    saved = _save(model, inputs, _callable_spec(), tmp_path_factory.mktemp("f7") / "callable")
+    try:
+        yield saved
+    finally:
+        saved.live.cleanup()
 
 
 def _saved_outs(trace: Any) -> dict[str, torch.Tensor]:
     return {op.label: op.out for op in trace.ops if isinstance(op.out, torch.Tensor)}
 
 
-@READER_WAIT
 def test_builtin_recipe_rerun_reproduces_live_activations(
     builtin_saved: Saved, model: _Toy, inputs: torch.Tensor
 ) -> None:
@@ -208,7 +203,6 @@ def _recipe_rows(recipe: Any) -> dict[str, Any]:
     }
 
 
-@READER_WAIT
 def test_loaded_recipe_equals_live_recipe(builtin_saved: Saved) -> None:
     """(b) The loaded recipe equals the live one column for column, and so do the per-op fire records."""
 
@@ -246,18 +240,17 @@ def test_callable_rule_saves_a_disclosed_placeholder(callable_saved: Saved) -> N
 _DOORS: dict[str, Callable[[Any, _Toy, torch.Tensor], Any]] = {
     "run": lambda trace, model, inputs: trace.run(model, inputs),
     "staged_rerun": lambda trace, model, inputs: trace.do(
-        tl.func("linear"),
+        tl.module("b"),
         tl.scale(2.0),
         model=model,
         inputs=inputs,
-        intervention=tl.options.InterventionOptions(engine="rerun"),
+        intervention=tl.options.InterventionOptions(engine="rerun", confirm_mutation=True),
     ),
     "fork_run": lambda trace, model, inputs: trace.fork().run(model, inputs),
     "bundle_run": lambda trace, model, inputs: tl.Bundle([trace]).run(model, inputs),
 }
 
 
-@READER_WAIT
 @pytest.mark.parametrize("door", sorted(_DOORS))
 def test_every_rerun_door_refuses_the_callable_placeholder(
     callable_saved: Saved, model: _Toy, inputs: torch.Tensor, door: str
@@ -292,7 +285,6 @@ def _retamper(root: Path, relpath: str, edit: Callable[[dict[str, Any]], None]) 
     manifest_path.write_text(json.dumps(manifest))
 
 
-@READER_WAIT
 def test_save_preflight_and_loaded_validators_run_on_both_traces(
     builtin_saved: Saved, callable_saved: Saved, tmp_path: Path
 ) -> None:

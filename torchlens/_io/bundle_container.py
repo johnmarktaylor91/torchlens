@@ -26,6 +26,7 @@ from .bundle_metadata import (
     _load_lineage_sections,
     _partition_bundle_sections,
 )
+from .format3.container import verify_member_reference
 
 _CEILING_CODE = _bundle_module._OPCODE_CEILING_CODE
 
@@ -223,6 +224,7 @@ def _load_bundle_member_traces(
                 f"Unified bundle member {name!r} forms a load cycle: its path "
                 f"{relative_path!r} re-enters an in-progress bundle directory."
             )
+        verify_member_reference(member_path, entry, required=False)
         loaded = _bundle_module.load(
             member_path, _bundle_visited=next_visited, **(member_load_options or {})
         )

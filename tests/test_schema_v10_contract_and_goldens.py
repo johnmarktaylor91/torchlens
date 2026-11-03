@@ -31,10 +31,10 @@ from torchlens._io import (
     ArtifactTooOldError,
     read_tlspec_version,
 )
-from torchlens._io._pre3_module_paths import modellog_216_error
 from torchlens._io.format_contract import (
     RESERVED_STEP_SCORE_CREDIT,
     RESERVED_STEP_SCORE_NAMES,
+    modellog_216_error,
 )
 from torchlens._io.writer_contract import writer_contract
 

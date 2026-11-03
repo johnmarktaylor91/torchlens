@@ -1,16 +1,12 @@
 """Reader of the 3.0 saved format: manifest first, digests, record tables, records.
 
-The order is fixed and every step refuses typed before the next one opens a
-file: :func:`read_manifest` (the 2.x test, the manifest schema, the version
-window), :func:`validate_artifact` (every listed file's byte count and
-SHA-256), the record tables (envelope, column set against the field bindings,
-one typed decode per cell through :mod:`.values`), cross-record references
-(identity strings and row indices into the tables), record construction
-through the record classes' state hooks under the governed load, tensors
-through the existing lazy layer, and the load validators unchanged. Nothing
-here evaluates, unpickles or imports by a name from the file. Contract:
-``docs/maintainers/saved_format_3.md``; design:
-``docs/maintainers/saved_format_3_design.md`` (sections 2, 3, 9 and 14).
+Every step refuses typed before the next opens a file: :func:`read_manifest` (2.x
+test, manifest schema, version window), :func:`validate_artifact` (listed files' bytes
+and SHA-256), the record tables (envelope, columns against the field bindings, one typed
+decode per cell through :mod:`.values`), cross-record references, record construction
+through the state hooks under the governed load, tensors through the lazy layer, and the
+load validators unchanged. Nothing here evaluates, unpickles or imports by a name from the
+file. Design: ``docs/maintainers/saved_format_3_design.md`` (sections 2, 3, 9 and 14).
 """
 
 from __future__ import annotations
@@ -37,7 +33,7 @@ from .decode import (
     STORABLE_DTYPES,
     Decoder,
     PendingRecord,
-    Unencodable,
+    UnencodableValue,
     _element_size,
     build_component,
     cell_error,
@@ -60,7 +56,7 @@ from .validate import (
     refuse_unknown_columns,
     symlink_guard,
     validate_records,
-    verify_file_bytes,
+    verify_listed_files,
 )
 from .values import RowRef, dtype_table
 
@@ -111,36 +107,29 @@ LOAD_ORDER: Final[tuple[str, ...]] = (
     "buffer",
 )
 
-#: Accessor-valued persisted fields. The writer stores an accessor of records
-#: as the list of its member rows (``schema._edge_members``); the reader
-#: rebuilds the accessor from the members' own keys before the owner's state
-#: hook runs. Each entry names the member record kind, the member's key column
-#: and the accessor class, named in the member class's module (``None`` where the
-#: owner's state hook wraps a plain mapping itself).
+#: Accessor-valued persisted fields, stored as the list of member rows (``schema._edge_members``)
+#: and rebuilt from the members' keys before the owner's state hook: member record kind, the
+#: member's key column, and the accessor class in the member's module (``None``: plain mapping).
 _ACCESSOR_COLUMNS: Final[dict[tuple[str, str], tuple[str, str, str | None]]] = {
+    ("layer", "ops"): ("op", "pass_number", "OpAccessor"),
+    ("trace", "_param_logs"): ("param", "address", "ParamAccessor"),
     ("module", "ops"): ("module_call", "call_index", None),
     ("module", "params"): ("param", "address", "ParamAccessor"),
     ("grad_fn", "calls"): ("grad_fn_call", "call_index", None),
 }
 
 
-# ---------------------------------------------------------------------------
-# Manifest
-# ---------------------------------------------------------------------------
+# ---- Manifest --------------------------------------------------------------
 
 
 def read_manifest(path: str | Path) -> dict[str, Any]:
     """Read and validate ``manifest.json``; the first door, before any other file is opened.
 
-    Raises
-    ------
-    ArtifactTooOldError
-        ``artifact_version_below_floor``: a 2.x artifact (no ``format`` key, a
-        ``metadata.pkl`` or ``bundle.json`` at the root, or a version below the floor).
-    ArtifactError
-        ``manifest_missing``, ``manifest_unreadable``, ``manifest_not_json_object``,
-        ``manifest_schema_invalid``, ``artifact_save_level_invalid``,
-        ``artifact_version_above_runtime`` or ``load_path_symlink_rejected``.
+    Raises ``ArtifactTooOldError`` (``artifact_version_below_floor``: no ``format`` key, a
+    ``metadata.pkl`` or ``bundle.json`` at the root, or a version below the floor) or
+    ``ArtifactError`` (``manifest_missing``, ``manifest_unreadable``,
+    ``manifest_not_json_object``, ``manifest_schema_invalid``, ``artifact_save_level_invalid``,
+    ``artifact_version_above_runtime``, ``load_path_symlink_rejected``).
     """
 
     root = Path(path)
@@ -170,16 +159,7 @@ def read_manifest(path: str | Path) -> dict[str, Any]:
         )
     if "format" not in manifest:
         raise pre3_error(root, "manifest.json without a format key", code=BELOW_FLOOR)
-    errors = manifest_schema_errors(manifest)
-    if errors:
-        shown = "; ".join(errors[:8]) + (f" (+{len(errors) - 8} more)" if len(errors) > 8 else "")
-        raise artifact_error(
-            f"Artifact manifest {manifest_path} fails the 3.0 manifest schema: {shown}.",
-            code=_CODES["manifest_invalid"],
-            remedy="re-save the trace with trace.save(); the manifest was edited or corrupted",
-            file_path=str(manifest_path),
-            errors=tuple(errors),
-        )
+    _refuse_schema_errors(manifest_path, manifest_schema_errors(manifest))
     check_version_window(manifest, root)
     if manifest["save_level"] not in contract.SAVE_LEVELS:
         raise artifact_error(
@@ -192,36 +172,46 @@ def read_manifest(path: str | Path) -> dict[str, Any]:
     return manifest
 
 
+def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
+    """Raise ``manifest_schema_invalid`` naming the first eight schema violations."""
+
+    if not errors:
+        return
+    shown = "; ".join(errors[:8]) + (f" (+{len(errors) - 8} more)" if len(errors) > 8 else "")
+    raise artifact_error(
+        f"Artifact manifest {manifest_path} fails the 3.0 manifest schema: {shown}.",
+        code=_CODES["manifest_invalid"],
+        remedy="re-save the trace with trace.save(); the manifest was edited or corrupted",
+        file_path=str(manifest_path),
+        errors=tuple(errors),
+    )
+
+
 def validate_artifact(path: str | Path) -> dict[str, Any]:
     """Validate the manifest and every file it lists; return the manifest.
 
     Every listed file must exist under the root with the manifest's byte count
-    and SHA-256 (``bundle_metadata_integrity_refused`` otherwise). Files not
-    listed are never read.
+    and SHA-256, and no unlisted file may be present
+    (``bundle_metadata_integrity_refused`` otherwise).
     """
 
     root = Path(path)
     manifest = read_manifest(root)
-    for relpath, entry in manifest["files"].items():
-        verify_file_bytes(root, relpath, entry)
+    verify_listed_files(root, manifest)
     return manifest
 
 
-# ---------------------------------------------------------------------------
-# Tensor references
-# ---------------------------------------------------------------------------
+# ---- Tensor references -----------------------------------------------------
 
 
 class TensorRefSink:
     """Collects the tensor cells a decode meets, as ``BlobRef`` markers plus lazy-layer entries.
 
-    The reader hands the entries to the existing rehydrate path as the
-    manifest's tensor index (blob id to entry), so eager and lazy
-    materialization run through ``LazyActivationRef`` on (chunk, key)
-    unchanged. A structure-only cell (no ``blob`` and no ``key``) decodes to
-    ``None`` and is counted. Every field is checked against the manifest: the
-    codec must be listed, the chunk must be in ``files``, the key must be an
-    opaque ``t<k>``; a (chunk, key) referenced twice must be declared identically.
+    The entries reach the rehydrate path as the manifest's tensor index, so eager and lazy
+    materialization run through ``LazyActivationRef`` on (chunk, key) unchanged. A
+    structure-only cell (no ``blob``, no ``key``) decodes to ``None`` and is counted. The
+    codec must be listed, the chunk in ``files``, the key an opaque ``t<k>``, and a (chunk,
+    key) referenced twice must be declared identically.
     """
 
     def __init__(self, *, codecs: tuple[str, ...], files: Mapping[str, Mapping[str, Any]]) -> None:
@@ -231,72 +221,20 @@ class TensorRefSink:
         self._files = files
 
     def add(self, ref: Mapping[str, Any], at: str) -> Any:
-        shape = ref["shape"]
-        if not isinstance(shape, list) or not all(is_int(d) and d >= 0 for d in shape):
-            raise cell_error(
-                at, "tensor shape must be an array of non-negative integers", code=CELL_CODE
-            )
-        if len(shape) > 64:
-            raise cell_error(at, "tensor shape has more than 64 dimensions", code=CELL_CODE)
-        numel = math.prod(shape)
-        if numel > MAX_TENSOR_NUMEL:
-            raise cell_error(
-                at,
-                f"tensor shape {shape!r} declares more than {MAX_TENSOR_NUMEL} elements",
-                code=CELL_CODE,
-            )
-        device = ref["device"]
-        if not isinstance(device, str) or not DEVICE_TEXT.fullmatch(device):
-            raise cell_error(at, f"tensor device {device!r} is not a device string", code=CELL_CODE)
-        try:
-            torch.device(device)
-        except (RuntimeError, TypeError, ValueError):
-            raise cell_error(
-                at, f"tensor device {device!r} is not a torch device", code=CELL_CODE
-            ) from None
-        is_complex = ref.get("complex", False)
-        if not isinstance(ref["requires_grad"], bool) or not isinstance(is_complex, bool):
-            raise cell_error(
-                at, "tensor requires_grad and complex must be booleans", code=CELL_CODE
-            )
+        """Check one tensor reference cell's geometry and return its placeholder."""
+
+        shape, numel, device, is_complex, dtype_name = _tensor_geometry(ref, at)
         codec_id, codec_metadata = _split_codec(ref["codec"], at=at)
         if codec_id not in self._codecs:
             raise cell_error(
                 at, f"tensor codec {codec_id!r} is not among the manifest's codecs", code=CELL_CODE
             )
-        dtype_name = ref["dtype"]
-        if not isinstance(dtype_name, str) or dtype_name not in dtype_table():
-            raise cell_error(
-                at, f"tensor dtype {dtype_name!r} is outside the dtype table", code=CELL_CODE
-            )
-        if dtype_name not in STORABLE_DTYPES:
-            raise cell_error(
-                at, f"tensor dtype {dtype_name!r} is not a storable dtype", code=CELL_CODE
-            )
         blob, key = ref.get("blob"), ref.get("key")
         if blob is None and key is None:
             self.structure_only_refs += 1
             return None
-        if not isinstance(blob, str) or not _BLOB_PATH.fullmatch(blob):
-            raise cell_error(
-                at,
-                f"tensor blob {blob!r} is not a blobs/<codec>-<nnnn>.safetensors path",
-                code=CELL_CODE,
-            )
-        if not isinstance(key, str) or not _BLOB_KEY.fullmatch(key):
-            raise cell_error(at, f"tensor key {key!r} is not an opaque t<k> key", code=CELL_CODE)
-        listed = self._files.get(blob)
-        if not isinstance(listed, Mapping):
-            raise cell_error(
-                at, f"tensor blob {blob} is not listed in the manifest's files", code=CELL_CODE
-            )
         declared = numel * _element_size(dtype_name) * (2 if is_complex else 1)
-        if declared > int(listed["bytes"]):
-            raise cell_error(
-                at,
-                f"tensor declares {declared} bytes but its chunk {blob} holds {listed['bytes']}",
-                code=CELL_CODE,
-            )
+        listed = self._listed_chunk(blob, key, at, declared)
         blob_id = f"{blob}#{key}"
         declaration = (list(shape), dtype_name, device, ref["requires_grad"], codec_id)
         seen = self.entries.get(blob_id)
@@ -339,6 +277,69 @@ class TensorRefSink:
         }
         return BlobRef(blob_id, kind)
 
+    def _listed_chunk(self, blob: Any, key: Any, at: str, declared: int) -> Mapping[str, Any]:
+        """Return the manifest ``files`` entry of ``blob`` once the reference is well formed."""
+
+        if not isinstance(blob, str) or not _BLOB_PATH.fullmatch(blob):
+            raise cell_error(
+                at,
+                f"tensor blob {blob!r} is not a blobs/<codec>-<nnnn>.safetensors path",
+                code=CELL_CODE,
+            )
+        if not isinstance(key, str) or not _BLOB_KEY.fullmatch(key):
+            raise cell_error(at, f"tensor key {key!r} is not an opaque t<k> key", code=CELL_CODE)
+        listed = self._files.get(blob)
+        if not isinstance(listed, Mapping):
+            raise cell_error(
+                at, f"tensor blob {blob} is not listed in the manifest's files", code=CELL_CODE
+            )
+        if declared > int(listed["bytes"]):
+            raise cell_error(
+                at,
+                f"tensor declares {declared} bytes but its chunk {blob} holds {listed['bytes']}",
+                code=CELL_CODE,
+            )
+        return listed
+
+
+def _tensor_geometry(ref: Mapping[str, Any], at: str) -> tuple[list[int], int, str, bool, str]:
+    """Check a tensor cell's shape, device, flags and dtype; return them with the element count."""
+
+    shape = ref["shape"]
+    if not isinstance(shape, list) or not all(is_int(d) and d >= 0 for d in shape):
+        raise cell_error(
+            at, "tensor shape must be an array of non-negative integers", code=CELL_CODE
+        )
+    if len(shape) > 64:
+        raise cell_error(at, "tensor shape has more than 64 dimensions", code=CELL_CODE)
+    numel = math.prod(shape)
+    if numel > MAX_TENSOR_NUMEL:
+        raise cell_error(
+            at,
+            f"tensor shape {shape!r} declares more than {MAX_TENSOR_NUMEL} elements",
+            code=CELL_CODE,
+        )
+    device = ref["device"]
+    if not isinstance(device, str) or not DEVICE_TEXT.fullmatch(device):
+        raise cell_error(at, f"tensor device {device!r} is not a device string", code=CELL_CODE)
+    try:
+        torch.device(device)
+    except (RuntimeError, TypeError, ValueError):
+        raise cell_error(
+            at, f"tensor device {device!r} is not a torch device", code=CELL_CODE
+        ) from None
+    is_complex = ref.get("complex", False)
+    if not isinstance(ref["requires_grad"], bool) or not isinstance(is_complex, bool):
+        raise cell_error(at, "tensor requires_grad and complex must be booleans", code=CELL_CODE)
+    dtype_name = ref["dtype"]
+    if not isinstance(dtype_name, str) or dtype_name not in dtype_table():
+        raise cell_error(
+            at, f"tensor dtype {dtype_name!r} is outside the dtype table", code=CELL_CODE
+        )
+    if dtype_name not in STORABLE_DTYPES:
+        raise cell_error(at, f"tensor dtype {dtype_name!r} is not a storable dtype", code=CELL_CODE)
+    return shape, numel, device, is_complex, dtype_name
+
 
 def _split_codec(codec: Any, *, at: str) -> tuple[str, dict[str, Any] | None]:
     """Return the codec id and the backend hints of a tensor cell's ``codec`` field."""
@@ -361,9 +362,7 @@ def _tensor_kind(at: str) -> str:
     return "grad" if "grad" in head else "out"
 
 
-# ---------------------------------------------------------------------------
-# Record tables
-# ---------------------------------------------------------------------------
+# ---- Record tables ---------------------------------------------------------
 
 
 class DecodedArtifact:
@@ -382,6 +381,8 @@ class DecodedArtifact:
     # -- decode -------------------------------------------------------------
 
     def decode_tables(self) -> None:
+        """Decode every record table the manifest lists, in record order."""
+
         for kind in self.manifest["records"]:
             raw_rows = read_record_table(self.root, self.manifest, kind)
             if raw_rows:
@@ -399,6 +400,8 @@ class DecodedArtifact:
         self.objects["trace"] = [state_new(record_class("trace"))]
 
     def _index_identities(self, kind: str) -> None:
+        """Index a decoded table's rows by their identity column."""
+
         field = IDENTITY_FIELDS.get(kind)
         if field is None:
             return
@@ -431,6 +434,8 @@ class DecodedArtifact:
                     row[name] = self._settle(row[name], f"{kind}[{row_number}].{name}")
 
     def _settle(self, value: Any, at: str) -> Any:
+        """Replace the references inside a decoded value with the built objects."""
+
         if isinstance(value, RowRef):
             return self._lookup(value, at)
         if isinstance(value, PendingRecord):
@@ -438,8 +443,12 @@ class DecodedArtifact:
             return build_component(value.cls, fields, at=at)
         if isinstance(value, list):
             return [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
+        if isinstance(value, BlobRef):
+            return value
         if isinstance(value, tuple):
-            return tuple(self._settle(item, f"{at}[{i}]") for i, item in enumerate(value))
+            items = [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
+            maker = getattr(type(value), "_make", None)  # a named tuple keeps its type
+            return maker(items) if callable(maker) else tuple(items)
         if isinstance(value, (set, frozenset)):
             return type(value)(self._settle(item, at) for item in value)
         if isinstance(value, dict):
@@ -447,6 +456,8 @@ class DecodedArtifact:
         return value
 
     def _lookup(self, reference: RowRef, at: str) -> Any:
+        """Return the object a row reference names, refusing a dangling one."""
+
         rows = self.objects.get(reference.record)
         if rows is None:
             raise cell_error(
@@ -468,8 +479,14 @@ class DecodedArtifact:
                 for row_number, (obj, row) in enumerate(
                     zip(self.objects.get(kind, ()), self.tables.get(kind, ()), strict=True)
                 ):
-                    row = self._rebuild_accessors(kind, row_number, row)
-                    _restore_record(obj, row, version=self.version, computed=computed_columns(kind))
+                    cells = self._rebuild_accessors(kind, row_number, row)
+                    _restore_record(
+                        obj, cells, version=self.version, computed=computed_columns(kind)
+                    )
+                    # After the hook: the state contract knows the column, not its slot.
+                    for column, slot in _RESTORED_COMPUTED.get(kind, {}).items():
+                        if cells.get(column) is not None:
+                            object.__setattr__(obj, slot, cells[column])
 
     def _rebuild_accessors(
         self, kind: str, row_number: int, row: Mapping[str, Any]
@@ -516,10 +533,10 @@ class DecodedArtifact:
         step because the record classes sit above this module.
         """
 
-        state = dict(self.tables["trace"][0])
+        state = dict(self._rebuild_accessors("trace", 0, self.tables["trace"][0]))
         state[TLSPEC_KEY] = self.version
         accessor = state.pop("_io_module_accessor_state", None)
-        if isinstance(accessor, Unencodable):
+        if isinstance(accessor, UnencodableValue):
             accessor = None
         if accessor is None and "module" in self.objects:
             accessor = self._module_accessor_state(accessor_cls)
@@ -527,6 +544,8 @@ class DecodedArtifact:
         return state
 
     def _module_accessor_state(self, accessor_cls: type) -> Any:
+        """Return the module accessor state built from the decoded module rows."""
+
         modules = self.objects["module"]
         module_dict = {
             row["address"]: obj for row, obj in zip(self.tables["module"], modules, strict=True)
@@ -568,10 +587,9 @@ def computed_columns(kind: str) -> frozenset[str]:
 def _restore_record(
     obj: Any, row: Mapping[str, Any], *, version: int, computed: frozenset[str] = frozenset()
 ) -> None:
-    # A COMPUTED column (``Param.is_quantized``, ``module_name``, ...) is written
-    # from the live property so the file reads whole; the object owns no slot for
-    # it, and installing it would shadow the property with dead state the
-    # rehydrate walk then cannot assign. The 2.x pickle state never carried it.
+    # A COMPUTED column comes from the live property; installing it would shadow the property.
+    """Run the record's state hook on its decoded row, computed columns dropped."""
+
     state = {name: value for name, value in row.items() if name not in computed}
     state[TLSPEC_KEY] = version
     setstate = getattr(type(obj), "__setstate__", None)
@@ -582,27 +600,30 @@ def _restore_record(
     state_restore(obj, state)
 
 
-# ---------------------------------------------------------------------------
-# Doors
-# ---------------------------------------------------------------------------
+# ---- Doors -----------------------------------------------------------------
 
-#: The rehydration step of each door, installed by ``torchlens._io.bundle`` (see
-#: :func:`install_load_hooks`). ``trace`` receives a :class:`DecodedArtifact` and
-#: the load options; ``bundle`` the loaded members, relations, baseline and root;
-#: ``recipe`` the validated artifact root.
+#: The rehydration step of each door, installed by ``torchlens._io.bundle`` through
+#: :func:`install_load_hooks` (trace: decoded artifact and load options; bundle: members).
 _LOAD_HOOKS: dict[str, Callable[..., Any]] = {}
 _HOOK_KINDS: Final = frozenset({"trace", "bundle", "recipe"})
+
+#: Computed columns kept behind their property after a load (column to backing slot).
+_TEMPLATE_SLOTS: Final = {
+    f"forward_{k}_template": f"_forward_{k}_template" for k in ("args", "kwargs")
+}
+# ``module`` derives its templates from its first call; only ``module_call`` keeps a slot.
+_RESTORED_COMPUTED: Final[dict[str, dict[str, str]]] = {
+    "module_call": _TEMPLATE_SLOTS,
+    "op": {"arg_expressions": "_arg_expressions_cache"},
+}
 
 
 def install_load_hooks(**hooks: Callable[..., Any]) -> None:
     """Install the rehydration step of the ``trace``, ``bundle`` and ``recipe`` doors.
 
-    This module reads, decodes and validates; turning decoded tables into
-    ``Trace``, ``Bundle`` and ``InterventionSpec`` objects runs the record
-    classes' rehydrate path, which sits above the format package in the import
-    layering, so ``torchlens._io.bundle`` installs those steps when it is
-    imported (``import torchlens`` does). A door called without its step
-    refuses with ``bundle_load_failed`` after the artifact validation.
+    Turning decoded tables into records runs the rehydrate path above this package in
+    the import layering, so ``torchlens._io.bundle`` installs the steps when imported.
+    A door called without its step refuses with ``bundle_load_failed``.
     """
 
     unknown = set(hooks) - _HOOK_KINDS
@@ -612,6 +633,8 @@ def install_load_hooks(**hooks: Callable[..., Any]) -> None:
 
 
 def _hook(kind: str, root: Path) -> Callable[..., Any]:
+    """Return the installed rehydration step of a door, refusing when none is installed."""
+
     try:
         return _LOAD_HOOKS[kind]
     except KeyError:
@@ -625,6 +648,8 @@ def _hook(kind: str, root: Path) -> Callable[..., Any]:
 
 
 def _require_kind(manifest: Mapping[str, Any], root: Path, expected: str) -> None:
+    """Refuse an artifact whose manifest kind is not the door's expected kind."""
+
     if manifest["kind"] != expected:
         raise artifact_error(
             f"Artifact {root} is a {manifest['kind']!r} artifact, not {expected!r}.",
@@ -663,11 +688,9 @@ def load_trace(
 ) -> Any:
     """Load one ``kind: trace`` artifact of the 3.0 saved format.
 
-    Every record table is decoded and every reference resolved before any
-    record's state hook runs; the hooks run under the governed load, so the
-    load validators run exactly as they do for in-process state. The installed
-    ``trace`` step then rehydrates the trace (tensors through the lazy layer,
-    accessors, the recipe when ``intervention.json`` is listed).
+    Every table is decoded and every reference resolved before any state hook runs under
+    the governed load (the load validators run as for in-process state); the installed
+    ``trace`` step then rehydrates tensors, accessors and the listed recipe.
     """
 
     root = Path(path)

@@ -14,8 +14,10 @@ from pathlib import Path
 import pytest
 
 from torchlens._io import ArtifactError
+from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.payloads import ChunkWriter
 from torchlens._io.format3.values import ValueEncoder
+from torchlens.types import UnencodableValue
 
 
 def test_self_referencing_value_refuses_typed() -> None:
@@ -50,3 +52,37 @@ def test_value_with_no_typed_encoding_is_disclosed_not_refused() -> None:
     disclosure = encoder.disclosures[0]
     assert disclosure["repr"] == "Opaque()"
     assert disclosure["at"].startswith("trace[0].annotations")
+
+
+def test_unencodable_value_loads_back_as_the_public_stand_in() -> None:
+    """The decoder returns ``tl.types.UnencodableValue`` in place of the value, never a dict."""
+
+    class Opaque:
+        def __repr__(self) -> str:
+            return "Opaque()"
+
+    encoded = ValueEncoder().encode({"k": Opaque()}, "op[3].func_config")
+    stand_in = decode_value(encoded, at="op[3].func_config")["k"]
+    assert isinstance(stand_in, UnencodableValue)
+    assert stand_in.repr_text == "Opaque()"
+    assert stand_in.type_name.endswith("Opaque")
+    assert stand_in.at == "op[3].func_config['k']"
+    assert hash(stand_in) == hash(UnencodableValue(stand_in.type_name, "Opaque()", stand_in.at))
+
+
+@pytest.mark.parametrize(
+    "cell",
+    [
+        {"$tl": "no_such_tag"},
+        {"$tl": "tuple"},
+        {"$tl": "tuple", "items": 3},
+        {"$tl": "dtype", "name": "float99"},
+    ],
+)
+def test_cell_failing_its_type_check_refuses_record_schema_invalid(cell: dict) -> None:
+    """A saved cell off the typed vocabulary refuses with its own code (ruled 2026-11-02)."""
+
+    with pytest.raises(ArtifactError) as caught:
+        decode_value(cell, at="op[0].func_config")
+    assert caught.value.fields["code"] == "record_schema_invalid"
+    assert "op[0].func_config" in str(caught.value)

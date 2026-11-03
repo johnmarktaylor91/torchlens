@@ -174,6 +174,13 @@ UNENCODABLE_FIELDS: Final[tuple[str, ...]] = ("type", "repr", "repr_length", "at
 UNENCODABLE_REPR_LIMIT: Final = 256
 #: Fields of a ``callable_placeholder`` in a saved intervention recipe.
 CALLABLE_PLACEHOLDER_FIELDS: Final[tuple[str, ...]] = ("position", "qualname", "repr_length")
+#: Public type an ``unencodable`` disclosure loads as (ruled 2 Nov 2026).
+UNENCODABLE_VALUE_TYPE: Final = "UnencodableValue"
+#: Load advisory attached when the manifest carries ``disclosures`` (ruled 2 Nov 2026).
+UNENCODABLE_LOAD_ADVISORY: Final = "unencodable_values_stringified"
+#: Labels ``tl.io.detect_tlspec_format`` returns: a 3.0 save, a 2.x save, not a
+#: TorchLens save (ruled 2 Nov 2026).
+FORMAT_DETECTION_LABELS: Final[tuple[str, ...]] = ("v3", "pre_3", "unknown")
 
 #: Refusal codes the writer and reader raise, by situation. Every value is a
 #: row of ``docs/reference/error_refusal_contract.md``; situations whose row
@@ -189,6 +196,7 @@ REFUSAL_CODES: Final[dict[str, str]] = {
     "save_level_unknown": "artifact_save_level_invalid",
     "record_file_corrupt": "bundle_metadata_integrity_refused",
     "record_key_unknown": "unknown_persisted_field",
+    "record_schema_invalid": "record_schema_invalid",
     "blob_missing": "bundle_load_failed",
     "structure_only_incoherent": "artifact_structure_only_incoherent",
     "symlink_path": "load_path_symlink_rejected",
@@ -200,11 +208,9 @@ REFUSAL_CODES: Final[dict[str, str]] = {
     "reader_not_built": "bundle_load_failed",
 }
 #: Situations whose code is provisional: a private spelling builders can use
-#: until the public code is ruled. Each is also a row of ``REFUSAL_CODES``
-#: above with the existing code the reader raises meanwhile.
-PROVISIONAL_REFUSALS: Final[dict[str, str]] = {
-    "record_schema_invalid": "manifest_schema_invalid",
-}
+#: until the public code is ruled, each mapped to the existing code raised
+#: meanwhile. Empty: every spelling the format needed has been ruled.
+PROVISIONAL_REFUSALS: Final[dict[str, str]] = {}
 
 #: Where the per-step timing keys come from: ``_phase_timings`` is keyed by the
 #: ``name`` of each step of this tuple, nothing else.

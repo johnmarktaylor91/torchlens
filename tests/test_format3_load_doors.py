@@ -93,4 +93,4 @@ def test_loaded_rows_match_the_manifest(saved):
     manifest = read_manifest(root)
     loaded = tl.load(root)
     assert len(loaded._layer_list) == manifest["records"]["op"]["rows"]
-    assert loaded._source_bundle_path == str(root)
+    assert loaded._source_bundle_path == root
