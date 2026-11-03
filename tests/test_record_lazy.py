@@ -73,25 +73,46 @@ def _record(name: str, *, lean: bool) -> Recording:
         return tl.record(build(), inp(), save=_save(name), lean=lean)
 
 
-def _normalized(ctx: RecordContext, memo: dict[int, RecordContext]) -> RecordContext:
-    """Return ``ctx`` with every wall-clock field zeroed, recursively."""
+_Flat = tuple[RecordContext, tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]
 
-    key = id(ctx)
-    if key not in memo:
-        memo[key] = replace(
-            ctx,
-            time_since_pass_start=0.0,
-            recent_events=tuple(_normalized(e, memo) for e in ctx.recent_events),
-            recent_ops=tuple(_normalized(e, memo) for e in ctx.recent_ops),
+
+def _key(ctx: RecordContext) -> tuple[int, int]:
+    return (ctx.pass_number, ctx.event_index)
+
+
+def _chain(root: RecordContext) -> dict[tuple[int, int], _Flat]:
+    """Return every context reachable from ``root`` keyed by pass and event index.
+
+    Each entry is the context with its wall-clock time zeroed and its two history
+    windows replaced by the keys of their members, so comparing two chains costs one
+    comparison per context. Comparing the nested contexts directly would revisit each
+    shared context once per path to it, which grows exponentially with the pass length.
+    """
+
+    chain: dict[tuple[int, int], _Flat] = {}
+    stack = [root]
+    seen: set[int] = set()
+    while stack:
+        ctx = stack.pop()
+        if id(ctx) in seen:
+            continue
+        seen.add(id(ctx))
+        flat = (
+            replace(ctx, time_since_pass_start=0.0, recent_events=(), recent_ops=()),
+            tuple(_key(e) for e in ctx.recent_events),
+            tuple(_key(e) for e in ctx.recent_ops),
         )
-    return memo[key]
+        assert chain.setdefault(_key(ctx), flat) == flat
+        stack.extend(ctx.recent_events)
+        stack.extend(ctx.recent_ops)
+    return chain
 
 
 def _assert_records_equal(default: Recording, lean: Recording) -> None:
     assert len(lean.records) == len(default.records) > 0
-    memo: dict[int, RecordContext] = {}
     for d, ln in zip(default.records, lean.records, strict=True):
-        assert _normalized(ln.ctx, memo) == _normalized(d.ctx, memo)
+        assert _key(ln.ctx) == _key(d.ctx)
+        assert _chain(ln.ctx) == _chain(d.ctx)
         assert ln.spec == d.spec
         assert torch.equal(ln.ram_payload, d.ram_payload)
 
