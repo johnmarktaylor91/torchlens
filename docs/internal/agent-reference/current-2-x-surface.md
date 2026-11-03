@@ -229,7 +229,7 @@
   after settlement. EVIDENCE DERIVATION IS DECLARATION-DRIVEN (F40b, foldA D8):
   tokens/digest/none per the declared kind, `step_output_from` resolves
   dict/ModelOutput/tuple root slots by container path, and per-step positions are
-  TAIL-ALIGNED along `step_axis` (last n_steps positions) — real `generate()`
+  TAIL-ALIGNED along `step_axis` (last `num_steps` positions) — real `generate()`
   prompt+completion shapes and float roots (under digest/none) capture instead of
   refusing; declaration mismatches refuse teaching (`episode_declaration_invalid`);
   `step_output_kind="none"` admits value-free save policies. The family version is

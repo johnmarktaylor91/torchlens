@@ -787,6 +787,8 @@ class TestReleaseContract:
         with pytest.raises(MergedSurfaceUnsupportedError) as excinfo:
             call()
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_MEMBER_RELEASED.value
+        # The refusal names the real method (MergedTrace.cleanup), not a release() spelling.
+        assert "cleanup() dropped them" in str(excinfo.value)
 
     def test_member_surfaces_refuse_typed_after_release(self, tmp_path):
         merged = self._merged()
