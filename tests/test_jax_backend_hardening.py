@@ -1257,6 +1257,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
         "jax_control_flow",
         "jax_max_control_flow_unroll",
         "module_identity_mode",
+        "facets",
     )
 
 
