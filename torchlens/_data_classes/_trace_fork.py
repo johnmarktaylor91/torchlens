@@ -221,9 +221,9 @@ class _RecordTranslator:
         self._guards: dict[int, Any] = {}
         self._keepalive: list[Any] = []
         self._fork_ref = fork_ref
-        # Weak parent-trace reference: a bare STRONG parent-trace value in
-        # copied state (ModuleCall._source_trace_strong) translates to the
-        # fork WITHOUT the translator pinning the parent (GC parity).
+        # Weak parent-trace reference: a parent-trace value met in copied
+        # state translates to the fork WITHOUT the translator pinning the
+        # parent (GC parity).
         self._parent_ref: Any = None
 
     def add(self, parent_record: Any, shell: Any) -> None:
@@ -686,11 +686,10 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     )
     if fork_core is not None:
         # The module kind's cells embed accessor objects (``Module.ops``/
-        # ``Module.params``) whose members hold STRONG trace references
-        # (``ModuleCall._source_trace_strong``); a view over that table
-        # would keep the parent Trace reachable for the fork's lifetime — a
-        # GC parity break vs the deepcopy fork. Modules are few, so they
-        # fork as detached duplicates with translated cells instead.
+        # ``Module.params``) whose members carry owner back-references; a
+        # view over that table would answer for the parent instead of the
+        # fork. Modules are few, so they fork as detached duplicates with
+        # translated cells instead.
         fork_core.kind_rows.pop("module", None)
     fork = state_new(type(parent))
     fork_ref = weakref.ref(fork)

@@ -656,12 +656,11 @@ class TraceGradFnCallAccessor(Accessor[Any]):
 
 
 # EVERY lazy Trace accessor is memoized on the owning Trace instance, NOT in
-# a module-global weak-keyed dict. A record held by an accessor can reach its
-# Trace strongly (``ModuleCall._source_trace``, and since M11 any fork record
-# through ``OpStoreView.record_translator`` -> translated shells ->
-# ``_source_trace_strong`` stamped by ``_rebind_fork_owner_refs``), so a
-# module-global WeakKeyDictionary value would reach its own weak key and the
-# Trace could never be collected. That class re-opened a THIRD time as the
+# a module-global weak-keyed dict. A record held by an accessor could reach
+# its Trace (``ModuleCall._source_trace``, and since M11 any fork record
+# through ``OpStoreView.record_translator`` -> translated shells stamped by
+# ``_rebind_fork_owner_refs``), so a module-global WeakKeyDictionary value
+# would reach its own weak key and the Trace could never be collected. That class re-opened a THIRD time as the
 # ``trace.run()`` fork leak (R37): the op-accessor cache entry populated
 # during ``run()`` pinned the entire result fork, payloads included, for the
 # process lifetime. An instance attribute makes the same edge an ordinary
