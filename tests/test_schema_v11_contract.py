@@ -89,7 +89,6 @@ V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
         "_layer_list": "keep",
         "_layer_logs": "keep",
         "_layer_num_calls": "keep",
-        "_module_filter": "drop",
         "_num_backward_passes": "keep",
         "_num_layers_with_params": "keep",
         "_num_ops": "keep",
