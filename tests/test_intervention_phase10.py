@@ -1012,6 +1012,7 @@ def test_r2_load_tolerates_torchlens_prefixed_foreign_key_no_foreign_import(
         }
     ]
     spec_path.write_text(json.dumps(payload), encoding="utf-8")
+    redigest(path, "intervention.json")
 
     calls: list[str] = []
     monkeypatch.setattr(os, "system", lambda cmd: calls.append(cmd) or 0)

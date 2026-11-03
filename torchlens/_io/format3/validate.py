@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from collections.abc import Mapping
 from importlib import import_module
@@ -43,6 +44,7 @@ __all__ = [
     "symlink_guard",
     "validate_records",
     "verify_file_bytes",
+    "verify_listed_files",
 ]
 
 _CODES: Final = contract.REFUSAL_CODES
@@ -290,6 +292,30 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
     return errors
 
 
+def verify_listed_files(root: Path, manifest: Mapping[str, Any]) -> None:
+    """Check every listed file, then refuse any file under the root the manifest omits.
+
+    The manifest is the whole artifact: a file it does not list is never read, and its
+    presence (a stray blob, a planted record, a leftover of an edit) refuses
+    ``bundle_metadata_integrity_refused`` so an artifact is exactly what its manifest says.
+    Symlinked entries refuse before anything follows them.
+    """
+
+    files = manifest["files"]
+    for relpath, entry in files.items():
+        verify_file_bytes(root, relpath, entry)
+    listed = set(files) | {contract.MANIFEST_FILE}
+    for parent, dirnames, filenames in os.walk(root, followlinks=False):
+        for name in sorted(dirnames + filenames):
+            path = Path(parent) / name
+            relpath = path.relative_to(root).as_posix()
+            symlink_guard(path, f"artifact entry {relpath}")
+            if name in filenames and relpath not in listed:
+                raise integrity_error(
+                    path, "present in the artifact but not listed in the manifest", code=_CORRUPT
+                )
+
+
 def verify_file_bytes(root: Path, relpath: str, entry: Mapping[str, Any]) -> Path:
     """Check one listed file's containment, existence, byte count and digest."""
 
@@ -299,7 +325,9 @@ def verify_file_bytes(root: Path, relpath: str, entry: Mapping[str, Any]) -> Pat
             break
         symlink_guard(ancestor, f"artifact file {relpath}")
     if not target.is_file():
-        raise integrity_error(target, "listed in the manifest but absent", code=_CORRUPT)
+        raise integrity_error(
+            target, "listed in the manifest but missing from the artifact", code=_CORRUPT
+        )
     size = target.stat().st_size
     if size != entry["bytes"]:
         raise integrity_error(

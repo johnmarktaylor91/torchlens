@@ -413,6 +413,16 @@ def test_wrong_file_digest_refuses(saved, tmp_path, tripwires):
         _refuses(copy, tripwires)
 
 
+@pytest.mark.parametrize(
+    "relpath", ["extra.bin", "blobs/planted.safetensors", "records/extra.json"]
+)
+def test_unlisted_file_in_the_artifact_refuses(saved, tmp_path, tripwires, relpath):
+    copy = copy_artifact(saved, tmp_path / ("unlisted-" + relpath.replace("/", "_")))
+    (copy / relpath).parent.mkdir(parents=True, exist_ok=True)
+    (copy / relpath).write_bytes(b"\x00")
+    _refuses(copy, tripwires, code="bundle_metadata_integrity_refused")
+
+
 def test_wrong_record_digest_refuses(saved, tmp_path, tripwires):
     copy = copy_artifact(saved, tmp_path / "recdigest")
     manifest = read_manifest(copy)

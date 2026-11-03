@@ -60,7 +60,7 @@ from .validate import (
     refuse_unknown_columns,
     symlink_guard,
     validate_records,
-    verify_file_bytes,
+    verify_listed_files,
 )
 from .values import RowRef, dtype_table
 
@@ -204,14 +204,13 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
     """Validate the manifest and every file it lists; return the manifest.
 
     Every listed file must exist under the root with the manifest's byte count
-    and SHA-256 (``bundle_metadata_integrity_refused`` otherwise). Files not
-    listed are never read.
+    and SHA-256, and no unlisted file may be present
+    (``bundle_metadata_integrity_refused`` otherwise).
     """
 
     root = Path(path)
     manifest = read_manifest(root)
-    for relpath, entry in manifest["files"].items():
-        verify_file_bytes(root, relpath, entry)
+    verify_listed_files(root, manifest)
     return manifest
 
 
