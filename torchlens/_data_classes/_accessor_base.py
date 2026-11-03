@@ -9,7 +9,7 @@ from typing import Any, ClassVar, Generic, TypeVar
 import torch
 
 from .._errors import InvalidArgumentError
-from .._utils._display_collections import collection_repr, collection_str
+from .._utils._display_collections import accessor_noun, collection_repr, collection_str
 from .._utils.fail_open import fail_open
 
 T = TypeVar("T")
@@ -341,8 +341,7 @@ class Accessor(Generic[T]):
     def __repr__(self) -> str:
         """Count and composition only; member rendering belongs to ``str``."""
 
-        kind = self._item_kind.removeprefix("Trace").lower() or "item"
-        noun = kind + ("s" if len(self) != 1 else "")
+        noun = accessor_noun(self._item_kind.removeprefix("Trace"), len(self))
         composition = fail_open(self._composition_note, lambda _error: None)
         return collection_repr(type(self).__name__, len(self), noun, composition)
 

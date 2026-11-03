@@ -11,6 +11,16 @@ from ._display_numbers import format_count
 from .fail_open import fail_open
 
 
+def accessor_noun(kind: str, count: int) -> str:
+    noun = {
+        "GradFn": "gradient function",
+        "GradFnCall": "gradient call",
+        "ModuleCall": "module call",
+        "BackwardPass": "backward pass",
+    }.get(kind, kind.lower() or "item")
+    return noun if count == 1 else noun + ("es" if noun.endswith("pass") else "s")
+
+
 def collection_repr(name: str, count: int, noun: str, composition: str | None = None) -> str:
     """Count-only collection header; details belong to ``str``."""
 
