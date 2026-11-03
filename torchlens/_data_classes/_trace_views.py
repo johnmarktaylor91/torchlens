@@ -407,6 +407,8 @@ def _boundary_entry(trace: Trace) -> Callable[[str], Layer | Op]:
     """
 
     def resolve(label: str) -> Layer | Op:
+        """Return the Layer stored under ``label``, else the Op the trace keys by it."""
+
         layer = trace._layer_logs.get(label)
         return layer if layer is not None else trace[label]
 
