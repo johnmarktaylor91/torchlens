@@ -1,5 +1,6 @@
 """Predicate event records and graph relationship fields."""
 
+import time
 from collections import defaultdict
 from collections.abc import Callable
 from math import prod
@@ -8,6 +9,11 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
+from ..._capture._lazy_contexts import (
+    LazyContextHistory,
+    lazy_contexts_eligible,
+    tensor_fields,
+)
 from ..._capture.arg_positions import (
     DYNAMIC_SPEC_UNCACHEABLE,
     FUNC_ARG_SPECS,
@@ -22,10 +28,14 @@ from ..._capture.plan import EnrichmentLevel
 from ..._capture.predicates import (
     _evaluate_keep_op,
     _is_halt_only_capture,
+    _module_capture_spec,
+    _plain_module_union,
     build_op_record_context,
 )
 from ..._capture.projections import (
     LiveOpView,
+    _build_record_context,
+    active_recording_state_or_none,
     append_projected_event,
     get_active_recording_state,
 )
@@ -41,6 +51,7 @@ from ..._ir.events import (
     FunctionCallRef,
 )
 from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._ir.selector_eval import module_union_matches
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
 from ..._utils.display import _timed_phase
@@ -75,6 +86,8 @@ __all__ = (
     "_extract_arg_tensors_and_params",
     "_build_param_fields",
     "_build_module_context_fields",
+    "_emit_lazy_predicate_operation_events",
+    "install_lazy_record_contexts",
 )
 
 
@@ -508,6 +521,120 @@ def _build_module_context_fields(
     fields_dict["atomic_module_call"] = None
 
 
+def install_lazy_record_contexts(trace: "Trace") -> None:
+    """Defer this pass's record contexts when its lean module read allows it.
+
+    Runs once per pass where the producer policy is set. An eligible pass (see
+    ``lazy_contexts_eligible``; the save selector must also be a plain
+    ``tl.module`` union) gets a ``LazyContextHistory`` and the deferring op
+    producer; any other pass is left exactly as it was.
+
+    Parameters
+    ----------
+    trace
+        Predicate-mode trace about to run its forward pass.
+    """
+
+    state = active_recording_state_or_none()
+    if state is None or state.event_index != 0:  # only at a pass start, before any event
+        return
+    options = state.options
+    addresses = _plain_module_union(options.keep_op)
+    if addresses is None or not lazy_contexts_eligible(
+        options, _module_capture_spec(options), state.no_tensor_capture
+    ):
+        return
+    state.history = LazyContextHistory(
+        state,
+        build=_build_record_context,
+        window=options.history_size,
+        module_addresses=addresses,
+        matches=module_union_matches,
+    )
+    trace._capture_producer_policy = CaptureProducerPolicy(
+        "predicate", _emit_lazy_predicate_operation_events
+    )
+
+
+def _emit_lazy_predicate_operation_events(
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> None:
+    """Label a lean module read's op outputs and defer their record contexts.
+
+    Matches ``_emit_predicate_operation_events`` on a pass that
+    ``install_lazy_record_contexts`` admitted: the plain ``tl.module`` union
+    answers False for every op context (none has a module-output candidate),
+    halt is off and a lean journal appends no shell event for an unkept op, so
+    the eager emitter's only lasting effects are the counters, the tensor
+    labels and the appended context, which this one defers with the same
+    inputs.
+    """
+
+    del arg_copies, kwarg_copies, exec_ctx, func_call_id
+    state = get_active_recording_state()
+    layer_type = _normalize_func_name(func_name)
+    arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
+    call_fields = {
+        "type": layer_type,
+        "func_name": func_name,
+        "parent_labels": tuple(get_label_list(arg_tensors)),
+        "is_bottom_level_func": is_bottom_level_func,
+        "is_transform": bool(getattr(func, "__tl_is_transform_boundary__", False))
+        or func_name in TRANSFORM_FUNC_NAMES,
+        "transform_kind": getattr(func, "__tl_transform_kind__", None)
+        or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
+    }
+    out_iter = list(_iter_loggable_live_outputs(out_orig, is_bottom_level_func))
+    for position, (out, container_path, _container_spec) in enumerate(out_iter):
+        output_index = _live_output_index(container_path) or position
+        _defer_lazy_op_output(self, state, out, output_index, call_fields)
+
+
+def _defer_lazy_op_output(
+    trace: "Trace", state: Any, out: Any, output_index: int, call_fields: dict[str, Any]
+) -> None:
+    """Count, label and defer one op output (the per-output body of the lazy emitter)."""
+
+    graph_ws = trace._raw_graph_ws
+    layer_type = call_fields["type"]
+    graph_ws.layer_counter += 1
+    graph_ws.raw_layer_type_counter[layer_type] += 1
+    state.op_counts[layer_type] = state.op_counts.get(layer_type, 0) + 1
+    state.step_index += 1
+    state.event_index += 1
+    raw_index = graph_ws.layer_counter
+    type_index = graph_ws.raw_layer_type_counter[layer_type]
+    label_raw = f"{layer_type}_{type_index}_{raw_index}_raw"
+    set_tensor_label(out, label_raw)
+    frame = state.module_stack[-1] if state.module_stack else None
+    data = {
+        **call_fields,
+        "label": label_raw,
+        "raw_label": label_raw,
+        "_label_raw": label_raw,
+        "raw_index": raw_index,
+        "type_index": type_index,
+        "output_index": output_index,
+        "address": frame.address if frame else None,
+        "module_type": frame.module_type if frame else None,
+        "module_pass_number": frame.pass_number if frame else None,
+        **tensor_fields(out),
+    }
+    elapsed = time.time() - trace._provenance_start_time
+    history = cast(LazyContextHistory, state.history)
+    history.defer("op", data, state.event_index, state.step_index, elapsed)
+
+
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_capture_records import (  # noqa: E402
@@ -525,4 +652,5 @@ from ._ops_predicates import (  # noqa: E402
 )
 from .ops import (  # noqa: E402
     TRANSFORM_FUNC_NAMES,
+    CaptureProducerPolicy,
 )

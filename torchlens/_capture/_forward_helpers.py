@@ -15,6 +15,7 @@ from torchlens._capture import peak_memory
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_honesty import ADVISORY_FUSED_ATTENTION_FASTPATH_HELD, append_capture_advisory
+from .._ir.predicate import ModuleStackFrame
 from .._quantities import Bytes
 from ..backends.registry import (
     BackendName,
@@ -31,6 +32,7 @@ from .stop import evaluate_halt_stop
 if TYPE_CHECKING:
     from .._capture_state_helpers import CompiledCapturePrep
     from .._data_classes.trace import Trace
+    from ._lazy_contexts import LazyContextHistory
 from .._utils.display import _timed_phase
 
 
@@ -509,6 +511,51 @@ def _run_predicate_forward_with_root_frame(
         finally:
             if not halt_only:
                 state.append_context(exit_ctx)
+            backend.pop_module_frame(trace, state.module_stack, root_frame)
+    return outputs
+
+
+def _run_lazy_predicate_forward_with_root_frame(
+    trace: "Trace",
+    backend: CaptureBackend,
+    model: object,
+    input_args: tuple[Any, ...] | list[Any],
+    input_kwargs: dict[Any, Any],
+    model_device: object | None,
+    history: "LazyContextHistory",
+) -> Any:
+    """Run the forward under the root frame on a pass with deferred contexts.
+
+    Matches ``_run_predicate_forward_with_root_frame`` there: the root
+    boundary events are unkept, halt is off and a lean journal appends no
+    shell event for them, so the root enter and exit contexts are deferred.
+    The halt-stop directive is evaluated once on the built enter context (it
+    re-binds the directive to the pass options exactly as the eager root does);
+    later evaluations are no-ops with halt off.
+    """
+
+    state = history.state
+    root_frame = ModuleStackFrame(
+        address="",
+        module_type=type(model).__name__,
+        module_id=id(model),
+        pass_number=1,
+    )
+    backend.push_existing_module_frame(trace, state.module_stack, root_frame)
+    elapsed = time.time() - trace._provenance_start_time
+    history.defer_module_boundary("module_enter", root_frame, "root:enter:1", elapsed)
+    evaluate_halt_stop(trace, history.latest(), state.options)
+    outputs = None
+    try:
+        with _timed_phase(trace, "dispatch:forward_model"):
+            with _forward_peak_memory_bracket(trace, model_device):
+                with backend.inference_context(trace):
+                    outputs = cast(Callable[..., Any], model)(*input_args, **input_kwargs)
+    finally:
+        try:
+            elapsed = time.time() - trace._provenance_start_time
+            history.defer_module_boundary("module_exit", root_frame, "root:exit:1", elapsed)
+        finally:
             backend.pop_module_frame(trace, state.module_stack, root_frame)
     return outputs
 

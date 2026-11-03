@@ -13,12 +13,13 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
 
 from ... import _state
+from ..._capture._lazy_contexts import LazyContextHistory, lazy_history_of
 from ..._ir import ModuleExitEvent
 from ..._ir.op_record import amend_module_boundary_retention
 from ...recording._halt import StopSignal
@@ -358,7 +359,13 @@ def _predicate_module_forward(
     frame = _mstack.push_frame(trace, state.module_stack, module)
     bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
     halt_only = _is_halt_only_capture(state.options)
-    skipped_spec = _predicate_module_enter(trace, state, frame, halt_only)
+    history = lazy_history_of(state)
+    enter, leave = (
+        (_predicate_module_enter, _predicate_module_exit)
+        if history is None
+        else (_lazy_module_enter, _lazy_module_exit)
+    )
+    skipped_spec = enter(trace, state, frame, halt_only)
     out = None
     try:
         if (
@@ -379,6 +386,8 @@ def _predicate_module_forward(
             call_args=args,
             call_kwargs=dict(kwargs),
         )
+        if history is not None:
+            history.prepare_module_boundary(f"{frame.address}:{frame.pass_number}")
         _record_predicate_module_boundary_outputs(
             trace,
             state,
@@ -388,9 +397,41 @@ def _predicate_module_forward(
         )
         return out
     finally:
-        _predicate_module_exit(
-            trace, state, (frame, halt_only, skipped_spec), out, sys.exc_info()[1]
-        )
+        leave(trace, state, (frame, halt_only, skipped_spec), out, sys.exc_info()[1])
+
+
+def _lazy_module_enter(trace: Trace, state: Any, frame: Any, halt_only: bool) -> Any:
+    """Defer a module entry's context on a pass with deferred contexts.
+
+    Matches ``_predicate_module_enter`` there: module boundary events are
+    unkept, halt is off and a lean journal appends no shell event for them, so
+    the lasting effects are the event count and the context.
+    """
+
+    del trace, halt_only
+    history = cast(LazyContextHistory, state.history)
+    label = f"{frame.address}:enter:{frame.pass_number}"
+    history.defer_module_boundary("module_enter", frame, label)
+    return CaptureSpec(save_out=False, save_metadata=False)
+
+
+def _lazy_module_exit(
+    trace: Trace,
+    state: Any,
+    entry: tuple[Any, bool, Any],
+    out: Any,
+    active_model_exc: BaseException | None,
+) -> None:
+    """Defer a module exit's context and pop the frame (see ``_lazy_module_enter``)."""
+
+    del trace, out, active_model_exc
+    frame = entry[0]
+    try:
+        history = cast(LazyContextHistory, state.history)
+        label = f"{frame.address}:exit:{frame.pass_number}"
+        history.defer_module_boundary("module_exit", frame, label)
+    finally:
+        _mstack.pop_frame(state.module_stack, frame)
 
 
 def _predicate_event_was_appended(trace: Trace, label_raw: str) -> bool:
