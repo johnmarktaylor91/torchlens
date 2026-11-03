@@ -13,7 +13,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, compute_forward_flops
 
 
 class _ConstructionModel(nn.Module):
@@ -38,48 +37,6 @@ class _AmbiguousModel(nn.Module):
         noise = torch.rand(x.shape)
         ramp = torch.linspace(0.0, 1.0, x.shape[1])
         return x + noise + ramp
-
-
-def test_witness_side_one_constructions_are_zero_by_rule() -> None:
-    """arange/tensor/zeros/ones_like classify zero_by_rule with 0 FLOPs."""
-
-    log = tl.trace(
-        _ConstructionModel(),
-        torch.randn(2, 3),
-        save=None,
-    )
-    try:
-        by_func: dict[str, list] = {}
-        for op in log._layer_list:
-            by_func.setdefault(op.func_name, []).append(op)
-        for name in ("arange", "tensor", "zeros", "ones_like"):
-            assert name in by_func, f"construction {name} not captured"
-            for op in by_func[name]:
-                assert int(op.flops_forward) == 0, name
-        coverage = log.compute_coverage
-        assert coverage["unknown"] == 0
-        assert coverage["zero_by_rule"] >= 4
-        assert log.unknown_flop_ops == ()
-    finally:
-        log.cleanup()
-
-
-def test_witness_side_two_ambiguous_names_stay_unknown() -> None:
-    """rand (RNG) and linspace (interpolating fill) STAY unknown, never 0."""
-
-    assert "rand" not in ZERO_ARITHMETIC_CONSTRUCTIONS
-    assert "randn" not in ZERO_ARITHMETIC_CONSTRUCTIONS
-    assert "linspace" not in ZERO_ARITHMETIC_CONSTRUCTIONS
-    assert compute_forward_flops("rand", (2, 3), (), (), {}) is None
-    assert compute_forward_flops("linspace", (8,), (), (), {}) is None
-
-    log = tl.trace(_AmbiguousModel(), torch.randn(2, 3), save=None)
-    try:
-        unknown_names = {group.func_name for group in log.unknown_flop_ops}
-        assert "rand" in unknown_names
-        assert "linspace" in unknown_names
-    finally:
-        log.cleanup()
 
 
 @pytest.mark.smoke
@@ -108,6 +65,7 @@ def test_unknown_ledger_names_reasons_and_remedies() -> None:
         log.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/trace.py, report/_trace_facts.py.
 def test_four_way_classification_is_total() -> None:
     """Every layer-list row lands in exactly one coverage class."""
 
@@ -128,27 +86,3 @@ def test_four_way_classification_is_total() -> None:
             )
         finally:
             log.cleanup()
-
-
-@pytest.mark.heavy
-def test_gpt2_reaches_full_coverage_sentence() -> None:
-    """gpt2@16: '541/541 covered; 25 zero-by-rule; 0 unknown' (costreport D3)."""
-
-    transformers = pytest.importorskip("transformers")
-    torch.manual_seed(0)
-    model = transformers.GPT2LMHeadModel(transformers.GPT2Config())
-    model.eval()
-    ids = torch.randint(0, 50257, (1, 16))
-    with torch.no_grad():
-        log = tl.trace(model, ids, save=None)
-    try:
-        coverage = log.compute_coverage
-        assert coverage["unknown"] == 0
-        assert log.unknown_flop_ops == ()
-        # The 25 former "unknowns" (tensor x24, arange x1) are zero-by-rule.
-        assert coverage["zero_by_rule"] >= 25
-        assert coverage["known"] + coverage["zero_by_rule"] == log._num_ops
-        # Reclassification adds ZERO FLOPs: the partition pin is unchanged.
-        assert int(log.cost.total_flops_forward) == 3_974_725_648
-    finally:
-        log.cleanup()

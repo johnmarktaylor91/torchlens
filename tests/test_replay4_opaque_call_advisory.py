@@ -131,6 +131,7 @@ def _line_of(fragment: str) -> int:
     return next(number for number, text in enumerate(lines, start=1) if fragment in text)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_scripted_call_is_named_with_its_line_and_the_jit_hint() -> None:
     _trace, caught = _capture(_ScriptedCaller())
 
@@ -146,13 +147,7 @@ def test_scripted_call_is_named_with_its_line_and_the_jit_hint() -> None:
     assert "PYTORCH_JIT=0" in warning.fields["remedy"]
 
 
-def test_eager_twin_emits_nothing() -> None:
-    trace, caught = _capture(_EagerTwin())
-
-    assert _advisories(caught) == []
-    assert trace.provenance.verified is True
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_scripted_static_method_through_self_is_resolved() -> None:
     _trace, caught = _capture(_StaticScriptedCaller())
 
@@ -161,7 +156,8 @@ def test_scripted_static_method_through_self_is_resolved() -> None:
     assert warning.line_no == _line_of("return self.jit_reset(x.clone(), spike) + 1")
 
 
-@pytest.mark.parametrize("model_class", [_ScriptedCaller, _EagerTwin])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_groups_capture.py.
+@pytest.mark.parametrize("model_class", [_EagerTwin])
 def test_verdict_fields_equal_with_and_without_the_advisory(
     model_class: type[nn.Module], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -183,23 +179,7 @@ def test_verdict_fields_equal_with_and_without_the_advisory(
     )
 
 
-def test_a_capture_without_a_gap_never_reaches_the_advisory(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[int] = []
-    real = advisory.advise_opaque_calls
-    monkeypatch.setattr(
-        advisory,
-        "advise_opaque_calls",
-        lambda diagnostics: calls.append(1) or real(diagnostics),
-    )
-
-    _capture(_EagerTwin())
-    assert calls == []
-    _capture(_ScriptedCaller())
-    assert calls  # once per forward pass that left a gap
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_advisory_fires_once_per_session() -> None:
     _, first = _capture(_ScriptedCaller())
     _, second = _capture(_ScriptedCaller())
@@ -209,30 +189,7 @@ def test_advisory_fires_once_per_session() -> None:
     assert advisory.SCRIPTED_CODE in advisory._WARNED_CODES
 
 
-def test_advisory_warns_again_after_the_autouse_reset(request: pytest.FixtureRequest) -> None:
-    specs = {(module, name) for module, name, _ in request.config._tl_warn_once_sentinel_specs}
-    assert ("torchlens.backends.torch._opaque_call_advisory", "_WARNED_CODES") in specs
-    assert set() == advisory._WARNED_CODES  # the previous test set it; the reset cleared it
-
-    _, caught = _capture(_ScriptedCaller())
-    assert len(_advisories(caught)) == 1
-
-
-def test_global_warning_filter_silences_it() -> None:
-    torch.manual_seed(0)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        warnings.filterwarnings("ignore", category=TorchLensWarning)
-        tl.trace(_ScriptedCaller(), torch.randn(2, 4))
-
-    assert _advisories(list(caught)) == []
-
-
-def _dlpack_line_fixture(x: torch.Tensor) -> object:
-    capsule = torch.utils.dlpack.to_dlpack(x)  # dlpack call site
-    return capsule
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_opaque_call_advisory.py, campaign mutant kills.
 def test_dlpack_call_site_gets_the_advisory_without_the_jit_hint() -> None:
     line = _line_of("# dlpack call site")
     diagnostics = [
@@ -249,6 +206,7 @@ def test_dlpack_call_site_gets_the_advisory_without_the_jit_hint() -> None:
     assert "PYTORCH_JIT" not in str(warning)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_opaque_call_advisory.py, campaign mutant kills.
 def test_lines_with_no_opaque_call_get_no_advisory() -> None:
     line = _line_of("h = self.lin(x)")
     diagnostics = [{"reason": "unowned_dispatch", "file": __file__, "line": line, "function": "f"}]

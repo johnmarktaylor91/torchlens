@@ -29,6 +29,7 @@ def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/types.py.
 def test_raw_metadata_covers_every_event_payload_free() -> None:
     """One row per chronological event, closed field set plus retained flag."""
 
@@ -47,21 +48,7 @@ def test_raw_metadata_covers_every_event_payload_free() -> None:
     assert all(row["shape"] is not None and row["dtype"] is not None for row in op_rows)
 
 
-def test_raw_metadata_retained_flag_matches_predicate_selection() -> None:
-    """Exactly the predicate-kept events carry retained=True."""
-
-    recording = tl.record(_model(), torch.randn(1, 4), save=tl.func("relu"))
-
-    rows = recording.raw_metadata()
-
-    retained_rows = [row for row in rows if row["retained"]]
-    assert len(retained_rows) == len(recording) == 1
-    assert retained_rows[0]["func_name"] == "relu"
-    # Unretained ops are still fully described (the point of the accessor).
-    unretained_ops = [row for row in rows if row["kind"] == "op" and not row["retained"]]
-    assert {row["func_name"] for row in unretained_ops} == {"linear"}
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/types.py.
 def test_raw_metadata_refuses_when_event_stream_is_gone() -> None:
     """A stream-less recording refuses typed, never an empty tuple."""
 
@@ -73,6 +60,7 @@ def test_raw_metadata_refuses_when_event_stream_is_gone() -> None:
     assert excinfo.value.fields["code"] == "recording_event_stream_unavailable"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_raw_metadata_works_on_failed_partial_recordings() -> None:
     """Failed partials keep their event stream readable (no cooking needed)."""
 

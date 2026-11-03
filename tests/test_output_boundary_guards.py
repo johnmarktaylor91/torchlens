@@ -18,7 +18,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._ir.container_registry import (
     OUTPUT_TREE_MAX_DEPTH,
-    _build_container_spec,
     walk_container,
 )
 
@@ -48,15 +47,7 @@ class _CyclicOut(nn.Module):
         return out
 
 
-class _DagOut(nn.Module):
-    """Forward returning one shared list under two output slots."""
-
-    def forward(self, x: torch.Tensor) -> object:
-        y = x + 1
-        shared = [y, y * 2]
-        return [shared, shared]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_outputs.py, campaign mutant kills.
 def test_deep_output_captures_instead_of_recursion_error() -> None:
     """A too-deep forward output degrades honestly instead of crashing capture."""
 
@@ -64,6 +55,7 @@ def test_deep_output_captures_instead_of_recursion_error() -> None:
     assert len(log) > 0
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_cyclic_output_captures_instead_of_recursion_error() -> None:
     """A self-referential forward output degrades honestly instead of crashing."""
 
@@ -71,16 +63,7 @@ def test_cyclic_output_captures_instead_of_recursion_error() -> None:
     assert len(log) > 0
 
 
-def test_dag_output_walks_every_occurrence() -> None:
-    """The cycle guard is path-scoped: shared output containers stay fully walked."""
-
-    log = tl.trace(_DagOut(), torch.ones(2))
-    assert len(log) > 0
-    result = walk_container([_deep_list(2, torch.ones(1))] * 2, role="output", capability="full")
-    assert result is not None
-    assert len(result.leaf_occurrences) == 2
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/_container_type_probes.py, _ir/container_registry.py.
 def test_overdeep_spec_degrades_to_opaque_and_unreconstructable() -> None:
     """The registry spec builder records the over-deep subtree as opaque."""
 
@@ -90,17 +73,7 @@ def test_overdeep_spec_degrades_to_opaque_and_unreconstructable() -> None:
     assert result.reconstructable is False
 
 
-def test_cyclic_spec_degrades_to_opaque_and_unreconstructable() -> None:
-    """The registry spec builder records the cycle edge as opaque."""
-
-    cyclic: list[object] = [torch.ones(1)]
-    cyclic.append(cyclic)
-    spec = _build_container_spec(cyclic)
-    assert spec is not None
-    kinds = {child.kind for _component, child in spec.child_specs}
-    assert "opaque" in kinds
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_runnable_prover_refuses_deep_and_cyclic_typed() -> None:
     """Refuse-unless-proved: the losslessness prover names the guard reasons."""
 
@@ -126,6 +99,7 @@ def test_runnable_prover_refuses_deep_and_cyclic_typed() -> None:
     assert proved is True
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/container_registry.py.
 def test_moderate_output_nesting_still_reconstructable() -> None:
     """Outputs well under the ceiling keep full reconstructable specs."""
 

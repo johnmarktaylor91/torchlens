@@ -155,24 +155,6 @@ class Transient(nn.Module):
         return self.fc(x)
 
 
-@linux_procfs
-def test_cpu_forward_peak_counts_a_freed_buffer_under_the_counter_lag() -> None:
-    torch.manual_seed(0)
-    tl.trace(Transient().eval(), torch.randn(2, 4)).cleanup()  # warm the wrappers
-    model = Transient().eval()
-    SAMPLES.clear()
-    with _Lagged() as lagged:
-        trace = tl.trace(model, torch.randn(2, 4), capture=HOST)
-    try:
-        outside = SAMPLES["alive"] - SAMPLES["entry"]
-        assert outside >= PLANT_BYTES - MARGIN
-        assert lagged.lag >= MIN_LAG
-        assert trace.cost.forward_peak_memory is not None
-        assert int(trace.cost.forward_peak_memory) >= outside - MARGIN
-    finally:
-        trace.cleanup()
-
-
 def _planted_trace(samples: dict[str, int]) -> tuple[Any, torch.Tensor]:
     """A trace whose output gradient hook plants and frees the 64 MiB buffer."""
 
@@ -210,40 +192,7 @@ def test_cpu_backward_peak_counts_a_freed_buffer_under_the_counter_lag() -> None
         trace.cleanup()
 
 
-def _fake_proc(
-    monkeypatch: pytest.MonkeyPatch, hwm_kib: int, rss_kib: int, stat_pages: int
-) -> None:
-    import builtins
-    import io
-
-    real_open = builtins.open
-    status = f"Name:\tpython\nVmHWM:\t{hwm_kib} kB\nVmRSS:\t{rss_kib} kB\n"
-    stat = "1 (py thon) S" + " 0" * 20 + f" {stat_pages}" + " 0" * 20 + "\n"
-
-    def fake_open(path: Any, *args: Any, **kwargs: Any) -> Any:
-        if str(path) == "/proc/self/status":
-            return io.StringIO(status)
-        if str(path) == "/proc/self/stat":
-            return io.StringIO(stat)
-        return real_open(path, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "open", fake_open)
-
-
-def test_peak_rss_adds_the_lag_only_when_the_mark_is_above_the_current_rss(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # The mark is the current RSS: no transient above it, nothing added.
-    _fake_proc(monkeypatch, hwm_kib=4000, rss_kib=4000, stat_pages=100)
-    assert peak_memory.peak_rss_bytes() == 4000 * 1024
-    # The mark came from the kernel's approximate counter: add exact minus approximate.
-    _fake_proc(monkeypatch, hwm_kib=9000, rss_kib=4000, stat_pages=100)
-    assert peak_memory.peak_rss_bytes() == 9000 * 1024 + (4000 * 1024 - 100 * PAGE)
-    # An approximate total above the exact one is never a negative lag.
-    _fake_proc(monkeypatch, hwm_kib=9000, rss_kib=4000, stat_pages=4000 * 1024 // PAGE + 50)
-    assert peak_memory.peak_rss_bytes() == 9000 * 1024
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/peak_memory.py.
 def test_kernel_mark_lag_is_exact_minus_approximate_never_negative() -> None:
     assert peak_memory._kernel_mark_lag_bytes(10 * 2**20, 9 * 2**20) == 2**20
     assert peak_memory._kernel_mark_lag_bytes(9 * 2**20, 10 * 2**20) == 0

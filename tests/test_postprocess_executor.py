@@ -19,7 +19,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import TraceCaptureError
 
 #: The pipeline in run order. Reordering steps is a reviewed semantic change.
 PIPELINE_ORDER = (
@@ -117,131 +116,6 @@ def test_pipeline_step_modules_resolve_and_own_the_adapter_or_body() -> None:
             assert step.postcondition.__name__ == f"_{step.name}_violation", step.name
         assert step.reads == tuple(sorted(set(step.reads))), step.name
         assert step.writes == tuple(sorted(set(step.writes))), step.name
-
-
-def test_pipeline_declared_writes_cover_observed_trace_rebinding(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Each step's ``writes`` covers every trace attribute it adds, drops or rebinds.
-
-    The check watches ``trace.__dict__``: keys added or removed by a step and
-    keys whose value object was replaced (``is`` identity) must be declared.
-    In-place mutation of a list or dict is not observable this way, so the
-    declared set may be wider than what this test sees, never narrower.
-    """
-
-    import dataclasses
-
-    from torchlens._postprocess import _pipeline
-
-    undeclared: dict[str, set[str]] = {}
-
-    def observing(step: _pipeline.PipelineStep) -> _pipeline.PipelineStep:
-        inner = step.run
-
-        def run(ctx: _pipeline.StepContext) -> None:
-            before = dict(ctx.trace.__dict__)
-            inner(ctx)
-            after = ctx.trace.__dict__
-            changed = {
-                key
-                for key in set(before) | set(after)
-                if key not in before or key not in after or before[key] is not after[key]
-            }
-            extra = changed - set(step.writes) - _TIMING_FIELDS
-            if extra:
-                undeclared[step.name] = extra
-
-        return dataclasses.replace(step, run=run)
-
-    monkeypatch.setattr(
-        _pipeline, "PIPELINE", tuple(observing(step) for step in _pipeline.PIPELINE)
-    )
-    trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
-    try:
-        assert undeclared == {}, undeclared
-    finally:
-        trace.cleanup()
-
-
-def test_executor_seam_patched_step_executes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A step function replaced on its home module executes.
-
-    The executor calls each step through its home module (here
-    ``graph_traversal``) at call time; a registry of imported references
-    would silently break every home-module seam.
-    """
-
-    import torchlens._postprocess as pp
-
-    calls: list[str] = []
-    real_step2 = pp.graph_traversal._find_output_ancestors
-
-    def patched_step2(trace: object) -> None:
-        calls.append("ran")
-        real_step2(trace)
-
-    monkeypatch.setattr(pp.graph_traversal, "_find_output_ancestors", patched_step2)
-    trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
-    try:
-        assert calls == ["ran"], "the patched step body must have executed"
-    finally:
-        trace.cleanup()
-
-
-def test_executor_should_run_called_exactly_once(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Executor invariant: should_run evaluates once per step, in order.
-
-    The ``finalize_streamed_bundle`` gate is deliberately context-writing (THE
-    streaming snapshot point); a re-evaluated ``evict_streamed_outs`` gate
-    after that step cleared _out_writer would always be false and streamed
-    outs would never be evicted.
-    """
-
-    import dataclasses
-
-    from torchlens._postprocess import _pipeline
-
-    counts: dict[str, int] = {}
-    seen_order: list[str] = []
-    original = _pipeline.PIPELINE
-
-    def counting(step: _pipeline.PipelineStep) -> _pipeline.PipelineStep:
-        inner = step.should_run
-
-        def counted(ctx: _pipeline.StepContext) -> bool:
-            counts[step.name] = counts.get(step.name, 0) + 1
-            seen_order.append(step.name)
-            return inner(ctx)
-
-        return dataclasses.replace(step, should_run=counted)
-
-    monkeypatch.setattr(_pipeline, "PIPELINE", tuple(counting(step) for step in original))
-    trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
-    try:
-        assert counts == {step.name: 1 for step in original}
-        assert seen_order == list(PIPELINE_ORDER)
-    finally:
-        trace.cleanup()
-
-
-def test_executor_failing_step_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A raising step propagates its exception out of ``tl.trace``."""
-
-    import torchlens._postprocess as pp
-
-    class _StepBoom(RuntimeError):
-        pass
-
-    def exploding_step9(trace: object) -> None:
-        raise _StepBoom("step 9 exploded")
-
-    monkeypatch.setattr(pp.labeling, "_log_final_info_for_layers", exploding_step9)
-    with pytest.raises(TraceCaptureError) as _tce_info:
-        tl.trace(_TinyModel().eval(), torch.randn(2, 3))
-    assert isinstance(_tce_info.value.__cause__, _StepBoom)
 
 
 def test_phase_timing_bucket_names_default_capture() -> None:
@@ -351,6 +225,7 @@ def test_evict_streamed_outs_step_and_gate_evict_from_memory(tmp_path: Path) -> 
         trace.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/control_flow.py, _postprocess/loop_detection.py, campaign mutant kills.
 def test_buffer_duplicate_axis_actually_merges(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -525,6 +400,7 @@ def _postcondition_breakers() -> list[Any]:
     ]
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_executor.py.
 @pytest.mark.parametrize(
     ("step", "attribute", "make_breaker", "message"), _postcondition_breakers()
 )

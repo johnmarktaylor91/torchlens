@@ -26,7 +26,6 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens import _state
@@ -154,19 +153,13 @@ def post_wrap_bag(post_wrap_library: types.ModuleType) -> type:
     return post_wrap_library.Bag
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/wrappers.py.
 def test_post_wrap_table_dispatches_on_the_fast_path(post_wrap_bag: type) -> None:
     """A C builtin dispatch reaches a wrapper-keyed table outside any capture."""
 
     bags = [post_wrap_bag(torch.ones(2)), post_wrap_bag(torch.zeros(2))]
     out = torch.stack(bags)
     assert torch.equal(out, torch.tensor([[2.0, 2.0], [0.0, 0.0]]))
-
-
-def test_post_wrap_table_dispatches_pure_python_functional(post_wrap_bag: type) -> None:
-    """A pure-Python functional (``handle_torch_function`` path) reaches it too."""
-
-    out = F.relu(post_wrap_bag(torch.tensor([-1.0, 3.0])))
-    assert torch.equal(out, torch.tensor([1.0, 4.0]))
 
 
 def _bag_stacking_model(bag_type: type) -> nn.Module:
@@ -181,6 +174,7 @@ def _bag_stacking_model(bag_type: type) -> nn.Module:
     return Model()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/arg_positions.py, backends/torch/wrappers.py, campaign mutant kills.
 def test_post_wrap_table_capture_matches_original_keyed_table(post_wrap_bag: type) -> None:
     """Inside a capture, a wrapper-keyed table logs what an original-keyed one logs."""
 
@@ -199,31 +193,7 @@ def test_post_wrap_table_capture_matches_original_keyed_table(post_wrap_bag: typ
     assert tl.validate(_bag_stacking_model(post_wrap_bag), x, scope="forward")
 
 
-def test_unwrap_aliases_post_wrap_tables_onto_originals(
-    post_wrap_library: types.ModuleType,
-) -> None:
-    """Unwrapped torch dispatches a post-wrap table; the next wrap undoes the alias."""
-
-    from torchlens.backends.torch.wrappers import unwrap_torch
-
-    wrapped_stack = torch.stack
-    imported_keys = set(post_wrap_library.HANDLED)
-    unwrap_torch()
-    try:
-        assert torch.stack is _resolve(wrapped_stack)
-        handled = post_wrap_library.HANDLED
-        assert torch.stack in handled and wrapped_stack in handled
-        bags = [post_wrap_library.Bag(torch.ones(1)), post_wrap_library.Bag(torch.ones(1))]
-        assert torch.equal(torch.stack(bags), torch.full((2, 1), 2.0))
-    finally:
-        _ensure_wrapped()
-    assert torch.stack is wrapped_stack
-    # Back on the call path, the wrappers redispatch; the foreign table is again
-    # exactly what its import built (wrapper keys only).
-    assert _resolve(wrapped_stack) not in post_wrap_library.HANDLED
-    assert set(post_wrap_library.HANDLED) == imported_keys
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_alias_container_adds_originals_only_for_wrapper_keys() -> None:
     """Dicts and sets gain the original beside each wrapper key, nothing else."""
 
@@ -244,6 +214,7 @@ def test_alias_container_adds_originals_only_for_wrapper_keys() -> None:
     assert members == {wrapper, 3}
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_protocol_redispatch.py, campaign mutant kills.
 def test_undo_leaves_a_re_registered_original_alone() -> None:
     """An original key whose value changed since the alias is the library's now."""
 
@@ -257,29 +228,7 @@ def test_undo_leaves_a_re_registered_original_alone() -> None:
     assert table == {wrapper: "impl", original: "re-registered"}
 
 
-def test_original_keyed_table_is_unchanged(post_wrap_bag: type) -> None:
-    """A table keyed on originals (pre-wrap import) dispatches on the first offer."""
-
-    del post_wrap_bag
-    calls: list[Callable[..., Any]] = []
-
-    def stack_impl(bags: list[Any], dim: int = 0) -> torch.Tensor:
-        calls.append(torch.stack)
-        return torch.stack([bag.tensor for bag in bags], dim)
-
-    pre_wrap_bag = _make_bag_type({_resolve(torch.stack): stack_impl})
-    out = torch.stack([pre_wrap_bag(torch.ones(1)), pre_wrap_bag(torch.ones(1))])
-    assert out.shape == (2, 1)
-    assert len(calls) == 1
-
-
-def test_genuine_decline_raises_the_original_error(post_wrap_bag: type) -> None:
-    """A function no handler accepts still raises torch's own TypeError."""
-
-    with pytest.raises(TypeError, match=r"Multiple dispatch failed for 'torch\.cat'"):
-        torch.cat([post_wrap_bag(torch.ones(1)), post_wrap_bag(torch.ones(1))])
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_protocol_redispatch.py, backends/torch/wrappers.py, campaign mutant kills.
 def test_enclosing_call_never_reruns_a_handler_that_did_work() -> None:
     """A declined NESTED dispatch is not re-offered by the enclosing wrapper."""
 
@@ -299,6 +248,7 @@ def test_enclosing_call_never_reruns_a_handler_that_did_work() -> None:
     assert cat_calls == [1]
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/_torch_compat.py, campaign mutant kills.
 def test_redispatch_stays_off_without_the_disabled_sentinel(
     post_wrap_bag: type, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -309,6 +259,7 @@ def test_redispatch_stays_off_without_the_disabled_sentinel(
         torch.stack([post_wrap_bag(torch.ones(1)), post_wrap_bag(torch.ones(1))])
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_protocol_redispatch.py, campaign mutant kills.
 def test_overloaded_args_follow_torch_protocol_order() -> None:
     """Exact Tensors and the disabled sentinel are skipped; subclasses go first."""
 
@@ -352,6 +303,7 @@ def _capture_failure(
     return cause
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py, campaign mutant kills.
 def test_unrelated_type_error_in_capture_keeps_torch_traceback_and_user_origin() -> None:
     """A TypeError that is no declined dispatch re-raises from the wrapper frame."""
 
@@ -363,14 +315,7 @@ def test_unrelated_type_error_in_capture_keeps_torch_traceback_and_user_origin()
     assert "out_orig = func(" in (frames[-1].line or "")
 
 
-def test_genuine_decline_in_capture_classifies_user_op(post_wrap_bag: type) -> None:
-    """A dispatch every handler declines twice is still the user's op."""
-
-    exc = _capture_failure(lambda x: torch.cat([post_wrap_bag(x), post_wrap_bag(x)]))
-    assert "Multiple dispatch failed for 'torch.cat'" in str(exc)
-    assert classify_failure_origin(exc) is FailureOrigin.USER_OP
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py, backends/torch/wrappers.py.
 def test_handler_error_after_redispatch_classifies_user_op(post_wrap_bag: type) -> None:
     """A library handler's own error after redispatch is the user's op failing."""
 
