@@ -28,6 +28,7 @@ import torchlens as tl
 import torchlens.validation.core as validation_core
 from torchlens._state import pause_logging
 from torchlens.validation import last_validation_failure
+from torchlens.validation.invariants import check_metadata_invariants
 
 _GLOBAL_OFFSET = torch.randn(3)
 
@@ -380,3 +381,77 @@ def test_identically_zero_grad_still_fails_its_input_perturbation() -> None:
     failure = last_validation_failure()
     assert failure is not None and failure.check_name == "perturbation"
     assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")
+
+
+@pytest.mark.parametrize(
+    ("model_cls", "shape", "paired_funcs"),
+    [
+        (_SecondOrder, (2, 3), {"matmul", "pow", "sum"}),
+        (_TwoLosses, (2, 3), {"matmul", "tanh", "add", "pow", "sum"}),
+        (_IntermediateInput, (2, 4), {"linear", "sin", "mul"}),
+    ],
+    ids=["second-order", "two-losses", "intermediate-input"],
+)
+def test_grad_fns_of_a_backward_inside_forward_pair_with_their_captured_ops(
+    model_cls: type[nn.Module], shape: tuple[int, ...], paired_funcs: set[str]
+) -> None:
+    """A backward pass run inside forward pairs each GradFn with the op that records it.
+
+    The walk of such a pass runs before any layer exists, so the pairing must not
+    depend on walk time: every GradFn whose node a captured op records names that op,
+    exactly as a backward run after the trace would.
+    """
+
+    torch.manual_seed(0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model_cls(), torch.randn(*shape))
+    try:
+        grad_fns = {grad_fn.grad_fn_object_id: grad_fn for grad_fn in trace.autograd.grad_fns}
+        recording_ops = [
+            op
+            for op in trace._layer_list
+            if op.grad_fn_object_id in grad_fns and getattr(op, "is_compute_op", False)
+        ]
+        assert recording_ops
+        for op in recording_ops:
+            grad_fn = grad_fns[op.grad_fn_object_id]
+            assert grad_fn.has_op, grad_fn.label
+            assert grad_fn.op is not None and grad_fn.op_label == op.layer_label
+        paired = [grad_fn for grad_fn in grad_fns.values() if grad_fn.has_op]
+        assert {grad_fn.op.func_name for grad_fn in paired} >= paired_funcs
+        check_metadata_invariants(trace)
+    finally:
+        trace.cleanup()
+
+
+def test_second_order_inside_forward_keeps_the_orders_of_the_same_math_after_the_trace() -> None:
+    """Pairing the penalty's ops does not change derivative orders: pass 2 stays order 2.
+
+    ``penalty = (g ** 2).sum()`` is captured inside forward, so its nodes pair with
+    their ops; they still feed the first gradient's order-2 nodes, so they sit at
+    order 2 and the nodes the second grad creates from them at order 3.
+    """
+
+    torch.manual_seed(0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(_SecondOrder(), torch.randn(2, 3))
+    try:
+        assert [p.order for p in trace.autograd.backward_passes] == [1, 2]
+        grad_fns = list(trace.autograd.grad_fns)
+        first_grad = next(op for op in trace._layer_list if op.transform_kind == "autograd.grad")
+        penalty_pow = next(
+            op
+            for op in trace._layer_list
+            if op.func_name == "pow" and first_grad.label in op.parents
+        )
+        penalty_sum = next(op for op in trace._layer_list if penalty_pow.label in op.parents)
+        penalty_ids = {penalty_pow.grad_fn_object_id, penalty_sum.grad_fn_object_id}
+        penalty_nodes = [g for g in grad_fns if g.grad_fn_object_id in penalty_ids]
+        assert len(penalty_nodes) == 2 and all(g.has_op for g in penalty_nodes)
+        assert {grad_fn.order for grad_fn in penalty_nodes} == {2}
+        creations = [g for g in grad_fns if g.creator_object_id in penalty_ids]
+        assert creations and {g.order for g in creations} == {3}
+    finally:
+        trace.cleanup()
