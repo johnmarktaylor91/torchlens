@@ -78,16 +78,11 @@ def _record_predicate_module_boundary_outputs(
         _plain_module_union(predicate) is None and not selector_contains_kind(predicate, "module")
     ):
         return
-    contexts_by_label = {
-        ctx.raw_label: ctx
-        for ctx in state.all_contexts
-        if ctx.kind == "op" and ctx.raw_label is not None
-    }
-    existing = {
-        (record.ctx.raw_label, record.ctx.pass_number)
-        for record in state.recording.records
-        if record.ctx.raw_label is not None
-    }
+    # This pass's op contexts and retained raw labels, kept per pass by the
+    # recording state: a boundary output can only come from an op of this
+    # pass, and a record of another pass never shares its (raw label, pass) key.
+    contexts_by_label = state.pass_lookup.contexts_by_raw_label
+    existing = state.pass_lookup.record_raw_labels
     module_call_label = f"{module_address}:{module_call_index}"
     labeled_outputs: list[tuple[torch.Tensor, tuple[Any, ...], str]] = []
     walked_leaf_count = 0
@@ -131,10 +126,8 @@ def _record_predicate_module_boundary_outputs(
         trace._tl_save_selector_fire_count = (
             int(getattr(trace, "_tl_save_selector_fire_count", 0)) + 1
         )
-        key = (boundary_ctx.raw_label, boundary_ctx.pass_number)
-        if key in existing:
+        if boundary_ctx.raw_label in existing:
             continue
-        existing.add(key)
         ram_payload, disk_payload, transformed_ram, transformed_disk = state.resolve_storage(
             tensor,
             decision,

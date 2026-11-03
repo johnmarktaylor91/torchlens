@@ -4251,3 +4251,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 50b513a4be6b12b984ff76aadac3b871b1490855 (dirty)
 recorded: 2026-11-03T16:49:21.650039+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: gen-memory: _predicate_forward reads this pass's contexts from _record_stores._PassIndex instead of scanning ctx.kind over all_contexts
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5885a73ebbf49ab9c8d721878334bad467ffb805 (dirty)
+recorded: 2026-11-03T17:20:38.386953+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: gen-memory: _predicate_forward reads this pass's contexts from _record_stores._PassIndex instead of scanning ctx.kind over all_contexts
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5885a73ebbf49ab9c8d721878334bad467ffb805 (dirty)
+recorded: 2026-11-03T17:20:44.851970+00:00

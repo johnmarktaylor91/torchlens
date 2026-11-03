@@ -27,7 +27,10 @@ from .._ir.refs import DeviceRef, DtypeRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
 from .._record_type import record_type
 from .._utils._torch_compat import tensor_version_or_none
-from .._utils._torch_symbols import torch_dtype_named
+from .._utils._torch_symbols import (
+    torch_device_from_string,
+    torch_dtype_from_string,
+)
 from .._utils.tensor_utils import get_memory_amount_from_metadata
 from ..recording.exceptions import PredicateError
 from ..recording.types import (
@@ -40,7 +43,7 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
-from ._record_stores import _GradFnContextMap, _StorageBackend
+from ._record_stores import _GradFnContextMap, _PassIndex, _StorageBackend
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -128,6 +131,7 @@ class RecordingState:
     step_index: int = 0
     no_tensor_capture: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
+    pass_lookup: _PassIndex = field(default_factory=_PassIndex)
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
     grad_fn_to_context: _GradFnContextMap = field(default_factory=_GradFnContextMap)
@@ -164,6 +168,7 @@ class RecordingState:
         """Append an event context to the bounded sliding window."""
 
         self.all_contexts.append(ctx)
+        self.pass_lookup.note_context(ctx)
         window_size = self.options.lookback or self.options.history_size
         if window_size == 0:
             return
@@ -174,6 +179,7 @@ class RecordingState:
     def add_record(self, record: ActivationRecord) -> None:
         """Append a retained out record and update indexes."""
 
+        self.pass_lookup.note_record(record)
         self.storage_backend.append(record)
 
     def module_fields_for(
@@ -1510,10 +1516,8 @@ def _grad_record_context_from_op_grad_event(
                 order=getattr(pass_record, "order", None),
                 event_index=ordinal,
                 shape=event.shape,
-                dtype=_torch_dtype_from_string(event.dtype),
-                tensor_device=_torch_device_from_string(
-                    getattr(fastlog_ctx, "tensor_device", None)
-                ),
+                dtype=torch_dtype_from_string(event.dtype),
+                tensor_device=torch_device_from_string(getattr(fastlog_ctx, "tensor_device", None)),
             )
         return GradRecordContext(
             label=event.op_label,
@@ -1527,7 +1531,7 @@ def _grad_record_context_from_op_grad_event(
             order=getattr(pass_record, "order", None),
             event_index=ordinal,
             shape=event.shape,
-            dtype=_torch_dtype_from_string(event.dtype),
+            dtype=torch_dtype_from_string(event.dtype),
             tensor_device=None,
         )
     op = trace._layer_dict_all_keys[event.op_label]
@@ -1547,8 +1551,8 @@ def _grad_record_context_from_op_grad_event(
         order=getattr(pass_record, "order", None),
         event_index=ordinal,
         shape=event.shape,
-        dtype=_torch_dtype_from_string(event.dtype),
-        tensor_device=_torch_device_from_string(getattr(op, "output_device", None)),
+        dtype=torch_dtype_from_string(event.dtype),
+        tensor_device=torch_device_from_string(getattr(op, "output_device", None)),
     )
 
 
@@ -1558,27 +1562,6 @@ def _public_record_context_label(ctx: RecordContext) -> str:
     if ctx.kind == "op" and ctx.layer_type is not None and ctx.type_index is not None:
         return f"{ctx.layer_type}_{ctx.type_index}"
     return ctx.label
-
-
-def _torch_dtype_from_string(dtype_name: str | None) -> torch.dtype | None:
-    """Return a ``torch.dtype`` for canonical dtype strings when possible."""
-
-    if dtype_name is None:
-        return None
-    if dtype_name.startswith("torch."):
-        return torch_dtype_named(dtype_name.removeprefix("torch."))
-    return None
-
-
-def _torch_device_from_string(device_name: Any) -> torch.device | None:
-    """Return a ``torch.device`` from a string-like field when possible."""
-
-    if device_name is None:
-        return None
-    try:
-        return torch.device(str(device_name))
-    except (TypeError, RuntimeError):
-        return None
 
 
 def recording_trace_from_events(events: Any) -> tuple[RecordContext, ...]:
