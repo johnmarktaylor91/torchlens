@@ -117,6 +117,33 @@ monotonically poisoned. Incomplete witness coverage can settle only as `unverifi
 [contract section 8](runnable_tlspec_contract.md#8-readiness-and-result-shapes), and settlement
 semantics are frozen in [section 11](runnable_tlspec_contract.md#11-honesty-divergence-poison-and-exactness).
 
+## Clean run, hooked run, and disclosure
+
+`run(inputs=)` means one thing: push new inputs through the recorded model. Verification is a
+property the result reports, not part of that meaning. The clean-run promise of this contract
+(a `verified` path, `attested` numerics when eligible) is made for a run with nothing staged on
+the trace: no hooks, no value replacements, no capture-time intervention on the path it replays.
+
+Hooks and value replacements are standing subscriptions: they act whenever a run reaches their
+site, and a run that applies them is an edited forward, not the model's own. The contract does
+not pretend otherwise. Such a run settles `unverifiable` with the ceiling diagnostic
+`user_intervention_unsupported` (stage `hooked_run_unverified`, details `pristine=false`),
+never `verified`, and a subscription that fired nowhere is recorded under the zero-fire policy
+rather than passed over. From that point the trace reads `Trace.is_pristine == False`, a one-way reading derived
+from the evidence the trace keeps, so a later reader of the saved artifact sees that something
+once intervened even if the hooks were cleared afterwards. The ordinary `run(inputs=)` keeps
+refusing staged edits it would not apply (`run_staged_spec_unapplied`), so an edit is either
+applied and disclosed or refused, never silently dropped.
+
+A capture whose taken path carries a user-replaced op cannot produce a sparse runnable artifact
+at all: producer preflight refuses it (`user_intervention_unsupported`, stage
+`producer_user_intervention`), because the replacement has no traceable function to replay.
+
+In short: a clean run is verified; an intervened or hooked run is reported as unverifiable and
+the trace is marked non-pristine; neither outcome is ever silent. The exhaustive wording is in
+[contract section 11](runnable_tlspec_contract.md#11-honesty-divergence-poison-and-exactness);
+the reading itself is defined under "Pristine" in the [glossary](glossary.md).
+
 ## Witness obligations
 
 The runnable proof is obligation-driven. Every replay-structure fact that can affect a verdict

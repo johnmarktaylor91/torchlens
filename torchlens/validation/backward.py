@@ -538,7 +538,7 @@ def _unexplained_backward_gaps(trace: Any) -> list[Any]:
 
 def validate_backward_pass(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
@@ -556,7 +556,7 @@ def validate_backward_pass(
     ----------
     model:
         Model to validate.
-    input_args:
+    inputs:
         Positional input arguments for ``model``.
     input_kwargs:
         Keyword input arguments for ``model``.
@@ -620,15 +620,15 @@ def validate_backward_pass(
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
-    input_args = _coerce_input_args(model, input_args)
-    check_model_and_input_variants(model, input_args, input_kwargs)
+    inputs = _coerce_input_args(model, inputs)
+    check_model_and_input_variants(model, inputs, input_kwargs)
     if input_kwargs is None:
         input_kwargs = {}
     if loss_fn is None:
         loss_fn = _sum_tensors
     if seed is None:
         seed = random.randint(1, 4294967294)
-    input_args = normalize_input_args(input_args, model)
+    inputs = normalize_input_args(inputs, model)
     model_device = next((parameter.device for parameter in model.parameters()), None)
     if _refuse_non_leaf_parameters(model):
         _record_backward_failure(
@@ -643,7 +643,7 @@ def validate_backward_pass(
     try:
         set_random_seed(seed)
         stock_inputs, stock_kwargs = _prepare_inputs_for_backward(
-            input_args, input_kwargs, model_device
+            inputs, input_kwargs, model_device
         )
         model.zero_grad(set_to_none=True)
         try:
@@ -675,7 +675,7 @@ def validate_backward_pass(
         # Restore only what the stock pass changed before the candidate runs.
         _restore_backward_model_state(model, model_state)
         trace = _capture_backward_candidate(
-            model, (input_args, input_kwargs), model_device, seed, trace_fn
+            model, (inputs, input_kwargs), model_device, seed, trace_fn
         )
         logged_loss = loss_fn(_reconstruct_candidate_output_for_loss(trace))
         with refusing_carried_graph(model):

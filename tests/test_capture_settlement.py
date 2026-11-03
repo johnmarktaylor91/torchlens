@@ -111,7 +111,7 @@ def test_recorder_halt_pass_settles_attested_halted_unfinished(monkeypatch) -> N
 
     monkeypatch.setattr(Recorder, "_absorb_pass_events", _capture)
     with Recorder(
-        ThreeStageModel(), save=lambda ctx: ctx.kind == "op", halt=halt_on_relu
+        ThreeStageModel(), save=lambda ctx: ctx.kind == "op", stop_after=halt_on_relu
     ) as recorder:
         output = recorder(torch.ones(1, 3))
     assert output is None

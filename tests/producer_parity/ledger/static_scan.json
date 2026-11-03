@@ -4330,6 +4330,30 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/_visualization/_encoding_aggregate.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/_encoding_aggregate.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_visualization/_encoding_size_layout.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/_visualization/_geometry_audit.py",
   "has_default": false,
   "sites": 13,
@@ -7173,6 +7197,22 @@
   "file": "torchlens/bundle/_relation_carriage.py",
   "has_default": false,
   "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/bundle/_relation_grades.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/bundle/_relation_grades.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {

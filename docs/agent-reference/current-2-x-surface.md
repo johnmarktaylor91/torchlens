@@ -290,7 +290,9 @@
   `diverged`, never a settlement input); declared unsnapshotable state refuses at declaration
   time (`episode_state_unsnapshotable`). Bundles gain the optional S6 member-relation table
   (`relations=`, `Bundle.relate`, `Bundle.episode_status` — a derived fold,
-  never Bundle-level settlement; mutators cascade explicitly or refuse typed). Doc of record:
+  never Bundle-level settlement; `Bundle.relation_grades` — per-row `RelationGrade` derived
+  from the evidence, `broken` on exactly two premises, seam-local divergences never escalate;
+  mutators cascade explicitly or refuse typed). Doc of record:
   `docs/reference/episode_capture.md`.
 - HARNESS BUNDLES (phases 1 and 2; every spelling DOCUMENTED-UNSTABLE; doc of record
   `docs/reference/harness_bundles.md`): no new datatype, the Bundle plus its relation table is
@@ -492,10 +494,14 @@
 - `Trace.draw(size_by=..., size_scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
   wave-1 SIZE channel, shipped with the D4 DEFAULT APPLIED (D4 unruled at merge: sqrt scale +
   conservative area-only mapping + typed refusal on rolled varying sources). Sources: a scalar
-  record field, the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
+  record field, the `color_by` builtin tokens (same meaning and units; field-backed ones take
+  the field path), the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
   shape-valued source — callables must return scalars), or a callable. Emitted sizes are
   width/height MINIMUMS under `fixedsize=false` (labels never truncate, fonts never scale),
-  encoded area clamped to `SIZE_BY_MAX_AREA_MULT` (4.0) x the default node area; strictly
+  label-aware (render-IR pass `_encoding_size_layout.layout_encoded_sizes`: base box =
+  per-dimension max(median label box, own label box), area grows linearly to
+  `SIZE_BY_MAX_AREA_MULT` (4.0) x the base at the top value); collapsed
+  boxes and segments encode from exact member-op sums (`_encoding_aggregate`); strictly
   opt-in (plain `draw()` keeps uniform boxes). On rolled multi-pass nodes size REFUSES where
   color degrades: `size_by_rolled_varying` fires for any source that cannot be certified
   single-valued (marker-varying reconciled fields, mirrored/per-pass projections, varying
@@ -649,7 +655,7 @@
   cap, and `None` disables it. Predicate-selected disk-only saves are exempt; exhaustive
   `save="all"` plus `to_disk(...)` remains budgeted
   until postprocess eviction (the former bare flat
-  `layers_to_save=` kwarg is removed). Unmeasurable auto
+  flat layer-selection keyword is removed). Unmeasurable auto
   devices warn on first charge and require an absolute budget for enforcement. The reported figure
   is an explicitly-labelled lower bound.
   Like `measure_python_peak_memory` it is a session-time knob (`FieldPolicy.DROP`, not in
@@ -751,7 +757,9 @@
   the C07-adjudicated field-intent census is maintained privately. The C07X
   AMENDMENT rides the SAME v9 window (TLSPEC_VERSION stays 9; JF-9 ratified): bundle
   relation grammar v2 (required/optional split; `successor_of` admits the optional
-  evidence envelope `{schema, items[], facts_digest}` + `carry_mode`/`state_source`;
+  evidence envelope `{schema, items[], facts_digest}` + `carry_mode` (closed:
+  `none`/`verbatim`/`summarized`; `none` grades `disclosed`) / `state_source` / `seams`; items carry
+  the seven-kind origin `class` (required under the reserved schemas) and an optional declared `seam`;
   graded claims over the closed verified/consistent/disclosed/unchecked/divergent
   vocabulary with the contracted unchecked-reason menu incl. `no_param_snapshot` --
   user-authored MEASUREMENT grades (verified/consistent/divergent) are clamped to
@@ -1411,6 +1419,14 @@
   torchlens.bridge.mcp`): read-only tools over saved `.tlspec` artifacts + environment
   (doctor / api_map / load_overview / agent_dump / explain), wrapping the same public
   surface -- no user-code execution, no mutation.
+- AGENT KIT (CLI spelling DOCUMENTED-UNSTABLE): `torchlens agent init` (tier 0, torch-free)
+  writes a marked block into `AGENTS.md` (or each repeatable `--file`) naming the installed
+  agent index `torchlens/_docs/AGENT_INDEX.md`; `--remove` deletes it; text outside the markers
+  is never touched and damaged markers are refused (exit 4). The index, `skills/torchlens/`
+  (`SKILL.md` + `ROUTER.md`), `docs/reference/agent_capabilities.md` and
+  `tools/docs/generated/llms.txt` are generated from `docs/field-guide/task_cards.yaml` by
+  `tools/docs/build_agent_index.py` (`--check` in tests); `tools/agent_evals/first_call.py`
+  grades whether a fresh agent's first TorchLens call is each card's canonical call.
 - DATASET EXTRACTION (D7/V5; `resume=`, `stimulus_ids=`, and the loader
   DOCUMENTED-UNSTABLE): disk-mode `tl.extract_dataset(..., path=)` writes atomic
   shards plus a self-describing `manifest.json` (run signature, per-site identity with

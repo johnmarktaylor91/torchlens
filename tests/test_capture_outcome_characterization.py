@@ -354,7 +354,7 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
 
     x = torch.ones(1, 3)
     with Recorder(
-        TwoOpModel(), save=lambda ctx: ctx.kind == "op", halt=_halt_second_pass
+        TwoOpModel(), save=lambda ctx: ctx.kind == "op", stop_after=_halt_second_pass
     ) as recorder:
         first_output = recorder(x)
         second_output = recorder(x)

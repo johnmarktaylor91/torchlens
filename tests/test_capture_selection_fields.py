@@ -14,7 +14,7 @@ from torchlens.errors import FacadeTeachingError
 from torchlens.options import CaptureOptions, merge_capture_options
 
 
-@pytest.mark.parametrize("removed", ["layers_to_save", "save_preview"])
+@pytest.mark.parametrize("removed", ["layers_to_save", "save_preview", "module_filter"])
 def test_removed_capture_fields_reject_constructor_keywords(removed: str) -> None:
     assert removed not in inspect.signature(CaptureOptions).parameters
     assert removed not in CaptureOptions().as_dict()
@@ -22,6 +22,27 @@ def test_removed_capture_fields_reject_constructor_keywords(removed: str) -> Non
         CaptureOptions(**{removed: False})
     assert excinfo.value.fields["code"] == "facade_redirect"
     assert "save=" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("removed", ["raise_on_nan", "track_nonfinite"])
+def test_removed_nonfinite_fields_name_on_nonfinite(removed: str) -> None:
+    assert removed not in inspect.signature(CaptureOptions).parameters
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        CaptureOptions(**{removed: True})
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert "on_nonfinite=" in str(excinfo.value)
+
+
+def test_trace_takes_inputs_and_refuses_the_old_input_args_keyword() -> None:
+    """``inputs=`` binds the model input; ``input_args=`` is an unrouted keyword, never forwarded."""
+
+    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    trace = tl.trace(model, inputs=torch.ones(1, 3))
+    assert isinstance(trace, tl.Trace)
+    with pytest.raises(tl.errors.ArgumentTypeError) as excinfo:
+        tl.trace(model, input_args=torch.ones(1, 3))
+    assert excinfo.value.fields["code"] == "trace_forward_kwargs_unrouted"
+    assert excinfo.value.fields["unrouted_keywords"] == ["input_args"]
 
 
 def test_private_selection_survives_option_merges() -> None:
@@ -47,19 +68,16 @@ def test_public_save_selects_final_labels_and_none() -> None:
     assert not any(op.has_saved_activation for op in tl.trace(model, x, save=None).ops)
 
 
-def test_module_filter_retained_until_where_composes_with_save_forms() -> None:
+def test_save_predicate_composes_the_module_selection() -> None:
     model = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
     trace = tl.trace(
         model,
         torch.ones(1, 3),
-        save="all",
-        capture=CaptureOptions(
-            module_filter=lambda fields: any(address == "1" for address, _ in fields.modules)
-        ),
+        save=tl.where(lambda context: any(f.address == "1" for f in context.module_stack)),
     )
     assert any(op.has_saved_activation for op in trace.ops if op.func_name == "relu")
     assert not any(op.has_saved_activation for op in trace.ops if op.func_name == "linear")
-    predicate = tl.where(lambda context: "1" in context.module_stack)
+    predicate = tl.where(lambda context: any(f.address == "1" for f in context.module_stack))
     # A bare label string composes with a selector (the selector algebra lifts it);
     # a list or a callable is not a selector operand and keeps Python's TypeError.
     assert isinstance("all" & predicate, CompositeSelector)

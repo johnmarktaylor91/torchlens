@@ -10,6 +10,7 @@ an oracle. The generated projection renders state, cost, and gaps TOGETHER.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -465,6 +466,104 @@ def render_projection() -> str:
         "",
         f"KNOWN-GAP rows: {len(gap_rows)} of {len(LEDGER)} "
         "(transitional; each carries owner, issue, deadline, reproducer, auto-probe).",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+# Plain-language titles for the public composition matrix
+# (docs/reference/composition_matrix.md). A row with no title here renders its
+# id in words, so a new row never blocks the page; the lockstep test still
+# fails until the committed page is regenerated.
+PUBLIC_TITLES: dict[str, str] = {
+    "CELL-FLAGSHIP-RERUN-NOOP": "A postprocess-label selector under the rerun engine",
+    "CELL-SAVE-ALL-REMEDY-CURRENCY": "The save-all refusal names a current remedy",
+    "CELL-REPLAY-PRECONDITION-CODELESS": "Replay precondition errors carry a code",
+    "CELL-SITE-RESOLUTION-ZERO-MATCH-CODELESS": "A selector matching no site refuses with a code",
+    "CELL-ZERO-MATCH-LANE-ASYMMETRY": "Zero-match handling agrees between capture and plan",
+    "CELL-DRAW-WRONG-KNOB-REFUSAL": "Trace.draw refuses a removed keyword",
+    "CELL-FACADE-NO-DID-YOU-MEAN": "A mistyped top-level name gets a suggestion",
+    "CELL-STORAGE-STREAMING-SILENT-CONFLICT": "Disk storage with explicit streaming",
+    "CELL-MCP-CACHE-KEY-SYMLINK": "MCP overview cache under a symlinked path",
+    "CELL-ENV-PARSER-BYPASS": "Every boolean environment variable uses the closed parser",
+    "CELL-PARTIALTRACE-AGENT-VERBS": "Agent verbs on a partial trace",
+    "CELL-MULTIPASS-BARE-LABEL-REFUSAL": "A bare label on a multi-pass layer",
+    "CELL-FORK-RAW-WRITE-SHARED-STORAGE": "Raw in-place writes on a fork reach shared storage",
+    "CELL-SUMMARY-CHARSET-PASSCOUNT": "Summary pass counts across ASCII and Unicode",
+}
+
+PUBLIC_STATE_WORDING: dict[str, str] = {
+    "SUPPORTED": "supported",
+    "SUPPORTED-WITH-DISCLOSURE": "supported, with a disclosure",
+    "REFUSES-TYPED-TEACHING": "refuses with a typed error and a remedy",
+    "N-A": "not applicable",
+    "KNOWN-GAP": "not yet verified",
+}
+
+
+def public_title(row: CompositionRow) -> str:
+    """Return the plain-language title of a row for the public matrix."""
+
+    fallback = row.row_id.removeprefix("CELL-").replace("-", " ").lower()
+    return PUBLIC_TITLES.get(row.row_id, fallback)
+
+
+_INTERNAL_TAG_PREFIX = re.compile(r"^[A-Z]{1,3}[0-9]{1,3}(?:\.[0-9]+)?:\s*")
+
+
+def public_evidence(row: CompositionRow) -> str:
+    """The evidence cell as the public page shows it.
+
+    The ledger's evidence node may open with an internal sprint tag
+    (``F08: tests/...``); the page keeps only the test path that follows it.
+    """
+
+    return _INTERNAL_TAG_PREFIX.sub("", row.evidence_node)
+
+
+def render_public_matrix() -> str:
+    """Render the public composition matrix (docs/reference/composition_matrix.md).
+
+    Regenerate-and-diff like :func:`render_projection`: the committed page is
+    the docs copy, and the lockstep test fails on drift. Every ledger row
+    appears; a KNOWN-GAP row renders as ``not yet verified`` with no evidence
+    cell, and owner, deadline and note fields stay internal.
+    """
+
+    gap_rows = [row for row in LEDGER if row.expected_state == "KNOWN-GAP"]
+    lines = [
+        "# Composition matrix",
+        "",
+        "<!-- Generated from tests/composition_expectations/ledger.py by",
+        "render_public_matrix(); do not edit by hand. The lockstep test",
+        "(tests/composition_expectations/test_contract_lockstep.py) fails on drift. -->",
+        "",
+        "Which feature pairings have been exercised together, and with what result.",
+        "Every pairing in the composition ledger appears here. A pairing is listed as",
+        "`supported` only when a test proves it; `refuses with a typed error and a remedy`",
+        "means the combination is rejected on purpose, with the remedy in the message;",
+        "`not yet verified` means the pairing is known and tracked but no test yet proves",
+        "its behaviour, so do not rely on it. The evidence column names the test that",
+        "proves a verified row.",
+        "",
+        "| Pairing | Family | Operations | Settings | Status | Evidence |",
+        "|---|---|---|---|---|---|",
+    ]
+    for row in LEDGER:
+        status = PUBLIC_STATE_WORDING[row.expected_state]
+        evidence = "-" if row.expected_state == "KNOWN-GAP" else public_evidence(row)
+        lines.append(
+            f"| {public_title(row)} | {row.family} | {', '.join(row.operation_ids)} "
+            f"| {'; '.join(row.axis_values)} | {status} | {evidence} |"
+        )
+    lines += [
+        "",
+        f"Rows: {len(LEDGER)}; not yet verified: {len(gap_rows)}.",
+        "",
+        "The matrix covers the hand-declared pairings of the composition ledger. Generated",
+        "pairings (the matrix, sweep and gallery generators in the test tree) are checked by",
+        "their own tests and are not listed here. A `not yet verified` row moves to a verified",
+        "state only through a test; the ledger refuses a verified state without evidence.",
         "",
     ]
     return "\n".join(lines)

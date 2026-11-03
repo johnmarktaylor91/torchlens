@@ -34,6 +34,7 @@ from ..._user_funcs_guards import (
     _reject_unrouted_jax_options,
     _trace_option_refusal_code,
 )
+from ...backends._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from ...backends._options import (
     MLX_EXTRA_KWARG_POLICY,
     TRACE_OPTION_CAPABILITY_GATES,
@@ -97,7 +98,6 @@ def _trace_mlx_model(
     visualization: VisualizationOptions | None,
     backward_ready: bool | MissingType,
     name: str | None | MissingType,
-    module_filter: Callable[[Any], bool] | None | MissingType,
     module_identity_mode: str | None | MissingType,
     grad_options: Any | None | MissingType,
     verbose: bool | MissingType,
@@ -154,7 +154,6 @@ def _trace_mlx_model(
         name=name,
         cache=MISSING,
         cache_dir=MISSING,
-        module_filter=module_filter,
         module_identity_mode=module_identity_mode,
     )
     save_options = (
@@ -218,7 +217,6 @@ def _trace_mlx_model(
         verbose=capture_options.verbose,
         backward_ready=capture_options.backward_ready,
         name=capture_options.name,
-        module_filter=capture_options.module_filter,
         transform=None,
         raw_input=raw_input,
         save_raw_input=capture_options.save_raw_input,
@@ -255,7 +253,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # Idempotent when the registry entry already resolved it; load-bearing for
     # direct/autoroute callers so the internal flat keys are honored, not dropped.
     # intervene=/halt= are DISPATCHED options on MLX (static-label live
-    # interventions); facets= is refused typed by the capture path below.
+    # interventions); facets= is snapshotted onto the finished trace below.
     # None of the three may flow through the capability-gated reject helper:
     # with interventions=True that would raise the never-dispatches
     # conformance error instead of running or refusing them properly.
@@ -301,13 +299,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
             allowed=_MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS,
             backend_name="MLX",
         )
-    recipes_value = kwargs.get("facets", MISSING)
-    if recipes_value is not MISSING and recipes_value is not None:
-        raise BackendUnsupportedError(
-            "MLX backend supports interventions only through static-label "
-            "trace(intervene=tl.when(...)) predicates; recipe specs (facets=) "
-            "are not supported. Use the PyTorch backend for intervention recipes."
-        )
+    facet_recipes = pop_facet_recipes(dict(kwargs))
     # N5 fix: every name below except the genuine top-level ``trace()``
     # parameters (model, input_args, input_kwargs, capture, save,
     # grad_transform, grad_options, intervene, halt) moved into the grouped
@@ -320,7 +312,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # the grouped object's value, exactly like direct/internal callers who
     # still pass the flat spelling.
     activation_transform = kwargs.get("activation_transform", MISSING)
-    return _trace_mlx_model(
+    trace = _trace_mlx_model(
         kwargs["model"],
         kwargs["input_args"],
         kwargs["input_kwargs"],
@@ -355,13 +347,14 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         visualization=None,
         backward_ready=kwargs.get("backward_ready", MISSING),
         name=kwargs.get("name", MISSING),
-        module_filter=kwargs.get("module_filter", MISSING),
         module_identity_mode=kwargs.get("module_identity_mode", MISSING),
         grad_options=kwargs["grad_options"],
         verbose=kwargs.get("verbose", MISSING),
         intervene=kwargs["intervene"],
         halt=pop_stop_directive(dict(kwargs)),
     )
+    attach_facet_recipes(trace, facet_recipes, backend_name="MLX")
+    return trace
 
 
 def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]) -> bool:

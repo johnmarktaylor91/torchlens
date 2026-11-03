@@ -254,14 +254,32 @@ def test_tf_shape_changing_replacement_refuses_typed() -> None:
         )
 
 
-def test_tf_halt_and_recipes_keep_typed_refusals() -> None:
-    """stop_after= and facets= refuse typed inside the capture path."""
+def test_tf_halt_keeps_typed_refusal() -> None:
+    """stop_after= refuses typed inside the capture path."""
 
     x = tf.constant([1.0, -1.0, 2.0])
     with pytest.raises(BackendUnsupportedError, match="stop_after"):
         tl.trace(_relu_plus_ten, x, backend="tf", stop_after=tl.func("relu"))
-    with pytest.raises(BackendUnsupportedError, match="recipes"):
+
+
+def test_tf_recipes_snapshot_dispatches() -> None:
+    """facets= attaches a per-trace facet registry snapshot on both tf capture paths."""
+
+    def recipe(record: Any) -> dict[str, Any]:
+        return {"is_relu": "relu" in str(getattr(record, "label", ""))}
+
+    x = tf.constant([1.0, -1.0, 2.0])
+    trace = tl.trace(_relu_plus_ten, x, backend="tf", facets=[recipe])
+    assert trace.facet_functions is not None
+    assert any("recipe" in entry.public.name for entry in trace.facet_functions.functions)
+
+    compiled = tf.function(lambda value: tf.reduce_sum(tf.nn.relu(value)))
+    static = tl.trace(compiled, tf.ones((2, 2)), backend="tf", facets=recipe)
+    assert static.facet_functions is not None
+
+    with pytest.raises(BackendUnsupportedError, match="recipe callables") as info:
         tl.trace(_relu_plus_ten, x, backend="tf", facets=object())
+    assert info.value.code == "trace_option_unsupported"
 
 
 def test_tf_graph_only_capture_refuses_intervene() -> None:

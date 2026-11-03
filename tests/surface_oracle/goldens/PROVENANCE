@@ -1766,3 +1766,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 8c10f7b1775e15fd2066b3cab2cbbfa50ffafc22 (clean)
 recorded: 2026-11-03T08:19:04.438910+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-apply-entry: inputs= rename, Recorder capture=/stop_after=, module_filter and layers_to_save removal
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
+recorded: 2026-11-03T08:04:42.506191+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-apply-entry: inputs= rename, Recorder capture=/stop_after=, module_filter and layers_to_save removal
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
+recorded: 2026-11-03T08:04:42.696100+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-apply-entry: inputs= rename, Recorder capture=/stop_after=, module_filter and layers_to_save removal
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
+recorded: 2026-11-03T08:04:42.881090+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-apply-entry: inputs= rename, Recorder capture=/stop_after=, module_filter and layers_to_save removal
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
+recorded: 2026-11-03T08:04:43.128864+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-apply-entry: inputs= rename, Recorder capture=/stop_after=, module_filter and layers_to_save removal
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
+recorded: 2026-11-03T08:04:43.281816+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-apply-entry: inputs= rename, Recorder capture=/stop_after=, module_filter and layers_to_save removal
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
+recorded: 2026-11-03T08:04:43.458201+00:00

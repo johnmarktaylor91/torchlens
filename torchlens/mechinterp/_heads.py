@@ -103,7 +103,7 @@ def _result_tensor(module: Any) -> torch.Tensor:
             f"{getattr(module, 'address', '?')} is not readable "
             f"({type(value).__name__}).",
             remedy="capture with the attention interior saved (retention_plan or "
-            "layers_to_save='all'); fused SDPA needs "
+            "save='all'); fused SDPA needs "
             "capture=CaptureOptions(save_args=True)",
             analysis="attention_head_contributions",
         )

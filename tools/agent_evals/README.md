@@ -64,3 +64,27 @@ offline tests.
 `measure_budgets.py` measures the agent surface's responses over the classics corpus against the
 budget configuration in `torchlens/agent/_budgets.py`; the method and the latest numbers are in
 `BUDGETS.md`.
+
+## First-call evaluation
+
+`first_call.py` measures the launch bar for the agent kit: a fresh agent must pick the canonical
+call first in 90% of runs at the mid subject tier and 75% at the small tier. Every task card in
+`docs/field-guide/task_cards.yaml` carries a test prompt in a user's words. In `index` mode each
+task directory holds that prompt and an `AGENTS.md` with the block `torchlens agent init` writes,
+pointing at the agent index inside a shared copy of the package; `bare` mode leaves the block out
+as a baseline. The grader reads `solution.py` without running it and compares its first
+TorchLens call (selectors and edit constructors skipped) with the card's canonical call.
+
+```bash
+python tools/agent_evals/first_call.py selfcheck      # every canonical passes its own grader
+python tools/agent_evals/first_call.py live --out DIR --label mid --runs 2 --jobs 2 \
+    --agent-cmd 'my-agent --system-file {instructions} --read-dir {package} --prompt-file {prompt}'
+python tools/agent_evals/first_call.py summary DIR [DIR ...]
+```
+
+Choose the agent under test by tier (small, mid, frontier), not by a fixed model name, and grant
+it read access to `{package}` and write access to its task directory only. The agent runs in a
+clean environment (home, path, locale and shell variables only); pass the variable holding its
+credential with `--keep-env NAME`. A failure is a docs or
+index finding: fix the card's `avoid` line, the read-first rules or the page, regenerate with
+`tools/docs/build_agent_index.py`, and rerun.

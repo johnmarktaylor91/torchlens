@@ -192,6 +192,8 @@ device-specific claims as attested by local testing only.
 
 - [Detached-reference handling](../migration/scoped_detached_patching.md)
 - [Runnable artifact model](runnable_model.md)
+- [Composition matrix](composition_matrix.md)
+- [Artifact compatibility and the migration policy](../../MIGRATIONS.md)
 - [Merged-trace contract](merged_trace_contract.md)
 - [Capture outcomes](capture_outcomes.md)
 - [Performance and memory controls](../performance.md)

@@ -508,7 +508,7 @@ def _trace_jax(model: Callable[..., Any], args: tuple[Any, ...], **kwargs: Any) 
         Public positional input tuple.
     **kwargs
         Additional public trace keyword arguments. Any name that is a
-        ``CaptureOptions`` field (``layers_to_save``, ``jax_control_flow``,
+        ``CaptureOptions`` field (``jax_control_flow``,
         ``jax_max_control_flow_unroll``, ...) is routed through
         ``capture=CaptureOptions(...)`` -- the sprint removed every such flat
         kwarg from ``trace()``'s own signature, so passing one directly lands

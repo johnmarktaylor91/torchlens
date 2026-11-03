@@ -160,7 +160,6 @@ MODEL_LOG_FIELD_ORDER = [
     "_options_backward_ready",
     "_options_inference_only",
     "_options_chunk_size",
-    "_module_filter",
     "_options_emit_nvtx",
     "_options_on_nonfinite",
     "annotations",

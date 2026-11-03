@@ -100,7 +100,6 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "name",
     "cache",
     "cache_dir",
-    "module_filter",
     "jax_control_flow",
     "jax_max_control_flow_unroll",
     "module_identity_mode",
@@ -226,7 +225,6 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "name": "name",
     "cache": "cache",
     "cache_dir": "cache_dir",
-    "module_filter": "module_filter",
     "jax_control_flow": "jax_control_flow",
     "jax_max_control_flow_unroll": "jax_max_control_flow_unroll",
     "module_identity_mode": "module_identity_mode",
@@ -489,18 +487,6 @@ class CaptureOptions:
             ``torchlens.clear_cache()`` empties the cache.
         cache_dir:
             Optional directory for content-hash cache entries.
-        module_filter:
-            Optional THIRD save gate composed (AND) with ``save=``: an op's
-            payload is retained only when the save selection picks it AND this
-            predicate returns truthy. The
-            predicate receives an op-record namespace (the legacy-shaped
-            ``SimpleNamespace`` of captured op fields such as ``func_name``,
-            ``layer_label``, and ``modules``), NEVER an
-            ``nn.Module`` instance — a filter written against modules (e.g.
-            ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
-            ZERO payloads. Returning ``False`` keeps metadata but skips payload
-            saving; a capture whose every selected payload was suppressed by
-            this gate emits a ``module_filter_zero_saved`` warning.
         jax_control_flow:
             Declared JAX control-flow policy. Backends other than torch reject
             explicit use until their implementation phase supports it.
@@ -688,7 +674,6 @@ class CaptureOptions:
     name: str | None = None
     cache: bool = False
     cache_dir: str | Path | None = None
-    module_filter: Callable[[Any], bool] | None = None
     jax_control_flow: Literal["reject", "unroll", "region"] = "unroll"
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
@@ -751,7 +736,6 @@ class CaptureOptions:
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
-        module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
         jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
