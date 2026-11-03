@@ -36,6 +36,9 @@ MKDOCS = REPO / "mkdocs.yml"
 #: Files under docs/ that are site inputs but not pages, never listed in the map.
 NON_PAGE_PATTERNS: tuple[str, ...] = ("_site_map.yaml",)
 
+#: Directories never published, whatever the site map says (maintainer and agent pages).
+NEVER_PUBLISHED_DIRS: tuple[str, ...] = ("internal/",)
+
 
 @dataclass(frozen=True)
 class Page:
@@ -139,7 +142,7 @@ def render_nav(site_map: SiteMap) -> list[str]:
 
 def render_excludes(site_map: SiteMap) -> list[str]:
     """Render the ``exclude_docs`` patterns (one unpublished page per line)."""
-    lines = [f"  /{pattern}" for pattern in NON_PAGE_PATTERNS]
+    lines = [f"  /{pattern}" for pattern in NON_PAGE_PATTERNS + NEVER_PUBLISHED_DIRS]
     lines += [f"  /{p.path}" for p in site_map.pages if not p.publish]
     return lines
 

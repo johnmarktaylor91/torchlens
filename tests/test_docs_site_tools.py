@@ -184,6 +184,17 @@ def test_site_map_never_publishes_internal_pages(tmp_path: Path) -> None:
         site_nav.load_site_map(bad)
 
 
+def test_internal_directory_is_excluded_from_every_build() -> None:
+    """``docs/internal/`` is excluded as a directory, not only page by page."""
+    site_map = site_nav.load_site_map(site_nav.SITE_MAP)
+    assert "  /internal/" in site_nav.render_excludes(site_map)
+    assert all(
+        page.section in site_map.internal_sections
+        for page in site_map.pages
+        if page.path.startswith("internal/")
+    )
+
+
 _MD_LINK = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)|^\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
 
 #: Links from public pages into internal pages that are still waiting for their
