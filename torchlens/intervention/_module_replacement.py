@@ -102,24 +102,39 @@ def tag_module_boundary_items(resolved: Any, plan: list[dict[str, Any]]) -> None
 
 def snapshot_module_boundary_sites(
     trace: Trace, specs: Iterable[HookSpec]
-) -> list[tuple[HookSpec, Op, dict[str, Any]]]:
-    """Return ``(spec, site, pre-push snapshot)`` for the module-boundary hooks of a push."""
+) -> list[tuple[HookSpec, str, Op, dict[str, Any]]]:
+    """Return ``(spec, address, site, pre-push snapshot)`` rows for a push's module hooks.
 
-    boundary: list[tuple[HookSpec, Op, dict[str, Any]]] = []
+    A hook attached straight from ``do(tl.module(addr), edit)`` carries the
+    module selector as its target; one lowered from a selection plan carries
+    a label target plus the ``MODULE_BOUNDARY_KEY`` metadata. Either way the
+    sites are what the engine itself resolves the target to.
+    """
+
+    boundary: list[tuple[HookSpec, str, Op, dict[str, Any]]] = []
     for spec in specs:
-        if MODULE_BOUNDARY_KEY not in spec.metadata:
+        address = _module_boundary_of(spec)
+        if address is None:
             continue
-        target = spec.site_target
-        label = target.selector_value if target.selector_kind == "label" else None
-        site = trace._layer_dict_all_keys.get(label) if isinstance(label, str) else None
-        if site is None:
-            continue
-        boundary.append((spec, site, rollback_snapshot(site)))
+        sites = trace._resolve_sites(
+            spec.site_target, strict=False, max_fanout=len(trace._layer_list)
+        )
+        for site in sites:
+            boundary.append((spec, address, site, rollback_snapshot(site)))
     return boundary
 
 
+def _module_boundary_of(spec: HookSpec) -> str | None:
+    """The module address a sticky hook spec edits the output of, or ``None``."""
+
+    address = (spec.metadata or {}).get(MODULE_BOUNDARY_KEY)
+    if address is None and spec.site_target.selector_kind == "module":
+        address = spec.site_target.selector_value
+    return str(address) if address is not None else None
+
+
 def materialize_module_replacements(
-    trace: Trace, boundary: Iterable[tuple[HookSpec, Op, dict[str, Any]]]
+    trace: Trace, boundary: Iterable[tuple[HookSpec, str, Op, dict[str, Any]]]
 ) -> list[Op]:
     """Move each module-boundary push result into its own replacement op.
 
@@ -138,10 +153,10 @@ def materialize_module_replacements(
     """
 
     minted: list[Op] = []
-    for spec, site, before in boundary:
+    for spec, address, site, before in boundary:
         if site.out is before["out"] or not isinstance(site.out, torch.Tensor):
             continue  # the push did not commit at this site: nothing to move
-        moved_calls = _moved_call_labels(site, spec.metadata[MODULE_BOUNDARY_KEY])
+        moved_calls = _moved_call_labels(site, address)
         if not moved_calls:
             continue  # not that module's output op: the in-place record stands
         replacement = _mint_replacement(trace, site, before, moved_calls)
@@ -149,12 +164,13 @@ def materialize_module_replacements(
         _rewire_consumers(trace, site, replacement)
         _splice_into_containers(trace, site, replacement, moved_calls)
         _repoint_module_calls(trace, site, replacement, moved_calls)
-        spec.site_target = TargetSpec(
-            "label",
-            replacement.layer_label,
-            strict=spec.site_target.strict,
-            metadata=dict(spec.site_target.metadata),
-        )
+        if spec.site_target.selector_kind == "label":  # a module target now resolves to R
+            spec.site_target = TargetSpec(
+                "label",
+                replacement.layer_label,
+                strict=spec.site_target.strict,
+                metadata=dict(spec.site_target.metadata),
+            )
         minted.append(replacement)
     return minted
 

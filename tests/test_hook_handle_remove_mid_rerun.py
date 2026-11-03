@@ -18,6 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.options import CaptureOptions
 
 
@@ -59,6 +60,7 @@ def test_forward_hook_removed_before_its_site_never_fires_on_that_run() -> None:
     trace.attach_hooks(tl.func("linear"), remover, prepend=True, confirm_mutation=True)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
+        warnings.simplefilter("ignore", MultiMatchWarning)  # tl.func fans out to both sites
         trace.run(model, x)
 
     assert events == ["removed", "linear", "linear"], events
@@ -88,6 +90,7 @@ def test_forward_hook_removing_itself_fires_once() -> None:
     handle_box.append(trace.attach_hooks(tl.func("relu"), once, confirm_mutation=True))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
+        warnings.simplefilter("ignore", MultiMatchWarning)  # tl.func fans out to both sites
         trace.run(model, x)
 
     assert len(fired) == 1, "a hook that removed itself fired again at a later site"
@@ -118,6 +121,7 @@ def test_forward_hook_on_a_passed_site_is_gone_at_its_next_site() -> None:
     trace.attach_hooks(tl.func("relu"), relu_hook, confirm_mutation=True)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
+        warnings.simplefilter("ignore", MultiMatchWarning)  # tl.func fans out to both sites
         trace.run(model, x)
 
     assert events == ["linear", "removed", "relu", "relu"], events
