@@ -18,7 +18,7 @@ from .. import __version__ as TORCHLENS_VERSION
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from . import TLSPEC_VERSION, refuse_bundle_exists
-from ._durability import _restrict_mode, fsync_dir, fsync_tree
+from ._durability import _restrict_mode, _restrict_tree_modes, fsync_dir, fsync_tree
 from ._tlspec_identity import _backend_v2_fields, _model_fingerprint, _model_signature, _safe_len
 from ._tlspec_json_helpers import _json_int_or_none, _json_str_or_none, _utc_timestamp
 from .format3.container import write_members
@@ -281,8 +281,7 @@ class _TlSpecWriter:
 
             manifest = cls._bundle_manifest(bundle, tmp_path=tmp_path, save_level=level)
             cls.write_json(tmp_path / TLSPEC_MANIFEST_FILENAME, manifest)
-            _restrict_mode(tmp_path / BUNDLE_RELATIONS_FILE, 0o600)
-            _restrict_mode(tmp_path / TLSPEC_MANIFEST_FILENAME, 0o600)
+            _restrict_tree_modes(tmp_path)
             # Durability before publish: fsync every written file and
             # directory so a power/OS crash after the rename below cannot
             # publish a bundle holding zero-length or partial members.
