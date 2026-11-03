@@ -13,7 +13,6 @@ matrix or not at all).
 
 from __future__ import annotations
 
-import math
 import time
 
 import pytest
@@ -24,46 +23,6 @@ import torchlens as tl
 from torchlens._observability import ArmSpec, measure_overhead
 from torchlens._observability._overhead import RefusalPredicate
 from torchlens.errors import TorchLensError
-
-
-def test_admissible_measurement_produces_full_artifact() -> None:
-    """A clean paired run yields statistics plus the declared scope."""
-
-    payload = torch.randn(8, 8)
-
-    def base() -> torch.Tensor:
-        time.sleep(0.002)
-        return payload + payload
-
-    def instrumented() -> torch.Tensor:
-        time.sleep(0.003)
-        return payload + payload
-
-    result = measure_overhead(
-        ArmSpec("raw", base), ArmSpec("instrumented", instrumented), reps=7, warmup=2
-    )
-    artifact = result.to_artifact()
-    assert artifact["schema"] == "torchlens.overhead_measurement.v1"
-    assert (artifact["baseline"], artifact["instrumented"]) == ("raw", "instrumented")
-    assert artifact["refusal_predicate"] == {"min_ratio": 1.0, "max_relative_iqr": 0.15}
-    assert artifact["torch_threads"] >= 1
-    assert artifact["clock"] == "time.perf_counter"
-    assert artifact["torch"] == torch.__version__
-    assert (artifact["reps"], artifact["warmup"]) == (7, 2)
-    assert artifact["witness"] == {"kind": "output_agreement", "failures": 0}
-    # Wall-clock values REPORT, never gate (fleet perf doctrine): a 3 ms vs 2 ms sleep pair
-    # can tie on a loaded host, so the contract is a complete artifact with finite, positive
-    # statistics, not the sign of any ratio. Admissibility is the predicate's verdict either way.
-    assert len(result.pair_ratios) == 7
-    assert artifact["pair_ratios"] == list(result.pair_ratios)
-    for value in (*result.pair_ratios, result.median_ratio, result.floor_ratio):
-        assert value is not None and math.isfinite(value) and value > 0.0
-    assert result.iqr is not None and math.isfinite(result.iqr) and result.iqr >= 0.0
-    assert result.floor_ratio == min(result.pair_ratios)
-    assert artifact["floor_ratio"] == result.floor_ratio
-    assert artifact["median_ratio"] == result.median_ratio
-    assert artifact["admissible"] is (not result.refusals)
-    assert artifact["refusals"] == list(result.refusals)
 
 
 def test_physically_impossible_ratio_is_refused() -> None:

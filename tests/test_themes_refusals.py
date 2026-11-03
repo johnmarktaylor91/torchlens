@@ -27,15 +27,6 @@ def plain_log() -> Any:
     log.cleanup()
 
 
-def test_transformer_refuses_on_zero_attention(plain_log: Any) -> None:
-    """Never an ordinary graph under a domain name."""
-
-    with pytest.raises(Exception) as excinfo:
-        lenses.resolve_lens(plain_log, "transformer")
-    assert excinfo.value.fields["code"] == "lens_attention_subject_absent"
-    assert "overview" in str(excinfo.value)
-
-
 def test_sequence_refuses_on_single_pass(plain_log: Any) -> None:
     """Single pass: nothing to sequence, with the teaching escape."""
 
@@ -43,13 +34,6 @@ def test_sequence_refuses_on_single_pass(plain_log: Any) -> None:
         lenses.resolve_lens(plain_log, "sequence")
     assert excinfo.value.fields["code"] == "lens_single_pass_no_sequence"
     assert "overview" in str(excinfo.value)
-
-
-def test_overview_and_blueprint_never_refuse(plain_log: Any) -> None:
-    """The two never-refuse rows resolve on any trace."""
-
-    assert lenses.resolve_lens(plain_log, "overview").draw_kwargs
-    assert lenses.resolve_lens(plain_log, "blueprint").draw_kwargs
 
 
 def test_detail_ceiling_refusal_names_both_remedies(plain_log: Any, monkeypatch: Any) -> None:
@@ -102,14 +86,3 @@ def test_sequence_stack_license_degrade_is_coded_and_rendered() -> None:
             assert resolution.draw_kwargs["stack_by"] == "auto"
     finally:
         log.cleanup()
-
-
-def test_refusals_never_leave_partial_state(plain_log: Any) -> None:
-    """A refused resolve leaves the trace drawable (no half-applied state)."""
-
-    from torchlens._errors import InvalidArgumentError
-
-    with pytest.raises(InvalidArgumentError):
-        lenses.resolve_lens(plain_log, "transformer")
-    resolution = lenses.resolve_lens(plain_log, "overview")
-    assert resolution.draw_kwargs

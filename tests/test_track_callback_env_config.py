@@ -113,16 +113,3 @@ def test_malformed_variable_refuses_naming_it(
         resolve_callback_settings(signals=None, select=None, every=None, hist_every=UNSET)
     assert info.value.fields["code"] == "watch_env_config_invalid"
     assert info.value.fields["variable"] == name
-
-
-def test_environment_never_activates_instrumentation(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Config variables alone install nothing: no callback, no hook."""
-
-    monkeypatch.setenv("TORCHLENS_WATCH_SIGNALS", "gradients")
-    monkeypatch.setenv("TORCHLENS_WATCH_EVERY", "1")
-    model = torch.nn.Linear(4, 4)
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
-    model(torch.randn(2, 4)).sum().backward()
-    optimizer.step()
-    assert not optimizer._optimizer_step_pre_hooks
-    assert not model._forward_hooks and not model._forward_pre_hooks

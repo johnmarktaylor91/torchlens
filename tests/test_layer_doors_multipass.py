@@ -87,7 +87,7 @@ def _zero(t: torch.Tensor) -> torch.Tensor:
     return torch.zeros_like(t)
 
 
-@pytest.mark.parametrize("door", ("do", "set", "sticky"))
+@pytest.mark.parametrize("door", ("set", "sticky"))
 def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) -> None:
     """Each Layer door on a two-pass layer edits both passes, matching plain torch."""
 

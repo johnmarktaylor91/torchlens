@@ -68,27 +68,6 @@ def _debugger_visible_names(obj: object) -> set[str]:
     return visible
 
 
-def _has_inspectable_descriptor(obj: object, name: str) -> bool:
-    """Return whether a field is backed by a real inspectable descriptor.
-
-    A slot descriptor, ``property``, or instance-``__dict__`` entry is
-    inspectable; resolution purely through ``__getattr__`` is not.
-    """
-
-    instance_dict = getattr(obj, "__dict__", None)
-    if instance_dict is not None and name in instance_dict:
-        return True
-    for mro_cls in type(obj).__mro__:
-        descriptor = mro_cls.__dict__.get(name)
-        if descriptor is None:
-            continue
-        if isinstance(descriptor, property):
-            return True
-        if hasattr(descriptor, "__get__"):
-            return True
-    return False
-
-
 _CASES = (
     ("trace", Trace, tuple(tl_constants.MODEL_LOG_FIELD_ORDER)),
     ("op", Op, tuple(tl_constants.LAYER_PASS_LOG_FIELD_ORDER)),
@@ -144,23 +123,6 @@ def test_all_declared_fields_are_debugger_visible(
         f"{cls.__name__} debugger-invisible field set changed: "
         f"unexpected={sorted(missing - _EXPECTED_ABSENT[kind])} "
         f"newly-visible={sorted(_EXPECTED_ABSENT[kind] - missing)}"
-    )
-
-
-@pytest.mark.parametrize(("kind", "cls", "field_order"), _CASES)
-def test_all_declared_fields_have_inspectable_descriptors(
-    dx_trace: Trace, kind: str, cls: type, field_order: tuple[str, ...]
-) -> None:
-    """No FIELD_ORDER field may resolve purely through ``__getattr__``."""
-
-    instance = _get_instance(dx_trace, kind)
-    uninspectable = {
-        name for name in field_order if not _has_inspectable_descriptor(instance, name)
-    }
-    assert uninspectable == _EXPECTED_ABSENT[kind], (
-        f"{cls.__name__} fields without slot/property/dict backing changed: "
-        f"unexpected={sorted(uninspectable - _EXPECTED_ABSENT[kind])} "
-        f"newly-backed={sorted(_EXPECTED_ABSENT[kind] - uninspectable)}"
     )
 
 

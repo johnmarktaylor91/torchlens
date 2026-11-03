@@ -79,20 +79,18 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
 ]
 
 
-@pytest.mark.parametrize(("owner", "removed", "replacement"), REMOVED_MEMBERS)
-def test_removed_member_raises_typed_redirect(
-    owners: dict[str, Any], owner: str, removed: str, replacement: str
-) -> None:
-    """The removed spelling refuses typed and names a replacement that exists."""
+def test_removed_member_raises_typed_redirect(owners: dict[str, Any]) -> None:
+    """Each removed spelling refuses typed and names a replacement that exists (one test, every row)."""
 
-    instance = owners[owner]
-    with pytest.raises(FacadeTeachingError) as excinfo:
-        getattr(instance, removed)
-    assert excinfo.value.fields["code"] == "facade_redirect"
-    assert removed in str(excinfo.value)
-    assert replacement in str(excinfo.value)
-    assert getattr(instance, removed, "absent") == "absent"
-    functools.reduce(getattr, replacement.split("."), instance)  # the named replacement is live
+    for owner, removed, replacement in REMOVED_MEMBERS:
+        instance = owners[owner]
+        with pytest.raises(FacadeTeachingError) as excinfo:
+            getattr(instance, removed)
+        assert excinfo.value.fields["code"] == "facade_redirect", removed
+        assert removed in str(excinfo.value)
+        assert replacement in str(excinfo.value), removed
+        assert getattr(instance, removed, "absent") == "absent", removed
+        functools.reduce(getattr, replacement.split("."), instance)  # the named replacement is live
 
 
 #: (public module, removed module-level name, the live replacement's public spelling)
@@ -111,21 +109,19 @@ REMOVED_MODULE_NAMES: list[tuple[str, str, str]] = [
 ]
 
 
-@pytest.mark.parametrize(("module_name", "removed", "replacement"), REMOVED_MODULE_NAMES)
-def test_removed_module_name_raises_typed_redirect(
-    module_name: str, removed: str, replacement: str
-) -> None:
-    """A public subpackage's removed name refuses typed and names a live replacement."""
+def test_removed_module_name_raises_typed_redirect() -> None:
+    """Each public subpackage's removed name refuses typed and names a live replacement."""
 
     import importlib
 
-    module = importlib.import_module(module_name)
-    with pytest.raises(FacadeTeachingError) as excinfo:
-        getattr(module, removed)
-    assert excinfo.value.fields["code"] == "facade_redirect"
-    assert removed in str(excinfo.value)
-    assert replacement in str(excinfo.value)
-    assert getattr(module, removed, "absent") == "absent"
+    for module_name, removed, replacement in REMOVED_MODULE_NAMES:
+        module = importlib.import_module(module_name)
+        with pytest.raises(FacadeTeachingError) as excinfo:
+            getattr(module, removed)
+        assert excinfo.value.fields["code"] == "facade_redirect", removed
+        assert removed in str(excinfo.value)
+        assert replacement in str(excinfo.value), removed
+        assert getattr(module, removed, "absent") == "absent", removed
     assert removed not in getattr(module, "__all__", ())
     # The named replacement is live (``Trace.do`` resolves from the package root).
     target: Any = importlib.import_module("torchlens")
@@ -134,15 +130,19 @@ def test_removed_module_name_raises_typed_redirect(
         target = getattr(target, part)
 
 
-@pytest.mark.parametrize(
-    "owner", ["Trace", "Bundle", "VisualizationOptions", "CaptureOptions", "VisualizationTheme"]
-)
-def test_unknown_member_still_fails_plain(owners: dict[str, Any], owner: str) -> None:
+def test_unknown_member_still_fails_plain(owners: dict[str, Any]) -> None:
     """Only removed public names redirect; any other miss stays a plain AttributeError."""
 
-    with pytest.raises(AttributeError) as excinfo:
-        getattr(owners[owner], "no_such_member_anywhere")
-    assert not isinstance(excinfo.value, FacadeTeachingError)
+    for owner in (
+        "Trace",
+        "Bundle",
+        "VisualizationOptions",
+        "CaptureOptions",
+        "VisualizationTheme",
+    ):
+        with pytest.raises(AttributeError) as excinfo:
+            getattr(owners[owner], "no_such_member_anywhere")
+        assert not isinstance(excinfo.value, FacadeTeachingError), owner
 
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -189,31 +189,3 @@ def test_redirect_hook_is_hidden_from_type_checkers(path: str, class_name: str |
         if isinstance(inner, ast.FunctionDef) and inner.name == "__getattr__"
     ]
     assert bare == [] and len(guarded) == 1
-
-
-def test_from_import_of_a_removed_name_is_a_plain_import_error() -> None:
-    """Pins the documented CPython limit: ``from`` imports drop the typed redirect.
-
-    ``from pkg import name`` replaces the module ``__getattr__``'s
-    AttributeError with a generic ImportError, so only attribute access
-    carries the facade_redirect message (MIGRATIONS.md, error contract). If a
-    future CPython keeps the original error, this test flags the docs as stale.
-    """
-
-    namespace: dict[str, Any] = {}
-    with pytest.raises(ImportError) as excinfo:
-        exec("from torchlens import resample_ablate", namespace)
-    assert not isinstance(excinfo.value, FacadeTeachingError)
-    assert "cannot import name" in str(excinfo.value)
-
-
-def test_root_resample_ablate_row_matches_the_shared_text() -> None:
-    """The root package's literal copy equals the intervention packages' shared text."""
-
-    from torchlens import _REDIRECTS as root_redirects
-    from torchlens.intervention import _REDIRECTS as package_redirects
-    from torchlens.intervention.helpers import _REDIRECTS as helper_redirects
-
-    shared = helper_redirects["resample_ablate"]
-    assert root_redirects["resample_ablate"] == shared
-    assert package_redirects["resample_ablate"] == shared

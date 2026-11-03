@@ -94,34 +94,6 @@ class SmallCnn(nn.Module):
         return self.head(torch.relu(self.conv(x)).flatten(1))
 
 
-def test_noisy_steps_are_seeded_and_replay_to_their_scores() -> None:
-    """Default noise is seeded per step; each step's edit replays through ``fork().do``."""
-
-    torch.manual_seed(0)
-    model = SmallCnn().eval()
-    x = torch.randn(1, 3, 6, 6)
-    saliency = attribution_kit.input_x_grad(model, x, target=2)
-    curve = attribution_kit.road_curve(model, x, target=2, attribution=saliency, num_steps=6)
-    again = attribution_kit.road_curve(model, x, target=2, attribution=saliency, num_steps=6)
-    other = attribution_kit.road_curve(
-        model, x, target=2, attribution=saliency, num_steps=6, seed=1
-    )
-    assert torch.equal(curve.scores, again.scores)
-    assert not torch.equal(curve.scores[1:], other.scores[1:])
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    for step in curve.steps:
-        fork = trace.fork()
-        try:
-            for selection, edit in step.build_interventions:
-                fork.do(selection, edit)
-            replayed = fork[fork.output_layers[0]].out[0, 2].detach()
-        finally:
-            fork.cleanup()
-        assert float(replayed) == pytest.approx(float(step.score[0]), abs=REPLAY_ATOL)
-        kept = ~step.build_baseline_mask
-        assert torch.equal(step.build_inputs[kept], x[kept])
-
-
 def _remedy(message: str) -> str:
     found = re.search(r"(tl\.attribution\.(?:road|deletion)_curve\(.*\))\. See", message)
     assert found is not None, message

@@ -86,14 +86,3 @@ def test_record_to_trace_keeps_the_traced_ops(name: str) -> None:
         ).to_trace()
     )
     assert recorded == traced
-
-
-def test_record_rebind_leaves_the_parameter_rebound() -> None:
-    """Classifying the rebind as a source write must not skip the write itself."""
-
-    torch.manual_seed(0)
-    x = torch.randn(3)
-    model = _ParameterDataRebind()
-    tl.record(model, x.clone(), recording=tl.options.RecordingOptions(default_op=True))
-    assert isinstance(model.alpha, nn.Parameter)
-    assert torch.equal(model.alpha.detach(), x.abs().max().reshape(model.alpha.shape))

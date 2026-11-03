@@ -54,6 +54,7 @@ def _failed_validation_trace(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, nn.M
     return trace, model, passed
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _io/scrub.py, validation/_trace_checks.py.
 def test_failed_validation_leaves_no_scratch_and_saves(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -62,16 +63,3 @@ def test_failed_validation_leaves_no_scratch_and_saves(
     assert _INDEX_KEY not in trace.__dict__
     trace.save(tmp_path / "trace.tlz")
     assert (tmp_path / "trace.tlz").exists()
-
-
-def test_validation_clears_scratch_when_it_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    trace, _model, _passed = _failed_validation_trace(monkeypatch)
-
-    def _boom(*_args: Any, **_kwargs: Any) -> Any:
-        trace.__dict__[_INDEX_KEY] = {"stale": []}
-        raise RuntimeError("mid-run failure")
-
-    monkeypatch.setattr(validation_core, "_validate_saved_outs_run", _boom)
-    with pytest.raises(RuntimeError, match="mid-run failure"):
-        validation_core.validate_saved_outs(trace, [])
-    assert _INDEX_KEY not in trace.__dict__

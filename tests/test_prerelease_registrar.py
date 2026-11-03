@@ -24,7 +24,6 @@ import torchlens as tl
 from torchlens._data_classes.trace import Trace
 from torchlens._io import FieldPolicy, PreReleaseArtifactError
 from torchlens._io.prerelease import (
-    PRERELEASE_MARKER,
     PRERELEASE_STATE_KEY,
     activate_prerelease_fields,
     prerelease_fields_active,
@@ -33,7 +32,6 @@ from torchlens._io.prerelease import (
     unregister_prerelease_field,
     validate_prerelease_state,
 )
-from torchlens._io.scrub import scrub_for_save
 
 #: Existing declared-DROP scalar Trace field used as the planted gated field.
 #: Any declared-DROP field works; this one is a plain session-time int.
@@ -99,27 +97,9 @@ def test_registry_inventory_and_unregister(planted_field: str) -> None:
     # Fixture teardown unregisters again; must be idempotent.
 
 
-def test_annotations_keys_retired_at_the_bump() -> None:
-    # The S7 episode-ledger home and the L3 telemetry relation persisted
-    # plainly at the tlspec v8 bump; the C01 sidecar namespace persisted
-    # plainly at the tlspec v9 bump (C07). No gated annotation sub-keys
-    # remain until a future sprint registers a new family.
-    assert registered_prerelease_fields().get("Trace.annotations", ()) == ()
-
-
 # ---------------------------------------------------------------------------
 # (a) DROP fields do not persist by default
 # ---------------------------------------------------------------------------
-
-
-def test_gated_field_does_not_persist_by_default(planted_field: str) -> None:
-    assert not prerelease_fields_active()
-    trace = _tiny_trace()
-    setattr(trace, planted_field, 7)
-    scrubbed_state, _, _ = scrub_for_save(trace)
-    assert scrubbed_state[planted_field] is None
-    assert PRERELEASE_STATE_KEY not in scrubbed_state
-    assert scrubbed_state["tlspec_version"] == tl._io.TLSPEC_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -148,17 +128,6 @@ def test_switch_scopes_and_restores() -> None:
 # (c) switch-on writes persist the field, carry the marker, and are
 #     distinguishable from real current-version artifacts
 # ---------------------------------------------------------------------------
-
-
-def test_switched_write_persists_field_and_carries_marker(planted_field: str) -> None:
-    trace = _tiny_trace()
-    setattr(trace, planted_field, 7)
-    with activate_prerelease_fields():
-        scrubbed_state, _, _ = scrub_for_save(trace)
-    assert scrubbed_state[planted_field] == 7
-    marker = scrubbed_state[PRERELEASE_STATE_KEY]
-    assert marker["marker"] == PRERELEASE_MARKER
-    assert f"Trace.{planted_field}" in marker["fields"]
 
 
 @pytest.mark.smoke

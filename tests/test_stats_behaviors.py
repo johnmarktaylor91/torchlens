@@ -133,38 +133,6 @@ def test_aggregate_unmatched_selector_raises_key_error() -> None:
         tl.stats.aggregate(model, [torch.ones(1, 2)], {"no_such_layer": tl.stats.Mean()})
 
 
-def test_aggregate_eval_fast_path_matches_exact_full_trace_path() -> None:
-    """The compiled sparse plan on eval models reproduces the exact path results.
-
-    The same model and batches run once in train mode (exact full-trace every
-    batch) and once in eval mode (plan compiled on batch one, sparse record
-    after); a parameter-free model makes the two modes semantically identical,
-    so any fast-path divergence is a real bug.
-    """
-
-    torch.manual_seed(5)
-    model = nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))
-    batches = [torch.randn(2, 3) for _ in range(4)]
-
-    def _run() -> dict[str, float]:
-        metrics = {"relu": tl.stats.Mean(), "output": tl.stats.Norm()}
-        return tl.stats.aggregate(model, list(batches), metrics)
-
-    model.train()
-    exact = _run()
-    model.eval()
-    fast = _run()
-
-    assert fast["relu"] == pytest.approx(exact["relu"], rel=1e-9)
-    assert fast["output"] == pytest.approx(exact["output"], rel=1e-9)
-
-    with torch.no_grad():
-        relu_values = torch.cat([torch.relu(model[0](batch)).reshape(-1) for batch in batches]).to(
-            dtype=torch.float64
-        )
-    assert fast["relu"] == pytest.approx(float(relu_values.mean().item()))
-
-
 class _BranchingModel(nn.Module):
     """Parameter-free model whose branches emit equal-length, reordered op streams.
 

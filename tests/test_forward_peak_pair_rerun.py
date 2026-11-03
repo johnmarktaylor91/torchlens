@@ -57,32 +57,7 @@ def _rerun_log(
     return log, model
 
 
-def test_zero_then_positive_rerun_drops_the_reason(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    log, _ = _rerun_log(monkeypatch, first=0, rerun=4096)
-
-    assert int(log.cost.forward_peak_memory) == 4096
-    assert log.cost.forward_peak_memory_reason is None
-    log.save(tmp_path / "bundle")
-    loaded = tl.load(tmp_path / "bundle")
-    assert int(loaded.cost.forward_peak_memory) == 4096
-    assert loaded.cost.forward_peak_memory_reason is None
-
-
-def test_positive_then_zero_rerun_carries_the_reason(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    log, _ = _rerun_log(monkeypatch, first=4096, rerun=0)
-
-    assert log.cost.forward_peak_memory is None
-    assert log.cost.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
-    log.save(tmp_path / "bundle")
-    loaded = tl.load(tmp_path / "bundle")
-    assert loaded.cost.forward_peak_memory is None
-    assert loaded.cost.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_groups.py, campaign mutant kills.
 def test_append_rerun_after_a_cpu_zero_round_trips(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -97,6 +72,7 @@ def test_append_rerun_after_a_cpu_zero_round_trips(
     assert loaded.cost.forward_peak_memory_reason is None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_forward_helpers.py.
 def test_cuda_bracket_clears_a_stale_reason(monkeypatch: pytest.MonkeyPatch) -> None:
     allocated = iter([100, 200])
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)

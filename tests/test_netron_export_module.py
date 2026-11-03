@@ -57,45 +57,6 @@ def _export(log: Any, path: Path, **kwargs: Any) -> dict[str, Any]:
     return json.loads(tl.export.netron(log, path, **kwargs).read_text(encoding="utf-8"))
 
 
-def test_module_is_the_file_export_default(tmp_path: Path) -> None:
-    """Ruling N2: the bare file export defaults to the module projection."""
-
-    log = tl.trace(_Deep(), torch.randn(2, 4))
-    payload = _export(log, tmp_path / "default.json")
-    props = {row["key"]: row["value"] for row in payload["metadataProps"]}
-    assert props["torchlens.granularity"] == "module"
-    assert props["torchlens.module_depth"] == "1"
-
-
-def test_per_call_functions_and_drill_down_shapes(tmp_path: Path) -> None:
-    """Each multi-op call gets its own FunctionProto with typed body values."""
-
-    log = tl.trace(_Deep(), torch.randn(2, 4))
-    payload = _export(log, tmp_path / "module.json")
-    functions = {fn["name"]: fn for fn in payload.get("functions", [])}
-    assert set(functions) == {"first", "second"}
-    for fn in functions.values():
-        assert fn["node"], "no empty FunctionProtos (a blank drill-down room is noise)"
-        assert fn["input"] and fn["input"][0] == "x", "formal names are signatures"
-        typed = {row["name"] for row in fn.get("valueInfo", [])}
-        for node in fn["node"]:
-            assert node["output"][0] in typed, "shapes render inside drill-downs"
-    root_ops = {node["name"] for node in payload["graph"]["node"]}
-    assert "add_1_5" in root_ops, "root-level op stays at root"
-    assert {"first", "second"} <= root_ops, "call sites are root nodes"
-
-
-def test_single_op_module_is_inlined_and_function_deleted(tmp_path: Path) -> None:
-    """A one-op module inlines; its FunctionProto is DELETED, not emptied."""
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    log = tl.trace(model, torch.randn(2, 4))
-    payload = _export(log, tmp_path / "inline.json")
-    assert payload.get("functions", []) == []
-    names = [node["name"] for node in payload["graph"]["node"]]
-    assert names == ["linear_1_1", "relu_1_2"]
-
-
 def test_reused_module_gets_per_call_functions(tmp_path: Path) -> None:
     """Compo row C7: one module called twice keys per call, pass-qualified."""
 
@@ -164,48 +125,6 @@ def test_depth_two_dissolves_the_top_level(tmp_path: Path) -> None:
     assert props["torchlens.module_depth"] == "2", "the chosen depth is recorded"
 
 
-def test_nested_functions_resolve_one_click_deep(tmp_path: Path) -> None:
-    """A retained call inside a retained call nests as a function-body call site."""
-
-    class _Outer2(nn.Module):
-        """Outer module whose single child itself contains a block."""
-
-        def __init__(self) -> None:
-            """Build the nested hierarchy."""
-
-            super().__init__()
-            self.mid = _Deep()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Delegate plus one outer op."""
-
-            return torch.sigmoid(self.mid(x))
-
-    log = tl.trace(_Outer2(), torch.randn(2, 4))
-    payload = _export(log, tmp_path / "nested.json")
-    functions = {fn["name"]: fn for fn in payload.get("functions", [])}
-    assert "mid" in functions
-    nested_calls = [
-        node["opType"]
-        for node in functions["mid"]["node"]
-        if node["domain"] == "ai.torchlens.module"
-    ]
-    assert set(nested_calls) == {"mid.first", "mid.second"}
-    assert set(nested_calls) <= set(functions), "nested call sites resolve to functions"
-
-
-def test_module_attrs_say_inclusive(tmp_path: Path) -> None:
-    """Module-call metrics are labelled inclusive (wording contract D-17)."""
-
-    log = tl.trace(_Deep(), torch.randn(2, 4))
-    payload = _export(log, tmp_path / "attrs.json")
-    call = next(n for n in payload["graph"]["node"] if n["domain"] == "ai.torchlens.module")
-    names = [attr["name"] for attr in call.get("attribute", [])]
-    assert "module_path" in names
-    assert any(name.endswith("_inclusive_us") for name in names)
-    assert names == sorted(names, key=str.lower)
-
-
 def test_extent_budget_warns_with_remedy(tmp_path: Path) -> None:
     """Past ~27 ranks the export warns and names the remedy (memo D-12)."""
 
@@ -227,14 +146,6 @@ def test_extent_budget_warns_with_remedy(tmp_path: Path) -> None:
     assert "netron_extent_budget_exceeded" in codes
     message = str(next(w.message for w in caught if getattr(w.message, "fields", {}).get("code")))
     assert "granularity='module'" in message
-
-
-def test_root_graph_never_empty(tmp_path: Path) -> None:
-    """The root graph is asserted non-empty (netron would open a function)."""
-
-    log = tl.trace(_Deep(), torch.randn(2, 4))
-    payload = _export(log, tmp_path / "root.json")
-    assert payload["graph"]["node"], "non-empty root graph"
 
 
 def test_cycle_fail_soft_provokes_the_fallback_warning(

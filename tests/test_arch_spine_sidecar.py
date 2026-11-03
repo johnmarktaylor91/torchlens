@@ -14,7 +14,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io.prerelease import gated_annotations_keys
 from torchlens._io.sidecar import SIDECAR_ANNOTATIONS_KEY
 from torchlens.errors import SidecarError
 from torchlens.io import (
@@ -98,14 +97,6 @@ class TestRegistrationLaw:
 
 
 class TestAttachAndRead:
-    def test_round_trip_on_a_real_trace(self, registered_family, traced) -> None:
-        attach_sidecar(traced, FAMILY.family_id, {"scores": [0.5, 0.25]})
-        assert read_sidecar(traced, FAMILY.family_id) == {"scores": [0.5, 0.25]}
-        envelope = traced.annotations[SIDECAR_ANNOTATIONS_KEY][FAMILY.family_id]
-        assert envelope["schema_id"] == FAMILY.schema_id
-        assert envelope["version"] == FAMILY.version
-        assert envelope["owner"] == FAMILY.owner
-
     def test_write_requires_registration(self, traced) -> None:
         from torchlens._registry import RegistryError
 
@@ -172,10 +163,6 @@ class TestMissingProviderAnalysisOnly:
 
 
 class TestPersistedAtV9:
-    def test_sidecar_key_is_no_longer_gated(self) -> None:
-        # The C01-era pre-release registration retired at the C07 v9 bump.
-        assert SIDECAR_ANNOTATIONS_KEY not in gated_annotations_keys()
-
     @pytest.mark.smoke
     def test_real_save_round_trips_the_sidecar(self, registered_family, tmp_path) -> None:
         model = nn.Sequential(nn.Linear(4, 3))

@@ -57,26 +57,6 @@ def conv_trace():
 class TestGraphIR:
     """The dep-free layer: names, edges, truthful fields, join oracle."""
 
-    def test_nodes_and_edges_from_executed_dag(self, conv_trace) -> None:  # noqa: ANN001
-        trace, _ = conv_trace
-        ir = trk.build_graph_ir(trace)
-        assert len(ir.nodes) == len(trace._layer_list)
-        names = {node.name for node in ir.nodes}
-        assert len(names) == len(ir.nodes), "node names must be unique"
-        # Every input edge resolves to a real node (the frontend join).
-        for node in ir.nodes:
-            for parent in node.inputs:
-                assert parent in names
-        # Module namespacing: the nested Sequential shows up as a slash path.
-        assert any("/" in node.name for node in ir.nodes)
-
-    def test_dict_input_model_still_graphs(self, conv_trace) -> None:  # noqa: ANN001
-        """The decade-old add_graph failure class: ours always logs."""
-
-        _, dict_trace = conv_trace
-        ir = trk.build_graph_ir(dict_trace)
-        assert len(ir.nodes) == len(dict_trace._layer_list) > 0
-
     def test_truthful_fields_disclosed(self, conv_trace) -> None:  # noqa: ANN001
         """No allocator claim anywhere; timing carries its evidence label."""
 

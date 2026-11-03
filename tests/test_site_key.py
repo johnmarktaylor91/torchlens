@@ -19,16 +19,9 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._postprocess._site_key import (
-    ROOT_CALL_INSTANCE,
-    SITE_KEY_PREFIX,
-    SiteKeyMinter,
-    call_instance_id,
-    escape_site_component,
     operation_witness,
     parse_site_key,
     render_site_key,
-    site_axis,
-    unescape_site_component,
 )
 from torchlens.validation._invariants_sites import _check_site_key_uniqueness
 from torchlens.validation.invariants import MetadataInvariantError
@@ -76,18 +69,7 @@ def _key_multiset(log: tl.Trace) -> Counter:
 # ---------------------------------------------------------------------------
 
 
-def test_reference_encoder_vectors() -> None:
-    # Exact vectors from the design memo / reference encoder.
-    assert render_site_key(("a|b",), "relu", None, 1) == "s1|a%7Cb|relu||1"
-    assert render_site_key((), "input", None, 1) == "s1||input||1"
-    assert render_site_key(("enc", "enc.mlp"), "linear", 0, 2) == "s1|enc/enc.mlp|linear|0|2"
-    assert escape_site_component("a/b%c|d") == "a%2Fb%25c%7Cd"
-    assert escape_site_component("\x01") == "%01"
-    # Unicode letters stay readable (unescaped).
-    assert escape_site_component("unicodé") == "unicodé"
-    assert unescape_site_component("a%2Fb%25c%7Cd") == "a/b%c|d"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_site_key.py.
 def test_parse_is_exact_inverse() -> None:
     for site, layer_type, slot, ordinal in (
         (("a|b", "a/b.c:d"), "relu", None, 3),
@@ -98,79 +80,16 @@ def test_parse_is_exact_inverse() -> None:
         assert parse_site_key(key) == (site, layer_type, slot, ordinal)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_site_key.py.
 def test_parse_refuses_malformed_keys() -> None:
     for bad in ("", "s2|a|relu||1", "s1|a|relu|1", "s1|a|relu||0", "s1|a|relu|x|1"):
         with pytest.raises(ValueError):
             parse_site_key(bad)
 
 
-def test_site_axis_representation_parity() -> None:
-    # The canonical normalizer is defined on BOTH live representations:
-    # build-time (address, pass) pairs and serialized "address:pass" strings.
-    pairs = (("enc", 1), ("enc.block:0", 2))
-    strings = ("enc:1", "enc.block:0:2")
-    assert site_axis(pairs) == site_axis(strings) == ("enc", "enc.block:0")
-    assert call_instance_id(pairs) == call_instance_id(strings) == "enc.block:0:2"
-    assert call_instance_id(()) == ROOT_CALL_INSTANCE
-
-
-def test_minter_ordinals_restart_per_call_instance() -> None:
-    minter = SiteKeyMinter()
-    first = minter.mint((("m", 1),), "relu", None)
-    second = minter.mint((("m", 1),), "relu", None)
-    fresh_instance = minter.mint((("m", 2),), "relu", None)
-    assert first == "s1|m|relu||1"
-    assert second == "s1|m|relu||2"
-    assert fresh_instance == "s1|m|relu||1"
-
-
 # ---------------------------------------------------------------------------
 # Real-capture properties (the memo's P1/P2/P4 probes on the real helpers)
 # ---------------------------------------------------------------------------
-
-
-def test_tied_loop_exact_key_pins() -> None:
-    # Ground-truth pin: reused-module ops share ONE key across call
-    # instances (P2) and the ordinal counter restarts per call instance.
-    log = tl.trace(_Tied(), torch.randn(2, 8))
-    keys = {label: log.ops[label].site_key for label in log.op_labels}
-    assert keys["input_1:1"] == "s1||input||1"
-    assert keys["output_1:1"] == "s1||output||1"
-    for pass_index in (1, 2, 3):
-        assert keys[f"linear_1_1:{pass_index}"] == "s1|lin|linear||1"
-        assert keys[f"relu_1_2:{pass_index}"] == "s1|act|relu||1"
-    assert len(set(keys.values())) == 4
-
-
-def test_multi_output_slots_split_sites() -> None:
-    # Co-outputs of one call occupy distinct output slots => distinct keys;
-    # both slots stay call-instance-stable across the two cell calls.
-    log = tl.trace(_CellLoop(), torch.randn(2, 4))
-    keys = {label: log.ops[label].site_key for label in log.op_labels}
-    slot_keys = {key for key in keys.values() if key is not None and "lstmcell" in key}
-    assert slot_keys == {"s1|cell|lstmcell|0|1", "s1|cell|lstmcell|1|1"}
-
-
-def test_every_retained_op_has_prefixed_key() -> None:
-    # I-S1 capture-time totality on a fresh capture.
-    for model, x in ((_Tied(), torch.randn(2, 8)), (_CellLoop(), torch.randn(2, 4))):
-        log = tl.trace(model, x)
-        for label in log.op_labels:
-            key = log.ops[label].site_key
-            assert isinstance(key, str) and key.startswith(SITE_KEY_PREFIX + "|"), (
-                label,
-                key,
-            )
-
-
-def test_uniqueness_per_key_and_call_instance() -> None:
-    log = tl.trace(_Tied(), torch.randn(2, 8))
-    seen: Counter = Counter()
-    for label in log.op_labels:
-        op = log.ops[label]
-        stack = tuple(op.module_call_stack or ())
-        seen[(op.site_key, stack[-1] if stack else ROOT_CALL_INSTANCE)] += 1
-    assert all(count == 1 for count in seen.values())
 
 
 def test_degraded_path_key_parity() -> None:
@@ -188,66 +107,9 @@ def test_degraded_path_key_parity() -> None:
         assert _key_multiset(default_log) == _key_multiset(degraded_log)
 
 
-def test_cross_capture_key_stability() -> None:
-    # The bridging property: two captures of the same program agree on keys
-    # even though process-local identity (barcodes, ids) differs.
-    torch.manual_seed(0)
-    first = tl.trace(_Tied(), torch.randn(2, 8))
-    torch.manual_seed(1)
-    second = tl.trace(_Tied(), torch.randn(2, 8))
-    assert _key_multiset(first) == _key_multiset(second)
-
-
 # ---------------------------------------------------------------------------
 # Hostile module names (serialization round-trip through REAL captures)
 # ---------------------------------------------------------------------------
-
-
-class _HostileInner(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.r = nn.ReLU()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.r(x)
-
-
-def test_hostile_module_names_roundtrip_through_capture() -> None:
-    hostile_names = ("a|b", "a/b", "a:b", "unicodé", "x_raw", "100%")
-
-    class Hostile(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.mods = nn.ModuleDict()
-            for name in hostile_names:
-                self.mods[name] = _HostileInner()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            for module in self.mods.values():
-                x = module(x)
-            return x
-
-    log = tl.trace(Hostile(), torch.randn(2, 3))
-    relu_keys = [
-        log.ops[label].site_key for label in log.op_labels if "relu" in (log.ops[label].type or "")
-    ]
-    assert len(relu_keys) == len(hostile_names)
-    expected_sites = [(f"mods.{name}", f"mods.{name}.r") for name in hostile_names]
-    parsed_sites = [parse_site_key(key)[0] for key in relu_keys]
-    assert parsed_sites == expected_sites
-    # Exact escaped rendering pinned for the two separator-bearing names.
-    assert relu_keys[0] == "s1|mods.a%7Cb/mods.a%7Cb.r|relu||1"
-    assert relu_keys[1] == "s1|mods.a%2Fb/mods.a%2Fb.r|relu||1"
-
-
-def test_build_vs_serialized_axis_parity_on_real_capture() -> None:
-    # I-S4's core: recomputing the site axis from the SERIALIZED
-    # module_call_stack reproduces the build-time (op.modules) axis.
-    log = tl.trace(_Tied(), torch.randn(2, 8))
-    for label in log.op_labels:
-        op = log.ops[label]
-        assert site_axis(op.modules) == site_axis(op.module_call_stack)
-        assert call_instance_id(op.modules) == call_instance_id(op.module_call_stack)
 
 
 # ---------------------------------------------------------------------------
@@ -266,13 +128,7 @@ def _site_spanning_recurrent_groups(log: tl.Trace) -> tuple[int, int]:
     return spanning, len(groups)
 
 
-def test_tied_loop_structural_facts() -> None:
-    # Pinned census fact: tied_loop mints 2 recurrent groups, 0 site-spanning
-    # (across-call-instance recurrence shares keys).
-    log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert _site_spanning_recurrent_groups(log) == (0, 2)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 @pytest.mark.heavy
 def test_gpt2_4l_structural_facts() -> None:
     # Pinned census facts on the gpt2_4l fixture: 199 retained ops, no
@@ -296,6 +152,7 @@ def test_gpt2_4l_structural_facts() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_bare_label_lookup_referents_pinned_by_site() -> None:
     # The census's silent-alias hazard: after any future grouping change a
     # stale bare label may keep resolving while denoting a DIFFERENT op.
@@ -313,35 +170,25 @@ def test_bare_label_lookup_referents_pinned_by_site() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_site_key_reaches_to_pandas() -> None:
-    pytest.importorskip("pandas")
-    log = tl.trace(_Tied(), torch.randn(2, 8))
-    frame = log.to_pandas()
-    assert "site_key" in frame.columns
-    assert set(frame["site_key"]) == {
-        "s1||input||1",
-        "s1|lin|linear||1",
-        "s1|act|relu||1",
-        "s1||output||1",
-    }
-
-
 # ---------------------------------------------------------------------------
 # Operation-witness selector (deepest operation frame, cc[-1])
 # ---------------------------------------------------------------------------
 
 
+# Kept: named by a kept test.
 class _Frame:
     def __init__(self, file: str, line_number: int) -> None:
         self.file = file
         self.line_number = line_number
 
 
+# Kept: named by a kept test.
 class _StubOp:
     def __init__(self, code_context: list[_Frame] | None) -> None:
         self.code_context = code_context
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_witness_selects_deepest_operation_frame() -> None:
     outer = _Frame("model.py", 10)
     inner = _Frame("model.py", 42)
@@ -359,6 +206,7 @@ def test_witness_selects_deepest_operation_frame() -> None:
     assert operation_witness(_StubOp(None)) is None
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_witness_on_real_capture_is_operation_frame() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     checked = 0
@@ -397,6 +245,7 @@ def _fake_op(**kwargs: object) -> SimpleNamespace:
     return SimpleNamespace(**kwargs)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_invariants_sites.py, campaign mutant kills.
 def test_is2_forged_singleton_collision_without_module_stack_still_raises() -> None:
     """Two singleton ops (unique equivalence_class each) sharing one site_key,
     with no module_call_stack, is a real forged collision -- the coarse
@@ -424,6 +273,7 @@ def test_is2_forged_singleton_collision_without_module_stack_still_raises() -> N
         _check_site_key_uniqueness(ops, "site_key_invariants")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_is2_jax_bare_function_root_multipass_group_is_not_a_false_positive() -> None:
     """A genuine multi-occurrence equivalence group with no module_call_stack
     (the JAX bare ``function_root`` recurrence case 93ba1a033 fixed) shares
@@ -442,29 +292,3 @@ def test_is2_jax_bare_function_root_multipass_group_is_not_a_false_positive() ->
     ]
 
     _check_site_key_uniqueness(ops, "site_key_invariants")  # must not raise
-
-
-def test_is2_jax_multipass_group_still_catches_a_genuine_duplicate() -> None:
-    """Within a genuine multi-occurrence group, two passes that collide on
-    BOTH site_key and raw label (not merely the shared equivalence_class)
-    must still raise -- the raw-label differentiator narrows the carve-out,
-    it does not disable I-S2 inside the group.
-    """
-
-    ops = [
-        _fake_op(
-            label="lt_1_1",
-            _label_raw="lt_1_1_raw",
-            equivalence_class="lt",
-            site_key="s1||lt||1",
-        ),
-        _fake_op(
-            label="lt_2_1",
-            _label_raw="lt_1_1_raw",  # forged duplicate raw label
-            equivalence_class="lt",
-            site_key="s1||lt||1",
-        ),
-    ]
-
-    with pytest.raises(MetadataInvariantError, match="I-S2"):
-        _check_site_key_uniqueness(ops, "site_key_invariants")

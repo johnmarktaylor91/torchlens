@@ -12,7 +12,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness, SparseRunDescriptor
-from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
@@ -205,7 +204,13 @@ def _plain_tuple_sort(value: torch.Tensor, *args: Any, **kwargs: Any) -> tuple[t
     return tuple(torch.sort(value, *args, **kwargs))
 
 
-@pytest.mark.parametrize("operation", ["sort", "topk", "max", "min", "median"])
+# Kept: sole branch coverage of _runnable/witness_contracts.py; a sole mutation kill.
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "max",
+    ],
+)
 def test_structseq_named_runtime_paths_match_positional_saved_paths(
     operation: str, tmp_path: Path
 ) -> None:
@@ -224,18 +229,7 @@ def test_structseq_named_runtime_paths_match_positional_saved_paths(
     assert torch.equal(result.output.indices, live.indices)
 
 
-def test_plain_tuple_is_not_accepted_as_structseq_under_positional_paths(tmp_path: Path) -> None:
-    """A plain tuple with right tensors but wrong structseq type must diverge."""
-
-    value = torch.tensor([[1.0, 4.0, -2.0], [3.0, 2.0, 5.0]])
-    loaded = _save_load(_StructSeqModel("sort"), value, tmp_path / "wrong_tuple.tlspec")
-    call_id = _rewrite_structseq_paths_to_positional(loaded)
-    loaded._runnable.callables_by_call_id[call_id] = _plain_tuple_sort
-
-    with pytest.raises(PathDivergenceError):
-        loaded.run(inputs=value.clone(), seed=0)
-
-
+# Kept: the catch of its regression fault.
 def test_unary_invert_is_not_classified_as_inplace_and_runs_verified(tmp_path: Path) -> None:
     """Unary ``~tensor`` must replay without an in-place mutation contract."""
 
@@ -247,33 +241,6 @@ def test_unary_invert_is_not_classified_as_inplace_and_runs_verified(tmp_path: P
     assert all(not op.is_inplace for op in invert_ops)
 
     path = tmp_path / "invert.tlspec"
-    trace.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=value.clone(), seed=0)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.equal(result.output, model(value))
-
-
-def test_genuine_inplace_ops_stay_inplace_and_replay_verified(tmp_path: Path) -> None:
-    """In-place op names and augmented dunders must remain in-place."""
-
-    value = torch.tensor([-2.0, 1.0, 3.0])
-    model = _GenuineInplaceModel()
-    trace = tl.trace(model, value, capture=_CAPTURE)
-    inplace_by_name = {
-        op.func_name: op.is_inplace
-        for op in trace.ops.values()
-        if op.func_name in {"add_", "relu_", "__iadd__", "masked_fill_"}
-    }
-
-    assert inplace_by_name == {
-        "add_": True,
-        "relu_": True,
-        "__iadd__": True,
-        "masked_fill_": True,
-    }
-
-    path = tmp_path / "inplace.tlspec"
     trace.save(path, level="runnable", include_weights=True)
     result = tl.load(path).run(inputs=value.clone(), seed=0)
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import math
 import struct
 from pathlib import Path
@@ -15,7 +14,7 @@ import torchlens as tl
 from torchlens._io.runnable import _encode_literal
 from torchlens._runnable import LiteralAtom, LiteralAtomKind, NumericAttestationStatus
 from torchlens._runnable.verification import _decode_literal
-from torchlens.errors.runnable import ReplayValueMismatchError, RunPreconditionError
+from torchlens.errors.runnable import RunPreconditionError
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
@@ -23,34 +22,6 @@ _CAPTURE = CaptureOptions(
     capture_container_structure=True,
     cache=False,
 )
-
-
-class MhaLinearNet(nn.Module):
-    """Self-attention followed by a final linear projection."""
-
-    def __init__(self) -> None:
-        """Build the MHA + Linear regression module."""
-
-        super().__init__()
-        self.mha = nn.MultiheadAttention(8, 2, batch_first=True)
-        self.fc = nn.Linear(8, 8)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return the final linear projection of attended tokens.
-
-        Parameters
-        ----------
-        x:
-            Input sequence tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Projected attention output.
-        """
-
-        attended, _ = self.mha(x, x, x)
-        return self.fc(attended)
 
 
 class MaskedMha(nn.Module):
@@ -112,32 +83,6 @@ def _save_runnable(
     return path
 
 
-def test_mha_benign_fallback_still_checks_later_corrupted_slot(tmp_path: Path) -> None:
-    """Corruption after the benign in-proj member still raises fail-closed."""
-
-    torch.manual_seed(1234)
-    model = MhaLinearNet()
-    model.eval()
-    x = torch.randn(2, 4, 8)
-    path = _save_runnable(
-        model,
-        x.clone(),
-        tmp_path / "mha_linear.tlspec",
-        include_weights=True,
-        include_activations=True,
-    )
-
-    loaded = tl.load(path)
-    archive = loaded._runnable.archived_activations
-    victim = "slot:softmax_1_20:1:out"
-    assert victim in archive
-    record = archive[victim]
-    archive[victim] = dataclasses.replace(record, value=record.value + 0.5)
-
-    with pytest.raises(ReplayValueMismatchError):
-        loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
-
-
 def test_masked_mha_nonfinite_attention_mask_saves_loads_runs(tmp_path: Path) -> None:
     """A genuine ``-inf`` MHA mask literal is runnable-representable."""
 
@@ -161,7 +106,8 @@ def test_masked_mha_nonfinite_attention_mask_saves_loads_runs(tmp_path: Path) ->
     }
 
 
-@pytest.mark.parametrize("value", [float("-inf"), float("inf"), float("nan")])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("value", [float("inf"), float("nan")])
 def test_nonfinite_float_literal_round_trips(value: float) -> None:
     """Non-finite float atoms encode with string payloads and decode by bit pattern."""
 

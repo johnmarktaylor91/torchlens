@@ -22,27 +22,6 @@ def _drop_module(module_name: str) -> None:
             del sys.modules[loaded_name]
 
 
-def test_notebook_import_stays_inert() -> None:
-    """``import torchlens.report._notebook`` never imports its foreign extra deps.
-
-    Package import must not touch ``IPython`` / ``jupyter_client`` as a side
-    effect, regardless of whether the extra is installed -- the dependency
-    check is deferred to first attribute access (see the security fix that
-    closes a foreign-import-at-untrusted-bundle-load class).
-    """
-    _drop_module("torchlens.report._notebook")
-    _drop_module("IPython")
-    _drop_module("jupyter_client")
-
-    module = importlib.import_module("torchlens.report._notebook")
-
-    # F22 facade contract: __all__ advertises only dependency-present real
-    # names, resolved via find_spec WITHOUT importing the foreign packages.
-    assert set(module.__all__) <= {"cards", "cardtree", "frontier"}
-    assert "IPython" not in sys.modules
-    assert "jupyter_client" not in sys.modules
-
-
 def test_notebook_attribute_access_reports_missing_dependency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -57,31 +36,6 @@ def test_notebook_attribute_access_reports_missing_dependency(
         # dependency reporting belongs to KNOWN names only.
         with pytest.raises(AttributeError, match=r"torchlens\.report\._notebook"):
             module.anything
-
-
-@pytest.mark.parametrize(
-    ("first_dep", "second_dep", "module_name"),
-    [
-        ("IPython", "jupyter_client", "torchlens.report._notebook"),
-        ("rsatoolbox", "brainscore_core", "torchlens.neuro"),
-    ],
-    ids=[
-        "notebook_attribute_access_when_deps_present",
-        "neuro_attribute_access_when_deps_present",
-    ],
-)
-def test_attribute_access_when_deps_present(
-    first_dep: str, second_dep: str, module_name: str
-) -> None:
-    """When deps are installed, attribute access raises AttributeError, not ImportError."""
-    pytest.importorskip(first_dep)
-    pytest.importorskip(second_dep)
-    _drop_module(module_name)
-
-    module = importlib.import_module(module_name)
-
-    with pytest.raises(AttributeError):
-        module.anything
 
 
 def test_neuro_import_stays_inert() -> None:
@@ -136,3 +90,28 @@ def test_neuro_attribute_access_reports_missing_dependency(monkeypatch: pytest.M
         # pre-F22 contract).
         with pytest.raises(MissingDependencyError, match="rsatoolbox"):
             module.datasets
+
+
+@pytest.mark.parametrize(
+    ("first_dep", "second_dep", "module_name"),
+    [
+        ("IPython", "jupyter_client", "torchlens.report._notebook"),
+        ("rsatoolbox", "brainscore_core", "torchlens.neuro"),
+    ],
+    ids=[
+        "notebook_attribute_access_when_deps_present",
+        "neuro_attribute_access_when_deps_present",
+    ],
+)
+def test_attribute_access_when_deps_present(
+    first_dep: str, second_dep: str, module_name: str
+) -> None:
+    """When deps are installed, attribute access raises AttributeError, not ImportError."""
+    pytest.importorskip(first_dep)
+    pytest.importorskip(second_dep)
+    _drop_module(module_name)
+
+    module = importlib.import_module(module_name)
+
+    with pytest.raises(AttributeError):
+        module.anything

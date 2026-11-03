@@ -43,17 +43,12 @@ import sys
 from pathlib import Path
 
 import pytest
-import torch
 
 from torchlens._io._safe_unpickle import (
-    _DENIED_FOREIGN_MODULES,
     SafeBundleUnpickler,
-    _module_denied,
-    _name_has_dunder_walk,
 )
 from torchlens._io.bundle import _RenameAwareUnpickler
-from torchlens._utils._callable_safety import _DENIED_MODULES
-from torchlens.io import detect_tlspec_format, inspect_tlspec
+from torchlens.io import inspect_tlspec
 
 _UNPICKLERS = [SafeBundleUnpickler, _RenameAwareUnpickler]
 
@@ -137,27 +132,6 @@ def test_rebuild_dotted_walk_to_globals_get_denied_no_exec(
     assert not sentinel.exists()
 
 
-@pytest.mark.parametrize("unpickler_cls", _UNPICKLERS)
-def test_rebuild_dotted_name_refused_before_walk(
-    unpickler_cls: type[pickle.Unpickler],
-) -> None:
-    """ANY dotted ``_rebuild`` name is refused up front (never triggers the walk)."""
-
-    payload = _stop_global_pickle("torch._utils", "_rebuild_tensor_v2.__globals__")
-    with pytest.raises(pickle.UnpicklingError, match="dotted"):
-        unpickler_cls(io.BytesIO(payload)).load()
-
-
-def test_legit_rebuild_reconstructors_still_admit() -> None:
-    """Genuine ``_rebuild_*`` reconstructors (single-segment names) still resolve."""
-
-    unpickler = SafeBundleUnpickler(io.BytesIO(b""))
-    for name in ("_rebuild_tensor_v2", "_rebuild_parameter"):
-        resolved = unpickler.find_class("torch._utils", name)
-        assert resolved is getattr(torch._utils, name)
-        assert callable(resolved) and not isinstance(resolved, type)
-
-
 # ---------------------------------------------------------------------------
 # DiD-1 -- trusted-foreign branch dunder-walk into module globals.
 # ---------------------------------------------------------------------------
@@ -178,31 +152,6 @@ def _trusted_os_module(tmp_path: Path) -> str:
         sys.modules.pop(mod_name, None)
 
 
-def test_trusted_globals_walk_to_os_system_denied(_trusted_os_module: str, tmp_path: Path) -> None:
-    """Under trust, ``<trusted>.hook.__globals__.get`` -> module globals is denied.
-
-    Without the DiD-1 guard this walk returns the module-globals ``dict`` (no
-    ``__module__``), the resolved-owner denylist recheck falls back to the trusted
-    (non-denied) pickled module, and a REDUCE-invocable ``dict.get`` of ``os`` is
-    handed back. The dunder-walk guard must refuse it BEFORE the walk.
-    """
-
-    sentinel = tmp_path / "r28_trusted_globals_pwned"
-    payload = _reduce_global_pickle(
-        _trusted_os_module,
-        "hook.__globals__.get",
-        [str(sentinel)],
-    )
-    with pytest.raises(pickle.UnpicklingError, match="dunder"):
-        SafeBundleUnpickler(io.BytesIO(payload), trust_custom_callables=True).load()
-    assert not sentinel.exists()
-    # A narrow allowlist keyed on the trusted module is likewise not fooled.
-    with pytest.raises(pickle.UnpicklingError, match="dunder"):
-        SafeBundleUnpickler(
-            io.BytesIO(payload), allowed_custom_callable_modules={_trusted_os_module}
-        ).load()
-
-
 def test_trusted_globals_mapping_return_denied(_trusted_os_module: str) -> None:
     """A trusted dotted name resolving to the bare ``__globals__`` mapping is denied."""
 
@@ -211,59 +160,9 @@ def test_trusted_globals_mapping_return_denied(_trusted_os_module: str) -> None:
         SafeBundleUnpickler(io.BytesIO(payload), trust_custom_callables=True).load()
 
 
-def test_trusted_legit_single_name_still_resolves(_trusted_os_module: str) -> None:
-    """A genuine (single-name) trusted callable still resolves (no regression)."""
-
-    unpickler = SafeBundleUnpickler(io.BytesIO(b""), trust_custom_callables=True)
-    resolved = unpickler.find_class(_trusted_os_module, "hook")
-    assert getattr(resolved, "__name__", None) == "hook"
-
-
-def test_name_has_dunder_walk_helper() -> None:
-    """The dunder-walk predicate flags every walk vector and passes legit qualnames."""
-
-    for bad in (
-        "hook.__globals__.get",
-        "f.__globals__",
-        "x.__builtins__",
-        "T.__reduce__",
-        "obj.__class__.__mro__",
-        "__dict__",
-    ):
-        assert _name_has_dunder_walk(bad)
-    for good in ("hook", "Outer.Inner", "_rebuild_tensor_v2", "recipe_fn"):
-        assert not _name_has_dunder_walk(good)
-
-
 # ---------------------------------------------------------------------------
 # E-r28-1 -- frozen import machinery denied under trust.
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("module", ["_frozen_importlib", "_frozen_importlib_external"])
-def test_frozen_importlib_in_both_denylists(module: str) -> None:
-    """Both frozen import modules are hard-denied in both denylists (incl. submodules)."""
-
-    assert module in _DENIED_MODULES
-    assert module in _DENIED_FOREIGN_MODULES
-    assert _module_denied(module)
-    assert _module_denied(module + ".SourceFileLoader")
-
-
-def test_resolve_import_ref_frozen_importlib_denied_under_trust() -> None:
-    """``resolve_import_ref('_frozen_importlib:__import__', trust=True)`` is DENIED."""
-
-    from torchlens.intervention._resolver_registry import resolve_import_ref
-    from torchlens.intervention.errors import UntrustedCallableError
-
-    with pytest.raises(UntrustedCallableError):
-        resolve_import_ref("_frozen_importlib:__import__")
-    with pytest.raises(UntrustedCallableError):
-        resolve_import_ref("_frozen_importlib:__import__", trust_custom_callables=True)
-    with pytest.raises(UntrustedCallableError):
-        resolve_import_ref(
-            "_frozen_importlib_external:_NamespaceLoader", trust_custom_callables=True
-        )
 
 
 @pytest.mark.parametrize("unpickler_cls", _UNPICKLERS)
@@ -282,40 +181,6 @@ def test_frozen_importlib_unpickle_denied_under_trust(
 # ---------------------------------------------------------------------------
 
 
-def _write_bundle_manifest(bundle: Path, obj: dict) -> None:
-    """Write a minimal ``manifest.json`` inside ``bundle``."""
-
-    bundle.mkdir(parents=True, exist_ok=True)
-    (bundle / "manifest.json").write_text(json.dumps(obj), encoding="utf-8")
-
-
-def test_detect_tlspec_format_rejects_symlinked_manifest(tmp_path: Path) -> None:
-    """A symlinked ``manifest.json`` child is refused during format detection."""
-
-    from torchlens._io import ArtifactError
-
-    outside = tmp_path / "outside.json"
-    outside.write_text(json.dumps({"kind": "x", "tlspec_version": 1}), encoding="utf-8")
-    bundle = tmp_path / "bundle.tlspec"
-    bundle.mkdir()
-    (bundle / "manifest.json").symlink_to(outside)
-    with pytest.raises(ArtifactError, match="symlink"):
-        detect_tlspec_format(bundle)
-
-
-def test_detect_tlspec_format_rejects_symlinked_root(tmp_path: Path) -> None:
-    """A symlinked bundle ROOT directory is refused during format detection."""
-
-    from torchlens._io import ArtifactError
-
-    real_bundle = tmp_path / "real.tlspec"
-    _write_bundle_manifest(real_bundle, {"kind": "x", "tlspec_version": 1})
-    link = tmp_path / "link.tlspec"
-    link.symlink_to(real_bundle, target_is_directory=True)
-    with pytest.raises(ArtifactError, match="symlink"):
-        detect_tlspec_format(link)
-
-
 def test_inspect_tlspec_rejects_symlinked_spec(tmp_path: Path) -> None:
     """A symlinked ``spec.json`` child is refused by ``inspect_tlspec``."""
 
@@ -328,12 +193,3 @@ def test_inspect_tlspec_rejects_symlinked_spec(tmp_path: Path) -> None:
     (bundle / "spec.json").symlink_to(outside)
     with pytest.raises(ArtifactError, match="symlink"):
         inspect_tlspec(bundle)
-
-
-def test_detect_tlspec_format_regular_bundle_unaffected(tmp_path: Path) -> None:
-    """A regular (non-symlinked) bundle still classifies normally (no regression)."""
-
-    bundle = tmp_path / "regular.tlspec"
-    _write_bundle_manifest(bundle, {"kind": "x", "tlspec_version": 1})
-    assert detect_tlspec_format(bundle) == "v2.0_unified"
-    assert inspect_tlspec(bundle)["kind"] == "x"

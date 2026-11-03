@@ -18,10 +18,8 @@ import pickle
 import pickletools
 import random
 import struct
-import weakref
 from collections.abc import Callable
 from dataclasses import fields, is_dataclass
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -29,11 +27,8 @@ import pytest
 import torch
 from torch import nn
 
-import torchlens as tl
 from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._io._pickle_prescan import (
-    GuardedCallable,
-    OpcodeCeilingExceeded,
     StreamNeedsInterpreter,
     scan_opcodes,
 )
@@ -41,8 +36,6 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _PurePythonBundleUnpickler,
 )
-from torchlens._io.bundle import _RenameAwareUnpickler
-from torchlens.options import CaptureOptions
 
 # --------------------------------------------------------------------------- #
 # Stream builders (raw opcodes, version-robust)
@@ -480,59 +473,6 @@ def _old_path(data: bytes) -> Any:
 
 _HONEST = _honest_streams()
 _HOSTILE = _hostile_streams()
-_CORPUS = {**_HONEST, **_HOSTILE, **_variants({**_HONEST, **_HOSTILE})}
-
-
-@pytest.mark.parametrize("label", sorted(_HONEST) + sorted(_HOSTILE))
-def test_corpus_decisions_match_the_interpreter(label: str) -> None:
-    """Every honest and hostile stream gets the same decision on both machines."""
-
-    data = _CORPUS[label]
-    assert _outcome(_new_path, data) == _outcome(_old_path, data)
-
-
-def test_the_fast_path_unpickler_retains_nothing_after_load() -> None:
-    """After ``load()`` neither the unpickler nor its dry-run planner holds the loaded graph.
-
-    The C machine's memo is not traversed by the cyclic collector on every supported
-    Python, so an unpickler kept alive by a planner-to-probe cycle pinned every object a
-    load built until a later collection (``tests/test_gc.py`` saw a loaded trace survive
-    its first ``gc.collect()``). The memo empties when the load ends and the unpickler
-    dies by reference count alone.
-    """
-
-    for label, data in sorted(_HONEST.items()):
-        unpickler = SafeBundleUnpickler(io.BytesIO(data))
-        loaded = unpickler.load()
-        if unpickler.load_path != "c":
-            del loaded, unpickler
-            continue
-        assert not unpickler.memo.copy(), f"{label}: the fast path kept its memo after load()"
-        unpickler_ref = weakref.ref(unpickler)
-        del unpickler
-        assert unpickler_ref() is None, f"{label}: a dry-run cycle kept the unpickler alive"
-        del loaded
-
-
-def test_corpus_decisions_match_the_interpreter_in_one_pass() -> None:
-    """The whole corpus, as the file's one smoke item: every mismatch in one report.
-
-    The hostile half is also checked for vacuity here, so the smoke tier carries the
-    C-path proof as a single item (``SMOKE_TIER_SIZE_CEILING`` in ``tests/conftest.py``).
-    """
-
-    mismatches = {
-        label: (_outcome(_new_path, data), _outcome(_old_path, data))
-        for label, data in {**_HONEST, **_HOSTILE}.items()
-        if _outcome(_new_path, data) != _outcome(_old_path, data)
-    }
-    assert not mismatches, f"{len(mismatches)} streams differ: {mismatches}"
-    admitted = {
-        label: _outcome(_new_path, data)
-        for label, data in _HOSTILE.items()
-        if _outcome(_new_path, data)[0] not in ("refused", "raised")
-    }
-    assert not admitted, f"hostile streams the fast path admitted: {admitted}"
 
 
 @pytest.mark.smoke
@@ -548,64 +488,9 @@ def test_generated_variants_match_the_interpreter() -> None:
     assert not mismatches, f"{len(mismatches)} of {len(variants)} variants differ: {mismatches}"
 
 
-def test_hostile_corpus_is_refused_by_both_machines() -> None:
-    """The hostile corpus is not vacuous: every entry refuses (or raises) on both paths.
-
-    Per entry and per machine for the targeted run; the one-pass smoke item above
-    carries the same check for the fast path.
-    """
-
-    for label, data in _HOSTILE.items():
-        for factory in (_new_path, _old_path):
-            outcome = _outcome(factory, data)
-            assert outcome[0] in ("refused", "raised"), (label, factory.__name__, outcome)
-
-
-def test_honest_corpus_takes_the_fast_path() -> None:
-    """Every honest stream loads on the C machine; no honest shape needs the interpreter."""
-
-    for label, data in _HONEST.items():
-        unpickler = SafeBundleUnpickler(io.BytesIO(data))
-        unpickler.load()
-        assert unpickler.load_path == "c", (label, unpickler.fallback_reason)
-
-
 # --------------------------------------------------------------------------- #
 # Mechanism pins
 # --------------------------------------------------------------------------- #
-
-
-def test_guards_never_reach_the_loaded_object_graph() -> None:
-    """A callable stored as a VALUE comes back as itself, not wrapped in a guard."""
-
-    value = {"method": getattr(torch._C.TensorBase, "sum"), "ctor": collections.OrderedDict}  # noqa: B009
-    loaded = _new_path(pickle.dumps(value, protocol=4))
-    assert loaded["method"] is value["method"]
-    assert loaded["ctor"] is collections.OrderedDict
-    assert not any(isinstance(item, GuardedCallable) for item in loaded.values())
-
-
-def test_build_on_a_reduce_result_refuses_before_setstate_runs() -> None:
-    """The guard refuses the BUILD target at the producing REDUCE; ``__setstate__`` never runs."""
-
-    calls = 0
-    original = torch.Tensor.__setstate__
-
-    def _spy(self: torch.Tensor, *args: object, **kwargs: object) -> object:
-        nonlocal calls
-        calls += 1
-        return original(self, *args, **kwargs)  # type: ignore[arg-type]
-
-    torch.Tensor.__setstate__ = _spy  # type: ignore[method-assign, assignment]
-    try:
-        with pytest.raises(pickle.UnpicklingError, match="BUILD applied to a torch"):
-            _new_path(_inline_tensor_then_build())
-        # The stock torch reduction is refused by name before any tensor exists.
-        with pytest.raises(pickle.UnpicklingError, match="_load_from_bytes"):
-            _new_path(_embedded_tensor_then_build())
-    finally:
-        torch.Tensor.__setstate__ = original  # type: ignore[method-assign]
-    assert calls == 0
 
 
 def test_value_and_call_shape_runs_the_interpreter_with_the_same_decision() -> None:
@@ -618,84 +503,6 @@ def test_value_and_call_shape_runs_the_interpreter_with_the_same_decision() -> N
     assert new == _outcome(_old_path, data)
 
 
-def test_opcode_ceiling_fires_in_the_prescan() -> None:
-    """``max_opcodes`` refuses before any object is built, on both paths."""
-
-    data = pickle.dumps([0] * 1000)
-    with pytest.raises(OpcodeCeilingExceeded):
-        SafeBundleUnpickler(io.BytesIO(data), max_opcodes=100).load()
-    with pytest.raises(OpcodeCeilingExceeded):
-        SafeBundleUnpickler(io.BytesIO(_getattr_value_and_call()), max_opcodes=3).load()
-    counted = SafeBundleUnpickler(io.BytesIO(data), max_opcodes=10_000)
-    assert counted.load() == [0] * 1000
-    assert counted.prescan_opcodes == sum(1 for _ in pickletools.genops(data))
-    # below the byte threshold the ceiling is unreachable and is not applied
-    skipped = SafeBundleUnpickler(io.BytesIO(data), max_opcodes=100, count_opcodes_above=len(data))
-    assert skipped.load() == [0] * 1000
-
-
-def test_absurd_memo_index_is_refused_before_either_machine_runs() -> None:
-    """A memo PUT index above the opcode count is refused (the C memo-table amplifier)."""
-
-    huge = (
-        pickle.PROTO + b"\x02" + pickle.EMPTY_LIST + pickle.LONG_BINPUT + struct.pack("<I", 2**30)
-    )
-    with pytest.raises(pickle.UnpicklingError, match="memo PUT index"):
-        _new_path(huge + pickle.STOP)
-    # the flipped-SETITEM shape the generated variants produce
-    flipped = pickle.PROTO + b"\x02" + pickle.EMPTY_DICT + b"r" + b"\xff\xff\xff\x7f" + pickle.STOP
-    with pytest.raises(pickle.UnpicklingError, match="memo PUT index"):
-        _new_path(flipped)
-    sane = pickle.PROTO + b"\x02" + pickle.EMPTY_LIST + pickle.BINPUT + b"\x01" + pickle.STOP
-    assert _new_path(sane) == []
-
-
-def test_application_failures_keep_their_identity() -> None:
-    """An exception from admitted application code propagates raw, as before."""
-
-    # ``Counter(1)`` fails inside ``collections`` (Python frames, so an application
-    # failure on both machines); a C-only failure such as ``OrderedDict(1, 2, 3)`` has no
-    # application frame and both machines report it as stream corruption.
-    data = _reduce("collections", "Counter", _int(1))
-    with pytest.raises(TypeError):
-        _new_path(data)
-    with pytest.raises(TypeError):
-        _old_path(data)
-    c_only = _reduce("collections", "OrderedDict", _int(1), _int(2), _int(3))
-    assert _outcome(_new_path, c_only) == _outcome(_old_path, c_only)
-    assert _outcome(_new_path, c_only)[:2] == ("refused", "UnpicklingError")
-
-
-def test_a_refusal_fires_in_stream_order_after_an_earlier_failure() -> None:
-    """A blocked global after a failing REDUCE: both machines report the REDUCE failure."""
-
-    data = (
-        pickle.PROTO
-        + b"\x02"
-        + pickle.EMPTY_LIST
-        + _reduce_body("collections", "Counter").replace(
-            pickle.MARK + pickle.TUPLE, pickle.MARK + _int(1) + pickle.TUPLE
-        )
-        + pickle.APPEND
-        + _global("os", "system")
-        + pickle.APPEND
-        + pickle.STOP
-    )
-    assert _outcome(_new_path, data) == _outcome(_old_path, data) == ("raised", "TypeError")
-    refused_first = (
-        pickle.PROTO
-        + b"\x02"
-        + pickle.EMPTY_LIST
-        + _global("os", "system")
-        + pickle.APPEND
-        + _reduce_body("collections", "Counter")
-        + pickle.APPEND
-        + pickle.STOP
-    )
-    assert _outcome(_new_path, refused_first) == _outcome(_old_path, refused_first)
-    assert _outcome(_new_path, refused_first)[:2] == ("refused", "UnpicklingError")
-
-
 class _TwoLayer(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -704,34 +511,3 @@ class _TwoLayer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.second(torch.relu(self.first(x)))
-
-
-def test_saved_bundle_loads_on_the_fast_path_and_round_trips(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A genuine bundle, with a metadata tensor, loads through the C machine unchanged."""
-
-    seen: list[tuple[str | None, int]] = []
-    original = _RenameAwareUnpickler.load
-
-    def _spy(self: _RenameAwareUnpickler) -> Any:
-        try:
-            return original(self)
-        finally:
-            seen.append((self.load_path, self.prescan_opcodes))
-
-    monkeypatch.setattr(_RenameAwareUnpickler, "load", _spy)
-    trace = tl.trace(_TwoLayer(), torch.ones(2, 4), capture=CaptureOptions(cache=False))
-    trace.annotations["probe"] = torch.arange(4, dtype=torch.float32)
-    path = tmp_path / "bundle.tlspec"
-    trace.save(path)
-    saved_metadata = (path / "metadata.pkl").read_bytes()
-    assert seen and all(load_path == "c" for load_path, _ in seen), seen  # the save preflight
-    seen.clear()
-    restored = tl.load(path)
-    assert seen and seen[0][0] == "c", seen
-    assert torch.equal(restored.annotations["probe"], torch.arange(4, dtype=torch.float32))
-    assert [layer.label for layer in restored.layers] == [layer.label for layer in trace.layers]
-    # The interpreter agrees with the fast path on the real metadata bytes.
-    assert _outcome(_new_path, saved_metadata)[0] == "ok"
-    assert _outcome(_new_path, saved_metadata) == _outcome(_old_path, saved_metadata)

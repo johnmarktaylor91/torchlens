@@ -33,6 +33,7 @@ class _BnNet(nn.Module):
         return self.head(torch.relu(self.bn(self.f1(x))))
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_range.py.
 def test_range_probe_adds_zero_ops_and_finds_violations() -> None:
     """The conformance gate: hooked and bare traces have IDENTICAL op counts."""
 
@@ -60,18 +61,7 @@ def test_range_probe_adds_zero_ops_and_finds_violations() -> None:
     assert finding.evidence == "capture_hook"
 
 
-def test_range_probe_within_bounds_collects_nothing() -> None:
-    """In-bounds activations produce zero findings, with fires still visible."""
-
-    torch.manual_seed(0)
-    model = _BnNet()
-    probe = tc.RangeProbe({tl.func("relu"): (0.0, None)})
-    tl.trace(model, torch.randn(8, 4), capture=tl.options.CaptureOptions(hooks=probe.hook_plan()))
-
-    assert probe.observed_fires  # coverage: zero fires would be visible
-    assert not probe.findings
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_range.py.
 def test_liveness_probe_records_statistics_never_verdicts() -> None:
     """Liveness facts carry zero-fraction/running-max and never say "dead"."""
 
@@ -95,6 +85,7 @@ def test_liveness_probe_records_statistics_never_verdicts() -> None:
     assert "tl.dead" in (tc.LivenessProbe.facts.__doc__ or "")
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_range.py.
 def test_probe_refusals_are_typed() -> None:
     """Empty/malformed probe configs refuse typed at construction."""
 

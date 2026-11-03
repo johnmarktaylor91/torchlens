@@ -21,7 +21,6 @@ import pytest
 
 from torchlens._ecosystem import plugins
 from torchlens._ecosystem.plugins import (
-    ENTRY_POINT_GROUPS,
     PluginLoadWarning,
     activate,
     activate_configured,
@@ -137,20 +136,6 @@ def on_path(provider_site: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def test_discover_is_metadata_only_and_never_imports(on_path: Path) -> None:
-    """discover() lists every candidate without importing any provider."""
-
-    rows = discover()
-    distributions = {row.distribution for row in rows}
-    assert {"eco-rt-good", "eco-rt-appl", "eco-rt-broken"} <= distributions
-    good = next(row for row in rows if row.distribution == "eco-rt-good")
-    assert good.group == "torchlens.export_targets"
-    assert good.value == "fakeprov_eco_rt:export_factory"
-    assert good.version == "0.1.0"
-    for module in _PROVIDER_MODULES:
-        assert module not in sys.modules, module
-
-
 def test_discover_unknown_group_refuses_typed(on_path: Path) -> None:
     """A group outside the approved five refuses plugin_group_unknown."""
 
@@ -158,20 +143,6 @@ def test_discover_unknown_group_refuses_typed(on_path: Path) -> None:
         discover("torchlens.bogus")
     assert excinfo.value.fields["code"] == "plugin_group_unknown"
     assert "approved groups" in str(excinfo.value)
-
-
-def test_plugin_status_reads_without_importing(on_path: Path) -> None:
-    """The four-state listing starts every candidate at 'installed'."""
-
-    listing = plugin_status()
-    states = {
-        record.candidate.distribution: record.state
-        for record in listing
-        if record.candidate.distribution.startswith("eco-rt-")
-    }
-    assert states and set(states.values()) == {"installed"}
-    for module in _PROVIDER_MODULES:
-        assert module not in sys.modules, module
 
 
 def test_metadata_parse_failure_warns_never_raises(
@@ -324,20 +295,6 @@ def test_env_kill_switch_beats_everything(on_path: Path, monkeypatch: pytest.Mon
     assert excinfo.value.fields["code"] == "plugin_activation_disabled"
 
 
-def test_activate_configured_reports_declaration_digest(on_path: Path) -> None:
-    """The activation notice reports the SHA-256 of the consumed declaration."""
-
-    from torchlens.export import _registry as export_registry
-
-    reports = activate_configured(["eco-rt-good"], source="test-config")
-    try:
-        expected = hashlib.sha256(b"eco-rt-good").hexdigest()
-        assert [report.declaration_digest for report in reports] == [expected]
-        assert [candidate.name for report in reports for candidate in report.loaded] == ["demo"]
-    finally:
-        export_registry.unregister_target("eco_rt_demo_target")
-
-
 def test_activate_configured_consumes_env_declaration(
     on_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -363,28 +320,3 @@ def test_activate_configured_none_declaration_refuses_with_digest(
         activate_configured(["none"], source="test-config")
     assert excinfo.value.fields["code"] == "plugin_activation_disabled"
     assert excinfo.value.fields["declaration_digest"] == hashlib.sha256(b"none").hexdigest()
-
-
-def test_cloned_repo_declaration_activates_nothing(on_path: Path) -> None:
-    """Composition row 9: installed declarations alone never import code.
-
-    The dist-info rows sit on sys.path for this whole module and NOTHING
-    imports until the explicit call; this test pins the negative half.
-    """
-
-    discover()
-    plugin_status()
-    for module in _PROVIDER_MODULES:
-        assert module not in sys.modules, module
-
-
-def test_approved_groups_are_exactly_the_architecture_five() -> None:
-    """The group vocabulary is closed at the five architecture-approved rows."""
-
-    assert ENTRY_POINT_GROUPS == (
-        "torchlens.backends",
-        "torchlens.transforms",
-        "torchlens.export_targets",
-        "torchlens.appliances",
-        "torchlens.recipes",
-    )

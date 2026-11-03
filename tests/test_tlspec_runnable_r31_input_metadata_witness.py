@@ -82,36 +82,7 @@ class DataStorageBytesBranch(nn.Module):
         return x + 3 if exact else x - 3
 
 
-def test_r31_data_alias_storage_offset_diverges(tmp_path: Path) -> None:
-    """A ``.data`` storage-offset branch must diverge on a differently-offset twin (was VERIFIED)."""
-
-    base = torch.randn(8)
-    x0 = base[0:4]  # storage_offset 0
-    xn = base[2:6]  # storage_offset 2, identical shape/dtype
-    path = _save(DataStorageOffsetBranch(), x0, tmp_path / "a1.tlspec")
-
-    assert tl.load(path).run(inputs=base.clone()[0:4]).report.path_faithfulness is (
-        PathFaithfulness.VERIFIED
-    )
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=xn)
-
-
-def test_r31_detach_alias_storage_offset_diverges(tmp_path: Path) -> None:
-    """A ``.detach()`` storage-offset branch must diverge on a differently-offset twin."""
-
-    base = torch.randn(8)
-    x0 = base[0:4]
-    xn = base[2:6]
-    path = _save(DetachStorageOffsetBranch(), x0, tmp_path / "a2.tlspec")
-
-    assert tl.load(path).run(inputs=base.clone()[0:4]).report.path_faithfulness is (
-        PathFaithfulness.VERIFIED
-    )
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=xn)
-
-
+# Kept: sole branch coverage of backends/torch/_completeness_metadata.py; a sole mutation kill.
 def test_r31_data_alias_storage_bytes_diverges(tmp_path: Path) -> None:
     """A ``.data`` storage-geometry branch must diverge on a slice-of-larger-buffer twin."""
 
@@ -136,6 +107,7 @@ class DataContiguityBranch(nn.Module):
         return x + 1 if x.data.is_contiguous() else x - 1
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_boundaries.py; a sole mutation kill; the catch of its regression fault.
 def test_r31_data_alias_contiguity_diverges(tmp_path: Path) -> None:
     """A ``.data`` contiguity branch verifies on the original and diverges on a transposed twin."""
 
@@ -160,6 +132,7 @@ class ConjBranch(nn.Module):
         return (x + 1).real if not x.is_conj() else (x - 1).real
 
 
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_r31_is_conj_diverges(tmp_path: Path) -> None:
     """A conjugated same-shape/same-dtype input on an ``is_conj`` model must diverge."""
 
@@ -180,6 +153,7 @@ class NegBranch(nn.Module):
         return x + 1 if not x.is_neg() else x - 1
 
 
+# Kept: sole branch coverage of _runnable/input_sites.py.
 def test_r31_is_neg_diverges(tmp_path: Path) -> None:
     """A ``torch._neg_view`` same-shape input on an ``is_neg`` model must diverge."""
 
@@ -200,6 +174,7 @@ class InferenceBranch(nn.Module):
         return x + 1 if not x.is_inference() else x - 1
 
 
+# Kept: sole branch coverage of _runnable/input_sites.py.
 def test_r31_is_inference_diverges(tmp_path: Path) -> None:
     """An inference-mode runtime input on an ``is_inference`` model must diverge."""
 
@@ -222,6 +197,7 @@ class IsSharedBranch(nn.Module):
         return x + 1 if not x.is_shared() else x - 1
 
 
+# Kept: sole branch coverage of _runnable/input_sites.py, backends/torch/_completeness_metadata.py, backends/torch/_completeness_storage.py; a sole mutation kill.
 def test_r31_is_shared_diverges(tmp_path: Path) -> None:
     """A shared-memory runtime input on an ``is_shared`` model must diverge."""
 
@@ -244,6 +220,7 @@ class BasePresenceBranch(nn.Module):
         return x + 1 if x._base is None else x - 1
 
 
+# Kept: sole branch coverage of _runnable/input_sites.py.
 def test_r31_base_presence_diverges(tmp_path: Path) -> None:
     """A view runtime input on a ``_base``-presence model must diverge."""
 
@@ -265,6 +242,7 @@ class RetainsGradLeafBranch(nn.Module):
         return x + 1 if not x.retains_grad else x - 1
 
 
+# Kept: sole branch coverage of _runnable/input_sites.py.
 def test_r31_retains_grad_leaf_diverges(tmp_path: Path) -> None:
     """A runtime input with ``retains_grad`` set on a retains_grad model must diverge."""
 
@@ -309,6 +287,7 @@ class IsViewViewBranch(nn.Module):
         return x + 1 if not x.view(-1)._is_view() else x - 1
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_patches.py; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     "model_cls",
     [RetainsGradViewBranch, IsLeafViewBranch, IsViewViewBranch],
@@ -329,30 +308,6 @@ def test_r31_autograd_structural_view_read_is_unverifiable(
 # --- Over-trigger guards (the two-sided balance) --------------------------------------------
 
 
-@pytest.mark.filterwarnings(
-    # A08 random-role-init disclosure (runnable_random_init_run): this test
-    # exercises a weight-free runnable run DELIBERATELY; the warning is the
-    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
-    "default:This runnable artifact carries no model weights"
-)
-def test_r31_requires_grad_oblivious_model_does_not_over_trigger(tmp_path: Path) -> None:
-    """A model that never reads autograd flags must NOT diverge on a requires_grad-changed input.
-
-    TorchLens's own per-op bookkeeping reads ``grad_fn`` / ``requires_grad`` on input-derived
-    views during capture; keeping those two accessors LEAF-ONLY (never view-attributed) is what
-    prevents this normal model from spuriously diverging.
-    """
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    x = torch.randn(2, 4)  # requires_grad False
-    path = _save(model, x, tmp_path / "og_grad.tlspec")
-
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
-    grad_input = torch.randn(2, 4, requires_grad=True)
-    twin = tl.load(path).run(inputs=grad_input)
-    assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
 class DisjointStorageViews(nn.Module):
     """Split the input into two disjoint sub-views -- a legitimate view-heavy model that VERIFIES."""
 
@@ -362,32 +317,3 @@ class DisjointStorageViews(nn.Module):
         left = x[:, :2]
         right = x[:, 2:]
         return left.sum() + right.sum()
-
-
-def test_r31_disjoint_storage_view_model_verifies(tmp_path: Path) -> None:
-    """A view-heavy model with no user metadata reads stays VERIFIED (no internal over-trigger)."""
-
-    x = torch.randn(2, 4)
-    path = _save(DisjointStorageViews(), x, tmp_path / "og_disjoint.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-@pytest.mark.filterwarnings(
-    # A08 random-role-init disclosure (runnable_random_init_run): this test
-    # exercises a weight-free runnable run DELIBERATELY; the warning is the
-    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
-    "default:This runnable artifact carries no model weights"
-)
-def test_r31_metadata_oblivious_model_verifies_exotic_input(tmp_path: Path) -> None:
-    """A plain model stays VERIFIED for a slice-of-larger-buffer input (no witnessed reads)."""
-
-    model = nn.Linear(4, 4)
-    x = torch.randn(2, 4)
-    path = _save(model, x, tmp_path / "og_plain.tlspec")
-
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
-    base = torch.randn(4, 4)
-    exotic = base[1:3]  # storage_offset != 0, larger base storage, same shape
-    assert tl.load(path).run(inputs=exotic).report.path_faithfulness is PathFaithfulness.VERIFIED

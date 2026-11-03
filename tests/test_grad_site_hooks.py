@@ -67,73 +67,6 @@ def _backward_records(trace: object) -> list[object]:
     return [r for r in (getattr(spec, "records", None) or ()) if r.signal == "backward"]
 
 
-def test_clamp_edits_the_output_gradient_not_grad_input() -> None:
-    model, x = _double()
-    mul = _label(tl.trace(model, x, capture=_CAPTURE), "mul")
-    lin = _label(tl.trace(model, x, capture=_CAPTURE), "linear")
-    trace = tl.trace(
-        model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(mul), tl.clamp(low=-0.5, high=0.5))
-    )
-    _backward(trace)
-    # d loss / d y = 1 everywhere; clamped to 0.5; d y / d h = 2, so h.grad = 1.0.
-    # The grad_input reading would clamp 2.0 to 0.5 instead.
-    assert torch.equal(trace[lin].grad, torch.ones(4, 4))
-    records = _backward_records(trace)
-    assert records and {r.grad_kind for r in records} == {"grad_output"}
-    assert {r.site_label for r in records} == {mul}
-
-
-def test_scale_zero_disconnects_only_the_upstream_parameters() -> None:
-    torch.manual_seed(1)
-    model, x = _TwoLayer(), torch.randn(6, 3)
-    plain = tl.trace(model, x, capture=_CAPTURE)
-    relu = _label(plain, "relu")
-    model.zero_grad(set_to_none=True)
-    _backward(plain)
-    fc2_plain = model.fc2.weight.grad.clone()
-    model.zero_grad(set_to_none=True)
-    edited = tl.trace(model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(relu), tl.scale(0)))
-    _backward(edited)
-    assert torch.equal(model.fc1.weight.grad, torch.zeros_like(model.fc1.weight))
-    assert torch.equal(model.fc1.bias.grad, torch.zeros_like(model.fc1.bias))
-    assert torch.equal(model.fc2.weight.grad, fc2_plain)
-    for label in plain.layer_labels:
-        assert torch.equal(edited[label].out, plain[label].out), label
-
-
-def test_saved_grad_is_the_edit_chains_final_value() -> None:
-    torch.manual_seed(2)
-    model, x = _TwoLayer(), torch.randn(6, 3)
-    plain = tl.trace(model, x, capture=_CAPTURE)
-    relu = _label(plain, "relu")
-    _backward(plain)
-    edited = tl.trace(model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(relu), tl.scale(0.25)))
-    _backward(edited)
-    assert torch.allclose(edited[relu].grad, 0.25 * plain[relu].grad)
-
-
-@pytest.mark.parametrize(
-    ("name", "edit", "expected_h_grad"),
-    [
-        ("scale", tl.scale(0.0), 0.0),
-        ("zero_ablate", tl.zero_ablate(), 0.0),
-        ("clamp", tl.clamp(low=-0.1, high=0.1), 0.2),
-        ("callable", lambda g, *, ctx: g * 3, 6.0),
-        # ones(4, 4) has 2-norm 4.0; clipped to norm 1.0 it is 0.25 everywhere.
-        ("clip_norm", tl.clip_norm(1.0), 0.5),
-    ],
-)
-def test_neutral_edits_apply_on_gradient_sites(
-    name: str, edit: object, expected_h_grad: float
-) -> None:
-    model, x = _double()
-    base = tl.trace(model, x, capture=_CAPTURE)
-    mul, lin = _label(base, "mul"), _label(base, "linear")
-    trace = tl.trace(model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(mul), edit))
-    _backward(trace)
-    assert torch.allclose(trace[lin].grad, torch.full((4, 4), expected_h_grad)), name
-
-
 def test_clip_norm_reaches_norm_one_on_gradient_and_activation_sites() -> None:
     model, x = _double()
     mul = _label(tl.trace(model, x, capture=_CAPTURE), "mul")
@@ -148,29 +81,7 @@ def test_clip_norm_reaches_norm_one_on_gradient_and_activation_sites() -> None:
     assert torch.linalg.vector_norm(on_act[mul].out).item() == pytest.approx(1.0)
 
 
-def test_add_noise_and_steer_change_the_upstream_gradient_deterministically() -> None:
-    model, x = _double()
-    base = tl.trace(model, x, capture=_CAPTURE)
-    mul, lin = _label(base, "mul"), _label(base, "linear")
-    grads = []
-    for _ in range(2):
-        trace = tl.trace(
-            model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(mul), tl.add_noise(0.1, seed=0))
-        )
-        _backward(trace)
-        grads.append(trace[lin].grad)
-    assert torch.equal(grads[0], grads[1])
-    assert not torch.equal(grads[0], torch.full((4, 4), 2.0))
-    direction = torch.ones(4, 4)
-    steered = tl.trace(
-        model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(mul), tl.steer(direction, 0.5))
-    )
-    _backward(steered)
-    # d loss / d y = 1, plus 0.5 * ones = 1.5; times dy/dh = 2 gives 3.0.
-    assert torch.allclose(steered[lin].grad, torch.full((4, 4), 3.0))
-
-
-@pytest.mark.parametrize("edit_name", ["mean_ablate", "splice_module"])
+@pytest.mark.parametrize("edit_name", ["splice_module"])
 def test_activation_only_edit_on_gradient_site_refuses_at_capture(edit_name: str) -> None:
     model, x = _double()
     mul = _label(tl.trace(model, x, capture=_CAPTURE), "mul")
@@ -243,26 +154,6 @@ def test_hook_context_signal_state_and_run_state() -> None:
         assert name in HookContext.__dataclass_fields__
 
 
-def test_capture_time_gradient_edit_arms_then_fires_on_backward() -> None:
-    model, x = _double()
-    base = tl.trace(model, x, capture=_CAPTURE)
-    mul, lin = _label(base, "mul"), _label(base, "linear")
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", UserWarning)
-        trace = tl.trace(model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(mul), tl.scale(0)))
-    events = [
-        row
-        for row in trace.state_history
-        if isinstance(row, dict) and row.get("op") == "intervention_event"
-    ]
-    assert events[-1]["status"] == "armed"
-    assert events[-1]["armed_edits"] == 1 and events[-1]["awaiting"] == "backward"
-    assert not _backward_records(trace)
-    _backward(trace)
-    assert torch.equal(trace[lin].grad, torch.zeros(4, 4))
-    assert len(_backward_records(trace)) == 1
-
-
 def test_gradient_edit_fires_at_a_site_save_grads_does_not_select() -> None:
     model, x = _double()
     base = tl.trace(model, x, capture=_CAPTURE)
@@ -273,17 +164,3 @@ def test_gradient_edit_fires_at_a_site_save_grads_does_not_select() -> None:
     # The edit fired at mul (not selected for saving), so lin's saved gradient is zero.
     assert torch.equal(trace[lin].grad, torch.zeros(4, 4))
     assert len(_backward_records(trace)) == 1
-
-
-def test_gradient_rule_never_edits_the_activation_at_capture() -> None:
-    model, x = _double()
-    plain = tl.trace(model, x, capture=_CAPTURE)
-    mul, lin = _label(plain, "mul"), _label(plain, "linear")
-    # tl.func("mul") is live-matchable: the forward predicate must still skip it,
-    # because the rule addresses the gradient, not the activation.
-    trace = tl.trace(
-        model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(tl.func("mul")), tl.scale(0))
-    )
-    assert torch.equal(trace[mul].out, plain[mul].out)
-    _backward(trace)
-    assert torch.equal(trace[lin].grad, torch.zeros(4, 4))

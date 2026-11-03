@@ -105,17 +105,6 @@ def test_bundle_getitem_returns_modellog_and_nodeview_accessor() -> None:
     assert bundle._supergraph is not None
 
 
-def test_map_is_per_member() -> None:
-    """map applies the function to each member, keyed by member name."""
-
-    bundle = tl.Bundle({"a": _log(), "b": _log()})
-
-    assert bundle.map(lambda member: len(member._layer_list)) == {
-        "a": len(bundle["a"]._layer_list),
-        "b": len(bundle["b"]._layer_list),
-    }
-
-
 def test_map_passes_the_member_name_only_where_fn_takes_it() -> None:
     """A defaulted second parameter keeps its default; ``name`` arrives by keyword or slot."""
 

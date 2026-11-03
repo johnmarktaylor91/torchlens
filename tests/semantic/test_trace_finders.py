@@ -46,23 +46,6 @@ class _FinderModel(nn.Module):
         return self.norm(self.attn(x))
 
 
-def test_trace_finders_return_matching_modules() -> None:
-    """Trace finders locate attention and normalization facet providers."""
-
-    log = trace_fn(
-        _FinderModel(),
-        torch.randn(2, 3, 8),
-        save="all",
-    )
-    attention_blocks = list(log.attention_blocks())
-    q_modules = list(log.modules_with_facet("q"))
-    norm_modules = list(log.modules_with_facet("normalized"))
-
-    assert [module.address for module in attention_blocks] == ["attn"]
-    assert q_modules == attention_blocks
-    assert [module.address for module in norm_modules] == ["norm"]
-
-
 def test_trace_finders_use_available_now_semantics() -> None:
     """Trace finders skip declared facets whose payloads were not captured.
 

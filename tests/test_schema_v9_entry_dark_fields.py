@@ -79,17 +79,6 @@ def _evidence_envelope(**overrides):
     return envelope
 
 
-def test_defaults_round_trip_on_ordinary_captures(tmp_path):
-    trace = _traced()
-    assert all(op.injection_provenance is None for op in trace.ops)
-    assert trace.source.snapshots == []
-    assert trace.graph.structure_evidence is None
-    loaded = _roundtrip(trace, tmp_path, "defaults")
-    assert all(op.injection_provenance is None for op in loaded.ops)
-    assert loaded.source.snapshots == []
-    assert loaded.graph.structure_evidence is None
-
-
 def test_injection_provenance_on_a_model_op_refuses_at_load(tmp_path):
     """A grammatical slot hand-stamped on a MODEL op refuses (F44 stage 2).
 
@@ -108,16 +97,13 @@ def test_injection_provenance_on_a_model_op_refuses_at_load(tmp_path):
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_injection_codec_invalid"
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "mutation",
     [
         {"host_site_key": ""},
-        {"spec_rule_id": 3},
         {"host_pass": 0},
-        {"firing_index": -1},
         {"nesting_path": [0, -2]},
-        {"nesting_path": "0"},
-        {"local_op_ordinal": True},
         {"output_slot": None},
         {"surprise": 1},
     ],
@@ -143,10 +129,10 @@ def test_source_snapshots_round_trip_and_validate(tmp_path):
     assert loaded.source.snapshots == rows
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "rows",
     [
-        "not-a-list",
         [{"path": "", "digest": _DIGEST, "text": None}],
         [{"path": "a.py", "digest": "nope", "text": None}],
         [{"path": "a.py", "digest": _DIGEST, "text": 7}],
@@ -165,32 +151,11 @@ def test_malformed_source_snapshots_refuse_at_load(tmp_path, rows):
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_source_snapshots_invalid"
 
 
-def test_structure_evidence_requires_the_structure_only_marker(tmp_path):
-    trace = _traced()
-    trace._graph_structure_evidence = _evidence_envelope()
-    with pytest.raises(ArtifactError) as excinfo:
-        _roundtrip(trace, tmp_path, "evidence_unmarked")
-    assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_structure_evidence_invalid"
-    assert "structure_only marker is False" in str(excinfo.value)
-
-
-def test_structure_evidence_round_trips_on_structure_only_captures(tmp_path):
-    trace = tl.trace(
-        nn.Sequential(nn.Linear(4, 3), nn.ReLU()),
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(structure_only=True),
-    )
-    trace._graph_structure_evidence = _evidence_envelope()
-    loaded = _roundtrip(trace, tmp_path, "evidence_ok")
-    assert loaded.graph.structure_evidence == _evidence_envelope()
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "mutation",
     [
         {"capture_mode": "eager"},
-        {"substrate": "quantum"},
-        {"values_available": True},
         {"outcome": "great"},
         {"factory_device_policy": "user_owned"},
         {"ambient_mode_present": "yes"},

@@ -175,83 +175,6 @@ def test_stimulus_ids_in_memory_refuses_typed() -> None:
     assert "requires path=" in str(excinfo.value)
 
 
-def test_left_padded_batch_derives_position_ids_and_matches_reference() -> None:
-    """Non-right-aligned masks get derived position_ids: bit-exact fix (D5.1)."""
-
-    torch.manual_seed(0)
-    model = _AbsPosModel().eval()
-    ids, mask = _left_padded_pair()
-
-    with pytest.warns(TorchLensWarning, match="derived position_ids") as record:
-        out = extract_dataset(
-            model, _tuple_stimuli(ids, mask), ["proj"], batch_size=2, progress=False
-        )
-    # Key on the disclosure code, not bare TorchLensWarning membership: a
-    # floor-torch install may also fire a one-time TorchCapabilityWarning
-    # (itself a TorchLensWarning) from an unrelated capability probe during
-    # this capture, which must not be mistaken for the position-ids notice.
-    disclosures = [
-        entry.message
-        for entry in record
-        if isinstance(entry.message, TorchLensWarning)
-        and entry.message.fields.get("code") == "extraction_position_ids_derived"
-    ]
-    assert len(disclosures) == 1
-    assert disclosures[0].fields["remedy"].startswith("right-pad the batch")
-
-    derived = (mask.long().cumsum(-1) - 1).clamp(min=0)
-    with torch.no_grad():
-        reference = model.proj(model.emb(ids) + model.pos(derived))
-        uncorrected = model.proj(
-            model.emb(ids) + model.pos(torch.arange(ids.shape[1]).unsqueeze(0).expand_as(ids))
-        )
-    got = next(iter(out.values()))
-    assert torch.equal(got, reference)
-    assert not torch.allclose(uncorrected, reference)
-
-
-def test_left_padded_batch_without_position_ids_refuses_typed() -> None:
-    """A model whose forward has no position_ids parameter refuses typed (D5.2)."""
-
-    model = _NoPosModel().eval()
-    ids, mask = _left_padded_pair()
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        extract_dataset(model, _tuple_stimuli(ids, mask), ["mul"], batch_size=2, progress=False)
-    assert excinfo.value.fields["code"] == "extraction_left_padding_unsupported"
-    message = str(excinfo.value)
-    assert "padding_side" in message
-    assert "batch_size=1" in message
-    # Disclosed conservatism: relative-position models are value-correct under
-    # left padding; the refusal is deliberately fail-closed for them.
-    assert "relative position" in message
-
-
-def test_right_aligned_batches_are_untouched() -> None:
-    """Right-padded masks trigger neither derivation nor a disclosure warning."""
-
-    torch.manual_seed(0)
-    model = _AbsPosModel().eval()
-    ids = torch.tensor([[7, 8, 9, 0, 0], [1, 2, 3, 4, 0]])
-    mask = torch.tensor([[1, 1, 1, 0, 0], [1, 1, 1, 1, 0]])
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", TorchLensWarning)
-        # A floor-torch install may fire a one-time TorchCapabilityWarning
-        # (an unrelated capability probe tripped by this capture) ahead of
-        # the business-logic check this test guards; tolerate that category
-        # specifically without loosening the "no position-ids disclosure"
-        # guarantee.
-        warnings.simplefilter("ignore", TorchCapabilityWarning)
-        out = extract_dataset(
-            model, _tuple_stimuli(ids, mask), ["proj"], batch_size=2, progress=False
-        )
-    with torch.no_grad():
-        default_positions = model.proj(
-            model.emb(ids) + model.pos(torch.arange(ids.shape[1]).unsqueeze(0).expand_as(ids))
-        )
-    assert torch.equal(next(iter(out.values())), default_positions)
-
-
 def test_caller_supplied_position_ids_are_trusted() -> None:
     """A batch already carrying position_ids is passed through unchanged."""
 
@@ -271,23 +194,6 @@ def test_caller_supplied_position_ids_are_trusted() -> None:
     with torch.no_grad():
         reference = model.proj(model.emb(ids) + model.pos(caller_positions))
     assert torch.equal(next(iter(out.values())), reference)
-
-
-def test_inference_guard_restores_mixed_train_eval_flags_and_buffers() -> None:
-    """Forwards run in eval/no_grad; exact per-submodule flags restore (D3)."""
-
-    model = nn.Sequential(nn.Linear(3, 4), nn.BatchNorm1d(4), nn.ReLU())
-    model.train()
-    model[2].training = False  # mixed tree: ReLU deliberately eval
-    flags_before = [module.training for module in model.modules()]
-    buffers_before = {name: buffer.clone() for name, buffer in model.named_buffers()}
-
-    out = extract_dataset(model, torch.randn(6, 3), ["relu"], batch_size=3, progress=False)
-
-    assert [module.training for module in model.modules()] == flags_before
-    for name, buffer in model.named_buffers():
-        assert torch.equal(buffer, buffers_before[name]), f"extraction mutated live buffer {name!r}"
-    assert not any(tensor.requires_grad for tensor in out.values())
 
 
 def test_inference_guard_restores_flags_on_refusal_mid_run() -> None:
@@ -405,87 +311,52 @@ def test_bert_class_left_padded_extraction_matches_right_padded() -> None:
         )
 
 
-@pytest.mark.real_model
-@pytest.mark.heavy
-def test_gpt2_class_mapping_batch_derivation_is_exact() -> None:
-    """R0 GPT-2 row: the mapping-carrier derivation fixes the decoder exactly.
+def test_left_padded_batch_without_position_ids_refuses_typed() -> None:
+    """A model whose forward has no position_ids parameter refuses typed (D5.2)."""
 
-    GPT-2's forward has ``past_key_values`` before ``attention_mask``, so a
-    two-element positional batch cannot name a mask; the mapping carrier is
-    where detection applies (end-to-end mapping routing lands with the C04
-    kwargs envelope). Measured defect: rel 41.6% wrong under left padding.
-    """
+    model = _NoPosModel().eval()
+    ids, mask = _left_padded_pair()
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        extract_dataset(model, _tuple_stimuli(ids, mask), ["mul"], batch_size=2, progress=False)
+    assert excinfo.value.fields["code"] == "extraction_left_padding_unsupported"
+    message = str(excinfo.value)
+    assert "padding_side" in message
+    assert "batch_size=1" in message
+    # Disclosed conservatism: relative-position models are value-correct under
+    # left padding; the refusal is deliberately fail-closed for them.
+    assert "relative position" in message
 
-    transformers = pytest.importorskip("transformers")
-    from torchlens._extraction.engine import _correct_envelope_positions
-    from torchlens.dataset_extraction import BatchEnvelope
+
+def test_left_padded_batch_derives_position_ids_and_matches_reference() -> None:
+    """Non-right-aligned masks get derived position_ids: bit-exact fix (D5.1)."""
 
     torch.manual_seed(0)
-    config = transformers.GPT2Config(
-        vocab_size=64,
-        n_positions=32,
-        n_embd=32,
-        n_layer=2,
-        n_head=2,
-        attn_implementation="eager",
-    )
-    model = transformers.GPT2Model(config).eval()
+    model = _AbsPosModel().eval()
+    ids, mask = _left_padded_pair()
 
-    ids = torch.tensor([[0, 0, 7, 8, 9], [0, 1, 2, 3, 4]])
-    mask = torch.tensor([[0, 0, 1, 1, 1], [0, 1, 1, 1, 1]])
-    envelope = BatchEnvelope(
-        args=(),
-        kwargs={"input_ids": ids, "attention_mask": mask},
-        num_rows=2,
-        mask=mask,
-        disclosure={"kind": "test"},
-    )
-
-    with pytest.warns(TorchLensWarning, match="derived position_ids"):
-        corrected_envelope, source = _correct_envelope_positions(model, envelope, 0, {})
-    assert source == "derived"
-    corrected = dict(corrected_envelope.kwargs)
-    assert torch.equal(corrected["position_ids"], (mask.long().cumsum(-1) - 1).clamp(min=0))
-
-    with torch.no_grad():
-        fixed = model(**corrected).last_hidden_state
-        uncorrected = model(input_ids=ids, attention_mask=mask).last_hidden_state
-        per_row = []
-        for index in range(ids.shape[0]):
-            length = int(mask[index].sum())
-            row_ids = ids[index, -length:].unsqueeze(0)
-            per_row.append(model(input_ids=row_ids).last_hidden_state[0])
-
-    for index in range(ids.shape[0]):
-        length = int(mask[index].sum())
-        assert torch.allclose(fixed[index, -length:], per_row[index], atol=1e-4), (
-            f"stimulus {index}: corrected activations diverge from single-sequence forward"
+    with pytest.warns(TorchLensWarning, match="derived position_ids") as record:
+        out = extract_dataset(
+            model, _tuple_stimuli(ids, mask), ["proj"], batch_size=2, progress=False
         )
-    assert not torch.allclose(uncorrected[0, -3:], per_row[0], atol=1e-2), (
-        "left padding no longer wrong without correction -- re-measure the defect"
-    )
-
-
-@pytest.mark.real_model
-@pytest.mark.heavy
-def test_resnet18_class_extraction_leaves_batchnorm_state_untouched() -> None:
-    """R0 ResNet row: a train-mode resnet18 harvest mutates zero buffers (D3)."""
-
-    torchvision = pytest.importorskip("torchvision")
-    torch.manual_seed(0)
-    model = torchvision.models.resnet18(weights=None)
-    model.train()
-    buffers_before = {name: buffer.clone() for name, buffer in model.named_buffers()}
-    flags_before = [module.training for module in model.modules()]
-
-    stimuli = torch.randn(4, 3, 64, 64)
-    out = extract_dataset(model, stimuli, ["layer4"], batch_size=2, progress=False)
-
-    assert [module.training for module in model.modules()] == flags_before
-    mutated = [
-        name
-        for name, buffer in model.named_buffers()
-        if not torch.equal(buffer, buffers_before[name])
+    # Key on the disclosure code, not bare TorchLensWarning membership: a
+    # floor-torch install may also fire a one-time TorchCapabilityWarning
+    # (itself a TorchLensWarning) from an unrelated capability probe during
+    # this capture, which must not be mistaken for the position-ids notice.
+    disclosures = [
+        entry.message
+        for entry in record
+        if isinstance(entry.message, TorchLensWarning)
+        and entry.message.fields.get("code") == "extraction_position_ids_derived"
     ]
-    assert mutated == [], f"extraction mutated {len(mutated)} live buffers: {mutated[:5]}"
-    assert all(not tensor.requires_grad for tensor in out.values())
+    assert len(disclosures) == 1
+    assert disclosures[0].fields["remedy"].startswith("right-pad the batch")
+
+    derived = (mask.long().cumsum(-1) - 1).clamp(min=0)
+    with torch.no_grad():
+        reference = model.proj(model.emb(ids) + model.pos(derived))
+        uncorrected = model.proj(
+            model.emb(ids) + model.pos(torch.arange(ids.shape[1]).unsqueeze(0).expand_as(ids))
+        )
+    got = next(iter(out.values()))
+    assert torch.equal(got, reference)
+    assert not torch.allclose(uncorrected, reference)

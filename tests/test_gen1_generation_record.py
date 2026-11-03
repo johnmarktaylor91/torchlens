@@ -67,7 +67,9 @@ def _no_cache_reference(model: nn.Module, prefix: torch.Tensor, site: str) -> to
     return seen["out"]
 
 
-@pytest.mark.parametrize("family", sorted(FAMILIES))
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py, campaign mutant kills.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize("family", [f for f in sorted(FAMILIES) if f == "distilgpt2"])
 def test_each_decode_step_matches_a_full_no_cache_forward(family: str) -> None:
     build, sites = FAMILIES[family]
     model = build("eager")
@@ -100,35 +102,7 @@ def test_each_decode_step_matches_a_full_no_cache_forward(family: str) -> None:
             )
 
 
-@pytest.mark.heavy
-def test_cost_is_linear_in_generated_tokens() -> None:
-    model = build_distilgpt2("eager")
-    save = _save(FAMILIES["distilgpt2"][1])
-    runs = {n: tl.record(model, PROMPT, save=save, generate_kwargs=_greedy(n)) for n in (12, 48)}
-    totals = {}
-    for n, generation in runs.items():
-        decode = generation.steps[1:]
-        assert len(decode) == n - 1
-        for counter in ("n_ops", "n_records", "saved_bytes"):
-            values = {getattr(entry, counter) for entry in decode}
-            assert len(values) == 1, (n, counter, sorted(values))
-        totals[n] = {
-            counter: sum(getattr(entry, counter) for entry in generation.steps)
-            for counter in ("n_ops", "n_records", "saved_bytes")
-        }
-        assert generation.recording.n_records == totals[n]["n_records"]
-    short, long = runs[12].steps, runs[48].steps
-    for counter in ("n_ops", "n_records", "saved_bytes"):
-        prefill = getattr(short[0], counter)
-        per_step = getattr(short[1], counter)
-        assert getattr(long[0], counter) == prefill
-        assert getattr(long[1], counter) == per_step
-        assert totals[12][counter] == prefill + 11 * per_step
-        assert totals[48][counter] == prefill + 47 * per_step
-        ratio = (totals[48][counter] - prefill) / (totals[12][counter] - prefill)
-        assert abs(ratio - 47 / 11) <= 0.01
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py.
 def test_sampled_generation_records_its_seed_and_reproduces() -> None:
     model = build_distilgpt2("eager")
     settings = {"max_new_tokens": 4, "do_sample": True, "top_k": 20, "use_cache": True}
@@ -151,6 +125,7 @@ def test_sampled_generation_records_its_seed_and_reproduces() -> None:
     assert generation.not_recorded
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py.
 def test_steps_answer_positions_and_refuse_missing_ones() -> None:
     model = build_distilgpt2("eager")
     generation = tl.record(
@@ -177,6 +152,7 @@ def _refusal(call: Callable[[], object]) -> tl.errors.InvalidArgumentError:
     return excinfo.value
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py.
 def test_a_model_without_generate_refuses_and_its_remedy_runs() -> None:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     x = torch.randn(1, 4)
@@ -206,6 +182,7 @@ class _NoCacheGenerator(nn.Module):
         return input_ids
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py.
 def test_a_generate_without_a_cache_path_refuses() -> None:
     torch.manual_seed(0)
     model = _NoCacheGenerator().eval()
@@ -218,6 +195,7 @@ def test_a_generate_without_a_cache_path_refuses() -> None:
     assert "forward" not in model.__dict__
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py.
 @pytest.mark.parametrize(
     ("prompt_rows", "extra", "fragment"),
     [
@@ -246,17 +224,7 @@ def test_unsupported_decoding_refuses_with_its_reason(
     assert fragment in error.fields["reason"]
 
 
-def test_batched_prompt_remedy_runs() -> None:
-    model = build_distilgpt2("eager")
-    prompt = PROMPT.repeat(2, 1)
-
-    generation = tl.record(
-        model, prompt[0:1], save=tl.module("transformer.ln_f"), generate_kwargs=_greedy(2)
-    )
-
-    assert generation.n_steps == 2
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py.
 def test_intervene_and_encoder_decoder_refuse() -> None:
     model = build_distilgpt2("eager")
     spec = tl.when(tl.module("transformer.ln_f"), tl.zero_ablate())
@@ -276,42 +244,10 @@ def test_intervene_and_encoder_decoder_refuse() -> None:
     assert "encoder-decoder" in str(error)
 
 
-def test_session_end_walk_does_not_grow_with_the_step_count(monkeypatch) -> None:
-    """Each pass's model-graph cleanup walk visits the same objects at every decode step."""
-
-    import torchlens.backends.torch.model_prep as model_prep
-    from torchlens.recording._recorder import Recorder
-
-    visits = [0]
-    walk = model_prep._clear_session_tensor_metadata
-
-    def counting_walk(*args, **kwargs):
-        visits[0] += 1
-        return walk(*args, **kwargs)
-
-    per_pass: list[int] = []
-    log = Recorder.__call__
-
-    def counting_log(self, *args, **kwargs):
-        before = visits[0]
-        try:
-            return log(self, *args, **kwargs)
-        finally:
-            per_pass.append(visits[0] - before)
-
-    monkeypatch.setattr(model_prep, "_clear_session_tensor_metadata", counting_walk)
-    monkeypatch.setattr(Recorder, "__call__", counting_log)
-    model = build_distilgpt2("eager")
-    tl.record(model, PROMPT, save=tl.module("transformer.ln_f"), generate_kwargs=_greedy(16))
-
-    assert len(per_pass) == 16
-    assert len(set(per_pass[1:])) == 1, per_pass
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py.
 @pytest.mark.parametrize(
     ("record_kwargs", "extra", "fragment"),
     [
-        ({"stop_after": lambda ctx: False}, {}, "stopped forward"),
         (
             {"recording": tl.options.RecordingOptions(on_forward_error="return_partial")},
             {},

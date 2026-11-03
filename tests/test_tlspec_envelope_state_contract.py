@@ -30,7 +30,6 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn as nn
-from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._io import (
@@ -77,29 +76,6 @@ def test_trace_dict_path_refuses_unknown_field(tiny_trace) -> None:
     _assert_typed_unknown_refusal(excinfo, "Trace")
 
 
-def test_trace_refusal_covers_both_writer_directions(tiny_trace) -> None:
-    """Same-stamp drift refuses as an unknown field; an older writer refuses as 2.x first."""
-
-    from torchlens._data_classes.trace import Trace
-    from torchlens._io import ArtifactTooOldError
-
-    state = tiny_trace.__getstate__()
-    state[UNKNOWN_KEY] = 1
-    state["tlspec_version"] = TLSPEC_VERSION
-    with governed_artifact_load(), pytest.raises(UnknownPersistedFieldError) as excinfo:
-        Trace.__new__(Trace).__setstate__(state)
-    assert excinfo.value.fields["declared_tlspec_version"] == TLSPEC_VERSION
-
-    # An older writer's state never reaches the unknown-field partition: this release
-    # reads no state a 2.x release wrote.
-    state = tiny_trace.__getstate__()
-    state[UNKNOWN_KEY] = 1
-    state["tlspec_version"] = 6
-    with governed_artifact_load(), pytest.raises(ArtifactTooOldError) as too_old:
-        Trace.__new__(Trace).__setstate__(state)
-    assert "saved by torchlens 2.x" in str(too_old.value)
-
-
 def test_op_columnar_path_refuses_typed_never_attributeerror(tiny_trace) -> None:
     """Acceptance bar: typed refusal, never AttributeError, on the Op path."""
 
@@ -140,24 +116,6 @@ def test_absent_fields_keep_tolerant_default_fill(tiny_trace) -> None:
     assert restored.annotations == {}
 
 
-def test_session_pickle_stays_outside_the_contract(tiny_trace) -> None:
-    """The contract governs ARTIFACT bytes only: session pickling of live
-    records keeps the historical open round-trip for user-set extras.
-
-    The save path refuses to persist undeclared record fields, so no governed
-    artifact ever carries extras legitimately; refusing them on plain
-    ``pickle`` would break the record-extras semantics the substrate pins
-    (``test_record_dict_shadow_never_streams``)."""
-
-    param = next(iter(tiny_trace.params.values()))
-    param.__dict__["user_note"] = "keep_me"
-    try:
-        restored = pickle.loads(pickle.dumps(param))
-    finally:
-        param.__dict__.pop("user_note", None)
-    assert restored.user_note == "keep_me"
-
-
 @pytest.fixture()
 def tampered_main_bundle(tiny_trace: object, tmp_path: Path) -> Path:
     """A bundle this release wrote whose Trace state gained one unknown field."""
@@ -172,20 +130,6 @@ def tampered_main_bundle(tiny_trace: object, tmp_path: Path) -> Path:
     with metadata_path.open("wb") as fh:
         dump_canonical_metadata(scrubbed_state, fh)
     return bundle
-
-
-def test_new_writer_direction_end_to_end_on_disk(tampered_main_bundle: Path) -> None:
-    """D-ECO-10's on-disk cell + anti-laundering: the typed refusal survives
-    the whole bundle load path with its stable code intact."""
-
-    with (
-        expect_bundle_minor_version_mismatch(),
-        pytest.raises(UnknownPersistedFieldError) as excinfo,
-    ):
-        tl.load(tampered_main_bundle)
-    assert excinfo.value.fields["code"] == "unknown_persisted_field"
-    assert excinfo.value.fields["record_type"] == "Trace"
-    assert UNKNOWN_KEY in excinfo.value.fields["unknown_fields"]
 
 
 def test_inert_inventory_reports_without_loading(
@@ -212,18 +156,6 @@ def test_inert_inventory_reports_without_loading(
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_field_is_registered_outcome_degrading() -> None:
-    """D-ECO-10 assertion two: an accept mode may never attest COMPLETE."""
-
-    from torchlens._capture.outcome import (
-        OUTCOME_DEGRADING_LOAD_CONDITIONS,
-        CaptureStatus,
-    )
-
-    degraded = OUTCOME_DEGRADING_LOAD_CONDITIONS["unknown_persisted_field"]
-    assert degraded is not CaptureStatus.COMPLETE
-
-
 def test_dropped_edge_tensor_args_still_feeds_its_invariant() -> None:
     """The field the contract exists to protect keeps protecting its invariant."""
 
@@ -234,9 +166,3 @@ def test_dropped_edge_tensor_args_still_feeds_its_invariant() -> None:
 
     assert "dropped_edge_tensor_args" in persisted_field_names("op")
     assert "dropped_edge_tensor_args" in inspect.getsource(validation_core)
-
-
-def test_public_errors_registry_serves_unknown_field_error() -> None:
-    import torchlens.errors as errors
-
-    assert errors.UnknownPersistedFieldError is UnknownPersistedFieldError

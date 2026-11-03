@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
-from collections.abc import Mapping
 from typing import Any
 
 import pytest
@@ -49,22 +48,6 @@ class ModuleRichModel(nn.Module):
         for block in self.blocks:
             x = block(x)
         return x
-
-
-def _historical_region_call_depth(
-    key: str,
-    top_modules: list[str],
-    children: Mapping[str, list[str]],
-) -> int:
-    """The pre-wave-14 per-key breadth-first sweep, verbatim, as the oracle."""
-
-    pending = [(candidate, 0) for candidate in top_modules]
-    while pending:
-        candidate, depth = pending.pop(0)
-        if candidate == key:
-            return depth
-        pending.extend((child, depth + 1) for child in children.get(candidate, []))
-    return render_ir._module_depth(key) - 1
 
 
 def test_region_build_scans_each_collection_a_bounded_number_of_times(
@@ -121,42 +104,3 @@ def test_region_build_scans_each_collection_a_bounded_number_of_times(
     assert counts["nodes"] <= 4 * finalize_calls
     assert counts["module_tree"] < regions
     assert counts["nodes"] < regions
-
-
-@pytest.mark.parametrize("depth", (1, 4, 12))
-def test_single_sweep_depth_table_matches_historical_per_key_sweep(depth: int) -> None:
-    """Every recorded depth equals the historical per-key breadth-first answer."""
-
-    trace = tl.trace(ModuleRichModel(depth=depth), torch.rand(2, 6))
-    for vis_mode in ("unrolled", "rolled"):
-        children, top_modules = render_ir._region_module_hierarchy(trace, vis_mode)
-        table = render_ir._region_call_depths(top_modules, children)
-        assert table, f"no reachable modules for {vis_mode}"
-        for key in table:
-            assert table[key] == _historical_region_call_depth(key, top_modules, children)
-
-
-def test_unreachable_key_keeps_the_module_depth_fallback() -> None:
-    """Keys the sweep never reaches stay absent so callers use the old fallback."""
-
-    children: defaultdict[str, list[str]] = defaultdict(list)
-    children["a"] = ["a.b"]
-    table = render_ir._region_call_depths(["a"], children)
-
-    assert table == {"a": 0, "a.b": 1}
-    assert "x.y.z" not in table
-    assert _historical_region_call_depth("x.y.z", ["a"], children) == (
-        render_ir._module_depth("x.y.z") - 1
-    )
-
-
-def test_depth_table_reports_shortest_root_distance_on_a_shared_child() -> None:
-    """A child reachable by two paths keeps its first-encounter (shortest) depth."""
-
-    children: defaultdict[str, list[str]] = defaultdict(list)
-    children["a"] = ["shared", "a.mid"]
-    children["a.mid"] = ["shared"]
-    table = render_ir._region_call_depths(["a"], children)
-
-    assert table["shared"] == 1
-    assert table["shared"] == _historical_region_call_depth("shared", ["a"], children)

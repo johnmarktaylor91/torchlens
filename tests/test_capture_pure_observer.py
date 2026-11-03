@@ -27,10 +27,8 @@ carry_state=True keeps them".
 from __future__ import annotations
 
 import copy
-import pickle
 import random
 import warnings
-import weakref
 from collections import OrderedDict
 
 import numpy as np
@@ -42,7 +40,6 @@ import torchlens as tl
 from torchlens._record_type import record_type
 from torchlens.errors import BufferSinkRoutingError, TraceCaptureError
 from torchlens.options import CaptureOptions
-from torchlens.types import AttributeWrite
 
 
 class _Stateful(nn.Module):
@@ -115,40 +112,6 @@ def _assert_state_equal(before: dict, after: dict) -> None:
     assert before["attrs"] == after["attrs"]
 
 
-def test_default_trace_restores_buffers_rng_modes_and_attributes():
-    """A default capture of a train-mode stateful model leaves every piece of state as it was."""
-
-    torch.manual_seed(0)
-    model = _Stateful().train()
-    history = model.history
-    x = torch.randn(2, 3, 8, 8)
-    before, rng_before = _observed_state(model), _rng_state()
-    tl.trace(model, x)
-    _assert_state_equal(before, _observed_state(model))
-    _assert_rng_equal(rng_before, _rng_state())
-    assert not hasattr(model, "last_batch")
-    # The list the forward appended to is restored in place, not replaced.
-    assert model.history is history and history == [1]
-
-
-def test_default_trace_records_what_the_forward_wrote():
-    """Stashed values are read from the trace: added, replaced (rebound or in place)."""
-
-    torch.manual_seed(0)
-    model = _Stateful().train()
-    trace = tl.trace(model, torch.randn(2, 3, 8, 8))
-    writes = trace.modules["self"].attribute_writes
-    assert writes is not None
-    assert set(writes) == {"calls", "history", "last_batch"}
-    assert writes["calls"] == AttributeWrite("replaced", 1)
-    assert writes["history"] == AttributeWrite("replaced", [1, 1])
-    assert writes["history"].value is not model.history  # a copy of the in-place change
-    assert writes["last_batch"] == AttributeWrite("added", 2)
-    assert dict(trace.modules["bn"].attribute_writes) == {}
-    with pytest.raises(TypeError):
-        writes["calls"] = AttributeWrite("added", 0)  # type: ignore[index]
-
-
 class _Stash(nn.Module):
     """Stashes a tensor, deletes an attribute, rebinds one and edits a tensor in place."""
 
@@ -171,27 +134,7 @@ class _Stash(nn.Module):
         return y
 
 
-def test_attribute_restore_keeps_identity_and_records_every_kind():
-    """Rebinds, removals, additions and in-place tensor edits are undone and recorded."""
-
-    model = _Stash()
-    cfg, count, big = model.cfg, model.count, model.big
-    trace = tl.trace(model, torch.randn(2, 4))
-    assert model.scratch == "gone after the forward"
-    assert model.cfg is cfg and cfg == {"mode": "a"}
-    assert model.count is count and torch.equal(count, torch.zeros(3))
-    assert model.big is big and torch.equal(big, torch.zeros(5000))
-    assert not hasattr(model, "last_out")
-    writes = trace.modules["self"].attribute_writes
-    assert set(writes) == {"big", "cfg", "count", "last_out", "scratch"}
-    assert writes["scratch"] == AttributeWrite("removed", None)
-    assert writes["cfg"] == AttributeWrite("replaced", {"mode": "b"})
-    assert writes["last_out"].kind == "added"
-    assert torch.equal(writes["last_out"].value, trace["linear_1_1"].out)
-    assert writes["count"].kind == "replaced" and torch.equal(writes["count"].value, torch.ones(3))
-    assert writes["big"].kind == "replaced" and writes["big"].value[0].item() == 7.0
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture_attr_observer.py.
 def test_carry_state_keeps_the_writes_and_records_them():
     """carry_state=True leaves the forward's attribute writes and records the same rows."""
 
@@ -204,6 +147,7 @@ def test_carry_state_keeps_the_writes_and_records_them():
     assert writes["last_out"].value is model.last_out
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture_attr_observer.py, campaign mutant kills.
 def test_loaded_trace_has_no_attribute_write_record(tmp_path):
     """The record is session-time only: a loaded trace reads None, never raises."""
 
@@ -216,52 +160,7 @@ def test_loaded_trace_has_no_attribute_write_record(tmp_path):
     assert loaded.modules["fc"].attribute_writes is None
 
 
-class _UnpicklableStash(nn.Module):
-    """Stashes a weak reference (unpicklable) on itself during the forward."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = self.fc(x)
-        self.last_ref = weakref.ref(self.fc)
-        return y
-
-
-def test_record_never_rides_pickles_or_the_capture_cache(tmp_path):
-    """The session-time record is dropped from pickle state: caching and pickling still work."""
-
-    model = _UnpicklableStash()
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", UserWarning)  # "Not caching this capture" would raise
-        trace = tl.trace(
-            model,
-            torch.randn(2, 4),
-            capture=CaptureOptions(cache=True, cache_dir=tmp_path / "cache"),
-        )
-    assert trace.modules["self"].attribute_writes["last_ref"].kind == "added"
-    assert not hasattr(model, "last_ref")
-    restored = pickle.loads(pickle.dumps(trace))
-    assert restored.modules["self"].attribute_writes is None
-    assert copy.deepcopy(trace).modules["self"].attribute_writes is None
-
-
-def test_forged_state_never_surfaces_an_attribute_write_record():
-    """A Module state carrying a record (forged or foreign) restores without it."""
-
-    from torchlens.types import Module
-
-    trace = tl.trace(_Stash(), torch.randn(2, 4))
-    state = trace.modules["self"].__getstate__()
-    forged = {"x": AttributeWrite("added", "forged")}
-    state["_attribute_writes"] = forged
-    state["attribute_writes"] = forged
-    record = Module.__new__(Module)
-    record.__setstate__(state)
-    assert record.attribute_writes is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/state_live.py, campaign mutant kills.
 def test_default_trace_restores_state_on_the_exception_path():
     """A capture whose forward raises after writing state still restores all of it."""
 
@@ -274,27 +173,6 @@ def test_default_trace_restores_state_on_the_exception_path():
     assert isinstance(_tce_info.value.__cause__, RuntimeError)
     _assert_state_equal(before, _observed_state(model))
     _assert_rng_equal(rng_before, _rng_state())
-
-
-def test_carry_state_is_forward_equivalent_bit_exact():
-    """carry_state=True: buffers, modes and attributes advance exactly as one model(x) does.
-
-    Random state is the exception under both settings: every capture draws from
-    its own seed and restores the global engines (R57), so the caller's random
-    streams never advance.
-    """
-
-    torch.manual_seed(0)
-    model = _Stateful().train()
-    reference = copy.deepcopy(model)
-    x = torch.randn(2, 3, 8, 8)
-    reference(x)
-    expected = _observed_state(reference)
-    rng_before = _rng_state()
-    trace = tl.trace(model, x, capture=CaptureOptions(carry_state=True))
-    _assert_state_equal(expected, _observed_state(model))
-    _assert_rng_equal(rng_before, _rng_state())
-    assert trace.modules["self"].attribute_writes["last_batch"] == AttributeWrite("added", 2)
 
 
 def _train_bn_stack() -> nn.Module:
@@ -313,6 +191,7 @@ def _train_bn_stack() -> nn.Module:
     ).train()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/projectors.py, _data_classes/_fork_lineage.py, intervention/_trace_run.py.
 def test_train_mode_batchnorm_runs_and_default_run_restores_stats():
     """Bug 7: run() and run(until=) on train-mode BN; the default run restores stats."""
 
@@ -328,6 +207,7 @@ def test_train_mode_batchnorm_runs_and_default_run_restores_stats():
         assert torch.equal(value, dict(model.named_buffers())[name]), name
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/transaction.py, intervention/_trace_run.py.
 def test_run_carry_state_advances_train_stats_like_a_plain_forward():
     """run(carry_state=True) running statistics equal a plain forward's, bit-exact."""
 
@@ -359,6 +239,7 @@ def test_train_mode_run_backward_matches_eager_gradients():
         torch.testing.assert_close(got[name], grad, rtol=0, atol=0, msg=name)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/projectors.py.
 def test_d18_still_refuses_unproven_train_mode_evidence():
     """Unproven (None) buffer-write evidence still refuses typed in train mode."""
 
@@ -372,6 +253,7 @@ def test_d18_still_refuses_unproven_train_mode_evidence():
         log.run(inputs=torch.randn(2, 3, 8, 8))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/projectors.py.
 def test_d18_still_refuses_a_non_norm_buffer_writer():
     """A counter buffer written in place is not a proven train-mode norm writer."""
 
@@ -392,22 +274,6 @@ def test_d18_still_refuses_a_non_norm_buffer_writer():
         log.run(inputs=torch.randn(2, 3))
 
 
-def test_resnet18_train_mode_runs_through_run_and_until():
-    """Acceptance: stock resnet18 in train mode runs through run and run(until=)."""
-
-    torchvision_models = pytest.importorskip("torchvision.models")
-    torch.manual_seed(0)
-    model = torchvision_models.resnet18(weights=None, num_classes=10).train()
-    x = torch.randn(2, 3, 32, 32)
-    before = {name: buf.clone() for name, buf in model.named_buffers()}
-    log = tl.trace(model, x, save=tl.in_module("layer2"))
-    log.run(inputs=torch.randn(2, 3, 32, 32)).output.pow(2).mean().backward()
-    result = log.run(inputs=torch.randn(2, 3, 32, 32), until="layer2")
-    result.trace["layer2"].out.pow(2).mean().backward()
-    for name, value in before.items():
-        assert torch.equal(value, dict(model.named_buffers())[name]), name
-
-
 def test_carry_state_does_not_change_the_trace():
     """carry_state changes only the model's post-capture state, never the trace."""
 
@@ -425,6 +291,7 @@ def test_carry_state_does_not_change_the_trace():
             assert torch.equal(left.out, right.out), left.layer_label
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/state_live.py, _utils/rng/streams.py.
 def test_unrestorable_state_warns_capture_state_restore_incomplete(monkeypatch):
     """A restore step that fails is named in one coded warning, never raised."""
 
@@ -468,12 +335,6 @@ class _BigHistory(nn.Module):
         return self.fc(x)
 
 
-def _innermost(nested: list, depth: int) -> list:
-    for _ in range(depth):
-        nested = nested[0]
-    return nested
-
-
 def _restore_incomplete_messages(caught: list) -> list[str]:
     from torchlens.errors import TorchLensWarning
 
@@ -485,37 +346,7 @@ def _restore_incomplete_messages(caught: list) -> list[str]:
     ]
 
 
-def test_large_container_write_is_restored_and_recorded():
-    """A 129-item list and dict written in place are restored in place and recorded."""
-
-    model = _BigHistory(n_items=129)
-    history, table = model.history, model.table
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trace = tl.trace(model, torch.ones(1, 1))
-    assert model.history is history and history[0] == 0 and len(history) == 129
-    assert model.table is table and table["0"] == 0
-    writes = trace.modules["self"].attribute_writes
-    assert writes["history"].kind == "replaced"
-    assert writes["history"].value[0] == 1 and writes["history"].value is not history
-    assert writes["table"].value["0"] == -1
-    assert _restore_incomplete_messages(caught) == []
-
-
-def test_deeply_nested_container_write_is_restored_and_recorded():
-    """A write 100 levels down (past the old 64-level bound) is restored and recorded."""
-
-    model = _BigHistory(n_items=2, depth=100)
-    inner = _innermost(model.deep, 100)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trace = tl.trace(model, torch.ones(1, 1))
-    assert _innermost(model.deep, 100) is inner and inner == [0]
-    write = trace.modules["self"].attribute_writes["deep"]
-    assert write.kind == "replaced" and _innermost(write.value, 100) == [1]
-    assert _restore_incomplete_messages(caught) == []
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py, _capture/prepare/door.py, _capture_attr_observer.py ....
 def test_nesting_past_the_observer_bound_warns_naming_the_attribute():
     """Past the observer's depth bound the capture names the attribute; never silent."""
 

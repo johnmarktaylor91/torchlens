@@ -219,6 +219,9 @@ def test_component_stack_records_smoke():
     assert excinfo.value.fields["code"] == "mi_top_by_invalid"
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
+
+
 def test_translation_table_rows_well_formed():
     """Every translation row carries (tlens, generation, facet) -- the CI row."""
 

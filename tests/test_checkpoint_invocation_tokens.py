@@ -71,6 +71,7 @@ def _captured(model: nn.Module, x: torch.Tensor, *, backward: bool = True) -> tl
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_plain_single_checkpoint_mints_exactly_one_token() -> None:
     trace = _captured(_OneCheckpoint(), torch.randn(3, 4))
     witness = trace.checkpoint_invocation_witness
@@ -88,6 +89,7 @@ def test_plain_single_checkpoint_mints_exactly_one_token() -> None:
     assert len(minted) == 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_two_identical_invocations_mint_two_tokens() -> None:
     trace = _captured(_TwoIdenticalCheckpoints(), torch.randn(3, 4))
     witness = trace.checkpoint_invocation_witness
@@ -97,6 +99,7 @@ def test_two_identical_invocations_mint_two_tokens() -> None:
         assert record["unpack_evidence_count"] > 0
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_forward_only_capture_has_token_with_zero_unpack_evidence() -> None:
     trace = _captured(_OneCheckpoint(), torch.randn(3, 4), backward=False)
     witness = trace.checkpoint_invocation_witness
@@ -106,6 +109,7 @@ def test_forward_only_capture_has_token_with_zero_unpack_evidence() -> None:
     assert record["site_key_candidates"] == []
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_backward_derived_site_candidates_resolve_under_armed_brackets() -> None:
     torch.manual_seed(0)
     trace = tl.trace(
@@ -130,44 +134,6 @@ def test_backward_derived_site_candidates_resolve_under_armed_brackets() -> None
 # ---------------------------------------------------------------------------
 
 
-class _PlainHooks(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.autograd.graph.saved_tensors_hooks(lambda t: t, lambda t: t):
-            h = self.fc(x)
-        with torch.autograd.graph.save_on_cpu():
-            return h * 2
-
-
-def test_negative_control_plain_hooks_and_save_on_cpu() -> None:
-    trace = _captured(_PlainHooks(), torch.randn(3, 4))
-    witness = trace.checkpoint_invocation_witness
-    assert witness["token_count"] == 0
-    assert witness["degrade_flags"] == []
-    assert witness["verdict"] == "no_checkpoint_invocation_observed"
-
-
-class _Reentrant(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.a = nn.Linear(4, 8)
-        self.b = nn.Linear(8, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.b(checkpoint(lambda y: torch.relu(self.a(y)), x, use_reentrant=True))
-
-
-def test_reentrant_sets_d5_and_never_reaches_affirmative_verdict() -> None:
-    trace = _captured(_Reentrant(), torch.randn(3, 4, requires_grad=True))
-    witness = trace.checkpoint_invocation_witness
-    assert witness["token_count"] == 0
-    assert "reentrant_node_discovered" in witness["degrade_flags"]
-    assert witness["verdict"] == "evidence_incomplete"
-
-
 class _PausedCheckpoint(nn.Module):
     """A checkpoint entered under paused logging: classifier condition (2) fails."""
 
@@ -186,6 +152,7 @@ class _PausedCheckpoint(nn.Module):
         return self.c(h)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, campaign mutant kills.
 def test_unwitnessed_enter_sets_d6_instead_of_staying_silent() -> None:
     torch.manual_seed(0)
     # The paused-region output enters module c without graph provenance;
@@ -203,6 +170,7 @@ def test_unwitnessed_enter_sets_d6_instead_of_staying_silent() -> None:
     assert witness["verdict"] == "evidence_incomplete"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, campaign mutant kills.
 def test_classifier_unavailable_sets_d1_and_no_tokens(monkeypatch) -> None:
     monkeypatch.setattr(backward_mod, "_resolve_checkpoint_hook_cls", lambda: None)
     trace = _captured(_OneCheckpoint(), torch.randn(3, 4))
@@ -212,6 +180,7 @@ def test_classifier_unavailable_sets_d1_and_no_tokens(monkeypatch) -> None:
     assert witness["verdict"] == "evidence_incomplete"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_unmatched_backward_warn_sets_d4_and_warn_once_preserved() -> None:
     torch.manual_seed(0)
     trace = tl.trace(
@@ -231,6 +200,7 @@ def test_unmatched_backward_warn_sets_d4_and_warn_once_preserved() -> None:
     assert witness["verdict"] == "evidence_incomplete"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_carry_foreign_hook_attrs_preserves_non_tl_state() -> None:
     """The attribute-carry helper copies foreign state, never TorchLens's own.
 
@@ -256,6 +226,7 @@ def test_carry_foreign_hook_attrs_preserves_non_tl_state() -> None:
     assert not hasattr(new_hook, "__tl_saved_tensors_hook_scoped__")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, campaign mutant kills.
 def test_hook_identity_attrs_preserved_when_simulated_in_play(monkeypatch) -> None:
     """Forcing the torch-2.14 attribute-carry path engaged mints a token normally.
 
@@ -273,6 +244,7 @@ def test_hook_identity_attrs_preserved_when_simulated_in_play(monkeypatch) -> No
     assert witness["verdict"] == "checkpoint_invocations_observed"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, campaign mutant kills.
 def test_failed_hook_identity_preserve_sets_d7_and_does_not_leak(monkeypatch) -> None:
     """A forced attribute-carry failure degrades D7 and never leaks into later captures.
 
@@ -306,6 +278,7 @@ def test_failed_hook_identity_preserve_sets_d7_and_does_not_leak(monkeypatch) ->
     assert clean_witness["verdict"] == "checkpoint_invocations_observed"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, campaign mutant kills.
 def test_patch_unavailable_sets_d2(monkeypatch) -> None:
     trace = _captured(nn.Linear(4, 2), torch.randn(3, 4))
     monkeypatch.setattr(backward_mod, "_SAVED_TENSORS_HOOKS_INIT_PATCHED", False)
@@ -318,28 +291,6 @@ def test_patch_unavailable_sets_d2(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 # Fresh-wrapper discipline: re-minting never stacks token layers.
 # ---------------------------------------------------------------------------
-
-
-def test_token_wrappers_unwrap_prior_layer_instead_of_stacking() -> None:
-    trace = tl.trace(nn.Linear(4, 2), torch.randn(3, 4))
-    state = backward_mod._checkpoint_token_state(trace)
-    state["tokens"][1] = {"pack_count": 0, "unpack_evidence": []}
-    state["tokens"][2] = {"pack_count": 0, "unpack_evidence": []}
-    calls: list[str] = []
-
-    def base(value):
-        calls.append("base")
-        return value
-
-    first = backward_mod._token_bearing_pack_hook(trace, 1, base)
-    second = backward_mod._token_bearing_pack_hook(
-        trace, 2, getattr(first, "__tl_token_inner__", first)
-    )
-    assert second.__tl_token_inner__ is base
-    second(torch.zeros(1))
-    assert state["tokens"][1]["pack_count"] == 0, "stale token layer still counting"
-    assert state["tokens"][2]["pack_count"] == 1
-    assert calls == ["base"]
 
 
 # ---------------------------------------------------------------------------

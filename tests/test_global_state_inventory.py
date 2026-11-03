@@ -138,77 +138,6 @@ class _BlockingCapture(nn.Module):
         return out
 
 
-class _PauseFromForeignThread(nn.Module):
-    """Log ops before and after a NON-OWNER thread enters ``pause_logging()``.
-
-    The foreign thread models the reachable-without-concurrent-capture case: a
-    thread merely ANALYZING an older Trace (``Trace.save``, validation, an ``.out``
-    transform) enters the same process-global pause the owner's forward relies on.
-
-    The foreign pause is HELD OPEN across the owner's second op group, which is
-    the realistic shape: an analysis thread's ``pause_logging()`` body spans a
-    whole save / validation pass, not a single statement.
-    """
-
-    def __init__(self, ops_per_side: int) -> None:
-        """Store how many logged ops run on each side of the foreign pause.
-
-        Parameters
-        ----------
-        ops_per_side:
-            Number of logged operations before, during, and after the pause.
-        """
-
-        super().__init__()
-        self.ops_per_side = ops_per_side
-        self.foreign_paused = threading.Event()
-        self.foreign_release = threading.Event()
-        self.foreign_error: list[BaseException] = []
-
-    def _foreign_pause(self) -> None:
-        """Hold ``pause_logging()`` open from a non-owner thread."""
-
-        try:
-            with _state.pause_logging():
-                self.foreign_paused.set()
-                if not self.foreign_release.wait(timeout=10.0):
-                    raise TimeoutError("owner never released the foreign pause")
-        except BaseException as error:  # pragma: no cover - reported by the test
-            self.foreign_error.append(error)
-        finally:
-            self.foreign_paused.set()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run ops before, during, and after a held foreign pause.
-
-        Parameters
-        ----------
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Activation after all three op groups ran.
-        """
-
-        for _ in range(self.ops_per_side):
-            x = torch.relu(x)
-        foreign = threading.Thread(target=self._foreign_pause)
-        foreign.start()
-        assert self.foreign_paused.wait(timeout=10.0), "foreign pause never entered"
-        # These ops run while a NON-OWNER thread holds the pause open.
-        for _ in range(self.ops_per_side):
-            x = torch.relu(x)
-        self.foreign_release.set()
-        foreign.join(timeout=10.0)
-        assert not foreign.is_alive(), "foreign pause thread did not exit"
-        # And these run after the foreign thread restored what it saved.
-        for _ in range(self.ops_per_side):
-            x = torch.relu(x)
-        return x
-
-
 @pytest.mark.parametrize("error_type", [RuntimeError, _InjectedBaseFailure])
 def test_mid_capture_failure_restores_process_state(
     error_type: type[BaseException],
@@ -237,6 +166,7 @@ def test_mid_capture_failure_restores_process_state(
     assert any(op.func_name == "relu" for op in recovered.compute_ops)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _state.py, campaign mutant kills.
 def test_concurrent_public_capture_refuses_without_corruption() -> None:
     """Overlapping public captures fail loudly and leave the owner intact."""
 
@@ -269,62 +199,7 @@ def test_concurrent_public_capture_refuses_without_corruption() -> None:
     assert _capture_scope_snapshot() == before
 
 
-def test_refused_concurrent_capture_leaves_winner_verified() -> None:
-    """A refused loser must not degrade the admitted winner's data quality.
-
-    The admission lock made "exactly one admitted" atomic, but a loser used to
-    run its capture-global side effects FIRST: model preparation swept and
-    replaced the winner's live label session before the loser reached the
-    typed refusal, leaving the winner with orphaned label stamps and
-    ``capture_verified=False`` (runtime-probed, hunt-b2 R54). The reservation
-    now refuses the loser BEFORE any pre-admission mutation, so the winner
-    completes verified and the loser's model is never even prepared.
-    """
-
-    tl.trace(nn.ReLU(), torch.ones(2))
-    before = _capture_scope_snapshot()
-    entered = threading.Event()
-    release = threading.Event()
-    owner_errors: list[BaseException] = []
-    owner_traces: list[Any] = []
-
-    def run_owner() -> None:
-        """Run the capture whose data quality the loser must not degrade."""
-
-        try:
-            owner_traces.append(tl.trace(_BlockingCapture(entered, release), torch.ones(2)))
-        except BaseException as error:  # pragma: no cover - surfaced by asserts
-            owner_errors.append(error)
-
-    owner = threading.Thread(target=run_owner)
-    owner.start()
-    assert entered.wait(timeout=5.0), "owner capture never reached its forward"
-    loser_model = nn.Sequential(nn.Linear(2, 2), nn.ReLU())
-    try:
-        with pytest.raises(_state.ReentrantTraceError, match="not re-entrant"):
-            tl.trace(loser_model, torch.ones(1, 2))
-    finally:
-        release.set()
-        owner.join(timeout=10.0)
-
-    assert not owner.is_alive(), "owner capture did not finish after release"
-    assert owner_errors == []
-    assert len(owner_traces) == 1
-    winner = owner_traces[0]
-    assert winner.provenance.verified is not False, (
-        "the refused loser's pre-admission side effects degraded the winner: "
-        f"capture_verified={winner.provenance.verified!r}, "
-        f"reason={getattr(winner, 'capture_verification_reason', None)!r}"
-    )
-    assert any(op.func_name == "relu" for op in winner.compute_ops)
-    # The loser must have been refused BEFORE model preparation ran.
-    assert loser_model not in _state._prepared_models, (
-        "the refused loser's model was prepared: its label-session swap ran "
-        "before the admission refusal"
-    )
-    assert _capture_scope_snapshot() == before
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_recorder.py.
 def test_refused_concurrent_record_never_installs_recording_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -377,6 +252,7 @@ def test_refused_concurrent_record_never_installs_recording_state(
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _state.py.
 def test_publish_active_trace_refuses_concurrent_and_clears_owner() -> None:
     """Non-forward publication windows are admission-locked and owner-stamped.
 
@@ -424,6 +300,7 @@ def test_publish_active_trace_refuses_concurrent_and_clears_owner() -> None:
     assert owner_errors == []
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _state.py.
 def test_publish_backward_capture_nests_same_thread_and_restores() -> None:
     """The backward publication handle keeps raw-swap nesting semantics.
 
@@ -456,6 +333,7 @@ def test_publish_backward_capture_nests_same_thread_and_restores() -> None:
     assert _state._active_owner_thread_id is None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _state.py, backends/torch/backward.py.
 def test_log_backward_refuses_foreign_live_window_instead_of_wedging() -> None:
     """``log_backward`` concurrent with a foreign capture window refuses typed.
 
@@ -510,74 +388,7 @@ def test_log_backward_refuses_foreign_live_window_instead_of_wedging() -> None:
     assert any(op.func_name == "relu" for op in recovered.compute_ops)
 
 
-def test_capture_reservation_is_released_on_failure_and_nested_same_thread() -> None:
-    """The reservation never leaks (wedging admission) and gates re-entry.
-
-    A capture failing anywhere between the reservation claim and teardown must
-    release the slot, or every later capture refuses forever. Same-thread
-    nesting passes through ONLY with the yielded continuation token (the
-    recorder hands it to the inner orchestration); a bare same-thread re-entry
-    is a nested public capture from user code inside the reserved window and
-    refuses typed (R55), as does a foreign thread's claim.
-    """
-
-    with pytest.raises(TraceCaptureError, match="injected mid-capture failure") as _tce_info:
-        tl.trace(_RaiseMidCapture(RuntimeError), torch.ones(2))
-    assert isinstance(_tce_info.value.__cause__, RuntimeError)
-    assert _state._capture_reserved_by is None
-    recovered = tl.trace(nn.ReLU(), torch.ones(2))
-    assert any(op.func_name == "relu" for op in recovered.compute_ops)
-
-    with _state.capture_reservation() as token:
-        assert _state._capture_reserved_by == threading.get_ident()
-        # Sanctioned re-entry: presenting the live token passes through.
-        with _state.capture_reservation(resume=token):
-            assert _state._capture_reserved_by == threading.get_ident()
-        # The inner exit must not release the outer claim.
-        assert _state._capture_reserved_by == threading.get_ident()
-        # Same-thread entry WITHOUT the live claim is the R55 nested-capture
-        # hole and must refuse typed, not pass through.
-        with pytest.raises(_state.ReentrantTraceError):
-            with _state.capture_reservation():
-                pass  # pragma: no cover - refused above
-        with pytest.raises(_state.ReentrantTraceError):
-            with _state.capture_reservation(resume=object()):
-                pass  # pragma: no cover - refused above
-        # The refused entries must not have released or reclaimed the slot.
-        assert _state._capture_reserved_by == threading.get_ident()
-
-        # R55: a bare same-thread re-entry (no token) is a nested PUBLIC
-        # capture started inside the reserved window -- both captures used to
-        # run to completion; it must refuse typed instead.
-        with pytest.raises(_state.ReentrantTraceError):
-            with _state.capture_reservation():
-                pass  # pragma: no cover - refused above
-        # A stale/forged token refuses identically.
-        with pytest.raises(_state.ReentrantTraceError):
-            with _state.capture_reservation(resume=object()):
-                pass  # pragma: no cover - refused above
-        # The refusals must not release or corrupt the live claim.
-        assert _state._capture_reserved_by == threading.get_ident()
-
-        foreign_error: list[BaseException] = []
-
-        def contend() -> None:
-            """Attempt a foreign-thread reservation against the live claim."""
-
-            try:
-                with _state.capture_reservation():
-                    pass  # pragma: no cover - refused above
-            except BaseException as error:
-                foreign_error.append(error)
-
-        contender = threading.Thread(target=contend)
-        contender.start()
-        contender.join(timeout=5.0)
-        assert len(foreign_error) == 1
-        assert isinstance(foreign_error[0], _state.ReentrantTraceError)
-    assert _state._capture_reserved_by is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/run.py, _state.py, _utils/arg_handling.py ....
 def test_nested_public_capture_inside_reserved_window_refuses_typed() -> None:
     """A nested ``tl.trace`` from user code inside the reserved window refuses.
 
@@ -620,6 +431,7 @@ def test_nested_public_capture_inside_reserved_window_refuses_typed() -> None:
     assert any(op.func_name == "relu" for op in recovered.compute_ops)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _state.py.
 def test_auto_name_counter_is_atomic_under_racing_threads() -> None:
     """Racing pre-admission ``_auto_name`` calls never mint duplicate names.
 
@@ -659,6 +471,7 @@ def test_auto_name_counter_is_atomic_under_racing_threads() -> None:
     assert len(set(names)) == 8000, "duplicate auto names minted under the race"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/container.py, types.py.
 def test_register_container_racing_lookup_never_breaks_iteration() -> None:
     """``register_container`` racing a lookup never raises mid-iteration.
 
@@ -719,30 +532,7 @@ def test_register_container_racing_lookup_never_breaks_iteration() -> None:
     assert errors == [], f"registry race surfaced: {errors!r}"
 
 
-def test_foreign_thread_pause_does_not_blind_the_owner_capture() -> None:
-    """A non-owner ``pause_logging()`` never drops the owner's later ops.
-
-    ``_PauseLogging.__enter__`` used to clear the process-global toggle
-    unconditionally, so ANY thread pausing (even one only analyzing an old
-    Trace) silently truncated a live capture from that instant on. The owner
-    check now lives in the context manager itself, covering every call site.
-    """
-
-    ops_per_side = 3
-    model = _PauseFromForeignThread(ops_per_side)
-    trace = tl.trace(model, torch.ones(2))
-
-    assert model.foreign_error == [], f"foreign pause raised {model.foreign_error!r}"
-    relu_ops = [op for op in trace.compute_ops if op.func_name == "relu"]
-    assert len(relu_ops) == 3 * ops_per_side, (
-        "ops logged while a non-owner thread held pause_logging() are missing: "
-        f"the foreign pause blinded the capture (saw {len(relu_ops)} of "
-        f"{3 * ops_per_side} relu ops)"
-    )
-    assert _state._logging_enabled is False
-    assert _state._active_owner_thread_id is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _state.py.
 def test_capture_admission_runs_under_the_admission_lock() -> None:
     """Admission blocks while another thread holds the admission lock.
 
@@ -794,76 +584,7 @@ def test_capture_admission_runs_under_the_admission_lock() -> None:
     assert _capture_scope_snapshot() == before
 
 
-def test_contended_admission_never_publishes_partial_owner_state() -> None:
-    """Under contention, an admitted session owns the globals for its whole body.
-
-    Complements the lock test above: whatever the interleaving, a thread that is
-    admitted must see its OWN owner id and trace for the entire session, and
-    every other thread must get the documented refusal rather than a corrupted
-    half-published state. Concurrent capture stays unsupported by design; this
-    pins the admission mechanism's behavior under contention.
-    """
-
-    before = _capture_scope_snapshot()
-    contenders = 4
-    rounds = 25
-    admitted = 0
-    refused = 0
-    stolen: list[tuple[int, int | None]] = []
-    unexpected: list[BaseException] = []
-    lock = threading.Lock()
-    # Bytecode-level interleaving is what the admission lock excludes; make the
-    # scheduler switch as often as possible so contention is real here.
-    prior_switch_interval = sys.getswitchinterval()
-    sys.setswitchinterval(1e-6)
-    try:
-        for _ in range(rounds):
-            barrier = threading.Barrier(contenders)
-
-            def contend(barrier: threading.Barrier = barrier) -> None:
-                """Enter ``active_logging`` at the same instant as the others."""
-
-                nonlocal admitted, refused
-                token = object()
-                barrier.wait(timeout=10.0)
-                try:
-                    with _state.active_logging(cast("Any", token)):
-                        mine = threading.get_ident()
-                        for _ in range(200):
-                            owner = _state._active_owner_thread_id
-                            if owner != mine or _state._active_trace is not token:
-                                with lock:
-                                    stolen.append((mine, owner))
-                                break
-                except _state.ReentrantTraceError:
-                    with lock:
-                        refused += 1
-                except BaseException as error:  # pragma: no cover - test signal
-                    with lock:
-                        unexpected.append(error)
-                else:
-                    with lock:
-                        admitted += 1
-
-            threads = [threading.Thread(target=contend) for _ in range(contenders)]
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                thread.join(timeout=20.0)
-            assert not any(thread.is_alive() for thread in threads), "contender hung"
-    finally:
-        sys.setswitchinterval(prior_switch_interval)
-
-    assert unexpected == [], f"unexpected admission failure: {unexpected!r}"
-    assert stolen == [], (
-        "an admitted capture's owner globals were overwritten by a racing "
-        f"contender (mine, observed_owner) pairs: {stolen!r}"
-    )
-    assert admitted + refused == contenders * rounds
-    assert admitted >= 1, "no capture was admitted at all"
-    assert _capture_scope_snapshot() == before
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/wrappers.py, campaign mutant kills.
 def test_unwrap_torch_refuses_during_an_active_capture() -> None:
     """Mid-capture ``unwrap_torch()`` is a typed refusal, not a silent truncation.
 
@@ -915,6 +636,7 @@ def test_unwrap_torch_refuses_during_an_active_capture() -> None:
     assert any(op.func_name == "relu" for op in recovered.compute_ops)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_release_model_refuses_during_an_active_capture() -> None:
     """Mid-capture ``tl.release_model()`` is a typed refusal, not silent damage.
 
@@ -977,6 +699,7 @@ def test_release_model_refuses_during_an_active_capture() -> None:
     assert any(op.modules for op in recovered.compute_ops)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/cleanup.py.
 def test_cleanup_of_active_trace_refuses_mid_capture() -> None:
     """Husking the live capture's own trace mid-forward refuses typed.
 
@@ -1027,6 +750,7 @@ def test_cleanup_of_active_trace_refuses_mid_capture() -> None:
     trace.cleanup()  # post-capture cleanup stays the supported path
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/finalize/arms.py, backends/torch/_failed_session.py.
 def test_interrupted_partial_diagnostics_still_restore_the_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

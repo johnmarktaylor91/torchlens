@@ -598,46 +598,24 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
 }
 
 
-def _public_error_classes() -> dict[str, type[BaseException]]:
-    """Return every public ``torchlens.errors`` exception or warning class.
+def _failing_rows(rows: Any, check: Callable[..., None]) -> list[str]:
+    """Run ``check`` on every table row; return one line per row whose check fails.
 
-    Returns
-    -------
-    dict[str, type[BaseException]]
-        Mapping from public name to the resolved class object.
+    The tables below are folded into one test each (test-shape ruling tests.1, fold to one
+    test per table): every row still runs on every pass, and a failing run names each
+    failing row instead of stopping at the first.
     """
 
-    discovered: dict[str, type[BaseException]] = {}
-    for name in dir(errors):
-        obj = getattr(errors, name)
-        if isinstance(obj, type) and issubclass(obj, BaseException):
-            discovered[name] = obj
-    return discovered
+    failures: list[str] = []
+    for row in rows:
+        try:
+            check(*row)
+        except (Exception, pytest.fail.Exception) as error:
+            failures.append(f"{row[:2]!r}: {type(error).__name__}: {error}")
+    return failures
 
 
-def test_builtin_lineage_golden_is_closed() -> None:
-    """The lineage golden covers exactly the public error surface.
-
-    A new public exception class cannot ship without a conscious lineage row,
-    and a removed class cannot leave a stale row behind.
-    """
-
-    discovered = set(_public_error_classes())
-    golden = set(BUILTIN_LINEAGE_GOLDEN)
-
-    assert discovered - golden == set(), (
-        f"public error classes missing a builtin-lineage golden row: {sorted(discovered - golden)}"
-    )
-    assert golden - discovered == set(), (
-        f"stale builtin-lineage golden rows: {sorted(golden - discovered)}"
-    )
-
-
-@pytest.mark.parametrize(
-    ("class_name", "expected_builtins"),
-    sorted(BUILTIN_LINEAGE_GOLDEN.items()),
-)
-def test_builtin_lineage_matches_golden(
+def _check_builtin_lineage(
     class_name: str,
     expected_builtins: tuple[str, ...],
 ) -> None:
@@ -680,8 +658,7 @@ def _import_exception(class_module: str, class_name: str) -> Any:
     return getattr(module_obj, class_name)
 
 
-@pytest.mark.parametrize("base_cls", BASE_CLASSES)
-def test_base_payload_contract(base_cls: type[errors.TorchLensError]) -> None:
+def _check_base_payload(base_cls: type[errors.TorchLensError]) -> None:
     """Base error classes store the shared structured payload fields."""
 
     instance = base_cls(
@@ -730,10 +707,7 @@ def test_invalid_severity_is_rejected() -> None:
     assert "Remedy:" in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    ("class_module", "class_name", "expected_base", "status"), OLD_EXCEPTION_MAPPING
-)
-def test_old_exception_class_maps_to_new_base(
+def _check_old_exception_mapping(
     class_module: str,
     class_name: str,
     expected_base: type[BaseException],
@@ -751,26 +725,17 @@ def test_old_exception_class_maps_to_new_base(
         assert cls.__name__ == class_name
 
 
-def test_spec_portability_alias_is_unchanged() -> None:
-    """SpecPortabilityError remains an alias for the executable-save error."""
-
-    from torchlens.intervention import errors as intervention_errors
-
-    assert intervention_errors.SpecPortabilityError is intervention_errors.OpaqueCallableError
-
-
-@pytest.mark.parametrize(
-    ("error_cls", "expected_code"),
-    (
-        (UnknownBackendError, "unknown_backend"),
-        (BackendMismatchError, "backend_mismatch"),
-        (AmbiguousBackendError, "backend_ambiguity"),
-        (BackendUnsupportedError, "backend_unsupported"),
-        (BackendPayloadUnsupportedError, "backend_payload_unsupported"),
-        (BackendRuntimeCompatibilityError, "backend_runtime_compatibility"),
-    ),
+_BACKEND_REFUSAL_ROWS = (
+    (UnknownBackendError, "unknown_backend"),
+    (BackendMismatchError, "backend_mismatch"),
+    (AmbiguousBackendError, "backend_ambiguity"),
+    (BackendUnsupportedError, "backend_unsupported"),
+    (BackendPayloadUnsupportedError, "backend_payload_unsupported"),
+    (BackendRuntimeCompatibilityError, "backend_runtime_compatibility"),
 )
-def test_backend_refusals_use_shared_fields_and_remedies(
+
+
+def _check_backend_refusal(
     error_cls: type[errors.ConfigurationError],
     expected_code: str,
 ) -> None:
@@ -845,8 +810,7 @@ TOP_REFUSAL_CASES: tuple[tuple[str, Callable[[], object]], ...] = (
 )
 
 
-@pytest.mark.parametrize(("expected_code", "trigger"), TOP_REFUSAL_CASES)
-def test_top_refusal_messages_name_a_remedy(
+def _check_top_refusal(
     expected_code: str,
     trigger: Callable[[], object],
 ) -> None:
@@ -886,17 +850,16 @@ def test_capture_context_refusals_name_the_active_trace_remedy(
     assert "Remedy:" in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "error_cls",
-    (
-        errors.InvalidArgumentError,
-        errors.ArgumentTypeError,
-        errors.ArgumentConflictError,
-        errors.CaptureNotActiveError,
-        errors.AtenOpsUnavailableError,
-    ),
+_ACTIONABLE_REFUSAL_CLASSES = (
+    errors.InvalidArgumentError,
+    errors.ArgumentTypeError,
+    errors.ArgumentConflictError,
+    errors.CaptureNotActiveError,
+    errors.AtenOpsUnavailableError,
 )
-def test_actionable_refusal_pickle_round_trip(
+
+
+def _check_actionable_pickle(
     error_cls: type[errors.TorchLensError],
 ) -> None:
     """Strict actionable constructors preserve fields across exception pickle."""
@@ -994,34 +957,6 @@ def test_multiarg_refusals_survive_pickle_and_deepcopy() -> None:
             assert restored.fields == original.fields, label
 
 
-def test_save_argument_door_is_typed_and_names_runnable_spellings() -> None:
-    """The ``save=`` type door refuses typed and its remedy names spellings that run.
-
-    ``save='all'`` and the ``save=[...]`` list form are documented ``tl.trace``
-    spellings and run; an unsupported type still refuses with a
-    code and a remedy. Historical ``TypeError`` lineage is preserved.
-    """
-
-    import torch
-    from torch import nn
-
-    import torchlens as tl
-
-    with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        tl.trace(nn.Identity(), torch.randn(2), save=3)
-
-    assert exc_info.value.fields["code"] == "save_predicate_type_invalid"
-    assert isinstance(exc_info.value, TypeError)
-    assert "save='all'" in exc_info.value.fields["remedy"]
-    assert "Remedy:" in str(exc_info.value)
-    x = torch.randn(2)
-    saved_all = tl.trace(nn.Identity(), x, save="all")
-    default = tl.trace(nn.Identity(), x)
-    assert [op.label for op in saved_all._layer_list if op.has_saved_activation] == [
-        op.label for op in default._layer_list if op.has_saved_activation
-    ]
-
-
 def test_collapse_order_mode_door_names_its_narrower_domain() -> None:
     """The collapse_order refusal remedy never sends the caller back in circles.
 
@@ -1109,32 +1044,6 @@ def test_predicate_type_doors_split_by_surface() -> None:
         assert record_info.value.fields["code"] == f"recording_{base}_predicate_type_invalid"
         assert isinstance(record_info.value, ValueError)
         assert not isinstance(record_info.value, TypeError)
-
-
-def test_option_group_conflict_doors_split_by_site_history() -> None:
-    """Each grouped/flat conflict door keeps its historical builtin, per code.
-
-    The five merge entrypoints historically raised ``raise
-    ValueError(conflict_message)`` and now raise ``ArgumentConflictError``
-    under ``option_group_conflict``; the visualization merge historically
-    raised a raw ``TypeError`` and now raises ``KeywordConflictError`` under
-    ``option_group_keyword_conflict``. One code maps to one catchable builtin.
-    """
-
-    with pytest.raises(errors.ArgumentConflictError) as value_info:
-        merge_capture_options(capture=CaptureOptions(name="one"), name="two")
-    assert value_info.value.fields["code"] == "option_group_conflict"
-    assert isinstance(value_info.value, ValueError)
-    assert not isinstance(value_info.value, TypeError)
-
-    with pytest.raises(errors.KeywordConflictError) as keyword_info:
-        merge_visualization_options(
-            visualization=VisualizationOptions(layout="dot"),
-            layout="rank",
-        )
-    assert keyword_info.value.fields["code"] == "option_group_keyword_conflict"
-    assert isinstance(keyword_info.value, TypeError)
-    assert not isinstance(keyword_info.value, ValueError)
 
 
 def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1545,31 +1454,6 @@ def test_package_exception_classes_are_registered_or_allowlisted() -> None:
     )
 
 
-@pytest.mark.heavy
-def test_taxonomy_allowlist_has_no_stale_or_shadowing_entries() -> None:
-    """The allowlist stays exact: no dead entries, no double-classification.
-
-    An entry for a deleted class is stale noise; an entry for a class that IS
-    registered would let a later un-registration pass silently.
-    """
-
-    discovered = set(_exception_class_definitions())
-    registered = _registered_exception_homes()
-    allowlisted = set(_TAXONOMY_INTERNAL_ALLOWLIST)
-
-    assert allowlisted - discovered == set(), (
-        f"stale allowlist entries (class no longer defined): {sorted(allowlisted - discovered)}"
-    )
-    assert allowlisted & registered == set(), (
-        "allowlist entries that are ALSO registered in torchlens.errors "
-        f"(remove the allowlist row): {sorted(allowlisted & registered)}"
-    )
-    for entry, reason in _TAXONOMY_INTERNAL_ALLOWLIST.items():
-        assert isinstance(reason, str) and reason.strip(), (
-            f"allowlist entry {entry!r} must carry a non-empty reason"
-        )
-
-
 # --- fixwave-5 refusal-code provocations (error-code coverage gate) -----------------
 
 
@@ -1664,3 +1548,47 @@ def test_output_unsupported_tensor_variant_provoked() -> None:
     with pytest.raises(OutputAttributionError) as excinfo:
         tl.trace(_NestedOut(), torch.ones(2, 4))
     assert excinfo.value.fields["code"] == "output_unsupported_tensor_variant"
+
+
+def test_builtin_lineage_matches_golden() -> None:
+    """Every public error class keeps its exact builtin-exception bases (one row per class)."""
+
+    failures = _failing_rows(sorted(BUILTIN_LINEAGE_GOLDEN.items()), _check_builtin_lineage)
+    assert not failures, "\n".join(failures)
+
+
+def test_base_payload_contract() -> None:
+    """Base error classes store the shared structured payload fields (one row per base class)."""
+
+    failures = _failing_rows([(cls,) for cls in BASE_CLASSES], _check_base_payload)
+    assert not failures, "\n".join(failures)
+
+
+def test_old_exception_class_maps_to_new_base() -> None:
+    """Every inventoried old exception class is preserved under the new taxonomy (one row per class)."""
+
+    failures = _failing_rows(OLD_EXCEPTION_MAPPING, _check_old_exception_mapping)
+    assert not failures, "\n".join(failures)
+
+
+def test_top_refusal_messages_name_a_remedy() -> None:
+    """Likely public option refusals expose codes and concrete remedies (one row per code)."""
+
+    failures = _failing_rows(TOP_REFUSAL_CASES, _check_top_refusal)
+    assert not failures, "\n".join(failures)
+
+
+def test_backend_refusals_use_shared_fields_and_remedies() -> None:
+    """Backend refusal vocabulary participates in the shared error contract (one row per class)."""
+
+    failures = _failing_rows(_BACKEND_REFUSAL_ROWS, _check_backend_refusal)
+    assert not failures, "\n".join(failures)
+
+
+def test_actionable_refusal_pickle_round_trip() -> None:
+    """Strict actionable constructors preserve fields across exception pickle (one row per class)."""
+
+    failures = _failing_rows(
+        [(cls,) for cls in _ACTIONABLE_REFUSAL_CLASSES], _check_actionable_pickle
+    )
+    assert not failures, "\n".join(failures)

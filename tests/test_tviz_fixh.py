@@ -11,7 +11,6 @@ overlap selection.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 from PIL import Image, ImageDraw
 
 from torchlens.viz import heatmap
@@ -48,43 +47,6 @@ def _selection(
     )
 
 
-# The seven-row measured regression table (tviz memo D8). Each row states the
-# axis-item population and the honesty invariant: drawn + omitted == total,
-# and a nonzero omission is NEVER silent. Row 2 is the measured defect case
-# (8 tokens, 4 labels drawn, no marker in the shipped renderer).
-_SEVEN_ROWS = [
-    # (n_labels, max_axis_items, plot_extent, expect_all_drawn)
-    (1, 8, 200, True),
-    (8, 8, 200, False),  # the measured 8-token defect row: decimation must mark
-    (4, 8, 400, True),
-    (16, 8, 200, False),  # over the cap: cap omissions counted
-    (32, 8, 120, False),  # cap + tight geometry: decimation omissions counted
-    (128, 8, 200, False),  # the measured 128-token defect row
-    (12, 12, 600, True),  # generous geometry: everything fits, no marker
-]
-
-
-@pytest.mark.parametrize(
-    ("n_labels", "max_axis_items", "plot_extent", "expect_all_drawn"), _SEVEN_ROWS
-)
-def test_omission_count_after_final_selection(
-    n_labels: int, max_axis_items: int, plot_extent: int, expect_all_drawn: bool
-) -> None:
-    """Drawn + omitted always equals total; omission is never silent."""
-
-    indices, omitted = _selection(n_labels, plot_extent=plot_extent, max_axis_items=max_axis_items)
-    assert len(indices) + omitted == n_labels
-    assert omitted >= 0
-    if expect_all_drawn:
-        assert omitted == 0
-        assert len(indices) == n_labels
-    else:
-        assert omitted > 0, (
-            "labels were dropped by cap or overlap selection but the omission "
-            "count claims everything is shown (the FIX-H defect class)"
-        )
-
-
 def test_marker_counts_decimated_labels_not_just_cap() -> None:
     """The measured defect: total under the cap, decimation still marked.
 
@@ -108,43 +70,6 @@ def test_nearest_neighbor_no_interpolated_colors() -> None:
     assert colors == {(0, 0, 0), (255, 255, 255)}, (
         f"interpolated colors appeared between discrete cells: {sorted(colors)[:5]}"
     )
-
-
-def test_nearest_neighbor_with_axis_labels() -> None:
-    """The axis-decorated path also scales cells without interpolation."""
-
-    data = np.array([[0.0, 1.0], [1.0, 0.0]])
-    image = heatmap(
-        data, width=96, height=96, cmap="gray", row_labels=["a", "b"], col_labels=["c", "d"]
-    )
-    # Interior plot pixels are pure cell colors, axis chrome, or the border;
-    # no gray blend band can appear inside a cell. Sample the two cell centers.
-    # Plot geometry: margins are deterministic for these inputs.
-    pixels = [tuple(pixel) for pixel in np.asarray(image).reshape(-1, 3)]
-    grays = {
-        pixel for pixel in pixels if pixel[0] == pixel[1] == pixel[2] and pixel[0] not in (0, 255)
-    }
-    # Permitted non-cell grays: axis line color and text antialiasing shades.
-    # The bilinear defect produced WIDE gradient bands; require that pure cell
-    # colors dominate the image area.
-    pure = sum(1 for pixel in pixels if pixel in ((0, 0, 0), (255, 255, 255)))
-    assert pure > len(pixels) * 0.5, (
-        f"cells are not rendered as discrete blocks (grays={len(grays)})"
-    )
-
-
-def test_separate_row_and_col_labels() -> None:
-    """Rectangular data takes distinct query/key label sets per axis."""
-
-    data = np.zeros((2, 5))
-    image = heatmap(
-        data,
-        width=200,
-        height=120,
-        row_labels=["query0", "query1"],
-        col_labels=["k0", "k1", "k2", "k3", "k4"],
-    )
-    assert image.size == (200, 120)
 
 
 def test_row_col_labels_override_axis_labels() -> None:

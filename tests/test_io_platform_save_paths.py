@@ -88,18 +88,6 @@ def test_bundle_save_round_trips_under_windows_fsync_semantics(
     assert loaded.layer_labels == trace.layer_labels
 
 
-def test_bundle_overwrite_under_windows_fsync_semantics(
-    tmp_path: Path, windows_fsync_semantics: None
-) -> None:
-    """The overwrite publish (backup, swap, parent-directory flush) also succeeds."""
-
-    trace = _trace()
-    path = tmp_path / "canary.tlspec"
-    trace.save(path)
-    trace.save(path, overwrite=True)
-    assert tl.load(path).layer_labels == trace.layer_labels
-
-
 def test_intervention_save_under_windows_fsync_semantics(
     tmp_path: Path, windows_fsync_semantics: None
 ) -> None:

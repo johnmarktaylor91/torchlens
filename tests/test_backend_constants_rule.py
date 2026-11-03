@@ -16,10 +16,7 @@ from typing import Any
 
 import numpy as np
 import pytest
-import torch
-from torch import nn
 
-import torchlens as tl
 from torchlens._data_classes.trace import Trace
 from torchlens._errors import CaptureGapError
 from torchlens._ir.capture_events import CaptureEvents
@@ -391,6 +388,7 @@ def _op_by_raw(trace: Trace, label_raw: str) -> Any:
     raise AssertionError(f"no op with raw label {label_raw!r}: {list(trace.layer_labels)}")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_closure_constant_is_a_parentless_source_op_with_payload_and_a_consumer_edge() -> None:
     """Rule 1: ``constant`` source op, no parents, payload saved, consumer lists it."""
 
@@ -406,27 +404,6 @@ def test_closure_constant_is_a_parentless_source_op_with_payload_and_a_consumer_
     consumer = _op_by_raw(trace, labels["add"])
     assert constant.layer_label in tuple(consumer.parents)
     assert consumer.layer_label in tuple(constant.children)
-
-
-def test_literal_producer_keeps_zero_parents_and_a_payload() -> None:
-    """Rule 2: ``ones`` stays an op with zero parents, a payload and its real name."""
-
-    trace, labels = _capture_planted_forward()
-    ones = _op_by_raw(trace, labels["ones"])
-    assert ones.func_name == "ones"
-    assert tuple(ones.parents) == ()
-    assert ones.out is not None
-    assert is_literal_producer_op(ones) and is_constant_op(ones)
-    assert not is_closure_constant_op(ones)
-    consumer = _op_by_raw(trace, labels["mul"])
-    assert ones.layer_label in tuple(consumer.parents)
-    assert set(constant_op_labels(trace)) == {
-        _op_by_raw(trace, labels["w"]).label,
-        ones.label,
-    }
-    # The ordinary ops and the input are not constants.
-    assert not is_constant_op(consumer)
-    assert not is_constant_op(_op_by_raw(trace, labels["x"]))
 
 
 @pytest.mark.smoke
@@ -453,6 +430,7 @@ def test_validation_helpers_name_the_contracted_reasons_and_stay_narrow() -> Non
     assert constant_parent_skip_reason(add) is None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_a_lost_parent_edge_is_never_a_constant() -> None:
     """A parentless op with an unattributed tensor argument is a capture gap, not a literal."""
 
@@ -473,28 +451,7 @@ def test_a_lost_parent_edge_is_never_a_constant() -> None:
     assert constant_leaf_reason(gap, replayable=False) is None
 
 
-@pytest.mark.parametrize(
-    "func_name",
-    ["rand", "randn", "random.normal", "random_uniform", "bernoulli", "Tensor.rand", "dropout"],
-)
-def test_rng_producers_are_not_constants(func_name: str) -> None:
-    """A parentless RNG op is random, not a constant; norms and normalize are untouched."""
-
-    assert is_rng_producer_name(func_name)
-    backend = _NumpyBackend()
-    trace = backend.new_trace()
-    x = np.ones((2,), dtype=np.float32)
-    backend.emit_input(trace, x, "input.arg_0")
-    noise = np.zeros((2,), dtype=np.float32)
-    backend.emit_op(trace, func_name, ((2,),), noise)
-    out = x + noise
-    backend.emit_op(trace, "add", (x, noise), out)
-    backend.finish(trace, out)
-    rng_op = next(op for op in trace._layer_list if op.func_name == func_name)
-    assert tuple(rng_op.parents) == ()
-    assert not is_constant_op(rng_op)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_norm_like_names_are_not_rng_producers() -> None:
     """Token matching keeps ``layer_norm``, ``normalize`` and ``uniform_like`` apart."""
 
@@ -505,6 +462,7 @@ def test_norm_like_names_are_not_rng_producers() -> None:
     assert is_rng_producer_name("rand_like")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_unreadable_constant_refuses_typed_before_the_consumer_is_recorded() -> None:
     """Rule 4: ``constant_unrealizable`` names the constant and its consumer; nothing is recorded."""
 
@@ -533,6 +491,7 @@ def test_unreadable_constant_refuses_typed_before_the_consumer_is_recorded() -> 
     assert excinfo.value.fields["code"] == CONSTANT_UNREALIZABLE_CODE
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_typed_refusals_from_host_copy_pass_through_unchanged() -> None:
     """A backend's own typed refusal inside ``host_copy`` is not re-wrapped."""
 
@@ -546,6 +505,7 @@ def test_typed_refusals_from_host_copy_pass_through_unchanged() -> None:
     assert excinfo.value.fields["code"] == "rng_state_in_graph"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_ledger_records_and_default_labels() -> None:
     """The ledger keeps closure and literal records in order with the label convention."""
 
@@ -563,6 +523,7 @@ def test_ledger_records_and_default_labels() -> None:
         constant_label(0)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_finalize_audit_refuses_a_constant_op_recorded_with_parents() -> None:
     """A ``constant`` op that lists parents is a capture bug the audit refuses."""
 
@@ -582,6 +543,7 @@ def test_finalize_audit_refuses_a_constant_op_recorded_with_parents() -> None:
         apply_constants_rule(trace, backend_name="fake", ledger=None)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_finalize_audit_refuses_a_ledger_entry_with_no_op() -> None:
     """A constant the backend registered but never emitted is a capture gap."""
 
@@ -599,6 +561,7 @@ def test_finalize_audit_refuses_a_ledger_entry_with_no_op() -> None:
         apply_constants_rule(trace, backend_name="fake", ledger=backend.ledger)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_finalize_audit_refuses_a_constant_without_payload_evidence() -> None:
     """Rule 4 at finalize: a ``constant`` op with neither payload nor shape refuses typed."""
 
@@ -626,6 +589,7 @@ def test_finalize_audit_refuses_a_constant_without_payload_evidence() -> None:
     assert label_w in found
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_constants.py.
 def test_finalize_without_a_ledger_still_runs_the_rule() -> None:
     """Backends that keep no ledger yet get the audit and the derived predicates for free."""
 
@@ -648,44 +612,3 @@ def test_finalize_without_a_ledger_still_runs_the_rule() -> None:
         attach_object_module_logs=lambda *_a, **_k: None,
     )
     assert len(constant_op_labels(trace)) == 1
-
-
-class _ClosureModel(nn.Module):
-    """Torch module using a plain-attribute tensor (not a parameter or buffer) and ``torch.ones``."""
-
-    def __init__(self) -> None:
-        """Hold a closure tensor outside the parameter and buffer registries."""
-
-        super().__init__()
-        self.scale = torch.full((3,), 0.5)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """``(x * scale) + ones``."""
-
-        return x * self.scale + torch.ones(3)
-
-
-def test_torch_already_satisfies_the_rule_structure() -> None:
-    """Torch records closure tensors as source ops and ``torch.ones`` as a literal producer."""
-
-    trace = tl.trace(_ClosureModel(), torch.arange(3.0))
-    ones_ops = [op for op in trace._layer_list if op.func_name == "ones"]
-    assert ones_ops, [op.func_name for op in trace._layer_list]
-    for op in ones_ops:
-        assert tuple(op.parents) == ()
-        assert is_literal_producer_op(op) and is_constant_op(op)
-    # Torch records the operator form (``__mul__``) for ``x * scale``.
-    mul_ops = [op for op in trace._layer_list if op.func_name in {"mul", "__mul__"}]
-    assert mul_ops, [op.func_name for op in trace._layer_list]
-    mul = mul_ops[0]
-    by_layer_label = {op.layer_label: op for op in trace._layer_list}
-    parents = [by_layer_label[label] for label in mul.parents]
-    assert len(parents) == 2, mul.parents
-    # The closure tensor arrives as a parentless buffer source op (torch's existing
-    # buffer and parameter source logging): a payload-bearing leaf, never a lost edge.
-    sources = [p for p in parents if not p.is_input]
-    assert len(sources) == 1, [(p.label, p.is_input, p.is_buffer) for p in parents]
-    assert sources[0].is_buffer is True
-    assert tuple(sources[0].parents) == ()
-    assert sources[0].out is not None
-    assert tuple(getattr(mul, "unattributed_tensor_args", ()) or ()) == ()

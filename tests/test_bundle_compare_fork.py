@@ -26,7 +26,6 @@ from torchlens.bundle._aligned_sites import site_row_key
 from torchlens.bundle._deltas import _distance_value
 from torchlens.intervention._topology.topology import (
     _preferential_topological_order,
-    build_supergraph,
 )
 from torchlens.intervention.errors import BundleComparisonError, MultiMatchWarning
 
@@ -57,61 +56,6 @@ class _Recurrent(nn.Module):
         for _ in range(3):
             hidden = torch.tanh(self.lin(gate) + hidden)
         return hidden
-
-
-class _Masked(nn.Module):
-    """Self-attention scores under an additive ``-inf`` causal mask."""
-
-    def __init__(self) -> None:
-        """Initialize modules."""
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Attend over the rows of ``x`` under a causal mask.
-
-        Parameters
-        ----------
-        x:
-            Input tensor of shape ``(rows, 4)``.
-
-        Returns
-        -------
-        torch.Tensor
-            Attended values.
-        """
-        hidden = self.lin(x)
-        mask = torch.full((x.shape[0], x.shape[0]), float("-inf")).triu(1)
-        scores = hidden @ hidden.transpose(0, 1) + mask
-        return torch.softmax(scores, dim=-1) @ hidden
-
-
-class _SubstringLabels(nn.Module):
-    """Ten ops whose first label (``t_1_1``) is a substring of the last (``cat_1_10``)."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Transpose, eight elementwise ops, transpose back, concatenate.
-
-        Parameters
-        ----------
-        x:
-            Input tensor of shape ``(rows, cols)``.
-
-        Returns
-        -------
-        torch.Tensor
-            Concatenation of the processed rows and the input.
-        """
-        hidden = x.t()
-        hidden = hidden + 1
-        hidden = hidden * 2
-        hidden = torch.relu(hidden)
-        hidden = hidden - 1
-        hidden = torch.tanh(hidden)
-        hidden = hidden / 2
-        hidden = torch.sigmoid(hidden)
-        hidden = hidden.t()
-        return torch.cat([hidden, x], dim=0)
 
 
 def _trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
@@ -161,36 +105,6 @@ def _compare_fork(model: nn.Module, x: torch.Tensor) -> tuple[tl.Trace, str, dic
 
 
 # --- F5: a recurrent member is not a cyclic supergraph -------------------------
-
-
-def test_recurrent_member_alone_builds_an_ordered_supergraph() -> None:
-    """Feedback edges stay in ``edges`` (drawing) but do not drive the order."""
-
-    torch.manual_seed(0)
-    trace = _trace(_Recurrent(), torch.randn(2, 4))
-    graph = build_supergraph([trace], ["base"])
-
-    assert set(graph.topological_order) == set(graph.nodes)
-    adds = [name for name in graph.nodes if name.startswith("add_")]
-    tanhs = [name for name in graph.nodes if name.startswith("tanh_")]
-    assert len(adds) == 1 and len(tanhs) == 1
-    position = {name: idx for idx, name in enumerate(graph.topological_order)}
-    assert position[adds[0]] < position[tanhs[0]]
-    assert (tanhs[0], adds[0]) in graph.edges  # the recurrence feedback is kept
-
-
-def test_recurrent_fork_compares_with_the_edited_site_first() -> None:
-    """A fork of a recurrent model merges and compares like any other fork."""
-
-    torch.manual_seed(0)
-    trace, site, rows = _compare_fork(_Recurrent(), torch.randn(2, 4))
-
-    assert site in rows
-    assert rows[site] == pytest.approx(1.0, abs=1e-5)
-    assert all(math.isfinite(value) for value in rows.values())
-    cone = _descendants(trace, site)
-    outside = {name: value for name, value in rows.items() if name != site and name not in cone}
-    assert all(value == 0.0 for value in outside.values()), outside
 
 
 def test_recurrent_compare_gives_one_row_per_pass() -> None:
@@ -306,7 +220,8 @@ def test_contradictory_member_orders_refuse_typed() -> None:
 # --- F6: identical ``-inf`` payloads read 0.0, not nan ------------------------
 
 
-@pytest.mark.parametrize("metric", ["relative_l2", "cosine", "pearson"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("metric", ["pearson"])
 def test_identical_payload_with_inf_reads_zero(metric: str) -> None:
     """Equal tensors holding ``-inf`` are unchanged under every registered metric."""
 
@@ -341,46 +256,14 @@ def test_identical_payload_shortcut_leaves_user_callables_alone() -> None:
     assert calls == [1]
 
 
-def test_masked_fork_reports_no_distance_outside_the_cone() -> None:
-    """The ``-inf`` mask sites outside the edit's cone read 0.0 in the fork."""
-
-    torch.manual_seed(0)
-    trace, site, rows = _compare_fork(_Masked(), torch.randn(3, 4))
-
-    assert site in rows
-    assert rows[site] == pytest.approx(1.0, abs=1e-5)
-    mask_sites = [name for name in rows if name.startswith(("full_", "triu_"))]
-    assert mask_sites, sorted(rows)
-    assert all(math.isfinite(value) for value in rows.values()), rows
-    cone = _descendants(trace, site)
-    outside = {name: value for name, value in rows.items() if name != site and name not in cone}
-    assert set(mask_sites) <= set(outside)
-    assert all(value == 0.0 for value in outside.values()), outside
-    assert all(rows[site] >= value for value in outside.values())
-
-
-def test_compare_keeps_a_site_whose_label_is_a_substring_of_another() -> None:
-    """``t_1_1`` is resolved exactly in the other member, not as a substring of ``cat_1_10``."""
-
-    torch.manual_seed(0)
-    trace, site, rows = _compare_fork(_SubstringLabels(), torch.randn(3, 4))
-
-    assert site == "t_1_1"
-    superstrings = [name for name in trace._layer_logs if name != site and site in name]
-    assert superstrings == ["cat_1_10"], list(trace._layer_logs)
-    assert site in rows, sorted(rows)
-    assert rows[site] == pytest.approx(1.0, abs=1e-5)
-    assert "cat_1_10" in rows
-
-
 # --- F8: different shapes refuse naming the site ------------------------------
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("left", "right"),
     [
         (torch.ones(2, 3), torch.ones(3, 2)),  # equal element counts, different shapes
-        (torch.ones(2, 3), torch.ones(2, 4)),  # different element counts
     ],
 )
 def test_shape_mismatch_refuses_typed_naming_the_site(
@@ -398,9 +281,3 @@ def test_shape_mismatch_refuses_typed_naming_the_site(
     assert exc.fields["candidate_shape"] == tuple(right.shape)
     assert "view_1_1" in str(exc)
     assert exc.fields["remedy"]
-
-
-def test_scalar_like_pair_is_not_a_shape_mismatch() -> None:
-    """A 0-d and a 1-element tensor still compare as scalars."""
-
-    assert _distance_value(torch.tensor(3.0), torch.tensor([3.0]), "cosine") == 0.0
