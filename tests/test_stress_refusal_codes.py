@@ -88,9 +88,10 @@ class _SampledAddmm(nn.Module):
         self.right = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        sampled = torch.sparse.sampled_addmm(
-            self.pattern.to_sparse_csr(), self.left(x), self.right(x).t()
-        )
+        # ``to_sparse(layout=...)`` is the recorded spelling; ``Tensor.to_sparse_csr``
+        # is in torch's override-ignored set and is not decorated.
+        pattern = self.pattern.to_sparse(layout=torch.sparse_csr)
+        sampled = torch.sparse.sampled_addmm(pattern, self.left(x), self.right(x).t())
         return sampled.to_dense()
 
 
@@ -116,7 +117,9 @@ class _Spsolve(nn.Module):
         self.linear = nn.Linear(4, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.sparse.spsolve(self.system.to_sparse_csr(), self.linear(x).squeeze(-1))
+        return torch.sparse.spsolve(
+            self.system.to_sparse(layout=torch.sparse_csr), self.linear(x).squeeze(-1)
+        )
 
 
 def _hook_raises(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
