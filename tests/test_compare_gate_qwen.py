@@ -8,7 +8,8 @@ Composition per the real-model matrix row: topology refusal x save/load x
 rank audit, every refusal asserting its stable code (test law 3).
 
 Offline by design: the checkout's pinned revision must already sit in the
-local HF cache (it is a cached matrix row); the test skips, never downloads.
+local HF cache (it is a cached matrix row); the test checks the cache before
+loading and skips visibly when the snapshot is absent, never downloads.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
@@ -72,13 +74,13 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
     monkeypatch.setenv("HF_HUB_OFFLINE", "1")
     monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
 
-    try:
-        tokenizer = transformers.AutoTokenizer.from_pretrained(_MODEL_ID, revision=_REVISION)
-        model = transformers.AutoModelForCausalLM.from_pretrained(
-            _MODEL_ID, revision=_REVISION, dtype=torch.float32
-        )
-    except Exception as exc:  # noqa: BLE001 - cache miss skips, never downloads
-        pytest.skip(f"pinned {_MODEL_ID}@{_REVISION[:8]} not in the local HF cache: {exc}")
+    # Cache presence is checked BEFORE loading: a missing snapshot is a
+    # visible skip, and a cached snapshot that fails to load fails loudly.
+    skip_unless_hf_checkpoint_cached(_MODEL_ID, revision=_REVISION)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(_MODEL_ID, revision=_REVISION)
+    model = transformers.AutoModelForCausalLM.from_pretrained(
+        _MODEL_ID, revision=_REVISION, dtype=torch.float32
+    )
     model.eval()
 
     turn1_ids = _chat_ids(tokenizer, [{"role": "user", "content": "Name one prime number."}])

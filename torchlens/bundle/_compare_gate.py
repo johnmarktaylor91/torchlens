@@ -445,7 +445,7 @@ def _input_shapes(trace: Trace) -> tuple[tuple[int, ...] | None, ...] | None:
 
     try:
         input_ops = list(trace.input_ops)
-    except Exception:  # noqa: BLE001 - a message detail, never a decision input
+    except (KeyError, ValueError):  # the documented lookup failures; a message detail only
         return None
     if not input_ops:
         return None
