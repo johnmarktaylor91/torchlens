@@ -15,10 +15,30 @@ from . import contract
 __all__ = ["summary_schema_errors"]
 
 _SHA256_HEX: Final = re.compile(r"^[0-9a-f]{64}$")
+#: The closed key sets: a summary carries exactly these keys and no other.
+_FINGERPRINT_FIELDS: Final = (
+    *contract.MODEL_FINGERPRINT_HASH_FIELDS,
+    "class_qualname",
+    "extra_metadata",
+)
+_BACKEND_FINGERPRINT_FIELDS: Final = ("backend_fingerprint",)
+_BACKWARD_SUMMARY_FIELDS: Final = (
+    "has_backward_pass",
+    *contract.BACKWARD_SUMMARY_COUNT_FIELDS,
+    "gradient_blob_kinds",
+    "old_bundle_policy",
+)
 
 
 def _is_count(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _unsupported(name: str, value: Mapping[str, Any], allowed: tuple[str, ...]) -> list[str]:
+    """The closed-shape violation for keys of ``value`` outside ``allowed``, if any."""
+
+    extra = sorted(str(key) for key in set(value) - set(allowed))
+    return [f"{name} has unsupported fields {extra}"] if extra else []
 
 
 def summary_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
@@ -58,8 +78,9 @@ def _fingerprint_errors(value: Any) -> list[str]:
             ]
         if not isinstance(inner["backend"], str) or not inner["backend"]:
             return ["model_fingerprint.backend_fingerprint.backend must be a non-empty string"]
-        return []
-    errors = [
+        return _unsupported("model_fingerprint", value, _BACKEND_FINGERPRINT_FIELDS)
+    errors = _unsupported("model_fingerprint", value, _FINGERPRINT_FIELDS)
+    errors += [
         f"model_fingerprint.{name} must be a SHA-256 hex digest"
         for name in contract.MODEL_FINGERPRINT_HASH_FIELDS
         if not isinstance(value.get(name), str) or _SHA256_HEX.match(value[name]) is None
@@ -75,7 +96,7 @@ def _fingerprint_errors(value: Any) -> list[str]:
 def _backward_summary_errors(value: Any) -> list[str]:
     if not isinstance(value, Mapping):
         return ["backward_summary must be an object"]
-    errors: list[str] = []
+    errors = _unsupported("backward_summary", value, _BACKWARD_SUMMARY_FIELDS)
     if not isinstance(value.get("has_backward_pass"), bool):
         errors.append("backward_summary.has_backward_pass must be a bool")
     for name in contract.BACKWARD_SUMMARY_COUNT_FIELDS:
