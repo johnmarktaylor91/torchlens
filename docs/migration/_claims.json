@@ -1451,6 +1451,74 @@
       },
       "last_verified": "2026-11-03",
       "owner": "maintainers"
+    },
+    {
+      "id": "attribution-destinations",
+      "competitor": "Captum; inseq",
+      "neutral_fact": "Captum is where TCAV, influence functions and adversarial attacks live; Captum and inseq provide DeepLift and LIME for text. TorchLens ships a gradient and perturbation attribution set in tl.attribution and a TCAV docs recipe with a causal check, and no influence functions, attacks or text DeepLift and LIME (rulings U20.8 and U22.5, 2026-10-11).",
+      "allowed_public_wording": "'For influence functions and adversarial attacks, use Captum; for DeepLift and LIME on text, use Captum or inseq.'",
+      "narrowed_scope_wording": "Name Captum (and inseq for text) as the destination without describing TorchLens's attribution set.",
+      "limitation_wording": "No attribution-breadth claims.",
+      "required_credit": "Captum (TCAV, influence functions, attacks, DeepLift, LIME); inseq (text attribution).",
+      "evidence_refs": [
+        "docs/migration/where_to_go_instead.md",
+        "docs/recipes/tcav.md"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL a sentence saying TorchLens ships, provides or implements influence functions, adversarial attacks, or DeepLift or LIME for text.",
+      "check": {
+        "scope": [
+          "README.md",
+          "LIMITATIONS.md",
+          "docs/**/*.md",
+          "CHANGELOG.md#unreleased"
+        ],
+        "rules": [
+          {
+            "forbid": "\\btorchlens\\b[^.]{0,60}\\b(ships|provides|implements|includes|offers|supports|computes)\\b[^.]{0,60}\\b(influence\\s+functions?|adversarial\\s+attacks?)\\b",
+            "require": [
+              "\\b(no|not|never|without)\\b[^.]{0,40}\\b(influence|attacks?)\\b|\\buse\\s+captum\\b"
+            ]
+          },
+          {
+            "forbid": "\\btorchlens\\b[^.]{0,60}\\b(ships|provides|implements|includes|offers|supports|computes)\\b[^.]{0,60}\\b(deep\\s?lift|lime)\\b[^.]{0,40}\\btext\\b",
+            "require": [
+              "\\b(no|not|never|without)\\b[^.]{0,40}\\b(deep\\s?lift|lime)\\b|\\bcaptum\\s+(or|and)\\s+inseq\\b"
+            ]
+          }
+        ]
+      },
+      "last_verified": "2026-11-03",
+      "owner": "maintainers"
+    },
+    {
+      "id": "transformers-5-supported-version",
+      "competitor": "none (self-claim about Hugging Face transformers 5 support)",
+      "neutral_fact": "transformers 5.x is called supported only with the tested version named; until the 5.x leg is green and the BERT and DistilBERT collapse goldens are re-recorded it is a candidate (ruling forks.4, 2026-10-12).",
+      "allowed_public_wording": "'Tested with transformers 5.N' (the version the green leg ran), or 'transformers 5 is a candidate'.",
+      "narrowed_scope_wording": "'transformers 5 is a candidate; the tested band is 4.x.'",
+      "limitation_wording": "No transformers 5 claim.",
+      "required_credit": null,
+      "evidence_refs": [
+        "pyproject.toml (hf extra band)"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL 'transformers 5' or 'transformers 5.x' called supported without a named 5.N version.",
+      "check": {
+        "scope": [
+          "README.md",
+          "LIMITATIONS.md",
+          "docs/**/*.md",
+          "CHANGELOG.md#unreleased"
+        ],
+        "rules": [
+          {
+            "forbid": "\\btransformers\\s+(v)?5(\\.x)?\\b(?!\\.\\d)[^.]{0,40}\\bsupport(ed|s)?\\b|\\bsupport\\w*\\s+(for\\s+)?transformers\\s+(v)?5(\\.x)?\\b(?!\\.\\d)"
+          }
+        ]
+      },
+      "last_verified": "2026-11-03",
+      "owner": "maintainers"
     }
   ],
   "check_block_line": "Every check pass over dossiers/boundary copy emits exactly one line: 'CLAIM-LINT: <n_run> run / <n_fail> fail [ids: ...]' (N5).",
