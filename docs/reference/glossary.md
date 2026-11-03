@@ -1066,7 +1066,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   never changes validation or a run report. Not `Trace.state`: `TraceState.PRISTINE` is an
   operational state that an assignment can set and that a func-targeted `intervene=` capture
   keeps. Not validation's pristine-torch oracle, which means running on unwrapped torch
-  functions.
+  functions. How the reading relates to the runnable clean-run promise (a hooked run
+  settles `unverifiable` and marks the trace non-pristine) is stated in
+  [`runnable_model.md`](runnable_model.md), "Clean run, hooked run, and disclosure".
 
 **Rescue re-run**
 : A single disclosed second forward under a `TorchFunctionMode` net that redirects detected stale

@@ -1,8 +1,9 @@
 # Penzai to TorchLens v2 Migration
 
 Status: the penzai repository is archived (read-only since its last push on
-2025-06-22), and treescope, the pretty-printer that grew out of it, has had no commits
-since August 2026. Existing penzai code keeps working; new work needs another home.
+2025-06-22), and treescope, the pretty-printer that grew out of it, is idle (last release
+v0.1.10 on 2025-08-08, last push 2026-06-18, checked 2026-11-03). Existing penzai code keeps
+working; new work needs another home. Other tools' status: [comparable tools](landscape.md).
 
 | Penzai operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |

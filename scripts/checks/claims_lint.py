@@ -261,6 +261,28 @@ PLANTED: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "module outputs; nnsight's .source reaches operations inside a forward.",
         ),
     ),
+    "artifact-compatibility-window": (
+        (
+            "A saved .tlspec artifact stays loadable for five years.",
+            "Artifacts written by this release load for 24 months.",
+        ),
+        (
+            "The intended window for 3.x artifacts is five years; it becomes a promise "
+            "when each prerequisite below is green.",
+        ),
+    ),
+    "comparison-landscape-currency": (
+        (
+            "TransformerLens 3.x is the current release.",
+            "nnsight 0.7 remains the latest stable release.",
+            "penzai is actively maintained.",
+            "Sparse autoencoders are the production monitor of choice.",
+        ),
+        (
+            "TransformerLens v4.3.0 (2026-10-23) is the latest release; penzai is archived; "
+            "probes are the production monitoring instrument and SAEs a discovery tool.",
+        ),
+    ),
 }
 
 
