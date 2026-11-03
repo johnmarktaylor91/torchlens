@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from .._query import _IndexSet, map_adaptive_pool_index_set, map_transposed_convolution_index_set
+from .._query import _IndexSet
+from .._query_maps import map_adaptive_pool_index_set, map_transposed_convolution_index_set
 from .._rules import ReceptiveFieldRuleContext, _RuleResult, register_rf_rule
 from ._utils import int_config, int_tuple, spatial_rank
 

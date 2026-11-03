@@ -17,7 +17,6 @@ from ._query import (
     _AxisSets,
     _build_box,
     _call_index_callback,
-    _call_interval_callback,
     _distinct_terminals,
     _IndexSet,
     _initial_axis_sets,
@@ -30,9 +29,9 @@ from ._query import (
     _validate_descriptor_for_query,
     _WalkKey,
     _WalkStep,
-    map_transposed_convolution_index_set,
 )
 from ._query_causal import EXTENDED_KINDS, map_extended_to_child
+from ._query_maps import _call_interval_callback, map_transposed_convolution_index_set
 from ._reshape_blocks import apply_blocks
 from ._rules import _RuleResult
 from ._types import ReceptiveField, ReceptiveFieldBox, ReceptiveFieldDirection
