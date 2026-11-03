@@ -8,9 +8,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from torchlens._io.format3.decode import CallablePlaceholder
 from torchlens._io.format3.payloads import PayloadStore
-from torchlens._io.format3.recipe import _bind, _RecipeEncoder
+from torchlens._io.format3.recipe import CallablePlaceholder, _bind, _RecipeEncoder
 
 
 def _round_trip(value, root: Path):
