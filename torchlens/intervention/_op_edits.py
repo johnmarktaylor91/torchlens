@@ -1,4 +1,4 @@
-"""Op-level intervention verbs: ``do``, ``attach_hooks``, ``grad_for``, facets.
+"""Op-level intervention verbs: ``do``, ``grad_for``, facets.
 
 Reached from ``Op`` through ``_data_classes._doors.intervention()``.
 """
@@ -21,7 +21,6 @@ __all__ = [
     "grad_for",
     "do",
     "set",
-    "attach_hooks",
 ]
 
 
@@ -110,45 +109,4 @@ def do(
         model=model,
         inputs=inputs,
         intervention=intervention,
-    )
-
-
-def attach_hooks(
-    op: Op,
-    hook: Any = None,
-    *extra_hooks: Any,
-    strict: bool = False,
-    prepend: bool = False,
-    confirm_mutation: bool = False,
-) -> Any:
-    """Attach sticky hooks to this op through the owning Trace.
-
-    Parameters
-    ----------
-    op:
-        The op record this function reads and writes.
-    hook:
-        Hook or helper to attach to this operation.
-    *extra_hooks:
-        Additional hooks to compose on this operation in left-to-right order.
-    strict:
-        Whether site resolution should reject non-portable selectors.
-    prepend:
-        Whether new sticky hooks should run before existing sticky hooks.
-    confirm_mutation:
-        Suppress root mutation warnings when intentionally mutating.
-
-    Returns
-    -------
-    Any
-        Trace or scoped removable hook handle, matching ``Trace.attach_hooks``.
-    """
-
-    return op._source_trace_or_error().attach_hooks(
-        op.layer_label,
-        hook,
-        *extra_hooks,
-        strict=strict,
-        prepend=prepend,
-        confirm_mutation=confirm_mutation,
     )

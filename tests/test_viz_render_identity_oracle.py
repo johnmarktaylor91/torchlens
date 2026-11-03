@@ -823,6 +823,12 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
     dict[str, Any]
         Bytes, structural, plan, schedule, and callback records.
     """
+    # Imported here, below the oracle models: a module-level import would shift
+    # their source lines, which the profiling node labels freeze.
+    from torchlens._visualization._trace_collapse import (
+        collapse_plan as _collapse_plan,
+        collapse_schedule as _collapse_schedule,
+    )
 
     torch.manual_seed(271828)
     model = case.model()
@@ -867,7 +873,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
         if collapsed_calls is not None:
             _assert_exactly_once(collapsed_calls, "collapsed_node_spec_fn")
         plans = {
-            str(mode): _stable_repr(trace._collapse_plan(mode=mode))
+            str(mode): _stable_repr(_collapse_plan(trace, mode=mode))
             for mode in ("auto", "max", 0.25, 0.75)
         }
         return {
@@ -875,7 +881,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
             "dot": source,
             "structural": _structural_digest(source),
             "plans": plans,
-            "schedule": _stable_repr(trace._collapse_schedule()),
+            "schedule": _stable_repr(_collapse_schedule(trace)),
             "callbacks": {
                 "node_spec_fn": sorted((node_calls or {}).values()),
                 "collapsed_node_spec_fn": sorted((collapsed_calls or {}).values()),

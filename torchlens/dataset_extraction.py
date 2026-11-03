@@ -446,6 +446,20 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     Every forward runs under ``torch.no_grad()`` with the model in ``eval``
     mode, and every submodule's exact ``training`` flag is restored
     afterward (exception paths included).
+
+    Examples
+    --------
+    >>> stimuli = torch.randn(4, 3, 8, 8)
+    >>> out = tl.extract_dataset(model, stimuli, ["1"], batch_size=2, progress=False)
+    >>> tuple(out["1"].shape)
+    (4, 4, 8, 8)
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     shards = tl.extract_dataset(
+    ...         model, stimuli, ["1"], batch_size=2, path=tmp, progress=False
+    ...     )
+    ...     len(shards)
+    2
     """
 
     ragged_mode, checksums_level = _validate_run_options(
@@ -582,6 +596,17 @@ class LoadedExtraction:
         keys (never silent padding, never object arrays).
     batch_paths:
         Shard files in ledger consumption order.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     stimuli = torch.randn(4, 3, 8, 8)
+    ...     _ = tl.extract_dataset(model, stimuli, ["1"], path=tmp, progress=False)
+    ...     loaded = tl.dataset_extraction.load_extraction(tmp)
+    ...     shape = tuple(loaded.activations["1"].shape)
+    >>> isinstance(loaded, LoadedExtraction), shape
+    (True, (4, 4, 8, 8))
     """
 
     manifest: dict[str, Any]
@@ -678,6 +703,19 @@ def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, An
         ``extraction_relabel_invalid`` when the artifact is not complete
         or the id list mislengths;
         ``extraction_stimulus_ids_invalid`` for malformed identifiers.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     stimuli = torch.randn(2, 3, 8, 8)
+    ...     _ = tl.extract_dataset(
+    ...         model, stimuli, ["1"], path=tmp, progress=False, stimulus_ids=["a", "b"]
+    ...     )
+    ...     audit = relabel_extraction(tmp, ["first", "second"])
+    ...     ids = tl.dataset_extraction.open_extraction(tmp).stimulus_ids()
+    >>> audit["kind"], ids
+    ('relabel', ['first', 'second'])
     """
 
     container_path = Path(path)

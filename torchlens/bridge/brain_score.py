@@ -83,6 +83,14 @@ class ScoreParts:
         The benchmark's reported error of the score, or ``None``.
     note:
         Why a field is ``None`` when the result does not explain itself.
+
+    Examples
+    --------
+    >>> parts = ScoreParts(raw=0.5, ceiling_normalised=0.25, ceiling=2.0)
+    >>> parts.ceiling_normalised
+    0.25
+    >>> parts.to_dict()["raw"]
+    0.5
     """
 
     raw: float | None
@@ -163,6 +171,14 @@ def score_parts(score: Any) -> ScoreParts:
     TypeError
         If ``score`` is neither a single number nor a ``Score``-shaped
         object whose value is a single number.
+
+    Examples
+    --------
+    >>> parts = tl.bridge.brain_score.score_parts(0.5)
+    >>> parts.raw
+    0.5
+    >>> parts.ceiling_normalised is None
+    True
     """
 
     attrs = getattr(score, "attrs", None)
@@ -242,6 +258,15 @@ def per_layer(
     ValueError
         If an explicitly requested site has no saved tensor out or is not
         stimulus-indexed.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> scores = tl.bridge.brain_score.per_layer(trace, lambda out, layer: 0.5)
+    >>> len(scores) > 0
+    True
+    >>> set(s.raw for s in scores.values())
+    {0.5}
     """
 
     if not callable(benchmark):
@@ -251,8 +276,8 @@ def per_layer(
     for layer in tensor_layers(trace, sites, verb="bridge.brain_score.per_layer"):
         out = getattr(layer, "out")
         label = str(getattr(layer, "layer_label", "layer"))
-        # TODO: connect the real Brain-Score Benchmark API once the offline
-        # vendored fixtures are available in the launch extras matrix.
+        # Scores come from the caller's offline benchmark callable, once per saved
+        # layer; this function does not call the Brain-Score Benchmark API itself.
         scores[label] = score_parts(benchmark(out, layer=label, **kwargs))
     return scores
 
@@ -330,6 +355,13 @@ def get_activations_fn(
     -------
     Callable[[Any, Iterable[str]], OrderedDict[str, Any]]
         The per-batch activations callable.
+
+    Examples
+    --------
+    >>> get_acts = tl.bridge.brain_score.get_activations_fn(model)
+    >>> acts = get_acts([x[0]], ["logits"])
+    >>> acts["logits"].shape
+    (1, 2, 8, 8)
     """
 
     first_param = next(model.parameters(), None)
@@ -466,6 +498,13 @@ def activations_extractor(
     ------
     ImportError
         If ``brainscore_vision`` is not installed (requires Python >= 3.11).
+
+    Examples
+    --------
+    >>> # requires: brainscore_vision
+    >>> wrapper = tl.bridge.brain_score.activations_extractor(model, None, identifier="tiny")
+    >>> wrapper.identifier
+    'tiny'
     """
 
     try:

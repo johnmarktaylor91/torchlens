@@ -1,4 +1,4 @@
-"""FactoredMatrix (vendored from TransformerLens) and the QK/OV circuits (U12.4).
+"""FactoredMatrix (vendored from TransformerLens) and the QK/OV circuits.
 
 The algebra tests compare every factored operation against the dense
 product it represents. The circuit tests compare ``qk_circuit`` /

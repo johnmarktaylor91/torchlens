@@ -852,6 +852,14 @@ def srp(
     -------
     TransformSpec
         The frozen srp step with seed + seed_source recorded (T-C4).
+
+    Examples
+    --------
+    >>> step = tl.transforms.srp(16, seed=0)
+    >>> step.seed, step.seed_source
+    (0, 'explicit')
+    >>> step.apply(torch.randn(4, 3, 8, 8)).shape
+    torch.Size([4, 16])
     """
 
     params = _srp_normalize(
@@ -905,6 +913,13 @@ def srp_realized_facts(
         Realized facts: input extent, effective seed, construction,
         algorithm_version, realized density, realized nnz, matrix digest,
         multiply path, share key/policy/source, distance_claim.
+
+    Examples
+    --------
+    >>> step = tl.transforms.srp(16, seed=0)
+    >>> facts = srp_realized_facts(step, torch.randn(4, 3, 8, 8))
+    >>> facts["input_extent"], facts["distance_claim"]
+    (192, 'empirical_only')
     """
 
     if isinstance(input_spec, torch.Tensor):
@@ -962,6 +977,13 @@ def srp_verify_matrix(
         ``transform_matrix_verification_failed`` when the regenerated
         canonical matrix does not reproduce the cached digest — a
         construction drift, which is never silent (T-C13).
+
+    Examples
+    --------
+    >>> step = tl.transforms.srp(16, seed=0)
+    >>> digest = srp_verify_matrix(step, torch.randn(4, 192))
+    >>> digest.startswith("sha256:")
+    True
     """
 
     if isinstance(input_spec, torch.Tensor):

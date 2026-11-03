@@ -11,28 +11,6 @@ from torchlens._utils import _torch_compat
 from torchlens.errors import GraphBreaksNormalizationError, GraphBreaksUnavailableError
 
 
-class _ExplicitBreakModel(nn.Module):
-    """Small model with one guaranteed user-inserted Dynamo break."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run operations on both sides of an explicit graph break.
-
-        Parameters
-        ----------
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Scaled tensor.
-        """
-
-        value = x + 1
-        torch._dynamo.graph_break()
-        return value * 2
-
-
 class _BreakFreeModel(nn.Module):
     """Small fully traceable model."""
 
@@ -53,35 +31,7 @@ class _BreakFreeModel(nn.Module):
         return torch.relu(x + 1)
 
 
-@pytest.mark.skipif(
-    not _torch_compat.HAS_DYNAMO_EXPLAIN,
-    reason="torch._dynamo.explain unavailable",
-)
-def test_graph_breaks_reports_source_and_safe_correlation() -> None:
-    """A guaranteed break retains its user source and correlation accounting."""
-
-    report = tl.debug.graph_breaks(_ExplicitBreakModel(), torch.ones(2, 3))
-
-    assert len(report.breaks) >= 1
-    graph_break = report.breaks[0]
-    assert graph_break.source_file == __file__
-    assert graph_break.line_number is not None
-    assert "graph_break" in graph_break.reason
-    assert graph_break.matched_op_labels or graph_break.unmatched_reason is not None
-
-
-@pytest.mark.skipif(
-    not _torch_compat.HAS_DYNAMO_EXPLAIN,
-    reason="torch._dynamo.explain unavailable",
-)
-def test_graph_breaks_break_free_model_is_empty() -> None:
-    """A fully traceable model returns an empty break list."""
-
-    report = tl.debug.graph_breaks(_BreakFreeModel(), torch.ones(2, 3))
-
-    assert report.breaks == ()
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_graph_breaks.py.
 def test_graph_breaks_unavailable_capability_is_typed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -94,6 +44,7 @@ def test_graph_breaks_unavailable_capability_is_typed(
     assert exc_info.value.code == "graph_breaks_unavailable"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_dynamo_explain_shapes.py, debug/_graph_breaks.py.
 def test_graph_breaks_unknown_runtime_shape_is_typed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

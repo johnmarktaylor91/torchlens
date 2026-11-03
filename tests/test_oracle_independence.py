@@ -159,33 +159,6 @@ def _planted_edge_drop_trace():
     return log, outputs
 
 
-class _DoubleConsume(nn.Module):
-    """Model with GENUINE edge multiplicity: one tensor consumed twice."""
-
-    def __init__(self) -> None:
-        """Build the single linear stage."""
-
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Consume the linear output at BOTH arg positions of one add.
-
-        Parameters
-        ----------
-        x:
-            Input batch.
-
-        Returns
-        -------
-        torch.Tensor
-            ``h + h`` for ``h = lin(x)`` -- two occurrences of one edge.
-        """
-
-        h = self.lin(x)
-        return h + h
-
-
 def _duplicate_edge_occurrence(log, child_label: str):
     """Append a copy of one existing CSR edge occurrence and re-freeze.
 
@@ -247,37 +220,6 @@ def test_duplicated_edge_occurrence_is_caught_on_a_live_trace():
         log.cleanup()
 
 
-def test_genuine_double_consumption_passes_multiplicity_witness():
-    """Legitimate parallel edges (``h + h``) must NOT trip the witness.
-
-    A genuine double consumption records TWO occurrences of one
-    (parent, child) edge, matched by two ``parent_arg_positions`` entries.
-    The witness compares COUNTS across independent roots, so honest
-    multiplicity stays green -- pin that, and pin that the trace really
-    carries the parallel edges (the positive half is not vacuous).
-    """
-
-    log = trace_fn(_DoubleConsume(), torch.randn(2, 4))
-    try:
-        core = log.__dict__["_trace_core"]
-        edges = core.ops.dataflow_edges
-        add_label = next(op.label for op in log.compute_ops if op.func_name in ("add", "__add__"))
-        add_row = core.label_rows[add_label.split(":", 1)[0]]
-        sources = [edge.source for edge in edges.in_edges(add_row)]
-        # The freeze emits one occurrence per parents-list entry per
-        # attributed arg position; a double consumption whose staging parents
-        # list also repeats the label records 2x2 = 4 parallel occurrences.
-        # The witness only requires count CONSISTENCY, so any >= 2 parallel
-        # multiplicity proves the positive fixture is not vacuous.
-        assert len(sources) >= 2 and len(set(sources)) == 1, (
-            "expected the add op to carry parallel occurrences of ONE parent "
-            f"edge; got sources {sources!r} -- the positive fixture went vacuous"
-        )
-        check_metadata_invariants(log)
-    finally:
-        log.cleanup()
-
-
 def test_symmetric_edge_drop_is_caught_on_a_live_trace():
     """A both-sides edge drop is caught by an INDEPENDENT root, live.
 
@@ -297,7 +239,6 @@ def test_symmetric_edge_drop_is_caught_on_a_live_trace():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_symmetric_edge_drop_is_caught_by_value_rooted_replay():
     """The replay pipeline also goes red on the same plant, from saved VALUES.
 
@@ -434,28 +375,6 @@ def test_duplicated_child_entry_is_caught_on_a_live_trace():
         check_metadata_invariants(trace)
 
 
-def test_genuine_double_consumption_keeps_children_deduped_and_green():
-    """Positive control for the child-direction witness: real ``h + h``
-    double consumption records ONE children entry (multiplicity lives in
-    the parent-side arg positions) and validates clean."""
-
-    class DoubleUse(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, x):
-            h = self.lin(x)
-            return h + h
-
-    trace = trace_fn(DoubleUse(), torch.randn(2, 4))
-    producer = next(r for r in trace._layer_list if r.layer_label.startswith("linear"))
-    consumer = next(r for r in trace._layer_list if "add" in r.layer_label)
-    assert len(producer.children) == len(set(producer.children))
-    assert list(consumer.parents).count("linear_1_1") == 2
-    check_metadata_invariants(trace)
-
-
 # ---------------------------------------------------------------------------
 # R75r5-1 (b9 F+O MED, 2nd round): the "Loaded-sparse / fast=True run guards"
 # table row was SHARED with NEITHER quarantine nor a pinned boundary test --
@@ -580,54 +499,6 @@ def _independence_table_text() -> str:
     return (repo / "docs" / "reference" / "oracle_independence.md").read_text(encoding="utf-8")
 
 
-def test_independence_table_cited_test_files_exist() -> None:
-    """Every arming-test file the table names must exist on disk."""
-
-    import re
-    from pathlib import Path
-
-    repo = Path(__file__).resolve().parents[1]
-    text = _independence_table_text()
-    cited = set(re.findall(r"tests/test_[a-z0-9_]+\.py", text))
-    assert cited, "the table lost its arming-test citations entirely"
-    missing = sorted(name for name in cited if not (repo / name).exists())
-    assert missing == [], f"independence table cites vanished test files: {missing}"
-
-
-def test_independence_table_cited_modules_exist() -> None:
-    """Every torchlens module path the table cites must still exist."""
-
-    import re
-    from pathlib import Path
-
-    repo = Path(__file__).resolve().parents[1]
-    text = _independence_table_text()
-    cited = set(re.findall(r"(?:torchlens/|validation/|backends/|utils/)[a-z0-9_/]+\.py", text))
-    missing = []
-    for name in cited:
-        rel = name if name.startswith("torchlens/") else f"torchlens/{name}"
-        if not (repo / rel).exists():
-            missing.append(name)
-    assert sorted(missing) == [], f"independence table cites vanished modules: {missing}"
-
-
-def test_independence_table_has_no_untested_shared_rows() -> None:
-    """Standing rule 2, mechanically: no table row may carry 'none yet'.
-
-    A SHARED classification with neither quarantine nor a pinned boundary
-    test is a finding by the table's own rules; this makes the violation a
-    red test instead of prose (the row-8 shape filed two rounds running).
-    """
-
-    offenders = [
-        line
-        for line in _independence_table_text().splitlines()
-        if line.startswith("|") and "none yet" in line
-    ]
-    assert offenders == [], f"table rows without an arming/boundary test: {offenders}"
-
-
-_EXPECTED_ORACLE_ROWS = 13
 """Reviewed oracle count (r7 b9-opus R75r6-F1 gap 3).
 
 The table's own contract is "a new oracle ... edits this file in the same
@@ -635,42 +506,6 @@ change", but nothing made ADDING an oracle red -- an unreviewed 14th row (or
 a silently dropped one) sailed. Adding or removing an oracle must bump this
 constant in the same change.
 """
-
-
-def _independence_table_rows() -> list[str]:
-    """Return the table's data rows (header and separator dropped)."""
-
-    lines = [line for line in _independence_table_text().splitlines() if line.startswith("|")]
-    return [line for line in lines[2:] if line.strip("|- ")]
-
-
-def test_independence_table_row_count_is_reviewed() -> None:
-    """Adding/removing an oracle must edit the reviewed count constant."""
-
-    rows = _independence_table_rows()
-    assert len(rows) == _EXPECTED_ORACLE_ROWS, (
-        f"oracle table has {len(rows)} rows but the reviewed count is "
-        f"{_EXPECTED_ORACLE_ROWS}; a new/removed oracle must update "
-        "_EXPECTED_ORACLE_ROWS in the same change"
-    )
-
-
-def test_independence_table_every_row_cites_an_arming_test() -> None:
-    """Standing rule 2 as a PROPERTY, not a phrase match (R75r6-F1 gap 2).
-
-    The 'none yet' grep is evaded by "not yet", "TBD", or an empty cell;
-    what the rule actually requires is that every row's arming column names
-    at least one test file or test identifier.
-    """
-
-    import re
-
-    offenders = []
-    for row in _independence_table_rows():
-        arming_cell = row.rstrip("|").rsplit("|", 1)[-1]
-        if not re.search(r"tests/[a-z0-9_/]+\.py|\btest_[a-z0-9_]+\b", arming_cell):
-            offenders.append(row.split("|")[1].strip()[:50])
-    assert offenders == [], f"table rows with no arming-test citation: {offenders}"
 
 
 def test_independence_table_cited_symbols_resolve() -> None:

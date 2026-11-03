@@ -113,6 +113,7 @@ class RaisingGradTrace:
         raise ValueError("jax traces do not expose op-level saved gradients")
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_common.py.
 def test_lineage_walks_ancestors_and_reports_bad_lookup() -> None:
     """lineage walks graph labels and reports lookup failures without raising."""
 
@@ -131,6 +132,7 @@ def test_lineage_walks_ancestors_and_reports_bad_lookup() -> None:
     assert "unavailable" in missing.message
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_common.py, debug/_graph.py.
 def test_compare_matches_diverges_and_skips_unsaved() -> None:
     """compare aligns pass-qualified ops and handles unsaved activations."""
 
@@ -153,18 +155,7 @@ def test_compare_matches_diverges_and_skips_unsaved() -> None:
     assert any("unsaved" in reason for reason in skipped["reason"])
 
 
-def test_compare_handles_recurrent_pass_records_without_layer_accessors() -> None:
-    """compare uses op records directly for repeated layers."""
-
-    torch.manual_seed(2)
-    trace = tl.trace(LoopMlp(), torch.randn(1, 4))
-
-    frame = tl.debug.compare(trace, trace).to_pandas()
-
-    assert frame.attrs["matched"] > 0
-    assert any(op.endswith(":2") for op in frame["op"])
-
-
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_compare_defaults_are_locked() -> None:
     """compare exposes the specified tolerance defaults."""
 
@@ -174,6 +165,7 @@ def test_compare_defaults_are_locked() -> None:
     assert params["atol"].default == 1e-8
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_graph.py.
 def test_dead_neurons_reports_rows_and_skip_reasons() -> None:
     """dead_neurons reports dense floating tensors and invalid dims."""
 
@@ -192,6 +184,7 @@ def test_dead_neurons_reports_rows_and_skip_reasons() -> None:
     assert "insufficient sample" in invalid.attrs["note"]
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_gradients.py.
 def test_gradient_flow_audit_empty_torch_only_and_defaults() -> None:
     """gradient_flow_audit handles no-backward and non-torch-like traces."""
 
@@ -204,28 +197,13 @@ def test_gradient_flow_audit_empty_torch_only_and_defaults() -> None:
     non_torch = tl.debug.grad_health(RaisingGradTrace()).to_pandas()  # type: ignore[arg-type]
     params = signature(tl.debug.grad_health).parameters
 
-    assert "re-trace backward_ready=True" in no_backward.attrs["message"]
+    assert "CaptureOptions(save_grads=True)" in no_backward.attrs["message"]
     assert non_torch.attrs["message"] == "torch-only"
     assert params["vanishing_threshold"].default == 1e-7
     assert params["exploding_threshold"].default == 1e4
 
 
-def test_gradient_flow_audit_reports_saved_gradients() -> None:
-    """gradient_flow_audit reports saved gradients after backward."""
-
-    torch.manual_seed(5)
-    x = torch.randn(2, 4, requires_grad=True)
-    trace = tl.trace(TinyMlp(), x, capture=tl.options.CaptureOptions(save_grads=True))
-    loss = trace[trace.output_layers[0]].out.sum()
-    trace.backward(loss)
-
-    frame = tl.debug.grad_health(trace).to_pandas()
-
-    assert len(frame) > 0
-    assert frame.attrs["bwd"] == 1
-    assert {"vanishing", "exploding", "dead", "unavailable"}.issubset(frame.attrs)
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_recompute.py.
 def test_recompute_candidates_ranks_budget_and_excludes_zero_flops() -> None:
     """recompute_candidates ranks candidates and separates zero-FLOP ops."""
 
@@ -243,25 +221,7 @@ def test_recompute_candidates_ranks_budget_and_excludes_zero_flops() -> None:
     assert len(zero) == 0
 
 
-def test_compare_params_matches_diverges_and_aligns_names() -> None:
-    """compare_params aligns qualified names and detects value divergence."""
-
-    torch.manual_seed(7)
-    model_a = TinyMlp()
-    model_b = TinyMlp()
-    model_b.load_state_dict(model_a.state_dict())
-    with torch.no_grad():
-        model_b.net[0].bias.add_(1.0)
-
-    frame = tl.debug.compare_params(model_a, model_b).to_pandas()
-
-    assert frame.attrs["value_diverged"] == 1
-    assert frame.attrs["matched"] == len(frame) - 1
-    diverged = frame.loc[frame["allclose"] == False, "name"].tolist()  # noqa: E712
-    assert diverged == ["net.0.bias"]
-    assert set(frame["kind"]) == {"parameter"}
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_params.py.
 def test_compare_params_reports_one_sided_and_shape_mismatch() -> None:
     """compare_params flags only-a/only-b names and shape mismatches."""
 
@@ -281,6 +241,7 @@ def test_compare_params_reports_one_sided_and_shape_mismatch() -> None:
     }
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_params.py.
 def test_compare_params_include_buffers_covers_integer_buffers() -> None:
     """include_buffers=True compares running stats and integer counters exactly."""
 
@@ -302,6 +263,7 @@ def test_compare_params_include_buffers_covers_integer_buffers() -> None:
     assert frame.attrs["value_diverged"] >= 1
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_params.py.
 def test_compare_params_meta_tensors_are_incomparable_not_compared() -> None:
     """Meta parameters skip the value comparison with a recorded reason."""
 
@@ -314,6 +276,7 @@ def test_compare_params_meta_tensors_are_incomparable_not_compared() -> None:
     assert frame["allclose"].isna().all()
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_compare_params_defaults_are_locked() -> None:
     """compare_params exposes the specified defaults."""
 

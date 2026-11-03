@@ -193,6 +193,7 @@ class _TensorLiteralOutputModel(nn.Module):
 # =============================================================================
 
 
+@pytest.mark.smoke
 def test_validation_import_path():
     """The removed validate_saved_outs alias no longer imports."""
     with pytest.raises(ImportError):
@@ -220,6 +221,7 @@ def test_validation_replay_unverified_status_semantics() -> None:
         bool(status)
 
 
+@pytest.mark.smoke
 def test_validation_replay_status_aggregate_fold() -> None:
     """Aggregate replay status keeps failures dominant over unverified regions."""
 
@@ -290,6 +292,7 @@ def test_validation_decision_recorder_counts_distinct_nodes() -> None:
     assert status.state == "passed"
 
 
+@pytest.mark.smoke
 def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire() -> None:
     """Repeated failure decisions still produce one genuine failed node."""
 
@@ -310,6 +313,7 @@ def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire
     assert bool(status) is False
 
 
+@pytest.mark.smoke
 def test_validation_all_exempted_cannot_pass_without_replayed_nodes() -> None:
     """Exemptions alone must produce a non-boolean unverified terminal state."""
 
@@ -617,6 +621,7 @@ def test_validation_moe_masked_gate_perturbation_determinism() -> None:
     assert all(results), results
 
 
+@pytest.mark.smoke
 def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
     """Replay args use live parameters only when saved snapshots still match."""
 
@@ -1071,6 +1076,7 @@ def _cast_layer(source: torch.Tensor, target: object) -> SimpleNamespace:
     )
 
 
+@pytest.mark.smoke
 def test_posthoc_integer_cast_quantization_is_exempt_only_for_float_to_int() -> None:
     """Float->int cast insensitivity is quantization; other casts stay strict.
 
@@ -1097,6 +1103,7 @@ def test_posthoc_integer_cast_quantization_is_exempt_only_for_float_to_int() -> 
     assert int_to_int.exempt is False
 
 
+@pytest.mark.smoke
 def test_pure_out_kwarg_destination_perturbation_is_exempt_only_when_pure() -> None:
     """A parent occupying ONLY kwargs['out'] is exempt; mixed positions stay strict.
 
@@ -1129,6 +1136,7 @@ def test_pure_out_kwarg_destination_perturbation_is_exempt_only_when_pure() -> N
     assert _perturbed_parents_only_occupy_out_kwarg(pure_out, []) is False
 
 
+@pytest.mark.smoke
 def test_validation_recompute_selects_dict_output_by_container_path() -> None:
     """Validation replay selects a dict leaf by typed path, not raw integer index."""
 
@@ -1718,6 +1726,7 @@ def test_unsnapshotable_attr_fails_closed_before_validation() -> None:
     assert any("cannot prove model-state restoration" in str(item.message) for item in caught)
 
 
+@pytest.mark.smoke
 def test_unsnapshotable_attr_early_refusal_is_not_a_bare_false() -> None:
     """An early precondition refusal (before any Trace exists) is still diagnosable.
 
@@ -2222,6 +2231,7 @@ def test_validation_genuine_replacement_alone_validates() -> None:
         assert validate_forward_pass(model, [torch.randn(3, 4)], input_kwargs={}) is True
 
 
+@pytest.mark.smoke
 def test_validation_genuine_replacement_plus_unrelated_drop_still_fails() -> None:
     """Bug 3: a real drop alongside a genuine replacement STILL fails the gate.
 
@@ -2351,6 +2361,7 @@ def test_completeness_backstop_dispatchless_captured_op_is_benign() -> None:
     assert dispatch == captured
 
 
+@pytest.mark.smoke
 def test_completeness_backstop_never_claims_match_on_empty_census() -> None:
     """An empty census proves nothing and must not report ``matched``."""
 
@@ -2546,6 +2557,7 @@ def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
     assert dispatch != captured
 
 
+@pytest.mark.smoke
 def test_completeness_backstop_mutating_owner_not_captured_fails_the_gate() -> None:
     """An uncaptured MUTATING owner_not_captured dispatch is a value-affecting drop.
 
@@ -2782,6 +2794,7 @@ def test_dispatch_backstop_buffer_write_credit_does_not_mask_a_genuine_leak() ->
     assert unbuffered_leak.reason == "dispatch_op_count_mismatch"
 
 
+@pytest.mark.smoke
 def test_completeness_backstop_buffer_write_count_is_apples_to_apples() -> None:
     """The buffer-write counter counts ONLY flagged ``state_view_accessor`` unowned dispatches.
 
@@ -2912,6 +2925,7 @@ def test_validate_forward_pass_metadata_off_rejects_functionless_op_laundering()
         trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_replay_validation_detects_corrupted_third_recurrent_pass_inputs() -> None:
     """Internal-helper hardening: bare-label direct calls validate every pass.
 
@@ -2968,6 +2982,7 @@ def test_replay_validation_detects_corrupted_third_recurrent_pass_inputs() -> No
     )
 
 
+@pytest.mark.smoke
 def test_perturbation_validation_catches_spurious_third_recurrent_pass_edge() -> None:
     """Every recurrent pass's concrete parent edges must be perturbation-tested."""
 
@@ -3175,6 +3190,7 @@ def test_validate_forward_pass_deepcopy_fallback_restore_failure_raises(
             validate_forward_pass(RestoreBlockedModel(), torch.randn(3))
 
 
+@pytest.mark.smoke
 def test_validation_tripwire_still_fails_on_wrong_output() -> None:
     """Trace validation still rejects genuinely wrong ground-truth outputs."""
 
@@ -3884,6 +3900,11 @@ def test_input_derived_full_validates_without_an_exemption() -> None:
         trace.cleanup()
 
 
+@pytest.mark.smoke_cells(
+    "test_runtime_tensor_fill_value_is_replayed_and_perturbation_sensitive[full-max-dtype1-shape1-True]",
+    "test_runtime_tensor_fill_value_is_replayed_and_perturbation_sensitive[full_like-max-dtype4-shape4-False]",
+    "test_runtime_tensor_fill_value_is_replayed_and_perturbation_sensitive[full_like-sum-dtype3-shape3-True]",
+)
 @pytest.mark.parametrize(
     "factory_name,fill_source,dtype,shape,use_keyword",
     [
@@ -4012,6 +4033,7 @@ def _make_deep_numeric_layer(
     )
 
 
+@pytest.mark.smoke
 def test_op_reduction_depth_reads_all_reduction_categories() -> None:
     """Per-output accumulation depth is read for every reduction category."""
 
@@ -4053,6 +4075,7 @@ def test_op_reduction_depth_reads_all_reduction_categories() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_op_reduction_depth_reads_keyword_passed_operands() -> None:
     """Depth must read operands passed by keyword, not just positionally.
 
@@ -4138,6 +4161,7 @@ def test_op_reduction_depth_scaled_dot_product_attention_uses_key_seq_len() -> N
     assert _op_reduction_depth(short_layer) < DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
 
 
+@pytest.mark.smoke
 def test_op_reduction_depth_sdpa_undeterminable_is_zero_fail_toward_strict() -> None:
     """A missing/unreadable key operand withholds band C, like every other category."""
 
@@ -4149,6 +4173,7 @@ def test_op_reduction_depth_sdpa_undeterminable_is_zero_fail_toward_strict() -> 
     )
 
 
+@pytest.mark.smoke
 def test_op_reduction_depth_undeterminable_is_zero_fail_toward_strict() -> None:
     """When depth cannot be determined the predicate returns 0 (ineligible)."""
 
@@ -4185,6 +4210,7 @@ def test_deep_numeric_replay_recovers_deep_conv_cancellation_drift() -> None:
     assert _deep_numeric_replay_matches_saved(layer, recomputed) is True
 
 
+@pytest.mark.smoke
 def test_deep_numeric_replay_false_positive_shallow_scatter_depth2() -> None:
     """LOAD-BEARING: a depth-2 scatter + ~5e-5 injection must NOT be masked.
 
@@ -4223,6 +4249,7 @@ def test_deep_numeric_replay_false_positive_shallow_linear_depth16() -> None:
     assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
 
 
+@pytest.mark.smoke
 def test_deep_numeric_replay_sdpa_band_c_still_rejects_wrong_replay() -> None:
     """LOAD-BEARING: sdpa's corrected depth must not mask a genuinely wrong replay.
 
@@ -4328,6 +4355,7 @@ def test_op_reduction_depth_scatter_fan_in_is_per_destination_coordinate() -> No
     assert _op_reduction_depth(deep_layer) >= DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH
 
 
+@pytest.mark.smoke
 def test_op_reduction_depth_conv_transpose_is_shallow() -> None:
     """LOAD-BEARING: transposed-conv depth uses the transposed weight layout.
 
@@ -4380,6 +4408,7 @@ def test_op_reduction_depth_overwrite_scatter_is_ineligible() -> None:
         assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
 
 
+@pytest.mark.smoke
 def test_op_reduction_depth_non_additive_scatter_reduce_is_ineligible() -> None:
     """LOAD-BEARING: ``scatter_reduce`` max/min/prod modes get no band C.
 
@@ -4414,6 +4443,7 @@ def test_op_reduction_depth_non_additive_scatter_reduce_is_ineligible() -> None:
         assert _op_reduction_depth(pos_layer) == 1024, f"{mode} positional eligible"
 
 
+@pytest.mark.smoke
 def test_tensor_nanequal_tolerances_are_dtype_derived_boundary() -> None:
     """LOAD-BEARING boundary gate for the ULP-derived replay tolerance table.
 
@@ -4501,6 +4531,7 @@ def test_ground_truth_output_check_is_dtype_aware() -> None:
     assert not _ground_truth_output_matches_saved(f32, f32 * (1.0 + 1e-5))
 
 
+@pytest.mark.smoke
 def test_ground_truth_fp8_doctrine_stays_strict() -> None:
     """PIN the deliberate fp8 exception to the own-ULP tolerance model.
 
@@ -4594,6 +4625,7 @@ def test_deep_numeric_replay_sub_denormal_scale_destruction_fails() -> None:
     assert _deep_numeric_replay_matches_saved(layer, recomputed) is False
 
 
+@pytest.mark.smoke
 def test_deep_numeric_replay_atol_not_amplified_by_extreme_dynamic_range() -> None:
     """LOAD-BEARING: one large element must not launder a tensor-max atol.
 
@@ -5788,6 +5820,7 @@ def test_buffer_write_version_invariant_rejects_unresolved_source() -> None:
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_buffer_replay_validated_invariant_rejects_missing_evidence() -> None:
     """Replay-validated contract rejects a write version without saved source args."""
 
@@ -5986,6 +6019,7 @@ def test_param_deep_xref_allows_recurrent_weight_sharing() -> None:
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None:
     """Live transformed payload metadata must match the retained tensor."""
 
@@ -6038,6 +6072,7 @@ def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_payload_metadata_invariant_allows_selective_save_validation() -> None:
     """Metadata validation must not read intentionally unsaved selective-save payloads."""
 
@@ -6218,6 +6253,7 @@ def test_backward_pass_domain_rejects_root_mismatch() -> None:
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_backward_phase_d_preconditions_reach_backward_trace() -> None:
     """Phase-D backward checks run on a real backward-captured trace."""
 
@@ -6235,6 +6271,7 @@ def test_backward_phase_d_preconditions_reach_backward_trace() -> None:
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> None:
     """Mid-forward backward triggers exempt only later-created forward layers."""
 
@@ -6261,6 +6298,7 @@ def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> N
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_backward_invariants_exempt_dead_branch_layers() -> None:
     """Ops whose outputs never feed the backward walk need no backpointer (R24-X).
 
@@ -6344,6 +6382,7 @@ def test_dead_branch_exemption_does_not_disarm_contributing_backpointers() -> No
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_bad_pre_trigger_layer_grad_fn_backpointer_raises() -> None:
     """A paired pre-trigger layer with a severed GradFn backpointer raises."""
 
@@ -6514,6 +6553,7 @@ def test_module_call_boundary_rejects_output_outside_ops() -> None:
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_module_call_boundary_allows_external_inputs_on_nested_modules() -> None:
     """ModuleCall input ops are allowed to come from the parent scope."""
 
@@ -6565,6 +6605,9 @@ def test_torch_trace_metadata_invariants_still_green() -> None:
         log.cleanup()
 
 
+@pytest.mark.smoke_cells(
+    "test_function_root_module_invariants_green_for_synthetic_backends[tinygrad]"
+)
 @pytest.mark.parametrize("backend", ["jax", "tinygrad"])
 def test_function_root_module_invariants_green_for_synthetic_backends(backend: str) -> None:
     """Synthetic JAX/tinygrad function-root traces pass minimal module invariants."""
@@ -6595,6 +6638,7 @@ def test_non_function_root_drop_op_module_attribution_raises() -> None:
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_non_function_root_cyclic_address_parent_raises() -> None:
     """Cyclic module address_parent links fail module containment logic."""
 
@@ -7049,6 +7093,7 @@ def _collect_strings(value: Any, depth: int = 0) -> set[str]:
     return set()
 
 
+@pytest.mark.smoke
 def test_raw_label_survival_roster_is_closed():
     """Every field observed carrying another op's label is in the roster.
 
@@ -7520,6 +7565,7 @@ def test_connectivity_accepts_retained_orphan_islands_with_final_labels() -> Non
         log.cleanup()
 
 
+@pytest.mark.smoke
 def test_connectivity_retained_orphan_mapped_to_live_final_label_is_rejected() -> None:
     """Excusing retained islands must not excuse a mapping onto a LIVE label."""
 
@@ -7910,6 +7956,7 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
     assert validate_forward_pass(model, [x], input_kwargs={})
 
 
+@pytest.mark.smoke
 def test_plain_trace_mistral_has_no_functionless_replacement():
     """TRIPWIRE on the real reproducer: tiny Mistral must trace cleanly.
 
@@ -7957,6 +8004,7 @@ def _where_layer(saved_args, saved_kwargs, dtype=torch.int64):
     )
 
 
+@pytest.mark.smoke
 def test_one_arg_where_positional_nonzero_is_index_exempt() -> None:
     """One-arg positional ``torch.where(cond)`` (nonzero index form) is recognized."""
 
@@ -7975,6 +8023,7 @@ def test_one_arg_where_keyword_nonzero_is_index_exempt() -> None:
     assert _check_one_arg_where_index_exempt(layer) is True
 
 
+@pytest.mark.smoke
 def test_mixed_kwarg_value_select_where_is_not_one_arg_exempt() -> None:
     """LOAD-BEARING: ``torch.where(cond, input=a, other=b)`` (value select, branches in
     kwargs, captured as len(saved_args)==1 with int output) must NOT be treated as the
@@ -8008,6 +8057,7 @@ def test_three_arg_positional_value_select_where_is_not_one_arg_exempt() -> None
     assert _check_one_arg_where_index_exempt(layer) is False
 
 
+@pytest.mark.smoke
 def test_float_output_where_is_not_one_arg_index_exempt() -> None:
     """A non-integer output ``where`` is never treated as the one-arg index form."""
 
@@ -8342,6 +8392,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
     _assert_validation_fails_only_on_adoption(model, x)
 
 
+@pytest.mark.smoke
 def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     """The func_call_id exemption for ``intervention_replacement`` is NARROW.
 

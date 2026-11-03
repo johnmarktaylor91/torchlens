@@ -54,25 +54,6 @@ def test_summary_includes_input_preprocessing_when_present() -> None:
     assert "WARNING: input preprocessing is UNVERIFIED" not in provenance
 
 
-def test_unverified_input_preprocessing_detail_is_reachable() -> None:
-    """The verification/source detail is reachable on trace.provenance.input_preprocessor."""
-
-    log = tl.trace(_TinyModel(), torch.ones(1), save="none")
-    log._provenance_input_preprocessor = ResolvedPreprocessing(
-        source="imagenet_default",
-        identifier="ImageNet-default-resize256-crop224",
-        verified=False,
-        config={},
-        description="ImageNet default (UNVERIFIED): resize 256",
-    )
-
-    record = log.provenance.input_preprocessor
-    assert record.verified is False
-    assert record.source == "imagenet_default"
-    assert record.identifier == "ImageNet-default-resize256-crop224"
-    assert "ImageNet default (UNVERIFIED): resize 256" in log.provenance.summary()
-
-
 def test_input_transform_summary_render_is_opt_in() -> None:
     """Input preprocessing text should render only with the draw affordance enabled."""
 

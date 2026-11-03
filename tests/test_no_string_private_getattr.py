@@ -222,7 +222,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # alone), discharging all nine new sites plus six pre-existing ones.
     # 116 -> 111: merged backend changes discharged five more sites; lowered
     # to the found count.
-    "backends/torch": 111,
+    # 111 -> 109 (C-077 merge): the stack's backend changes meet C-076's and
+    # discharge two more sites; lowered to the found count.
+    "backends/torch": 109,
     "bridge": 1,
     "bundle": 1,
     # 20 -> 22 (2026-08-16 l2 episode, f2228f46 S7 suite): the episode

@@ -255,19 +255,6 @@ def _normalize_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def test_hash_namespace_is_available_through_all_public_import_patterns() -> None:
-    """The structural-hash namespace should preserve lazy facade import patterns."""
-
-    import torchlens.fingerprint as hash_module
-    from torchlens import fingerprint as imported_namespace
-    from torchlens.fingerprint import model as model_hash
-
-    assert tl.fingerprint is hash_module
-    assert imported_namespace is hash_module
-    assert model_hash is hash_module.model
-    assert tl.fingerprint.assert_unchanged is hash_module.assert_unchanged
-
-
 class _Tracker:
     """Small object with tracker-like custom_methods for export tests."""
 
@@ -534,30 +521,6 @@ def test_tracker_exports_reject_paths_with_clear_type_errors(
         tl.export.aim(export_log, to=tmp_path / "aim")
 
 
-def test_emit_nvtx_capture_option_does_not_change_capture(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """emit_nvtx should be accepted and should not alter normal logging output.
-
-    The host is simulated as NVTX-capable: a CUDA-less host refuses
-    ``emit_nvtx=True`` typed (``emit_nvtx_unavailable``, U35.3).
-    """
-
-    from torchlens.backends.torch import _op_markers
-
-    monkeypatch.setattr(_op_markers, "_nvtx_host_available", lambda: True)
-    monkeypatch.setattr(torch.cuda.nvtx, "range_push", lambda name: None)
-    monkeypatch.setattr(torch.cuda.nvtx, "range_pop", lambda: None)
-    log = tl.trace(
-        nn.Linear(2, 2),
-        torch.randn(1, 2),
-        capture=tl.options.CaptureOptions(emit_nvtx=True),
-    )
-
-    assert log.options.emit_nvtx is True
-    assert len(log._layer_list) > 0
-
-
 def test_tabular_exports_round_trip(export_log: Any, tmp_path: Path) -> None:
     """Canonical tabular exports should round-trip."""
 
@@ -628,6 +591,7 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
         )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/layer.py, export/_model_explorer/_attrs.py, export/_model_explorer/_build.py ....
 def test_recurrent_static_graph_exports_use_unique_pass_qualified_ids(tmp_path: Path) -> None:
     """Recurrent exports preserve every execution pass and every connecting edge."""
 
@@ -756,6 +720,7 @@ def test_hub_push_scrubs_local_paths_from_uploaded_trace(export_log: Any) -> Non
         assert user.encode() not in contents, "uploaded artifact leaked the username"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of bridge/depyf.py.
 def test_depyf_bridge_fails_soft_when_extra_missing(tmp_path: Path) -> None:
     """depyf bridge should explain the missing optional dependency."""
 

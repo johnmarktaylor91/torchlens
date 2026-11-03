@@ -1204,9 +1204,10 @@ SLIDES: tuple[Slide, ...] = (
         id="builtin-legend",
         title="The legend TorchLens draws",
         rule="show_legend=True adds the key under the header, one entry per mark drawn, each with its "
-        "real shape and fill (input, output, trainable and frozen weights, module, and buffer, "
-        "true/false test, mutated parameter or intervention/cone when drawn); None shows only an "
-        "active channel's section.",
+        "real shape and fill (input, output, trainable and frozen weights, module, module run as "
+        "one op, collapsed module, hidden buffers, and buffer, true/false test, mutated parameter "
+        "or intervention/cone when drawn); None shows only an active channel's section, except "
+        "that a module= focused draw also shows the key and a reading key.",
         panels=(
             Panel(
                 "a",
@@ -1443,8 +1444,9 @@ UNENCODED: tuple[tuple[str, str], ...] = (
 OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     (
         "Bundle graph",
-        "several traces of one model, grouped",
-        "tl._visualization.show_bundle_graph(bundle)",
+        "several traces of one model, grouped; nodes='members' draws one box per "
+        "trace and on='grad' compares gradients",
+        "bundle.draw(path)",
         "docs/reference/glossary.md",
     ),
     (

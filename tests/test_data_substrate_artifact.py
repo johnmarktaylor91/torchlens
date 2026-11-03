@@ -106,7 +106,6 @@ def test_read_trusted_rows_refuses_missing_or_resized_member_typed(tmp_path: Pat
     assert excinfo.value.fields["code"] == "extraction_ledger_prefix_broken"
 
 
-@pytest.mark.smoke
 def test_repair_ledger_tail_truncates_torn_and_completes_missing_newline(tmp_path: Path) -> None:
     """Tail repair: torn line truncated; parseable line missing \\n completed."""
 

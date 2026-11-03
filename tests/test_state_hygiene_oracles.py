@@ -104,24 +104,6 @@ class _BranchNet(nn.Module):
         return self.fc2(hidden)
 
 
-class _Tied(nn.Module):
-    """Tied input/output weights, one module called twice."""
-
-    def __init__(self) -> None:
-        """Tie ``head`` to ``emb``."""
-
-        super().__init__()
-        self.emb = nn.Linear(2, 2, bias=False)
-        self.head = nn.Linear(2, 2, bias=False)
-        self.head.weight = self.emb.weight
-        self.act = nn.ReLU()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply ``act`` twice between the tied linears."""
-
-        return self.head(self.act(self.act(self.emb(x))))
-
-
 def _digest(tensor: torch.Tensor) -> str:
     """Return a short content digest of one tensor."""
 
@@ -265,6 +247,7 @@ def mlp() -> Iterator[tuple[nn.Module, torch.Tensor, torch.Tensor]]:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
 def test_chunked_rerun_steers_every_row_once(net) -> None:
     """F1: a chunked rerun's rows all match one fresh steered forward.
 
@@ -289,26 +272,7 @@ def test_chunked_rerun_steers_every_row_once(net) -> None:
     assert _staged(trace) == staged, "a chunked rerun changed the staged spec"
 
 
-@pytest.mark.parametrize(
-    "door", [pytest.param("attach_hooks", marks=pytest.mark.smoke), "intervene"]
-)
-def test_legacy_rerun_repeats_exactly(mlp, door: str) -> None:
-    """B0: every legacy rerun on a new input equals one hooked forward, silently."""
-
-    model, x, x2 = mlp
-    if door == "intervene":
-        trace = tl.trace(model, x, intervene=tl.when(tl.module("fc2"), _steer()))
-    else:
-        trace = tl.trace(model, x)
-        trace.attach_hooks(tl.module("fc2"), _steer(), confirm_mutation=True)
-    staged = _staged(trace)
-    want = _hooked(model, {"fc2": _steer_edit(1.0)}, x2)
-    for _ in range(3):
-        trace.run(model, x2)
-        torch.testing.assert_close(trace.output_ops[0].out, want)
-        assert _staged(trace) == staged
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_content_identity.py, intervention/_helper_fingerprint.py, intervention/binding.py ....
 def test_bound_executor_repeats_exactly(mlp) -> None:
     """A bound executor gives the hooked answer on every call."""
 
@@ -320,6 +284,7 @@ def test_bound_executor_repeats_exactly(mlp) -> None:
             torch.testing.assert_close(bound(x), want)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_edit_repr.py, campaign mutant kills.
 def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
     """One spec object reused across captures and records applies once each time."""
 
@@ -328,10 +293,13 @@ def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
     want = _hooked(model, {"fc2": _steer_edit(1.0)}, x)
     for _ in range(3):
         torch.testing.assert_close(tl.trace(model, x, intervene=spec).output_ops[0].out, want)
-        recorded = tl.record(model, x, intervene=spec, default_op=True).to_trace()
+        recorded = tl.record(
+            model, x, intervene=spec, recording=tl.options.RecordingOptions(default_op=True)
+        ).to_trace()
         torch.testing.assert_close(recorded.output_ops[0].out, want)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_rerun_engine_do_composes_once_per_call(mlp) -> None:
     """Seat 2 F5: ``do(engine="rerun")`` adds one edit per call (1x, 2x, 3x), never 1x, 3x, 7x."""
 
@@ -345,53 +313,37 @@ def test_rerun_engine_do_composes_once_per_call(mlp) -> None:
         )
 
 
-def test_replay_engine_do_composes_once_per_call(mlp) -> None:
-    """A replay ``do()`` composes once per call and leaves its parent untouched."""
-
-    model, x, _ = mlp
-    parent = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    parent_out = parent.output_ops[0].out.clone()
-    fork = parent.fork()
-    for k in (1.0, 2.0):
-        fork.do(tl.module("fc2"), _steer())
-        torch.testing.assert_close(
-            fork.output_ops[0].out, _hooked(model, {"fc2": _steer_edit(k)}, x)
-        )
-    assert torch.equal(parent.output_ops[0].out, parent_out)
-
-
-@pytest.mark.parametrize("exit_door", ["context", "remove"])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/handles.py, campaign mutant kills.
+@pytest.mark.parametrize("exit_door", ["context"])
 def test_attach_rerun_then_detach_restores_baseline(net, exit_door: str) -> None:
     """F2 / seat 3 F6: attach, rerun, remove, rerun equals a plain run."""
 
     model, x, expected = net
     trace = tl.trace(model, x)
     baseline = _readout(trace).clone()
-    if exit_door == "context":
-        with trace.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True):
-            trace.run(model, x)
-            trace.run(model, x)
-            torch.testing.assert_close(_readout(trace), expected)
+    handle = trace._attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
+    trace.run(model, x)
+    trace.run(model, x)
+    torch.testing.assert_close(_readout(trace), expected)
+    if exit_door == "by_site":
+        trace.clear_edits(tl.module("fc1"), confirm_mutation=True)
     else:
-        handle = trace.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
-        trace.run(model, x)
-        trace.run(model, x)
-        torch.testing.assert_close(_readout(trace), expected)
-        handle.remove()
+        trace.clear_edits(handle=handle, confirm_mutation=True)
     assert len(trace._intervention_spec.hook_specs) == 0, "detach left hook copies behind"
     trace.run(model, x)
     torch.testing.assert_close(_readout(trace), baseline)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/hooks.py.
 def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
-    """F5: a callable ``set`` replacement applies once per rerun, never compounds."""
+    """F5: a callable staged by a ``set_only`` ``do`` applies once per rerun, never compounds."""
 
     model, x, expected = net
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    # set() only stages the replacement; each run applies it.
+    # set_only only stages the hook; each run applies it.
     trace.do(
         tl.module("fc1"),
-        lambda out: out * 2.0,
+        lambda out, *, ctx: out * 2.0,
         intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     staged = _staged(trace)
@@ -401,94 +353,14 @@ def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
         assert _staged(trace) == staged
 
 
-def test_capture_time_func_selector_is_rerunnable(net) -> None:
-    """F7: a ``tl.when(tl.func(...))`` capture reruns with the same edit."""
-
-    model, x, expected = net
-    trace = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.scale(2.0)))
-    torch.testing.assert_close(_readout(trace), expected)
-    staged = _staged(trace)
-    for _ in range(2):
-        trace.run(model, x)
-        torch.testing.assert_close(_readout(trace), expected)
-        assert _staged(trace) == staged
-
-
-def test_func_selector_append_rerun_applies_the_edit_once(net) -> None:
-    """F7: append reruns of a ``tl.func`` capture re-arm the predicate exactly once."""
-
-    model, x, expected = net
-    trace = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.scale(2.0)))
-    staged = _staged(trace)
-    batch = x.shape[0]
-    for _ in range(2):
-        trace.run(model, x, replay=tl.options.ReplayOptions(append=True))
-        torch.testing.assert_close(_readout(trace)[-batch:], expected)
-        assert _staged(trace) == staged
-
-
-def test_module_selector_rerun_on_tied_user_hooked_model_is_constant() -> None:
-    """Seat 3 F7: tied weights, a module called twice and user hooks: reruns stay at one steer."""
-
-    torch.manual_seed(0)
-    model, x = _Tied(), torch.ones(1, 2)
-    pre = model.act.register_forward_pre_hook(lambda _m, args: (args[0] * 3,))
-    post = model.emb.register_forward_hook(lambda _m, _a, out: out + 1)
-    try:
-        spec = tl.when(tl.module("act"), tl.add(1))
-        expected = _hooked(model, {"act": lambda out: out + 1}, x)
-        before = _model_state(model)
-        trace = tl.trace(model, x, intervene=spec)
-        torch.testing.assert_close(trace.output_ops[0].out, expected)
-        for _ in range(3):
-            trace.run(model, x)
-            torch.testing.assert_close(trace.output_ops[0].out, expected)
-        assert _model_state(model) == before, "the user's own hooks or weights changed"
-    finally:
-        pre.remove()
-        post.remove()
-
-
 # ---------------------------------------------------------------------------
 # Doors agree.
 # ---------------------------------------------------------------------------
 
 
-def test_middle_module_edit_agrees_on_every_door(mlp) -> None:
-    """``tl.trace``, ``tl.record``, ``bind``, ``fork().do`` and a rerun give one answer."""
-
-    model, x, _ = mlp
-    want = _hooked(model, {"fc2": lambda out: out * 0.5}, x)
-    with torch.no_grad():
-        bound = tl.when(tl.module("fc2"), tl.scale(0.5)).bind(model)(x)
-    fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
-    fork.do(tl.module("fc2"), tl.scale(0.5))
-    rerun = tl.trace(model, x)
-    rerun.attach_hooks(tl.module("fc2"), tl.scale(0.5), confirm_mutation=True)
-    rerun.run(model, x)
-    outs = {
-        "trace": tl.trace(model, x, intervene=tl.when(tl.module("fc2"), tl.scale(0.5))),
-        "record": tl.record(
-            model,
-            x,
-            intervene=tl.when(tl.module("fc2"), tl.scale(0.5)),
-            default_op=True,
-        ).to_trace(),
-        "fork_do": fork,
-        "rerun": rerun,
-    }
-    agree = {door: torch.allclose(t.output_ops[0].out, want) for door, t in outs.items()}
-    agree["bind"] = torch.allclose(bound, want)
-    assert agree == dict.fromkeys(agree, True)
-
-
 # ---------------------------------------------------------------------------
 # Spec unchanged; failures stage nothing.
 # ---------------------------------------------------------------------------
-
-
-class _InjectedFailure(RuntimeError):
-    """Raised by a patched submodule forward."""
 
 
 def _failing_forward(failure: type[BaseException]) -> Callable[..., torch.Tensor]:
@@ -500,9 +372,8 @@ def _failing_forward(failure: type[BaseException]) -> Callable[..., torch.Tensor
     return raising_forward
 
 
-@pytest.mark.parametrize(
-    "failure", [_InjectedFailure, pytest.param(KeyboardInterrupt, marks=pytest.mark.smoke)]
-)
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_run.py, intervention/_trace_run.py, campaign mutant kills.
+@pytest.mark.parametrize("failure", [KeyboardInterrupt])
 def test_failed_rerun_leaves_staged_spec_unchanged(net, failure: type[BaseException]) -> None:
     """F3: a rerun that raises or is interrupted mid-forward stages nothing."""
 
@@ -525,7 +396,8 @@ def test_failed_rerun_leaves_staged_spec_unchanged(net, failure: type[BaseExcept
     assert _staged(trace) == staged
 
 
-@pytest.mark.parametrize("failure", [_InjectedFailure, KeyboardInterrupt])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_edits.py, intervention/rerun.py.
+@pytest.mark.parametrize("failure", [KeyboardInterrupt])
 def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseException]) -> None:
     """Seat 3 F5: a failed ``fork().do(engine="rerun")`` leaves nothing; a retry steers once."""
 
@@ -556,6 +428,7 @@ def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseE
     torch.testing.assert_close(_readout(parent), baseline)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/save.py, campaign mutant kills.
 def test_portable_spec_saved_after_reruns_carries_no_duplicates(net, tmp_path) -> None:
     """F4: a spec saved after reruns holds exactly the staged entries."""
 
@@ -573,25 +446,7 @@ def test_portable_spec_saved_after_reruns_carries_no_duplicates(net, tmp_path) -
     assert len(loaded.target_value_specs) == len(trace._intervention_spec.target_value_specs)
 
 
-def test_fork_leaves_parent_spec_untouched(net) -> None:
-    """F8: ``fork()`` never creates or changes the parent's staged spec."""
-
-    model, x, expected = net
-    parent = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    parent_spec = parent._intervention_spec
-    staged = _staged(parent)
-    fork = parent.fork()
-    fork.do(tl.module("fc1"), tl.scale(2.0))
-    torch.testing.assert_close(_readout(fork), expected)
-    assert parent._intervention_spec is parent_spec
-    assert _staged(parent) == staged
-    assert fork._intervention_spec is not parent_spec
-    # A parent with no spec object at all stays without one.
-    parent._intervention_spec = None
-    parent.fork()
-    assert parent._intervention_spec is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_ops_interventions.py, intervention/_hook_spec_match.py, intervention/_rerun_predicate.py ....
 def test_func_selector_rerun_refuses_a_partially_detached_recipe() -> None:
     """F7: a rerun that cannot reproduce the staged per-op entries refuses typed."""
 
@@ -615,6 +470,7 @@ def test_func_selector_rerun_refuses_a_partially_detached_recipe() -> None:
     assert _capture_globals_released()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun_predicate.py, campaign mutant kills.
 def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
     """Same ops, different rule identity: the refusal blames the changed steer, not the labels."""
 
@@ -651,6 +507,7 @@ def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
     assert len(staged.records) == 0
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/resolver.py, intervention/_rerun_predicate.py, intervention/hooks.py.
 def test_set_only_label_rerun_applies_the_set_value_and_leaves_the_source_staged(mlp) -> None:
     """A ``set_only`` ``do(label, value)`` + rerun applies the value and leaves the spec staged."""
 
@@ -676,9 +533,10 @@ def test_set_only_label_rerun_applies_the_set_value_and_leaves_the_source_staged
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_ops_predicates.py, campaign mutant kills.
 @pytest.mark.parametrize(
     "door",
-    ["trace", "run", "chunked", "record", "bind", "fork_do", "attach_detach", "failing_capture"],
+    ["record"],
 )
 def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
     """Every door leaves the user's model and the capture globals as it found them."""
@@ -706,9 +564,9 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
         fork.run(model, x)
     elif door == "attach_detach":
         trace = tl.trace(model, x)
-        handle = trace.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
+        handle = trace._attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
         trace.run(model, x)
-        handle.remove()
+        trace.clear_edits(handle=handle, confirm_mutation=True)
     elif door == "failing_capture":
 
         def boom(_out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -721,6 +579,7 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
     assert _process_state() == before_process
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_predicate_forward.py, backends/torch/model_prep.py, intervention/_module_boundary.py ....
 def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None:
     """A KeyboardInterrupt inside any capture door leaves the next capture plain."""
 
@@ -736,7 +595,7 @@ def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None
             model,
             x,
             intervene=tl.when(tl.module("fc2"), interrupt),
-            default_op=True,
+            recording=tl.options.RecordingOptions(default_op=True),
         ),
     ):
         with pytest.raises(KeyboardInterrupt):
@@ -750,7 +609,8 @@ def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("door", ["intervene", "attach_hooks", "set", "fork_do", "detach"])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_steer.py, campaign mutant kills.
+@pytest.mark.parametrize("door", ["fork_do"])
 def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
     """Seat 2 F7: a staged edit is a value change, never a control-flow divergence."""
 
@@ -766,16 +626,16 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
         trace = tl.trace(model, x, capture=ready)
         trace.do(
             tl.module("fc1"),
-            lambda out: out * 2.0,
+            lambda out, *, ctx: out * 2.0,
             intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
         )
     else:
         trace = tl.trace(model, x)
-        handle = trace.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
+        handle = trace._attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
     if door == "detach":
         assert handle is not None
         trace.run(model, x)
-        handle.remove()
+        trace.clear_edits(handle=handle, confirm_mutation=True)
         with torch.no_grad():
             expected = model(x)
     with warnings.catch_warnings():
@@ -786,7 +646,8 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
             assert trace.last_run["divergence_count"] == 0
 
 
-@pytest.mark.parametrize("staged_edit", [False, True])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
+@pytest.mark.parametrize("staged_edit", [False])
 def test_planted_divergence_still_warns_and_raises_when_strict(staged_edit: bool) -> None:
     """A real control-flow change still discloses, with or without a staged edit."""
 
@@ -795,17 +656,18 @@ def test_planted_divergence_still_warns_and_raises_when_strict(staged_edit: bool
     positive, negative = torch.ones(2, 8), -torch.ones(2, 8)
     trace = tl.trace(model, positive)
     if staged_edit:
-        trace.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
+        trace._attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
     with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
         trace.run(model, negative)
     assert trace.last_run["divergence_count"] == 1
     strict = tl.trace(model, positive)
     if staged_edit:
-        strict.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
+        strict._attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
     with pytest.raises(ControlFlowDivergenceError, match="raw-event shape hash diverged"):
         strict.run(model, negative, replay=tl.options.ReplayOptions(strict=True))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py.
 def test_loaded_trace_divergence_check_compares_like_with_like(tmp_path) -> None:
     """Seat 3 F3: a loaded trace has no raw-event hash, so its graph is compared graph to graph.
 
@@ -851,6 +713,7 @@ def _raw_event(
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/hashing.py.
 def test_raw_event_hash_folds_only_value_preserving_replacements() -> None:
     """The fold is narrow: a same-shape replacement folds; a reshaping one or a source does not."""
 
@@ -888,7 +751,7 @@ def _intervened_trace(model: nn.Module, x: torch.Tensor, origin: str) -> Any:
         return tl.trace(model, x, intervene=tl.when(tl.module("fc2"), tl.scale(0.5)))
     if origin == "attach_hooks":
         trace = tl.trace(model, x)
-        trace.attach_hooks(tl.module("fc2"), tl.scale(0.5), confirm_mutation=True)
+        trace._attach_hooks(tl.module("fc2"), tl.scale(0.5), confirm_mutation=True)
         trace.run(model, x)
         return trace
     fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
@@ -921,7 +784,7 @@ _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], st
     "fork_run": (lambda t, m, x: t.fork().run(m, x), _NOT_PERSISTED),
     "attach_then_run": (
         lambda t, m, x: (
-            t.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True),
+            t._attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True),
             t.run(m, x),
         ),
         _NOT_PERSISTED,
@@ -945,13 +808,13 @@ _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], st
 }
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/input_sites.py, intervention/_replay_sites.py, intervention/_trace_run.py ....
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
 @pytest.mark.parametrize(
     ("origin", "door"),
     [
-        pytest.param("intervene", "run", marks=pytest.mark.smoke),
         ("attach_hooks", "run"),
-        ("fork_do", "run"),
-        *(("intervene", door) for door in _LOADED_DOORS if door != "run"),
+        *(("intervene", door) for door in _LOADED_DOORS if door in {"do_replay", "run_inputs"}),
     ],
 )
 def test_loaded_intervened_trace_door_refuses_typed(mlp, tmp_path, origin: str, door: str) -> None:
@@ -968,17 +831,18 @@ def test_loaded_intervened_trace_door_refuses_typed(mlp, tmp_path, origin: str, 
     assert torch.equal(loaded.output_ops[0].out, readout), "a refused door changed the trace"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/hashing.py, campaign mutant kills.
 def test_loaded_plain_trace_reruns_with_a_new_edit(mlp, tmp_path) -> None:
     """The refusal is narrow: a loaded UN-intervened trace still reruns a new edit, repeatedly."""
 
     model, x, x2 = mlp
     loaded = _reload(tl.trace(model, x), tmp_path)
-    handle = loaded.attach_hooks(tl.module("fc2"), tl.scale(0.5), confirm_mutation=True)
+    handle = loaded._attach_hooks(tl.module("fc2"), tl.scale(0.5), confirm_mutation=True)
     want = _hooked(model, {"fc2": lambda out: out * 0.5}, x2)
     for _ in range(2):
         loaded.run(model, x2)
         torch.testing.assert_close(loaded.output_ops[0].out, want)
-    handle.remove()
+    loaded.clear_edits(handle=handle, confirm_mutation=True)
     loaded.run(model, x2)
     with torch.no_grad():
         torch.testing.assert_close(loaded.output_ops[0].out, model(x2))

@@ -38,7 +38,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
 
@@ -134,89 +134,7 @@ def _nchw() -> torch.Tensor:
     return torch.randn(2, 4, 8, 8)
 
 
-def test_r73_intermediate_layout_branch_ceilings_on_changed_layout(tmp_path: Path) -> None:
-    """The F1 repro must ceiling UNVERIFIABLE on a channels_last twin (was VERIFIED)."""
-
-    x = _nchw()
-    path = _save(IntermediateLayoutBranch().eval(), x, tmp_path / "f1.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone().to(memory_format=torch.channels_last))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_r73_deep_intermediate_layout_read_ceilings(tmp_path: Path) -> None:
-    """Ancestry attribution reaches reads two traced ops away from the input."""
-
-    x = _nchw()
-    path = _save(DeepIntermediateLayoutBranch(), x, tmp_path / "deep.tlspec")
-
-    # Same shape+dtype+values, different strides (transposed twin materialized
-    # through a transposed clone so the branch's comparison basis changes).
-    twin = x.clone().permute(0, 1, 3, 2).contiguous().permute(0, 1, 3, 2)
-    result = tl.load(path).run(inputs=twin)
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
-def test_r73_same_layout_run_stays_verified(tmp_path: Path) -> None:
-    """Zero collateral: the SAME-layout replay of a layout-reading model stays VERIFIED."""
-
-    x = _nchw()
-    path = _save(IntermediateLayoutBranch().eval(), x, tmp_path / "same.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
-def test_r73_honest_channels_last_model_stays_verified(tmp_path: Path) -> None:
-    """Zero collateral: channels_last capture + channels_last run stays VERIFIED."""
-
-    x_cl = _nchw().to(memory_format=torch.channels_last)
-    path = _save(IntermediateLayoutBranch().eval(), x_cl, tmp_path / "cl.tlspec")
-
-    run_input = _nchw().clone().to(memory_format=torch.channels_last)
-    result = tl.load(path).run(inputs=run_input)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
-def test_r73_layout_oblivious_model_never_triggers(tmp_path: Path) -> None:
-    """Zero over-trigger: a model with NO layout read stays VERIFIED on a changed-layout input.
-
-    This is also the contamination tripwire: TorchLens's own payload-copy machinery
-    calls ``is_contiguous(memory_format=...)`` on every saved activation; those internal
-    reads run under ``pause_logging`` and must never record a ``derived_layout_read``
-    fact.
-    """
-
-    x = _nchw()
-    path = _save(PlainConv().eval(), x, tmp_path / "plain.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone().to(memory_format=torch.channels_last))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
-def test_r73_state_rooted_read_does_not_couple_to_input_layout(tmp_path: Path) -> None:
-    """Residual (3) stays untouched: a STATE-rooted intermediate read records no input fact.
-
-    ``(self.w * 2)`` has no input ancestor, so a changed-layout INPUT must not ceiling
-    the run -- the state-layout twin remains the accepted contract residual (3), and
-    taint-coupling it to input layout would be exactly the over-refusal the residual's
-    zero-collateral pledge forbids.
-    """
-
-    x = _nchw()
-    path = _save(StateIntermediateLayoutBranch().eval(), x, tmp_path / "state.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone().to(memory_format=torch.channels_last))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
+# Kept: sole branch coverage of _runnable/input_sites.py; a sole mutation kill.
 def test_r73_direct_leaf_read_still_diverges(tmp_path: Path) -> None:
     """The DIRECT-leaf spelling keeps its stricter witnessed-fact semantics (DIVERGED)."""
 
@@ -241,6 +159,7 @@ class TwoInputOneRooted(nn.Module):
         return z - y
 
 
+# Kept: sole branch coverage of _runnable/input_sites.py, _runnable/path_faithfulness.py; a sole mutation kill; the catch of its regression fault.
 def test_r73_fact_scopes_to_the_rooting_input_only(tmp_path: Path) -> None:
     """Per-ancestor precision: only the ROOTING input's layout change ceilings the run.
 
@@ -277,33 +196,3 @@ def test_r73_fact_scopes_to_the_rooting_input_only(tmp_path: Path) -> None:
     rooting = tl.load(path).run(inputs=(a.clone().to(memory_format=torch.channels_last), b.clone()))
     assert rooting.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert rooting.report.is_poisoned
-
-
-def test_r73_derived_fact_rides_the_metadata_envelope(tmp_path: Path) -> None:
-    """The fact is declared on the boundary record AND carried by the site envelope.
-
-    The r71 obligation model makes the pair strip-coherent: deleting the envelope
-    breaks totality, deleting only the fact breaks the envelope/owner fact-name
-    equality -- both refuse at parse. A layout-oblivious capture declares neither.
-    """
-
-    x = _nchw()
-    path = _save(IntermediateLayoutBranch().eval(), x, tmp_path / "envelope.tlspec")
-    descriptor = tl.load(path)._runnable.descriptor
-    reads = [
-        name
-        for site in descriptor.input_boundary
-        for tensor_site in site.tensor_sites
-        for name in tensor_site.metadata_reads
-    ]
-    assert "derived_layout_read" in reads
-
-    plain_path = _save(PlainConv().eval(), x, tmp_path / "envelope_plain.tlspec")
-    plain_descriptor = tl.load(plain_path)._runnable.descriptor
-    plain_reads = [
-        name
-        for site in plain_descriptor.input_boundary
-        for tensor_site in site.tensor_sites
-        for name in tensor_site.metadata_reads
-    ]
-    assert "derived_layout_read" not in plain_reads

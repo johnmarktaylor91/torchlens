@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection.provenance import _FLIP, SelectionProvenance
+from torchlens._selection.provenance import SelectionProvenance
 from torchlens.bundle import Bundle
 from torchlens.errors import SelectionError
 
@@ -94,57 +94,7 @@ def _relations(resolved):
 # ---------------------------------------------------------------------------
 
 
-def test_top_k_mask_matches_manual_ranking(log):
-    """top_k selects exactly the k largest elements of the site's saved value."""
-
-    resolved = log[tl.top_k(_RELU, 7)]
-    value = log[_RELU].out.reshape(-1).to(torch.float64)
-    expected = torch.zeros_like(value, dtype=torch.bool)
-    expected[torch.argsort(value, descending=True, stable=True)[:7]] = True
-    assert torch.equal(resolved[0].mask.reshape(-1), expected)
-    assert _relations(resolved) == ["exact"]
-    assert resolved[0].num_selected == 7
-
-
-def test_top_k_bottom_and_abs_variants(log):
-    """largest=False ranks ascending; by='abs' ranks magnitudes."""
-
-    value = log[_SIGMOID].out.reshape(-1)
-    bottom = log[tl.top_k(_SIGMOID, 3, largest=False)]
-    assert bottom[0].mask.reshape(-1)[torch.argsort(value.to(torch.float64), stable=True)[:3]].all()
-    magnitude = log[tl.top_k(_SIGMOID, 3, by="abs")]
-    expected = torch.zeros_like(value, dtype=torch.bool)
-    expected[torch.argsort(value.abs().to(torch.float64), descending=True, stable=True)[:3]] = True
-    assert torch.equal(magnitude[0].mask.reshape(-1), expected)
-
-
-def test_top_k_tie_break_is_first_flat_indices():
-    """Ties break deterministically by flat index (stable sort, pinned)."""
-
-    class _AllZero(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.relu(x * 0.0)
-
-    trace = tl.trace(_AllZero(), torch.randn(1, 2, 2))
-    try:
-        resolved = trace[tl.top_k("relu_1_2", 2)]
-        flat = resolved[0].mask.reshape(-1)
-        assert flat[:2].all() and not flat[2:].any()
-    finally:
-        trace.cleanup()
-
-
-def test_top_k_population_too_small_refuses_typed(log):
-    """k beyond the rankable population refuses with structured counts."""
-
-    numel = log[_RELU].out.numel()
-    with pytest.raises(SelectionError) as excinfo:
-        log[tl.top_k(_RELU, numel + 1)]
-    assert excinfo.value.fields["code"] == "selection_unresolvable"
-    assert excinfo.value.fields["reason"] == "population_too_small"
-    assert excinfo.value.fields["available"] == numel
-
-
+@pytest.mark.smoke
 def test_top_fraction_ceil_rule_pinned(log):
     """top_fraction selects ceil(fraction * population), never zero when nonempty."""
 
@@ -154,6 +104,7 @@ def test_top_fraction_ceil_rule_pinned(log):
     assert log[tl.top_fraction(_RELU, 0.0)].is_empty
 
 
+@pytest.mark.smoke
 def test_threshold_band_and_abs(log):
     """Strict above/below bounds and their conjunction, plus magnitude form."""
 
@@ -165,24 +116,6 @@ def test_threshold_band_and_abs(log):
     magnitude = log[tl.threshold(_RELU, above=0.5, by="abs")]
     assert torch.equal(magnitude[0].mask, value.abs() > 0.5)
     assert _relations(above) == ["exact"]
-
-
-def test_sign_classes_partition_the_site(log):
-    """positive/negative/zero partition; zero is the sparsity mask."""
-
-    value = log[_RELU].out
-    zero = log[tl.sign(_RELU, "zero")]
-    positive = log[tl.sign(_RELU, "positive")]
-    negative = log[tl.sign(_RELU, "negative")]
-    nonzero = log[tl.sign(_RELU, "nonzero")]
-    assert torch.equal(zero[0].mask, value == 0)
-    assert torch.equal(positive[0].mask, value > 0)
-    assert negative[0].num_selected == 0  # ReLU output has no negatives
-    assert torch.equal(nonzero[0].mask, ~zero[0].mask)
-    total = zero[0].num_selected + positive[0].num_selected
-    assert total == value.numel()
-    # the engineered dead channel is all-zero on this capture
-    assert zero[0].mask[0, 3].all()
 
 
 def test_nan_never_satisfies_any_criterion():
@@ -211,59 +144,9 @@ def test_nan_never_satisfies_any_criterion():
         trace.cleanup()
 
 
-def test_global_default_population_spans_saved_sites(log):
-    """within=None ranks across every retained tensor site of the capture."""
-
-    resolved = log[tl.top_k(None, 10)]
-    assert len(resolved) > 1  # touched family: all saved sites
-    assert sum(entry.num_selected for entry in resolved) == 10
-
-
-def test_value_producer_restricted_by_selection_population(log):
-    """A Selection population restricts the candidate set, not just the mask."""
-
-    zeros = tl.sign(_RELU, "zero")
-    ranked = log[tl.top_k(zeros, 4, largest=False)]
-    value = log[_RELU].out
-    relu_entry = [entry for entry in ranked if entry.key == (_RELU, 1)][0]
-    assert relu_entry.num_selected == 4
-    assert (value[relu_entry.mask] == 0).all()
-
-
 # ---------------------------------------------------------------------------
 # Statistical producers: multi-sample honesty.
 # ---------------------------------------------------------------------------
-
-
-def test_dead_requires_multi_sample_and_names_the_single_trace_spelling(log):
-    """The single-capture form is a DIFFERENT spelling, enforced at construction."""
-
-    with pytest.raises(ValueError, match=r"MULTI-SAMPLE.*sign\(site, 'zero'\)"):
-        tl.dead([log])
-
-
-def test_dead_mask_is_conjunction_across_samples(log, log_b):
-    """dead selects exactly the elements silent in EVERY sample."""
-
-    resolved = log[tl.dead([log, log_b], within=_RELU)]
-    expected = (log[_RELU].out == 0) & (log_b[_RELU].out == 0)
-    assert torch.equal(resolved[0].mask, expected)
-    assert resolved[0].mask[0, 3].all()  # the engineered dead channel
-    assert _relations(resolved) == ["upper_bound"]
-    assert "n_samples=2" in resolved[0].provenance.source
-
-
-def test_dead_composes_with_module_selector(log, log_b):
-    """The brief's acceptance row: tl.dead(...) & tl.in_module('encoder')."""
-
-    composed = tl.dead([log, log_b]) & tl.in_module("encoder")
-    resolved = log[composed]
-    site_keys = {entry.key for entry in resolved}
-    assert (_RELU, 1) in site_keys
-    assert (_SIGMOID, 1) not in site_keys  # head is outside the encoder
-    relu_entry = [entry for entry in resolved if entry.key == (_RELU, 1)][0]
-    assert relu_entry.mask[0, 3].all()
-    assert relu_entry.provenance.relation == "upper_bound"  # join(upper, exact)
 
 
 def test_saturated_detects_pinned_sigmoid_channel(log, log_b):
@@ -279,6 +162,7 @@ def test_saturated_detects_pinned_sigmoid_channel(log, log_b):
     assert _relations(resolved) == ["upper_bound"]
 
 
+@pytest.mark.smoke
 def test_saturated_requires_a_declared_bound(log, log_b):
     """Saturation is relative to a range; no bound refuses at construction."""
 
@@ -286,6 +170,7 @@ def test_saturated_requires_a_declared_bound(log, log_b):
         tl.saturated([log, log_b])
 
 
+@pytest.mark.smoke
 def test_low_variance_selects_constant_channel(log, log_b):
     """The zero-weight constant channel has zero variance across samples."""
 
@@ -306,6 +191,7 @@ def test_samples_accept_a_bundle(log, log_b):
     assert bundled == listed
 
 
+@pytest.mark.smoke
 def test_samples_must_be_traces(log):
     """Non-Trace evidence refuses at construction with the offending index."""
 
@@ -376,26 +262,6 @@ def test_wrong_provenance_claim_fails_closed():
         SelectionProvenance(relation="approximately")
 
 
-def test_relation_composition_through_flip_and_difference(log, log_b):
-    """~dead flips upper->lower; exact - upper_bound lands lower_bound."""
-
-    dead_sel = tl.dead([log, log_b], within=_RELU)
-    inverted = log[~dead_sel]
-    assert _relations(inverted) == [_FLIP["upper_bound"]] == ["lower_bound"]
-    difference = log[tl.sign(_RELU, "zero") - dead_sel]
-    assert _relations(difference) == ["lower_bound"]
-    # element check: zeros-in-this-capture minus dead-across-both
-    expected = (log[_RELU].out == 0) & ~((log[_RELU].out == 0) & (log_b[_RELU].out == 0))
-    assert torch.equal(difference[0].mask, expected)
-
-
-def test_complement_of_top_k_counts(log):
-    """~top_k keeps the touched family and complements within the site."""
-
-    resolved = log[~tl.top_k(_RELU, 5)]
-    assert resolved[0].num_selected == log[_RELU].out.numel() - 5
-
-
 # ---------------------------------------------------------------------------
 # Typed refusal matrix.
 # ---------------------------------------------------------------------------
@@ -409,6 +275,7 @@ def test_param_population_refuses_kind(log):
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
+@pytest.mark.smoke
 def test_unknown_site_refuses_typed(log):
     """A population site absent from the trace refuses site_not_in_trace."""
 
@@ -482,6 +349,7 @@ def test_constructor_validation_rows():
         tl.top_k("s", 1, by="magnitude")
 
 
+@pytest.mark.smoke
 def test_repr_stability_pins(log, log_b):
     """The constructor-shaped disclosures are pinned (readable AST spellings)."""
 

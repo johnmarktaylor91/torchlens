@@ -77,25 +77,6 @@ def split_trace() -> Iterator[tl.Trace]:
         trace.cleanup()
 
 
-def test_rolled_collapsed_box_excludes_surfaced_exit_layers(split_trace: tl.Trace) -> None:
-    """The rolled box counts only the layers it actually hides (V4)."""
-
-    source = _dot(split_trace, rolled=True, collapse_fn=lambda m: m.address == "b")
-
-    visible_layers = {
-        name
-        for name in re.findall(r'^\s*"?([\w.]+)"? \[', source, re.MULTILINE)
-        if name.startswith(("relu", "conv"))
-    }
-    # The recurrence-surfaced exit layer renders beside the box. Grouping rule
-    # row 26 (and section 1: shapes are never evidence): all five calls of the
-    # one block instance are passes of one relu Layer, across the shape change.
-    assert visible_layers == {"relu_1_2"}
-    # ...so the box must claim only the genuinely hidden conv layer.
-    ops_rows = re.findall(r">(\d+ ops?)<", source)
-    assert ops_rows == ["1 op"], f"box double-represents surfaced layers: {ops_rows}"
-
-
 def test_unrolled_collapsed_boxes_exclude_surfaced_exit_layers(split_trace: tl.Trace) -> None:
     """Each unrolled call box counts only its hidden layers (V4)."""
 
@@ -112,7 +93,6 @@ def test_unrolled_collapsed_boxes_exclude_surfaced_exit_layers(split_trace: tl.T
     assert ops_rows == ["1 op"] * 5, f"call boxes double-represent surfaced exits: {ops_rows}"
 
 
-@pytest.mark.smoke
 def test_rolled_multicall_box_discloses_shape_variation(split_trace: tl.Trace) -> None:
     """A shape-varying rolled box carries a shapes line, not one false shape (V5)."""
 

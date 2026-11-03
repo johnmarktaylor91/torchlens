@@ -14,7 +14,14 @@ from ._trace_groups import _TraceGroup
 
 
 class TraceSettings(_TraceGroup):
-    """The capture options this Trace ran with (the stored snapshot)."""
+    """The capture options this Trace ran with (the stored snapshot).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
+    >>> type(trace.options).__name__, trace.options.backward_ready
+    ('TraceSettings', True)
+    """
 
     __slots__ = ()
 
@@ -226,6 +233,13 @@ class TraceSource(_TraceGroup):
     The class, ``__init__`` and ``forward`` locations (file, line and the
     combined location), the forward signature, the three docstrings, the
     captured frames, and the live class while the model is still alive.
+
+    Examples
+    --------
+    >>> source = tl.trace(model, x).source
+    >>> type(source).__name__, source.class_name
+    ('TraceSource', 'Sequential')
+
     """
 
     __slots__ = ()
@@ -349,7 +363,15 @@ class TraceSource(_TraceGroup):
 
 
 class TraceHealth(_TraceGroup):
-    """Honesty diagnostics of the capture: witness and escape-detector facts."""
+    """Honesty diagnostics of the capture: witness and escape-detector facts.
+
+    Examples
+    --------
+    >>> health = tl.trace(model, x).health
+    >>> type(health).__name__, isinstance(health.num_escape_detector_events, int)
+    ('TraceHealth', True)
+
+    """
 
     __slots__ = ()
 

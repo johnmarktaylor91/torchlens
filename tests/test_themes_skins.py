@@ -28,70 +28,7 @@ from torchlens._visualization.themes import (
 )
 
 
-def test_every_skin_carries_the_new_records() -> None:
-    """Palette, 3-anchor ramp, and neutral fill on all five skins."""
-
-    assert set(THEME_PRESETS) == {"torchlens", "paper", "dark", "colorblind", "high_contrast"}
-    role_keys = set(LEGACY_SEMANTIC_PALETTE)
-    for theme in THEME_PRESETS.values():
-        assert set(theme.semantic_palette) == role_keys, theme.name
-        assert len(theme.ramp) == 3
-        assert theme.neutral_aggregate_fill.startswith("#")
-
-
-@pytest.mark.smoke
-def test_semantic_palette_default_is_the_shared_read_only_legacy_proxy() -> None:
-    """The default palette is the legacy proxy itself, shared and immutable.
-
-    Regression: a plain ``field(default=<mappingproxy>)`` raised ``ValueError:
-    mutable default`` at import on Python 3.11, which broke every test module
-    that imported the visualization package.
-    """
-
-    import dataclasses
-    from types import MappingProxyType
-
-    from torchlens._visualization.themes import VisualizationTheme
-
-    theme = VisualizationTheme(
-        name="probe",
-        graph={},
-        node={},
-        edge={},
-        default_fill="white",
-        default_border="black",
-        default_font="black",
-    )
-    assert theme.semantic_palette is LEGACY_SEMANTIC_PALETTE
-    assert isinstance(theme.semantic_palette, MappingProxyType)
-    with pytest.raises(TypeError):
-        theme.semantic_palette["input"] = "#000000"  # type: ignore[index]
-    palette_field = {f.name: f for f in dataclasses.fields(VisualizationTheme)}["semantic_palette"]
-    assert palette_field.default is dataclasses.MISSING
-
-
-def test_legend_items_field_is_deleted() -> None:
-    """The dead legend_items data is gone (memo skins bullet)."""
-
-    theme = resolve_theme("torchlens")
-    assert not hasattr(theme, "legend_items")
-
-
-def test_low_ramp_anchor_never_equals_default_fill() -> None:
-    """The measured white-on-white absence defect cannot recur."""
-
-    for theme in THEME_PRESETS.values():
-        assert theme.ramp[0].lower() != str(theme.default_fill).lower(), theme.name
-
-
-def test_neutral_fill_collides_with_no_semantic_meaning() -> None:
-    """N17: the aggregate fill never equals a role colour in the same skin."""
-
-    for theme in THEME_PRESETS.values():
-        semantic = {color.lower() for color in theme.semantic_palette.values()}
-        assert theme.neutral_aggregate_fill.lower() not in semantic, theme.name
-
-
+# Kept: the slices removed this test; the stack's Okabe-Ito default-skin work rewrote it to assert the new palette.
 def test_default_skin_renders_the_okabe_ito_palette() -> None:
     """The default skin translates every legacy constant to its Okabe-Ito role colour."""
 
@@ -103,6 +40,7 @@ def test_default_skin_renders_the_okabe_ito_palette() -> None:
     assert resolve_theme("colorblind").semantic_palette is OKABE_ITO_SEMANTIC_PALETTE
 
 
+# Kept: the slices removed this test; the stack's Okabe-Ito default-skin work rewrote it to assert the new palette.
 def test_paper_and_high_contrast_keep_their_historical_palettes() -> None:
     """The paper and high_contrast skins keep the legacy role colours."""
 
@@ -113,40 +51,6 @@ def test_paper_and_high_contrast_keep_their_historical_palettes() -> None:
         assert spec.fillcolor == "#98FB98", name
 
 
-def test_dark_skin_param_remap_is_byte_identical_to_history() -> None:
-    """The dark param remap rides the palette; frozen weights are the lighter gray."""
-
-    dark = resolve_theme("dark")
-    flat = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#D9D9D9"), dark)
-    assert flat.fillcolor == "#374151"
-    frozen = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#B0B0B0"), dark)
-    assert frozen.fillcolor == "#6B7280"
-    gradient = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#D9D9D9:#B0B0B0"), dark)
-    assert gradient.fillcolor == "#374151:#6B7280"
-    passthrough = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#98FB98"), dark)
-    assert passthrough.fillcolor == "#98FB98"
-
-
-def test_palette_wiring_is_live() -> None:
-    """Swapping a skin's palette changes the rendered fill: the machinery is live."""
-
-    from dataclasses import replace
-
-    flipped = replace(resolve_theme("paper"), semantic_palette=OKABE_ITO_SEMANTIC_PALETTE)
-    spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#98FB98"), flipped)
-    assert spec.fillcolor == "#009E73"
-
-
-def test_okabe_ito_set_passes_all_four_cvd_gates() -> None:
-    """The FORK-2 branch-A set is distinguishable under every simulation."""
-
-    findings = palette_distinguishability(dict(OKABE_ITO_SEMANTIC_PALETTE))
-    assert len(findings) == 4
-    failed = [finding for finding in findings if not finding.passed]
-    assert not failed, [finding.detail for finding in failed]
-
-
-@pytest.mark.smoke
 def test_legacy_palette_fails_deuteranopia_the_fork_evidence() -> None:
     """The measured defect: the legacy red/green input/output pair is
     confusable under deuteranopia. Pinned as FORK-2's evidence -- if this

@@ -1,8 +1,8 @@
 """Trace hook functions reached from the records through ``_data_classes._doors.intervention``.
 
-``attach_hooks`` and ``clear_hooks`` of ``Trace``, moved verbatim as functions
-taking the trace first (sticky hook registration on the mutable intervention
-spec and its clearing).
+The private ``Trace._attach_hooks`` / ``Trace._clear_hooks`` bodies (sticky hook
+registration on the mutable recipe and its clearing). ``Trace.do`` is the public
+door: attaching folded into ``do`` and clearing goes through ``clear_edits``.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from .._data_classes._trace_intervention_records import (
 )
 from .._errors import InvalidArgumentError
 from ._edit_guards import refuse_chunked_batch_coupling, warn_if_root_mutation
+from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_edits import (
     ensure_intervention_spec,
     target_spec_from_site,
@@ -30,7 +31,6 @@ if TYPE_CHECKING:
 __all__: list[str] = []
 
 from .errors import HookSignatureError
-from .handles import HookHandle
 from .hooks import expand_facet_hook_entries, normalize_hook_plan
 from .spec import (
     Recipe as PublicInterventionSpec,
@@ -44,10 +44,9 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
     hook: Any = None,
     *extra_hooks: Any,
     strict: bool = False,
-    prepend: bool = False,
     confirm_mutation: bool = False,
-) -> Any:
-    """Attach sticky hooks to the current intervention spec. (the ``Trace.attach_hooks`` body)."""
+) -> tuple[str, ...]:
+    """Stage sticky hooks on the recipe (the ``Trace._attach_hooks`` body); return handle ids."""
 
     warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
     if isinstance(hooks_or_site, PublicInterventionSpec):
@@ -56,7 +55,7 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
         # arguments have nothing sound to bind to.
         if hook is not None or extra_hooks:
             raise InvalidArgumentError(
-                "attach_hooks(spec) takes the InterventionSpec alone: its "
+                "do(spec) takes the Recipe alone: its "
                 "rules already carry the site and action, so extra hook "
                 "arguments have nothing to bind to",
                 code="spec_door_extra_arguments",
@@ -64,7 +63,7 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
                 "merge them), or use the (site, hook) call shape without a spec",
                 argument="hooks_or_site",
             )
-        entries = entries_from_spec(hooks_or_site, door="attach_hooks")
+        entries = entries_from_spec(hooks_or_site, door="do")
     elif extra_hooks:
         if hook is None:
             raise HookSignatureError("extra hooks require an initial hook argument.")
@@ -97,7 +96,6 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
             helper=entry.helper_spec,
             handle=handle_id,
             metadata=metadata,
-            prepend=prepend,
         )
     if gradient_entries == len(entries):
         # Gradient rules edit nothing the forward recorded, so the saved
@@ -115,19 +113,22 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
         hook_count=len(entries),
         sites=tuple(history_site_payload(entry.site_target) for entry in entries),
         strict=strict,
-        prepend=prepend,
         handles=tuple(handle_ids),
         **history,
     )
     trace._last_hook_handle_ids = tuple(handle_ids)
-    return HookHandle(trace, tuple(handle_ids), confirm_mutation=confirm_mutation)
+    return tuple(handle_ids)
 
 
 def clear_hooks(trace: Trace, *, confirm_mutation: bool = False) -> Trace:
-    """Clear all sticky hooks from the current intervention spec. (the ``Trace.clear_hooks`` body)."""
+    """Clear every sticky hook from the recipe (the ``Trace._clear_hooks`` body)."""
 
     warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
-    ensure_intervention_spec(trace).clear()
+    spec = ensure_intervention_spec(trace)
+    handles_before = sticky_handle_ids(spec)
+    spec.clear()
     mark_intervention_spec_mutated(trace)
+    # Removal takes effect at once, in a rerun or backward pass in progress.
+    retire_live_hook_handles(handles_before)
     record_operation(trace, "clear_hooks")
     return trace

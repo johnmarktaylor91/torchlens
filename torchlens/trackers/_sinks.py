@@ -29,7 +29,19 @@ _MEMORY_CAPABILITIES = frozenset(
 
 
 class MemorySink:
-    """In-memory reference sink; records every accepted point verbatim."""
+    """In-memory reference sink; records every accepted point verbatim.
+
+    Examples
+    --------
+    >>> from torchlens.trackers import ScalarPoint
+    >>> sink = MemorySink()
+    >>> sink.emit_scalar(ScalarPoint("gradients/norm/0.weight", 3, 0.5))
+    >>> [(p.tag, p.step) for p in sink.scalars]
+    [('gradients/norm/0.weight', 3)]
+    >>> sink.close()
+    >>> sink.closed
+    True
+    """
 
     def __init__(self, *, capabilities: frozenset[str] | None = None) -> None:
         """Optionally narrow the advertised capability set (test knob)."""
@@ -91,6 +103,20 @@ class JSONLSink:
     JSONL" is a property of the file, not a hope: the old default-buffered
     handle left a TORN last line whenever the filesystem died mid-flush
     (AUD-CODE 2.14).
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> from torchlens._io._json import loads_bounded
+    >>> from torchlens.trackers import ScalarPoint
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = pathlib.Path(tmp) / "run.jsonl"
+    ...     sink = JSONLSink(path)
+    ...     sink.emit_scalar(ScalarPoint("gradients/norm/0.weight", 3, 0.5))
+    ...     sink.close()
+    ...     rows = [loads_bounded(line) for line in path.read_text().splitlines()]
+    >>> [row.get("kind", "header") for row in rows]
+    ['header', 'scalar', 'closed']
     """
 
     def __init__(self, path: str | Path) -> None:

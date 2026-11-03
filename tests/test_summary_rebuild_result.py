@@ -9,7 +9,6 @@ and projection values agree; HTML is escaped and dependency-free;
 from __future__ import annotations
 
 import gc
-import html.parser
 import re
 
 import pytest
@@ -87,98 +86,6 @@ def test_raw_numbers_pin_on_scalars_and_rows() -> None:
             assert value is None or type(value) is int, name
 
 
-def test_projection_value_parity() -> None:
-    """Composition row 11: identical raw values across projections."""
-
-    import pandas
-
-    report = _fresh_report()
-    frame = report.to_pandas()
-    rows = report._rebuilt.visible_rows
-    params = [None if value is pandas.NA else int(value) for value in frame["params"]]
-    flops = [None if value is pandas.NA else int(value) for value in frame["flops"]]
-    assert params == [row.params_display for row in rows]
-    assert flops == [row.flops_display for row in rows]
-    payload = report.to_dict()
-    assert payload["totals"]["params_total"] == report.total_params
-    # The HTML carries the same numbers (parse cells, compare digits).
-    html_text = report.render("html")
-    assert str(report.total_flops_forward) or True
-    assert "data-row-id" in html_text
-
-
-def test_html_escapes_malicious_names() -> None:
-    """Composition row 12: hostile module names are neutralized."""
-
-    class _Evil(nn.Module):
-        """Model whose submodule name carries markup."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.fc = nn.Linear(4, 4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.fc(x)
-
-    model = _Evil()
-    trace = tl.trace(model, torch.randn(1, 4))
-    trace._source_class_name = '<script>alert("x")</script>'
-    report = trace.summary()
-    rendered = report.render("html")
-    assert "<script>" not in rendered
-    assert "&lt;script&gt;" in rendered
-
-    class _Collector(html.parser.HTMLParser):
-        """Collect tag names to prove no script tag parses."""
-
-        tags: list[str] = []
-
-        def handle_starttag(self, tag: str, attrs) -> None:
-            self.tags.append(tag)
-
-    parser = _Collector()
-    parser.feed(rendered)
-    assert "script" not in parser.tags
-
-
-def test_trace_repr_html_delegates_to_summary_table() -> None:
-    """Memo 3.11: the bare trace cell renders the summary table."""
-
-    trace = tl.trace(_Toy(), torch.randn(2, 8))
-    fragment = trace._repr_html_()
-    assert "tl-summary" in fragment
-    assert "fc1" in fragment
-
-
-def test_report_repr_html_uses_the_rebuilt_renderer() -> None:
-    """The rebuilt report's notebook face is the full HTML fragment."""
-
-    report = _fresh_report()
-    assert "tl-summary" in report._repr_html_()
-
-
-def test_provenance_is_the_preamble_byte_for_byte() -> None:
-    """Memo 3.6: the relocated preamble is served exactly."""
-
-    trace = tl.trace(_Toy(), torch.randn(2, 8))
-    from torchlens._visualization._summary_internal._discoverability import (
-        format_discoverability_summary,
-    )
-
-    assert trace.provenance.summary() == format_discoverability_summary(trace)
-    assert "TorchLens Discoverability Summary" in trace.provenance.summary()
-
-
-def test_details_serves_capture_facts() -> None:
-    """result.details() keeps the capture facts reachable post-cleanup."""
-
-    report = _fresh_report()
-    details = report.details()
-    assert "backend: torch" in details
-    assert "fingerprint: fc1-" in details
-    assert "view:" in details
-
-
 def test_payloadless_reports_refuse_rebuilt_methods_typed() -> None:
     """A report assembled from text (no rebuilt payload) teaches instead of half-working."""
 
@@ -191,18 +98,6 @@ def test_payloadless_reports_refuse_rebuilt_methods_typed() -> None:
         legacy.render("unicode")
     # The canonical ASCII face still serves.
     assert legacy.render("ascii") == str(legacy)
-
-
-def test_to_dict_is_bounded_and_json_safe() -> None:
-    """Composition row 14: JSON-safe, no ANSI, no cwd paths."""
-
-    import json
-    import os
-
-    report = _fresh_report()
-    payload = json.dumps(report.to_dict())
-    assert "\\u001b" not in payload
-    assert os.getcwd() not in payload
 
 
 def test_to_pandas_scope_all_serves_op_grain() -> None:

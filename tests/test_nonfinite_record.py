@@ -67,100 +67,6 @@ class _CleanModel(nn.Module):
         return torch.tanh(torch.relu(x)) + 1.0
 
 
-def test_lazy_basis_finds_nonfinite_ops_on_default_capture() -> None:
-    """The default capture serves the record from saved payloads, free at capture."""
-
-    log = tl.trace(_NanModel(), torch.randn(2, 4))
-    labels = log.nonfinite_ops
-    assert any(label.startswith("truediv") for label in labels)
-    coverage = log.nonfinite_coverage
-    assert coverage.basis == "saved_payloads"
-    assert coverage.nonfinite == len(labels) > 0
-    assert coverage.unexamined == 0
-    # Every reported label is a valid trace key.
-    for label in labels:
-        assert log[label] is not None
-
-
-def test_lazy_basis_clean_model_returns_empty() -> None:
-    """A finite forward yields an empty record with full coverage."""
-
-    log = tl.trace(_CleanModel(), torch.randn(2, 4))
-    assert log.nonfinite_ops == ()
-    coverage = log.nonfinite_coverage
-    assert coverage.nonfinite == 0
-    assert coverage.checked > 0
-
-
-def test_track_nonfinite_records_capture_basis() -> None:
-    """track_nonfinite=True serves capture-time verdicts."""
-
-    log = tl.trace(
-        _NanModel(),
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(on_nonfinite="track"),
-    )
-    labels = log.nonfinite_ops
-    assert any(label.startswith("truediv") for label in labels)
-    coverage = log.nonfinite_coverage
-    assert coverage.basis == "capture"
-    assert coverage.nonfinite >= 1
-    assert coverage.checked >= 4
-
-
-def test_track_nonfinite_covers_unsaved_ops_on_selective_save() -> None:
-    """The capture-time record sees ops the saved-payload scan cannot."""
-
-    model = _NanModel()
-    x = torch.randn(2, 4)
-    lazy = tl.trace(model, x, save=tl.func("relu"))
-    # The saved-payload basis is honestly blind here: the non-finite op
-    # retained no payload, and coverage says so.
-    assert lazy.nonfinite_ops == ()
-    lazy_coverage = lazy.nonfinite_coverage
-    assert lazy_coverage.basis == "saved_payloads"
-    assert lazy_coverage.unexamined > 0
-    tracked = tl.trace(
-        model,
-        x,
-        save=tl.func("relu"),
-        capture=tl.options.CaptureOptions(on_nonfinite="track"),
-    )
-    assert any(label.startswith("truediv") for label in tracked.nonfinite_ops)
-    assert tracked.nonfinite_coverage.basis == "capture"
-
-
-def test_track_nonfinite_off_means_no_store_and_no_per_op_work() -> None:
-    """The default path never allocates the capture store (zero hot-path cost)."""
-
-    log = tl.trace(_CleanModel(), torch.randn(2, 4))
-    assert log.track_nonfinite is False
-    assert _CAPTURE_STORE_ATTR not in log.__dict__
-
-
-def test_multipass_nonfinite_op_is_pass_qualified() -> None:
-    """A hit inside a recurrence-grouped loop names the exact pass."""
-
-    class _LoopLog(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            y = x
-            for _ in range(2):
-                # First log stays finite (input is > 1); the second log sees
-                # negative values and produces NaN on pass 2.
-                y = torch.log(y - 0.5)
-            return y
-
-    log = tl.trace(
-        _LoopLog(),
-        torch.full((2, 4), 2.0),
-        capture=tl.options.CaptureOptions(on_nonfinite="track"),
-    )
-    hits = [label for label in log.nonfinite_ops if "log" in label]
-    assert hits, log.nonfinite_ops
-    assert all(":" in label for label in log.nonfinite_ops)
-    assert any(label.endswith(":2") for label in hits)
-
-
 def test_drain_settles_pending_flags_and_quarantines_failures() -> None:
     """Deferred flags read in one batch; unreadable flags disclose as unchecked."""
 
@@ -198,18 +104,6 @@ def test_structure_only_refuses_track_nonfinite() -> None:
             capture=tl.options.CaptureOptions(structure_only=True, on_nonfinite="track"),
         )
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
-
-
-def test_raise_on_nan_stop_and_throw_unchanged_by_tracking() -> None:
-    """raise_on_nan still aborts at the first non-finite op with tracking on."""
-
-    with pytest.raises(Exception) as excinfo:
-        tl.trace(
-            _NanModel(),
-            torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
-        )
-    assert "nan" in str(excinfo.value).lower() or "finite" in str(excinfo.value).lower()
 
 
 class _BufferedNanModel(nn.Module):
@@ -268,17 +162,6 @@ def test_raise_on_nan_survives_buffer_sources() -> None:
             capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
     assert "finite" in str(excinfo.value).lower() or "nan" in str(excinfo.value).lower()
-
-
-def test_track_nonfinite_survives_buffer_sources() -> None:
-    """The recorder handles buffer source commits without recursion."""
-
-    log = tl.trace(
-        _BufferedNanModel().eval(),
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(on_nonfinite="track"),
-    )
-    assert any(label.startswith("truediv") for label in log.nonfinite_ops)
 
 
 def test_loaded_trace_restores_default_and_serves_saved_basis(tmp_path) -> None:

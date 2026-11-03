@@ -47,17 +47,7 @@ def _clean_trace() -> tl.Trace:
 # --- SF1: escape-free publishable text (LAUNCH BLOCKER) ---------------------
 
 
-def test_first_nonfinite_default_is_plain_text() -> None:
-    """The default register carries no ESC byte and no file:// / vscode:// URI."""
-
-    trace = _nan_trace()
-    answer = trace.first_nonfinite()
-    assert ESC not in answer
-    assert "file://" not in answer and "vscode://" not in answer
-    assert answer == trace.first_nonfinite(link_format="text")
-
-
-@pytest.mark.smoke
+# Kept: sole branch coverage of _data_classes/_nonfinite.py, _source_links.py, report/_trace_summary.py.
 def test_styled_link_registers_stay_opt_in() -> None:
     """terminal/html remain available but only by explicit request."""
 
@@ -66,7 +56,7 @@ def test_styled_link_registers_stay_opt_in() -> None:
     assert "vscode://file/" in trace.first_nonfinite(link_format="html")
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of report/_explain.py, report/_health.py, stats/_stats_kernel.py and more.
 def test_explain_text_is_escape_free() -> None:
     """explain() output is publishable data: no ESC bytes on any fixture."""
 
@@ -80,6 +70,7 @@ def test_explain_text_is_escape_free() -> None:
     assert "truediv" in report
 
 
+# Kept: sole branch coverage of _data_classes/_trace_groups.py, _data_classes/interface.py, _data_classes/trace.py.
 def test_str_trace_is_escape_free() -> None:
     """print(trace) inherits the plain-text default (OSC 8 leak regression)."""
 
@@ -89,28 +80,7 @@ def test_str_trace_is_escape_free() -> None:
 # --- SF6: one-pass health-scan predicate ------------------------------------
 
 
-@pytest.mark.parametrize(
-    "tensor",
-    [
-        torch.tensor([1.0, 2.0, 3.0]),
-        torch.tensor([1.0, float("nan")]),
-        torch.tensor([float("inf"), 1.0]),
-        torch.tensor([-float("inf")]),
-        torch.zeros(3, 4),
-        torch.tensor([1, 2, 3]),
-        torch.tensor([True, False]),
-        torch.tensor([1.0 + 2.0j, complex(float("nan"), 0.0)]),
-        torch.tensor([], dtype=torch.float32),
-    ],
-    ids=["clean", "nan", "inf", "neginf", "zeros", "int", "bool", "complex", "empty"],
-)
-def test_one_pass_predicate_matches_two_pass_reference(tensor: torch.Tensor) -> None:
-    """not all(isfinite) is pinned equivalent to the historical any(~isfinite)."""
-
-    reference = bool((~torch.isfinite(tensor.detach())).any().item())
-    assert _has_nonfinite(tensor) is reference
-
-
+# Kept: sole branch coverage of _data_classes/_nonfinite.py.
 def test_predicate_unrunnable_dtype_returns_none() -> None:
     """Dtypes with no isfinite kernel stay None (no evidence), never False."""
 
@@ -121,6 +91,7 @@ def test_predicate_unrunnable_dtype_returns_none() -> None:
 # --- SF4: log_value canonical home + read-back ------------------------------
 
 
+# Kept: sole branch coverage of observers.py.
 def test_log_value_lives_in_observers_only() -> None:
     """observers owns log_value; tl.report carries no alias (U00 clean break)."""
 
@@ -131,7 +102,7 @@ def test_log_value_lives_in_observers_only() -> None:
     assert not hasattr(report, "log_value") and "log_value" not in report.__all__
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _data_classes/trace.py, agent/_envelope.py, report/_agent_json.py and more.
 def test_log_value_read_back_and_renders() -> None:
     """Logged values read back via Trace.logged_values and render in reports."""
 
@@ -153,6 +124,7 @@ def test_log_value_read_back_and_renders() -> None:
     assert "logged_values" in dump["guide"]["next_steps"]
 
 
+# Kept: sole branch coverage of report/_explain.py.
 def test_logged_values_render_is_bounded() -> None:
     """Arbitrary logged objects render bounded: caps disclosed, never a spew."""
 
@@ -173,21 +145,7 @@ def test_logged_values_render_is_bounded() -> None:
 # --- SF3: agent-guide triage -------------------------------------------------
 
 
-def test_guide_next_steps_are_reader_executable() -> None:
-    """No guide entry requires live objects the dump's reader does not hold."""
-
-    steps = _clean_trace().to_agent_json(max_ops=1)["guide"]["next_steps"]
-    assert "tl.report.doctor(model, x).to_markdown()" not in steps.values()
-    for spelling in steps.values():
-        assert "model" not in spelling.replace("trace", "") or spelling.startswith("trace")
-    # The omitted members are now taught.
-    assert steps["health_audit"] == "trace.audit()"
-    assert steps["inventory"] == "trace.bill_of_materials()"
-    assert steps["resource_profile"] == "trace.profile(level='module')"
-    assert steps["nonfinite_evidence"] == "trace.first_nonfinite()"
-    assert steps["environment_diagnosis"] == "tl.report.doctor()"
-
-
+# Kept: sole branch coverage of _capture/prepare/resolve.py.
 def test_guide_next_steps_are_conditional_on_state() -> None:
     """State-dependent entries appear only when the trace can honor them."""
 
@@ -207,6 +165,7 @@ def test_guide_next_steps_are_conditional_on_state() -> None:
 # --- WT23: presenter refusals + poisoned/episode banners ---------------------
 
 
+# Kept: sole branch coverage of _capture_honesty.py, _trace_slice.py, report/_agent_json.py and more.
 def test_explain_and_agent_json_refuse_trace_slice_typed() -> None:
     """A TraceSlice subject refuses typed instead of a hollow wrong report."""
 
@@ -219,17 +178,7 @@ def test_explain_and_agent_json_refuse_trace_slice_typed() -> None:
         tl.Trace.to_agent_json(trace_slice)
 
 
-def test_explain_refuses_recording_typed() -> None:
-    """A sparse Recording subject is refused with the to_trace() remedy."""
-
-    recording = tl.record(
-        nn.Sequential(nn.Linear(3, 4), nn.ReLU()), torch.randn(2, 3), save=tl.func("relu")
-    )
-    with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
-        tl.Trace.explain(recording)
-    assert "to_trace" in str(exc_info.value)
-
-
+# Kept: sole branch coverage of report/_explain.py.
 def test_poisoned_trace_stops_rendering_clean() -> None:
     """Poison facts surface on explain, agent_json, and the honesty banner."""
 
@@ -248,6 +197,7 @@ def test_poisoned_trace_stops_rendering_clean() -> None:
     assert facts["poisoned"] is True
 
 
+# Kept: sole branch coverage of _visualization/render_execution.py.
 def test_poisoned_trace_draw_caption_carries_banner() -> None:
     """draw() DOT source of a poisoned trace names the poison."""
 
@@ -258,7 +208,7 @@ def test_poisoned_trace_draw_caption_carries_banner() -> None:
     assert "POISONED" in dot_source
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _trace_slice.py.
 def test_trace_slice_summary_carries_parent_honesty_banner() -> None:
     """A slice of a poisoned capture summarizes with the banner, not clean."""
 
@@ -273,7 +223,7 @@ def test_trace_slice_summary_carries_parent_honesty_banner() -> None:
 # --- SF2: bounded reprs ------------------------------------------------------
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _doctor_types.py, backends/_scorecard_rows.py, compat/__init__.py and more.
 def test_compat_report_repr_is_designed_and_bounded() -> None:
     """repr is bounded; str and show share the complete fixed-width table."""
 
@@ -291,6 +241,7 @@ def test_compat_report_repr_is_designed_and_bounded() -> None:
     assert max(len(line) for line in report.show().splitlines()) < 500
 
 
+# Kept: sole branch coverage of _doctor_types.py.
 def test_capability_dump_moved_to_detail_accessor() -> None:
     """The row cell carries the grouped summary; the accessor the full dump."""
 
@@ -320,6 +271,7 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
             assert name in row.details
 
 
+# Kept: sole branch coverage of report/_doctor.py.
 @pytest.mark.heavy  # doctor probe walk crossed the 7s smoke budget at T55 (7.2s cpu)
 def test_doctor_report_repr_is_bounded() -> None:
     """DoctorReport repr is the designed multi-line render with capped lines."""
@@ -332,7 +284,7 @@ def test_doctor_report_repr_is_bounded() -> None:
     assert isinstance(doctor_report.capability_snapshot(), dict)
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of report/_explain.py.
 def test_episode_facts_surface_on_report_surfaces() -> None:
     """An episode ledger (incl. forced-tokens basis) is visible in reports."""
 

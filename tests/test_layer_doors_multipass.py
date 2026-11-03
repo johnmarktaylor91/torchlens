@@ -1,4 +1,4 @@
-"""``Layer.do`` (both engines) and ``Layer.attach_hooks`` address every pass of a multi-pass layer.
+"""``Layer.do``, ``Layer.set`` and the sticky ``Layer.do(engine="set_only")`` address every pass of a multi-pass layer.
 
 A bare layer label addresses only a single-pass layer, so the three Layer doors
 must not forward it for a layer that ran several passes: a module reused in a
@@ -17,6 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import MultiMatchWarning
+from torchlens.options import InterventionOptions
 
 
 class _SharedThenFresh(nn.Module):
@@ -86,7 +87,7 @@ def _zero(t: torch.Tensor) -> torch.Tensor:
     return torch.zeros_like(t)
 
 
-@pytest.mark.parametrize("door", ("do", "set", "attach_hooks"))
+@pytest.mark.parametrize("door", ("set", "sticky"))
 def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) -> None:
     """Each Layer door on a two-pass layer edits both passes, matching plain torch."""
 
@@ -105,7 +106,10 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
                 ),
             )
         else:
-            layer.attach_hooks(tl.scale(2.0), confirm_mutation=True)
+            layer.do(
+                tl.scale(2.0),
+                intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+            )
         # The recipe doors apply on push, which re-resolves the same two sites.
         if door != "do":
             fork.push()

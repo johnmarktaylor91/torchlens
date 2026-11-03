@@ -55,7 +55,7 @@ REMOVED_SUMMARY_LEVELS: dict[str, str] = {
 #: typed (``summary_option_invalid``) naming the replacement; there is no
 #: alias and no historical renderer behind them.
 REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
-    "filter": "where= (regex string or callable row -> bool; presentation-only)",
+    "filter": "where= (regex string, selector or callable row -> bool; presentation-only)",
     "preset": "view= ('overview' | 'compute') for the column bundle, level= for row grain",
     "fields": "columns= (bundle name, exact ordered list, or +name/-name deltas)",
     "show_ops": "level='op' (one row per executed op pass)",

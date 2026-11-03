@@ -315,6 +315,23 @@ def render_attention(
     -------
     Artifact
         Written paths plus every rendered disclosure line.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> toks = ("a", "b", "c")
+    >>> view = tl.transformer.AttentionView(
+    ...     pattern=torch.full((2, 3, 3), 1 / 3),
+    ...     query_tokens=tl.transformer.TokenAxis("query", toks),
+    ...     key_tokens=tl.transformer.TokenAxis("key", toks),
+    ...     heads=(0, 1),
+    ...     layer="blocks.0.attn",
+    ... )
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.viz.attention(view, pathlib.Path(tmp) / "attn.png")
+    ...     written = saved.paths[0].exists()
+    >>> written, saved.num_pages
+    (True, 1)
     """
 
     if heads is not None:
@@ -368,6 +385,23 @@ def render_attention_atlas(
     -------
     Artifact
         Overview + detail page paths and the rendered disclosures.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> toks = ("a", "b", "c")
+    >>> view = tl.transformer.AttentionView(
+    ...     pattern=torch.full((2, 3, 3), 1 / 3),
+    ...     query_tokens=tl.transformer.TokenAxis("query", toks),
+    ...     key_tokens=tl.transformer.TokenAxis("key", toks),
+    ...     heads=(0, 1),
+    ...     layer="blocks.0.attn",
+    ... )
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.viz.attention_atlas([view], pathlib.Path(tmp) / "atlas.png")
+    ...     n_pages = len(saved.paths)
+    >>> n_pages
+    2
     """
 
     if not views:

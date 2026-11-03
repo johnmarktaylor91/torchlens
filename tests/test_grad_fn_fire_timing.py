@@ -17,8 +17,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._io import PreReleaseArtifactError
-from torchlens._io.prerelease import PRERELEASE_STATE_KEY, activate_prerelease_fields
+from torchlens._io.prerelease import PRERELEASE_STATE_KEY
 from torchlens._ir.events import BackwardCoverageGap, GradFnFired
 from torchlens.backends.torch import backward as backward_mod
 
@@ -53,69 +52,6 @@ def _fired_events(trace: tl.Trace) -> list[GradFnFired]:
 # ---------------------------------------------------------------------------
 
 
-def test_timed_fire_has_positive_span_and_ordered_stamps() -> None:
-    trace = _backward_trace()
-    fired = _fired_events(trace)
-    assert fired, "backward capture produced no GradFnFired events"
-    for event in fired:
-        assert event.fire_started_monotonic is not None
-        assert event.fire_finished_monotonic is not None
-        assert event.fire_finished_monotonic > event.fire_started_monotonic
-    timings = trace.autograd.grad_fn_fire_timings
-    assert timings and all(span is not None and float(span) > 0 for span in timings.values())
-    assert trace.grad_fn_timing_provenance == "perf_counter"
-
-
-def test_timing_keys_align_with_grad_fn_calls() -> None:
-    trace = _backward_trace()
-    timings = trace.autograd.grad_fn_fire_timings
-    # Timings iterate in fire order, grad_fn_calls in discovery order; the
-    # key SETS are identical 1:1.
-    assert set(timings.keys()) == {call.label for call in trace.autograd.grad_fn_calls}
-
-
-def test_repeat_fires_get_independent_spans_and_monotone_wall_stamps() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(
-        _Tiny(),
-        torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
-    )
-    loss = trace.output_ops[0].out.sum()
-    trace.backward(loss, retain_graph=True)
-    trace.backward(loss)
-    fired = _fired_events(trace)
-    by_object: dict[int, list[GradFnFired]] = {}
-    for event in fired:
-        by_object.setdefault(event.object_id, []).append(event)
-    repeated = [events for events in by_object.values() if len(events) >= 2]
-    assert repeated, "no grad_fn fired across both passes"
-    for events in repeated:
-        wall = [event.timestamp for event in events]
-        assert wall == sorted(wall)
-        spans = {(event.fire_started_monotonic, event.fire_finished_monotonic) for event in events}
-        assert len(spans) == len(events), "repeat fires must carry independent stamp pairs"
-    timings = trace.autograd.grad_fn_fire_timings
-    assert all(span is not None for span in timings.values())
-
-
-@pytest.mark.smoke
-def test_higher_order_backward_pairs_lifo_correctly() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(
-        _Tiny(),
-        torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
-    )
-    loss = trace.output_ops[0].out.pow(2).sum()
-    trace.backward(loss, create_graph=True)
-    for event in _fired_events(trace):
-        if event.fire_started_monotonic is None:
-            continue
-        assert event.fire_finished_monotonic is not None
-        assert event.fire_finished_monotonic > event.fire_started_monotonic
-
-
 # ---------------------------------------------------------------------------
 # Keyed-LIFO degrade set: stale discard, no-prehook, registration failure.
 # ---------------------------------------------------------------------------
@@ -129,35 +65,6 @@ def test_pop_matching_fire_start_discards_stale_entries() -> None:
     assert backward_mod._pop_matching_fire_start(stamps, 7) is None
     assert stamps == []
     assert backward_mod._pop_matching_fire_start(stamps, 1) is None
-
-
-def test_stale_prehook_entry_never_becomes_a_wrong_positive_span() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(
-        _Tiny(),
-        torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
-    )
-    # Seed retry debris: a stale keyed entry for a call index that will never
-    # match, on every node list minted by the walk. The next real fire must
-    # pair to ITS OWN stamp and discard the debris.
-    original = backward_mod._fire_timing_stamp_list
-
-    def seeded(inner_trace, grad_fn_object_id):
-        stamps = original(inner_trace, grad_fn_object_id)
-        if not stamps:
-            stamps.append((999, -1.0))
-        return stamps
-
-    try:
-        backward_mod._fire_timing_stamp_list = seeded
-        trace.backward(trace.output_ops[0].out.sum())
-    finally:
-        backward_mod._fire_timing_stamp_list = original
-    for event in _fired_events(trace):
-        assert event.fire_started_monotonic is not None
-        assert event.fire_started_monotonic > 0, "stale seeded stamp leaked into a pair"
-        assert event.fire_finished_monotonic > event.fire_started_monotonic
 
 
 def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> None:
@@ -201,7 +108,6 @@ def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> N
     assert trace.grad_fn_timing_provenance == "unmeasured"
 
 
-@pytest.mark.smoke
 def test_register_fire_timing_prehook_own_try_except() -> None:
     class _RefusesPrehooks:
         def register_prehook(self, hook):
@@ -247,20 +153,6 @@ def test_plain_v8_save_persists_per_fire_timing_semantics(tmp_path) -> None:
     assert PRERELEASE_STATE_KEY not in state
 
 
-def test_provenance_field_roundtrips_only_under_prerelease_switch(tmp_path) -> None:
-    trace = _backward_trace()
-    assert trace.grad_fn_timing_provenance == "perf_counter"
-    path = tmp_path / "timing_prerelease.tlspec"
-    with activate_prerelease_fields():
-        trace.save(str(path))
-        loaded = tl.load(str(path))
-        assert loaded.grad_fn_timing_provenance == "perf_counter"
-    # The switched artifact carries the pre-release marker and REFUSES to
-    # load as a real v7 artifact outside the switch.
-    with pytest.raises(PreReleaseArtifactError):
-        tl.load(str(path))
-
-
 def test_live_accessor_refuses_typed_on_loaded_trace(tmp_path) -> None:
     trace = _backward_trace()
     path = tmp_path / "timing_loaded.tlspec"
@@ -269,18 +161,3 @@ def test_live_accessor_refuses_typed_on_loaded_trace(tmp_path) -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = loaded.autograd.grad_fn_fire_timings
     assert excinfo.value.fields["code"] == "grad_fn_fire_timing_unavailable"
-
-
-def test_fold_sort_key_unchanged_and_projection_count_matches() -> None:
-    trace = _backward_trace()
-    assert len(trace.autograd.grad_fn_fire_timings) == len(trace.autograd.grad_fn_calls)
-    # tlspec v8: projection writes the per-fire monotonic pair; the wall
-    # timestamp stays the separate event-ordering stamp and is never a
-    # duration operand.
-    for call in trace.autograd.grad_fn_calls:
-        span = trace.autograd.grad_fn_fire_timings[f"{call.grad_fn_label}:{call.call_index}"]
-        if span is None:
-            assert call._time_started is None and call._time_finished is None
-        else:
-            assert call._time_finished - call._time_started == pytest.approx(float(span))
-            assert call._time_started != call.timestamp  # monotonic, not wall

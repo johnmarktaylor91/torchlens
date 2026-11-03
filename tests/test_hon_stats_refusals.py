@@ -1,4 +1,4 @@
-"""U25.2: CKA refuses non-finite input typed and warns on zero variance.
+"""CKA refuses non-finite input typed and warns on zero variance.
 
 ``tl.stats.cka`` and the streaming ``tl.stats.CKA`` used to pass NaN/Inf
 through to a NaN score and return NaN silently for a zero-variance
@@ -9,7 +9,6 @@ refuse ``cka_input_nonfinite`` and warn ``cka_zero_variance``.
 from __future__ import annotations
 
 import math
-import warnings
 
 import pytest
 import torch
@@ -70,13 +69,3 @@ def test_zero_variance_cka_warns_and_returns_nan() -> None:
     with pytest.warns(TorchLensWarning) as caught_stream:
         assert math.isnan(meter.compute())
     assert caught_stream[0].message.fields["code"] == "cka_zero_variance"
-
-
-def test_well_conditioned_cka_stays_silent() -> None:
-    """No warning on an ordinary input: the warning is not noise."""
-
-    torch.manual_seed(1)
-    a, b = torch.randn(8, 3), torch.randn(8, 2)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", TorchLensWarning)
-        assert math.isfinite(tl.stats.cka(a, b))

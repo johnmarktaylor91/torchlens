@@ -73,7 +73,7 @@ tl.summary(model, inputs=None, input_kwargs=None,
     view="overview",          # overview | compute | stats (column bundles; stats = per-site payload statistics)
     depth="auto",             # auto | all | int
     columns=None,             # bundle name, exact list, or +name/-name deltas
-    where=None,               # regex or callable; totals stay whole-model
+    where=None,               # regex, selector or callable; totals stay whole-model
     buffers="summary",        # summary | hide
     fold_repeats="auto", max_rows=48,
     flop_convention="fma2",   # fma2 | fma1 (refuses typed if underivable)

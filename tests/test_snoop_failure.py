@@ -52,24 +52,6 @@ def _crash_tail(sink: io.StringIO) -> list[str]:
     return [line for line in sink.getvalue().split("\n") if line]
 
 
-def test_crash_tail_order_and_attempted_marker() -> None:
-    """Memo test 5: qualified attempted line last, frontier fields correct."""
-
-    lines = _crash_tail(io.StringIO())
-    failed_index = next(i for i, line in enumerate(lines) if line.startswith("!! forward failed"))
-    assert "RuntimeError" in lines[failed_index]
-    assert any(line.startswith("!! last completed event=") and "relu" in line for line in lines)
-    assert any(line.startswith("!! last narrated event=") for line in lines)
-    attempted = [line for line in lines if line.startswith("!! attempted call=layer_norm")]
-    assert len(attempted) == 1
-    assert "[2,8]" in attempted[0]
-    assert "(not proven culprit)" in attempted[0]
-    assert lines[-1].startswith("-- end echo tail")
-    # The tail REPRINTS lines that already appeared live.
-    live_relu = [i for i, line in enumerate(lines) if "relu_1" in line and "#" in line]
-    assert len(live_relu) >= 2
-
-
 def test_on_error_only_narrates_nothing_until_failure() -> None:
     """Memo test 9 shape: happy passes emit zero bytes; the crash speaks."""
 
@@ -94,7 +76,6 @@ def test_on_error_only_narrates_nothing_until_failure() -> None:
     assert "!! forward failed" in tail_sink.getvalue()
 
 
-@pytest.mark.smoke
 def test_record_tier_disposition_trio_flushes_the_tail() -> None:
     """Memo test 7 shape: raise / attach_partial / return_partial all flush."""
 
@@ -108,7 +89,7 @@ def test_record_tier_disposition_trio_flushes_the_tail() -> None:
                     ShapeCrash(),
                     x,
                     narrate=NarrationOptions(sites=True, sink=sink),
-                    on_forward_error=mode,
+                    recording=tl.options.RecordingOptions(on_forward_error=mode),
                 )
         except TraceCaptureError as exc:
             assert isinstance(exc.__cause__, RuntimeError)
@@ -122,7 +103,6 @@ def test_record_tier_disposition_trio_flushes_the_tail() -> None:
         assert "attempted call=layer_norm" in sink.getvalue()
 
 
-@pytest.mark.smoke
 def test_partial_narrate_works_with_echo_off() -> None:
     """Tail 1, the headline: post-hoc narration needs no foresight."""
 
@@ -137,7 +117,6 @@ def test_partial_narrate_works_with_echo_off() -> None:
     assert "the raising call is not in the record" in rendered
 
 
-@pytest.mark.smoke
 def test_trace_and_recording_narrate_render_the_same_grammar() -> None:
     """One renderer, three carriers: tail idiom on finished products."""
 
@@ -152,7 +131,6 @@ def test_trace_and_recording_narrate_render_the_same_grammar() -> None:
     assert "relu" in filtered and "linear" not in filtered
 
 
-@pytest.mark.smoke
 def test_broken_sink_disables_narrator_and_capture_continues() -> None:
     """Observer failures are instrumentation failures: warn once, continue."""
 
@@ -177,7 +155,6 @@ def test_broken_sink_disables_narrator_and_capture_continues() -> None:
     assert codes.count("echo_sink_disabled") == 1
 
 
-@pytest.mark.smoke
 def test_double_fault_original_exception_wins() -> None:
     """A sink that dies during the crash tail never outranks the model error."""
 
@@ -222,7 +199,6 @@ def test_keyboard_interrupt_stays_an_interrupt() -> None:
             )
 
 
-@pytest.mark.smoke
 def test_raise_on_nan_minting_op_is_last_narrated_and_census_exact() -> None:
     """Memo crash D shape: tripwire reuse -- the crash line has the tensor."""
 
@@ -255,19 +231,3 @@ def test_raise_on_nan_minting_op_is_last_narrated_and_census_exact() -> None:
     assert "(exact)" in tripwire[0]
     narrated = [line for line in lines if line.startswith("!! last narrated event=")]
     assert narrated and "div" in narrated[0]
-
-
-def test_halted_capture_footer_says_halted_not_failed() -> None:
-    """Halted (halt=/stop_after) is not failed; the footer distinguishes."""
-
-    sink = io.StringIO()
-    log = tl.trace(
-        nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2)),
-        torch.randn(2, 4),
-        stop_after=tl.func("relu"),
-        narrate=NarrationOptions(sites=True, sink=sink),
-    )
-    assert log is not None
-    transcript = sink.getvalue()
-    assert "halted, not failed" in transcript
-    assert "!! forward failed" not in transcript

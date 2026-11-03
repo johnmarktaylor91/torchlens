@@ -6,6 +6,9 @@ Each pattern carries a strength:
 - ``contextual``: the name in its usual position (``.member``, ``kw=``, ``ns.X``) that
   another object of the same leaf name could also fill;
 - ``leaf``: the bare leaf; counted only inside a backtick span or a bold term.
+
+A refusal code (``code``) is qualified when quoted; a record key (``receipt``) when
+subscripted on its record (``last_run["engine"]``), contextual when merely quoted.
 """
 
 from __future__ import annotations
@@ -107,6 +110,14 @@ def spellings(row: dict[str, Any], name: str | None = None) -> list[Spelling]:
         found.append(Spelling(re.compile(rf"(?<=\.){leaf}"), CONTEXTUAL))
     elif kind == "param":
         found.append(Spelling(re.compile(rf"(?<![\w.]){leaf}(?=\s*=(?!=))"), CONTEXTUAL))
+    elif kind == "code":
+        found.append(Spelling(re.compile(rf"""(?<=["']){leaf}(?=["'])"""), QUALIFIED))
+    elif kind == "receipt":
+        owner = re.escape(str(row.get("owner", "")))
+        found.append(
+            Spelling(re.compile(rf"""(?<![\w.]){owner}\[["']{leaf}(?=["']\])"""), QUALIFIED)
+        )
+        found.append(Spelling(re.compile(rf"""(?<=["']){leaf}(?=["'])"""), CONTEXTUAL))
     found.append(Spelling(re.compile(rf"(?<![\w.]){leaf}"), LEAF))
     return [dataclasses.replace(item, leaf=literal) for item in found]
 

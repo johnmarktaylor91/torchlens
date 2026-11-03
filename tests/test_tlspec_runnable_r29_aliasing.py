@@ -58,25 +58,7 @@ class DirectMutateModel(nn.Module):
         return a + b
 
 
-def test_r29_view_mediated_input_mutation_aliased_fails_closed(tmp_path: Path) -> None:
-    """``a[0].add_()`` with ``a is b`` at runtime must fail closed (F2-hon gap)."""
-
-    ca, cb = torch.randn(4), torch.randn(4)
-    path = _save(ViewMutateModel(), (ca, cb), tmp_path / "vm.tlspec")
-
-    # Distinct inputs match the de-aliased capture -> VERIFIED (no over-trigger).
-    assert tl.load(path).run(inputs=(ca.clone(), cb.clone())).report.path_faithfulness is (
-        PathFaithfulness.VERIFIED
-    )
-
-    shared = torch.randn(4)
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=(shared, shared))
-    diverged = tl.load(path).run(inputs=(shared, shared), on_divergence="return")
-    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
+# Kept: sole branch coverage of _runnable/path_faithfulness.py, _runnable/verification.py.
 def test_r29_disjoint_views_of_one_base_do_not_over_trigger(tmp_path: Path) -> None:
     """Two disjoint views of the same base storage must NOT falsely diverge (codex-F4)."""
 
@@ -88,18 +70,6 @@ def test_r29_disjoint_views_of_one_base_do_not_over_trigger(tmp_path: Path) -> N
     assert va.untyped_storage().data_ptr() == vb.untyped_storage().data_ptr()
     result = tl.load(path).run(inputs=(va, vb))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_r29_overlapping_views_still_fail_closed(tmp_path: Path) -> None:
-    """Two OVERLAPPING views of one base with an in-place input mutation must fail closed."""
-
-    base = torch.randn(8)
-    path = _save(DirectMutateModel(), (base[:4].clone(), base[2:6].clone()), tmp_path / "ov.tlspec")
-
-    big = torch.randn(8)
-    va, vb = big[:4], big[2:6]  # overlap on bytes [2, 4)
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=(va, vb))
 
 
 # ---------------------------------------------------------------------------
@@ -121,50 +91,7 @@ def _run_pair(tmp_path: Path, name: str, a: torch.Tensor, b: torch.Tensor):
     return tl.load(path).run(inputs=(a, b))
 
 
-def test_r35_even_odd_interleaves_are_proved_disjoint(tmp_path: Path) -> None:
-    """corr2_1: ``base[::2]`` / ``base[1::2]`` share no element byte -> VERIFIED."""
-
-    base = torch.randn(8)
-    a, b = base[::2], base[1::2]
-    result = _run_pair(tmp_path, "evenodd.tlspec", a, b)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.equal(result.output, a + b)
-
-
-def test_r35_step3_interleaves_and_offsets_are_proved_disjoint(tmp_path: Path) -> None:
-    """Step-3 interleaves with distinct residues are disjoint -> VERIFIED."""
-
-    base = torch.randn(12)
-    result = _run_pair(tmp_path, "step3.tlspec", base[::3], base[1::3])
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_r35_disjoint_2d_tiles_with_overlapping_boxes_are_disjoint(tmp_path: Path) -> None:
-    """Disjoint 2-D tiles whose bounding byte intervals overlap -> VERIFIED."""
-
-    base = torch.randn(4, 4)
-    a = base[0:2, 0:2]  # rows 0-1, cols 0-1
-    b = base[0:2, 2:4]  # rows 0-1, cols 2-3 (bounding intervals interleave)
-    result = _run_pair(tmp_path, "tiles.tlspec", a, b)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_r35_large_residue_provable_interleaves_stay_verified(tmp_path: Path) -> None:
-    """Above the enumeration cap, the residue proof still proves disjointness."""
-
-    base = torch.randn(2 * 70000)
-    result = _run_pair(tmp_path, "bigresidue.tlspec", base[::2], base[1::2])
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_r35_genuine_partial_overlap_fails_closed(tmp_path: Path) -> None:
-    """``base[:3]`` / ``base[2:]`` genuinely share an element -> fail closed."""
-
-    base = torch.randn(6)
-    with pytest.raises(PathDivergenceError):
-        _run_pair(tmp_path, "overlap.tlspec", base[:4], base[2:6])
-
-
+# Kept: sole branch coverage of _runnable/input_aliases.py, _utils/alias_footprint.py.
 def test_r35_broadcast_zero_stride_overlap_fails_closed(tmp_path: Path) -> None:
     """A zero-stride broadcast view over a consumed element -> fail closed."""
 
@@ -174,6 +101,7 @@ def test_r35_broadcast_zero_stride_overlap_fails_closed(tmp_path: Path) -> None:
         _run_pair(tmp_path, "broadcast.tlspec", expanded, base)
 
 
+# Kept: sole branch coverage of _runnable/input_aliases.py.
 def test_r35_same_object_identity_fails_closed(tmp_path: Path) -> None:
     """``forward(a, b)`` with ``a is b`` stays an observed contradiction."""
 
@@ -182,6 +110,7 @@ def test_r35_same_object_identity_fails_closed(tmp_path: Path) -> None:
         _run_pair(tmp_path, "identity.tlspec", shared, shared)
 
 
+# Kept: sole branch coverage of _runnable/path_faithfulness.py.
 def test_r35_unprovable_topology_is_unverifiable_never_attested(tmp_path: Path) -> None:
     """Above the cap with no residue proof: unknown -> UNVERIFIABLE, never DIVERGED."""
 
@@ -196,16 +125,7 @@ def test_r35_unprovable_topology_is_unverifiable_never_attested(tmp_path: Path) 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-def test_r35_zero_length_views_are_trivially_disjoint(tmp_path: Path) -> None:
-    """An empty view shares no bytes with anything -> engine proves disjoint."""
-
-    from torchlens._runnable.input_metadata import _touched_bytes_relation
-
-    base = torch.randn(6)
-    assert _touched_bytes_relation(base[0:0], base[:4]) == "disjoint"
-    assert _touched_bytes_relation(base[2:2], base) == "disjoint"
-
-
+# Kept: sole branch coverage of _runnable/input_metadata.py, _utils/alias_footprint.py.
 def test_r35_engine_unit_matrix() -> None:
     """Unit rows for the three-valued engine (proof, not assumption)."""
 

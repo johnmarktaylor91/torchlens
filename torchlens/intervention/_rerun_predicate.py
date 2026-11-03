@@ -10,12 +10,15 @@ entries, and then checks that the door re-staged exactly the entries the trace
 carries. The staged spec itself is never mutated. Entries a user staged on a
 final label (set_only ``do``, ``attach_hooks(tl.label(...))``) are translated to
 the raw capture labels of the ops they name (:func:`translate_staged_final_labels`),
-the same translation a mixed gradient plan's activation half uses.
+the same translation a mixed gradient plan's activation half uses. A rerun of a
+capture that saved a static raw-index subset re-selects it through
+:func:`_make_raw_index_save_predicate`.
 """
 
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -308,3 +311,28 @@ def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
     ):
         return capture_spec
     return replace(capture_spec, target_value_specs=values, hook_specs=hooks)
+
+
+def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any], bool]:
+    """Build a predicate that mirrors a static raw-index save subset.
+
+    Parameters
+    ----------
+    selected_indices:
+        Raw operation indices selected by the original capture.
+
+    Returns
+    -------
+    Callable[[Any], bool]
+        Predicate returning ``True`` for matching capture contexts.
+    """
+
+    def keep_selected_raw_index(ctx: Any) -> bool:
+        """Return whether a predicate context matches the selected raw indices."""
+
+        raw_index = getattr(ctx, "raw_index", None)
+        if raw_index is None:
+            raw_index = getattr(ctx, "event_index", None)
+        return raw_index in selected_indices
+
+    return keep_selected_raw_index

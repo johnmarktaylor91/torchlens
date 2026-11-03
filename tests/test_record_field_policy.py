@@ -178,6 +178,7 @@ def _record_instances(trace: Trace, cls: type[Any]) -> Iterable[Any]:
         yield next(iter(trace.autograd.backward_passes))
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_layer_field_order_includes_live_aggregate_fields() -> None:
     """Layer FIELD_ORDER includes aggregate fields kept by _FIELD_POLICY."""
 
@@ -194,6 +195,7 @@ def test_layer_field_order_includes_live_aggregate_fields() -> None:
     assert expected_fields.issubset(LAYER_LOG_FIELD_ORDER)
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("case", RECORD_CASES, ids=lambda case: case.cls.__name__)
 def test_record_field_policy_is_field_order_source(case: RecordCase) -> None:
     """Every record's user-facing policy entries exactly match FIELD_ORDER."""
@@ -204,6 +206,7 @@ def test_record_field_policy_is_field_order_source(case: RecordCase) -> None:
     assert len(case.field_order) == len(set(case.field_order))
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("case", RECORD_CASES, ids=lambda case: case.cls.__name__)
 def test_record_portable_spec_is_generated_from_policy(case: RecordCase) -> None:
     """Class portable specs are generated views over _FIELD_POLICY."""
@@ -211,6 +214,7 @@ def test_record_portable_spec_is_generated_from_policy(case: RecordCase) -> None
     assert portable_state_spec_from_policy(case.cls._FIELD_POLICY) == case.cls._PORTABLE_STATE_SPEC
 
 
+# Kept: sole branch coverage of _data_classes/field_policy.py.
 def test_trace_and_op_generated_policy_views_match_old_names() -> None:
     """Trace/Op fork-policy views are generated from their field policy tables."""
 
@@ -218,6 +222,7 @@ def test_trace_and_op_generated_policy_views_match_old_names() -> None:
     assert fork_policy_from_policy(Op._FIELD_POLICY) == Op._FIELD_FORK_POLICY
 
 
+# Kept: sole branch coverage of _data_classes/buffer.py, _data_classes/grad_fn.py, _data_classes/grad_fn_call.py and more; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize("case", RECORD_CASES, ids=lambda case: case.cls.__name__)
 def test_record_field_order_attributes_are_live(case: RecordCase) -> None:
     """Captured records expose every ordered user-facing field."""
@@ -236,6 +241,7 @@ def test_record_field_order_attributes_are_live(case: RecordCase) -> None:
         trace.cleanup()
 
 
+# Kept: sole branch coverage of _trace_core/op_store.py.
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the
