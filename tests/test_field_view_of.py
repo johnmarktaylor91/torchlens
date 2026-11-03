@@ -212,7 +212,7 @@ def test_results_compose_with_the_selection_algebra(stack) -> None:
     assert torch.equal(_row(left & right, conv3).mask, a & b)
     assert torch.equal(_row(left | right, conv3).mask, a | b)
     assert torch.equal(_row(left - right, conv3).mask, a & ~b)
-    assert torch.equal(_row(stack[~left], conv3).mask, ~a)
+    assert torch.equal(_row(~left, conv3).mask, ~a)
     # An unresolved selector composes too, resolving against the bound trace.
     corner = tl.units(conv3.label, [(0, 0, 0, 0)])
     assert torch.equal(_row(left | corner, conv3).mask, a | _row(stack[corner], conv3).mask)
