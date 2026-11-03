@@ -6,10 +6,7 @@ import contextlib
 import json
 import os
 import shutil
-import sys
 import uuid
-from collections.abc import Iterable
-from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
@@ -18,11 +15,19 @@ import torch
 from safetensors.torch import save_file
 
 from .. import __version__ as TORCHLENS_VERSION
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
-from ..backends import get_backend_spec
-from . import TLSPEC_VERSION, TorchLensIOError
-from ._durability import fsync_dir, fsync_tree
-from .manifest import Manifest, TensorEntry, sha256_of_file
+from .._utils.hashing import sha256_file
+from ..backends.registry import get_backend_spec
+from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
+from ._durability import _restrict_mode, fsync_dir, fsync_tree
+from ._tlspec_json_helpers import (
+    _hash_named_tensor_meta,
+    _json_int_or_none,
+    _json_str_or_none,
+    _utc_timestamp,
+)
+from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
 
 _PARTIAL_SENTINEL = "PARTIAL"
@@ -38,24 +43,6 @@ def _reject_symlink_path(path: Path, *, context: str) -> None:
         context=context,
         message_prefix="Refusing to write through symlink",
     )
-
-
-def _restrict_mode(path: Path, mode: int) -> None:
-    """Best-effort tighten a written ``.tlspec`` path's permissions (POSIX only).
-
-    Permission parity with ``_io/bundle.py::_restrict_mode`` and the streaming
-    writer (R59): ``mkdir`` / file writes honor the ambient umask, so under
-    umask 002 the bundle directory and its sidecars were left group-writable
-    while the core bundle writer tightens them. The publish rename preserves
-    ``tmp_path``'s mode, so tightening the staged directory tightens the
-    published bundle. Best-effort: a filesystem that ignores mode bits is not a
-    save failure.
-    """
-
-    if os.name != "posix":
-        return
-    with contextlib.suppress(OSError):
-        path.chmod(mode)
 
 
 # NOTE: ``TLSPEC_VERSION`` is imported (not redefined) from ``torchlens._io``
@@ -143,7 +130,7 @@ class _TlSpecWriter:
         # which of two same-named keys wins.
         unified_fields.pop("tlspec_version", None)
         manifest.update(unified_fields)
-        backend_name = str(getattr(trace, "backend", "torch"))
+        backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
         if backend_name != "torch" or sparse_run is not None:
             spec = get_backend_spec(backend_name)
             manifest.update(
@@ -269,7 +256,7 @@ class _TlSpecWriter:
         body_filename = "body.safetensors"
         try:
             if target_path.exists() and not overwrite:
-                raise FileExistsError(f"Bundle path already exists: {target_path}")
+                refuse_bundle_exists(target_path, overwritable=True)
             tmp_path.mkdir(parents=True)
             _restrict_mode(tmp_path, 0o700)
             # Sweepable from birth: mark the staging dir PARTIAL so a SIGKILL
@@ -303,7 +290,7 @@ class _TlSpecWriter:
                     "shape": [],
                     "num_elements": 0,
                     "intended_use": "bundle_marker",
-                    "sha256": sha256_of_file(tmp_path / body_filename),
+                    "sha256": sha256_file(tmp_path / body_filename),
                 }
             ]
             cls.write_json(tmp_path / TLSPEC_MANIFEST_FILENAME, manifest)
@@ -334,7 +321,7 @@ class _TlSpecWriter:
                 # success). Mirror ``torchlens/_io/bundle.py`` and refuse
                 # instead of live-destroying a concurrently-published artifact.
                 if not overwrite:
-                    raise FileExistsError(f"Bundle path already exists: {target_path}")
+                    refuse_bundle_exists(target_path, overwritable=True)
                 backup_path = target_path.parent / f"{target_path.name}.bak.{uuid.uuid4().hex}"
                 os.replace(target_path, backup_path)
             os.replace(tmp_path, target_path)
@@ -456,7 +443,7 @@ class _TlSpecWriter:
 
         members = getattr(bundle, "members", {})
         if not isinstance(members, dict):
-            raise TorchLensIOError("Bundle writer expected a mapping of members.")
+            raise ArtifactError("Bundle writer expected a mapping of members.")
         members_path = tmp_path / "members"
         members_path.mkdir()
         records: list[dict[str, str]] = []
@@ -507,7 +494,7 @@ class _TlSpecWriter:
             "kind": kind,
             "created_at": getattr(source, "_source_bundle_created_at", None) or _utc_timestamp(),
             "torchlens_version": TORCHLENS_VERSION,
-            "python_version": _python_version(),
+            "python_version": _runtime_python_version(),
             "torch_version": torch.__version__,
             "schema_version": TLSPEC_SCHEMA_VERSION,
             "model_signature": model_signature,
@@ -559,13 +546,13 @@ class _TlSpecWriter:
 
         spec = get_backend_spec(backend_name)
         runtime_name = spec.serialization_policy.runtime_name or backend_name
-        runtime_config = getattr(source, "backend_runtime_config", None)
+        runtime_config = source._provenance_backend_config
         if not isinstance(runtime_config, dict):
             runtime_config = {}
         device_summary = getattr(source, "backend_runtime_device_summary", None)
         if not isinstance(device_summary, dict):
             device_summary = {}
-        runtime_version = getattr(source, "backend_runtime_version", "0.0.metadata")
+        runtime_version = source._provenance_backend_version
         return {
             "name": runtime_name,
             "version": None if runtime_version is None else str(runtime_version),
@@ -620,8 +607,10 @@ class _TlSpecWriter:
             JSON-ready derived-gradient summary, or ``None`` when absent.
         """
 
-        leaf_records = getattr(source, "derived_grads", {})
-        intermediate_records = getattr(source, "intermediate_derived_grads", {})
+        leaf_records = source._autograd_derived_grads
+        intermediate_records = getattr(
+            getattr(source, "autograd", None), "intermediate_derived_grads", {}
+        )
         leaf_count = _safe_len(leaf_records)
         intermediate_count = _safe_len(intermediate_records)
         if leaf_count == 0 and intermediate_count == 0:
@@ -659,14 +648,14 @@ class _TlSpecWriter:
         """
 
         model_signature = cls._model_signature(source, kind="trace")
-        graph_shape_hash = getattr(source, "graph_shape_hash", None)
+        graph_shape_hash = source._provenance_fingerprint
         return {
             "backend_fingerprint": {
                 "backend": backend_name,
                 "model_signature": model_signature,
                 "graph_digest": graph_shape_hash or "metadata-only",
                 "module_identity_mode": getattr(source, "module_identity_mode", None),
-                "param_source": getattr(source, "param_source", None),
+                "param_source": source._provenance_param_source,
             }
         }
 
@@ -689,7 +678,7 @@ class _TlSpecWriter:
 
         if kind == "bundle":
             return "torchlens.intervention.bundle.Bundle"
-        model_class_qualname = getattr(source, "model_class_qualname", None)
+        model_class_qualname = source._source_class_qualname if is_live_trace(source) else None
         if isinstance(model_class_qualname, str) and model_class_qualname:
             return model_class_qualname
         model = _source_model(source)
@@ -736,7 +725,9 @@ class _TlSpecWriter:
             parameter_hash = _hash_named_tensor_meta(model.named_parameters())
             buffer_hash = _hash_named_tensor_meta(model.named_buffers())
         else:
-            raw_parameter_hash = getattr(source, "param_hash_quick", None)
+            raw_parameter_hash = (
+                source._provenance_param_hash_quick if is_live_trace(source) else None
+            )
             if isinstance(raw_parameter_hash, str) and len(raw_parameter_hash) == 64:
                 parameter_hash = raw_parameter_hash
             else:
@@ -812,9 +803,9 @@ class _TlSpecWriter:
                         sites.append(site)
             return sites
         layers = (
-            source.get("layer_list", [])
+            source.get("_layer_list", [])
             if isinstance(source, dict)
-            else getattr(source, "layer_list", [])
+            else (source._layer_list if is_live_trace(source) else [])
         )
         sites = []
         for layer in layers if isinstance(layers, list) else []:
@@ -893,15 +884,21 @@ class _TlSpecWriter:
         """
 
         grad_kinds = {"grad", "transformed_grad", "grad_fn_grad"}
-        backend_name = str(getattr(source, "backend", "torch"))
+        backend_name = str(source._provenance_backend if is_live_trace(source) else "torch")
         saved_grad_records = 0
         if backend_name == "torch":
             saved_grad_records = _safe_len(getattr(source, "saved_grad_ops", None))
         return {
-            "has_backward_pass": bool(getattr(source, "has_backward_pass", False)),
-            "num_backward_passes": int(getattr(source, "num_backward_passes", 0) or 0),
-            "num_grad_fns": int(getattr(source, "num_grad_fns", 0) or 0),
-            "num_grad_fn_calls": int(getattr(source, "num_grad_fn_calls", 0) or 0),
+            "has_backward_pass": bool(
+                source._autograd_has_backward_pass if is_live_trace(source) else False
+            ),
+            "num_backward_passes": int(
+                (source._num_backward_passes if is_live_trace(source) else 0) or 0
+            ),
+            "num_grad_fns": _safe_len(source._grad_fn_logs if is_live_trace(source) else None),
+            "num_grad_fn_calls": _safe_len(
+                getattr(getattr(source, "autograd", None), "grad_fn_calls", None)
+            ),
             "num_saved_grad_records": saved_grad_records,
             "gradient_blob_count": sum(1 for entry in tensor_entries if entry.kind in grad_kinds),
             "gradient_blob_kinds": sorted(
@@ -1004,29 +1001,11 @@ def _source_model(source: Any) -> torch.nn.Module | None:
         Source model, or ``None`` when unavailable.
     """
 
-    source_ref = getattr(source, "_source_model_ref", None)
+    source_ref = source._source_model_ref if is_live_trace(source) else None
     if source_ref is None:
         return None
     model = source_ref()
     return model if isinstance(model, torch.nn.Module) else None
-
-
-def _hash_named_tensor_meta(named_tensors: Iterable[tuple[str, torch.Tensor]]) -> str:
-    """Hash ``(name, shape, dtype)`` metadata for named tensors.
-
-    Parameters
-    ----------
-    named_tensors:
-        Iterable of named tensor pairs.
-
-    Returns
-    -------
-    str
-        SHA-256 hex digest.
-    """
-
-    entries = [(name, tuple(tensor.shape), str(tensor.dtype)) for name, tensor in named_tensors]
-    return sha256(repr(entries).encode("utf-8")).hexdigest()
 
 
 def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
@@ -1044,74 +1023,16 @@ def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
     """
 
     return {
-        "model_class_name": _json_str_or_none(getattr(source, "model_class_name", None)),
-        "graph_shape_hash": _json_str_or_none(getattr(source, "graph_shape_hash", None)),
-        "input_signature_hash": _json_str_or_none(getattr(source, "input_signature_hash", None)),
+        "model_class_name": _json_str_or_none(
+            source._source_class_name if is_live_trace(source) else None
+        ),
+        "graph_shape_hash": _json_str_or_none(
+            source._provenance_fingerprint if is_live_trace(source) else None
+        ),
+        "input_signature_hash": _json_str_or_none(
+            source._provenance_input_signature_hash if is_live_trace(source) else None
+        ),
     }
-
-
-def _json_str_or_none(value: Any) -> str | None:
-    """Return a string for JSON output, preserving ``None``.
-
-    Parameters
-    ----------
-    value:
-        Raw value.
-
-    Returns
-    -------
-    str | None
-        JSON-safe string or ``None``.
-    """
-
-    if value is None:
-        return None
-    return str(value)
-
-
-def _json_int_or_none(value: Any) -> int | None:
-    """Return an int for JSON output when possible.
-
-    Parameters
-    ----------
-    value:
-        Raw value.
-
-    Returns
-    -------
-    int | None
-        JSON-safe int or ``None``.
-    """
-
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    return None
-
-
-def _python_version() -> str:
-    """Return the runtime Python version string.
-
-    Returns
-    -------
-    str
-        ``major.minor.micro`` version string.
-    """
-
-    return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-
-
-def _utc_timestamp() -> str:
-    """Return a UTC ISO 8601 timestamp.
-
-    Returns
-    -------
-    str
-        UTC timestamp with ``Z`` suffix.
-    """
-
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 __all__ = [

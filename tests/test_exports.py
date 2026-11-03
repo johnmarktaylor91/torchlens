@@ -103,7 +103,7 @@ def _assert_netron_structure(payload: dict[str, Any]) -> None:
     honesty_value = props["torchlens.capture_honesty"]
     assert json.loads(honesty_value)["schema"] == "torchlens.capture_honesty.v1"
     assert props["torchlens.lossy_export"] == "true"
-    assert props["torchlens.runnable"] == "false"
+    assert props["torchlens._runnable"] == "false"
     assert props["torchlens.netron_schema"] == "2"
     assert props["torchlens.granularity"] in {"op", "module", "rolled"}
     graph = payload["graph"]
@@ -258,14 +258,14 @@ def _normalize_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def test_hash_namespace_is_available_through_all_public_import_patterns() -> None:
     """The structural-hash namespace should preserve lazy facade import patterns."""
 
-    import torchlens.hash as hash_module
-    from torchlens import hash as imported_namespace
-    from torchlens.hash import model as model_hash
+    import torchlens.fingerprint as hash_module
+    from torchlens import fingerprint as imported_namespace
+    from torchlens.fingerprint import model as model_hash
 
-    assert tl.hash is hash_module
+    assert tl.fingerprint is hash_module
     assert imported_namespace is hash_module
     assert model_hash is hash_module.model
-    assert tl.assert_unchanged is hash_module.assert_unchanged
+    assert tl.fingerprint.assert_unchanged is hash_module.assert_unchanged
 
 
 class _Tracker:
@@ -289,7 +289,7 @@ class _Tracker:
 
         self.metrics.append((name, value))
 
-    def track(self, value: int, name: str) -> None:
+    def track(self, value: int, name: str, **kwargs: Any) -> None:
         """Record an Aim-like track call.
 
         Parameters
@@ -298,9 +298,27 @@ class _Tracker:
             Metric value.
         name:
             Metric name.
+        **kwargs:
+            Ignored ``step=``/``context=`` of the per-layer series.
         """
 
+        del kwargs
         self.metrics.append((name, value))
+
+    def log_table(self, data: Any, artifact_file: str) -> None:
+        """Accept an MLflow-like table artifact."""
+
+    def log_text(self, text: str, artifact_file: str) -> None:
+        """Accept an MLflow-like text artifact."""
+
+    def set_tag(self, key: str, value: str) -> None:
+        """Accept an MLflow-like run tag."""
+
+    def add_tag(self, value: str) -> None:
+        """Accept an Aim-like run tag."""
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Accept an Aim-like run param."""
 
 
 class _FakeHubApi:
@@ -343,7 +361,7 @@ class _FakeHubApi:
         # cleaned up as soon as this call returns, so content must be
         # captured now rather than by re-reading the path later.
         self.uploaded_bytes.append(Path(kwargs["path_or_fileobj"]).read_bytes())
-        return "https://huggingface.co/example/repo/blob/main/torchlens_artifact.pkl"
+        return "https://huggingface.co/example/repo/blob/main/torchlens_artifact.tar.gz"
 
 
 @pytest.fixture
@@ -390,7 +408,8 @@ def test_xarray_export_has_neuroidassembly_shape(export_log: Any) -> None:
     """xarray export should expose presentation and neuroid dimensions."""
     pytest.importorskip("xarray")
 
-    assembly = tl.export.xarray(export_log)
+    dataset = tl.export.xarray(export_log)
+    assembly = dataset["out"]
 
     assert assembly.dims == ("presentation", "neuroid")
     assert "layer" in assembly.coords
@@ -404,7 +423,7 @@ def test_xarray_export_names_mismatched_presentation_layer() -> None:
     pytest.importorskip("xarray")
 
     fake_log = SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             SimpleNamespace(layer_label="first", out=torch.randn(2, 3)),
             SimpleNamespace(layer_label="bad_layer", out=torch.randn(1, 3)),
         ]
@@ -435,7 +454,7 @@ def test_tracker_exports_accept_existing_objects(export_log: Any, tmp_path: Path
     assert tracker.metrics
 
     aim_tracker = _Tracker()
-    assert tl.export.aim(export_log, run=aim_tracker, prefix="tl")["num_layers"] > 0
+    assert tl.export.aim(export_log, to=aim_tracker, prefix="tl")["num_layers"] > 0
     assert aim_tracker.metrics
 
     pytest.importorskip("wandb")
@@ -453,12 +472,30 @@ def test_mlflow_export_routes_run_id_by_client_shape(export_log: Any) -> None:
         def log_metric(self, run_id: str, key: str, value: float, step: int | None = None) -> None:
             self.calls.append((run_id, key, value))
 
+        def log_table(self, run_id: str, data: Any, artifact_file: str) -> None:
+            del run_id, data, artifact_file
+
+        def log_text(self, run_id: str, text: str, artifact_file: str) -> None:
+            del run_id, text, artifact_file
+
+        def set_tag(self, run_id: str, key: str, value: str) -> None:
+            del run_id, key, value
+
     class _Fluent:
         def __init__(self) -> None:
             self.calls: list[tuple[Any, ...]] = []
 
         def log_metric(self, key: str, value: float, step: int | None = None, run_id: Any = None):
             self.calls.append((key, value, run_id))
+
+        def log_table(self, data: Any, artifact_file: str, run_id: Any = None) -> None:
+            del data, artifact_file, run_id
+
+        def log_text(self, text: str, artifact_file: str, run_id: Any = None) -> None:
+            del text, artifact_file, run_id
+
+        def set_tag(self, key: str, value: str, run_id: Any = None) -> None:
+            del key, value, run_id
 
     class _Bare:
         def log_metric(self, key: str, value: float) -> None:
@@ -494,20 +531,31 @@ def test_tracker_exports_reject_paths_with_clear_type_errors(
     with pytest.raises(TypeError, match="mlflow expects an existing tracker object"):
         tl.export.mlflow(export_log, client=tmp_path / "mlruns")
     with pytest.raises(TypeError, match="aim expects an existing tracker object"):
-        tl.export.aim(export_log, run=tmp_path / "aim")
+        tl.export.aim(export_log, to=tmp_path / "aim")
 
 
-def test_emit_nvtx_capture_option_does_not_change_capture() -> None:
-    """emit_nvtx should be accepted and should not alter normal logging output."""
+def test_emit_nvtx_capture_option_does_not_change_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """emit_nvtx should be accepted and should not alter normal logging output.
 
+    The host is simulated as NVTX-capable: a CUDA-less host refuses
+    ``emit_nvtx=True`` typed (``emit_nvtx_unavailable``, U35.3).
+    """
+
+    from torchlens.backends.torch import _op_markers
+
+    monkeypatch.setattr(_op_markers, "_nvtx_host_available", lambda: True)
+    monkeypatch.setattr(torch.cuda.nvtx, "range_push", lambda name: None)
+    monkeypatch.setattr(torch.cuda.nvtx, "range_pop", lambda: None)
     log = tl.trace(
         nn.Linear(2, 2),
         torch.randn(1, 2),
         capture=tl.options.CaptureOptions(emit_nvtx=True),
     )
 
-    assert log.emit_nvtx is True
-    assert len(log.layer_list) > 0
+    assert log.options.emit_nvtx is True
+    assert len(log._layer_list) > 0
 
 
 def test_tabular_exports_round_trip(export_log: Any, tmp_path: Path) -> None:
@@ -560,7 +608,7 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
         "netron.json", _normalize_export_payload(netron_payload)
     )
 
-    result = tl.bridge.huggingface.push_to_hub(
+    result = tl.bridge.huggingface_hub.push_to_hub(
         export_log,
         "example/repo",
         dry_run=True,
@@ -569,7 +617,7 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
     assert result["dry_run"] is True
 
     api = _FakeHubApi()
-    uploaded = tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    uploaded = tl.bridge.huggingface_hub.push_to_hub(export_log, "example/repo", api=api)
     assert uploaded["upload_result"].startswith("https://huggingface.co/")
     assert api.created
     assert api.uploaded
@@ -655,7 +703,7 @@ def test_hub_push_uploads_real_bundle_not_metadata_stub(export_log: Any) -> None
     """
 
     api = _FakeHubApi()
-    uploaded = tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    uploaded = tl.bridge.huggingface_hub.push_to_hub(export_log, "example/repo", api=api)
     assert uploaded["dry_run"] is False
     assert api.uploaded, "expected an upload_file call"
 
@@ -683,7 +731,7 @@ def test_hub_push_scrubs_local_paths_from_uploaded_trace(export_log: Any) -> Non
     """
 
     api = _FakeHubApi()
-    tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    tl.bridge.huggingface_hub.push_to_hub(export_log, "example/repo", api=api)
     payload = api.uploaded_bytes[-1]
 
     # Decompress the gzip-tar and scan the actual member bytes: a compressed

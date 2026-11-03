@@ -185,14 +185,14 @@ def _check_square_distances(distances: np.ndarray) -> None:
         raise ValueError("distances must be non-negative.")
 
 
-def _check_stimulus_count(n_stimuli: int, min_n: int) -> None:
+def _check_stimulus_count(n_stimuli: int, min_stimuli: int) -> None:
     """Validate the minimum number of stimuli for display-oriented MDS.
 
     Parameters
     ----------
     n_stimuli:
         Number of rows in the representation.
-    min_n:
+    min_stimuli:
         User-facing minimum stimulus gate.
 
     Raises
@@ -203,10 +203,10 @@ def _check_stimulus_count(n_stimuli: int, min_n: int) -> None:
 
     if n_stimuli < 3:
         raise ValueError("classical_mds requires at least 3 stimuli.")
-    if n_stimuli < min_n:
+    if n_stimuli < min_stimuli:
         raise ValueError(
             f"classical_mds has too few stimuli for a stable visualization: "
-            f"got {n_stimuli}, need at least {min_n}."
+            f"got {n_stimuli}, need at least {min_stimuli}."
         )
 
 
@@ -632,7 +632,7 @@ def _kendall_tau_a(a: np.ndarray, b: np.ndarray) -> float:
     return concordance / n_pairs if n_pairs else math.nan
 
 
-def rdm_compare(rdm_a: Any, rdm_b: Any, method: str = "spearman") -> float:
+def compare_rdms(rdm_a: Any, rdm_b: Any, method: str = "spearman") -> float:
     """Return a descriptive rank correlation between two model RDMs.
 
     F20, brainpipe memo D-6 (spelling DOCUMENTED-UNSTABLE): the same class
@@ -750,11 +750,13 @@ def _angular_dissimilarity(features: np.ndarray, *, center_rows: bool) -> np.nda
 def _gaussian_dissimilarity(features: np.ndarray) -> np.ndarray:
     """Return Gaussian/RBF-kernel dissimilarities for row-wise features.
 
-    Convention (thingsvision's, credited -- ``thingsvision.core.rsa``):
-    with squared euclidean pairwise distances ``D``, the bandwidth is
-    ``mean(D)`` over the FULL ``N x N`` matrix (diagonal zeros included),
-    the similarity kernel is ``exp(-D / (2 * mean(D)))``, and the
-    dissimilarity is ``1 - similarity``. The bandwidth choice is a
+    Convention (thingsvision's, credited -- ``gaussian_kernel`` in
+    ``thingsvision/core/rsa/helpers.py``, unchanged upstream since its
+    2022-08-31 commit): with squared euclidean pairwise distances ``D``, the
+    bandwidth is ``mean(D)`` over the FULL ``N x N`` matrix (diagonal zeros
+    included), the similarity kernel is ``exp(-D / mean(D))``, and the
+    dissimilarity is ``1 - similarity``. This equals the similarity-repository's
+    ``rdm/*/gaussian`` exactly (oracle-checked). The bandwidth choice is a
     convention, not a law of nature; it is stated here so the number is
     reproducible.
 
@@ -766,7 +768,7 @@ def _gaussian_dissimilarity(features: np.ndarray) -> np.ndarray:
     Returns
     -------
     np.ndarray
-        Square ``1 - exp(-D / (2 * mean(D)))`` dissimilarity matrix.
+        Square ``1 - exp(-D / mean(D))`` dissimilarity matrix.
 
     Raises
     ------
@@ -785,7 +787,7 @@ def _gaussian_dissimilarity(features: np.ndarray) -> np.ndarray:
             "the data-derived bandwidth (mean squared pairwise distance, "
             "thingsvision's convention) is zero."
         )
-    return 1.0 - np.exp(-squared / (2.0 * bandwidth))
+    return 1.0 - np.exp(-squared / bandwidth)
 
 
 def rank_transform_rdm(
@@ -871,9 +873,9 @@ def _average_ranks(values: np.ndarray) -> np.ndarray:
 
 def classical_mds(
     data: Any,
-    n_components: int = 2,
+    num_components: int = 2,
     *,
-    min_n: int = 8,
+    min_stimuli: int = 8,
     input_kind: MDSInputKind = "auto",
 ) -> tuple[np.ndarray, MDSInfo]:
     """Embed pairwise distances or row-wise features with classical MDS.
@@ -892,9 +894,9 @@ def classical_mds(
     ----------
     data:
         Pairwise distance matrix or row-wise coordinate/feature data.
-    n_components:
-        Number of embedding axes to return.
-    min_n:
+    num_components:
+        Number of embedding components (output axes) to return.
+    min_stimuli:
         Minimum number of stimuli required for visualization-oriented MDS.
     input_kind:
         How to read ``data``: ``"auto"`` detects a distance matrix from
@@ -913,10 +915,10 @@ def classical_mds(
         If inputs are non-finite, too small, duplicate, or rank-deficient.
     """
 
-    if n_components < 1:
-        raise ValueError("n_components must be at least 1.")
-    if min_n < 3:
-        raise ValueError("min_n must be at least 3.")
+    if num_components < 1:
+        raise ValueError("num_components must be at least 1.")
+    if min_stimuli < 3:
+        raise ValueError("min_stimuli must be at least 3.")
     if input_kind not in ("auto", "distances", "features"):
         raise ValueError(
             "input_kind must be one of 'auto', 'distances', or 'features'; "
@@ -952,7 +954,7 @@ def classical_mds(
         distances = activation_distance_matrix(array, metric="euclidean")
         _check_square_distances(distances)
     n_stimuli = distances.shape[0]
-    _check_stimulus_count(n_stimuli, min_n)
+    _check_stimulus_count(n_stimuli, min_stimuli)
     if _has_duplicate_distances(distances):
         raise ValueError("classical_mds input is rank-deficient or contains duplicate stimuli.")
 
@@ -961,9 +963,9 @@ def classical_mds(
     positive_tolerance = _positive_rank_tolerance(eigenvalues)
     positive_mask = eigenvalues > positive_tolerance
     effective_rank = int(np.count_nonzero(positive_mask))
-    if effective_rank < n_components:
+    if effective_rank < num_components:
         raise ValueError(
-            f"classical_mds input is rank-deficient for {n_components} components: "
+            f"classical_mds input is rank-deficient for {num_components} components: "
             f"effective rank is {effective_rank}."
         )
 
@@ -973,14 +975,14 @@ def classical_mds(
     total_reported_mass = positive_mass + negative_mass
     discarded_fraction = negative_mass / total_reported_mass if total_reported_mass > 0.0 else 0.0
 
-    selected_values = np.clip(eigenvalues[:n_components], 0.0, None)
-    embedding = eigenvectors[:, :n_components] * np.sqrt(selected_values)
+    selected_values = np.clip(eigenvalues[:num_components], 0.0, None)
+    embedding = eigenvectors[:, :num_components] * np.sqrt(selected_values)
     embedding = _canonicalize_axis_signs(embedding)
     info: MDSInfo = {
         "n_stimuli": n_stimuli,
-        "n_components": n_components,
+        "n_components": num_components,
         "effective_rank": effective_rank,
-        "min_n": min_n,
+        "min_stimuli": min_stimuli,
         "negative_eigenvalue_count": int(np.count_nonzero(negative_mask)),
         "discarded_variance_fraction": discarded_fraction,
         "input_kind": "distances" if input_is_distances else "features",
@@ -992,7 +994,7 @@ def scree(
     activations: Any,
     *,
     metric: DistanceMetric = "euclidean",
-    min_n: int = 3,
+    min_stimuli: int = 3,
 ) -> np.ndarray:
     """Return sorted non-negative centered-Gram eigenvalues for activations.
 
@@ -1003,7 +1005,7 @@ def scree(
         precomputed distance matrix.
     metric:
         Distance metric used when activations are not already distances.
-    min_n:
+    min_stimuli:
         Minimum number of stimuli required to compute the scree spectrum.
 
     Returns
@@ -1017,10 +1019,10 @@ def scree(
         If inputs are malformed, non-finite, or have too few stimuli.
     """
 
-    if min_n < 3:
-        raise ValueError("min_n must be at least 3 for scree.")
+    if min_stimuli < 3:
+        raise ValueError("min_stimuli must be at least 3 for scree.")
     distances = _as_distance_matrix_or_activations(activations, metric=metric)
-    _check_stimulus_count(distances.shape[0], min_n)
+    _check_stimulus_count(distances.shape[0], min_stimuli)
     eigenvalues, _eigenvectors = _centered_gram_eigh(distances)
     return np.clip(eigenvalues, 0.0, None)
 
@@ -1029,7 +1031,7 @@ def effective_dimensionality(
     activations: Any,
     *,
     metric: DistanceMetric = "euclidean",
-    min_n: int = 3,
+    min_stimuli: int = 3,
     variance_threshold: float = 0.90,
 ) -> EffectiveDimensionalityInfo:
     """Return scree-derived effective-dimensionality statistics.
@@ -1041,7 +1043,7 @@ def effective_dimensionality(
         precomputed distance matrix.
     metric:
         Distance metric used when activations are not already distances.
-    min_n:
+    min_stimuli:
         Minimum number of stimuli required to compute the scree spectrum.
     variance_threshold:
         Cumulative variance fraction used for the component-count callout.
@@ -1059,7 +1061,7 @@ def effective_dimensionality(
     """
 
     _validate_variance_threshold(variance_threshold)
-    eigenvalues = scree(activations, metric=metric, min_n=min_n)
+    eigenvalues = scree(activations, metric=metric, min_stimuli=min_stimuli)
     return _effective_dimensionality_from_eigenvalues(
         eigenvalues,
         variance_threshold=variance_threshold,

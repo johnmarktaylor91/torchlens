@@ -17,7 +17,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.options import EchoOptions
+from torchlens.errors import TraceCaptureError
+from torchlens.options import NarrationOptions
 
 
 class ShapeCrash(nn.Module):
@@ -41,12 +42,13 @@ def _crash_tail(sink: io.StringIO) -> list[str]:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TraceCaptureError) as excinfo:
             tl.trace(
                 ShapeCrash(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=sink),
+                narrate=NarrationOptions(sites=True, sink=sink),
             )
+        assert isinstance(excinfo.value.__cause__, RuntimeError)
     return [line for line in sink.getvalue().split("\n") if line]
 
 
@@ -73,17 +75,22 @@ def test_on_error_only_narrates_nothing_until_failure() -> None:
 
     sink = io.StringIO()
     model = nn.Sequential(nn.Linear(4, 8), nn.ReLU())
-    tl.trace(model, torch.randn(2, 4), echo=EchoOptions(select=True, sink=sink, on_error_only=True))
+    tl.trace(
+        model,
+        torch.randn(2, 4),
+        narrate=NarrationOptions(sites=True, sink=sink, on_error_only=True),
+    )
     assert sink.getvalue() == ""
     tail_sink = io.StringIO()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TraceCaptureError) as _tce_info:
             tl.trace(
                 ShapeCrash(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=tail_sink, on_error_only=True),
+                narrate=NarrationOptions(sites=True, sink=tail_sink, on_error_only=True),
             )
+        assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert "!! forward failed" in tail_sink.getvalue()
 
 
@@ -100,16 +107,17 @@ def test_record_tier_disposition_trio_flushes_the_tail() -> None:
                 result = tl.record(
                     ShapeCrash(),
                     x,
-                    echo=EchoOptions(select=True, sink=sink),
+                    narrate=NarrationOptions(sites=True, sink=sink),
                     on_forward_error=mode,
                 )
-        except RuntimeError as exc:
+        except TraceCaptureError as exc:
+            assert isinstance(exc.__cause__, RuntimeError)
             assert mode in ("raise", "attach_partial")
             if mode == "attach_partial":
                 assert getattr(exc, "partial_recording", None) is not None
         else:
             assert mode == "return_partial"
-            assert result.failed
+            assert result.is_failed
         assert "!! forward failed" in sink.getvalue()
         assert "attempted call=layer_norm" in sink.getvalue()
 
@@ -120,9 +128,10 @@ def test_partial_narrate_works_with_echo_off() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(TraceCaptureError) as excinfo:
             tl.trace(ShapeCrash(), torch.randn(2, 4))
-    rendered = excinfo.value.partial_log.narrate(20)
+        assert isinstance(excinfo.value.__cause__, RuntimeError)
+    rendered = excinfo.value.partial_trace.narrate(20)
     assert "!! forward failed: RuntimeError" in rendered
     assert "relu" in rendered
     assert "the raising call is not in the record" in rendered
@@ -161,7 +170,7 @@ def test_broken_sink_disables_narrator_and_capture_continues() -> None:
         log = tl.trace(
             nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
             torch.randn(2, 4),
-            echo=EchoOptions(select=True, sink=broken),
+            narrate=NarrationOptions(sites=True, sink=broken),
         )
     assert log["relu_1_2"].shape == (2, 8)
     codes = [getattr(item.message, "fields", {}).get("code") for item in caught]
@@ -180,12 +189,13 @@ def test_double_fault_original_exception_wins() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(TraceCaptureError) as excinfo:
             tl.trace(
                 ShapeCrash(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=broken),
+                narrate=NarrationOptions(sites=True, sink=broken),
             )
+        assert isinstance(excinfo.value.__cause__, RuntimeError)
     assert "normalized_shape" in str(excinfo.value)
 
 
@@ -208,7 +218,7 @@ def test_keyboard_interrupt_stays_an_interrupt() -> None:
             tl.trace(
                 Interrupted(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=sink),
+                narrate=NarrationOptions(sites=True, sink=sink),
             )
 
 
@@ -232,8 +242,8 @@ def test_raise_on_nan_minting_op_is_last_narrated_and_census_exact() -> None:
             tl.trace(
                 Minter(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=sink),
-                capture=tl.options.CaptureOptions(raise_on_nan=True),
+                narrate=NarrationOptions(sites=True, sink=sink),
+                capture=tl.options.CaptureOptions(on_nonfinite="raise"),
             )
     assert "div" in str(excinfo.value) or "nonfinite" in str(excinfo.value).lower()
     lines = [line for line in sink.getvalue().split("\n") if line]
@@ -254,8 +264,8 @@ def test_halted_capture_footer_says_halted_not_failed() -> None:
     log = tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2)),
         torch.randn(2, 4),
-        halt=tl.func("relu"),
-        echo=EchoOptions(select=True, sink=sink),
+        stop_after=tl.func("relu"),
+        narrate=NarrationOptions(sites=True, sink=sink),
     )
     assert log is not None
     transcript = sink.getvalue()

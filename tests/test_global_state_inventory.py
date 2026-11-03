@@ -17,8 +17,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._capture import projections, trace as capture_trace
 from torchlens.backends.torch import _tl as torch_tl, completeness_witness, rescue
-from torchlens.capture import projections, trace as capture_trace
+from torchlens.errors import TraceCaptureError
 
 MUTATING_METHODS = frozenset(
     {
@@ -464,7 +465,7 @@ class _PauseFromForeignThread(nn.Module):
     """Log ops before and after a NON-OWNER thread enters ``pause_logging()``.
 
     The foreign thread models the reachable-without-concurrent-capture case: a
-    thread merely ANALYZING an older Trace (``tl.save``, validation, an ``.out``
+    thread merely ANALYZING an older Trace (``Trace.save``, validation, an ``.out``
     transform) enters the same process-global pause the owner's forward relies on.
 
     The foreign pause is HELD OPEN across the owner's second op group, which is
@@ -570,10 +571,10 @@ _HOT_STATE_SUBSET_PREFIXES = (
     "torchlens/_capture_state_helpers.py",
     "torchlens/_save_budget.py",
     "torchlens/backends/torch/",
-    "torchlens/capture/",
-    "torchlens/fastlog/",
-    "torchlens/utils/rng.py",
-    "torchlens/utils/_torch_compat.py",
+    "torchlens/_capture/",
+    "torchlens/recording/",
+    "torchlens/_utils/rng/",
+    "torchlens/_utils/_torch_compat.py",
 )
 
 
@@ -670,8 +671,13 @@ def test_mid_capture_failure_restores_process_state(
     tl.trace(nn.ReLU(), torch.ones(2))
     before = _capture_scope_snapshot()
 
-    with pytest.raises(error_type, match="injected mid-capture failure"):
+    # An ordinary forward exception escapes as the door's TraceCaptureError
+    # chained from it; an interrupt-class BaseException is never wrapped.
+    expected = TraceCaptureError if issubclass(error_type, Exception) else error_type
+    with pytest.raises(expected, match="injected mid-capture failure") as excinfo:
         tl.trace(_RaiseMidCapture(error_type), torch.ones(2))
+    if expected is TraceCaptureError:
+        assert type(excinfo.value.__cause__) is error_type
 
     assert _capture_scope_snapshot() == before
     recovered = tl.trace(nn.ReLU(), torch.ones(2))
@@ -752,9 +758,9 @@ def test_refused_concurrent_capture_leaves_winner_verified() -> None:
     assert owner_errors == []
     assert len(owner_traces) == 1
     winner = owner_traces[0]
-    assert winner.capture_verified is not False, (
+    assert winner.provenance.verified is not False, (
         "the refused loser's pre-admission side effects degraded the winner: "
-        f"capture_verified={winner.capture_verified!r}, "
+        f"capture_verified={winner.provenance.verified!r}, "
         f"reason={getattr(winner, 'capture_verification_reason', None)!r}"
     )
     assert any(op.func_name == "relu" for op in winner.compute_ops)
@@ -777,7 +783,7 @@ def test_refused_concurrent_record_never_installs_recording_state(
     reservation refuses before the install.
     """
 
-    from torchlens.fastlog import _recorder as recorder_module
+    from torchlens.recording import _recorder as recorder_module
 
     installs: list[Any] = []
     real_install = recorder_module.active_recording_state
@@ -946,7 +952,7 @@ def test_log_backward_refuses_foreign_live_window_instead_of_wedging() -> None:
     assert _state._active_trace is None
     assert _state._active_owner_thread_id is None
     trace.log_backward(loss)
-    assert int(trace.num_backward_passes) == 1
+    assert int(len(trace.autograd.backward_passes)) == 1
     recovered = tl.trace(nn.ReLU(), torch.ones(2))
     assert any(op.func_name == "relu" for op in recovered.compute_ops)
 
@@ -962,8 +968,9 @@ def test_capture_reservation_is_released_on_failure_and_nested_same_thread() -> 
     refuses typed (R55), as does a foreign thread's claim.
     """
 
-    with pytest.raises(RuntimeError, match="injected mid-capture failure"):
+    with pytest.raises(TraceCaptureError, match="injected mid-capture failure") as _tce_info:
         tl.trace(_RaiseMidCapture(RuntimeError), torch.ones(2))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert _state._capture_reserved_by is None
     recovered = tl.trace(nn.ReLU(), torch.ones(2))
     assert any(op.func_name == "relu" for op in recovered.compute_ops)
@@ -1109,7 +1116,7 @@ def test_register_container_racing_lookup_never_breaks_iteration() -> None:
     snapshots under the registry lock.
     """
 
-    from torchlens.ir import container as container_mod
+    from torchlens._ir import container as container_mod
 
     registered_types: list[type] = []
     errors: list[BaseException] = []
@@ -1126,7 +1133,7 @@ def test_register_container_racing_lookup_never_breaks_iteration() -> None:
                     break
                 fresh = type(f"_RaceContainer{index}", (), {})
                 registered_types.append(fresh)
-                tl.register_container(
+                tl.types.register_container(
                     fresh,
                     lambda value: ([], None),
                     lambda aux, children: object(),
@@ -1345,7 +1352,7 @@ def test_unwrap_torch_refuses_during_an_active_capture() -> None:
 
     assert len(seen) == 1, "unwrap_torch() mid-capture did not refuse"
     error = seen[0]
-    assert isinstance(error, tl.errors.CaptureContextError)
+    assert isinstance(error, tl.errors.CaptureNotActiveError)
     assert error.fields["code"] == "unwrap_during_active_capture"
     relu_ops = [op for op in trace.compute_ops if op.func_name == "relu"]
     assert len(relu_ops) == 2, "the refused unwrap still truncated the capture"
@@ -1402,7 +1409,7 @@ def test_release_model_refuses_during_an_active_capture() -> None:
 
     assert len(seen) == 1, "release_model() mid-capture did not refuse"
     error = seen[0]
-    assert isinstance(error, tl.errors.CaptureContextError)
+    assert isinstance(error, tl.errors.CaptureNotActiveError)
     assert error.fields["code"] == "release_during_active_capture"
     relu_ops = [op for op in trace.compute_ops if op.func_name == "relu"]
     assert len(relu_ops) == 2, "the refused release still truncated the capture"
@@ -1460,7 +1467,7 @@ def test_cleanup_of_active_trace_refuses_mid_capture() -> None:
 
     assert len(seen) == 1, "cleanup() of the active trace mid-capture did not refuse"
     error = seen[0]
-    assert isinstance(error, tl.errors.CaptureContextError)
+    assert isinstance(error, tl.errors.CaptureNotActiveError)
     assert error.fields["code"] == "cleanup_during_active_capture"
     relu_ops = [op for op in trace.compute_ops if op.func_name == "relu"]
     assert len(relu_ops) == 2, "the refused cleanup still truncated the capture"
@@ -1479,7 +1486,7 @@ def test_interrupted_partial_diagnostics_still_restore_the_model(
     ``requires_grad``, ``tl_*`` attributes, and an installed buffer tracker.
     """
 
-    from torchlens import partial as partial_module
+    from torchlens import _partial as partial_module
 
     class _FailingModel(nn.Module):
         """Register a frozen parameter and then fail the forward."""

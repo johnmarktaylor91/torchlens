@@ -10,18 +10,18 @@ from __future__ import annotations
 
 from collections import Counter
 
-from torchlens import constants as tl_constants
-from torchlens.data_classes._trace_components import (
+from torchlens import _constants as tl_constants
+from torchlens._data_classes._trace_components import (
     TRACE_COMPONENT_VOCABULARY,
     TRACE_FIELD_OWNERSHIP,
 )
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 
 
 def test_ownership_covers_exactly_the_declared_policy() -> None:
-    """Ownership keys == Trace.FIELD_POLICY keys, both directions."""
+    """Ownership keys == Trace._FIELD_POLICY keys, both directions."""
 
-    policy_fields = set(Trace.FIELD_POLICY)
+    policy_fields = set(Trace._FIELD_POLICY)
     owned_fields = set(TRACE_FIELD_OWNERSHIP)
     missing = policy_fields - owned_fields
     stale = owned_fields - policy_fields

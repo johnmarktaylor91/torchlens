@@ -13,7 +13,7 @@ from torch import nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
-from torchlens.constants import (  # noqa: E402
+from torchlens._constants import (  # noqa: E402
     BUFFER_LOG_FIELD_ORDER,
     GRAD_FN_LOG_FIELD_ORDER,
     GRAD_FN_PASS_LOG_FIELD_ORDER,
@@ -22,7 +22,7 @@ from torchlens.constants import (  # noqa: E402
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.buffer import _TO_PANDAS_EXCLUDED_BUFFER_FIELDS  # noqa: E402
+from torchlens._data_classes.buffer import _TO_PANDAS_EXCLUDED_BUFFER_FIELDS  # noqa: E402
 
 
 class _RecordExportModel(nn.Module):
@@ -114,7 +114,7 @@ def test_forward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_pa
     _assert_round_trip(op, ["label", "layer_label", "type"], tmp_path)
     _assert_round_trip(layer, ["layer_label", "layer_type", "num_passes"], tmp_path)
     _assert_round_trip(module, ["layer_label", "layer_type", "num_ops"], tmp_path)
-    _assert_round_trip(module_call, ["address", "call_index", "call_label"], tmp_path)
+    _assert_round_trip(module_call, ["address", "call_index", "label"], tmp_path)
     _assert_round_trip(param, ["address", "name", "num_params"], tmp_path)
     _assert_round_trip(buffer, ["address", "name", "call_index"], tmp_path)
 
@@ -122,11 +122,13 @@ def test_forward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_pa
 def test_backward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_path: Path) -> None:
     """Backward records expose the full tabular export quartet."""
 
-    grad_fn = next(record for record in record_export_trace.grad_fns if record.num_calls == 1)
+    grad_fn = next(
+        record for record in record_export_trace.autograd.grad_fns if record.num_calls == 1
+    )
     grad_fn_call = grad_fn.calls[0]
 
     assert list(grad_fn.to_pandas().columns) == GRAD_FN_LOG_FIELD_ORDER
     assert list(grad_fn_call.to_pandas().columns) == GRAD_FN_PASS_LOG_FIELD_ORDER
 
     _assert_round_trip(grad_fn, ["label", "class_name", "num_calls"], tmp_path)
-    _assert_round_trip(grad_fn_call, ["call_index", "call_label"], tmp_path)
+    _assert_round_trip(grad_fn_call, ["call_index", "label"], tmp_path)

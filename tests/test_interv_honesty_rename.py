@@ -1,13 +1,16 @@
 """Intervention honesty: the ``resample_ablate`` -> ``scramble_elements``
 honest rename (edits memo row 1, decision D19; alias posture: hard rename,
-no alias, artifact-load compatibility KEPT).
+no alias, and since U00 "yes, renames are hard. clean break" no load alias
+either).
 
 The helper is an elementwise iid scramble -- a false friend of the field's
 "resampling ablation" (coherent donor patching). Same bytes, honest name:
 
 - ``scramble_elements`` is the only constructor; the ``resample_ablate``
   spelling is gone from ``torchlens.intervention`` and the ``tl.*`` facade.
-- Persisted specs naming ``resample_ablate`` keep loading (artifact format).
+- A saved spec naming ``resample_ablate`` refuses typed
+  (``intervention_helper_renamed``) with a remedy naming ``scramble_elements``;
+  it never loads silently under the new name.
 """
 
 from __future__ import annotations
@@ -51,7 +54,7 @@ def test_old_spelling_raises_typed_error_naming_the_replacement(owner: str) -> N
 def test_constructor_mints_the_honest_name() -> None:
     """Specs carry the honest helper name."""
 
-    assert scramble_elements(torch.ones(3), seed=0).helper_name == "scramble_elements"
+    assert scramble_elements(torch.ones(3), seed=0).name == "scramble_elements"
 
 
 @pytest.mark.smoke
@@ -61,21 +64,48 @@ def test_seeded_draws_are_reproducible() -> None:
     source = torch.arange(12.0)
     out = torch.zeros(2, 3)
 
-    first = scramble_elements(source, seed=7).factory()(out, hook=None)
-    second = scramble_elements(source, seed=7).factory()(out, hook=None)
+    first = scramble_elements(source, seed=7).factory()(out, ctx=None)
+    second = scramble_elements(source, seed=7).factory()(out, ctx=None)
     assert torch.equal(first, second)
     assert set(first.flatten().tolist()) <= set(source.tolist())
 
 
-@pytest.mark.parametrize("persisted_name", ["scramble_elements", "resample_ablate"])
-def test_serialized_specs_load_under_both_names(persisted_name: str) -> None:
-    """Artifact-load compatibility: legacy persisted helper names reconstruct."""
+def test_serialized_specs_load_under_the_new_name() -> None:
+    """A persisted ``scramble_elements`` spec reconstructs through its constructor."""
 
-    spec = rebuild_builtin_helper(persisted_name, (torch.ones(3),), {"seed": 3})
-    assert spec.helper_name == "scramble_elements"
+    spec = rebuild_builtin_helper("scramble_elements", (torch.ones(3),), {"seed": 3})
+    assert spec.name == "scramble_elements"
     hook = spec.factory()
-    sampled = hook(torch.zeros(4), hook=None)
+    sampled = hook(torch.zeros(4), ctx=None)
     assert torch.equal(sampled, torch.ones(4))
+
+
+def test_a_saved_spec_naming_the_old_helper_refuses_typed() -> None:
+    """No load alias: the old persisted name refuses, teaching the new one."""
+
+    from torchlens._errors import InvalidArgumentError
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        rebuild_builtin_helper("resample_ablate", (torch.ones(3),), {"seed": 3})
+    assert excinfo.value.fields["code"] == "intervention_helper_renamed"
+    assert excinfo.value.fields["renamed_to"] == "scramble_elements"
+    assert "torchlens.intervention.scramble_elements" in str(excinfo.value)
+
+
+def test_a_pickled_edit_naming_the_old_helper_refuses_typed() -> None:
+    """The pickle restore path shares the registry, so it refuses the same way."""
+
+    import pickle
+    from dataclasses import replace
+
+    from torchlens._errors import InvalidArgumentError
+
+    saved = replace(scramble_elements(torch.ones(3), seed=3), factory=None)
+    legacy = replace(saved, name="resample_ablate")
+    payload = pickle.dumps(legacy)
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        pickle.loads(payload)
+    assert excinfo.value.fields["code"] == "intervention_helper_renamed"
 
 
 def test_import_ref_to_the_retired_name_fails_closed_typed() -> None:
@@ -91,8 +121,8 @@ def test_import_ref_to_the_retired_name_fails_closed_typed() -> None:
 
     from torchlens._errors import FacadeTeachingError
     from torchlens.intervention import helpers
+    from torchlens.intervention._resolver_registry import resolve_import_ref
     from torchlens.intervention.errors import ReplayPreconditionError
-    from torchlens.intervention.resolver import resolve_import_ref
 
     current = resolve_import_ref("torchlens.intervention.helpers:scramble_elements")
     assert current is helpers.scramble_elements
@@ -111,4 +141,4 @@ def test_empty_source_refusal_names_the_honest_helper() -> None:
 
     hook = scramble_elements(torch.ones(0), seed=1).factory()
     with pytest.raises(HookValueError, match="scramble_elements"):
-        hook(torch.zeros(3), hook=None)
+        hook(torch.zeros(3), ctx=None)

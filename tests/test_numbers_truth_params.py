@@ -87,7 +87,7 @@ class PartialFreeze(nn.Module):
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Metadata-only capture."""
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+    return tl.trace(model, x, save=None)
 
 
 def test_tied_params_counted_once_by_object_identity() -> None:
@@ -98,7 +98,7 @@ def test_tied_params_counted_once_by_object_identity() -> None:
     try:
         assert log.num_params == sum(p.numel() for p in model.parameters())
         assert log.num_params == 40
-        assert log.num_param_tensors == 1
+        assert len(log.params) == 1
     finally:
         log.cleanup()
 
@@ -110,8 +110,8 @@ def test_tie_is_named_and_per_path_total_printed() -> None:
     model = TiedLM()
     log = _capture(model, torch.tensor([[1, 2]]))
     try:
-        assert log.tied_param_groups == (("emb.weight", "head.weight"),)
-        assert log.num_params_by_path == 80
+        assert log.graph.tied_param_groups == (("emb.weight", "head.weight"),)
+        assert log.params.numel_by_path == 80
         # The footer prints both totals and names the tie (A2).
         rebuilt = log.summary()
         assert "40 declared unique" in rebuilt
@@ -130,8 +130,8 @@ def test_shared_storage_views_stay_distinct_parameters() -> None:
         assert log.num_params == 24
         assert log.num_params == sum(p.numel() for p in model.parameters())
         # Two distinct parameter identities, no tie group (different objects).
-        assert log.num_param_tensors == 2
-        assert log.tied_param_groups == ()
+        assert len(log.params) == 2
+        assert log.graph.tied_param_groups == ()
     finally:
         log.cleanup()
 
@@ -144,9 +144,9 @@ def test_declared_executed_unexecuted_split_named() -> None:
     log = _capture(model, torch.randn(2, 6))
     try:
         assert log.num_params == 36 + 21  # declared: used 6*6 + dead 6*3+3
-        assert log.num_params_executed == 36
-        assert log.num_params_unexecuted == 21
-        assert set(log.unexecuted_param_names) == {"dead.weight", "dead.bias"}
+        assert log.params.executed.numel == 36
+        assert log.params.unexecuted.numel == 21
+        assert set(log.params.unexecuted.labels) == {"dead.weight", "dead.bias"}
         # The footer names the unexecuted split, never drops it (A3).
         rebuilt = log.summary()
         assert "21 never ran: dead" in rebuilt

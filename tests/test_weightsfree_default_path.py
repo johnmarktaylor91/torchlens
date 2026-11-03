@@ -31,17 +31,17 @@ def test_ordinary_capture_pays_no_weightsfree_machinery() -> None:
     """The factory slot is empty, the transparency belt is dormant, and no
     admission registers on an ordinary capture."""
 
-    from torchlens.backends.torch._weightsfree_ctx import active_factory_device
-    from torchlens.capture._weightsfree_admission import (
+    from torchlens._capture._weightsfree_admission import (
         admission_record_for,
         weightsfree_meta_active,
     )
+    from torchlens.backends.torch._weightsfree_ctx import active_factory_device
 
     trace = tl.trace(Toy(), torch.randn(2, 4))
     assert active_factory_device() is None
     assert admission_record_for(trace) is None
     assert not weightsfree_meta_active(trace)
-    assert trace.structure_evidence is None
+    assert trace.graph.structure_evidence is None
 
 
 def test_ordinary_digest_stable_across_repeat_captures() -> None:
@@ -52,8 +52,8 @@ def test_ordinary_digest_stable_across_repeat_captures() -> None:
     model = Toy()
     model.eval()
     x = torch.randn(2, 4)
-    first = tl.hash.trace(tl.trace(model, x))
-    second = tl.hash.trace(tl.trace(model, x))
+    first = tl.fingerprint.trace(tl.trace(model, x))
+    second = tl.fingerprint.trace(tl.trace(model, x))
     assert first == second
 
 
@@ -68,15 +68,15 @@ def test_ambient_device_context_row_d19() -> None:
     digest for the same model and input.
     """
 
-    from torchlens.utils._torch_compat import HAS_TORCH_FUNCTION_STACK_SURGERY
+    from torchlens._utils._torch_compat import HAS_TORCH_FUNCTION_STACK_SURGERY
 
     torch.manual_seed(0)
     model = Toy()
     model.eval()
     x = torch.randn(2, 4)
-    bare = tl.hash.trace(tl.trace(model, x))
+    bare = tl.fingerprint.trace(tl.trace(model, x))
     with torch.device("cpu"):
-        inside = tl.hash.trace(tl.trace(model, x))
+        inside = tl.fingerprint.trace(tl.trace(model, x))
     if inside == bare:
         return  # absorption (or an inert context) already holds the pin
     if not HAS_TORCH_FUNCTION_STACK_SURGERY:

@@ -105,12 +105,12 @@ def test_unknown_module_identity_mode_refuses_typed_on_all_five_previews() -> No
     parity is pinned runtime-free.
     """
 
-    from torchlens.backends import BackendUnsupportedError
     from torchlens.backends.jax.backend import _resolve_jax_module_identity_mode
     from torchlens.backends.mlx.backend import _resolve_mlx_module_identity_mode
     from torchlens.backends.paddle.backend import _resolve_paddle_module_identity_mode
     from torchlens.backends.tf.backend import _resolve_tf_module_identity_mode
     from torchlens.backends.tinygrad.backend import _resolve_tinygrad_module_identity_mode
+    from torchlens.errors import BackendUnsupportedError
 
     for resolver in (
         _resolve_jax_module_identity_mode,

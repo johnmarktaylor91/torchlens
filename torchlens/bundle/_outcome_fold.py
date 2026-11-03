@@ -17,10 +17,10 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..capture.outcome import CaptureOutcome
+    from .._capture.outcome import CaptureOutcome
 
 # Worst-of-members fold severity, least -> most severe, keyed on the frozen
-# CaptureStatus values (string keys keep torchlens.capture lazy at import).
+# CaptureStatus values (string keys keep torchlens._capture lazy at import).
 # The order is capability-table restrictiveness under the landed
 # CAPTURE_OUTCOME_CAPABILITIES matrix (refusal-cell count), with the two ties
 # broken by epistemic weakness: UNATTESTED sits above COMPLETE because an
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 _OUTCOME_FOLD_SEVERITY: dict[str, int] = {
     "complete": 0,
     "unattested": 1,
-    "halted": 2,
+    "stopped": 2,
     "aborted_nonfinite": 3,
     "failed": 4,
     "unknown": 5,
@@ -54,7 +54,7 @@ def _fold_member_outcomes(
     ----------
     member_outcomes:
         Ordered ``(member_name, settled_outcome_or_None)`` pairs, as read
-        through :func:`torchlens.capture.outcome.outcome_for`.
+        through :func:`torchlens._capture.outcome.outcome_for`.
 
     Returns
     -------
@@ -64,13 +64,13 @@ def _fold_member_outcomes(
         ``settlement_note`` naming the driving member plus status counts.
     """
 
-    from ..capture.outcome import CaptureOutcome, CaptureStatus
+    from .._capture.outcome import CaptureOutcome, CaptureStatus
 
     if not member_outcomes:
         return CaptureOutcome(
             status=CaptureStatus.UNKNOWN,
-            derived=True,
-            settlement_note=(
+            is_derived=True,
+            note=(
                 "bundle worst-of-members fold over 0 members: no member "
                 "outcomes to fold (fail-closed)"
             ),
@@ -99,4 +99,4 @@ def _fold_member_outcomes(
     )
     if unsettled:
         note += f"; {unsettled} member(s) carry no settled outcome (treated unknown, fail-closed)"
-    return CaptureOutcome(status=worst_status, derived=True, settlement_note=note)
+    return CaptureOutcome(status=worst_status, is_derived=True, note=note)

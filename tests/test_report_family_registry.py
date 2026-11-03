@@ -22,10 +22,11 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.report import (
+from torchlens.errors import TraceCaptureError
+from torchlens.report._factcore import factcore
+from torchlens.report._registry import (
     SURFACE_REGISTRY,
     capability_card,
-    factcore,
     registry_entry,
     which_do_i_use,
 )
@@ -76,8 +77,9 @@ def partial_trace():
     with pytest.warns(Warning):
         try:
             tl.trace(Boom(), torch.randn(2, 4))
-        except RuntimeError as exc:
-            return tl.partial.from_failed_capture(exc)
+        except TraceCaptureError as exc:
+            assert isinstance(exc.__cause__, RuntimeError)
+            return exc.partial_trace
     raise AssertionError("the planted failure did not raise")
 
 
@@ -88,7 +90,7 @@ def partial_trace():
 def test_registry_vocabularies_are_closed() -> None:
     """Every row uses the closed subject/register/invariant/cost vocab."""
 
-    from torchlens.report import COST_CLASSES, INVARIANTS, REGISTERS, SUBJECTS
+    from torchlens.report._registry import COST_CLASSES, INVARIANTS, REGISTERS, SUBJECTS
 
     assert SURFACE_REGISTRY
     keys = [entry.key for entry in SURFACE_REGISTRY]
@@ -139,16 +141,16 @@ def test_which_do_i_use_docs_page_is_lockstepped() -> None:
 def test_capability_card_is_metadata_only(family_trace, monkeypatch) -> None:
     """D24: building the card never scans, captures, or runs a forward."""
 
-    import torchlens.data_classes._nonfinite as nonfinite_module
+    import torchlens._data_classes._nonfinite as nonfinite_module
 
     def _no_scan(*_args, **_kwargs):
         raise AssertionError("capability_card triggered a payload scan")
 
     monkeypatch.setattr(nonfinite_module, "_scan", _no_scan)
-    card = family_trace.capability_card()
+    card = family_trace.capabilities()
     text = str(card)
     assert "capability card" in text
-    assert any(row.available for row in card.rows)
+    assert any(row.is_available for row in card.rows)
 
 
 def test_capability_card_on_partial_names_remedies(partial_trace) -> None:
@@ -156,7 +158,7 @@ def test_capability_card_on_partial_names_remedies(partial_trace) -> None:
 
     card = capability_card(partial_trace)
     assert card.object_kind == "partial_trace"
-    refused = {row.key: row for row in card.rows if not row.available}
+    refused = {row.key: row for row in card.rows if not row.is_available}
     assert "summary" in refused
     assert "explain" not in refused  # explain degrades, never refuses
     assert "audit" in str(refused["summary"].reason) or "explain" in str(refused["summary"].reason)
@@ -182,7 +184,7 @@ def test_partial_members_refuse_typed_never_attributeerror(partial_trace) -> Non
 def test_partial_explain_and_audit_still_answer(partial_trace) -> None:
     """The two remedies the refusal names actually work."""
 
-    text = tl.report.explain(partial_trace)
+    text = partial_trace.explain()
     assert "partial capture" in text
     audit = partial_trace.audit()
     assert audit is not None
@@ -193,18 +195,22 @@ def test_partial_explain_and_audit_still_answer(partial_trace) -> None:
 
 
 @pytest.mark.smoke
-def test_explain_json_agent_json_overlapping_fields_agree(family_trace) -> None:
-    """One machine core: every overlapping fact is equal across the two
-    projections (the 69/151 bug class regression gate)."""
+def test_agent_json_is_the_one_machine_projection(family_trace) -> None:
+    """One machine core (D17; defaults.7): explain is prose only, and the
+    agent JSON counts read the same FactCore the summary family reads (the
+    69/151 bug class regression gate)."""
 
-    explain_json = tl.report.explain(family_trace, format="json")
+    import inspect
+
+    from torchlens.report._factcore import factcore
+
+    assert "format" not in inspect.signature(tl.Trace.explain).parameters
+    core = factcore(family_trace)
     agent_json = family_trace.to_agent_json()
-    assert explain_json["layer_count"] == agent_json["counts"]["layers"]
-    assert explain_json["operation_count"] == agent_json["counts"]["operations"]
-    assert explain_json["saved_tensor_count"] == agent_json["counts"]["tensors_saved"]
-    assert explain_json["model_class"] == agent_json["capture"]["model_class"]
-    assert explain_json["capture_status"] == agent_json["capture"]["capture_status"]
-    assert explain_json["has_backward_pass"] == agent_json["capture"]["has_backward_pass"]
+    assert agent_json["counts"]["layers"] == core.counts.layers
+    assert agent_json["counts"]["operations"] == core.counts.tracked_tensor_rows
+    assert agent_json["counts"]["tensors_saved"] == core.memory.captured_saved_ops
+    assert agent_json["capture"]["model_class"] == family_trace.source.class_name
 
 
 @pytest.mark.smoke
@@ -248,7 +254,7 @@ def test_metadata_only_members_trigger_no_scan(family_trace, monkeypatch) -> Non
     """D4 work-metric (composition row 6): no metadata_only member pays for
     a payload scan -- explain, profile, BOM, agent_json, summary included."""
 
-    import torchlens.data_classes._nonfinite as nonfinite_module
+    import torchlens._data_classes._nonfinite as nonfinite_module
 
     calls: list[str] = []
     real_scan = nonfinite_module._scan
@@ -258,13 +264,13 @@ def test_metadata_only_members_trigger_no_scan(family_trace, monkeypatch) -> Non
         return real_scan(log, kind, stop_at_first)
 
     monkeypatch.setattr(nonfinite_module, "_scan", _counting_scan)
-    tl.report.explain(family_trace)
+    family_trace.explain()
     family_trace.profile()
     family_trace.bill_of_materials()
     family_trace.to_agent_json()
     tl.report.cost_tree(family_trace)
-    tl.report.flops_report(family_trace)
-    family_trace.capability_card()
+    tl.report.flops(family_trace)
+    family_trace.capabilities()
     assert calls == [], f"metadata-only members scanned: {calls}"
 
 
@@ -273,12 +279,12 @@ def test_family_non_mutation(family_trace) -> None:
     """Composition row 10: no family member mutates params or RNG."""
 
     rng_before = torch.get_rng_state().clone()
-    tl.report.explain(family_trace)
+    family_trace.explain()
     family_trace.profile()
     family_trace.bill_of_materials()
     family_trace.to_agent_json()
     tl.report.cost_tree(family_trace)
-    tl.report.flops_report(family_trace)
+    tl.report.flops(family_trace)
     tl.report.backward_status(family_trace)
     tl.report.backward_estimate(family_trace)
     assert torch.equal(torch.get_rng_state(), rng_before)
@@ -288,7 +294,7 @@ def test_shared_facts_object_equal_before_render(family_trace) -> None:
     """Composition row 1: every surface reads THE one FactCore instance."""
 
     assert factcore(family_trace) is factcore(family_trace)
-    report = tl.report.flops_report(family_trace)
+    report = tl.report.flops(family_trace)
     core = factcore(family_trace)
     assert report.forward_flops == int(core.compute.partition_total)
     assert report.params_unique == core.params.total
@@ -298,7 +304,7 @@ def test_health_evidence_survives_annotations_roundtrip(family_trace) -> None:
     """Composition row 8 (session form): a derived health record persists
     on the annotations channel and is served back as the authority."""
 
-    from torchlens.report import HEALTH_FACTS_ANNOTATIONS_KEY, health_facts
+    from torchlens.report._health import HEALTH_FACTS_ANNOTATIONS_KEY, health_facts
 
     derived = health_facts(family_trace)  # the explicit door may scan
     assert HEALTH_FACTS_ANNOTATIONS_KEY in family_trace.annotations

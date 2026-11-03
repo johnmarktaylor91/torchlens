@@ -1,7 +1,7 @@
 """Provocation coverage for previously test-orphaned ``RunnableErrorCode`` members (r25-3).
 
 Every test drives a REAL production raise site through the public API (``tl.trace``,
-``tl.save``, ``tl.load``, ``Trace.run``) and asserts the frozen code string on
+``Trace.save``, ``tl.load``, ``Trace.run``) and asserts the frozen code string on
 ``exc.fields["code"]`` (or on the surfaced report/diagnostics for
 divergence-classification and producer-preflight codes). No raise site is
 monkeypatched; where physically constructing a condition is impractical the test
@@ -27,6 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
@@ -35,13 +36,12 @@ from torchlens.errors import (
     RunPreconditionError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 
 def _capture_options() -> CaptureOptions:
     """Return the standard runnable-capable capture options."""
 
-    return CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+    return CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 class BranchModel(nn.Module):
@@ -84,6 +84,12 @@ def _tamper_run_descriptor(path: Path, mutate: Callable[[dict[str, Any]], None])
     manifest = json.loads(manifest_path.read_text())
     mutate(manifest["run"])
     manifest_path.write_text(json.dumps(manifest))
+
+
+def _final_call_id(loaded: Any) -> str:
+    """Return the id of the last recorded call of a loaded trace (``call:<index>``)."""
+
+    return max(loaded._runnable.callables_by_call_id, key=lambda key: int(key.split(":")[1]))
 
 
 def _wrap_loaded_callable(
@@ -230,11 +236,11 @@ def test_slot_production_mismatch_on_unproduced_output_source(tmp_path: Path) ->
     loaded = tl.load(_save_branch_artifact(tmp_path, "produce.tlspec"))
     _wrap_loaded_callable(
         loaded,
-        "call:19",
+        _final_call_id(loaded),
         lambda orig: lambda *args, **kwargs: {"x": orig(*args, **kwargs)},
     )
     with pytest.raises(RunPreconditionError) as caught:
-        loaded.run(inputs=_branch_input(), on_divergence="return_diverged")
+        loaded.run(inputs=_branch_input(), on_divergence="return")
     assert caught.value.fields["code"] == RunnableErrorCode.SLOT_PRODUCTION_MISMATCH.value
 
 
@@ -248,7 +254,7 @@ def test_missing_tensor_slot_on_consumer_of_unproduced_slot(tmp_path: Path) -> N
         lambda orig: lambda *args, **kwargs: {"x": orig(*args, **kwargs)},
     )
     with pytest.raises(RunPreconditionError) as caught:
-        loaded.run(inputs=_branch_input(), on_divergence="return_diverged")
+        loaded.run(inputs=_branch_input(), on_divergence="return")
     assert caught.value.fields["code"] == RunnableErrorCode.MISSING_TENSOR_SLOT.value
 
 
@@ -321,10 +327,10 @@ def test_poisoned_run_refused_on_faithful_consumers(tmp_path: Path) -> None:
     """A return_diverged poisoned Trace refuses export and tabular consumption typed."""
 
     loaded = tl.load(_save_branch_artifact(tmp_path, "poison.tlspec"))
-    result = loaded.run(inputs=-_branch_input(), on_divergence="return_diverged")
-    assert result.report.poisoned
+    result = loaded.run(inputs=-_branch_input(), on_divergence="return")
+    assert result.report.is_poisoned
     with pytest.raises(PoisonedRunError) as export_caught:
-        tl.save(result.trace, tmp_path / "poisoned-export.tlspec")
+        result.trace.save(tmp_path / "poisoned-export.tlspec")
     assert export_caught.value.fields["code"] == RunnableErrorCode.POISONED_RUN_REFUSED.value
     with pytest.raises(PoisonedRunError) as pandas_caught:
         result.trace.to_pandas()
@@ -341,7 +347,7 @@ def test_run_capability_unavailable_on_analysis_only_load(tmp_path: Path) -> Non
 
     path = tmp_path / "analysis.tlspec"
     trace = tl.trace(nn.Linear(4, 4).eval(), torch.randn(2, 4), capture=_capture_options())
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     with pytest.raises(RunCapabilityUnavailableError) as caught:
         loaded.run(inputs=torch.randn(2, 4))
@@ -369,7 +375,7 @@ def test_input_alias_topology_unresolved_code_surfaces_on_report(tmp_path: Path)
         def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
             return a[:8].sum() + b[:8].sum()
 
-    from torchlens.errors import TorchLensCaptureGapWarning
+    from torchlens.errors import CaptureGapWarning
 
     base = torch.randn(3 * 70000 + 4)
     a = base[0::3][:69000]
@@ -378,7 +384,7 @@ def test_input_alias_topology_unresolved_code_surfaces_on_report(tmp_path: Path)
     # The unprovable same-storage topology already discloses a capture gap at
     # capture time (input_copy_semantics_unverifiable) -- expected here, since the
     # unresolved relation is exactly what this provocation constructs.
-    with pytest.warns(TorchLensCaptureGapWarning):
+    with pytest.warns(CaptureGapWarning):
         trace = tl.trace(TwoInput().eval(), (a, b), capture=_capture_options())
     trace.save(path, level="runnable")
     result = tl.load(path).run(inputs=(a, b))

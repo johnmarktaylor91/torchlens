@@ -23,7 +23,7 @@ _REQUIRED_PARAMS_MAX = 6
 _EXAMPLES: dict[str, str] = {
     "trace": "log = tl.trace(model, x, save=tl.func('relu'))",
     "load": "log = tl.load('run.tlspec')",
-    "save": "tl.save(log, 'run.tlspec')",
+    "save": "log.save('run.tlspec')",
     "record": "rec = tl.record(model, x, save=tl.func('relu'))",
     "func": "tl.trace(model, x, save=tl.func('relu'))",
     "in_module": "tl.trace(model, x, save=tl.in_module('encoder'))",
@@ -200,8 +200,9 @@ def submodule_map() -> dict[str, str]:
     """The deliberately-unlisted power submodules an agent should know about."""
 
     return {
-        "tl.report": "explain(), TraceProfile/build_profile, log_value",
-        "tl.compat": "compat.report(model, x): capture-compatibility findings",
+        "tl.report": "ProfileReport/profile, flops, overhead, doctor(model=None, inputs=None)",
+        "tl.observers": "log_value(name, value), tap, span: in-forward value recording",
+        "tl.compat": "migration adapters: from_fx, from_timm, from_huggingface, ...",
         "tl.debug": "power-user diagnostics (bisect_nan, hot_path, ...)",
         "tl.receptive_field": "lazy influence-geometry submodule",
         "tl.bridge": "optional external-tool adapters (captum, shap, mcp, ...)",

@@ -21,8 +21,16 @@ DOCS_TIERS = {"referenced", "executed-R0", "executed-R1", "NONE"}
 #: R1_REFERENCED_FLOOR only rises (realism fill rate is the launch number);
 #: UNDOCUMENTED_CEILING only falls (three class names lacked a
 #: ``torchlens.``-prefixed docs reference at the freeze -- D01 burns them).
-R1_REFERENCED_FLOOR = 24
-UNDOCUMENTED_CEILING = 3
+#: 24 -> 22: the R1 rows ``do`` and ``run`` left with their public symbols
+#: (decided-surface rows ``root:tl.do`` and ``root:tl.run``, both removed); their
+#: real-model evidence calls ``Trace.do`` and model ``run()`` methods, and no
+#: successor in ``torchlens.__all__`` is referenced from the real-model trees.
+#: The 3.0 surface removed the R1 rows ``save`` and ``load_extraction``; ``Trace`` and
+#: ``validate`` rose to R1 on real-model-tree references (the r1 flagship metric's
+#: ``tl.Trace`` member, the r1 MoE/SSM/video ``tl.validate`` call), holding the floor.
+#: 3 -> 2: ``AtenOp`` (an undocumented row) left the root for ``tl.types.AtenOp``.
+R1_REFERENCED_FLOOR = 22
+UNDOCUMENTED_CEILING = 2
 
 #: Named realism rows OUTSIDE the symbol grid: whole-workflow recipes whose
 #: rot would not surface through any one symbol's row. Each names a test

@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 PACKED_RNN_FUNC_NAMES = ("gru", "rnn_tanh", "rnn_relu")
 
@@ -106,13 +106,24 @@ def check_expand_pinned_size_exempt(self: Trace, layer: Op, layers_to_perturb: l
 
 
 def setitem_bool_mask_at_index_slot(layer: Op, layers_to_perturb: list[str]) -> bool:
-    """Return whether the perturbed parent is only a bool mask inside the index tuple."""
+    """Return whether the perturbed parent is only a bool mask in the index tuple whose
+    True-count the value tensor's shape pins.
+
+    A mask is a real value input (a different mask writes different elements), so the
+    slot is structural only when the call would REJECT a mask with another True-count:
+    the value must broadcast to the selection of the saved mask and not to the selection
+    of that mask with one element flipped. A scalar or broadcast value fits every mask
+    and keeps the mask edge under perturbation.
+    """
 
     keys = _arg_keys_of(layer, layers_to_perturb)
     args = tuple(getattr(layer, "saved_args", ()) or ())
-    if keys is None or len(args) < 2 or not isinstance(args[1], tuple):
+    if keys is None or len(args) < 3 or not isinstance(args[1], tuple):
         return False
-    index = args[1]
+    destination, index, value = args[0], args[1], args[2]
+    if not isinstance(destination, torch.Tensor) or not isinstance(value, torch.Tensor):
+        return False
+    slots: list[int] = []
     for key in keys:
         if not (isinstance(key, tuple) and len(key) == 2 and key[0] == 1):
             return False
@@ -122,4 +133,39 @@ def setitem_bool_mask_at_index_slot(layer: Op, layers_to_perturb: list[str]) -> 
         mask = index[slot]
         if not (isinstance(mask, torch.Tensor) and mask.dtype == torch.bool):
             return False
-    return True
+        slots.append(slot)
+    return all(_value_shape_pins_mask(destination, index, slot, value) for slot in slots)
+
+
+def _value_shape_pins_mask(
+    destination: torch.Tensor, index: tuple[Any, ...], slot: int, value: torch.Tensor
+) -> bool:
+    """Return whether ``value`` fits ``index``'s selection and not the selection of the
+    same index with one element of the mask at ``slot`` flipped.
+
+    The probe is a zero-strided expansion of a scalar, so indexing it allocates only the
+    selection's shape, never a copy of the destination.
+    """
+
+    mask = index[slot]
+    if mask.numel() == 0:
+        return False
+    flipped = mask.clone()
+    flipped.view(-1)[0] = ~flipped.view(-1)[0]
+    alternative = index[:slot] + (flipped,) + index[slot + 1 :]
+    probe = torch.zeros((), dtype=torch.bool, device=destination.device).expand(destination.shape)
+    try:
+        selected_shape = tuple(probe[index].shape)
+        alternative_shape = tuple(probe[alternative].shape)
+        if tuple(torch.broadcast_shapes(value.shape, selected_shape)) != selected_shape:
+            return False
+    except (IndexError, RuntimeError, TypeError, ValueError):
+        return False
+    try:
+        fits_alternative = (
+            tuple(torch.broadcast_shapes(value.shape, alternative_shape)) == alternative_shape
+        )
+    except RuntimeError:
+        # The flipped mask rejects the value: its True-count is pinned.
+        return True
+    return not fits_alternative

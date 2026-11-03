@@ -552,7 +552,7 @@ def _check_identity(
             "norm fold costs 8.7-120 logits while still ranking components plausibly; "
             "this table is refused, not served.",
             remedy="this is a kit or capture defect, not a user error: report it with "
-            "tl.compat.report(model, x)",
+            "tl.report.doctor(model, x)",
             max_abs_residual=receipt["max_abs_residual"],
             tolerance=worst_budget,
             worst_element=coordinate,

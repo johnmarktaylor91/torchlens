@@ -1,7 +1,7 @@
 """Witness-gating regression suite.
 
 The host-nondeterminism channel monitor (``host_nondeterminism_monitor``) is armed
-ONLY for runnable-capable captures (``intervention_ready=True``) -- the exact
+ONLY for runnable-capable captures (``replayable=True``) -- the exact
 predicate for "this capture can produce a passing sparse runnable descriptor",
 which is the witness verdict's only consumer. A disarmed capture must stamp the
 fail-closed ``monitor_not_armed`` uncertainty so any unforeseen descriptor build
@@ -15,11 +15,12 @@ from __future__ import annotations
 import sys
 
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import WitnessCompleteness, WitnessGapKind
 from torchlens.options import CaptureOptions
-from torchlens.runnable import WitnessCompleteness, WitnessGapKind
 
 
 class _ProfileProbeModel(nn.Module):
@@ -36,10 +37,10 @@ class _ProfileProbeModel(nn.Module):
 
 
 _RUNNABLE_CAP = {
-    "intervention_ready": True,
+    "replayable": True,
     "capture_container_structure": True,
     "cache": False,
-    "random_seed": 7,
+    "seed": 7,
 }
 
 
@@ -47,7 +48,7 @@ def test_plain_trace_does_not_arm_monitor_and_stamps_fail_closed():
     model = _ProfileProbeModel()
     trace = tl.trace(model, torch.randn(2, 4))
     # No profile hook was installed for the user forward.
-    assert model.profile_hook_during_forward is None
+    assert stashed(trace, "profile_hook_during_forward") is None
     # The fail-closed stamp: channel coverage is UNKNOWABLE, never "no consumption".
     assert trace._runnable.rng_monitor_uncertain is True
     assert trace._runnable.rng_monitor_uncertain_detail == ("monitor_not_armed",)
@@ -68,7 +69,7 @@ def test_intervention_ready_trace_arms_monitor_unchanged():
 
 def test_plain_trace_cannot_pass_runnable_preflight():
     # The gate predicate invariant: descriptor.preflight.passed implies
-    # trace.intervention_ready, so "was-witnessed" and "can-claim" never diverge.
+    # trace.is_replayable, so "was-witnessed" and "can-claim" never diverge.
     from torchlens._io.runnable import build_sparse_run_descriptor
 
     model = _ProfileProbeModel()

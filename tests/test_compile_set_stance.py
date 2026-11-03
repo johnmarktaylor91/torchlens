@@ -13,9 +13,10 @@ run its ORIGINAL Python for the duration of a capture:
 * interior interventions work inside formerly-opaque regions.
 
 One honest qualification (review): the stance invalidates nothing, but TorchLens's
-own wrapper install/uninstall can cost ONE bounded recompile on the next
-compiled call after capture. The coexistence contract is "one bounded
-recompile", not "zero cost".
+own wrapper install/uninstall can cost a bounded burst of
+recompilations on the first compiled call after each capture, then steady
+state. The coexistence contract is that burst, not "zero cost"; its size on
+real models is pinned in ``tests/real_model/test_track_compile_recompile_burst.py``.
 
 Each verified scenario is pinned here as a regression contract, plus the
 torch < 2.6 tamper leg proving the no-stance fallback path is unchanged. The
@@ -33,7 +34,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _capture_state_helpers
-from torchlens.utils import _torch_compat
+from torchlens._utils import _torch_compat
+from torchlens.errors import TraceCaptureError
 
 pytestmark = [pytest.mark.heavy]
 
@@ -136,10 +138,10 @@ def test_compiled_attribute_interior_is_logged_with_full_verified_semantics() ->
             f"compiled-attribute interior op '{interior}' must be logged under the stance"
         )
     assert trace._raw_dynamo_region_detected is False
-    assert trace.capture_verification_reason != "dynamo_region_not_logged"
+    assert trace.provenance.verification_reason != "dynamo_region_not_logged"
 
     control = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
-    assert trace.capture_verified == control.capture_verified
+    assert trace.provenance.verified == control.provenance.verified
 
     with torch.no_grad():
         expected = torch.relu(torch.sin(model.fc(x))) + 1
@@ -175,7 +177,7 @@ def test_forced_eager_disclosure_note_fires_once_per_process() -> None:
     assert len(notes) == 1
     text = str(notes[0].message)
     assert "interiors ARE logged" in text
-    assert "one bounded recompile" in text
+    assert "a bounded burst of recompilations" in text
 
     with warnings.catch_warnings(record=True) as second:
         warnings.simplefilter("always")
@@ -238,7 +240,7 @@ def test_compiled_free_function_interior_is_logged_without_any_warning() -> None
     dynamo_warnings = [w for w in caught if "Dynamo" in str(w.message)]
     assert not dynamo_warnings, f"expected no Dynamo warning, saw: {dynamo_warnings}"
     assert trace._raw_dynamo_region_detected is False
-    assert trace.capture_verification_reason != "dynamo_region_not_logged"
+    assert trace.provenance.verification_reason != "dynamo_region_not_logged"
 
 
 def test_nested_compiled_modules_run_original_python() -> None:
@@ -304,7 +306,7 @@ def test_nested_compiled_modules_run_original_python() -> None:
     assert any("sin" in label for label in labels)
     assert any("mul" in label for label in labels)
     assert trace._raw_dynamo_region_detected is False
-    assert trace.capture_verification_reason != "dynamo_region_not_logged"
+    assert trace.provenance.verification_reason != "dynamo_region_not_logged"
     assert model._orig_mod.inner is compiled_child, (
         "the compiled child slot must be restored after capture"
     )
@@ -410,8 +412,9 @@ def test_failed_capture_restores_force_eager_stance() -> None:
             raise RuntimeError("injected stance-scope failure")
 
     x = torch.randn(2, 4)
-    with pytest.raises(RuntimeError, match="injected stance-scope failure"):
+    with pytest.raises(TraceCaptureError, match="injected stance-scope failure") as _tce_info:
         tl.trace(_CompiledThenRaise(), x)
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert compile_events == [], "the stance must compile zero graphs"
 
     compiled_free(x)
@@ -421,12 +424,14 @@ def test_failed_capture_restores_force_eager_stance() -> None:
 
 
 def test_warm_artifact_is_reproduced_and_the_recompile_is_bounded() -> None:
-    """The coexistence contract: caches intact, at most ONE recompile after.
+    """The coexistence contract: caches intact, a bounded burst after, then steady.
 
     ``force_eager`` itself invalidates nothing; TorchLens's wrapper
-    install/uninstall may cost one bounded recompile on the next compiled call
-    after capture. The reproduced output must be bitwise-identical to the
-    original warm artifact's.
+    install/uninstall may cost a bounded burst of recompilations on
+    the first compiled call after each capture, then steady state. This toy
+    model measures at most one recompile; the real-model burst bound lives in
+    ``tests/real_model/test_track_compile_recompile_burst.py``. The reproduced
+    output must be bitwise-identical to the original warm artifact's.
     """
 
     torch.compiler.reset()
@@ -444,7 +449,7 @@ def test_warm_artifact_is_reproduced_and_the_recompile_is_bounded() -> None:
     after_start = _frames_compiled()
     post = model(x)
     recompiles = _frames_compiled() - after_start
-    assert recompiles <= 1, f"the post-capture recompile must be bounded at one, got {recompiles}"
+    assert recompiles <= 1, f"the toy model measures at most one recompile, got {recompiles}"
     assert torch.equal(post, warm), "the warm compiled artifact must be bitwise-reproduced"
 
 
@@ -476,7 +481,7 @@ def test_count_compiles_missing_counters_refuses_typed(
 ) -> None:
     """A torch runtime without Dynamo counters refuses with the stable code."""
 
-    from torchlens.debug import CompileCountsUnavailableError
+    from torchlens.errors import CompileCountsUnavailableError
 
     monkeypatch.setattr(
         _torch_compat, "get_dynamo_compile_counters", lambda force_probe=False: None
@@ -492,17 +497,17 @@ def test_compat_row_states_the_coexistence_contract_under_stance() -> None:
     """The torch.compile row documents the contract instead of a scope refusal."""
 
     torch.compiler.reset()
-    row = tl.compat.report(_CompiledAttrModel(), torch.randn(2, 4)).row("torch_compile")
-    assert row.detected is True
+    row = tl.report.doctor(_CompiledAttrModel(), torch.randn(2, 4)).check("torch_compile")
+    assert row.is_detected is True
     assert row.status == "pass"
     assert "set_stance" in row.details
-    assert "one bounded recompile" in row.details
+    assert "a bounded burst of recompilations" in row.details
     assert "unwrap_torch()" in row.details
     assert "tl.debug.graph_breaks" in row.suggestion
     assert "tl.debug.count_compiles" in row.suggestion
 
-    clear_row = tl.compat.report(nn.Identity(), torch.randn(2, 4)).row("torch_compile")
-    assert clear_row.detected is False
+    clear_row = tl.report.doctor(nn.Identity(), torch.randn(2, 4)).check("torch_compile")
+    assert clear_row.is_detected is False
     assert "original eager Python" in clear_row.details
 
 
@@ -526,6 +531,6 @@ def test_no_stance_tamper_fallback_is_unchanged(monkeypatch: pytest.MonkeyPatch)
 
     assert not any("relu" in label for label in trace.layer_labels)
     assert trace._raw_dynamo_region_detected is True
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "dynamo_region_not_logged"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "dynamo_region_not_logged"
     assert model.compiled_act is compiled_callable

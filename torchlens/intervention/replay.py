@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import time
 import warnings
-from collections import OrderedDict, deque
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from collections import OrderedDict
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 import torch
 
+from torchlens._ir.capture_events import CaptureEvents
+
 from .._errors import InvalidArgumentError
-from .._trace_state import TraceState
-from ..ir import CaptureEvents
-from ..ir.container import (
+from .._ir.container import (
     DataclassField,
     DictKey,
     HFKey,
@@ -21,15 +22,52 @@ from ..ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
+from .._quantities import Bytes
+from .._selection.resolver import _label_index_scope
+from .._trace_state import TraceState
+from .._utils._tensor_layout import relay_to_layout
+from .._utils.display import progress_bar
+from .._utils.rng import execute_with_restored_rng_autocast
+from ..errors._base import TorchLensError
 from ..options import ReplayOptions, merge_replay_options
-from ..quantities import Bytes
-from ..utils.display import progress_bar
-from ..utils.rng import execute_with_restored_rng_autocast
+from ._param_fingerprint import (
+    CHANGED_PARAMS_RUN_KEY,
+    changed_param_scope,
+    checked_param_value,
+    record_changed_params,
+)
+from ._replay_cone import (
+    _disclosure_label,
+    _label_key_map,
+    _resolve_single_origin,
+    cone_of_effect,
+)
 from ._replay_context import (
     REPLAY_CAPTURE_DIGESTS_KEY,
     _ensure_replay_run_ctx,
+    _final_label_for_ref,
+    _func_call_groups,
+    _group_for_site,
+    _group_representative,
     _record_capture_digest,
     _replay_site_key,
+)
+from ._replay_sites import (
+    _buffer_thread_candidate,
+    _frontier_leaf,
+    _is_source_record,
+    _keeps_captured_draw,
+    _no_func_message,
+    _parent_value,
+    _require_hook_origins,
+    _unmet_log_precondition,
+)
+from ._replay_values import (
+    _call_mutates_tensor_args,
+    _clone_tensors_in,
+    _is_inplace_none_return,
+    _looks_like_template_dict,
+    rollback_snapshot,
 )
 from .audit import _hook_name, _replay_fire_record
 from .edge_substitution import require_depth1_arg_path
@@ -47,6 +85,7 @@ from .hooks import (
     normalize_hooks_from_spec,
 )
 from .runtime import _execute_hook
+from .spec import is_gradient_site
 from .types import (
     CapturedArgTemplate,
     FireRecord,
@@ -57,81 +96,13 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
-    from .selectors import SelectorLike
-
-
-class _CallConeNode(Protocol):
-    """Dependency fields required by the shared call-cone scheduler."""
-
-    @property
-    def call_id(self) -> str:
-        """Return the stable call identifier."""
-
-        ...
-
-    @property
-    def parent_call_ids(self) -> tuple[str, ...]:
-        """Return stable identifiers for dependency-parent calls."""
-
-        ...
-
-
-def _walk_call_cone(
-    calls: Sequence[_CallConeNode],
-    execute_call: Callable[[_CallConeNode], None],
-) -> None:
-    """Execute a dependency-complete call cone in stable recorded order.
-
-    Parameters
-    ----------
-    calls:
-        Recorded call nodes whose parent IDs define the runnable cone.
-    execute_call:
-        Transaction-local callback that executes and stages one ready node.
-
-    Raises
-    ------
-    ReplayPreconditionError
-        If the recorded cone has a missing parent or cyclic dependency.
-
-    Notes
-    -----
-    The caller owns transaction commit. Sparse runnable execution uses an
-    unexposed Trace fork, while intervention replay uses pending update maps.
-    """
-
-    call_ids = {call.call_id for call in calls}
-    missing = {
-        parent_id
-        for call in calls
-        for parent_id in call.parent_call_ids
-        if parent_id not in call_ids
-    }
-    if missing:
-        raise ReplayPreconditionError(
-            "Recorded call cone references missing parents: " + ", ".join(sorted(missing))
-        )
-    pending = list(calls)
-    completed: set[str] = set()
-    while pending:
-        ready_index = next(
-            (index for index, call in enumerate(pending) if set(call.parent_call_ids) <= completed),
-            None,
-        )
-        if ready_index is None:
-            blocked = ", ".join(call.call_id for call in pending)
-            raise ReplayPreconditionError(
-                f"Recorded call cone contains a dependency cycle among: {blocked}."
-            )
-        call = pending.pop(ready_index)
-        execute_call(call)
-        completed.add(call.call_id)
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
+    from .._selection.selectors import SelectorLike
 
 
 def push(
-    log: Trace,
+    trace: Trace,
     *,
     replay: ReplayOptions | None = None,
 ) -> Trace:
@@ -139,7 +110,7 @@ def push(
 
     Parameters
     ----------
-    log:
+    trace:
         Model log to mutate in place.
     replay:
         Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``).
@@ -151,31 +122,99 @@ def push(
     """
 
     replay_options = merge_replay_options(replay=replay)
-    _preflight_log(log)
-    _warn_if_direct_writes_will_be_overlaid(log)
-    hook_entries = _normalize_replay_hooks(log, replay_options.hooks)
-    origins = _origin_sites_for_hooks(log, hook_entries, strict=replay_options.strict)
-    if not origins:
-        raise ReplayPreconditionError("push requires at least one hook target")
-    if replay_options.differentiable:
-        return _run_differentiable_replay(
-            log,
+    _preflight_log(trace)
+    _refuse_armed_gradient_rules(trace, replay_options.hooks)
+    _warn_if_direct_writes_will_be_overlaid(trace)
+    hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
+    found = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
+    origins = _require_hook_origins(found)
+    with changed_param_scope(replay_options.allow_changed_params):
+        if replay_options.differentiable:
+            return _run_differentiable_replay(
+                trace,
+                origins,
+                hook_entries=hook_entries,
+                strict=replay_options.strict,
+                preserve_origins=False,
+            )
+        return _run_replay(
+            trace,
             origins,
             hook_entries=hook_entries,
             strict=replay_options.strict,
             preserve_origins=False,
         )
-    return _run_replay(
-        log,
-        origins,
-        hook_entries=hook_entries,
-        strict=replay_options.strict,
-        preserve_origins=False,
+
+
+def gradient_edit_replay_text(sites: str) -> tuple[str, str]:
+    """Return the ONE ``(message, remedy)`` for a gradient edit meeting replay.
+
+    Every door that refuses ``replay_gradient_edit_unsupported`` for a
+    gradient site (``do`` with a replay engine, ``push`` on an armed recipe)
+    raises with this text, so the spelling lives in one place.
+
+    Parameters
+    ----------
+    sites:
+        Rendering of the gradient sites the edit addresses.
+
+    Returns
+    -------
+    tuple[str, str]
+        The refusal message and its remedy.
+    """
+
+    message = (
+        f"Replay re-executes forward ops only and cannot edit the gradient at {sites}. "
+        "Pass model= and x= to rerun with the edit armed, then call "
+        "result.backward(loss) (or pass loss=), or stage it with engine='set_only' "
+        "and call trace.backward(loss) on this trace."
     )
+    remedy = (
+        "trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
+        "do(..., intervention=InterventionOptions(engine='set_only')) then trace.backward(loss)"
+    )
+    return message, remedy
+
+
+def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
+    """Refuse a push whose recipe or explicit replay hooks address a gradient.
+
+    Replay recomputes forward values off the autograd graph, so a gradient
+    rule could never fire there, whether the recipe arms it or the call
+    passes it as ``ReplayOptions(hooks={tl.grad(site): edit})``; refusing
+    keeps a push from returning a result that silently dropped it.
+
+    Parameters
+    ----------
+    trace:
+        Trace about to be pushed.
+    hooks:
+        The push's explicit ``ReplayOptions.hooks`` mapping, or ``None``.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``replay_gradient_edit_unsupported`` naming the gradient sites.
+    """
+
+    spec = trace._intervention_spec
+    targets = [hook_spec.site_target for hook_spec in getattr(spec, "hook_specs", ())]
+    if isinstance(hooks, Mapping):
+        targets.extend(hooks)
+    sites = [repr(target) for target in targets if is_gradient_site(target)]
+    if sites:
+        message, remedy = gradient_edit_replay_text(", ".join(dict.fromkeys(sites)))
+        raise InvalidArgumentError(
+            message,
+            code="replay_gradient_edit_unsupported",
+            remedy=remedy,
+            argument="hooks_or_site",
+        )
 
 
 def push_from(
-    log: Trace,
+    trace: Trace,
     site: SelectorLike | str | Op,
     *,
     replay: ReplayOptions | None = None,
@@ -184,7 +223,7 @@ def push_from(
 
     Parameters
     ----------
-    log:
+    trace:
         Model log to mutate in place.
     site:
         Layer pass or selector resolving to the origin site. The origin's
@@ -199,14 +238,15 @@ def push_from(
     """
 
     replay_options = merge_replay_options(replay=replay)
-    _preflight_log(log)
-    _warn_if_direct_writes_will_be_overlaid(log)
-    origin = _resolve_single_origin(log, site, strict=replay_options.strict)
+    _preflight_log(trace)
+    _warn_if_direct_writes_will_be_overlaid(trace)
+    origin = _resolve_single_origin(trace, site, strict=replay_options.strict)
     if not isinstance(origin.out, torch.Tensor):
         raise ReplayPreconditionError(f"origin {origin.layer_label!r} has no tensor out")
-    return _run_replay(
-        log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
-    )
+    with changed_param_scope(replay_options.allow_changed_params):
+        return _run_replay(
+            trace, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
+        )
 
 
 def _run_differentiable_replay(
@@ -243,13 +283,13 @@ def _run_differentiable_replay(
     log._record_operation(
         "fork",
         source_id=id(log),
-        name=replay_log.trace_label,
+        name=replay_log.name,
         source_cone_labels=tuple(_disclosure_label(site) for site in source_cone),
     )
     _reset_backward_projection(replay_log)
     _run_replay(
         replay_log,
-        [replay_log.layer_dict_all_keys[_replay_site_key(origin)] for origin in origins],
+        [replay_log._layer_dict_all_keys[_replay_site_key(origin)] for origin in origins],
         hook_entries=hook_entries,
         strict=strict,
         preserve_origins=preserve_origins,
@@ -259,15 +299,15 @@ def _run_differentiable_replay(
         **(replay_log.last_run if isinstance(replay_log.last_run, dict) else {}),
         "engine": "replay",
         "differentiable": True,
-        "source_trace_label": getattr(log, "trace_label", None),
-        "frontier": tuple(replay_log.replay_frontier),
+        "source_trace_label": getattr(log, "name", None),
+        "frontier": tuple(replay_log._replay_frontier),
     }
     if replay_log.state_history and isinstance(replay_log.state_history[-1], dict):
         replay_log.state_history[-1].update(
             {
                 "differentiable": True,
-                "source_trace_label": getattr(log, "trace_label", None),
-                "frontier": tuple(replay_log.replay_frontier),
+                "source_trace_label": getattr(log, "name", None),
+                "frontier": tuple(replay_log._replay_frontier),
             }
         )
     return replay_log
@@ -287,7 +327,7 @@ def _differentiable_replay_name(log: Trace) -> str:
         Trace label for the replay fork.
     """
 
-    base_name = getattr(log, "trace_label", None) or "trace"
+    base_name = getattr(log, "name", None) or "trace"
     return f"{base_name}_replay"
 
 
@@ -314,25 +354,26 @@ def _reset_backward_projection(log: Trace) -> None:
     log.__dict__.pop("_backward_projection_event_count", None)
     log.__dict__.pop("_backward_projection_revision", None)
     log.__dict__.pop("_backward_projection_fold_state", None)
-    log.has_backward_pass = False
-    log.has_gradients = False
+    log._autograd_has_backward_pass = False
+    log._autograd_has_grads = False
     log._saved_grad_labels = set()
-    log.grad_fn_logs = OrderedDict()
-    log.grad_fn_order = []
-    log.backward_pass_logs = OrderedDict()
-    log.backward_root_grad_fn_object_ids = []
-    log.backward_durations = []
-    log.num_backward_passes = 0
-    log.backward_peak_memory = Bytes(0)
-    log.total_backward_memory = Bytes(0)
-    log.total_gradient_memory = Bytes(0)
-    log.saved_gradient_memory = Bytes(0)
-    log.total_param_gradient_memory = Bytes(0)
-    log.backward_memory_backend = "unknown"
-    log.replay_frontier = {}
-    for op in getattr(log, "layer_list", ()):
+    log._grad_fn_logs = OrderedDict()
+    log._autograd_grad_fn_order = []
+    log._backward_pass_logs = OrderedDict()
+    log._autograd_backward_root_grad_fn_object_ids = []
+    log._cost_backward_durations = []
+    log._num_backward_passes = 0
+    log._cost_backward_peak_memory = Bytes(0)
+    log.backward_peak_memory_reason = None
+    log._cost_total_backward_memory = Bytes(0)
+    log._cost_total_grad_memory = Bytes(0)
+    log._cost_saved_grad_memory = Bytes(0)
+    log._cost_total_param_grad_memory = Bytes(0)
+    log._provenance_backward_memory_backend = "unknown"
+    log._replay_frontier = {}
+    for op in log._layer_list:
         _clear_op_gradient_projection(op)
-    for param_log in getattr(log, "param_logs", {}).values():
+    for param_log in log._param_logs.values():
         _clear_param_gradient_projection(param_log)
 
 
@@ -376,131 +417,86 @@ def _clear_param_gradient_projection(param_log: Any) -> None:
     param_log._grad_memory = Bytes(0)
 
 
-def _disclosure_label(site: Op) -> str:
-    """Return the user-facing label for replay disclosures and frontier keys.
+@dataclass(frozen=True)
+class _ReplayPass:
+    """One replay's loop state: what is fixed at entry and what the walk accumulates.
 
-    Bare layer labels are unambiguous only when the layer is single-pass;
-    multi-pass ops disclose their pass-qualified spelling.
+    ``overlay`` holds every value the cone currently reads (origin outs first,
+    recomputed values as they land); ``pending_updates`` and
+    ``pending_records`` are the transactional writes
+    :func:`_commit_replay_updates` applies once the whole cone succeeded.
     """
 
-    if int(getattr(site, "num_passes", 1) or 1) > 1:
-        return _replay_site_key(site)
-    return site.layer_label
+    log: Trace
+    origins: tuple[Op, ...]
+    origin_keys: frozenset[str]
+    label_keys: dict[str, tuple[str, ...]]
+    hook_targets: Mapping[str, Sequence[NormalizedHookEntry]]
+    preserve_origins: bool
+    strict: bool
+    frontier: dict[str, torch.Tensor] | None
+    overlay: dict[str, torch.Tensor] = field(default_factory=dict)
+    pending_updates: dict[str, torch.Tensor] = field(default_factory=dict)
+    pending_records: dict[str, list[FireRecord]] = field(default_factory=dict)
+
+    def is_preserved_origin(self, site: Op) -> bool:
+        """Whether ``site`` is an origin whose edited out stands as given."""
+
+        return self.preserve_origins and _replay_site_key(site) in self.origin_keys
 
 
-def _label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
-    """Map every string label spelling to the replay keys it may denote.
+def _commit_member(member: Op, tensor: torch.Tensor, state: _ReplayPass) -> None:
+    """Fire the hooks aimed at ``member`` on ``tensor`` and stage the result.
 
-    A spelling denoting exactly one op (pass-qualified labels, single-pass
-    bare labels, historical position labels) maps to that op's replay key; a
-    layer-wide spelling of a multi-pass layer (its bare ``layer_label``, its
-    short label) maps to EVERY pass's key and is therefore pass-ambiguous.
+    The staged value joins the overlay (so downstream cone members read it)
+    and the pending transaction; under differentiable replay a hooked site
+    becomes a frontier leaf and every staged tensor gets its backward hook.
     """
 
-    mapping: dict[str, list[str]] = {}
-    for op in trace.layer_list:
-        key = _replay_site_key(op)
-        spellings = {key, op.layer_label}
-        for spelling in getattr(op, "lookup_keys", ()) or ():
-            if isinstance(spelling, str):
-                spellings.add(spelling)
-        for spelling in spellings:
-            keys = mapping.setdefault(spelling, [])
-            if key not in keys:
-                keys.append(key)
-    return {spelling: tuple(keys) for spelling, keys in mapping.items()}
+    key = _replay_site_key(member)
+    tensor, records = _apply_replay_hooks(
+        tensor,
+        site=member,
+        hook_entries=state.hook_targets.get(key, ()),
+        run_ctx=_ensure_replay_run_ctx(state.log),
+    )
+    if state.frontier is not None and key in state.hook_targets:
+        tensor = _frontier_leaf(state.frontier, _disclosure_label(member), tensor)
+    state.overlay[key] = tensor
+    state.pending_updates[key] = tensor
+    if records:
+        state.pending_records.setdefault(key, []).extend(records)
+    if state.frontier is not None:
+        _install_replay_tensor_hook(state.log, member, tensor)
+    _check_edge_expectations(member, strict=state.strict)
 
 
-def _validated_cone_origins(origins: Iterable[Op]) -> list[Op]:
-    """Refuse non-op cone origins typed (leverage B3), returning them listed."""
+def _thread_source_group(group: Sequence[Op], state: _ReplayPass) -> None:
+    """Stage the replay values of a source-only group (nothing to re-execute).
 
-    if isinstance(origins, str):
-        raise InvalidArgumentError(
-            f"cone_of_effect origins must be op records, not the string "
-            f"{origins!r}: iterating a string walks its CHARACTERS and would "
-            "silently return an empty cone. Resolve the label first — "
-            "trace[label].ops, or trace.find_sites(label).",
-            code="cone_origin_invalid",
-            remedy="pass op records (e.g. trace[label].ops)",
-        )
-    listed = list(origins)
-    for origin in listed:
-        if isinstance(origin, str) or not hasattr(origin, "layer_label"):
-            raise InvalidArgumentError(
-                f"cone_of_effect origin {origin!r} is not an op record; "
-                "resolve string addresses first (trace[label].ops, or "
-                "trace.find_sites(label)).",
-                code="cone_origin_invalid",
-                remedy="pass op records (e.g. trace[label].ops)",
-            )
-    return listed
-
-
-def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
-    """Return downstream cone in topological order.
-
-    Parameters
-    ----------
-    trace:
-        Model log whose saved graph should be traversed.
-    origins:
-        Origin layer ops whose downstream dependents are affected.
-
-    Returns
-    -------
-    list[Op]
-        Origin and downstream sites in execution order, with call-group
-        siblings included. Traversal is keyed by pass-qualified op labels, so
-        edges crossing recurrence-grouped (multi-pass) layers are followed
-        per-pass rather than silently dropped.
+    A written buffer VERSION record threads the recomputed writing op's
+    output through it so downstream consumers of the buffer read the
+    propagated state, not the captured value. A record nothing threads into
+    (an input leaf, an initial buffer read, or an undisclosed gap) keeps its
+    captured value; a hook aimed AT it still fires, on that value, which is
+    what the record's consumers read, so the edit propagates through the cone
+    from here. Without a hook there is nothing to recompute.
     """
 
-    origins = _validated_cone_origins(origins)
-    all_keys = trace.layer_dict_all_keys
-    label_keys = _label_key_map(trace)
-    call_groups = _func_call_groups(trace)
-    visited: set[str] = set()
-    frontier: deque[str] = deque()
-    for origin in origins:
-        key = _replay_site_key(origin)
-        if key in all_keys:
-            frontier.append(key)
-
-    def _enqueue_children(site: Op) -> None:
-        """Push one op's unvisited children onto the cone frontier, per pass.
-
-        Parameters
-        ----------
-        site:
-            The op whose child relations are being expanded.
-        """
-
-        for child_label in _child_labels(site):
-            # A pass-ambiguous child spelling (not produced by finished-trace
-            # relations, but guarded against) expands to every pass: a
-            # conservative superset is safe for cone traversal, guessing one
-            # pass is not.
-            for child_key in label_keys.get(child_label, ()):
-                if child_key not in visited:
-                    frontier.append(child_key)
-
-    while frontier:
-        key = frontier.popleft()
-        if key in visited:
+    for member in group:
+        if state.is_preserved_origin(member):
             continue
-        visited.add(key)
-        layer = all_keys.get(key)
-        if layer is None:
-            continue
-
-        group = call_groups.get(layer.func_call_id, ()) if layer.func_call_id is not None else ()
-        for sibling in group:
-            visited.add(_replay_site_key(sibling))
-            _enqueue_children(sibling)
-
-        _enqueue_children(layer)
-
-    return [layer for layer in trace.layer_list if _replay_site_key(layer) in visited]
+        threaded = _threaded_source_value(member, state.log, state.overlay, strict=state.strict)
+        if threaded is None:
+            if _replay_site_key(member) not in state.hook_targets:
+                continue
+            if not isinstance(member.out, torch.Tensor):
+                continue
+            threaded = member.out
+        # Clone: buffer records keep their own storage at capture, so the
+        # committed buffer out must not alias the writing op's committed out
+        # (nor the captured payload a hook edits).
+        _commit_member(member, threaded.clone(), state)
 
 
 def _run_replay(
@@ -538,97 +534,62 @@ def _run_replay(
     """
 
     started_at = time.monotonic()
+    # The flag says what THIS replay does, never what an earlier one did: hooks
+    # firing here read it (keep_grad discloses the frontier only under
+    # differentiable replay). Rebind, never mutate: a fork may share the dict.
+    is_differentiable = differentiable_frontier is not None
+    run_ctx = {**_ensure_replay_run_ctx(log), "differentiable": is_differentiable}
+    if not is_differentiable:
+        run_ctx.pop("frontier", None)
+    run_ctx.pop(CHANGED_PARAMS_RUN_KEY, None)
+    log.last_run = run_ctx
     cone = cone_of_effect(log, origins)
-    origin_keys = {_replay_site_key(origin) for origin in origins}
-    label_keys = _label_key_map(log)
-    overlay: dict[str, torch.Tensor] = {}
+    state = _ReplayPass(
+        log=log,
+        origins=tuple(origins),
+        origin_keys=frozenset(_replay_site_key(origin) for origin in origins),
+        label_keys=_label_key_map(log),
+        hook_targets=_hook_targets_by_label(log, hook_entries, strict=strict),
+        preserve_origins=preserve_origins,
+        strict=strict,
+        frontier=differentiable_frontier,
+    )
     for origin in origins:
         if isinstance(origin.out, torch.Tensor):
-            overlay[_replay_site_key(origin)] = origin.out
+            state.overlay[_replay_site_key(origin)] = origin.out
 
-    hook_targets = _hook_targets_by_label(log, hook_entries, strict=strict)
     executed_call_ids: set[int] = set()
     call_groups = _func_call_groups(log)
+    cone_keys = {_replay_site_key(member) for member in cone}
     errors_non_fatal = 0
-    pending_updates: dict[str, torch.Tensor] = {}
-    pending_records: dict[str, list[FireRecord]] = {}
+    loaded = bool(log.__dict__.get("_loaded_from_bundle", False))
 
     for site in progress_bar(cone, total=len(cone), desc="torchlens.push"):
         site_key = _replay_site_key(site)
-        if preserve_origins and site_key in origin_keys:
-            pending_updates[site_key] = overlay[site_key]
+        if preserve_origins and site_key in state.origin_keys:
+            state.pending_updates[site_key] = state.overlay[site_key]
             continue
         if site.func_call_id is not None and site.func_call_id in executed_call_ids:
             continue
-        group = _group_for_site(site, call_groups, cone)
+        group = _group_for_site(site, call_groups, cone_keys)
         if site.func_call_id is not None:
             executed_call_ids.add(site.func_call_id)
-        if all(preserve_origins and _replay_site_key(member) in origin_keys for member in group):
+        if all(state.is_preserved_origin(member) for member in group):
             continue
-        _preflight_group(group)
-        replay_group = [member for member in group if not getattr(member, "is_buffer", False)]
+        _preflight_group(group, loaded=loaded)
+        replay_group = [member for member in group if not _is_source_record(member)]
         if not replay_group:
-            # A buffer-only group is a written buffer VERSION record: thread
-            # the recomputed writing op's output through it so downstream
-            # consumers of the buffer read the propagated state, not the
-            # captured value.
-            for member in group:
-                member_key = _replay_site_key(member)
-                if preserve_origins and member_key in origin_keys:
-                    continue
-                threaded = _threaded_buffer_value(member, log, overlay, strict=strict)
-                if threaded is None:
-                    continue
-                # Clone: buffer records keep their own storage at capture, so
-                # the committed buffer out must not alias the writing op's
-                # committed out.
-                tensor = threaded.clone()
-                tensor, records = _apply_replay_hooks(
-                    tensor,
-                    site=member,
-                    hook_entries=hook_targets.get(member_key, ()),
-                    run_ctx=_ensure_replay_run_ctx(log),
-                )
-                if differentiable_frontier is not None and member_key in hook_targets:
-                    tensor = _frontier_leaf(
-                        differentiable_frontier, _disclosure_label(member), tensor
-                    )
-                overlay[member_key] = tensor
-                pending_updates[member_key] = tensor
-                if records:
-                    pending_records.setdefault(member_key, []).extend(records)
-                if differentiable_frontier is not None:
-                    _install_replay_tensor_hook(log, member, tensor)
-                _check_edge_expectations(member, strict=strict)
+            _thread_source_group(group, state)
             continue
-        # A synthesized boundary output node carries the parent call's
-        # template but ``func=identity`` -- it replays THROUGH its parent's
-        # function call, so a member that carries the call's real func must
-        # execute the group. Fall back to the full (cone-unfiltered) call
-        # group when the cone holds only boundary nodes (an output-node
-        # origin replayed with recomputation).
-        representative = next(
-            (member for member in replay_group if not getattr(member, "is_output", False)),
-            None,
-        )
-        if representative is None:
-            representative = next(
-                (
-                    member
-                    for member in call_groups.get(site.func_call_id, ())
-                    if not getattr(member, "is_output", False)
-                    and not getattr(member, "is_buffer", False)
-                ),
-                replay_group[0],
-            )
+        representative = _group_representative(replay_group, call_groups, site)
         args, kwargs = _reconstruct_args_from_template(
             _template_for_site(representative),
             representative,
             log,
-            overlay,
+            state.overlay,
             strict=strict,
             differentiable_frontier=differentiable_frontier,
-            label_keys=label_keys,
+            label_keys=state.label_keys,
         )
         args, kwargs = _splice_param_substitutions(replay_group, args, kwargs)
         if _call_mutates_tensor_args(representative, kwargs):
@@ -638,12 +599,11 @@ def _run_replay(
             # through copy-on-write forks, the SOURCE trace's payloads).
             args = _clone_tensors_in(args)
             kwargs = {key: _clone_tensors_in(value) for key, value in kwargs.items()}
-        output = _execute_replay_func_strict(representative, args, kwargs)
+        output = _replay_group_output(representative, replay_group, args, kwargs, state=state)
         if output is None and _is_inplace_none_return(representative):
             output = args[0]
         for member in replay_group:
-            member_key = _replay_site_key(member)
-            if preserve_origins and member_key in origin_keys:
+            if state.is_preserved_origin(member):
                 continue
             if getattr(member, "is_output", False):
                 # A boundary output node carries its PARENT's resolved slot,
@@ -654,31 +614,17 @@ def _run_replay(
                 # earlier group member, a hooked site), the boundary node
                 # mirrors it; otherwise it takes the parent's slot of the
                 # just-executed call.
-                parent = _boundary_slot_parent_op(member, log, label_keys=label_keys)
+                parent = _boundary_slot_parent_op(member, log, label_keys=state.label_keys)
                 parent_key = _replay_site_key(parent)
-                if parent_key in overlay:
-                    tensor = overlay[parent_key]
+                if parent_key in state.overlay:
+                    tensor = state.overlay[parent_key]
                 else:
                     tensor = _slice_output_by_path(output, tuple(parent.container_path or ()))
             else:
                 tensor = _slice_output_by_path(output, tuple(member.container_path or ()))
-            tensor, records = _apply_replay_hooks(
-                tensor,
-                site=member,
-                hook_entries=hook_targets.get(member_key, ()),
-                run_ctx=_ensure_replay_run_ctx(log),
-            )
-            if differentiable_frontier is not None and member_key in hook_targets:
-                tensor = _frontier_leaf(differentiable_frontier, _disclosure_label(member), tensor)
-            overlay[member_key] = tensor
-            pending_updates[member_key] = tensor
-            if records:
-                pending_records.setdefault(member_key, []).extend(records)
-            if differentiable_frontier is not None:
-                _install_replay_tensor_hook(log, member, tensor)
-            _check_edge_expectations(member, strict=strict)
+            _commit_member(member, tensor, state)
 
-    _commit_replay_updates(log, pending_updates, pending_records)
+    _commit_replay_updates(log, state.pending_updates, state.pending_records)
     log.state = TraceState.REPLAY_PROPAGATED
     log._out_recipe_revision = getattr(log, "_spec_revision", 0)
     log.last_run = {
@@ -692,6 +638,7 @@ def _run_replay(
         "errors_non_fatal": errors_non_fatal,
         "cone": tuple(_disclosure_label(site) for site in cone),
     }
+    record_changed_params(log)
     log._record_operation(
         "replay",
         engine="replay",
@@ -703,7 +650,7 @@ def _run_replay(
     )
     log._has_direct_writes = False
     if differentiable_frontier is not None:
-        log.replay_frontier = dict(differentiable_frontier)
+        log._replay_frontier = dict(differentiable_frontier)
     return log
 
 
@@ -870,10 +817,12 @@ def _boundary_slot_parent_op(
     parent_label = parents[0]
     candidate_keys = label_keys.get(parent_label, ())
     candidates = [
-        trace.layer_dict_all_keys[key] for key in candidate_keys if key in trace.layer_dict_all_keys
+        trace._layer_dict_all_keys[key]
+        for key in candidate_keys
+        if key in trace._layer_dict_all_keys
     ]
-    if not candidates and parent_label in trace.layer_dict_all_keys:
-        candidates = [trace.layer_dict_all_keys[parent_label]]
+    if not candidates and parent_label in trace._layer_dict_all_keys:
+        candidates = [trace._layer_dict_all_keys[parent_label]]
     same_call = [
         candidate
         for candidate in candidates
@@ -956,7 +905,7 @@ def _resolve_arg_component(
         label_keys = _label_key_map(trace)
     if isinstance(component, ParentRef):
         parent_label = _final_label_for_ref(trace, component.parent_label)
-        if parent_label not in trace.layer_dict_all_keys:
+        if parent_label not in trace._layer_dict_all_keys:
             raise ReplayPreconditionError(
                 f"{pass_log.layer_label} references missing parent {component.parent_label!r}"
             )
@@ -971,41 +920,12 @@ def _resolve_arg_component(
                 f"{len(parent_keys)} passes of that layer "
                 f"({', '.join(repr(key) for key in parent_keys)}); refusing to guess a pass."
             )
-        parent = trace.layer_dict_all_keys[parent_keys[0] if parent_keys else parent_label]
-        parent_key = _replay_site_key(parent)
+        parent = trace._layer_dict_all_keys[parent_keys[0] if parent_keys else parent_label]
         _warn_if_unexpected_parent(pass_log, parent, label_keys, strict=strict)
-        if parent_key in overlay:
-            return overlay[parent_key]
-        versions = getattr(parent, "out_versions_by_child", {}) or {}
-        child_spelling = next(
-            (
-                spelling
-                for spelling in (_replay_site_key(pass_log), pass_log.layer_label)
-                if spelling in versions
-            ),
-            None,
-        )
-        if child_spelling is not None:
-            version = versions[child_spelling]
-            if isinstance(version, torch.Tensor):
-                if differentiable_frontier is not None:
-                    return _frontier_leaf(
-                        differentiable_frontier,
-                        f"{_disclosure_label(parent)}->{_disclosure_label(pass_log)}",
-                        version,
-                    )
-                return version
-        if isinstance(parent.out, torch.Tensor):
-            if differentiable_frontier is not None:
-                return _frontier_leaf(
-                    differentiable_frontier, _disclosure_label(parent), parent.out
-                )
-            return parent.out
-        raise ReplayPreconditionError(
-            f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no out"
-        )
+        value = _parent_value(parent, pass_log, overlay, differentiable_frontier)
+        return relay_to_layout(value, component._capture_layout)
     if isinstance(component, LiteralTensor):
-        return component.value
+        return checked_param_value(component, pass_log)
     if isinstance(component, LiteralValue):
         return component.value
     if isinstance(component, Unsupported):
@@ -1040,33 +960,6 @@ def _resolve_arg_component(
             for value in component
         )
     return component
-
-
-def _frontier_leaf(
-    frontier: dict[str, torch.Tensor],
-    label: str,
-    tensor: torch.Tensor,
-) -> torch.Tensor:
-    """Return a fresh replay-frontier leaf for a saved tensor.
-
-    Parameters
-    ----------
-    frontier:
-        Mutable frontier cache keyed by source label.
-    label:
-        Source label for the boundary tensor.
-    tensor:
-        Saved tensor entering the replay cone.
-
-    Returns
-    -------
-    torch.Tensor
-        Detached cloned leaf requiring grad.
-    """
-
-    if label not in frontier:
-        frontier[label] = tensor.detach().clone().requires_grad_()
-    return frontier[label]
 
 
 def _install_replay_tensor_hook(log: Trace, site: Op, tensor: torch.Tensor) -> None:
@@ -1124,6 +1017,107 @@ def _execute_replay_func_strict(
     )
 
 
+def _replay_group_output(
+    representative: Op,
+    replay_group: Sequence[Op],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    state: _ReplayPass,
+) -> Any:
+    """Return one function-call group's replay output.
+
+    A stochastic call with no recorded RNG state and no changed argument
+    keeps its captured output (:func:`_keeps_captured_draw`); every other
+    call re-executes its saved callable (:func:`_execute_group_call`).
+
+    Parameters
+    ----------
+    representative:
+        Representative site of the group.
+    replay_group:
+        Sites the call produced.
+    args:
+        Reconstructed positional arguments.
+    kwargs:
+        Reconstructed keyword arguments.
+    state:
+        This replay's loop state (origins, pending values, label keys).
+
+    Returns
+    -------
+    Any
+        The call's output, to be sliced per member by container path.
+    """
+
+    if _keeps_captured_draw(
+        representative,
+        replay_group,
+        pending_updates=state.pending_updates,
+        label_keys=state.label_keys,
+        log=state.log,
+    ):
+        return representative.out.clone()
+    return _execute_group_call(representative, args, kwargs, origins=state.origins)
+
+
+def _execute_group_call(
+    site: Op,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    origins: Sequence[Op],
+) -> Any:
+    """Execute one replay call, surfacing a torch failure as a typed replay refusal.
+
+    An edit can carry a value the captured graph cannot consume downstream:
+    an index lookup fed an index past its table, a reshape fed a tensor of
+    another size. Torch then raises from the replayed callable, far from the
+    edit that caused it. The refusal names the op that raised, the edit
+    origins and the original exception (chained as ``__cause__``); nothing
+    is committed, so the fork keeps its captured values.
+
+    Parameters
+    ----------
+    site:
+        Representative site of the function-call group being replayed.
+    args:
+        Reconstructed positional arguments.
+    kwargs:
+        Reconstructed keyword arguments.
+    origins:
+        Replay origins (the edited sites).
+
+    Returns
+    -------
+    Any
+        Function return value.
+    """
+
+    try:
+        return _execute_replay_func_strict(site, args, kwargs)
+    except TorchLensError:
+        raise
+    except Exception as exc:
+        origin_labels = ", ".join(repr(_disclosure_label(origin)) for origin in origins)
+        func_name = str(getattr(site, "func_name", "") or "the saved callable")
+        raise ReplayPreconditionError(
+            f"replay of {_disclosure_label(site)!r} ({func_name}) raised "
+            f"{type(exc).__name__}: {exc}. "
+            f"The edit at {origin_labels} produced a value this op cannot consume on the "
+            "captured graph (an index, shape or dtype path fixed at capture). Nothing was "
+            "committed. Choose an edit that keeps the edited site inside the range the "
+            "downstream ops accept, or rerun the model with the edit staged: "
+            "trace.run(model, inputs)",
+            code="replay_downstream_op_raised",
+            remedy=(
+                "Choose an edit that keeps the edited site inside the range the downstream "
+                "ops accept, or rerun the model with the edit staged: trace.run(model, inputs)"
+            ),
+            raised_type=type(exc).__name__,
+        ) from exc
+
+
 def _apply_replay_hooks(
     out: torch.Tensor,
     *,
@@ -1157,9 +1151,9 @@ def _apply_replay_hooks(
         context = make_hook_context(
             name=_hook_name(entry),
             timing="post",
-            direction="forward",
-            layer_log=site,
-            run_ctx=run_ctx,
+            signal="forward",
+            op=site,
+            run_context=run_ctx,
             args=(current,),
             kwargs={},
         )
@@ -1171,7 +1165,7 @@ def _apply_replay_hooks(
             entry.normalized_callable,
             current,
             context,
-            force_shape_change=bool(entry.metadata.get("force_shape_change", False)),
+            allow_shape_change=bool(entry.metadata.get("allow_shape_change", False)),
         )
         records.append(
             _replay_fire_record(
@@ -1275,20 +1269,9 @@ def _commit_replay_updates(
     new_digests: dict[str, str] = {}
     try:
         for label, tensor in pending_updates.items():
-            site = log.layer_dict_all_keys[label]
+            site = log._layer_dict_all_keys[label]
             _record_capture_digest(site, known_digests, new_digests)
-            snapshots[label] = {
-                "out": site.out,
-                "transformed_out": site.transformed_out,
-                "shape": site.shape,
-                "transformed_out_shape": site.transformed_out_shape,
-                "dtype": site.dtype,
-                "transformed_out_dtype": site.transformed_out_dtype,
-                "memory": site.activation_memory,
-                "transformed_activation_memory": site.transformed_activation_memory,
-                "interventions": list(site.interventions),
-                "intervention_replaced": site.intervention_replaced,
-            }
+            snapshots[label] = rollback_snapshot(site)
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
             if new_records:
@@ -1298,7 +1281,7 @@ def _commit_replay_updates(
                 # two records, never three). Live-door records (capture
                 # facts), edge records (tier-(ii) corroboration), and
                 # records on sites this push did not fire at survive.
-                old_records = list(site.interventions or ())
+                old_records = list(site.edits or ())
                 surviving = [
                     record
                     for record in old_records
@@ -1308,12 +1291,10 @@ def _commit_replay_updates(
                 # component (a user-injected tensor mints no FireRecord);
                 # preserve exactly that component across the replacement.
                 record_replaced_before = any(record.replaced for record in old_records)
-                nonrecord_component = bool(site.intervention_replaced) and (
-                    not record_replaced_before
-                )
-                site._internal_set("interventions", surviving + new_records)
+                nonrecord_component = bool(site.is_edited) and (not record_replaced_before)
+                site._internal_set("edits", surviving + new_records)
                 site._internal_set(
-                    "intervention_replaced",
+                    "is_edited",
                     bool(
                         nonrecord_component
                         or any(record.replaced for record in surviving + new_records)
@@ -1321,7 +1302,7 @@ def _commit_replay_updates(
                 )
     except Exception:
         for label, state in snapshots.items():
-            site = log.layer_dict_all_keys[label]
+            site = log._layer_dict_all_keys[label]
             for field_name, value in state.items():
                 site._internal_set(field_name, value)
         raise
@@ -1341,7 +1322,7 @@ def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:
         Replacement out.
     """
 
-    from ..data_classes.op import _set_saved_out_metadata
+    from .._data_classes.op import _set_saved_out_metadata
 
     site._internal_set("out", tensor)
     site._internal_set("transformed_out", None)
@@ -1357,29 +1338,41 @@ def _preflight_log(log: Trace) -> None:
         Model log to validate.
     """
 
-    from ..runnable import refuse_poisoned_trace
+    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(log, "path-assuming intervention chaining")
-    if not getattr(log, "_tracing_finished", False):
-        raise ReplayPreconditionError("replay requires a completed Trace")
-    if not getattr(log, "intervention_ready", False):
-        raise ReplayPreconditionError("replay requires intervention_ready=True capture metadata")
+    unmet = _unmet_log_precondition(log)
+    if unmet is not None:
+        raise ReplayPreconditionError(unmet)
 
 
-def _preflight_group(group: Sequence[Op]) -> None:
+def _preflight_group(group: Sequence[Op], *, loaded: bool = False) -> None:
     """Validate replay preconditions for one function-call group.
 
     Parameters
     ----------
     group:
         Same-call output sites.
+    loaded:
+        Whether the trace was loaded from a saved file (no callables travel
+        with a save, so the refusal names that condition and its remedy).
     """
 
     for site in group:
-        if getattr(site, "is_buffer", False):
+        if _is_source_record(site):
             continue
+        if site.func is None and loaded:
+            raise ReplayPreconditionError(
+                _no_func_message(site, loaded=True),
+                code="replay_loaded_trace_has_no_callables",
+                remedy=(
+                    "Edit a trace captured in this process with "
+                    "CaptureOptions(replayable=True), or rerun the model with the edit "
+                    "staged: trace.run(model, inputs)"
+                ),
+            )
         if site.func is None:
-            raise ReplayPreconditionError(f"{site.layer_label!r} has no func for replay")
+            raise ReplayPreconditionError(_no_func_message(site, loaded=False))
         _template_for_site(site)
 
 
@@ -1502,12 +1495,13 @@ def _origin_sites_for_hooks(
     """
 
     target_keys: set[str] = set()
-    for entry in hook_entries:
-        for site in log.resolve_sites(
-            entry.site_target, strict=strict, max_fanout=len(log.layer_list)
-        ):
-            target_keys.add(_replay_site_key(site))
-    return [site for site in log.layer_list if _replay_site_key(site) in target_keys]
+    with _label_index_scope():  # resolution reads the trace; nothing relabels it here
+        for entry in hook_entries:
+            for site in log._resolve_sites(
+                entry.site_target, strict=strict, max_fanout=len(log._layer_list)
+            ):
+                target_keys.add(_replay_site_key(site))
+    return [site for site in log._layer_list if _replay_site_key(site) in target_keys]
 
 
 def _hook_targets_by_label(
@@ -1535,111 +1529,13 @@ def _hook_targets_by_label(
     """
 
     targets: dict[str, list[NormalizedHookEntry]] = {}
-    for entry in hook_entries:
-        for site in log.resolve_sites(
-            entry.site_target, strict=strict, max_fanout=len(log.layer_list)
-        ):
-            targets.setdefault(_replay_site_key(site), []).append(entry)
+    with _label_index_scope():  # resolution reads the trace; nothing relabels it here
+        for entry in hook_entries:
+            for site in log._resolve_sites(
+                entry.site_target, strict=strict, max_fanout=len(log._layer_list)
+            ):
+                targets.setdefault(_replay_site_key(site), []).append(entry)
     return {label: tuple(entries) for label, entries in targets.items()}
-
-
-def _resolve_single_origin(
-    log: Trace,
-    site: Any,
-    *,
-    strict: bool,
-) -> Op:
-    """Resolve one replay_from origin.
-
-    Parameters
-    ----------
-    log:
-        Model log to query.
-    site:
-        Layer pass or selector-like query.
-    strict:
-        Whether strict selector resolution is active.
-
-    Returns
-    -------
-    Op
-        Single origin site.
-    """
-
-    if hasattr(site, "layer_label") and hasattr(site, "out"):
-        return cast("Op", site)
-    return cast("Op", log.resolve_sites(site, strict=strict, max_fanout=1).first())
-
-
-def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:
-    """Return function-call groups in topological order.
-
-    Parameters
-    ----------
-    log:
-        Model log to inspect.
-
-    Returns
-    -------
-    dict[int | None, tuple[Op, ...]]
-        Sites grouped by ``func_call_id``.
-    """
-
-    groups: dict[int | None, list[Op]] = {}
-    for layer in log.layer_list:
-        groups.setdefault(layer.func_call_id, []).append(layer)
-    return {call_id: tuple(layers) for call_id, layers in groups.items()}
-
-
-def _group_for_site(
-    site: Op,
-    call_groups: Mapping[int | None, Sequence[Op]],
-    cone: Sequence[Op],
-) -> tuple[Op, ...]:
-    """Return same-call group members for a site.
-
-    Parameters
-    ----------
-    site:
-        Representative site.
-    call_groups:
-        Function-call grouping map.
-    cone:
-        Current replay cone.
-
-    Returns
-    -------
-    tuple[Op, ...]
-        Same-call members in topological order.
-    """
-
-    if site.func_call_id is None:
-        return (site,)
-    cone_keys = {_replay_site_key(member) for member in cone}
-    return tuple(
-        member
-        for member in call_groups.get(site.func_call_id, (site,))
-        if _replay_site_key(member) in cone_keys
-    )
-
-
-def _child_labels(site: Op) -> tuple[str, ...]:
-    """Return child labels from edge and tensor-version metadata.
-
-    Parameters
-    ----------
-    site:
-        Layer pass whose children should be traversed.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Child labels.
-    """
-
-    labels = list(getattr(site, "children", ()) or ())
-    labels.extend((getattr(site, "out_versions_by_child", {}) or {}).keys())
-    return tuple(dict.fromkeys(labels))
 
 
 def _index_output_component(output: Any, component: OutputPathComponent) -> Any:
@@ -1661,13 +1557,13 @@ def _index_output_component(output: Any, component: OutputPathComponent) -> Any:
     if isinstance(component, TupleIndex):
         return output[component.index]
     if isinstance(component, DictKey):
-        return output[component.key]
+        return output[component._key]
     if isinstance(component, NamedField):
-        return getattr(output, component.name)
+        return getattr(output, component._name)
     if isinstance(component, DataclassField):
-        return getattr(output, component.name)
+        return getattr(output, component._name)
     if isinstance(component, HFKey):
-        return output[component.key]
+        return output[component._key]
     if isinstance(component, int):
         return output[component]
     if isinstance(component, str):
@@ -1675,44 +1571,6 @@ def _index_output_component(output: Any, component: OutputPathComponent) -> Any:
             return output[component]
         return getattr(output, component)
     raise ReplayPreconditionError(f"unsupported output path component {component!r}")
-
-
-def _looks_like_template_dict(component: tuple[Any, ...]) -> bool:
-    """Return whether a tuple encodes a captured dict argument.
-
-    Parameters
-    ----------
-    component:
-        Tuple template component.
-
-    Returns
-    -------
-    bool
-        Whether all items are key/value pairs.
-    """
-
-    return all(isinstance(item, tuple) and len(item) == 2 for item in component)
-
-
-def _final_label_for_ref(log: Trace, label: str) -> str:
-    """Resolve raw or final parent-ref label to a current lookup label.
-
-    Parameters
-    ----------
-    log:
-        Model log to query.
-    label:
-        Raw or final label from a template.
-
-    Returns
-    -------
-    str
-        Lookup label.
-    """
-
-    if label in log.layer_dict_all_keys:
-        return label
-    return cast(str, getattr(log, "_raw_to_final_layer_labels", {}).get(label, label))
 
 
 def _warn_if_unexpected_parent(
@@ -1779,77 +1637,38 @@ def _check_edge_expectations(site: Op, *, strict: bool) -> None:
         warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
 
 
-def _is_inplace_none_return(site: Op) -> bool:
-    """Return whether a None return should be treated as mutated arg zero.
+def _threaded_source_value(
+    site: Op,
+    trace: Trace,
+    overlay: Mapping[str, torch.Tensor],
+    *,
+    strict: bool,
+) -> torch.Tensor | None:
+    """Return the value threaded into a source record, if any.
+
+    Only a buffer version record has a writing op to thread from; a model
+    input leaf has none and keeps its captured value.
 
     Parameters
     ----------
     site:
-        Replayed site.
+        Source record (buffer version or input leaf).
+    trace:
+        Model log being replayed.
+    overlay:
+        Recomputed values so far, by replay site key.
+    strict:
+        Whether a threading gap raises instead of warning.
 
     Returns
     -------
-    bool
-        Whether to use the first positional argument as output.
+    torch.Tensor | None
+        Threaded value for a buffer record; None for an input leaf or a gap.
     """
 
-    func_name = getattr(site.func, "__name__", "") if site.func is not None else ""
-    return bool(site.is_inplace) or func_name in {"__setitem__", "zero_", "__delitem__"}
-
-
-def _call_mutates_tensor_args(site: Op, kwargs: Mapping[str, Any]) -> bool:
-    """Return whether a replayed call may write into its argument tensors.
-
-    Covers the captured in-place flag, the torch trailing-underscore
-    convention (dunders excluded), the explicit mutator set from
-    :func:`_is_inplace_none_return`, and a tensor ``out=`` destination. A
-    false positive only costs one defensive clone; a false negative lets the
-    replayed call mutate captured payloads by identity.
-
-    Parameters
-    ----------
-    site:
-        Replayed site.
-    kwargs:
-        Reconstructed keyword arguments.
-
-    Returns
-    -------
-    bool
-        Whether argument tensors must be cloned before execution.
-    """
-
-    if _is_inplace_none_return(site):
-        return True
-    func_name = getattr(site.func, "__name__", "") if site.func is not None else ""
-    if func_name.endswith("_") and not func_name.endswith("__"):
-        return True
-    return isinstance(kwargs.get("out"), torch.Tensor)
-
-
-def _clone_tensors_in(value: Any) -> Any:
-    """Return ``value`` with every tensor leaf cloned, containers rebuilt.
-
-    Parameters
-    ----------
-    value:
-        Resolved argument value (tensor, container, or opaque object).
-
-    Returns
-    -------
-    Any
-        Structure with cloned tensor leaves; non-tensor leaves unchanged.
-    """
-
-    if isinstance(value, torch.Tensor):
-        return value.clone()
-    if isinstance(value, tuple):
-        return tuple(_clone_tensors_in(item) for item in value)
-    if isinstance(value, list):
-        return [_clone_tensors_in(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _clone_tensors_in(item) for key, item in value.items()}
-    return value
+    if not getattr(site, "is_buffer", False):
+        return None
+    return _threaded_buffer_value(site, trace, overlay, strict=strict)
 
 
 def _threaded_buffer_value(
@@ -1861,13 +1680,10 @@ def _threaded_buffer_value(
 ) -> torch.Tensor | None:
     """Return the recomputed value to thread through one buffer record.
 
-    A written-buffer version record's single parent is the op that performed
-    the write, and for ``inplace``/``reassign`` write kinds that op's output
-    IS the post-write buffer state. Threading is self-certifying: the
-    capture-time buffer value must equal the capture-time producer out, or
-    the record keeps its captured value and a
-    :class:`~torchlens.intervention.errors.BufferThreadGapWarning` discloses
-    the gap (raised under ``strict``).
+    :func:`~torchlens.intervention._replay_sites._buffer_thread_candidate`
+    decides; an unthreadable version inside the cone keeps its captured value
+    and a :class:`~torchlens.intervention.errors.BufferThreadGapWarning`
+    discloses the gap (raised under ``strict``).
 
     Parameters
     ----------
@@ -1887,85 +1703,17 @@ def _threaded_buffer_value(
         value.
     """
 
-    parents = tuple(getattr(site, "parents", ()) or ())
-    if not parents:
-        # An unwritten (initial-read) buffer version has no producer; its
-        # captured value is the honest replay value.
-        return None
-    producer_key = parents[0] if len(parents) == 1 else None
-    producer = trace.layer_dict_all_keys.get(producer_key) if producer_key is not None else None
-    # The overlay is keyed by the pass-qualified replay key while a
-    # SINGLE-pass producer spells its parent label bare (``copy_1_4`` vs
-    # ``copy_1_4:1``); resolve the producer first and look up ITS replay key,
-    # or every single-pass buffer write silently fell into the
-    # "producer outside the cone" branch below with no gap disclosed
-    # (AUD-CODE 2.8).
-    recomputed = overlay.get(_replay_site_key(producer)) if producer is not None else None
-
-    def _gap(reason: str) -> None:
-        """Disclose one unthreadable buffer version (raise under strict)."""
-
+    recomputed, gap = _buffer_thread_candidate(site, trace, overlay)
+    if gap is not None:
         message = (
             f"buffer record {_disclosure_label(site)!r} inside the replay cone keeps its "
-            f"CAPTURED value: {reason}. Downstream consumers of this buffer version do "
+            f"CAPTURED value: {gap}. Downstream consumers of this buffer version do "
             "not see the propagated edit."
         )
         if strict:
             raise ControlFlowDivergenceError(message)
         warnings.warn(message, BufferThreadGapWarning, stacklevel=4)
-
-    if producer_key is None:
-        _gap(f"record has {len(parents)} parents, not one writing op")
-        return None
-    if producer is None or recomputed is None:
-        # Producer outside the cone (or not recomputed): captured value is
-        # still the honest replay value, nothing to disclose.
-        return None
-    write_kind = getattr(site, "buffer_write_kind", None)
-    if write_kind not in {"inplace", "reassign"}:
-        # A DECLARED (fused-mutator) write whose bytes provably did not change
-        # -- every eval-mode BatchNorm/InstanceNorm/GroupNorm buffer is
-        # journaled this way (``rescue._buffer_write_labels`` applies the same
-        # evidence rule) -- keeps its captured value with NOTHING to disclose:
-        # that value IS the replay value. ``True``/``None`` (changed or
-        # unknown) stay the fail-closed disclosure.
-        if getattr(site, "buffer_value_changed", None) is not False:
-            _gap(
-                f"write kind {write_kind!r} does not prove the writing op's output equals "
-                "the post-write buffer state"
-            )
-        return None
-    captured_site = site.out
-    captured_producer = producer.out
-    if (
-        not isinstance(captured_site, torch.Tensor)
-        or not isinstance(captured_producer, torch.Tensor)
-        or captured_site.shape != captured_producer.shape
-        or not torch.equal(captured_site, captured_producer)
-    ):
-        _gap(
-            f"capture-time corroboration failed: the buffer value does not equal the "
-            f"writing op {producer_key!r}'s captured output"
-        )
-        return None
     return recomputed
-
-
-def _is_namedtuple_instance(value: Any) -> bool:
-    """Return whether a value is a namedtuple instance.
-
-    Parameters
-    ----------
-    value:
-        Candidate value.
-
-    Returns
-    -------
-    bool
-        Whether it is a namedtuple instance.
-    """
-
-    return isinstance(value, tuple) and hasattr(value, "_fields")
 
 
 __all__ = [

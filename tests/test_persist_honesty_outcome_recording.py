@@ -7,7 +7,7 @@ WT1 A-IV item 21 (lane A08), three defects in one bundle:
   ``_outcome`` slot behind the validating ``outcome`` property -- read as
   UNKNOWN with a false "hand-built object" warning. ``outcome_for`` now
   honors the sanctioned ``_OUTCOME_SELF_AUTHORITY`` marker.
-* ``tl.fastlog.recover()`` rebuilt aborted bundles (PARTIAL sentinel +
+* ``tl.recording.recover()`` rebuilt aborted bundles (PARTIAL sentinel +
   REASON.txt debris) as ``failed=False`` recordings with no error evidence --
   laundering the failure record. Recovery now carries the abort evidence and
   the derived outcome is FAILED; corruption salvage itself is unchanged.
@@ -27,7 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CaptureOutcomeError,
     CaptureStatus,
     outcome_for,
@@ -104,19 +104,19 @@ def aborted_bundle(tmp_path):
         storage=tl.to_disk(str(tmp_path / "bundle")),
         on_forward_error="return_partial",
     )
-    assert rec.failed and rec.bundle_path is not None
-    assert (rec.bundle_path / "PARTIAL").exists()
-    return rec.bundle_path
+    assert rec.is_failed and rec.path is not None
+    assert (rec.path / "PARTIAL").exists()
+    return rec.path
 
 
 @pytest.mark.smoke
 def test_recover_carries_abort_failure_evidence(aborted_bundle):
-    recovered = tl.fastlog.recover(aborted_bundle)
-    assert recovered.recovered is True
-    assert recovered.failed is True
+    recovered = tl.recording.recover(aborted_bundle)
+    assert recovered.is_recovered is True
+    assert recovered.is_failed is True
     assert "aborted" in (recovered.error_repr or "")
     assert recovered.outcome.status is CaptureStatus.FAILED
-    assert recovered.outcome.recovered is True
+    assert recovered.outcome.is_recovered is True
     assert any("aborted mid-write" in w for w in recovered.recovery_warnings)
 
 
@@ -129,14 +129,14 @@ def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     rec = tl.record(
         model, torch.randn(2, 4), save=tl.func("relu"), storage=tl.to_disk(str(tmp_path / "ok"))
     )
-    bundle = rec.bundle_path
+    bundle = rec.path
     assert bundle is not None
     # Simulate a hard crash: strip the finalized manifest so only the index
     # remains, with no PARTIAL/REASON abort debris.
     (bundle / "manifest.json").unlink()
-    recovered = tl.fastlog.recover(bundle)
-    assert recovered.recovered is True
-    assert recovered.failed is False
+    recovered = tl.recording.recover(bundle)
+    assert recovered.is_recovered is True
+    assert recovered.is_failed is False
     assert recovered.outcome.status is CaptureStatus.UNKNOWN
 
 
@@ -147,23 +147,23 @@ def test_loaded_log_backward_refuses_before_mutation(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
     trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True))
-    tl.save(trace, tmp_path / "bundle")
+    trace.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
     live_loss = model(x.requires_grad_(True)).sum()
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
         loaded.log_backward(live_loss)
-    assert len(getattr(loaded, "backward_passes", []) or []) == 0
-    assert len(loaded.grad_fns) == 0
+    assert len(loaded.autograd.backward_passes or []) == 0
+    assert len(loaded.autograd.grad_fns) == 0
 
 
 def test_loaded_recording_backward_refuses(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
     trace = tl.trace(model, x)
-    tl.save(trace, tmp_path / "bundle")
+    trace.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
-        loaded.recording_backward()
+        loaded.capture_backward()
 
 
 def test_live_log_backward_still_works():
@@ -172,4 +172,4 @@ def test_live_log_backward_still_works():
     trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True))
     loss = trace["relu_1_2"].out.sum()
     trace.log_backward(loss)
-    assert len(trace.backward_passes) == 1
+    assert len(trace.autograd.backward_passes) == 1

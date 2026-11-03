@@ -63,10 +63,12 @@ from _oracle_env import (  # noqa: E402 - tests/ is on sys.path under pytest
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.selectors import (
+from torchlens._record_type import record_type
+from torchlens._selection.selectors import (
     BaseSelector,
     CompositeSelector,
     grad_fn_label,
+    output_at,
 )
 from torchlens.intervention.types import TargetSpec
 
@@ -189,11 +191,15 @@ def _model_and_input(model_key: str) -> tuple[nn.Module, Any]:
     raise KeyError(model_key)
 
 
-def _extra_trace_kwargs(model_key: str) -> dict[str, Any]:
-    """Per-model capture options (input containers need explicit opt-in)."""
+def _extra_capture_fields(model_key: str) -> dict[str, Any]:
+    """Per-model ``CaptureOptions`` fields (input containers need explicit opt-in).
+
+    Callers fold these into their own ``CaptureOptions`` so ``tl.trace`` never
+    receives ``capture=`` twice.
+    """
 
     if model_key == "dictin":
-        return {"capture": tl.options.CaptureOptions(capture_container_structure=True)}
+        return {"capture_container_structure": True}
     return {}
 
 
@@ -202,7 +208,10 @@ def _full_trace(model_key: str) -> Any:
     model, x = _model_and_input(model_key)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return tl.trace(model, x, **_extra_trace_kwargs(model_key))
+        fields = _extra_capture_fields(model_key)
+        if not fields:
+            return tl.trace(model, x)
+        return tl.trace(model, x, capture=tl.options.CaptureOptions(**fields))
 
 
 @cache
@@ -235,14 +244,16 @@ def _probe_capture(model_key: str, make_selector: Callable[[], Any]) -> Any:
                 model,
                 x,
                 save=selector,
-                lookback=4,
-                lookback_payload_policy="detached_raw",
-                **_extra_trace_kwargs(model_key),
+                capture=tl.options.CaptureOptions(
+                    lookback=4,
+                    lookback_payload_policy="detached_raw",
+                    **_extra_capture_fields(model_key),
+                ),
             )
     except Exception as exc:  # noqa: BLE001 - characterization records error shape
         return _error_cell(exc)
     return sorted(
-        str(op.layer_label) for op in log.layer_list if getattr(op, "has_saved_activation", False)
+        str(op.layer_label) for op in log._layer_list if getattr(op, "has_saved_activation", False)
     )
 
 
@@ -266,33 +277,19 @@ def _probe_live(model_key: str, make_selector: Callable[[], Any]) -> Any:
     model, x = _model_and_input(model_key)
     fired: list[str] = []
 
-    def _probe_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        fired.append(str(hook.layer_log.get("layer_label")))
+    def _probe_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
+        fired.append(str(ctx.op.get("layer_label")))
         return out
 
     try:
         selector = make_selector()
-        # Fold the per-model capture opt-ins into ONE CaptureOptions so the
-        # hook wiring never collides with _extra_trace_kwargs' capture= key.
-        extra = dict(_extra_trace_kwargs(model_key))
-        base_capture = extra.pop("capture", None)
-        capture_kwargs: dict[str, Any] = {"hooks": [(selector, _probe_hook)]}
-        if base_capture is not None:
-            capture_kwargs.update(
-                {
-                    name: value
-                    for name, value in base_capture.as_dict().items()
-                    if base_capture.is_field_explicit(name)
-                }
-            )
+        capture_kwargs: dict[str, Any] = {
+            "hooks": [(selector, _probe_hook)],
+            **_extra_capture_fields(model_key),
+        }
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            tl.trace(
-                model,
-                x,
-                **extra,
-                capture=tl.options.CaptureOptions(**capture_kwargs),
-            )
+            tl.trace(model, x, capture=tl.options.CaptureOptions(**capture_kwargs))
     except Exception as exc:  # noqa: BLE001
         return _error_cell(exc)
     return sorted(fired)
@@ -326,7 +323,7 @@ def _probe_live_backward(make_selector: Callable[[], Any]) -> Any:
         log = _backward_trace("conv")
         grads = (torch.ones(1),)
         matched = []
-        for site in log.grad_fns:
+        for site in log.autograd.grad_fns:
             if live_backward_selector_matches(
                 selector, site, 1, grad_input=grads, grad_output=grads
             ):
@@ -378,8 +375,8 @@ def _probe_spec(
     is resolved via ``find_sites`` and the labels are stored in the cell.
     """
 
-    from torchlens.intervention.selectors import _classify_selector_direction
-    from torchlens.ir.selector_eval import selector_from_spec
+    from torchlens._ir.selector_eval import selector_from_spec
+    from torchlens._selection.selectors import classify_selector_universe
 
     try:
         selector = make_selector()
@@ -389,9 +386,9 @@ def _probe_spec(
         return f"NOT_A_SELECTOR:{type(selector).__name__}"
     cell: dict[str, Any] = {"kind": str(selector.selector_kind)}
     try:
-        cell["direction"] = _classify_selector_direction(selector)
+        cell["universe"] = classify_selector_universe(selector)
     except Exception as exc:  # noqa: BLE001
-        cell["direction"] = _error_cell(exc)
+        cell["universe"] = _error_cell(exc)
     try:
         spec = selector.to_target_spec()
     except Exception as exc:  # noqa: BLE001
@@ -403,7 +400,7 @@ def _probe_spec(
             spec.selector_kind, spec.selector_value, spec.metadata, lifecycle="site"
         )
         cell["resolver_repr"] = repr(rebuilt)
-        cell["resolver_direction"] = _classify_selector_direction(rebuilt)
+        cell["resolver_universe"] = classify_selector_universe(rebuilt)
         if model_key is not None:
             cell["resolver_labels"] = _rebuilt_selector_labels(
                 rebuilt, model_key, backward=backward
@@ -415,7 +412,7 @@ def _probe_spec(
             spec.selector_kind, spec.selector_value, spec.metadata, lifecycle="live"
         )
         cell["hooks_repr"] = repr(rebuilt_live)
-        cell["hooks_direction"] = _classify_selector_direction(rebuilt_live)
+        cell["hooks_universe"] = classify_selector_universe(rebuilt_live)
     except Exception as exc:  # noqa: BLE001
         cell["hooks_repr"] = _error_cell(exc)
     try:
@@ -442,7 +439,7 @@ def _rebuilt_selector_labels(rebuilt: Any, model_key: str, *, backward: bool) ->
 
 
 def _where_relu() -> Any:
-    return tl.where(lambda p: getattr(p, "layer_type", None) == "relu", name_hint="type_relu")
+    return tl.where(lambda p: record_type(p, None) == "relu", name_hint="type_relu")
 
 
 #: (cell_name, model_key, selector factory). Every entry gets capture/sites/live
@@ -450,12 +447,12 @@ def _where_relu() -> Any:
 FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("label_final", "conv", lambda: tl.label("relu_1_2")),
     ("label_raw", "conv", lambda: tl.label("relu_1_3_raw")),
-    ("contains_lower", "conv", lambda: tl.contains("relu")),
-    ("contains_upper", "conv", lambda: tl.contains("RELU")),
-    ("contains_mixed", "conv", lambda: tl.contains("Conv2d")),
-    ("regex_lower", "conv", lambda: tl.regex(r"relu_\d")),
-    ("regex_upper", "conv", lambda: tl.regex(r"RELU")),
-    ("regex_anchored", "conv", lambda: tl.regex(r"^conv2d_2")),
+    ("contains_lower", "conv", lambda: tl.label_contains("relu")),
+    ("contains_upper", "conv", lambda: tl.label_contains("RELU")),
+    ("contains_mixed", "conv", lambda: tl.label_contains("Conv2d")),
+    ("regex_lower", "conv", lambda: tl.label_matches(r"relu_\d")),
+    ("regex_upper", "conv", lambda: tl.label_matches(r"RELU")),
+    ("regex_anchored", "conv", lambda: tl.label_matches(r"^conv2d_2")),
     ("func_relu", "conv", lambda: tl.func("relu")),
     ("func_add_type", "conv", lambda: tl.func("add")),
     ("func_add_dunder", "conv", lambda: tl.func("__add__")),
@@ -464,9 +461,9 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("module_address", "conv", lambda: tl.module("features.0")),
     ("in_module_container", "conv", lambda: tl.in_module("features")),
     ("in_module_pass", "conv", lambda: tl.in_module("features:1")),
-    ("output_index", "conv", lambda: tl.output(0)),
-    ("output_at_0", "conv", lambda: tl.output_at((0,))),
-    ("input_at_0", "conv", lambda: tl.input_at(0)),
+    ("output_index", "conv", lambda: tl.model_output(0)),
+    ("output_at_0", "conv", lambda: output_at((0,))),
+    ("input_at_0", "conv", lambda: tl.model_input(0)),
     ("where_type_relu", "conv", _where_relu),
     ("and_func_inmodule", "conv", lambda: tl.func("relu") & tl.in_module("features")),
     ("or_funcs", "conv", lambda: tl.func("relu") | tl.func("conv2d")),
@@ -474,7 +471,7 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     (
         "and_nested_three",
         "conv",
-        lambda: (tl.func("relu") & tl.in_module("features")) & tl.contains("relu"),
+        lambda: (tl.func("relu") & tl.in_module("features")) & tl.label_contains("relu"),
     ),
     (
         "followed_by_combo",
@@ -486,10 +483,10 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("facet_named", "conv", lambda: tl.facet("q")),
     ("head_indexed", "conv", lambda: tl.head(0)),
     ("grad_fn_on_forward", "conv", lambda: tl.grad_fn("ReluBackward0")),
-    ("split_output_0", "split", lambda: tl.output(0)),
-    ("split_output_1", "split", lambda: tl.output(1)),
+    ("split_output_0", "split", lambda: tl.model_output(0)),
+    ("split_output_1", "split", lambda: tl.model_output(1)),
     ("split_func_chunk_out1", "split", lambda: tl.func("chunk", output=1)),
-    ("split_contains_mul", "split", lambda: tl.contains("mul")),
+    ("split_contains_mul", "split", lambda: tl.label_contains("mul")),
     ("loop_in_module_block", "loop", lambda: tl.in_module("block")),
     ("loop_in_module_pass2", "loop", lambda: tl.in_module("block:2")),
     ("loop_module_block", "loop", lambda: tl.module("block")),
@@ -497,19 +494,19 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("loop_label_recurrent", "loop", lambda: tl.label("linear_1_1")),
     # Raw/short spellings live only in the exact-label universe post-hoc:
     # substring/regex over them would make contains("raw") match every op.
-    ("contains_raw_sub", "conv", lambda: tl.contains("_raw")),
-    ("regex_raw_anchor", "conv", lambda: tl.regex(r"_raw$")),
+    ("contains_raw_sub", "conv", lambda: tl.label_contains("_raw")),
+    ("regex_raw_anchor", "conv", lambda: tl.label_matches(r"_raw$")),
     # Typed output-path components against real container outputs.
-    ("dict_output_at_logits", "dictout", lambda: tl.output_at(("logits",))),
-    ("dict_output_at_aux0", "dictout", lambda: tl.output_at(("aux", 0))),
-    ("dict_output_at_aux1", "dictout", lambda: tl.output_at(("aux", 1))),
-    ("dict_output_name", "dictout", lambda: tl.output("logits")),
-    ("nt_output_at_main", "ntout", lambda: tl.output_at(("main",))),
-    ("nt_output_at_extra", "ntout", lambda: tl.output_at(("extra",))),
+    ("dict_output_at_logits", "dictout", lambda: output_at(("logits",))),
+    ("dict_output_at_aux0", "dictout", lambda: output_at(("aux", 0))),
+    ("dict_output_at_aux1", "dictout", lambda: output_at(("aux", 1))),
+    ("dict_output_name", "dictout", lambda: tl.model_output("logits")),
+    ("nt_output_at_main", "ntout", lambda: output_at(("main",))),
+    ("nt_output_at_extra", "ntout", lambda: output_at(("extra",))),
     # MODEL_INPUT container paths (positive input_at cells).
-    ("dictin_input_at_a", "dictin", lambda: tl.input_at("a")),
-    ("dictin_input_at_b", "dictin", lambda: tl.input_at("b")),
-    ("dictin_input_at_missing", "dictin", lambda: tl.input_at("zzz")),
+    ("dictin_input_at_a", "dictin", lambda: tl.model_input("a")),
+    ("dictin_input_at_b", "dictin", lambda: tl.model_input("b")),
+    ("dictin_input_at_missing", "dictin", lambda: tl.model_input("zzz")),
     # torch.func transform boundary ops (positive func_transform cells).
     ("vmap_transform_any", "vmap", lambda: tl.func_transform()),
     ("vmap_transform_vmap", "vmap", lambda: tl.func_transform("vmap")),
@@ -517,12 +514,12 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
 )
 
 #: Post-hoc resolution at DEFAULT max_fanout (F-3: the broadened ``func`` kind
-#: must be characterized where SiteAmbiguityError can actually fire).
+#: must be characterized where AmbiguousSiteError can actually fire).
 DEFAULT_FANOUT_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("func_relu", "conv", lambda: tl.func("relu")),
     ("func_conv2d", "conv", lambda: tl.func("conv2d")),
     ("func_add_type", "conv", lambda: tl.func("add")),
-    ("contains_relu", "conv", lambda: tl.contains("relu")),
+    ("contains_relu", "conv", lambda: tl.label_contains("relu")),
     ("not_func_missing", "conv", lambda: ~tl.func("zzz_missing")),
 )
 
@@ -533,11 +530,16 @@ LIVE_BACKWARD_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
     ("grad_output", lambda: tl.grad_output()),
     ("grad_fn_class", lambda: tl.grad_fn("ReluBackward0")),
     ("without_op", lambda: tl.without_op()),
+    # A bare forward selector no longer bridges into backward hooks (it is an
+    # activation address); tl.grad(...) is the gradient address.
     ("func_relu_bridge", lambda: tl.func("relu")),
+    ("grad_func_relu", lambda: tl.grad(tl.func("relu"))),
     ("bwd_and_binary", lambda: tl.grad_fn("ReluBackward0") & tl.grad_input()),
     (
         "bwd_and_nary_flat",
-        lambda: CompositeSelector("and", (tl.grad_input(), tl.func("relu"), tl.contains("relu"))),
+        lambda: CompositeSelector(
+            "and", (tl.grad_input(), tl.func("relu"), tl.label_contains("relu"))
+        ),
     ),
     ("bwd_not", lambda: ~tl.grad_input()),
     ("bwd_label_finalized", lambda: tl.label("relu_back_1_9")),
@@ -611,30 +613,36 @@ BACKWARD_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
     ("backward_pass_2", lambda: tl.in_backward_pass(2)),
     (
         "bwd_and_direction_agnostic",
-        lambda: tl.grad_fn("ReluBackward0") & tl.contains("relu"),
+        lambda: tl.grad_fn("ReluBackward0") & tl.label_contains("relu"),
     ),
     ("bwd_plain_label", lambda: tl.label("relu_back_1_9")),
     ("bwd_not_accumulate", lambda: ~tl.grad_fn("AccumulateGrad")),
-    # Direction-agnostic container kinds must intersect with backward kinds
-    # through the grad_fn boundary-alias bridge (deleted-code invariant).
-    ("bwd_output_at_and_grad_input", lambda: tl.output_at((0,)) & tl.grad_input()),
-    ("bwd_output0_and_grad_input", lambda: tl.output(0) & tl.grad_input()),
-    ("bwd_input_at_and_grad_output", lambda: tl.input_at(0) & tl.grad_output()),
+    # Gradient addresses resolve to the forward sites whose output gradient they name.
+    ("grad_func_relu", lambda: tl.grad(tl.func("relu"))),
+    ("grad_func_relu_pass_1", lambda: tl.grad(tl.func("relu")) & tl.in_backward_pass(1)),
+    ("grad_or_activation_relu", lambda: tl.grad(tl.func("relu")) | tl.func("relu")),
+    ("grad_not_relu", lambda: ~tl.grad(tl.func("relu"))),
+    # Container kinds joined to node selectors: the bridge from a bare selector
+    # into the node universe is removed, so these refuse at construction.
+    ("bwd_output_at_and_grad_input", lambda: output_at((0,)) & tl.grad_input()),
+    ("bwd_output0_and_grad_input", lambda: tl.model_output(0) & tl.grad_input()),
+    ("bwd_input_at_and_grad_output", lambda: tl.model_input(0) & tl.grad_output()),
 )
 
-#: Backward composition against container/multi-output models: the
-#: direction-agnostic bridge (paired op + grad_fn boundary aliases) must make
-#: ``output(0) & grad_input()`` and ``output_at(path) & grad_input()``
-#: NON-vacuously intersect (deleted-code invariant; conv-only cells are []).
+#: Backward composition against container/multi-output models: a bare container
+#: selector joined to a node selector refuses (``selector_cross_universe_and``);
+#: the gradient of a model output is ``tl.grad(tl.model_output(0))``.
 BACKWARD_CONTAINER_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
-    ("split_output0_and_grad_input", "split", lambda: tl.output(0) & tl.grad_input()),
-    ("split_output1_and_grad_input", "split", lambda: tl.output(1) & tl.grad_input()),
+    ("split_output0_and_grad_input", "split", lambda: tl.model_output(0) & tl.grad_input()),
+    ("split_output1_and_grad_input", "split", lambda: tl.model_output(1) & tl.grad_input()),
     (
         "dictout_output_at_logits_and_grad_input",
         "dictout",
-        lambda: tl.output_at(("logits",)) & tl.grad_input(),
+        lambda: output_at(("logits",)) & tl.grad_input(),
     ),
-    ("dictout_output_at_logits", "dictout", lambda: tl.output_at(("logits",))),
+    ("dictout_output_at_logits", "dictout", lambda: output_at(("logits",))),
+    ("split_grad_output0", "split", lambda: tl.grad(tl.model_output(0))),
+    ("dictout_grad_output_at_logits", "dictout", lambda: tl.grad(output_at(("logits",)))),
 )
 
 #: Selector compositions expected to be decided at construction time.
@@ -644,6 +652,14 @@ CONSTRUCT_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
     ("not_followed_by", lambda: ~tl.followed_by(tl.func("relu"))),
     ("double_followed_by", lambda: tl.followed_by(tl.func("a")) & tl.followed_by(tl.func("b"))),
     ("func_non_string", lambda: tl.func(torch.relu)),  # type: ignore[arg-type]
+    ("grad_nested", lambda: tl.grad(tl.grad(tl.func("relu")))),
+    ("grad_inner_node", lambda: tl.grad(tl.grad_fn("ReluBackward0"))),
+    ("grad_inner_pass_qualifier", lambda: tl.grad(tl.func("relu") & tl.in_backward_pass(2))),
+    ("grad_and_activation", lambda: tl.grad(tl.func("relu")) & tl.func("relu")),
+    ("grad_and_node", lambda: tl.grad(tl.func("relu")) & tl.grad_fn("ReluBackward0")),
+    ("activation_and_pass_qualifier", lambda: tl.func("relu") & tl.in_backward_pass(2)),
+    ("grad_or_grad", lambda: tl.grad(tl.func("relu")) | tl.grad(tl.func("add"))),
+    ("grad_not", lambda: ~tl.grad(tl.func("relu"))),
 )
 
 

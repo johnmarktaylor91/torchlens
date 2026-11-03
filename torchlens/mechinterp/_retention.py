@@ -25,7 +25,7 @@ from typing import Any
 from ._errors import refuse
 from ._walk import walk_spine
 
-__all__ = ["RetentionPlan", "retention_plan"]
+__all__ = ["SavePlan", "retention_plan"]
 
 _ANALYSES = (
     "accumulation",
@@ -66,7 +66,7 @@ class PlanSite:
 
 
 @dataclass(frozen=True)
-class RetentionPlan:
+class SavePlan:
     """A priced, composable retention plan (mikit D15).
 
     ``predicate`` composes with ordinary ``save=``; ``module_subtrees`` are
@@ -186,14 +186,34 @@ def _spine_sites(trace: Any, analysis: str) -> list[PlanSite]:
 
 
 def _attention_subtrees(trace: Any) -> list[str]:
-    """Attention module addresses (whole-subtree saves for head analyses)."""
+    """Attention module addresses (whole-subtree saves for head analyses).
 
-    from ._heads import _attention_modules
+    Planning keys on the head geometry facets, which a structure-only capture
+    carries; the payload facets (``result``, ``pattern``, ...) appear only once
+    the interior is saved, so keying on them planned nothing from the cheap
+    first forward.
+    """
 
-    return [str(getattr(m, "address", "")) for m in _attention_modules(trace)]
+    from ._heads import _facet_keys_or_none
+
+    addresses = []
+    for module in trace.modules:
+        keys = _facet_keys_or_none(module)
+        if keys is not None and {"n_q_heads", "d_head"} <= keys:
+            addresses.append(str(getattr(module, "address", "")))
+    return addresses
 
 
-def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> RetentionPlan:
+def _input_sites(trace: Any, analysis: str) -> list[PlanSite]:
+    """Sites for the model inputs (the token ids the head-score masks compare)."""
+
+    return [
+        _site(trace, str(getattr(op, "label", op)), analysis)
+        for op in getattr(trace, "input_ops", ()) or ()
+    ]
+
+
+def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> SavePlan:
     """Build the retention plan for the named analyses (mikit D15).
 
     Parameters
@@ -229,11 +249,13 @@ def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> Rete
             sites.extend(_spine_sites(trace, name))
         if name in ("heads", "head_scores"):
             subtrees.extend(_attention_subtrees(trace))
+        if name == "head_scores":
+            sites.extend(_input_sites(trace, name))
     deduped: dict[str, PlanSite] = {}
     for site in sites:
         deduped.setdefault(site.op_label, site)
     pairs = frozenset((site.func_name, site.module_address or "") for site in deduped.values())
-    return RetentionPlan(
+    return SavePlan(
         analyses=tuple(wanted),
         sites=tuple(deduped.values()),
         module_subtrees=tuple(dict.fromkeys(subtrees)),

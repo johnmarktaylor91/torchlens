@@ -17,6 +17,7 @@ import pytest
 import torch
 
 import torchlens.trackers as trk
+from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
 from torchlens.trackers._errors import (
     SinkDeliveryError,
     TagGrammarError,
@@ -24,7 +25,6 @@ from torchlens.trackers._errors import (
     WatchConfigError,
     WatchRuntimeError,
 )
-from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
 _requires_gradscaler = pytest.mark.skipif(
     not HAS_AMP_GRADSCALER,
@@ -207,8 +207,8 @@ class TestAttachPreflights:
     def test_wandb_bucket_cap_refuses_at_attach_before_any_emission(self) -> None:
         """An EXPLICIT over-cap grid still refuses at attach, before any row."""
 
-        from torchlens.observability import HistogramDescriptor, WatchSettings
-        from torchlens.observability._kernels import DEFAULT_DESCRIPTOR
+        from torchlens._observability import HistogramDescriptor, WatchSettings
+        from torchlens._observability._kernels import DEFAULT_DESCRIPTOR
 
         class _Run:
             def __init__(self) -> None:
@@ -250,8 +250,8 @@ class TestAttachPreflights:
     def test_wandb_sink_supplies_its_safe_grid_when_none_is_chosen(self) -> None:
         """No descriptor and no settings: the sink's cap-safe grid attaches."""
 
-        from torchlens.observability import WatchSettings
-        from torchlens.observability._kernels import DEFAULT_DESCRIPTOR
+        from torchlens._observability import WatchSettings
+        from torchlens._observability._kernels import DEFAULT_DESCRIPTOR
 
         class _Run:
             def log(self, payload, step=None):  # noqa: ANN001

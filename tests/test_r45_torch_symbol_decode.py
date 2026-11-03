@@ -19,6 +19,7 @@ through the single shared helper ``torch_attr`` (``torch.__dict__.get``) and pin
 from __future__ import annotations
 
 import ast
+import json
 import subprocess
 import sys
 import textwrap
@@ -36,7 +37,7 @@ _PKG_ROOT = Path(torchlens.__file__).resolve().parent
 def _guarded_files() -> list[Path]:
     """r47 secD_1/secF_1: the immunizer now guards the ENTIRE ``torchlens/**/*.py`` package (zero
     per-line exemptions), not just the r45 load/decode subset. The ``.run()`` random-init dtype
-    site (``_runnable_state.py:_torch_dtype``) lived at the package ROOT and was invisible to the
+    site (``_runnable/state.py:_torch_dtype``) lived at the package ROOT and was invisible to the
     r45 ``_io/`` glob -- so its tripwire was vacuous there. Any bare ``getattr(torch, <var>)`` /
     ``hasattr(torch, <var>)`` ANYWHERE in the package reintroduces the PEP-562 lazy-import /
     deprecated-replacement hazard."""
@@ -241,38 +242,64 @@ def test_module_aliased_and_subscript_torch_flagged() -> None:
     assert flagged_lines == [6, 7, 8], flagged_lines
 
 
-@pytest.mark.parametrize("hazard", ["onnx", "_dynamo", "_inductor", "has_cuda"])
-def test_r49_torch_lazy_import_belt_resolver_key(hazard: str) -> None:
-    """r49 secF_1 BEHAVIORAL belt (PRIMARY, spelling-independent): tampering the intervention
-    function-registry KEY to a hazardous top-level torch qualname refuses WITHOUT firing torch's
-    PEP-562 lazy ``__getattr__`` (no ``torch.onnx`` / ``torch._dynamo`` / ``torch._inductor`` in
-    ``sys.modules``, no deprecation warning) -- in a FRESH subprocess so the module table is
-    pristine. Closes the class by OBSERVABLE SIDE EFFECT: no AST spelling (subscript / alias /
-    param) can bypass it."""
+_RESOLVER_KEY_HAZARDS = ("onnx", "_dynamo", "_inductor", "has_cuda")
+_LAZY_TORCH_SUBMODULES = ("torch.onnx", "torch._dynamo", "torch._inductor")
+
+
+@pytest.fixture(scope="module")
+def resolver_key_hazard_outcomes() -> dict[str, dict[str, object]]:
+    """Resolve every hazardous registry key in ONE fresh interpreter, in turn.
+
+    One interpreter instead of one per hazard: interpreter start-up and the torch
+    import are most of the cost. Attribution stays per hazard: each entry records
+    the lazy torch submodules that appeared in ``sys.modules`` during THAT key's
+    resolution, so a hazard that fires torch's lazy ``__getattr__`` is named even
+    when an earlier one already did.
+    """
 
     code = textwrap.dedent(
         f"""
-        import sys, warnings
+        import json, sys, warnings
         warnings.simplefilter("error", DeprecationWarning)
         import torch
-        from torchlens.intervention.resolver import resolve_function_registry_key
+        from torchlens.intervention._resolver_registry import resolve_function_registry_key
         from torchlens.intervention.types import FunctionRegistryKey
-        key = FunctionRegistryKey(namespace="torch", qualname={hazard!r}, dispatch_kind="function")
-        try:
-            resolve_function_registry_key(key)
-            outcome = "no_error"
-        except Exception as exc:
-            outcome = type(exc).__name__
-        assert outcome != "no_error", "hazardous torch key was resolved (should refuse)"
-        assert "torch.onnx" not in sys.modules, "torch.onnx imported (lazy side effect)"
-        assert "torch._dynamo" not in sys.modules, "torch._dynamo imported (lazy side effect)"
-        assert "torch._inductor" not in sys.modules, "torch._inductor imported (lazy side effect)"
-        print("REFUSED", outcome)
+        lazy = {_LAZY_TORCH_SUBMODULES!r}
+        outcomes = {{}}
+        for hazard in {_RESOLVER_KEY_HAZARDS!r}:
+            before = {{name for name in lazy if name in sys.modules}}
+            key = FunctionRegistryKey(namespace="torch", qualname=hazard, dispatch_kind="function")
+            try:
+                resolve_function_registry_key(key)
+                outcome = "no_error"
+            except Exception as exc:
+                outcome = type(exc).__name__
+            imported = sorted(name for name in lazy if name in sys.modules and name not in before)
+            outcomes[hazard] = {{"outcome": outcome, "imported": imported}}
+        print("OUTCOMES", json.dumps(outcomes))
         """
     )
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=180)
     assert proc.returncode == 0, proc.stderr
-    assert "REFUSED" in proc.stdout, proc.stdout
+    line = next(text for text in proc.stdout.splitlines() if text.startswith("OUTCOMES "))
+    return json.loads(line.removeprefix("OUTCOMES "))
+
+
+@pytest.mark.parametrize("hazard", _RESOLVER_KEY_HAZARDS)
+def test_r49_torch_lazy_import_belt_resolver_key(
+    hazard: str, resolver_key_hazard_outcomes: dict[str, dict[str, object]]
+) -> None:
+    """r49 secF_1 BEHAVIORAL belt (PRIMARY, spelling-independent): tampering the intervention
+    function-registry KEY to a hazardous top-level torch qualname refuses WITHOUT firing torch's
+    PEP-562 lazy ``__getattr__`` (no ``torch.onnx`` / ``torch._dynamo`` / ``torch._inductor`` in
+    ``sys.modules``, no deprecation warning) -- in a FRESH subprocess so the module table is
+    pristine (one subprocess for the four hazards, each hazard's new imports recorded
+    separately). Closes the class by OBSERVABLE SIDE EFFECT: no AST spelling (subscript /
+    alias / param) can bypass it."""
+
+    result = resolver_key_hazard_outcomes[hazard]
+    assert result["outcome"] != "no_error", "hazardous torch key was resolved (should refuse)"
+    assert result["imported"] == [], f"lazy side effect imported {result['imported']}"
 
 
 @pytest.mark.parametrize("hazard", ["onnx", "_dynamo"])
@@ -292,7 +319,7 @@ def test_r49_torch_lazy_import_belt_runnable_registry_key(hazard: str, tmp_path:
         m = nn.Linear(4, 4)
         log = tl.trace(
             m, torch.randn(2, 4),
-            capture=CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False),
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
         log.save({str(bundle)!r}, level="runnable")
         print("BUILT")
@@ -401,7 +428,7 @@ def test_tampered_manifest_dtype_refuses_without_import(hazard: str, tmp_path: P
         import torch, torch.nn as nn, torchlens as tl
         m = nn.Linear(4, 4)
         log = tl.trace(m, torch.randn(1, 4))
-        tl.save(log, {str(bundle)!r})
+        log.save({str(bundle)!r})
         print("BUILT")
         """
     )
@@ -456,7 +483,7 @@ def test_tampered_manifest_dtype_refuses_without_import(hazard: str, tmp_path: P
 @pytest.mark.heavy
 def test_tampered_run_slot_dtype_refuses_without_import(hazard: str, tmp_path: Path) -> None:
     """r47 secD_1/secF_1 behavioral belt: the ``.run()`` random-init path resolves a tensor-slot
-    dtype via ``_runnable_state._torch_dtype`` (``_runnable_state.py:908``) -- a package-ROOT site
+    dtype via ``_runnable_state._torch_dtype`` (``_runnable/state.py:908``) -- a package-ROOT site
     the r45 ``_io/`` glob missed. Tampering ``run.tensor_slots[*].dtype`` to a hazardous torch name
     yields a typed refusal (parse-validated at load, defense-in-depth; the run-path belt is also
     ``torch_attr``) with NO ``torch.onnx`` / ``torch._dynamo`` in ``sys.modules`` and NO deprecation
@@ -470,7 +497,7 @@ def test_tampered_run_slot_dtype_refuses_without_import(hazard: str, tmp_path: P
         m = nn.Linear(4, 4)
         log = tl.trace(
             m, torch.randn(2, 4),
-            capture=CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False),
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
         log.save({str(bundle)!r}, level="runnable")  # include_weights=False -> random init at run
         print("BUILT")

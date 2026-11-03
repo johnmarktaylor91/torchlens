@@ -52,19 +52,22 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._runnable_execution as rex
-import torchlens._runnable_state as rstate
-from torchlens._runnable_execution import (
-    _MAX_DECODE_NESTING_DEPTH,
+import torchlens._runnable.call_arguments
+import torchlens._runnable.execution as rex
+import torchlens._runnable.input_aliases
+import torchlens._runnable.input_metadata
+import torchlens._runnable.state as rstate
+from torchlens._runnable import StateSource
+from torchlens._runnable.call_arguments import (
     _has_tensor_operand,
     _preflight_call_allocation,
     _projection_required_by_arguments,
 )
-from torchlens._runnable_state import RunResourceCeiling, _byte_guarded_clone
+from torchlens._runnable.execution import _MAX_DECODE_NESTING_DEPTH
+from torchlens._runnable.state import RunResourceCeiling, _byte_guarded_clone
 from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.runnable import StateSource
 
-_CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
+_CAPTURE = {"capture": tl.options.CaptureOptions(replayable=True)}
 
 
 # --------------------------------------------------------------------------- #
@@ -94,7 +97,7 @@ def _rlimit_cap(extra: int = 1 << 30) -> Iterator[None]:
 def _build(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor) -> Path:
     trace = tl.trace(model.eval(), x, **_CAPTURE)
     bundle = tmp_path / name
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 
@@ -264,7 +267,9 @@ def test_no_literal_amplifier_families_refused_typed(
     typed at ``op_allocation_preflight`` against a small budget -- with tiny/empty real
     operands and no real output allocation (fake tensors never allocate)."""
 
-    monkeypatch.setattr(rex, "_allocation_budget_bytes", lambda device: 8 << 20)
+    # Home (_runnable_state) plus the modules holding a from-import copy of the budget.
+    for module in (rstate, torchlens._runnable.call_arguments, rex):
+        monkeypatch.setattr(module, "_allocation_budget_bytes", lambda device: 8 << 20)
     operands = args()
     with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError) as caught:
         _preflight_call_allocation(None, func, list(operands), {}, _stub_call())
@@ -393,6 +398,62 @@ def test_honest_zero_numel_model_runs_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness.value == "verified"
 
 
+class _ExpandSum(nn.Module):
+    """A broadcast view read by a reduction: the view's extent is the reduction's work."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
+        wide = x.expand(64, 4)
+        return wide.sum() + x.sum()
+
+
+def test_e2e_self_consistent_view_extent_tamper_refused(tmp_path: Path) -> None:
+    """Tamper the ``expand`` literal AND its recorded slot shape (64 -> 1e11 rows) of a
+    capture that did not save the view, so the view is self-consistent and the run would
+    allocate nothing for it, but the ``sum`` reading it would touch 4e11 elements.
+    View-aware run-prep charging must not admit it: the view's logical extent is over
+    both the host budget and the view work ceiling, so it refuses typed at
+    ``op_allocation_preflight`` before any call executes, as it did before."""
+
+    x = torch.randn(1, 4)
+    trace = tl.trace(_ExpandSum().eval(), x, save=tl.func("sum"), **_CAPTURE)
+    bundle = tmp_path / "view_extent.tlspec"
+    trace.save(str(bundle), level="runnable", include_weights=True)
+    assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == "verified"
+    assert _tamper_literal(bundle, "int", 64, 10**11) >= 1
+    assert _tamper_slot_shapes(bundle, [64, 4], [10**11, 4]) >= 1
+    with _rlimit_cap():
+        loaded = tl.load(str(bundle))
+        with pytest.raises(RunCapabilityUnavailableError) as caught:
+            loaded.run(inputs=x.clone())
+    fields = caught.value.fields
+    assert fields.get("detection_stage") == "op_allocation_preflight"
+    assert int(fields["logical_elements"]) == 4 * 10**11
+    assert int(fields["logical_elements"]) > int(fields["logical_element_ceiling"])
+
+
+def test_e2e_literal_only_view_extent_tamper_refused_under_return_diverged(
+    tmp_path: Path,
+) -> None:
+    """Inflate only the ``expand`` literal (64 -> 1e11 rows) of a capture that did not save
+    the view, leaving the recorded slot honest. Run-prep passes (the recorded slot is
+    small) and the run copies nothing for the view, so under ``on_divergence="return"`` the shape
+    divergence alone would let the ``sum`` read 4e11 elements. The produced view must be
+    refused typed before any consumer runs."""
+
+    x = torch.randn(1, 4)
+    trace = tl.trace(_ExpandSum().eval(), x, save=tl.func("sum"), **_CAPTURE)
+    bundle = tmp_path / "view_literal.tlspec"
+    trace.save(str(bundle), level="runnable", include_weights=True)
+    assert _tamper_literal(bundle, "int", 64, 10**11) >= 1
+    with _rlimit_cap():
+        loaded = tl.load(str(bundle))
+        with pytest.raises(RunCapabilityUnavailableError) as caught:
+            loaded.run(inputs=x.clone(), on_divergence="return")
+    fields = caught.value.fields
+    assert fields.get("detection_stage") == "op_allocation_execution"
+    assert int(fields["logical_elements"]) == 4 * 10**11
+
+
 # --------------------------------------------------------------------------- #
 # (4) corr_2 -- input mirror clone byte-guarded; honest requires_grad preserved   #
 # --------------------------------------------------------------------------- #
@@ -428,15 +489,15 @@ def test_runtime_mirror_clone_routes_guard_and_mirrors_requires_grad() -> None:
     ceiling = RunResourceCeiling(types.SimpleNamespace(calls=[]))  # type: ignore[arg-type]
     slot = types.SimpleNamespace(slot_id="slot:input_1")
     raw = torch.randn(3, requires_grad=True)
-    clone = rex._runtime_mirror_clone(raw, ceiling, slot)  # type: ignore[arg-type]
+    clone = torchlens._runnable.input_metadata._runtime_mirror_clone(raw, ceiling, slot)  # type: ignore[arg-type]
     assert clone.requires_grad and clone.is_leaf
     assert clone.data_ptr() != raw.data_ptr()
-    plain = rex._runtime_mirror_clone(torch.randn(3), ceiling, slot)  # type: ignore[arg-type]
+    plain = torchlens._runnable.input_metadata._runtime_mirror_clone(torch.randn(3), ceiling, slot)  # type: ignore[arg-type]
     assert not plain.requires_grad
     with _rlimit_cap():
         huge = torch.randn(1).expand(10**12)
         with pytest.raises(RunCapabilityUnavailableError) as caught:
-            rex._runtime_mirror_clone(huge, ceiling, slot)  # type: ignore[arg-type]
+            torchlens._runnable.input_metadata._runtime_mirror_clone(huge, ceiling, slot)  # type: ignore[arg-type]
     assert caught.value.fields.get("detection_stage") == "clone_allocation_preflight"
 
 
@@ -513,7 +574,7 @@ def test_run_time_state_clone_routes_through_ceiling_guard(
     ceiling = RunResourceCeiling(types.SimpleNamespace(calls=[]))  # type: ignore[arg-type]
     descriptor = types.SimpleNamespace(tensor_slots=())
     shared = torch.randn(2)
-    cloned = rex._clone_state_values(
+    cloned = torchlens._runnable.input_aliases._clone_state_values(
         descriptor,  # type: ignore[arg-type]
         {"slot:a": shared, "slot:b": shared, "slot:c": torch.randn(2)},
         ceiling,
@@ -522,7 +583,9 @@ def test_run_time_state_clone_routes_through_ceiling_guard(
     assert cloned["slot:c"] is not cloned["slot:a"]
     monkeypatch.setattr(rstate, "_allocation_budget_bytes", lambda device: 4)
     with pytest.raises(RunCapabilityUnavailableError) as caught:
-        rex._clone_state_values(descriptor, {"slot:a": torch.randn(8)}, ceiling)  # type: ignore[arg-type]
+        torchlens._runnable.input_aliases._clone_state_values(
+            descriptor, {"slot:a": torch.randn(8)}, ceiling
+        )  # type: ignore[arg-type]
     assert caught.value.fields.get("detection_stage") == "clone_allocation_preflight"
 
 
@@ -565,10 +628,13 @@ def test_source_tripwires_gate_and_clone_routing() -> None:
     and routes through the guard core; (c) the capture-side save-time snapshot stays
     deliberately UNROUTED (live-model values, no artifact amplification)."""
 
-    gate_src = inspect.getsource(rex._preflight_call_allocation)
+    gate_src = inspect.getsource(torchlens._runnable.call_arguments._preflight_call_allocation)
     assert "_projection_required_by_arguments(" in gate_src
     assert "if not (_has_numeric_literal" not in gate_src
-    for fn in (rex._runtime_mirror_clone, rex._clone_state_values):
+    for fn in (
+        torchlens._runnable.input_metadata._runtime_mirror_clone,
+        torchlens._runnable.input_aliases._clone_state_values,
+    ):
         src = inspect.getsource(fn)
         assert ".detach().clone()" not in src, f"{fn.__name__} has a raw unguarded clone"
         assert "guarded_clone(" in src

@@ -23,25 +23,24 @@ Design rationale:
     just to check the toggle.
 
 Access policy (disputed-r2 b5/R45, exempt-by-declaration):
-    This module is the sanctioned shared toggle substrate. Direct READS of its
-    published globals from other torchlens modules — including the bare
-    ``_state._logging_enabled`` / ``_state._active_trace`` loads on the per-op
-    wrapper hot path — are the documented design, not private-member
-    reach-ins, and are exempt from private-access lint ratchets by this
-    declaration. The exemption is pinned no-growth by
-    ``tests/test_state_access_ratchet.py``: new cross-module access sites may
-    not silently accumulate. NEW code should prefer the atomic
-    ``active_capture()`` snapshot below over paired raw reads. Multi-field
-    session-state TRANSITIONS (enable/disable, session setup/teardown) belong
-    in state-owned functions and context managers here (``active_logging``,
-    ``pause_logging``, ``reset_capture_runtime_context``, ...), not in
-    external assignment clusters.
+    This module is the sanctioned shared toggle substrate. Direct READS of its published globals
+    from other torchlens modules — including the bare ``_state._logging_enabled`` /
+    ``_state._active_trace`` loads on the per-op wrapper hot path — are the documented design, not
+    private-member reach-ins, and are exempt from private-access lint ratchets by this declaration.
+    The exemption is pinned no-growth by ``tests/test_state_access_ratchet.py``: new cross-module
+    access sites may not silently accumulate. NEW code should prefer the atomic ``active_capture()``
+    snapshot below over paired raw reads. Multi-field session-state TRANSITIONS (enable/disable,
+    session setup/teardown) belong in state-owned functions and context managers here
+    (``active_logging``, ``pause_logging``, ``reset_capture_runtime_context``, ...), not in external
+    assignment clusters.
 """
 
 import contextvars
+import functools
 import itertools
 import threading
 import weakref
+import zlib
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
@@ -50,10 +49,8 @@ from typing import TYPE_CHECKING, Any
 # ``errors._base`` imports nothing from torchlens, so this cannot form a cycle.
 from .errors._base import CaptureError
 
-# TYPE_CHECKING is False at runtime, so this import only exists for static
-# analysis / IDE support — it will never trigger the circular-import problem.
 if TYPE_CHECKING:
-    from .data_classes.trace import Trace
+    from ._data_classes.trace import Trace
     from .intervention.types import InterventionSpec
 
 # ---------------------------------------------------------------------------
@@ -106,12 +103,40 @@ this to know *where* to record tensor operations.  Always None outside a
 logging session.
 """
 
+_capture_attribute_rewind: Callable[[], None] | None = None
+"""Puts plain module attributes back to the capture's pre-forward snapshot.
+
+Set by the capture observer bracket (``_runnable_state_live``) for the capture
+it wraps and restored in its ``finally``; the escape-rescue re-run calls it
+before the second forward, so the re-run starts from the state the first
+forward started from. ``None`` outside a ``tl.trace`` capture.
+"""
+
 _active_fast_run_collector: Any | None = None
 """Explicit fast-run collector active around one native live-model forward.
 
 The slot stays import-free so decorated torch wrappers can cheaply offer selected
 functional-op collection without importing the fast-run implementation. It is non-``None``
 only inside ``Trace.run(inputs=..., fast=True)`` and is restored in ``finally``.
+"""
+
+_pause_depth: int = 0
+"""Open effective ``pause_logging()`` windows on the active fingerprint's thread.
+
+Incremented by ``_PauseLogging.__enter__`` (and :func:`hold_fingerprint`, for
+TorchLens-internal reads) and decremented by its ``__exit__`` only when the pause takes effect (owner-thread rule) AND a ``CallFingerprint``
+owned by the pausing thread is active; each pause instance remembers whether it
+counted, so cross-thread pauses and a fingerprint that starts or ends inside an
+open pause can never leave the depth stuck. Zero means "a call the user's code
+made", the condition ``CallFingerprint.note`` counts under.
+"""
+
+_call_fingerprint: "CallFingerprint | None" = None
+"""Ordered torch-call/module-entry fingerprint being accumulated, or ``None``.
+
+Set by ``active_logging()`` for every capture and by ``call_fingerprinting()``
+around a native forward. Decorated torch wrappers read it first on every call:
+one global read and a ``None`` compare in the steady state.
 """
 
 _rf_probe_depth: int = 0
@@ -271,7 +296,9 @@ def list_logs() -> tuple["Trace", ...]:
     """
 
     snapshot = list(_log_registry)
-    return tuple(log for log in snapshot if log is not None and hasattr(log, "layer_list"))
+    return tuple(
+        log for log in snapshot if log is not None and not log.__dict__.get("_tl_cleaned_up")
+    )
 
 
 def _strip_hf_suffix(class_name: str) -> str:
@@ -505,7 +532,7 @@ _completeness_witness_mode: str = "off"
 """Dispatcher completeness witness mode: ``"off"`` or diagnostic ``"shadow"``.
 
 OFF BY DEFAULT (AUD-HONESTY H4): a plain ``tl.trace()`` never arms the aten-dispatch
-census, so ``Trace.capture_verified`` stays ``None`` (NOT RECORDED -- never a clean
+census, so ``Trace.provenance.verified`` stays ``None`` (NOT RECORDED -- never a clean
 bill) and host escapes only the census can see (``from_numpy``/``as_tensor``/
 ``from_dlpack`` round-trips in a plain forward, in-forward storage writes) leave no
 ceiling. A numpy- or dlpack-backed ``autograd.Function`` forward is the one such
@@ -517,13 +544,13 @@ default on is a maintainer fork (cost + observer-effect trade), not a lane decis
 """
 
 _runnable_ledger_armed: bool = False
-# Private wave-0 ATen recorder edge-token arm. It is capture-scoped and never portable.
+# ATen recorder edge-token arm (``CaptureOptions(aten_ops=True)``). Capture-scoped, never portable.
 _aten_recording_armed: bool = False
 """Whether the r35 event-lifecycle ledger requires wrapper ownership tokens.
 
-Armed only around a runnable-eligible (``intervention_ready``) capture forward so
-the dispatch census can attribute raised / host-returning aten events to their
-exact wrapper owner even when both diagnostic shadow modes are off.
+Armed around a runnable-eligible (``replayable``) capture forward and around an
+``aten_ops=True`` capture, so the dispatch census can attribute raised / host-returning
+aten events to their exact wrapper owner even when both diagnostic shadow modes are off.
 """
 _prepared_models: weakref.WeakSet[Any] = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.
@@ -781,9 +808,11 @@ def _reentrant_refusal() -> ReentrantTraceError:
         Refusal naming the active model when one is identifiable.
     """
 
-    active_model = getattr(_active_trace, "model_label", None)
-    if active_model is None:
-        active_model = getattr(_active_trace, "model_class_name", None)
+    active_model = getattr(_active_trace, "model_name", None)
+    # A non-Trace active subject (a Recording, a test sentinel) may carry no instance dict.
+    active_state = getattr(_active_trace, "__dict__", {})
+    if active_model is None and not active_state.get("_tl_cleaned_up"):
+        active_model = active_state.get("_source_class_name")
     active_model_text = f" for active model {active_model!r}" if active_model else ""
     return ReentrantTraceError(
         "torchlens.trace / active_logging is not re-entrant: "
@@ -869,6 +898,41 @@ def capture_reservation(resume: object | None = None) -> Iterator[object]:
             with _capture_admission_lock:
                 _capture_reserved_by = None
                 _capture_reservation_token = None
+
+
+@contextmanager
+def publish_attribute_rewind(rewind: Callable[[], None]) -> Iterator[None]:
+    """Publish the capture observer's plain-attribute rewind for one capture.
+
+    The state-owned transition for ``_capture_attribute_rewind``: the previous
+    value (an enclosing capture's rewind, or ``None``) comes back on every exit.
+
+    Parameters
+    ----------
+    rewind:
+        Zero-argument callable restoring the capture's pre-forward plain
+        attributes.
+    """
+
+    global _capture_attribute_rewind
+    previous = _capture_attribute_rewind
+    _capture_attribute_rewind = rewind
+    try:
+        yield
+    finally:
+        _capture_attribute_rewind = previous
+
+
+def rewind_capture_attributes() -> None:
+    """Run the published plain-attribute rewind, if a capture published one.
+
+    The escape-rescue re-run calls this before its second forward, so the
+    re-run starts from the attributes the first forward started from.
+    """
+
+    rewind = _capture_attribute_rewind
+    if rewind is not None:
+        rewind()
 
 
 @contextmanager
@@ -1005,6 +1069,99 @@ def publish_backward_capture(
     return publication
 
 
+class CallFingerprint:
+    """Ordered structural fingerprint of the torch calls and module entries of one run.
+
+    ``add`` folds one token into an FNV-style ordered rolling hash (order
+    matters; deterministic across processes because tokens are CRC32s of
+    names, never ``hash()``). Only the owner thread's unpaused calls count:
+    ``note`` is the guarded entry the wrappers and module-entry sites use.
+
+    Parameters
+    ----------
+    owner_thread_id:
+        ``threading.get_ident()`` of the thread whose calls are fingerprinted.
+    """
+
+    __slots__ = ("owner_thread_id", "count", "digest")
+
+    def __init__(self, owner_thread_id: int) -> None:
+        self.owner_thread_id = owner_thread_id
+        self.count = 0
+        self.digest = 0
+
+    def add(self, token: int) -> None:
+        """Fold ``token`` into the ordered digest unconditionally."""
+        self.count += 1
+        self.digest = (self.digest * 1099511628211 + token) & 0xFFFFFFFFFFFFFFFF
+
+    def note(self, token: int) -> None:
+        """Fold ``token`` only for an unpaused call on the owner thread."""
+        if _pause_depth == 0 and self.owner_thread_id == threading.get_ident():
+            self.count += 1
+            self.digest = (self.digest * 1099511628211 + token) & 0xFFFFFFFFFFFFFFFF
+
+    @property
+    def value(self) -> tuple[int, int]:
+        """Return ``(count, digest)``."""
+        return (self.count, self.digest)
+
+
+@functools.cache
+def call_token(func_name: str) -> int:
+    """Return the deterministic fingerprint token of a decorated torch callable."""
+    return zlib.crc32(("call:" + func_name).encode())
+
+
+@functools.cache
+def module_token(address: str) -> int:
+    """Return the deterministic fingerprint token of a module entry at ``address``."""
+    return zlib.crc32(("module:" + address).encode())
+
+
+def note_fingerprint_token(token: int) -> None:
+    """Fold ``token`` into the active fingerprint under its owner/pause guard."""
+    fp = _call_fingerprint
+    if fp is not None:
+        fp.note(token)
+
+
+def hold_fingerprint() -> bool:
+    """Open an internal-read window the active fingerprint does not count.
+
+    The same owner rule as ``pause_logging()``'s depth: only a ``CallFingerprint``
+    owned by the calling thread is held, so another thread's internal read never
+    hides the owner's calls. Returns whether the window counted; pass it to
+    :func:`release_fingerprint`.
+    """
+    global _pause_depth
+    fp = _call_fingerprint
+    counted = fp is not None and fp.owner_thread_id == threading.get_ident()
+    if counted:
+        _pause_depth += 1
+    return counted
+
+
+def release_fingerprint(counted: bool) -> None:
+    """Close a :func:`hold_fingerprint` window that ``counted``."""
+    global _pause_depth
+    if counted:
+        _pause_depth -= 1
+
+
+@contextmanager
+def call_fingerprinting() -> Iterator[CallFingerprint]:
+    """Install a fresh ``CallFingerprint`` for the current thread; restore on exit."""
+    global _call_fingerprint
+    previous = _call_fingerprint
+    fp = CallFingerprint(threading.get_ident())
+    _call_fingerprint = fp
+    try:
+        yield fp
+    finally:
+        _call_fingerprint = previous
+
+
 @contextmanager
 def active_logging(trace: "Trace") -> Iterator[None]:
     """Activate logging for the duration of a forward pass.
@@ -1025,7 +1182,7 @@ def active_logging(trace: "Trace") -> Iterator[None]:
     """
     global _logging_enabled, _active_trace, _functorch_warning_emitted, _func_call_id_iter
     global _dynamo_warning_emitted
-    global _active_owner_thread_id
+    global _active_owner_thread_id, _call_fingerprint
     # Admission is atomic: the refusal check and the publication of the three
     # owner globals happen under one lock, so two threads entering together
     # cannot both be admitted (see ``_capture_admission_lock``).
@@ -1039,6 +1196,9 @@ def active_logging(trace: "Trace") -> Iterator[None]:
         _functorch_warning_emitted = False
         _dynamo_warning_emitted = False
         _func_call_id_iter = itertools.count(1)
+        previous_fingerprint = _call_fingerprint
+        fingerprint = CallFingerprint(_active_owner_thread_id)
+        _call_fingerprint = fingerprint
         _logging_enabled = True
     try:
         yield
@@ -1048,6 +1208,12 @@ def active_logging(trace: "Trace") -> Iterator[None]:
             _logging_enabled = False
             _active_trace = None
             _active_owner_thread_id = None
+            _call_fingerprint = previous_fingerprint
+        # Runtime-only (FieldPolicy.DROP): the ordered torch-call structure the
+        # guarded fast re-run compares against (see ``CallFingerprint``).
+        # Admission tests drive this with stateless ``object()`` sentinels.
+        if hasattr(trace, "__dict__"):
+            trace._raw_call_fingerprint = fingerprint.value
 
 
 class _PauseLogging:
@@ -1069,30 +1235,41 @@ class _PauseLogging:
     general form of the r43 fix that ``materialize_deferred_for_call`` applied at
     one call site; every one of the ~40 ``pause_logging()`` sites is covered here,
     including the ones reachable with NO concurrent capture at all -- a thread
-    merely analyzing an older Trace (``tl.save``, validation, an ``.out``
+    merely analyzing an older Trace (``Trace.save``, validation, an ``.out``
     transform) while another thread captures.
     """
 
-    __slots__ = ("_prev", "_owns_toggle")
+    __slots__ = ("_prev", "_owns_toggle", "_counted")
 
     def __enter__(self) -> None:
-        global _logging_enabled
+        global _logging_enabled, _pause_depth
         owner = _active_owner_thread_id
-        if owner is not None and owner != threading.get_ident():
-            # Live capture owned by a different thread: do not touch the global.
-            self._owns_toggle = False
-            self._prev = False
-            return
+        fp = _call_fingerprint
+        counted = False
+        if owner is not None or fp is not None:
+            ident = threading.get_ident()
+            if owner is not None and owner != ident:
+                # Live capture owned by a different thread: do not touch the global.
+                self._owns_toggle = False
+                self._counted = False
+                self._prev = False
+                return
+            counted = fp is not None and fp.owner_thread_id == ident
+        if counted:
+            _pause_depth += 1
+        self._counted = counted
         self._owns_toggle = True
         self._prev = _logging_enabled  # save current state (True or False)
         _logging_enabled = False
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        global _logging_enabled
+        global _logging_enabled, _pause_depth
         if not self._owns_toggle:
             # Symmetric no-op: a stale restore from a non-owner thread could
             # re-enable logging after the owner's capture already finished.
             return
+        if self._counted:
+            _pause_depth -= 1
         # b2:A2 remnant (r5 fable R54): re-check ownership at RESTORE time.
         # This thread can have read owner=None an instant before another
         # thread's locked capture publication; restoring the stale pre-pause

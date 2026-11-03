@@ -84,14 +84,14 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         lambda: _tl().trace(
             _model(),
             _x(),
-            capture=_tl().options.CaptureOptions(structure_only=True, raise_on_nan=True),
+            capture=_tl().options.CaptureOptions(structure_only=True, on_nonfinite="raise"),
         ),
     ),
     RefusalRow(
         "RF-input-rung-conflict",
         "input_rung_conflict",
         "input",
-        lambda: _tl().trace(_model(), _x(), input_size=(2, 4)),
+        lambda: _tl().trace(_model(), _x(), input_shape=(2, 4)),
     ),
     RefusalRow(
         "RF-unknown-backend",
@@ -103,23 +103,23 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         "RF-selection-kind-mix",
         "selection_kind_incompatible",
         "kind",
-        lambda: _tl().units("relu_1_2", [(0, 0)]) & _tl().params("0.weight"),
+        lambda: _tl().units("relu_1_2", [(0, 0)]) & _tl().param("0.weight"),
     ),
     RefusalRow(
         "RF-halted-runnable-save",
-        "halted_capture_not_runnable",
+        "stopped_capture_unsupported",
         "HALTED",
-        lambda: _tl().save(
-            _tl().trace(_model(), _x(), halt=_tl().func("relu")),
-            "/tmp/proofnet-halted-runnable-refused.tlspec",
-            level="runnable",
+        lambda: (
+            _tl()
+            .trace(_model(), _x(), stop_after=_tl().func("relu"))
+            .save("/tmp/proofnet-halted-runnable-refused.tlspec", level="runnable")
         ),
     ),
     RefusalRow(
         "RF-edges-without-arming",
         "edge_provenance_unavailable",
-        "intervention_ready",
-        lambda: _tl().trace(_model(), _x()).edges,
+        "replayable",
+        lambda: _tl().trace(_model(), _x()).graph.edges,
     ),
     RefusalRow(
         "RF-summary-axis-conflict",
@@ -137,13 +137,13 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         "RF-topk-param-population",
         "selection_kind_incompatible",
         "ACT",
-        lambda: _tl().top_k(_tl().params("0.weight"), 3),
+        lambda: _tl().top_k(_tl().param("0.weight"), 3),
     ),
     RefusalRow(
         "RF-changed-self-comparison",
         "selection_unresolvable",
         "own reference",
-        lambda: (lambda tl, tr: tl.changed(tr).resolve(tr))(_tl(), _tl().trace(_model(), _x())),
+        lambda: (lambda tl, tr: tr[tl.changed(tr)])(_tl(), _tl().trace(_model(), _x())),
     ),
     RefusalRow(
         "RF-load-missing-artifact",

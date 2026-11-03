@@ -27,12 +27,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     WitnessCompleteness,
 )
+from torchlens.options import CaptureOptions
 
 
 class DDScale(nn.Module):
@@ -81,7 +81,7 @@ def _save_runnable(model: nn.Module, capture_input: torch.Tensor, path: Path) ->
         model,
         capture_input,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -97,7 +97,7 @@ def _assert_not_blessed(report) -> None:
     assert report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-    assert report.poisoned
+    assert report.is_poisoned
     assert not any(
         check.name.startswith("numeric_attestation:") for check in report.contract_checks
     )
@@ -108,7 +108,7 @@ def _assert_verified_attested(report) -> None:
 
     assert report.path_faithfulness is PathFaithfulness.VERIFIED
     assert report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert not report.poisoned
+    assert not report.is_poisoned
 
 
 def test_item_scale_changed_input_is_unverifiable_not_attested(tmp_path: Path) -> None:
@@ -173,7 +173,7 @@ def test_scalar_free_model_changed_input_unchanged(tmp_path: Path) -> None:
     # No tensor-derived-scalar dependency: a deterministic scalar-free model stays
     # VERIFIED on a changed input (the taken path is faithful).
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     live = ScalarFree()(torch.tensor([3.0, -5.0]))
     assert torch.allclose(result.output, live)
 
@@ -184,9 +184,7 @@ def test_dead_scalar_sink_not_over_triggered(tmp_path: Path) -> None:
     trace = tl.trace(
         DeadScalarSink(),
         torch.tensor([1.0, 2.0]),
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     from torchlens._io.runnable import build_sparse_run_descriptor
 
@@ -200,7 +198,7 @@ def test_dead_scalar_sink_not_over_triggered(tmp_path: Path) -> None:
     path = _save_runnable(DeadScalarSink(), torch.tensor([1.0, 2.0]), tmp_path / "dead.tlspec")
     result = tl.load(path).run(inputs=torch.tensor([7.0, 8.0]))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     live = DeadScalarSink()(torch.tensor([7.0, 8.0]))
     assert torch.allclose(result.output, live)
 
@@ -211,9 +209,7 @@ def test_item_scale_descriptor_emits_tensor_derived_scalar_witness(tmp_path: Pat
     trace = tl.trace(
         DDScale(),
         torch.tensor([2.0, 2.0]),
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     descriptor = build_sparse_run_descriptor(trace)
 

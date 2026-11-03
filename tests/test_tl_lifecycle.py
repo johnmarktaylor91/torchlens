@@ -9,6 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
+from torchlens._utils.introspection import get_vars_of_type_from_obj
 from torchlens.backends.torch._tl import (
     TensorMeta,
     get_buffer_address,
@@ -18,11 +20,10 @@ from torchlens.backends.torch._tl import (
     set_tensor_label,
 )
 from torchlens.backends.torch.model_prep import _tag_untagged_buffers
-from torchlens.data_classes.trace import Trace
+from torchlens.errors import TraceCaptureError
 from torchlens.intervention.runtime import _copy_tl_replacement_attrs
-from torchlens.options import CaptureOptions, SaveOptions
-from torchlens.partial import PartialTrace
-from torchlens.utils.introspection import get_vars_of_type_from_obj
+from torchlens.options import CaptureOptions
+from torchlens.types import PartialTrace
 
 
 class _LifecycleModel(nn.Module):
@@ -87,8 +88,7 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(save_arg_values=True),
-        save=SaveOptions(activation_transform=lambda t: t.float().mean()),
+        capture=CaptureOptions(save_args=True, activation_transform=lambda t: t.float().mean()),
     )
 
     assert not hasattr(x, "_tl")
@@ -103,7 +103,7 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     assert module_meta.address == "linear"
     assert module_meta.module_type == "Linear"
 
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         _assert_tensor_tree_clean(layer.out)
         _assert_tensor_tree_clean(getattr(layer, "transformed_out", None))
         _assert_tensor_tree_clean(getattr(layer, "saved_args", None))
@@ -116,7 +116,8 @@ def test_successful_capture_cleans_deeply_nested_saved_args() -> None:
     trace = tl.trace(
         _NestedSavedArgsModel(),
         torch.ones(2),
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=CaptureOptions(save_args=True),
+        save="all",
     )
 
     foreach_ops = [op for op in trace.ops if op.func_name == "_foreach_add"]
@@ -131,10 +132,11 @@ def test_failed_capture_cleans_partial_outputs_buffers_and_params() -> None:
     x = torch.randn(2, 3)
     original_requires_grad = {name: p.requires_grad for name, p in model.named_parameters()}
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TraceCaptureError) as exc_info:
         tl.trace(model, x)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
 
-    partial = getattr(exc_info.value, "partial_log", None)
+    partial = getattr(exc_info.value, "partial_trace", None)
     assert isinstance(partial, PartialTrace)
     for layer in partial.raw_layers:
         _assert_tensor_tree_clean(getattr(layer, "out", None))

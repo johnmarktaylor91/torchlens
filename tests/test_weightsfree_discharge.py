@@ -12,8 +12,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture._weightsfree_admission import stamp_wrap_generation
-from torchlens.capture.structure_only import (
+from torchlens._capture._weightsfree_admission import stamp_wrap_generation
+from torchlens._capture.structure_only import (
     COMPARISON_VOCABULARY_V1,
     StructureClaimStatus,
     StructureOnlyCapabilityError,
@@ -61,7 +61,7 @@ def test_rescue_asymmetry_refuses() -> None:
     """A rescue re-run on exactly one side breaks comparability (D10)."""
 
     structure, real = _twins()
-    real.rescue_rerun = {"trigger": "test"}
+    real._rescue_rerun = {"trigger": "test"}
     _expect_incomparable(structure, real, "rescue_asymmetry")
 
 

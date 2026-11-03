@@ -14,9 +14,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._visualization import collapse_estimator, collapse_optimizer
+from torchlens._visualization.collapse_plan import RenderContext, count
 from torchlens.errors._base import TorchLensWarning
-from torchlens.visualization import collapse_estimator, collapse_optimizer
-from torchlens.visualization.collapse_plan import RenderContext, count
 
 
 class _Block(nn.Module):

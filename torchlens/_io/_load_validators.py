@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn
 from .forgery_validation import _is_digest, _is_int, _is_sequence, _refuse, _trace_ops
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 _GRAPH_REMEDY = (
     "re-save the artifact from its source capture with one current TorchLens "
@@ -55,7 +55,7 @@ def _validate_graph_structure(trace: Trace) -> None:
     known = _known_relation_targets(ops)
     for op in ops:
         label = str(getattr(op, "label", "<unknown>"))
-        pass_index = getattr(op, "pass_index", None)
+        pass_index = getattr(op, "pass_number", None)
         num_passes = getattr(op, "num_passes", None)
         if not (
             _is_int(pass_index)
@@ -66,7 +66,7 @@ def _validate_graph_structure(trace: Trace) -> None:
             _graph_invalid(
                 f"op {label!r} carries pass_index={pass_index!r} / num_passes={num_passes!r}; "
                 "pass stamps are 1-based ints with 1 <= pass_index <= num_passes",
-                "Op.pass_index",
+                "Op.pass_number",
                 "pass_stamp_range",
             )
         for relation in ("parents", "children"):
@@ -463,3 +463,32 @@ def _validate_op_annotations(op: Any) -> None:
             'Op.annotations["dedup_reference_label"]',
             "dedup_type",
         )
+
+
+def _validate_executed_flops_records(trace: Trace) -> None:
+    """Validate each backward pass's persisted executed-FLOPs record (tlspec v10).
+
+    The record is a closed dict of ints, ``None`` and short strings whose rows
+    plus unattributed bucket equal a known executed count; anything else
+    refuses rather than coercing.
+    """
+
+    from ..report._backward_attribution import executed_flops_record_problem
+
+    for record in (trace._backward_pass_logs or {}).values():
+        value = getattr(record, "_executed_flops_record", None)
+        if value is None:
+            continue
+        problem = executed_flops_record_problem(value)
+        if problem is not None:
+            message, reason = problem
+            _refuse(
+                f"backward pass {getattr(record, 'pass_index', '?')}: {message}",
+                code="artifact_executed_flops_record_invalid",
+                field="BackwardPass._executed_flops_record",
+                reason=reason,
+                remedy=(
+                    "re-save the artifact from its source capture; do not hand-edit "
+                    "the counted backward record"
+                ),
+            )

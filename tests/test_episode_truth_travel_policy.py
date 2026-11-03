@@ -9,7 +9,7 @@ The foldA round-3 headline receipts, as permanent regressions:
   (``annotations["logged_values"]``) rode a fresh execution the same way.
 
 The fix under test: the per-sub-key travel registry
-(``torchlens/capture/_annotations_travel.py``) applied at the ONE provider
+(``torchlens/_capture/_annotations_travel.py``) applied at the ONE provider
 settlement finalizer. VERIFIED may never coexist with foreign step evidence.
 """
 
@@ -22,20 +22,20 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._annotations_travel import (
+from torchlens._capture._annotations_travel import (
     TRAVEL_CAPTURE_EVIDENCE,
     register_travel_policy,
     registered_travel_policies,
     scrub_fresh_execution_annotations,
     travel_policy_for,
 )
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_ledger import (
     capture_kind_for,
     episode_ledger_for,
     validate_loaded_episode_annotations,
 )
-from torchlens.options import EpisodeSpec
-from torchlens.runnable import PathFaithfulness
+from torchlens._runnable import PathFaithfulness
+from torchlens.options import EpisodeOptions
 
 V = 16
 N_STEPS = 3
@@ -81,7 +81,7 @@ def _episode_trace(model: _Greedy, **extra) -> tl.Trace:
     return tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
         **extra,
     )
 

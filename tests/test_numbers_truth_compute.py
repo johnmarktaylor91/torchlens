@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.compute_record import MAC_FAMILY_NAMES
-from torchlens.capture.flops import (
+from torchlens._capture.compute_record import MAC_FAMILY_NAMES
+from torchlens._capture.flops import (
     ELEMENTWISE_FLOPS,
     SPECIALTY_HANDLERS,
     ZERO_FLOPS_OPS,
@@ -25,7 +25,7 @@ from torchlens.capture.flops import (
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Metadata-only capture."""
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+    return tl.trace(model, x, save=None)
 
 
 def test_biased_linear_true_macs_not_flops_over_two() -> None:
@@ -40,7 +40,7 @@ def test_biased_linear_true_macs_not_flops_over_two() -> None:
         assert record.other_flops == 32  # the bias adds, NOT MACs
         assert record.mac_applicability == "mac"
         assert record.evidence == "formula_exact"
-        assert int(log.total_macs_forward) == 256
+        assert int(log.cost.total_macs_forward) == 256
     finally:
         log.cleanup()
 
@@ -79,8 +79,8 @@ def test_fma_convention_honored_never_discarded() -> None:
 def test_fma1_refuses_typed_on_underivable_split() -> None:
     """A6: an fma=1 request over an underivable MAC split refuses typed."""
 
+    from torchlens._capture.flops import _CUSTOM_OP_RULES, register_op_rule
     from torchlens._errors import InvalidArgumentError
-    from torchlens.capture.flops import _CUSTOM_OP_RULES, register_op_rule
 
     assert "mul" not in _CUSTOM_OP_RULES
     register_op_rule("mul", lambda out, params, args, kwargs: 42)
@@ -123,7 +123,7 @@ def test_fma_outside_the_closed_vocabulary_refuses_typed() -> None:
 def test_flop_count_conventions() -> None:
     """A6: utils.flop_count honors the default/fma2/fma1 convention."""
 
-    from torchlens.utils import flop_count
+    from torchlens._utils import flop_count
 
     model = nn.Linear(8, 16, bias=True)
     x = torch.randn(2, 8)
@@ -150,7 +150,7 @@ def test_flop_count_refuses_removed_and_unknown_options(
     """The removed count_fma_as_two spelling refuses typed naming flop_convention."""
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.utils import flop_count
+    from torchlens._utils import flop_count
 
     model = nn.Linear(2, 2)
     calls: list[int] = []
@@ -186,9 +186,9 @@ def test_backward_macs_are_none_never_half_flops() -> None:
         assert first_op.macs_backward is None
         assert first_op.macs_total is None
         assert op.macs_backward is None
-        assert log.total_macs_backward is None
-        assert log.total_macs is None
-        assert log.macs_by_op_type()["linear"]["backward"] is None
+        assert log.cost.total_macs_backward is None
+        assert log.cost.total_macs is None
+        assert log.cost.macs_by_kind()["linear"]["backward"] is None
     finally:
         log.cleanup()
 
@@ -227,7 +227,7 @@ def test_record_collapse_matches_stored_flops_everywhere() -> None:
     log = _capture(model, torch.randn(2, 3, 4, 4))
     try:
         checked = 0
-        for op in log.layer_list:
+        for op in log._layer_list:
             record = op.compute_record
             if record is None or record.fma_macs is None:
                 continue
@@ -253,17 +253,17 @@ def test_bert_base_exact_mac_decomposition() -> None:
     model.eval()
     ids = torch.randint(0, 30522, (1, 12))
     with torch.no_grad():
-        log = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save=None))
+        log = tl.trace(model, ids, save=None)
     try:
         fused = [
             op
-            for op in log.layer_list
+            for op in log._layer_list
             if op.func_name in ("addmm", "linear") and op.macs_forward is not None
         ]
         assert len(fused) == 73
         assert sum(int(op.macs_forward) for op in fused) == 1_019_805_696
         assert sum(int(op.macs_forward) for op in fused) != 1_020_303_744
-        assert int(log.total_macs_forward) == 1_019_805_696 + 2_654_208
+        assert int(log.cost.total_macs_forward) == 1_019_805_696 + 2_654_208
         assert log.macs_unknown_split_ops == ()
     finally:
         log.cleanup()

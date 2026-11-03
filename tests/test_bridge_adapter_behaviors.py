@@ -8,7 +8,6 @@ are asserted directly.
 
 from __future__ import annotations
 
-import json
 import sys
 from types import SimpleNamespace
 from typing import Any
@@ -53,7 +52,7 @@ def test_bridge_namespace_lazily_imports_and_rejects_unknown_names() -> None:
 
     module = bridge.profiler
     assert module.__name__ == "torchlens.bridge.profiler"
-    assert "gradcam" in dir(bridge)
+    assert "pytorch_grad_cam" in dir(bridge)
     with pytest.raises(AttributeError, match="no attribute"):
         _ = bridge.does_not_exist
 
@@ -69,7 +68,7 @@ def test_bridge_utils_error_contracts(conv_log) -> None:
         bridge_utils.out_at(conv_log, SimpleNamespace(out="not a tensor", layer_label="fake_1_1"))
 
     with pytest.raises(ValueError, match="tensor input"):
-        bridge_utils.first_input_tensor(SimpleNamespace(layer_list=[]))
+        bridge_utils.first_input_tensor(SimpleNamespace(_layer_list=[]))
 
     layers = bridge_utils.tensor_layers(conv_log)
     assert layers
@@ -81,16 +80,16 @@ def test_bridge_utils_error_contracts(conv_log) -> None:
 def test_gradcam_layer_resolves_self_addresses_and_site_fallback(conv_log) -> None:
     """layer() honors 'self', module addresses, resolved sites, and refusals."""
 
-    from torchlens.bridge import gradcam
+    from torchlens.bridge import pytorch_grad_cam
 
     model = bridge_utils.source_model(conv_log)
-    assert gradcam.layer(conv_log, "self") is model
-    assert gradcam.layer(conv_log, "conv") is model.conv
+    assert pytorch_grad_cam.layer(conv_log, "self") is model
+    assert pytorch_grad_cam.layer(conv_log, "conv") is model.conv
     # A layer-label site falls back to the module the op executed in.
-    assert gradcam.layer(conv_log, "conv2d_1_1") is model.conv
+    assert pytorch_grad_cam.layer(conv_log, "conv2d_1_1") is model.conv
 
     with pytest.raises(ValueError, match="Could not resolve"):
-        gradcam.layer(conv_log, conv_log["input_1"])
+        pytorch_grad_cam.layer(conv_log, conv_log["input_1"])
 
 
 @pytest.mark.smoke
@@ -99,7 +98,7 @@ def test_gradcam_cam_runs_context_manager_runner_with_resolved_inputs(
 ) -> None:
     """cam() builds the runner from the resolved model/layer and captured input."""
 
-    from torchlens.bridge import gradcam
+    from torchlens.bridge import pytorch_grad_cam
 
     calls: dict[str, Any] = {}
 
@@ -122,7 +121,7 @@ def test_gradcam_cam_runs_context_manager_runner_with_resolved_inputs(
 
     monkeypatch.setitem(sys.modules, "pytorch_grad_cam", SimpleNamespace(GradCAM=_StubCam))
 
-    payload = gradcam.cam(conv_log, "conv")
+    payload = pytorch_grad_cam.cam(conv_log, "conv")
 
     assert payload["schema"] == "torchlens.gradcam.v1"
     assert payload["cam"] == "cam-output"
@@ -135,18 +134,18 @@ def test_gradcam_cam_runs_context_manager_runner_with_resolved_inputs(
 def test_gradcam_missing_dependency_names_extra(conv_log, monkeypatch: pytest.MonkeyPatch) -> None:
     """cam() raises ImportError naming the gradcam extra when the package is absent."""
 
-    from torchlens.bridge import gradcam
+    from torchlens.bridge import pytorch_grad_cam
 
     monkeypatch.setitem(sys.modules, "pytorch_grad_cam", None)
     with pytest.raises(ImportError, match="torchlens\\[gradcam\\]"):
-        gradcam.cam(conv_log, "conv")
+        pytorch_grad_cam.cam(conv_log, "conv")
 
 
 @pytest.mark.smoke
-def test_sae_lens_bridge_dispatches_encode_decode_and_refuses_junk(
+def test_sae_lens_bridge_dispatches_encode_reconstruct_and_refuses_junk(
     conv_log, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """encode()/decode() use the SAE's methods, fall back to callables, else refuse."""
+    """encode()/reconstruct() use the SAE's methods, fall back to callables, else refuse."""
 
     from torchlens.bridge import sae_lens as sae_bridge
 
@@ -162,8 +161,14 @@ def test_sae_lens_bridge_dispatches_encode_decode_and_refuses_junk(
 
     encoded = sae_bridge.encode(conv_log, "relu_1_2", _Sae())
     assert torch.equal(encoded, site_out * 2)
-    decoded = sae_bridge.decode(conv_log, "relu_1_2", _Sae())
-    assert torch.equal(decoded, site_out * 3)
+    # reconstruct decodes the site's latents, never the raw activation.
+    reconstructed = sae_bridge.reconstruct(conv_log, "relu_1_2", _Sae())
+    assert torch.equal(reconstructed, site_out * 2 * 3)
+    assert not hasattr(sae_bridge, "decode")
+    forward = sae_bridge.reconstruct(conv_log, "relu_1_2", lambda value: value + 1)
+    assert torch.equal(forward, site_out + 1)
+    with pytest.raises(TypeError, match="encode"):
+        sae_bridge.reconstruct(conv_log, "relu_1_2", object())
 
     called_with: list[torch.Tensor] = []
     fallback = sae_bridge.encode(conv_log, "relu_1_2", called_with.append)
@@ -177,17 +182,10 @@ def test_sae_lens_bridge_dispatches_encode_decode_and_refuses_junk(
         sae_bridge.encode(conv_log, "relu_1_2", _Sae())
 
 
-def test_profiler_execution_trace_writes_layer_nodes(conv_log, tmp_path) -> None:
-    """execution_trace() writes the documented per-layer node schema."""
+def test_profiler_execution_trace_is_removed() -> None:
+    """U53.1: the profiler bridge keeps only ``join``; ``execution_trace`` is gone."""
 
     from torchlens.bridge import profiler
 
-    destination = tmp_path / "exec_trace.json"
-    payload = profiler.execution_trace(conv_log, destination)
-
-    on_disk = json.loads(destination.read_text(encoding="utf-8"))
-    assert on_disk == payload
-    assert payload["schema"] == "torchlens.execution_trace.v1"
-    assert len(payload["nodes"]) == len(conv_log.layer_list)
-    by_name = {node["name"]: node for node in payload["nodes"]}
-    assert "conv2d_1_1" in by_name["relu_1_2"]["inputs"]
+    assert not hasattr(profiler, "execution_trace")
+    assert profiler.__all__ == ["join"]

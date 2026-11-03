@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.visualization._rank_layout_internal.layout as layout_mod
+import torchlens._visualization._rank_layout_internal.layout as layout_mod
 
 
 class _Recurrent(nn.Module):
@@ -59,11 +59,10 @@ def _rank_dot_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     monkeypatch.setattr(layout_mod, "_run_neato_with_fallbacks", _fake_neato)
     trace = tl.trace(_Recurrent(), torch.randn(1, 4))
     trace.draw(
-        vis_mode="unrolled",
-        vis_node_placement="rank",
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "rank_geometry"),
+        rolled=False,
+        layout="rank",
+        file_format="svg",
+        path=str(tmp_path / "rank_geometry"),
         show_containers=False,
     )
     return captured["source"]
@@ -132,7 +131,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.visualization._rank_layout_internal.layout as layout_mod
+import torchlens._visualization._rank_layout_internal.layout as layout_mod
 
 class Recurrent(nn.Module):
     def __init__(self):
@@ -155,11 +154,10 @@ torch.manual_seed(0)
 trace = tl.trace(Recurrent(), torch.randn(1, 4))
 out = Path(sys.argv[1]) / "sweep"
 trace.draw(
-    vis_mode="unrolled",
-    vis_node_placement="rank",
-    vis_save_only=True,
-    vis_fileformat="svg",
-    vis_outpath=str(out),
+    rolled=False,
+    layout="rank",
+    file_format="svg",
+    path=str(out),
     show_containers=False,
 )
 normalized = captured["source"].replace(str(out), "OUT")

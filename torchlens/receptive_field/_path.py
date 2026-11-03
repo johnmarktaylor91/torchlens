@@ -15,8 +15,8 @@ from ._errors import (
 from ._types import ReceptiveFieldDirection
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ._query import _IndexSet
 
 
@@ -47,13 +47,13 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
         If a module call has zero or multiple output operations.
     """
 
-    from ..data_classes.layer import Layer
-    from ..data_classes.module import Module, ModuleCall
-    from ..data_classes.op import Op
+    from .._data_classes.layer import Layer
+    from .._data_classes.module import Module, ModuleCall
+    from .._data_classes.op import Op
     from ..intervention.errors import MultiOutputModuleError
 
     if isinstance(handle, str):
-        matches = [op for op in trace.layer_list if op.label == handle]
+        matches = [op for op in trace._layer_list if op.label == handle]
         if len(matches) != 1:
             raise ReceptiveFieldError(
                 f"No operation with exact pass-qualified label {handle!r} exists in this trace."
@@ -74,14 +74,14 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
         return handle.ops[0]
 
     if isinstance(handle, ModuleCall):
-        _require_trace_owner(trace, handle._source_trace, handle.call_label)
+        _require_trace_owner(trace, handle._source_trace, handle.label)
         if len(handle.output_ops) != 1:
             candidates = ", ".join(
                 f"module_call.output_ops[{index}]={label!r}"
                 for index, label in enumerate(handle.output_ops)
             )
             raise MultiOutputModuleError(
-                f"ModuleCall {handle.call_label!r} has {len(handle.output_ops)} output ops; "
+                f"ModuleCall {handle.label!r} has {len(handle.output_ops)} output ops; "
                 f"select one candidate explicitly: {candidates or 'none'}."
             )
         return resolve_graph_point(trace, handle.output_ops[0])
@@ -286,7 +286,9 @@ def _graph_indexes(
         Canonical operation lookup followed by parent and child adjacency mappings.
     """
 
-    operations = tuple(op for op in trace.layer_list if isinstance(getattr(op, "label", None), str))
+    operations = tuple(
+        op for op in trace._layer_list if isinstance(getattr(op, "label", None), str)
+    )
     by_reference = {
         reference: op
         for op in operations

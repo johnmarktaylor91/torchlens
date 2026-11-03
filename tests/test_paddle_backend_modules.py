@@ -69,13 +69,13 @@ def _input() -> object:
 def test_paddle_nested_layer_addresses_and_kwargs() -> None:
     """Nested Paddle layers should populate module logs and forward kwargs."""
 
-    trace = tl.trace(PaddleNested(), _input(), {"scale": 2.0}, backend="paddle")
+    trace = tl.trace(PaddleNested(), _input(), input_kwargs={"scale": 2.0}, backend="paddle")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     addresses = {module.address for module in trace.modules}
     assert {"self", "seq", "seq.0", "seq.1", "scale", "head"} <= addresses
     assert trace.module_calls["scale:1"].forward_kwargs == {"scale": 2.0}
-    scale_labels = trace.resolve_sites(tl.in_module("scale"), max_fanout=16).labels()
+    scale_labels = trace[tl.in_module("scale")].labels
     assert scale_labels
     assert all("scale:1" in trace.layers[label].modules for label in scale_labels)
 
@@ -85,9 +85,9 @@ def test_paddle_param_logs_from_named_parameters() -> None:
 
     trace = tl.trace(PaddleNested(), _input(), backend="paddle")
 
-    addresses = {param.address for param in trace.param_logs}
+    addresses = {param.address for param in trace._param_logs}
     assert {"seq.0.weight", "seq.0.bias", "head.weight", "head.bias"} <= addresses
-    assert trace.num_param_tensors == 4
+    assert len(trace.params) == 4
     assert trace.modules["seq.0"].params
     assert trace.modules["head"].params
 
@@ -124,8 +124,8 @@ def test_paddle_object_module_vs_function_root() -> None:
     object_trace = tl.trace(PaddleNested(), _input(), backend="paddle")
     function_trace = tl.trace(lambda x: paddle.nn.functional.relu(x), _input(), backend="paddle")
 
-    assert object_trace.module_identity_mode == "object_module"
-    assert function_trace.module_identity_mode == "function_root"
+    assert object_trace.options.module_identity_mode == "object_module"
+    assert function_trace.options.module_identity_mode == "function_root"
     assert [module.address for module in function_trace.modules] == ["self"]
 
 
@@ -145,14 +145,14 @@ class PaddleSingleLinear(paddle.nn.Layer):
 
 
 def test_paddle_num_layers_with_params_populated_in_object_module_mode() -> None:
-    """``_finish_trace`` must populate ``trace.num_layers_with_params``.
+    """``_finish_trace`` must populate ``trace._num_layers_with_params``.
 
     Regression test: ``PaddleBackend._finish_trace``
     (``torchlens/backends/paddle/backend.py``) calls the shared
     ``finalize_single_pass_trace`` helper without
     ``count_layers_with_attached_params=True``, so ``op_log._param_logs`` was
     attached correctly per-op but the trace-level summary counter
-    ``trace.num_layers_with_params`` stayed at its dataclass default of ``0``
+    ``trace._num_layers_with_params`` stayed at its dataclass default of ``0``
     on every parameterized Paddle model -- silently wrong, and it trips the
     ``[param_xrefs]`` metadata invariant (``_check_layer_param_aggregate_dedup``)
     for any object-module-mode trace with attached params. The sibling MLX
@@ -162,6 +162,6 @@ def test_paddle_num_layers_with_params_populated_in_object_module_mode() -> None
 
     trace = tl.trace(PaddleSingleLinear(), _input(), backend="paddle")
 
-    assert trace.module_identity_mode == "object_module"
-    assert trace.num_layers_with_params == 1
+    assert trace.options.module_identity_mode == "object_module"
+    assert trace._num_layers_with_params == 1
     assert check_metadata_invariants(trace) is True

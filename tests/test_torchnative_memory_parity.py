@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from torchlens.observability._memory_parity import (
+from torchlens._observability._memory_parity import (
     EMITTED_CATEGORIES,
     NEVER_EMITTED_CATEGORIES,
     categorized_key_counts,

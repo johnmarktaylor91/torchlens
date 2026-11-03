@@ -13,19 +13,19 @@ from safetensors.torch import load_file
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.runnable import (
     assert_sparse_core_has_no_tensor_payload,
     build_sparse_run_descriptor,
 )
-from torchlens._runnable_state import runnable_tensor_byte_digest
-from torchlens.errors import StateBindingError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     StateSource,
 )
+from torchlens._runnable.state import runnable_tensor_byte_digest
+from torchlens.errors import StateBindingError
+from torchlens.options import CaptureOptions
 
 
 def _fresh_warning() -> bool:
@@ -84,7 +84,7 @@ def _capture(model: nn.Module) -> tl.Trace:
         model,
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -109,7 +109,7 @@ def _metadata(path: Path) -> dict[str, Any]:
     return value
 
 
-@pytest.mark.parametrize("field_name", ("annotations", "interventions"))
+@pytest.mark.parametrize("field_name", ("annotations", "edits"))
 def test_runnable_save_rejects_tensor_in_slotted_keep_field(
     tmp_path: Path,
     field_name: str,
@@ -117,13 +117,13 @@ def test_runnable_save_rejects_tensor_in_slotted_keep_field(
     """Reject tensor payloads hidden in any persisted slotted Op field."""
 
     trace = _capture(WeightPayloadModel().eval())
-    op = next(op for op in trace.layer_list if not op.is_input)
+    op = next(op for op in trace._layer_list if not op.is_input)
     object.__setattr__(op, field_name, {"hidden_tensor": torch.tensor([1.0])})
 
-    with pytest.raises((AssertionError, TorchLensIOError)) as caught:
+    with pytest.raises((AssertionError, ArtifactError)) as caught:
         trace.save(tmp_path / f"{field_name}.tlspec", level="runnable")
 
-    if isinstance(caught.value, TorchLensIOError):
+    if isinstance(caught.value, ArtifactError):
         assert isinstance(caught.value.__cause__, AssertionError)
 
 
@@ -156,7 +156,7 @@ def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -278,7 +278,7 @@ def test_include_weights_writes_full_state_dict_as_separate_blob_family(
     assert_sparse_core_has_no_tensor_payload(weighted_manifest["run"])
     assert_sparse_core_has_no_tensor_payload(metadata)
     assert metadata["_buffer_initial_values"] == {}
-    assert all(op.func is None for op in metadata["layer_list"])
+    assert all(op.func is None for op in metadata["_layer_list"])
     tl.validation.validate_tlspec(weighted_path)
 
 
@@ -413,7 +413,7 @@ def test_weight_payload_preserves_canonical_alias_records(tmp_path: Path) -> Non
         model,
         torch.ones(1, 2),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -421,7 +421,7 @@ def test_weight_payload_preserves_canonical_alias_records(tmp_path: Path) -> Non
     path = tmp_path / "tied.tlspec"
     trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
-    descriptor = loaded.runnable_descriptor
+    descriptor = loaded._sparse_run_descriptor
     assert descriptor is not None
     tied_slots = [
         slot
@@ -445,7 +445,6 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     import copy
 
     from torchlens.errors import PoisonedRunError
-    from torchlens.runnable import DivergencePolicy
 
     class _M(nn.Module):
         def __init__(self) -> None:
@@ -462,9 +461,7 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     trace = tl.trace(
         model,
         torch.ones(2, 3),
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     path = tmp_path / "embedded.tlspec"
     trace.save(path, level="runnable", include_weights=True)
@@ -476,9 +473,7 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     assert copy.deepcopy(ok_fork) is not None
 
     # A DIVERGED fork must round-trip its poison flag through pickle and deepcopy and stay refused.
-    diverged = loaded.run(
-        inputs=torch.ones(5, 3), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    ).trace
+    diverged = loaded.run(inputs=torch.ones(5, 3), on_divergence="return").trace
     for revived in (pickle.loads(pickle.dumps(diverged)), copy.deepcopy(diverged)):
         assert revived._runnable.poisoned is True
         with pytest.raises(PoisonedRunError):

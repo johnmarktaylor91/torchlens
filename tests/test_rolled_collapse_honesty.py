@@ -60,11 +60,10 @@ def _dot(trace: tl.Trace, **kwargs: object) -> str:
 
     out = tempfile.mkdtemp()
     return trace.draw(
-        vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=f"{out}/g",
+        file_format="dot",
+        path=f"{out}/g",
         **kwargs,
-    )
+    ).dot
 
 
 @pytest.fixture(scope="module")
@@ -81,15 +80,17 @@ def split_trace() -> Iterator[tl.Trace]:
 def test_rolled_collapsed_box_excludes_surfaced_exit_layers(split_trace: tl.Trace) -> None:
     """The rolled box counts only the layers it actually hides (V4)."""
 
-    source = _dot(split_trace, vis_mode="rolled", collapse_fn=lambda m: m.address == "b")
+    source = _dot(split_trace, rolled=True, collapse_fn=lambda m: m.address == "b")
 
     visible_layers = {
         name
         for name in re.findall(r'^\s*"?([\w.]+)"? \[', source, re.MULTILINE)
         if name.startswith(("relu", "conv"))
     }
-    # The recurrence-surfaced exit layers render beside the box...
-    assert visible_layers == {"relu_1_2", "relu_2_4"}
+    # The recurrence-surfaced exit layer renders beside the box. Grouping rule
+    # row 26 (and section 1: shapes are never evidence): all five calls of the
+    # one block instance are passes of one relu Layer, across the shape change.
+    assert visible_layers == {"relu_1_2"}
     # ...so the box must claim only the genuinely hidden conv layer.
     ops_rows = re.findall(r">(\d+ ops?)<", source)
     assert ops_rows == ["1 op"], f"box double-represents surfaced layers: {ops_rows}"
@@ -105,13 +106,8 @@ def test_unrolled_collapsed_boxes_exclude_surfaced_exit_layers(split_trace: tl.T
         for name in re.findall(r'^\s*"?([\w.]+)"? \[', source, re.MULTILINE)
         if name.startswith("relu")
     }
-    assert visible_layers == {
-        "relu_1_2pass1",
-        "relu_1_2pass2",
-        "relu_1_2pass3",
-        "relu_2_4pass1",
-        "relu_2_4pass2",
-    }
+    # grouping rule row 26: the block's relu is one Layer with 5 passes.
+    assert visible_layers == {f"relu_1_2pass{index}" for index in range(1, 6)}
     ops_rows = re.findall(r">(\d+ ops?)<", source)
     assert ops_rows == ["1 op"] * 5, f"call boxes double-represent surfaced exits: {ops_rows}"
 
@@ -120,7 +116,7 @@ def test_unrolled_collapsed_boxes_exclude_surfaced_exit_layers(split_trace: tl.T
 def test_rolled_multicall_box_discloses_shape_variation(split_trace: tl.Trace) -> None:
     """A shape-varying rolled box carries a shapes line, not one false shape (V5)."""
 
-    source = _dot(split_trace, vis_mode="rolled", collapse_fn=lambda m: m.address == "b")
+    source = _dot(split_trace, rolled=True, collapse_fn=lambda m: m.address == "b")
 
     # Calls 1-3 output (1, 8, 8, 8); calls 4-5 output (1, 8, 4, 4). The box
     # header shows the first call's shape, so the variation must be disclosed.

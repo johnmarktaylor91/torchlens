@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Closed position-scaling vocabulary (D12).
 POSITION_SCALING_CLASSES: tuple[str, ...] = (
@@ -203,7 +203,7 @@ def padding_waste(
     unclassified = 0
     largest: tuple[str | None, int] = (None, 0)
     forward = 0
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in trace._layer_list or ():
         if classify_row(op) != "known":
             continue
         flops = int(getattr(op, "flops_forward", 0) or 0)

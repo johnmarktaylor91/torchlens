@@ -14,7 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ...utils.display import format_flops, human_readable_size
+from ..._record_type import record_type
+from ..._utils.display import format_flops, human_readable_size
 
 __tl_layer__ = "L8"
 
@@ -63,7 +64,7 @@ def node_label(entry: Any) -> str:
     func_name = _real_func_name(entry)
     if func_name:
         return func_name
-    layer_type = str(getattr(entry, "layer_type", "") or "")
+    layer_type = str(record_type(entry, "") or "")
     if layer_type and layer_type.lower() != "none":
         return layer_type
     return node_kind(entry)
@@ -196,7 +197,7 @@ def _pass_string(entry: Any) -> str | None:
     num_passes = int(getattr(entry, "num_passes", 1) or 1)
     if num_passes <= 1:
         return None
-    return f"{int(getattr(entry, 'pass_index', 1) or 1)}/{num_passes}"
+    return f"{int(getattr(entry, 'pass_number', 1) or 1)}/{num_passes}"
 
 
 def _bytes_string(value: Any) -> str | None:

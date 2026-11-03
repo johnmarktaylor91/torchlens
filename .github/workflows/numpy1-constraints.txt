@@ -3,3 +3,7 @@
 # declares no numpy requirement, so the resolver pairs it with a numpy 1.x pin
 # and `import pyarrow` fails. pyarrow 25.x supports numpy 1.x.
 pyarrow<26
+# python-dateutil 3.0.0 (2026-10-21) is outside botocore's python-dateutil<3 range,
+# so the resolver falls back to ancient botocore 0.76 / boto3 0.0.3 / six 1.7.3 and
+# `import brainscore_vision` fails on `six.moves`. Cap it until botocore allows 3.x.
+python-dateutil<3

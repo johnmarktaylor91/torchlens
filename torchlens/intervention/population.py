@@ -13,7 +13,7 @@ ergonomic follow-up).
 Population laws implemented here:
 
 - D2: one public noun, ``origin=`` required.
-- D3: reductions are not draws -- :meth:`Reference.mean` / :meth:`Reference.std`
+- D3: reductions are not draws -- :meth:`Population.mean` / :meth:`Population.std`
   return TENSORS, never invent a seed, and accumulate reduced-precision
   members in float32.
 - D10: populations are PREPARED at construction; hooks only index, cast,
@@ -40,13 +40,14 @@ from typing import Any, Literal
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 
 __all__ = [
     "OneDatum",
     "PerRowDatums",
-    "Reference",
-    "reference",
+    "Population",
+    "population",
 ]
 
 
@@ -114,7 +115,7 @@ def _iter_member_ops(member: Any) -> tuple[Any, ...]:
     insertion history).
     """
 
-    table = getattr(member, "layer_dict_all_keys", None) or {}
+    table = member._layer_dict_all_keys or {}
     by_label: dict[str, Any] = {}
     for value in table.values():
         label = getattr(value, "label", None)
@@ -124,14 +125,14 @@ def _iter_member_ops(member: Any) -> tuple[Any, ...]:
 
 
 #: Persisted capture facts entering the trace ADDRESS identity, in order.
-#: ``trace_label`` is deliberately ABSENT: it is a process-global registry
+#: ``name`` is deliberately ABSENT: it is a process-global registry
 #: ordinal (``twoblock_1``, ``twoblock_2``, ...), a transient of the session,
 #: not a fact of the capture.
 _TRACE_ADDRESS_FACTS = (
-    "model_class_qualname",
-    "random_seed",
+    "_source_class_qualname",
+    "_options_seed",
     "num_operations",
-    "input_signature_hash",
+    "_provenance_input_signature_hash",
 )
 
 
@@ -211,7 +212,7 @@ def _trace_payload_digest(members: Sequence[Any], address_digest: str) -> str:
 
 
 @dataclass(frozen=True)
-class Reference:
+class Population:
     """A prepared, provenance-stamped donor population (the population noun).
 
     Parameters
@@ -270,7 +271,7 @@ class Reference:
         return len(self.members)
 
     @property
-    def population_identity(self) -> str:
+    def identity(self) -> str:
         """Stable identity string for seed derivation and audit records.
 
         Digest-first (privacy rule D13: identity travels, payloads never);
@@ -415,7 +416,7 @@ class Reference:
 
     def mean(
         self,
-        over: Any = None,
+        dim: Any = None,
         *,
         group_by: Callable[[Any], Any] | None = None,
         matching: Any = None,
@@ -424,7 +425,7 @@ class Reference:
 
         Parameters
         ----------
-        over:
+        dim:
             ``None`` for the elementwise across-member mean, or explicit
             member-shape axes (int or tuple of ints) to reduce further with
             ``keepdim=True``. Named axis tokens resolve through the axis
@@ -447,18 +448,18 @@ class Reference:
             """Reduce the eligible member stack to its mean."""
 
             reduced = stack.mean(dim=0)
-            if over is None:
+            if dim is None:
                 return reduced
-            axes = _resolve_over_axes(over, reduced.ndim, verb="Reference.mean")
+            axes = _resolve_over_axes(dim, reduced.ndim, verb="Population.mean")
             if axes == "all":
                 return reduced.mean()
             return reduced.mean(dim=axes, keepdim=True)
 
-        return self._reduce("Reference.mean", _mean, group_by=group_by, matching=matching)
+        return self._reduce("Population.mean", _mean, group_by=group_by, matching=matching)
 
     def std(
         self,
-        over: Any = None,
+        dim: Any = None,
         *,
         group_by: Callable[[Any], Any] | None = None,
         matching: Any = None,
@@ -476,15 +477,15 @@ class Reference:
             """Reduce the eligible member stack to its std."""
 
             reduced = stack.std(dim=0)
-            if over is None:
+            if dim is None:
                 return reduced
-            axes = _resolve_over_axes(over, reduced.ndim, verb="Reference.std")
+            axes = _resolve_over_axes(dim, reduced.ndim, verb="Population.std")
             if axes == "all":
                 return reduced.mean()
             return reduced.mean(dim=axes, keepdim=True)
 
         return self._reduce(
-            "Reference.std", _std, group_by=group_by, matching=matching, min_members=2
+            "Population.std", _std, group_by=group_by, matching=matching, min_members=2
         )
 
 
@@ -511,16 +512,16 @@ def _prepare_tensor_members(source: Any) -> tuple[torch.Tensor, ...] | None:
 def _looks_like_trace(value: Any) -> bool:
     """Whether a member is a captured-trace-like donor (duck-typed)."""
 
-    return hasattr(value, "layer_dict_all_keys") and hasattr(value, "ops")
+    return is_live_trace(value) and hasattr(value, "ops")
 
 
-def reference(
+def population(
     source: Any,
     *,
     origin: str,
     data: Sequence[Any] | None = None,
     digest_population: bool = False,
-) -> Reference:
+) -> Population:
     """Build the provenance-stamped donor population (the ONE public noun).
 
     DOCUMENTED-UNSTABLE spelling pending naming-session ratification
@@ -549,7 +550,7 @@ def reference(
 
     Returns
     -------
-    Reference
+    Population
         The prepared population.
 
     Raises
@@ -594,7 +595,7 @@ def reference(
                     argument="source",
                 )
         prepared = tuple(member.detach() for member in tensor_members)
-        return Reference(
+        return Population(
             members=prepared,
             datums=datums,
             origin=origin,
@@ -614,7 +615,7 @@ def reference(
             # stamp is earned rather than asserted.
             digest = _trace_payload_digest(members, digest)
             digest_kind = "content"
-        return Reference(
+        return Population(
             members=members,
             datums=datums,
             origin=origin,
@@ -624,7 +625,7 @@ def reference(
         )
 
     if _looks_like_trace(source):
-        return reference([source], origin=origin, data=data, digest_population=digest_population)
+        return population([source], origin=origin, data=data, digest_population=digest_population)
 
     raise InvalidArgumentError(
         f"unsupported population source {type(source).__name__}; a population is "

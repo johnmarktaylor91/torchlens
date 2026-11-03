@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from ._tl import get_tensor_label, set_tensor_label
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> None:
@@ -43,17 +43,17 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
         whose parent is the op the edit replaced.
     """
 
-    from ...capture.predicates import _evaluate_keep_op, build_op_record_context
-    from ...capture.projections import append_projected_event
-    from ...fastlog.types import CaptureSpec
+    from ..._capture.predicates import _evaluate_keep_op, build_op_record_context
+    from ..._capture.projections import append_projected_event
+    from ..._ir.predicate import RetroactiveCaptureDecision
     from ...intervention.runtime import (
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
     )
-    from ...ir.predicate import RetroactiveCaptureDecision
+    from ...recording.types import CaptureSpec
+    from ._ops_containers import _walk_output_tensors_with_paths
     from ._ops_predicates import _record_predicate_output
     from .model_prep import _live_intervention_machinery_armed, _note_replacement_event
-    from .ops import _walk_output_tensors_with_paths
 
     layer_type = "interventionreplacement"
     # Like the exhaustive replacement op, the edited value belongs to the scope
@@ -93,12 +93,12 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
             pass_index=state.pass_index,
             event_index=state.event_index,
             step_index=state.step_index,
-            capture_start_time=trace.capture_start_time,
+            capture_start_time=trace._provenance_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
             address=consumer_frame.address if consumer_frame else None,
             module_type=consumer_frame.module_type if consumer_frame else None,
-            module_pass_index=consumer_frame.pass_index if consumer_frame else None,
+            module_pass_number=consumer_frame.pass_number if consumer_frame else None,
         )
         spec = CaptureSpec(save_out=False, save_metadata=False)
         ram_payload = None

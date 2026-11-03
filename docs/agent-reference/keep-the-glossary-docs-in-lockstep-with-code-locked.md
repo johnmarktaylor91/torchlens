@@ -5,6 +5,7 @@ The glossary is the **canonical** API spec (maintained privately; `docs/referenc
 - **Rename / add / remove any PUBLIC name** (dataclass field, `@property`, method, top-level `tl.*` name, kwarg) → in the SAME change, update: (1) the **glossary** entry (canonical), (2) the agent-reference examples (`docs/agent-reference/`, moved out of `AGENTS.md`), (3) the audit notebooks (`notebooks/audit/`) and `examples/` that use it.
 - A change that touches code but leaves the glossary/docs stale is **INCOMPLETE.** This is exactly how the v7 `memory → activation_memory` gap and the stale `log_forward_pass`/`vis_opt` examples slipped through.
 - After a rename/conformance sprint: re-file the updated canonical glossary (it supersedes the prior dated version), and confirm a `grep` of every old name is clean across `torchlens/`, `tests/`, `examples/`, `notebooks/`, AND the glossary itself.
+- Tooling: `python tools/name_lockstep check --base ref:<base-branch>` lists every new, renamed and removed public name of the working tree against a base (a member whose defining module or class moved but whose public `Class.name` spelling did not, including a mixin member folded onto the class it was reached through, is `moved`: it keeps only the glossary-entry obligation) (ids `root:tl.X`, `export:tl.ns.X`, `member:<module>:<Class>.<name>`, `param:<name>`) and exits 1 with each missing glossary entry, missing agent-reference mention and stale old spelling (`--glossary PATH` adds the canonical copy; a `.member` or `kw=` hit that is a live head name, an imported third-party object's attribute, a URL or an assignment target is attributed there and not reported). `codemod --proposals FILE` applies renames from rows carrying `id` and `proposed`, dry run unless `--apply`; `gate-input` writes each new name with its call-site snippet for the legibility check.
 
 ### Trusted custom callable imports
 
@@ -25,7 +26,7 @@ state, then optional embedded capture state, then the versioned
 `torchlens_role_init_v2` fallback (degenerate-total: empty slots consume zero RNG); random reports
 name every initialized slot.
 
-`tl.save(trace, path, level="runnable", include_weights=True)` bundles the full capture-time
+`trace.save(path, level="runnable", include_weights=True)` bundles the full capture-time
 `state_dict` (all named parameters plus persistent buffers) as the separate, schema-versioned
 `state_dict_v1` blob family. The default is `include_weights=False`, so the sparse core stays
 tensor-value-free. Load validates embedded state through the same strict binder; run reports
@@ -39,13 +40,13 @@ topology refuses at save with `state_alias_topology_unsupported`. Payload blobs 
 allocating, and one atomic run-preparation staging pass moves all state families to their recorded
 devices (a CUDA artifact on a CPU-only host loads for analysis and refuses `.run()` typed).
 
-`tl.save(trace, path, level="runnable", include_activations=True)` independently archives exactly
+`trace.save(path, level="runnable", include_activations=True)` independently archives exactly
 the activations already retained by the capture-time `save=` decision, including retained raw and
 transformed outputs, as `selected_activation_v2` with physical `InputAttestationFingerprint`
 eligibility records. Load exposes them through
 `trace.archived_activations` for inspection. They never seed the sparse DAG. On original-input runs
 with embedded or capture-equivalent staged state, recomputed saved raw slots are compared by exact
-bytes and report `attested`; the first mismatch raises `numeric_attestation_failed` and rolls back.
+bytes and report `attested`; the first mismatch raises `replay_value_mismatch` and rolls back.
 Changed-input (logical or physical), random-state, non-equivalent-state, and
 nondeterministic-capture-context runs report `not_applicable`; `attested` always implies
 `verified`.
@@ -56,24 +57,30 @@ nondeterministic-capture-context runs report `not_applicable`; `attested` always
 on a fork to the existing `save_new_outs` fast capture path. The live refresh projector's
 buffer-sink refusal is TRAINING-MODE AWARE (D18, by design): eval-mode BatchNorm
 (every buffer sink carries derived write evidence `buffer_value_changed=False` with agreeing
-mode claims) is refresh-eligible and runnable on the DEFAULT path, while any value-changing
-buffer write (train-mode running stats, counters), unproven (`None`) evidence, a mode claim
-contradicting the evidence, or a value-changing write in the refreshed rerun's own journal
-refuses with the typed `BufferSinkRoutingError` carrying
-`RunnableErrorCode.BUFFER_SINK_ROUTING_MUTABLE` (provisional spelling, documented-unstable;
+mode claims) and train-mode BatchNorm (`buffer_value_changed=True` from a mode-sensitive norm
+call whose every recorded mode claim says train, plus the in-place `num_batches_tracked` counter
+advanced in that same module call) are refresh-eligible and runnable through
+`trace.run(inputs=...)`, on the DEFAULT path and under `until=`: a default capture is a pure
+observer and a default run restores the declared state it changed (U40.1), so every run starts
+from the state the trace was captured from. The legacy `save_new_outs` refresh restores nothing
+and keeps refusing train-mode writers. Unproven (`None`) evidence, a value-changing write by anything else (counters, caches), a
+mode claim contradicting the evidence, a refreshed rerun's own journal recording a
+value-changing write the target does not prove, or diverging target-vs-refreshed evidence
+(compared per sink label) refuses with the typed `BufferSinkRoutingError` carrying
+code `"buffer_sink_routing_unsupported"` (provisional spelling, documented-unstable;
 pinned "computational graph changed" message term preserved). A loaded sparse Trace binds cloned
 input leaves plus staged/random state and executes its resolved taken-path DAG under
 `pause_logging()`. Both return `RunResult(output, trace, report)` and leave the source Trace
 unchanged. Analysis-only loads raise typed `run_capability_unavailable`. Stage 5 populates
 `report.path_faithfulness`; Stage 6 enforces the three-layer honesty transaction. Divergence raises
-and rolls back by default; `return_diverged` is the sole opt-in and returns a monotonic poisoned
+and rolls back by default; `on_divergence="return"` is the sole opt-in and returns a monotonic poisoned
 Trace refused by validation, export, faithful comparison, and path-assuming intervention chaining.
 Incomplete witness coverage is `unverifiable`, never `verified`; numeric attestation is
 `not_applicable` for sparse-only or ineligible activation-payload runs. Model outputs with ZERO
 tensor leaves remain subject to the output-container rules below. `trace.run(inputs=x, fast=True)`
 is the explicit guarded static-loop exception to source immutability: live traces execute native
-`forward()` with targeted module hooks (and scoped functional collection only for an explicit
-functional `save=` predicate); loaded traces perform one ordinary verified run, then reuse staged
+`forward()` with targeted module hooks (and scoped functional collection only for the functional ops
+the capture saved: an explicit functional `save=` predicate or the save-all default); loaded traces perform one ordinary verified run, then reuse staged
 state, compiled binders, and one result Trace. Every fast iteration retains input, output-shape/
 dtype, call-path, and control-witness guards and always raises on divergence. Default `fast=False`
 keeps the full transactional validation/attestation path. The fast-mode handle
@@ -84,7 +91,7 @@ keeps the full transactional validation/attestation path. The fast-mode handle
 `tests/test_schema_lockstep.py::PRIVATE_ORDERED_DROP_FIELDS`). Model outputs with ZERO
 tensor leaves (all-literal trees, literal roots, empty containers) and namedtuple/mapping/
 registered-container outputs carrying extra per-instance state refuse at save
-(`missing_output_container_contract`; one per-kind capability table governs capture proof, save
+(`output_container_contract_missing`; one per-kind capability table governs capture proof, save
 refusal, and load-time recompute). Host nondeterminism beyond the two replayable global engines
 -- RNG instances (incl. outside-held NumPy Generators, witnessed by a chained
 `sys`/`threading.setprofile` receiver classifier + a cheap model-attribute state digest -- NO
@@ -129,7 +136,7 @@ Cluster C: instance-state inspection is fail-closed (`inspect_instance_state`; a
 property/descriptor-shadowed `__dict__` or a custom `__getattribute__`/`__getattr__` on a
 declared-schema container refuses `instance_state_uninspectable` without running the hook).
 Cluster B: slice/composite-literal components are classifier-first (a semantic scalar can never
-launder through a `slice` component). Cluster D: reserved input-path sentinels (the whole `\x00`
+launder through a `plane` component). Cluster D: reserved input-path sentinels (the whole `\x00`
 namespace) are escaped by the key codec so a real dict key equal to a marker round-trips.
 
 The declared state model is the capture-time `state_dict` (named parameters plus persistent buffers)
@@ -146,7 +153,7 @@ whole-storage byte comparison + per-consumption sampling, with the raw `data_ptr
 to `unverifiable`, and a read-only exposure staying `verified`. Full boundary in
 `docs/reference/runnable_tlspec_contract.md` section 11.
 
-The frozen runnable enums live in `torchlens.runnable`: `ReadinessStatus`, `RunProvider`,
+The frozen runnable enums live in `torchlens._runnable`: `ReadinessStatus`, `RunProvider`,
 `StateSource`, `PathFaithfulness`, `DivergencePolicy`, `NumericAttestationStatus`, and
 `RunnableErrorCode`. Public code branches on these values or the structured report, not exception
 text. The exhaustive error vocabulary and release threshold are maintained in

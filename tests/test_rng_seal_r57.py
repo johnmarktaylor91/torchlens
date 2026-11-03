@@ -24,7 +24,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.utils.rng import _skip_retired_hooks, host_nondeterminism_monitor
+from torchlens._utils.rng import host_nondeterminism_monitor
+from torchlens._utils.rng.monitor_state import _skip_retired_hooks
+from torchlens.errors import TraceCaptureError
 
 _HELD_LOCALTIME = time.localtime  # pre-window held alias (module import time)
 
@@ -162,7 +164,7 @@ def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
     bookkeeping opcode tomorrow.
     """
 
-    import torchlens.utils.rng as rng_module
+    from torchlens._utils.rng import call_sites as rng_call_sites
 
     class _FakeInstruction:
         def __init__(self, offset: int, opname: str, argval: object = None) -> None:
@@ -187,9 +189,9 @@ def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
     ]
 
     monkeypatch.setattr(
-        rng_module._dis_module, "get_instructions", lambda code: iter(fake_instructions)
+        rng_call_sites._dis_module, "get_instructions", lambda code: iter(fake_instructions)
     )
-    proof = rng_module._call_site_time_arg_proof(_FakeFrame(), argcount=1, time_arg_index=0)
+    proof = rng_call_sites._call_site_time_arg_proof(_FakeFrame(), argcount=1, time_arg_index=0)
 
     assert proof == "now_read", (
         f"PRECALL-interposed call site misclassified as {proof!r}; the walk-back "
@@ -273,7 +275,7 @@ def test_capture_restores_user_global_rng_streams() -> None:
     np.random.seed(4711)
     torch.manual_seed(99)
     before = _global_rng_fingerprint()
-    tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(random_seed=1234))
+    tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(seed=1234))
     assert _global_rng_fingerprint() == before, (
         "capture left the user's global RNG engines reseeded"
     )
@@ -287,8 +289,9 @@ def test_failed_capture_restores_user_global_rng_streams() -> None:
     np.random.seed(626)
     torch.manual_seed(939)
     before = _global_rng_fingerprint()
-    with pytest.raises(RuntimeError, match="injected forward failure"):
-        tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(random_seed=77))
+    with pytest.raises(TraceCaptureError, match="injected forward failure") as _tce_info:
+        tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(seed=77))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert _global_rng_fingerprint() == before, (
         "failed capture leaked the seeded RNG engines to the user"
     )
@@ -298,7 +301,7 @@ def test_auto_seed_freshness_survives_the_restore() -> None:
     """Auto-seeded captures still draw FRESH seeds after the restore.
 
     The seed pick (``random.randint``) deliberately stays OUTSIDE the restore
-    bracket: restoring the pick too would make every ``random_seed=None``
+    bracket: restoring the pick too would make every ``seed=None``
     capture reuse the identical seed, silently correlating dropout patterns
     across runs.
     """
@@ -306,7 +309,7 @@ def test_auto_seed_freshness_survives_the_restore() -> None:
     random.seed(555)
     first = tl.trace(_TinyNet(), torch.ones(2, 3))
     second = tl.trace(_TinyNet(), torch.ones(2, 3))
-    assert first.random_seed != second.random_seed, (
+    assert first.options.seed != second.options.seed, (
         "restore bracket swallowed the auto-seed draw; captures now reuse one seed"
     )
 
@@ -391,7 +394,7 @@ def test_capture_is_rng_neutral_to_the_host_process() -> None:
     untouched (queued RNG-reseed fork); only the leak is closed. The
     auto-seed pick itself draws from a PRIVATE entropy stream (never the
     user's global engines), so neutrality holds even with
-    ``random_seed=None`` while consecutive captures still get fresh seeds.
+    ``seed=None`` while consecutive captures still get fresh seeds.
     """
 
     import random as _random

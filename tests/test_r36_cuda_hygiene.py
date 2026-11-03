@@ -14,7 +14,7 @@ import torchlens  # noqa: F401 -- full package init before submodule imports
 def test_cpu_async_pending_events_drain_and_clear() -> None:
     """The cpu_async fence registry drains fully and tolerates odd devices (R36-1)."""
 
-    from torchlens.utils.tensor_utils import (
+    from torchlens._utils.tensor_utils import (
         _CPU_ASYNC_PENDING_EVENTS,
         synchronize_pending_cpu_async_copies,
     )
@@ -38,7 +38,7 @@ def test_failed_fence_preserves_the_unfenced_tail_and_retries() -> None:
     loss. The failing entry and the tail must stay pending for retry.
     """
 
-    from torchlens.utils import tensor_utils as tu
+    from torchlens._utils import tensor_utils as tu
 
     class _FakeEvent:
         def __init__(self) -> None:
@@ -81,18 +81,53 @@ def test_capture_touched_cuda_predicate_gates_on_trace_fact() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.utils.tensor_utils import capture_touched_cuda
+    from torchlens._utils.tensor_utils import capture_touched_cuda
 
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu")) is False
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="mps")) is False
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="cuda")) is True
+    assert (
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", _layer_list=None)
+        )
+        is False
+    )
+    assert (
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="mps", _layer_list=None)
+        )
+        is False
+    )
+    assert (
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="cuda", _layer_list=None)
+        )
+        is True
+    )
     # Unknown/missing fails toward the historical flush, never toward skipping.
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="unknown")) is True
-    assert capture_touched_cuda(SimpleNamespace()) is True
+    assert (
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="unknown", _layer_list=None)
+        )
+        is True
+    )
+    assert (
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend=None, _layer_list=None)
+        )
+        is True
+    )
     # Other KNOWN accelerator homes must not flush the CUDA allocator (the
     # old blanket `not in ("cpu", "mps")` over-broadly flushed for them).
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="xpu")) is False
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="hpu")) is False
+    assert (
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="xpu", _layer_list=None)
+        )
+        is False
+    )
+    assert (
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="hpu", _layer_list=None)
+        )
+        is False
+    )
 
 
 def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
@@ -106,16 +141,21 @@ def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.utils.tensor_utils import capture_touched_cuda
+    from torchlens._utils.tensor_utils import capture_touched_cuda
 
     cpu_op = SimpleNamespace(device_ref="cpu")
     cuda_op = SimpleNamespace(device_ref="cuda:0")
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu", ops=[cpu_op, cuda_op]))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", _layer_list=[cpu_op, cuda_op])
+        )
         is True
     )
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu", ops=[cpu_op])) is False
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", _layer_list=[cpu_op])
+        )
+        is False
     )
 
     class _RaisingOps:
@@ -124,7 +164,9 @@ def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
 
     # Consult failure keeps the stamped fact's verdict (adds flushes only).
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu", ops=_RaisingOps()))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", _layer_list=_RaisingOps())
+        )
         is False
     )
 
@@ -139,7 +181,7 @@ def test_failed_drain_restores_unfenced_tail_and_retry_fences_it() -> None:
     read could observe partial bytes with no diagnostic.
     """
 
-    from torchlens.utils import tensor_utils as tu
+    from torchlens._utils import tensor_utils as tu
 
     class _FlakyEvent:
         def __init__(self) -> None:
@@ -181,7 +223,7 @@ def test_failed_drain_restores_unfenced_tail_and_retry_fences_it() -> None:
 def test_failed_drain_keeps_tail_ahead_of_copies_recorded_since() -> None:
     """Restored unfenced entries precede fences recorded after the failure (R36-1)."""
 
-    from torchlens.utils import tensor_utils as tu
+    from torchlens._utils import tensor_utils as tu
 
     class _Event:
         def __init__(self, fail: bool = False) -> None:
@@ -216,14 +258,15 @@ def test_capture_touched_cuda_keys_on_recorded_op_devices() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.ir.refs import DeviceRef
-    from torchlens.utils.tensor_utils import capture_touched_cuda
+    from torchlens._ir.refs import DeviceRef
+    from torchlens._utils.tensor_utils import capture_touched_cuda
 
     def _trace(backend: str, device_names: list[str]) -> object:
         ops = [SimpleNamespace(device_ref=DeviceRef.from_value(name)) for name in device_names]
 
         class _FakeTrace:
-            forward_memory_backend = backend
+            _provenance_forward_memory_backend = backend
+            _layer_list = None
 
             def __iter__(self):
                 return iter(ops)
@@ -243,7 +286,8 @@ def test_capture_touched_cuda_keys_on_recorded_op_devices() -> None:
     # Ops WITHOUT device facts are no evidence: fall back to the stamped
     # backend rule (unknown -> flush), never a false "provably non-CUDA".
     class _NoRefTrace:
-        forward_memory_backend = "unknown"
+        _provenance_forward_memory_backend = "unknown"
+        _layer_list = None
 
         def __iter__(self):
             return iter([SimpleNamespace()])
@@ -254,7 +298,7 @@ def test_capture_touched_cuda_keys_on_recorded_op_devices() -> None:
 def test_pure_view_probes_consume_no_global_rng() -> None:
     """The lazy-import _pure_view probes never draw from the user's generator (B8-7)."""
 
-    from torchlens.utils._callable_safety import _pure_view
+    from torchlens._utils._callable_safety import _pure_view
 
     torch.manual_seed(1234)
     before = torch.get_rng_state()
@@ -292,7 +336,7 @@ def test_mps_style_no_arg_synchronize_does_not_typeerror() -> None:
     TypeError MASKED the original capture exception with a drain traceback.
     """
 
-    from torchlens.utils import tensor_utils as tu
+    from torchlens._utils import tensor_utils as tu
 
     calls = {"noarg": 0}
 
@@ -321,7 +365,7 @@ def test_cpu_async_pending_events_are_bounded() -> None:
     neutral).
     """
 
-    from torchlens.utils import tensor_utils as tu
+    from torchlens._utils import tensor_utils as tu
 
     assert tu._CPU_ASYNC_PENDING_EVENTS == []
     try:
@@ -343,10 +387,10 @@ def test_cleanup_does_not_flush_cuda_for_cpu_capture() -> None:
     import torch.nn as nn
 
     import torchlens as tl
-    from torchlens.data_classes import cleanup as cleanup_module
+    from torchlens._data_classes import cleanup as cleanup_module
 
     trace = tl.trace(nn.Sequential(nn.Linear(4, 4)), torch.randn(2, 4))
-    assert getattr(trace, "forward_memory_backend", None) in ("cpu", "mps")
+    assert getattr(trace, "_provenance_forward_memory_backend", None) in ("cpu", "mps")
 
     calls = {"flush": 0}
     saved_available = cleanup_module._is_cuda_available

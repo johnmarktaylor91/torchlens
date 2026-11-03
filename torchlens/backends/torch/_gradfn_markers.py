@@ -48,7 +48,7 @@ def _obs_session_profiler() -> Any | None:
     """
 
     try:
-        from ...observability._session import active_session
+        from ..._observability._session import active_session
     except ImportError:  # pragma: no cover - torn install without the substrate
         return None
     session = active_session()

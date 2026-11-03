@@ -3,7 +3,7 @@
 Two defense-in-depth tripwire gaps in the sparse-runnable untrusted-load path:
 
 * MEDIUM -- the pure-forward-callable gate
-  (:func:`torchlens.utils._callable_safety.is_pure_forward_callable`) historically
+  (:func:`torchlens._utils._callable_safety.is_pure_forward_callable`) historically
   admitted the whole ``operator`` / ``_operator`` module WHOLESALE (module-granular
   allowlist). That surface *also* exposes generic gadget / mutation primitives that
   are plainly not forward ops -- ``operator.call`` (invokes an arbitrary callable),
@@ -15,7 +15,7 @@ Two defense-in-depth tripwire gaps in the sparse-runnable untrusted-load path:
   comparison / bitwise / index operators are admitted, default-denying the rest of
   ``operator`` by construction.
 
-* LOW -- :func:`torchlens._runnable_execution._decode_literal` admitted ANY
+* LOW -- :func:`torchlens._runnable.execution._decode_literal` admitted ANY
   non-callable ``torch`` attribute for a ``LiteralTorchSymbol``, including whole
   submodules (``torch.serialization`` / ``torch.os``). The fix tightens it to a
   POSITIVE allowlist of the torch symbolic constant types a forward op legitimately
@@ -41,17 +41,17 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable_execution import _decode_literal
+from torchlens._runnable import LiteralTorchSymbol, PathFaithfulness
+from torchlens._runnable.verification import _decode_literal
+from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.errors.runnable import RunPreconditionError
+from torchlens.intervention._resolver_registry import resolve_function_registry_key
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.runnable import LiteralTorchSymbol, PathFaithfulness
-from torchlens.utils._callable_safety import is_pure_forward_callable
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -238,12 +238,12 @@ def test_decode_literal_admits_torch_device() -> None:
 )
 def test_decode_literal_device_malformed_payload_typed(qualname: str) -> None:
     """r41 secC: a malformed ``torch.device(...)`` payload raises the SAME typed
-    ``unsupported_literal`` refusal as every other decoder branch -- never a raw
+    ``literal_unsupported`` refusal as every other decoder branch -- never a raw
     torch ``RuntimeError`` outside the ``RunnableErrorCode`` vocabulary."""
 
     with pytest.raises(RunPreconditionError) as exc:
         _decode_literal(LiteralTorchSymbol(qualname))
-    assert exc.value.fields.get("code") == "unsupported_literal"
+    assert exc.value.fields.get("code") == "literal_unsupported"
 
 
 @pytest.mark.parametrize(
@@ -287,7 +287,7 @@ def test_operator_and_float32_forward_saves_loads_runs_verified(tmp_path: Path) 
 
     result = tl.load(run).run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
     assert torch.allclose(result.output, expected)
 
 

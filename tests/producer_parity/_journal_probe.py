@@ -67,8 +67,8 @@ def grab_journal_events(monkeypatch: Any, producer: str) -> list[Any]:
     """
 
     assert producer in ("legacy", "decomposed"), producer
-    postprocess_module = importlib.import_module("torchlens.postprocess")
-    materialize_module = importlib.import_module("torchlens.postprocess._materialize")
+    postprocess_module = importlib.import_module("torchlens._postprocess")
+    materialize_module = importlib.import_module("torchlens._postprocess._materialize")
     original = materialize_module.materialize_from_events
     grabbed: list[Any] = []
 

@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
 
+from ._errors import InvalidArgumentError
+from ._utils._torch_compat import get_dynamo_optimized_module_type
+from ._utils._torch_symbols import torch_attr
 from .errors._base import ConfigurationError
-from .utils._torch_compat import get_dynamo_optimized_module_type
-from .utils._torch_symbols import torch_attr
+
+if TYPE_CHECKING:
+    from .options import CaptureOptions
 
 _NON_GRAD_DTYPES = {
     torch.int8,
@@ -29,10 +33,57 @@ for _dtype_name in ("uint16", "uint32", "uint64"):
         _NON_GRAD_DTYPES.add(_resolved_dtype)
 
 
+def autograd_disabled_at_entry() -> bool:
+    """Return whether autograd is off where a capture is entered.
+
+    A capture entered under ``torch.no_grad()`` or ``torch.inference_mode()``
+    builds no autograd graph, so ``tl.trace`` and ``tl.record`` imply
+    ``inference_only=True`` for it unless the caller asked for a backward.
+
+    Returns
+    -------
+    bool
+        ``True`` when gradient mode is disabled or inference mode is active.
+    """
+
+    return not torch.is_grad_enabled() or torch.is_inference_mode_enabled()
+
+
+def effective_inference_only(capture_options: CaptureOptions, *, backward_requested: bool) -> bool:
+    """Resolve ``inference_only`` for one torch capture.
+
+    An explicit value always wins. Otherwise a capture entered under
+    ``torch.no_grad()`` or ``torch.inference_mode()`` builds no autograd graph,
+    so it implies ``inference_only=True`` unless a backward-related option asks
+    for one. The Trace then reports ``inference_only=True`` and a later
+    ``log_backward`` refusal names the cause. An implied value is provisional:
+    the capture clears it after the forward if an output still carries
+    autograd history (``torch.enable_grad()`` inside the forward), see
+    :func:`torchlens._capture.stop.cleared_inference_only_directive`.
+
+    Parameters
+    ----------
+    capture_options:
+        Resolved capture options for this call.
+    backward_requested:
+        Whether ``backward_ready``, ``save_grads`` or ``replayable``
+        is in force.
+
+    Returns
+    -------
+    bool
+        The ``inference_only`` value the capture runs with.
+    """
+
+    if capture_options._is_field_explicit("inference_only"):
+        return bool(capture_options.inference_only)
+    return not backward_requested and autograd_disabled_at_entry()
+
+
 class TrainingModeConfigError(ConfigurationError, ValueError):
     """Raised when ``backward_ready=True`` conflicts with capture configuration.
 
-    This is the slow/replay sibling of ``tl.fastlog.RecordingConfigError``:
+    This is the slow/replay sibling of ``tl.errors.RecordingConfigError``:
     both are ``ValueError`` subclasses for user configuration mistakes, but
     this class specifically covers autograd-retaining training captures.
     """
@@ -50,8 +101,9 @@ def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
 
     Raises
     ------
-    RuntimeError
-        If ``model`` is a compiled ``OptimizedModule`` wrapper.
+    InvalidArgumentError
+        ``compiled_model_unsupported`` if ``model`` is a compiled
+        ``OptimizedModule`` wrapper, whatever the other options are.
     """
 
     optimized_module_type = get_dynamo_optimized_module_type()
@@ -63,11 +115,20 @@ def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
         is_optimized_module = model.__class__.__name__ == "OptimizedModule"
 
     if is_optimized_module:
-        raise RuntimeError(
-            f"{api_name} does not support torch.compile'd models in backward_ready: "
-            "dynamo replaces the Python forward with a compiled graph that "
-            "byops TorchLens' function wrappers. Call the API on the "
-            "original un-compiled model."
+        # typed, and the condition is stated as it is checked (any
+        # torch.compile wrapper, not only under backward_ready).
+        raise InvalidArgumentError(
+            f"{api_name} does not record torch.compile'd models (got an OptimizedModule "
+            "wrapper): Dynamo replaces the Python forward with a compiled graph that "
+            "bypasses TorchLens' function wrappers",
+            code="compiled_model_unsupported",
+            remedy=(
+                "pass the eager source module (compiled._orig_mod), or use "
+                "tl.trace(compiled, x), which traces the eager source; to inspect what "
+                "torch.compile generated, use tl.bridge.depyf.dump(model, x, path)"
+            ),
+            argument="model",
+            received_type=type(model).__name__,
         )
 
 
@@ -120,7 +181,7 @@ def validate_training_compatibility(
     if not backward_ready:
         return
 
-    streaming_bundle_path = getattr(streaming, "bundle_path", None)
+    streaming_bundle_path = getattr(streaming, "path", None)
     if save_outs_to is not None or streaming_bundle_path is not None:
         raise TrainingModeConfigError(
             "backward_ready=True is not compatible with slow/replay out disk saves. "

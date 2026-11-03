@@ -82,13 +82,12 @@ def capture(model: nn.Module, x: torch.Tensor) -> object:
     return tl.trace(
         model,
         x.detach().clone().requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 
 def last_conv(trace: object) -> object:
-    matches = [op for op in trace.layer_list if op.label.startswith("conv2d")]
+    matches = [op for op in trace._layer_list if op.label.startswith("conv2d")]
     assert matches, "no conv2d op captured"
     return matches[-1]
 
@@ -144,7 +143,7 @@ def test_axis_permutation_receptive_box_matches_bruteforce(permute: str) -> None
 
     checked = op.receptive_field.check((0, 0, 2, 3))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
 
 def test_transpose_unequal_extents_accepts_valid_units() -> None:
@@ -165,7 +164,7 @@ def test_transpose_unequal_extents_accepts_valid_units() -> None:
 
     checked = op.receptive_field.check((0, 0, 13, 3))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
 
 def test_transpose_asymmetric_kernel_projective_matches_bruteforce() -> None:
@@ -177,7 +176,7 @@ def test_transpose_asymmetric_kernel_projective_matches_bruteforce() -> None:
 
     trace = capture(model, x)
     op = last_conv(trace)
-    source = next(item for item in trace.layer_list if item.is_input)
+    source = next(item for item in trace._layer_list if item.is_input)
     box = source.projective_field.at((4, 7), target=op)
     assert box.exact
     assert windowed_bounds(box) == truth
@@ -200,4 +199,4 @@ def test_transpose_center_unit_and_center_selector_agree() -> None:
 
     checked = op.receptive_field.check(complete)
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0

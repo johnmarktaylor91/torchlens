@@ -27,7 +27,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -94,7 +94,7 @@ def episode_log():
     trace = tl.trace(
         runner,
         torch.tensor([[1, 2]]),
-        episode=EpisodeSpec(stepped_module=model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model, num_steps=N_STEPS),
     )
     try:
         yield trace
@@ -162,7 +162,7 @@ def test_disclosure_fires_with_both_counts(episode_log: tl.Trace) -> None:
 
     label = _extra_label(episode_log)
     with pytest.warns(TorchLensWarning) as records:
-        resolved = tl.pass_variance(above=-1.0, within=label).resolve(episode_log)
+        resolved = episode_log[tl.pass_variance(above=-1.0, within=label)]
     coded = [
         r.message
         for r in records
@@ -177,7 +177,7 @@ def test_disclosure_fires_with_both_counts(episode_log: tl.Trace) -> None:
     # Compo memo D3: a disclosure attaches to a USABLE result — the resolve
     # still lands one entry per window pass of the site.
     entries = list(resolved)
-    assert [entry.site_key for entry in entries] == [(label, 1), (label, 2)]
+    assert [entry.key for entry in entries] == [(label, 1), (label, 2)]
 
 
 @pytest.mark.smoke
@@ -186,7 +186,7 @@ def test_disclosure_covers_stable_across_passes(episode_log: tl.Trace) -> None:
 
     label = _extra_label(episode_log)
     with pytest.warns(TorchLensWarning) as records:
-        tl.stable_across_passes(within=label, tol=1e9).resolve(episode_log)
+        episode_log[tl.stable_across_passes(within=label, atol=1e9)]
     coded = [
         r.message
         for r in records
@@ -202,6 +202,6 @@ def test_no_disclosure_on_plain_captures(plain_log: tl.Trace) -> None:
     label = _extra_label(plain_log)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.pass_variance(above=-1.0, within=label).resolve(plain_log)
+        plain_log[tl.pass_variance(above=-1.0, within=label)]
     torchlens_warnings = [w for w in caught if isinstance(w.message, TorchLensWarning)]
     assert torchlens_warnings == []

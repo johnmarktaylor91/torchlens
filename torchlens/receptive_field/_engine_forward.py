@@ -13,7 +13,6 @@ from ._engine import (
     _concatenation_offsets,
     _geometry_memo,
     _graph_revision,
-    _has_zero_extent,
     _merge_states,
     _operation_is_live,
     _passthrough_axis_map,
@@ -40,8 +39,8 @@ from ._rules import _rf_rules_epoch, _RuleResult
 from ._types import ReceptiveField, ReceptiveFieldDirection, ReceptiveFieldStatus
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 _TARGET_SOLUTION_CACHE_SIZE = 8
@@ -120,7 +119,7 @@ def _canonical_targets(trace: Trace, target_ops: Iterable[Op | str]) -> tuple[Op
             "Projective descriptor solving requires at least one target operation."
         )
     targets = tuple(
-        op for op in trace.layer_list if op.label in resolved and _operation_is_live(op)
+        op for op in trace._layer_list if op.label in resolved and _operation_is_live(op)
     )
     keys = [target.io_role or target.label for target in targets]
     if len(keys) != len(set(keys)):
@@ -136,7 +135,7 @@ def _solve_projective_uncached(
 ) -> _ProjectiveFieldSolution:
     """Run the reverse dynamic program for one canonical target set."""
 
-    operations = tuple(op for op in trace.layer_list if _operation_is_live(op))
+    operations = tuple(op for op in trace._layer_list if _operation_is_live(op))
     by_reference = {
         reference: op
         for op in operations
@@ -153,8 +152,9 @@ def _solve_projective_uncached(
             continue
         branches: dict[str, list[_InputState]] = defaultdict(list)
         target = target_by_label.get(op.label)
-        # An empty target has no units: nothing projects into it.
-        if target is not None and not _has_zero_extent(target):
+        if target is not None and 0 in tuple(target.shape):
+            target = None  # no units, so no projective geometry to seed
+        if target is not None:
             seed = _seed_target(target)
             branches[seed.io_role].append(seed)
 

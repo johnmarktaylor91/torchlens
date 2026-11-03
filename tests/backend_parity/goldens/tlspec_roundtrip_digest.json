@@ -18,11 +18,9 @@
           "fc2"
         ],
         "ops": [
-          "input_1:1",
           "linear_1_1:1",
           "relu_1_2:1",
-          "linear_2_3:1",
-          "output_1:1"
+          "linear_2_3:1"
         ],
         "params": [
           "fc1.weight",
@@ -234,8 +232,6 @@
           "lookup_keys": [
             -1,
             4,
-            "fc2",
-            "fc2:1",
             "output",
             "output_1",
             "output_1",
@@ -286,11 +282,9 @@
           "fc2"
         ],
         "ops": [
-          "input_1:1",
           "linear_1_1:1",
           "relu_1_2:1",
-          "linear_2_3:1",
-          "output_1:1"
+          "linear_2_3:1"
         ],
         "params": [
           "fc1.weight",
@@ -502,8 +496,6 @@
           "lookup_keys": [
             -1,
             4,
-            "fc2",
-            "fc2:1",
             "output",
             "output_1",
             "output_1",
@@ -538,13 +530,13 @@
     }
   },
   "sha256_chunks": [
-    "edede05f",
-    "26a3c153",
-    "c0099f52",
-    "2aaa83c9",
-    "b72fdccf",
-    "2ddbec56",
-    "95920a8c",
-    "de2140fe"
+    "90d18fa8",
+    "4def9384",
+    "6619aff3",
+    "f73ddc1f",
+    "c17f5349",
+    "49e01f87",
+    "835e1b82",
+    "66d03244"
   ]
 }

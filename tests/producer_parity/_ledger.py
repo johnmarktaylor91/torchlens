@@ -35,7 +35,7 @@ from typing import Any
 
 from _source_corpus import PACKAGE_ROOT as _CORPUS_PACKAGE_ROOT, package_ast, package_files
 
-from torchlens.ir.events import OpEvent
+from torchlens._ir.events import OpEvent
 
 
 def _require_corpus_root(package_root: Path) -> None:
@@ -150,10 +150,10 @@ def runtime_read_recorder() -> Iterator[dict[str, set[str]]]:
 def step0_trace_read_recorder() -> Iterator[set[str]]:
     """Record trace attribute names read during step-0 materialization."""
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
-    postprocess_module = importlib.import_module("torchlens.postprocess")
-    materialize_module = importlib.import_module("torchlens.postprocess._materialize")
+    postprocess_module = importlib.import_module("torchlens._postprocess")
+    materialize_module = importlib.import_module("torchlens._postprocess._materialize")
     original_public = postprocess_module.materialize_from_events
     original_direct = materialize_module.materialize_from_events
     original_getattribute = Trace.__getattribute__

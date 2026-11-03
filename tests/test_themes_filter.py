@@ -15,8 +15,8 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses.audit import CORPUS
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses.audit import CORPUS
 
 
 def _member(name: str) -> Any:
@@ -115,12 +115,10 @@ def test_bridged_edges_are_dashed_with_midpoint_labels(glue_log: Any, tmp_path: 
     )
     graph = glue_log.draw(
         **resolution.draw_kwargs,
-        vis_outpath=str(tmp_path / "filtered"),
-        vis_fileformat="svg",
-        vis_save_only=True,
-        return_graph=True,
-    )
-    source = graph.source
+        path=str(tmp_path / "filtered"),
+        file_format="svg",
+    ).dot
+    source = graph
     assert "style=dashed" in source
     labels = re.findall(r'label="via (\d+) hidden"', source)
     assert labels and int(labels[0]) >= 1
@@ -136,8 +134,7 @@ def test_predicate_boundary_raise_teaches(glue_log: Any, tmp_path: Any) -> None:
     with pytest.raises(Exception) as excinfo:
         glue_log.draw(
             skip_fn=lambda layer: True,
-            vis_outpath=str(tmp_path / "boundary"),
-            vis_save_only=True,
+            path=str(tmp_path / "boundary"),
         )
     message = str(excinfo.value)
     assert excinfo.value.fields["code"] == "skip_fn_boundary_invalid"
@@ -175,18 +172,18 @@ def test_selection_operand_hides_the_selected_site(glue_log: Any) -> None:
     silent no-op: the resolved site labels must reach the match fn)."""
 
     target = next(op for op in glue_log.ops if not (op.is_input or op.is_final_output))
-    resolved = target.__selection__().resolve(glue_log)
+    resolved = glue_log[target.__selection__()]
     compiled = lenses.compile_display_filter(glue_log, lenses.DisplayFilter(exclude=resolved))
     assert compiled.filtered >= 1
 
 
 def test_foreign_resolved_selection_refuses_typed(glue_log: Any) -> None:
-    """A ResolvedSelection bound to another trace refuses; align_to is the door."""
+    """A Selection bound to another trace refuses; align_to is the door."""
 
     model, x = _member("filtered_chain").build()
     other = tl.trace(model, x)
     try:
-        foreign = other.ops[0].__selection__().resolve(other)
+        foreign = other[other.ops[0].__selection__()]
         with pytest.raises(Exception) as excinfo:
             lenses.compile_display_filter(glue_log, lenses.DisplayFilter(exclude=foreign))
         assert excinfo.value.fields["code"] == "display_filter_selection_foreign"

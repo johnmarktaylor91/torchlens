@@ -186,12 +186,11 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
     """Check-shaped functions in the direct-target scope are all mutant targets.
 
     b9-sol round-5 R74-2: the direct roster covered exactly one validation
-    comparator and one postprocess checker while validation/core.py carried
-    five more raise-on-violation entry points and postprocess/__init__.py two
-    assert seams — claimed-exhaustive tripwire coverage derived from the
+    comparator while validation/core.py carried five more raise-on-violation
+    entry points — claimed-exhaustive tripwire coverage derived from the
     metadata-contract registry alone. Registry contracts are enrolled by
     construction; this census makes the DIRECT scope structural too: a new
-    ``_check_*``/``_validate_*``/``_assert_*`` def in either file must join
+    ``_check_*``/``_validate_*``/``_assert_*`` def in that file must join
     MUTANTS or EXEMPT_MUTANTS (or a reasoned exclusion here) before it ships.
     """
 
@@ -202,8 +201,12 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
         (path, function) for path, function in driver.EXEMPT_MUTANTS.values()
     }
     # Reasoned exclusions only — every entry needs a why.
-    excluded: set[tuple[str, str]] = set()
-    scope = ("torchlens/validation/core.py", "torchlens/postprocess/__init__.py")
+    excluded: set[tuple[str, str]] = {
+        # The public validate_saved_outs entry's whole-run body, split out for its
+        # scratch-clearing finally; the reason lives in CORE_CHECK_EXCLUSIONS.
+        ("torchlens/validation/core.py", "_validate_saved_outs_run"),
+    }
+    scope = ("torchlens/validation/core.py",)
     unenrolled = []
     for rel in scope:
         source = (_REPO_ROOT / rel).read_text(encoding="utf-8")
@@ -394,7 +397,7 @@ def test_mutation_workflow_rotation_contract() -> None:
     """r7 cluster 19: the rotation contract f9964208 claimed but never pinned.
 
     The scheduled leg's slot selection and family routing live in shell
-    inside ``mutation.yml``; nothing else checks that the families it names
+    inside weekly.yml's ``mutation`` job; nothing else checks that the families it names
     exist in the driver, that the rotation can only produce shards 1..4 of
     4, or that step outputs stay routed through ``env:`` (the zizmor
     template-injection class). Pin all three so a workflow edit that breaks
@@ -404,7 +407,14 @@ def test_mutation_workflow_rotation_contract() -> None:
 
     import re
 
-    workflow = (_REPO_ROOT / ".github" / "workflows" / "mutation.yml").read_text(encoding="utf-8")
+    weekly = (_REPO_ROOT / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
+
+    def _job_text(text: str, job: str) -> str:
+        match = re.search(rf"^  {job}:\n.*?(?=^  [a-z0-9-]+:\n|\Z)", text, re.M | re.S)
+        assert match is not None, f"weekly.yml lost its {job} job"
+        return match.group(0)
+
+    workflow = _job_text(weekly, "mutation")
     driver = _load_driver_module()
 
     # Every family literal the workflow can route exists in the driver's
@@ -454,7 +464,7 @@ def test_mutation_workflow_rotation_contract() -> None:
     # unrelated upstream event makes historical verdicts incomparable.
     # Scoped to each leg's canonical-env install step (weekly.yml carries
     # other, unrelated torch pins for its floor-matrix jobs).
-    weekly = (_REPO_ROOT / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
+    margin = _job_text(weekly, "mutation-margin")
 
     def _canonical_env_step(text: str, source: str) -> str:
         match = re.search(
@@ -468,12 +478,12 @@ def test_mutation_workflow_rotation_contract() -> None:
     for package in ("torch", "torchvision"):
         pins = {
             name: set(re.findall(rf'"{package}==([0-9][^"]*)"', _canonical_env_step(text, name)))
-            for name, text in (("mutation.yml", workflow), ("weekly.yml", weekly))
+            for name, text in (("mutation", workflow), ("mutation-margin", margin))
         }
         assert all(len(v) == 1 for v in pins.values()), (
             f"each mutation leg needs exactly one {package} pin in its canonical env step: {pins}"
         )
-        assert pins["mutation.yml"] == pins["weekly.yml"], (
+        assert pins["mutation"] == pins["mutation-margin"], (
             f"the mutation legs disagree on {package}: {pins} -- both must "
             "install the canonical pinned CPU pair"
         )
@@ -552,8 +562,8 @@ def test_operator_label_matches_the_applied_disarm_keyword(tmp_path: Path) -> No
 def test_executor_family_derivation_reaches_every_step() -> None:
     """r7 R74 (sol b9 HIGH): the postprocess executor is enrolled, DERIVED.
 
-    25 ``_run_step_*`` bodies plus the conditional gate predicates had no
-    mutation verdict while R74 explicitly scopes ``postprocess/``. The
+    The 25 ``_run_<step name>`` bodies plus the conditional gate predicates
+    had no mutation verdict while R74 explicitly scopes ``postprocess/``. The
     family derives from the module's defs, so a new step self-enrolls; run
     bodies neuter to ``return None`` (silent skip) and gate predicates to
     ``return False`` (never fires), each the dangerous direction.
@@ -561,17 +571,23 @@ def test_executor_family_derivation_reaches_every_step() -> None:
 
     driver = _load_driver_module()
     mutants = driver.derive_executor_mutants(_REPO_ROOT)
-    run_steps = {mid for mid in mutants if "#_run_step_" in mid}
-    gates = {mid for mid in mutants if "#_should_run_step_" in mid}
+    run_steps = {mid for mid in mutants if "#_run_" in mid}
+    gates = {mid for mid in mutants if "#_should_run_" in mid}
     assert len(run_steps) >= 20, f"only {len(run_steps)} run-step mutants derived"
     assert gates, "no gate-predicate mutants derived"
     for mid, (rel, func, value) in mutants.items():
-        assert rel == "torchlens/postprocess/_executor.py"
-        assert value == ("None" if func.startswith("_run_step_") else "False"), (mid, value)
-    # Cross-check against the live registry: every StepSpec.run is enrolled.
-    from torchlens.postprocess._executor import STEP_REGISTRY
+        assert rel == "torchlens/_postprocess/_executor.py"
+        assert value == ("None" if func.startswith("_run_") else "False"), (mid, value)
+    # Cross-check against the live pipeline: every step's run body and every
+    # named gate predicate is enrolled.
+    from torchlens._postprocess._pipeline import PIPELINE
 
-    registered_runs = {spec.run.__name__ for spec in STEP_REGISTRY}
+    registered = {step.run.__name__ for step in PIPELINE}
+    registered |= {
+        step.should_run.__name__
+        for step in PIPELINE
+        if step.should_run.__name__.startswith("_should_run_")
+    }
     enrolled_funcs = {func for _, func, _ in mutants.values()}
-    missing = registered_runs - enrolled_funcs
-    assert not missing, f"STEP_REGISTRY steps outside the executor family: {sorted(missing)}"
+    missing = registered - enrolled_funcs
+    assert not missing, f"PIPELINE steps outside the executor family: {sorted(missing)}"

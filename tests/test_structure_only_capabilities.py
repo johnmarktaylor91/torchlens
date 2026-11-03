@@ -19,12 +19,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io.prerelease import activate_prerelease_fields
-from torchlens.capture.structure_only import (
+from torchlens._capture.structure_only import (
     STRUCTURE_ONLY_CAPABILITIES,
     StructureOnlyCapabilityError,
     require_structure_only_capability,
 )
+from torchlens._io.prerelease import activate_prerelease_fields
 from torchlens.options import CaptureOptions
 
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent
@@ -51,7 +51,7 @@ def _structure_trace():
 
 def test_nobody_reads_the_capability_table_but_the_chokepoint() -> None:
     for path in TORCHLENS_DIR.rglob("*.py"):
-        if path.name == "structure_only.py" and path.parent.name == "capture":
+        if path.name == "structure_only.py" and path.parent.name == "_capture":
             continue
         text = path.read_text(encoding="utf-8")
         assert "STRUCTURE_ONLY_CAPABILITIES[" not in text, str(path)
@@ -67,11 +67,18 @@ def test_gated_entries_consult_the_structure_only_chokepoint() -> None:
     refactor that drops a structure-only gate call from a value-bearing
     surface fails here."""
 
-    validation_source = (TORCHLENS_DIR / "data_classes" / "_trace_validation.py").read_text(
-        encoding="utf-8"
+    # The gated entry bodies live in the record-rebuild destination modules
+    # (the `Trace` methods are thin door calls); read all three.
+    validation_source = "".join(
+        (TORCHLENS_DIR / part).read_text(encoding="utf-8")
+        for part in (
+            "validation/_trace_checks.py",
+            "intervention/_trace_run.py",
+            "backends/torch/_trace_backward.py",
+        )
     )
     gate_calls = re.findall(
-        r'require_structure_only_capability\(self, "([a-z_]+)"\)', validation_source
+        r'require_structure_only_capability\(trace, "([a-z_]+)"\)', validation_source
     )
     # One sibling call per capture-outcome gate site: save_new_outs, push,
     # push_from, run (entry pre-gate + loaded-sparse + halted-analysis +
@@ -122,7 +129,7 @@ def test_doc_table_locksteps_with_the_in_code_authority() -> None:
 
 
 def test_row_grammar_is_closed_and_red_capable() -> None:
-    from torchlens.capture.structure_only import CapabilityRow, _validate_row_grammar
+    from torchlens._capture.structure_only import CapabilityRow, _validate_row_grammar
 
     with pytest.raises(AssertionError):
         _validate_row_grammar(
@@ -170,9 +177,9 @@ def test_save_persists_the_marker_plainly(tmp_path) -> None:
 
     log = _structure_trace()
     path = tmp_path / "structure.tlspec"
-    tl.save(log, path)
+    log.save(path)
     loaded = tl.load(path)
-    assert loaded.structure_only is True
+    assert loaded.options.structure_only is True
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
         loaded.run(inputs=torch.randn(2, 4))
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
@@ -222,9 +229,9 @@ def test_registrar_switch_round_trips_the_marker_and_load_fails_closed(tmp_path)
     log = _structure_trace()
     artifact = tmp_path / "structure.tlspec"
     with activate_prerelease_fields():
-        tl.save(log, artifact)
+        log.save(artifact)
         reloaded = tl.load(artifact)
-        assert reloaded.structure_only is True
+        assert reloaded.options.structure_only is True
     # Outside the switch the stamped artifact can NEVER pass as a real one.
     from torchlens._io import PreReleaseArtifactError
 

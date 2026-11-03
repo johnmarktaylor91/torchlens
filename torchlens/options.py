@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+import importlib
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, TypeVar, cast
 
 import torch
 
@@ -13,7 +14,7 @@ from ._deprecations import (
     MISSING,
     MissingType,
 )
-from ._episode_spec import EpisodeSpec
+from ._episode_spec import EpisodeOptions
 from ._errors import (
     ArgumentConflictError,
     ArgumentTypeError,
@@ -23,22 +24,21 @@ from ._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
     FoldRepeatsLiteral,
+    OnNonfiniteLiteral,
     OutputDeviceLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
-    VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from ._mutate_warnings import _MutateWarningSuppression
 from ._option_receipt import (
-    EchoOptions,
-    OptionReceiptEntry,
+    NarrationOptions,
     _explicit_fields,
     _field_is_explicit,
     _resolve_option_value,
     _set_frozen_fields,
-    option_receipt,
 )
 from ._options_validation import (
     _normalize_layout,
@@ -49,69 +49,81 @@ from ._options_validation import (
     _validate_intervention_mode,
     _validate_node_style,
     _validate_visualization_flag_fields,
+    visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
+from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
 
 if TYPE_CHECKING:
-    from .data_classes.layer import Layer
-    from .data_classes.module import Module
+    from ._data_classes.layer import Layer
+    from ._data_classes.module import Module
+    from .recording.options import RecordingOptions as RecordingOptions
 
 T = TypeVar("T")
-ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
-GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
+_ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
+_GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
-    "layers_to_save",
-    "transform",
+    "input_transform",
     "save_raw_input",
     "batch_render",
     "output_transform",
-    "output_style",
-    "output_head",
-    "save_raw_output",
+    "save_transformed_output",
     "layer_visualizers",
     "save_visualizations",
     "keep_orphans",
     "output_device",
-    "save_arg_values",
+    "save_args",
     "save_grads",
     "capture_tensor_grad_hooks",
-    "save_code_context",
-    "save_rng_states",
-    "random_seed",
+    "save_source_context",
+    "save_rng",
+    "seed",
     "source_context_lines",
     "optimizer",
     "compute_input_output_distances",
     "detach_saved_activations",
     "recurrence_detection",
-    "intervention_ready",
+    "replayable",
     "capture_container_structure",
     "hooks",
     "unwrap_when_done",
     "verbose",
     "backward_ready",
     "inference_only",
+    "carry_state",
     "name",
     "cache",
     "cache_dir",
     "module_filter",
-    "stop_after",
     "jax_control_flow",
     "jax_max_control_flow_unroll",
     "module_identity_mode",
     "payload_policy",
-    "save_preview",
     "emit_nvtx",
     "measure_python_peak_memory",
     "save_budget",
     "distributed_witness",
-    "raise_on_nan",
-    "track_nonfinite",
+    "on_nonfinite",
     "track_device_memory",
     "structure_only",
     "log_injections",
+    "measure_host_peak_memory",
+    "activation_transform",
+    "grad_transform",
+    "save_raw_activations",
+    "save_raw_grads",
+    "save_mode",
+    "reconstruction_ready",
+    "lookback",
+    "lookback_payload_policy",
+    "grouping",
+    "jax_static_argnums",
+    "grad_options",
+    "chunk_size",
+    "aten_ops",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "activation_transform",
@@ -120,10 +132,11 @@ _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "save_raw_gradients",
 )
 _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
-    "view",
+    "graph",
+    "rolled",
     "depth",
     "container_path",
-    "save_only",
+    "open_viewer",
     "file_format",
     "show_buffers",
     "direction",
@@ -148,13 +161,11 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "show_legend",
     "color_by",
     "size_by",
-    "scale",
+    "size_scale",
     "stack_by",
     "show_redundant_args",
     "font_size",
     "dpi",
-    "for_paper",
-    "return_graph",
     "order_siblings",
 )
 _REPLAY_FIELDS: Final[tuple[str, ...]] = (
@@ -163,73 +174,83 @@ _REPLAY_FIELDS: Final[tuple[str, ...]] = (
     "differentiable",
     "append",
     "chunk_size",
+    "allow_changed_params",
 )
 _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
     "engine",
     "confirm_mutation",
     "strict",
+    "allow_changed_params",
 )
 _STREAMING_FIELDS: Final[tuple[str, ...]] = (
-    "bundle_path",
+    "path",
     "retain_in_memory",
-    "out_callback",
+    "on_save",
     "include_custom_attributes",
     "include_buffer_values",
     "async_writes",
     "max_pending_bytes",
 )
 _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "layers_to_save": "layers_to_save",
-    "transform": "transform",
+    "input_transform": "input_transform",
     "save_raw_input": "save_raw_input",
     "batch_render": "batch_render",
     "output_transform": "output_transform",
-    "output_style": "output_style",
-    "output_head": "output_head",
-    "save_raw_output": "save_raw_output",
+    "save_transformed_output": "save_transformed_output",
     "layer_visualizers": "layer_visualizers",
     "save_visualizations": "save_visualizations",
     "keep_orphans": "keep_orphans",
     "output_device": "output_device",
-    "save_arg_values": "save_arg_values",
+    "save_args": "save_args",
     "save_grads": "save_grads",
     "capture_tensor_grad_hooks": "capture_tensor_grad_hooks",
-    "save_code_context": "save_code_context",
-    "save_rng_states": "save_rng_states",
-    "random_seed": "random_seed",
+    "save_source_context": "save_source_context",
+    "save_rng": "save_rng",
+    "seed": "seed",
     "source_context_lines": "source_context_lines",
     "optimizer": "optimizer",
     "compute_input_output_distances": "compute_input_output_distances",
     "detach_saved_activations": "detach_saved_activations",
     "recurrence_detection": "recurrence_detection",
-    "intervention_ready": "intervention_ready",
+    "replayable": "replayable",
     "capture_container_structure": "capture_container_structure",
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
     "verbose": "verbose",
     "backward_ready": "backward_ready",
     "inference_only": "inference_only",
+    "carry_state": "carry_state",
     "name": "name",
     "cache": "cache",
     "cache_dir": "cache_dir",
     "module_filter": "module_filter",
-    "stop_after": "stop_after",
     "jax_control_flow": "jax_control_flow",
     "jax_max_control_flow_unroll": "jax_max_control_flow_unroll",
     "module_identity_mode": "module_identity_mode",
     "payload_policy": "payload_policy",
-    "save_preview": "save_preview",
-    "raise_on_nan": "raise_on_nan",
+    "on_nonfinite": "on_nonfinite",
     "structure_only": "structure_only",
+    "activation_transform": "activation_transform",
+    "grad_transform": "grad_transform",
+    "save_raw_activations": "save_raw_activations",
+    "save_raw_grads": "save_raw_grads",
+    "save_mode": "save_mode",
+    "reconstruction_ready": "reconstruction_ready",
+    "lookback": "lookback",
+    "lookback_payload_policy": "lookback_payload_policy",
+    "grouping": "grouping",
+    "jax_static_argnums": "jax_static_argnums",
+    "grad_options": "grad_options",
+    "chunk_size": "chunk_size",
 }
 _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "activation_transform": "activation_transform",
     "grad_transform": "grad_transform",
     "save_raw_activations": "save_raw_activations",
-    "save_raw_gradients": "save_raw_gradients",
+    "save_raw_grads": "save_raw_gradients",
 }
 _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "view": "view",
+    "rolled": "rolled",
     "depth": "depth",
     "layout": "layout",
     "node_style": "node_style",
@@ -244,91 +265,19 @@ _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "differentiable": "differentiable",
     "append": "append",
     "chunk_size": "chunk_size",
+    "allow_changed_params": "allow_changed_params",
 }
 _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "engine": "engine",
     "confirm_mutation": "confirm_mutation",
     "strict": "strict",
+    "allow_changed_params": "allow_changed_params",
 }
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "bundle_path": "bundle_path",
+    "path": "path",
     "retain_in_memory": "retain_in_memory",
-    "out_callback": "out_callback",
+    "on_save": "on_save",
 }
-
-
-class _MutateWarningSuppression:
-    """Session-level toggle and context manager for mutation warnings."""
-
-    def __init__(self) -> None:
-        """Initialize the suppression flag."""
-
-        self._suppress = False
-        # Stack of states to restore on ``__exit__``; supports nested ``with``.
-        self._restore_stack: list[bool] = []
-        # Pre-call state captured by ``__call__`` so ``with suppress(on):``
-        # restores the state that existed *before* the call instead of leaking
-        # the in-block value. ``None`` means no call-form entry is pending.
-        self._pending_prior: bool | None = None
-
-    def __call__(self, on: bool = True) -> _MutateWarningSuppression:
-        """Set suppression state and return this context-capable object.
-
-        Toggling immediately keeps the bare ``suppress_mutate_warnings(True)``
-        session-level form working, while snapshotting the pre-call state lets a
-        ``with suppress_mutate_warnings(on):`` restore it on exit rather than
-        leaking the in-block value.
-
-        Parameters
-        ----------
-        on:
-            Whether mutate-in-place warnings should be suppressed.
-
-        Returns
-        -------
-        _MutateWarningSuppression
-            This suppression controller.
-        """
-
-        self._pending_prior = self._suppress
-        self._suppress = bool(on)
-        return self
-
-    def __enter__(self) -> _MutateWarningSuppression:
-        """Temporarily suppress mutate-in-place warnings.
-
-        Returns
-        -------
-        _MutateWarningSuppression
-            This suppression controller.
-        """
-
-        if self._pending_prior is not None:
-            prior = self._pending_prior
-            self._pending_prior = None
-        else:
-            prior = self._suppress
-        self._restore_stack.append(prior)
-        self._suppress = True
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        """Restore the suppression state active before the context.
-
-        Parameters
-        ----------
-        *exc:
-            Exception triple supplied by the context manager protocol.
-        """
-
-        self._pending_prior = None
-        self._suppress = self._restore_stack.pop() if self._restore_stack else False
-
-    @property
-    def is_suppressed(self) -> bool:
-        """Whether mutate-in-place warnings are currently suppressed."""
-
-        return self._suppress
 
 
 suppress_mutate_warnings = _MutateWarningSuppression()
@@ -407,517 +356,462 @@ def _merge_grouped_options(
             )
         values[group_field] = flat_value
         specified_fields = frozenset((*specified_fields, group_field))
-    return option_factory().from_values(values, specified_fields)
+    return _build_option(option_factory, values, specified_fields)
+
+
+def _build_option(
+    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
+) -> Any:
+    """Build an option object from resolved values through its (possibly private) builder."""
+
+    builder = getattr(option_factory, "_from_values", None)
+    if builder is None:
+        builder = option_factory.from_values
+    return builder(values, specified_fields)
 
 
 @dataclass(frozen=True, init=False)
 class CaptureOptions:
     """Grouped capture options for ``trace``.
 
-    Parameters
-    ----------
-    layers_to_save:
-        Activation layer selector to capture.
-    transform:
-        Optional callable applied once to the user input before ``model.forward``.
-    save_raw_input:
-        Raw user-input save policy for portable bundles. ``"small"`` stores a
-        bounded representation, ``True`` stores the full object, and ``False``
-        drops it when saving.
-    batch_render:
-        Raw-input batch rendering policy for visualization. Supported values are
-        ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and
-        ``"shape_only"``.
-    output_transform:
-        Optional callable applied once to the model output after ``model.forward``.
-    output_style:
-        Optional semantic output decode style.
-    output_head:
-        Optional live-output head to decode.
-    save_raw_output:
-        Raw model-output save policy for portable bundles. ``"small"`` stores a
-        bounded representation, ``True`` stores the full object, and ``False``
-        drops it when saving.
-    layer_visualizers:
-        Optional mapping from site selectors to per-layer thumbnail callables.
-    save_visualizations:
-        Whether rendered visualizer image files should be copied into portable bundles.
-    keep_orphans:
-        Whether island ops (computations unreachable from both the model inputs and
-        outputs) are retained in raw metadata and exposed via ``trace.orphans``. Defaults
-        to ``False`` (islands pruned); set ``True`` to surface them. Retained orphans do not
-        enter ``layer_list``/summaries; they live only on the ``trace.orphans`` accessor.
-    output_device:
-        Device placement for saved tensors.
-    save_arg_values:
-        Whether non-tensor function arguments are captured.
-    save_grads:
-        Backward gradient-retention policy. ``True`` captures all gradients,
-        ``False``/``None`` disables capture, and selectors restrict retention:
-        label strings/ordinal lists, ``tl.*`` selectors, and bare callables
-        are all honored (never collapsed to "all"). A bare callable is
-        evaluated once per FINALIZED op (a layer-like ctx, post-postprocess,
-        before any backward) and must return a strict ``bool``; only matching
-        ops receive gradient hooks.
-    save_code_context:
-        Whether source-text context is captured in addition to source identity.
-    save_rng_states:
-        Whether operation-level RNG states are captured.
-    random_seed:
-        Fixed seed used for deterministic capture. The capture snapshots the
-        global RNG states (Python ``random``, NumPy, torch CPU, and CUDA when
-        its RNG state is already live), reseeds every engine with this seed
-        for its own forward, and restores the snapshot on every exit path,
-        including a failed capture. Code after the capture therefore draws
-        the same numbers as it would without the capture. When ``None`` (the
-        default) the seed is drawn from a private entropy-seeded stream, not
-        the global ``random`` engine, so ``torch.manual_seed(k)`` before an
-        unseeded capture does NOT make the capture reproducible; pass
-        ``random_seed=`` explicitly for that. The seed used is recorded on
-        ``trace.random_seed``.
-    source_context_lines:
-        Number of source-context lines to store.
-    optimizer:
-        Optional optimizer used to annotate optimized parameters.
-    compute_input_output_distances:
-        Whether input/output graph distances are computed.
-    detach_saved_activations:
-        Whether saved tensors are detached from autograd. The default
-        ``False`` keeps saved activations graph-connected, which retains the
-        captured autograd graph alongside the payloads: measured ~1.48x the
-        saved-payload bytes live on a resnet18 capture, vs ~1.01x with
-        ``True``. Pass ``True`` for forward-only analysis when that
-        multiplier matters (R33).
-    recurrence_detection:
-        Whether repeated graph patterns are detected during postprocess.
-    intervention_ready:
-        Whether replay-template metadata is captured for intervention APIs.
-    capture_container_structure:
-        Whether to persist input and output container structure without
-        enabling intervention replay metadata.
-    hooks:
-        Optional live hook plan applied during capture.
-    unwrap_when_done:
-        Whether Torch functions are unwrapped after this call.
-    verbose:
-        Whether progress messages are printed.
-    backward_ready:
-        Whether capture keeps autograd-connected tensors for training workflows.
-    inference_only:
-        Whether capture wraps the user forward in ``torch.no_grad()``.
-    name:
-        Optional user-facing name for the returned log.
-    cache:
-        Whether to use the content-hash capture cache. The key covers model
-        tensor content (including per-tensor device and ``requires_grad``),
-        training flags, non-persistent buffers, module tree and ``forward``
-        code, plain instance attributes (bounded digest), user-registered
-        module hooks, inputs, and the capture configuration; closure cells,
-        globals referenced by ``forward``, and the interior state of opaque
-        attribute objects remain outside the key (documented boundary).
-        ``torchlens.clear_capture_cache()`` empties the cache.
-    cache_dir:
-        Optional directory for content-hash cache entries.
-    module_filter:
-        Optional THIRD save gate composed (AND) with ``save=`` /
-        ``layers_to_save``: an op's payload is retained only when the
-        save selection picks it AND this predicate returns truthy. The
-        predicate receives an op-record namespace (the legacy-shaped
-        ``SimpleNamespace`` of captured op fields such as ``func_name``,
-        ``layer_label``, and ``modules``), NEVER an
-        ``nn.Module`` instance — a filter written against modules (e.g.
-        ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
-        ZERO payloads. Returning ``False`` keeps metadata but skips payload
-        saving; a capture whose every selected payload was suppressed by
-        this gate emits a ``module_filter_zero_saved`` warning.
-    stop_after:
-        Inclusive stop-early site for torch captures (DOCUMENTED-UNSTABLE
-        spelling): capture halts immediately AFTER the named site is
-        captured, returning a partial halted trace that includes it. The
-        site compiles into the halt engine on emission identity: a string
-        halts at the first emission whose module address
-        (``"encoder.layer.4"``, at that module's exit boundary) or function
-        name (``"relu"``) matches, a live selector (``tl.func("relu")``,
-        ``tl.module(...)``) halts at its first match, and a callable
-        predicate halts when it returns True. Finalized postprocess labels
-        (``"relu_1_2"``) do not exist during capture and refuse typed
-        (``stop_after_site_not_live``). A selector-shaped site that never
-        fires refuses typed (``stop_after_never_fired``); a callable that
-        never fires warns. Cannot combine with ``halt=``
-        (``stop_after_halt_conflict``) or ``chunk_size``. Torch-only.
-    jax_control_flow:
-        Declared JAX control-flow policy. Backends other than torch reject
-        explicit use until their implementation phase supports it.
-    jax_max_control_flow_unroll:
-        Declared maximum JAX control-flow unroll count.
-    module_identity_mode:
-        Declared backend module-mode selection passthrough.
-    payload_policy:
-        Declared payload materialization/codec policy passthrough.
-    save_preview:
-        Non-torch preview backends' declared flag reserving extended ``save=``
-        semantics; the shipped torch ``save=`` kwarg is independent of it.
-    emit_nvtx:
-        Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
-        ranges around each logged operation. Range names carry call identity
-        (``torchlens::<op>#<call_id>``) and TorchLens's own bookkeeping calls
-        are separated under ``torchlens::internal::`` so the Nsight timeline
-        shows model work, not capture plumbing. NVTX markers are visible in
-        NVIDIA Nsight Systems and Nsight Compute timelines. The default is ``False``;
-        enabling it can add small per-op overhead. The option applies to full
-        ``tl.trace`` capture and is preserved through ``tl.record``-style
-        options, although sparse recording may only expose ranges for operations
-        it actually logs.
-    measure_python_peak_memory:
-        Whether the host-side forward-pass peak recorded in
-        ``Trace.forward_peak_memory`` additionally includes a ``tracemalloc``
-        Python-allocation peak. The default is ``False``: the CPU/MPS
-        measurement is then the cheap host resident-set-size (or MPS allocator)
-        delta alone, which reads ``0`` for models too small to move that
-        coarse-grained counter. Enabling it installs CPython's allocator hook
-        for the duration of the forward pass, which is precise for small models
-        but taxes every traced operation (measured at 1.7x-2.5x total capture
-        time on torchvision CNNs and ViTs), so it is opt-in. CUDA captures
-        report the true device peak and ignore this option.
-    distributed_witness:
-        Session-time witness level for collective boundary records captured
-        under the distributed opt-in. ``"none"`` (the default) records
-        structure and correlation only; ``"digest"`` additionally stores
-        byte-exact SHA-256 digests of each contribution at issue and each
-        destination at observed completion (redundant evidence that can only
-        DEMOTE a merge verdict, never rescue one -- and a synchronization cost
-        on accelerator captures). ``"payload"`` is reserved for the merge
-        artifact story and currently refuses. Like
-        ``measure_python_peak_memory`` this is a session-time knob: it changes
-        what capture pays for, not what a trace means, and load restores the
-        default. The per-boundary ``witness.policy_resolved`` field IS
-        portable evidence of what was captured.
-    save_budget:
-        Ceiling on the bytes of activation payload a single capture may retain,
-        enforced per device. ``"auto"`` (the default)
-        allows half of each device's *available* memory measured at that device's
-        first save; a float in ``(0, 1]`` sets a different fraction; an int sets
-        an absolute per-device byte cap; ``None`` disables budgeting. Crossing the
-        budget stops capture with
-        :class:`torchlens.errors.SaveBudgetExceededError`. The primary retained copy
-        is admitted before allocation from source-tensor bytes and retained storage
-        is alias-aware. This is not a general OOM guarantee: the model forward,
-        transform-only deltas, and cross-device temporaries can allocate before they
-        are knowable. Predicate-selected disk-only saves are exempt, while exhaustive
-        ``save="all"`` plus disk streaming remains budgeted until postprocess eviction.
-        Devices whose headroom cannot be measured are left unbudgeted and
-        emit a ``UserWarning`` on their first non-empty charge; use an absolute byte
-        cap to enforce those devices.
-    raise_on_nan:
-        Whether capture should stop at the first NaN or Inf tensor.
-    track_nonfinite:
-        Whether torch capture records a per-op finiteness verdict
-        (DOCUMENTED-UNSTABLE), served by ``Trace.nonfinite_ops`` /
-        ``Trace.nonfinite_coverage``; covers unsaved ops, never changes
-        control flow, reads device flags in one post-forward batch. A
-        session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
-    track_device_memory:
-        Whether torch capture samples device allocator counters around each op call, served by
-        ``torchlens.observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
-        opt-in, never resetting; allocated/reserved before/after, signed deltas, high-water ADVANCE
-        per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
-    structure_only:
-        Whether this capture runs under the structure-only contract
-        (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
-        no deprecation shim owed on rename). Structure-only capture records
-        the op graph, module hierarchy, parameter geometry, and per-op
-        shape/dtype as HYPOTHESES while every value-bearing claim is refused
-        typed or gated; value-dependent branches refuse with the user's
-        source line. Torch-only; the capability contract lives in
-        ``docs/reference/structure_only_capabilities.md``.
-    log_injections:
-        Whether computation inside intervention hooks is recorded as anchored
-        injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
-        (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
+        Parameters
+        ----------
+        input_transform:
+    Optional callable applied once to the user input before ``model.forward``.
+        save_raw_input:
+            Raw user-input save policy for portable bundles. ``"small"`` stores a
+            bounded representation, ``True`` stores the full object, and ``False``
+            drops it when saving.
+        batch_render:
+            Raw-input batch rendering policy for visualization. Supported values are
+            ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and
+            ``"shape_only"``.
+        output_transform:
+            Optional callable applied once to the model output after ``model.forward``.
+        save_raw_output:
+            Raw model-output save policy for portable bundles. ``"small"`` stores a
+            bounded representation, ``True`` stores the full object, and ``False``
+            drops it when saving.
+        layer_visualizers:
+            Optional mapping from site selectors to per-layer thumbnail callables.
+        save_visualizations:
+            Whether rendered visualizer image files should be copied into portable bundles.
+        keep_orphans:
+            Whether island ops (computations unreachable from both the model inputs and
+            outputs) are retained in raw metadata and exposed via ``trace.graph.orphans``. Defaults
+            to ``False`` (islands pruned); set ``True`` to surface them. Retained orphans do not
+            enter ``layer_list``/summaries; they live only on the ``trace.graph.orphans`` accessor.
+        output_device:
+            Device placement for saved tensors.
+        save_arg_values:
+            Whether non-tensor function arguments are captured.
+        save_grads:
+            Backward gradient-retention policy. ``True`` captures all gradients,
+            ``False``/``None`` disables capture, and selectors restrict retention:
+            label strings/ordinal lists, ``tl.*`` selectors, and bare callables
+            are all honored (never collapsed to "all"). A bare callable is
+            evaluated once per FINALIZED op (a layer-like ctx, post-postprocess,
+            before any backward) and must return a strict ``bool``; only matching
+            ops receive gradient hooks.
+        save_code_context:
+            Whether source-text context is captured in addition to source identity.
+        save_rng_states:
+            Whether operation-level RNG states are captured.
+        random_seed:
+            Fixed seed used for deterministic capture. The capture snapshots the
+            global RNG states (Python ``random``, NumPy, torch CPU, and CUDA when
+            its RNG state is already live), reseeds every engine with this seed
+            for its own forward, and restores the snapshot on every exit path,
+            including a failed capture. Code after the capture therefore draws
+            the same numbers as it would without the capture. When ``None`` (the
+            default) the seed is drawn from a private entropy-seeded stream, not
+            the global ``random`` engine, so ``torch.manual_seed(k)`` before an
+            unseeded capture does NOT make the capture reproducible; pass
+            ``seed=`` explicitly for that. The seed used is recorded on
+            ``trace.seed``.
+        source_context_lines:
+            Number of source-context lines to store.
+        optimizer:
+            Optional optimizer used to annotate optimized parameters.
+        compute_input_output_distances:
+            Whether input/output graph distances are computed.
+        detach_saved_activations:
+            Whether saved tensors are detached from autograd. The default
+            ``False`` keeps saved activations graph-connected, which retains the
+            captured autograd graph alongside the payloads: measured ~1.48x the
+            saved-payload bytes live on a resnet18 capture, vs ~1.01x with
+            ``True``. Pass ``True`` for forward-only analysis when that
+            multiplier matters (R33).
+        recurrence_detection:
+            Whether repeated graph patterns are detected during postprocess.
+        replayable:
+            Whether replay-template metadata is captured for intervention APIs.
+        capture_container_structure:
+            Whether to persist input and output container structure without
+            enabling intervention replay metadata.
+        hooks:
+            Optional live hook plan applied during capture.
+        unwrap_when_done:
+            Whether Torch functions are unwrapped after this call.
+        verbose:
+            Whether progress messages are printed.
+        backward_ready:
+            Whether capture keeps autograd-connected tensors for training workflows.
+        inference_only:
+            Whether capture wraps the user forward in ``torch.no_grad()``. When
+            omitted, a capture entered under ``torch.no_grad()`` or
+            ``torch.inference_mode()`` implies ``True`` unless ``backward_ready``,
+            ``save_grads`` or ``replayable`` asks for a backward; the
+            Trace reports the effective value. The implied value is cleared when
+            the forward re-enables grad (``torch.enable_grad()`` inside it) and an
+            output carries autograd history.
+        carry_state:
+            Whether the capture keeps the model state its forward changed
+            (forward-equivalent: norm running statistics, buffer writes, training
+            modes and plain attributes advance exactly as one direct ``model(x)``
+            would, the spelling ``trace.run(carry_state=True)`` uses; no capture
+            advances the caller's random streams under either setting). The default
+            ``False`` makes the capture a pure observer: buffers, random state,
+            training modes and plain instance attributes are restored afterwards,
+            on success and on failure. What the forward wrote to plain attributes
+            is recorded on the trace under either setting, so a value the forward
+            stashes on a module is read from
+            ``trace.modules[address].attribute_writes`` (``Module.attribute_writes``;
+            objects without a value snapshot are restored by identity only, see
+            the capture-state contract). A cache hit runs no forward, so nothing
+            advances (DOCUMENTED-UNSTABLE).
+        name:
+            Optional user-facing name for the returned log.
+        cache:
+            Whether to use the content-hash capture cache. The key covers model
+            tensor content (including per-tensor device and ``requires_grad``),
+            training flags, non-persistent buffers, module tree and ``forward``
+            code, plain instance attributes (bounded digest), user-registered
+            module hooks, inputs, and the capture configuration; closure cells,
+            globals referenced by ``forward``, and the interior state of opaque
+            attribute objects remain outside the key (documented boundary).
+            ``torchlens.clear_cache()`` empties the cache.
+        cache_dir:
+            Optional directory for content-hash cache entries.
+        module_filter:
+            Optional THIRD save gate composed (AND) with ``save=``: an op's
+            payload is retained only when the save selection picks it AND this
+            predicate returns truthy. The
+            predicate receives an op-record namespace (the legacy-shaped
+            ``SimpleNamespace`` of captured op fields such as ``func_name``,
+            ``layer_label``, and ``modules``), NEVER an
+            ``nn.Module`` instance — a filter written against modules (e.g.
+            ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
+            ZERO payloads. Returning ``False`` keeps metadata but skips payload
+            saving; a capture whose every selected payload was suppressed by
+            this gate emits a ``module_filter_zero_saved`` warning.
+        jax_control_flow:
+            Declared JAX control-flow policy. Backends other than torch reject
+            explicit use until their implementation phase supports it.
+        jax_max_control_flow_unroll:
+            Declared maximum JAX control-flow unroll count.
+        module_identity_mode:
+            Declared backend module-mode selection passthrough.
+        payload_policy:
+            Declared payload materialization/codec policy passthrough.
+        emit_nvtx:
+            Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
+            ranges around each logged operation. Range names carry call identity
+            (``torchlens::<op>#<call_id>``) and TorchLens's own bookkeeping calls
+            are separated under ``torchlens::internal::`` so the Nsight timeline
+            shows model work, not capture plumbing. NVTX markers are visible in
+            NVIDIA Nsight Systems and Nsight Compute timelines. The default is ``False``;
+            enabling it can add small per-op overhead. The option applies to full
+            ``tl.trace`` capture and is preserved through ``tl.record``-style
+            options, although sparse recording may only expose ranges for operations
+            it actually logs.
+        measure_python_peak_memory:
+            Whether the host-side forward-pass peak recorded in
+            ``Trace.cost.forward_peak_memory`` additionally includes a ``tracemalloc``
+            Python-allocation peak. On CPU it adds to the peak measured under
+            ``measure_host_peak_memory=True``; without that opt-in the CPU peak is
+            ``None`` and this probe fills only the peak pair's ``live`` value. A
+            measured CPU peak of 0 (a model too small to move the coarse-grained
+            resident counters) is recorded as ``None`` with
+            ``Trace.cost.forward_peak_memory_reason`` naming this option. Enabling it installs CPython's allocator hook
+            for the duration of the forward pass, which is precise for small models
+            but taxes every traced operation (measured at 1.7x-2.5x total capture
+            time on torchvision CNNs and ViTs), so it is opt-in. CUDA captures
+            report the true device peak and ignore this option.
+        distributed_witness:
+            Session-time witness level for collective boundary records captured
+            under the distributed opt-in. ``"none"`` (the default) records
+            structure and correlation only; ``"digest"`` additionally stores
+            byte-exact SHA-256 digests of each contribution at issue and each
+            destination at observed completion (redundant evidence that can only
+            DEMOTE a merge verdict, never rescue one -- and a synchronization cost
+            on accelerator captures). ``"payload"`` is reserved for the merge
+            artifact story and currently refuses. Like
+            ``measure_python_peak_memory`` this is a session-time knob: it changes
+            what capture pays for, not what a trace means, and load restores the
+            default. The per-boundary ``witness.policy_resolved`` field IS
+            portable evidence of what was captured.
+        save_budget:
+            Ceiling on the bytes of activation payload a single capture may retain,
+            enforced per device. ``"auto"`` (the default)
+            allows half of each device's *available* memory measured at that device's
+            first save; a float in ``(0, 1]`` sets a different fraction; an int sets
+            an absolute per-device byte cap; ``None`` disables budgeting. Crossing the
+            budget stops capture with
+            :class:`torchlens.errors.SaveBudgetExceededError`. The primary retained copy
+            is admitted before allocation from source-tensor bytes and retained storage
+            is alias-aware. This is not a general OOM guarantee: the model forward,
+            transform-only deltas, and cross-device temporaries can allocate before they
+            are knowable. Predicate-selected disk-only saves are exempt, while exhaustive
+            ``save="all"`` plus disk streaming remains budgeted until postprocess eviction.
+            Devices whose headroom cannot be measured are left unbudgeted and
+            emit a ``UserWarning`` on their first non-empty charge; use an absolute byte
+            cap to enforce those devices.
+        on_nonfinite:
+            Non-finite (NaN or Inf) policy for torch captures. ``"ignore"``
+            (the default) neither checks nor records. ``"track"`` records a
+            per-op finiteness verdict, served by ``Trace.nonfinite_ops`` /
+            ``Trace.nonfinite_coverage``; covers unsaved ops, never changes
+            control flow, reads device flags in one post-forward batch (a
+            session-time knob; doc: ``docs/reference/capture_outcomes.md``).
+            ``"warn"`` tracks the same way and, once per capture, warns
+            ``capture_nonfinite_detected`` naming the first non-finite op when
+            any op produced one. ``"raise"`` stops the capture at the first
+            non-finite tensor and raises. Cannot combine with
+            ``structure_only=True`` except as ``"ignore"``.
+        track_device_memory:
+            Whether torch capture samples device allocator counters around each op call, served by
+            ``torchlens._observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
+            opt-in, never resetting; allocated/reserved before/after, signed deltas, high-water ADVANCE
+            per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
+        structure_only:
+            Whether this capture runs under the structure-only contract
+            (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
+            no deprecation shim owed on rename). Structure-only capture records
+            the op graph, module hierarchy, parameter geometry, and per-op
+            shape/dtype as HYPOTHESES while every value-bearing claim is refused
+            typed or gated; value-dependent branches refuse with the user's
+            source line. Torch-only; the capability contract lives in
+            ``docs/reference/structure_only_capabilities.md``.
+        log_injections:
+            Whether computation inside intervention hooks is recorded as anchored
+            injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
+            (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
+        measure_host_peak_memory:
+            Whether CPU captures measure ``Trace.cost.forward_peak_memory`` and
+            ``Trace.cost.backward_peak_memory`` (a session-time knob).
+            Measuring needs a per-bracket reset of the process-wide resident high-water
+            mark (Linux ``VmHWM``), which also resets the caller's own ``VmHWM`` and
+            ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
+            ``False`` writes nothing: CPU peaks read ``None`` with a reason naming this
+            option. CUDA peaks and the MPS allocator delta ignore it.
+        activation_transform:
+            Optional transform applied to each saved activation before storage
+            (``torchlens.UserTransformError`` on a transform failure).
+        grad_transform:
+            Optional transform applied to each saved gradient before storage.
+        save_raw_activations:
+            Whether raw activations remain available when transformed.
+        save_raw_grads:
+            Whether raw gradients remain available when transformed.
+        save_mode:
+            Tensor save policy: ``"copy"`` (the safe cloning default),
+            ``"reference"`` (keep the live tensor), ``"view"`` or
+            ``"cpu_async"``.
+        reconstruction_ready:
+            Whether the capture keeps what tensor reconstruction needs.
+        lookback:
+            Number of preceding ops kept in the live predicate window
+            (``tl.followed_by`` / ``tl.preceded_by`` reach); ``0`` disables it.
+        lookback_payload_policy:
+            What the lookback window retains: ``"metadata_only"`` (the default)
+            or a payload-retaining policy.
+        grouping:
+            Postprocess grouping knob (UNSTABLE, closed vocabulary); only
+            ``"structural"`` (the default) is entry-legal today.
+        jax_static_argnums:
+            Static argument positions for ``jax.make_jaxpr`` when
+            ``backend="jax"``; refused on other backends.
+        grad_options:
+            Backend gradient options (``jax``, ``mlx``, ``tinygrad``,
+            ``paddle`` and ``tf`` only); refused on torch.
+        chunk_size:
+            Chunked-forward batch size; ``None`` runs one forward. Cannot
+            combine with ``stop_after=``.
+        aten_ops:
+            Whether the capture records the public ATen operations that each logged
+            torch call dispatched to, served by ``Op.aten_ops`` and ``Trace.aten_ops``
+            (a session-time knob; ``Trace.has_aten_ops`` reports it after capture or
+            load). Recording installs a dispatch mode for the forward pass and for
+            ``Trace.backward()`` with ``backward_ready=True``, so it is opt-in. The
+            default ``False`` installs no dispatch mode and the accessors raise
+            ``AtenOpsUnavailableError``. GPU kernel recording is out of scope.
 
-    Examples
-    --------
-    >>> opts = CaptureOptions(layers_to_save=["fc1"], random_seed=0)
-    >>> opts.layers_to_save
-    ['fc1']
+        Examples
+        --------
+        >>> opts = CaptureOptions(seed=0)
+        >>> opts.seed
+        0
     """
 
-    layers_to_save: str | list[Any] | None = "all"
-    transform: Callable[[Any], Any] | None = None
+    _layers_to_save: ClassVar[Any] = "all"
+    _layers_to_save_explicit: ClassVar[bool] = False
+    input_transform: Callable[[Any], Any] | None = None
     save_raw_input: str | bool = "small"
     batch_render: str = "auto"
     output_transform: Callable[[Any], Any] | None = None
-    output_style: str | None = None
-    output_head: str | None = None
-    save_raw_output: str | bool = "small"
+    save_transformed_output: str | bool = "small"
     layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
     save_visualizations: bool = False
     keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
-    save_arg_values: bool = False
+    save_args: bool = False
     save_grads: bool | str | list[Any] | Callable[[Any], Any] | None = None
     capture_tensor_grad_hooks: bool = True
-    save_code_context: bool = False
-    save_rng_states: bool = False
-    random_seed: int | None = None
+    save_source_context: bool = False
+    save_rng: bool = False
+    seed: int | None = None
     source_context_lines: int = 7
     optimizer: Any = None
     compute_input_output_distances: bool = True
     detach_saved_activations: bool = False
     recurrence_detection: bool = True
-    intervention_ready: bool = False
+    replayable: bool = False
     capture_container_structure: bool = False
     hooks: Any | None = None
     unwrap_when_done: bool = False
     verbose: bool = False
     backward_ready: bool = False
     inference_only: bool = False
+    carry_state: bool = False
     name: str | None = None
     cache: bool = False
     cache_dir: str | Path | None = None
     module_filter: Callable[[Any], bool] | None = None
-    stop_after: Any | None = None
     jax_control_flow: Literal["reject", "unroll", "region"] = "unroll"
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
     payload_policy: str | None = None
-    save_preview: bool = False
     emit_nvtx: bool = False
     measure_python_peak_memory: bool = False
     save_budget: SaveBudgetOption = "auto"
     distributed_witness: str = "none"
-    raise_on_nan: bool = False
-    track_nonfinite: bool = False
+    on_nonfinite: OnNonfiniteLiteral = "ignore"
     track_device_memory: bool = False
     structure_only: bool = False
     log_injections: bool = False
+    measure_host_peak_memory: bool = False
+    activation_transform: _ActivationPostfunc | None = None
+    grad_transform: _GradientPostfunc | None = None
+    save_raw_activations: bool = True
+    save_raw_grads: bool = True
+    save_mode: SaveMode = "copy"
+    reconstruction_ready: bool = False
+    lookback: int = 0
+    lookback_payload_policy: str = "metadata_only"
+    grouping: str = "structural"
+    jax_static_argnums: int | Sequence[int] | None = None
+    grad_options: Any | None = None
+    chunk_size: int | None = None
+    aten_ops: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
-        transform: Callable[[Any], Any] | None | MissingType = MISSING,
+        input_transform: Callable[[Any], Any] | None | MissingType = MISSING,
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
-        output_style: str | None | MissingType = MISSING,
-        output_head: str | None | MissingType = MISSING,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None | MissingType = MISSING,
         save_visualizations: bool | MissingType = MISSING,
         keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
-        save_arg_values: bool | MissingType = MISSING,
+        save_args: bool | MissingType = MISSING,
         save_grads: bool | str | list[Any] | Callable[[Any], Any] | None | MissingType = MISSING,
         capture_tensor_grad_hooks: bool | MissingType = MISSING,
-        save_code_context: bool | MissingType = MISSING,
-        save_rng_states: bool | MissingType = MISSING,
-        random_seed: int | None | MissingType = MISSING,
+        save_source_context: bool | MissingType = MISSING,
+        save_rng: bool | MissingType = MISSING,
+        seed: int | None | MissingType = MISSING,
         source_context_lines: int | MissingType = MISSING,
         optimizer: Any | MissingType = MISSING,
         compute_input_output_distances: bool | MissingType = MISSING,
         detach_saved_activations: bool | MissingType = MISSING,
         recurrence_detection: bool | MissingType = MISSING,
-        intervention_ready: bool | MissingType = MISSING,
+        replayable: bool | MissingType = MISSING,
         capture_container_structure: bool | MissingType = MISSING,
         hooks: Any | MissingType = MISSING,
         unwrap_when_done: bool | MissingType = MISSING,
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         inference_only: bool | MissingType = MISSING,
+        carry_state: bool | MissingType = MISSING,
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
         module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
-        stop_after: Any | None | MissingType = MISSING,
         jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
         payload_policy: str | None | MissingType = MISSING,
-        save_preview: bool | MissingType = MISSING,
         emit_nvtx: bool | MissingType = MISSING,
         measure_python_peak_memory: bool | MissingType = MISSING,
         save_budget: SaveBudgetOption | MissingType = MISSING,
         distributed_witness: str | MissingType = MISSING,
-        raise_on_nan: bool | MissingType = MISSING,
+        on_nonfinite: OnNonfiniteLiteral | MissingType = MISSING,
         *,
-        track_nonfinite: bool | MissingType = MISSING,
         track_device_memory: bool | MissingType = MISSING,
         structure_only: bool | MissingType = MISSING,
         log_injections: bool | MissingType = MISSING,
+        measure_host_peak_memory: bool | MissingType = MISSING,
+        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
+        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
+        save_raw_activations: bool | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
+        save_mode: SaveMode | MissingType = MISSING,
+        reconstruction_ready: bool | MissingType = MISSING,
+        lookback: int | MissingType = MISSING,
+        lookback_payload_policy: str | MissingType = MISSING,
+        grouping: str | MissingType = MISSING,
+        jax_static_argnums: int | Sequence[int] | None | MissingType = MISSING,
+        grad_options: Any | None | MissingType = MISSING,
+        chunk_size: int | None | MissingType = MISSING,
+        aten_ops: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
-        specified_fields: set[str] = set()
+        supplied = locals().copy()  # every parameter is named after its field
+        specified: set[str] = set()
         values: dict[str, Any] = {
-            "layers_to_save": _resolve_option_value(
-                "layers_to_save", layers_to_save, "all", specified_fields
-            ),
-            "transform": _resolve_option_value("transform", transform, None, specified_fields),
-            "save_raw_input": _resolve_option_value(
-                "save_raw_input", save_raw_input, "small", specified_fields
-            ),
-            "batch_render": _resolve_option_value(
-                "batch_render", batch_render, "auto", specified_fields
-            ),
-            "output_transform": _resolve_option_value(
-                "output_transform", output_transform, None, specified_fields
-            ),
-            "output_style": _resolve_option_value(
-                "output_style", output_style, None, specified_fields
-            ),
-            "output_head": _resolve_option_value(
-                "output_head", output_head, None, specified_fields
-            ),
-            "save_raw_output": _resolve_option_value(
-                "save_raw_output", save_raw_output, "small", specified_fields
-            ),
-            "layer_visualizers": _resolve_option_value(
-                "layer_visualizers", layer_visualizers, None, specified_fields
-            ),
-            "save_visualizations": _resolve_option_value(
-                "save_visualizations", save_visualizations, False, specified_fields
-            ),
-            "keep_orphans": _resolve_option_value(
-                "keep_orphans", keep_orphans, False, specified_fields
-            ),
-            "output_device": _resolve_option_value(
-                "output_device", output_device, "same", specified_fields
-            ),
-            "save_arg_values": _resolve_option_value(
-                "save_arg_values", save_arg_values, False, specified_fields
-            ),
-            "save_grads": _resolve_option_value("save_grads", save_grads, None, specified_fields),
-            "capture_tensor_grad_hooks": _resolve_option_value(
-                "capture_tensor_grad_hooks",
-                capture_tensor_grad_hooks,
-                True,
-                specified_fields,
-            ),
-            "save_code_context": _resolve_option_value(
-                "save_code_context", save_code_context, False, specified_fields
-            ),
-            "save_rng_states": _resolve_option_value(
-                "save_rng_states", save_rng_states, False, specified_fields
-            ),
-            "random_seed": _resolve_option_value(
-                "random_seed", random_seed, None, specified_fields
-            ),
-            "source_context_lines": _resolve_option_value(
-                "source_context_lines", source_context_lines, 7, specified_fields
-            ),
-            "optimizer": _resolve_option_value("optimizer", optimizer, None, specified_fields),
-            "compute_input_output_distances": _resolve_option_value(
-                "compute_input_output_distances",
-                compute_input_output_distances,
-                True,
-                specified_fields,
-            ),
-            "detach_saved_activations": _resolve_option_value(
-                "detach_saved_activations", detach_saved_activations, False, specified_fields
-            ),
-            "recurrence_detection": _resolve_option_value(
-                "recurrence_detection", recurrence_detection, True, specified_fields
-            ),
-            "intervention_ready": _resolve_option_value(
-                "intervention_ready", intervention_ready, False, specified_fields
-            ),
-            "capture_container_structure": _resolve_option_value(
-                "capture_container_structure",
-                capture_container_structure,
-                False,
-                specified_fields,
-            ),
-            "hooks": _resolve_option_value("hooks", hooks, None, specified_fields),
-            "unwrap_when_done": _resolve_option_value(
-                "unwrap_when_done", unwrap_when_done, False, specified_fields
-            ),
-            "verbose": _resolve_option_value("verbose", verbose, False, specified_fields),
-            "backward_ready": _resolve_option_value(
-                "backward_ready", backward_ready, False, specified_fields
-            ),
-            "inference_only": _resolve_option_value(
-                "inference_only", inference_only, False, specified_fields
-            ),
-            "name": _resolve_option_value("name", name, None, specified_fields),
-            "cache": _resolve_option_value("cache", cache, False, specified_fields),
-            "cache_dir": _resolve_option_value("cache_dir", cache_dir, None, specified_fields),
-            "module_filter": _resolve_option_value(
-                "module_filter", module_filter, None, specified_fields
-            ),
-            "stop_after": _resolve_option_value("stop_after", stop_after, None, specified_fields),
-            "jax_control_flow": _resolve_option_value(
-                "jax_control_flow", jax_control_flow, "unroll", specified_fields
-            ),
-            "jax_max_control_flow_unroll": _resolve_option_value(
-                "jax_max_control_flow_unroll",
-                jax_max_control_flow_unroll,
-                64,
-                specified_fields,
-            ),
-            "module_identity_mode": _resolve_option_value(
-                "module_identity_mode", module_identity_mode, None, specified_fields
-            ),
-            "payload_policy": _resolve_option_value(
-                "payload_policy", payload_policy, None, specified_fields
-            ),
-            "save_preview": _resolve_option_value(
-                "save_preview", save_preview, False, specified_fields
-            ),
-            "emit_nvtx": _resolve_option_value("emit_nvtx", emit_nvtx, False, specified_fields),
-            "measure_python_peak_memory": _resolve_option_value(
-                "measure_python_peak_memory",
-                measure_python_peak_memory,
-                False,
-                specified_fields,
-            ),
-            "save_budget": _resolve_option_value(
-                "save_budget",
-                save_budget,
-                "auto",
-                specified_fields,
-            ),
-            "distributed_witness": _resolve_option_value(
-                "distributed_witness",
-                distributed_witness,
-                "none",
-                specified_fields,
-            ),
-            "raise_on_nan": _resolve_option_value(
-                "raise_on_nan", raise_on_nan, False, specified_fields
-            ),
-            "track_nonfinite": _resolve_option_value(
-                "track_nonfinite", track_nonfinite, False, specified_fields
-            ),
-            "track_device_memory": _resolve_option_value(
-                "track_device_memory", track_device_memory, False, specified_fields
-            ),
-            "structure_only": _resolve_option_value(
-                "structure_only", structure_only, False, specified_fields
-            ),
-            "log_injections": _resolve_option_value(
-                "log_injections", log_injections, False, specified_fields
-            ),
+            field_name: _resolve_option_value(
+                field_name, supplied[field_name], _CAPTURE_DEFAULTS[field_name], specified
+            )
+            for field_name in _CAPTURE_FIELDS
         }
         _validate_capture_values(values)
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
-        object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
+        object.__setattr__(self, "_specified_fields", frozenset(specified))
 
     def as_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
 
         return {field_name: getattr(self, field_name) for field_name in _CAPTURE_FIELDS}
 
-    def is_field_explicit(self, field_name: str) -> bool:
-        """Return whether a field was explicitly supplied by the caller."""
+    def _is_field_explicit(self, field_name: str) -> bool:
+        """Return whether a field was explicitly supplied by the caller (private)."""
 
         return _field_is_explicit(self, field_name)
 
     @classmethod
-    def from_values(
-        cls, values: Mapping[str, Any], specified_fields: frozenset[str]
+    def _from_values(
+        cls,
+        values: Mapping[str, Any],
+        specified_fields: frozenset[str],
+        *,
+        _layers_to_save: Any = "all",
+        _layers_to_save_explicit: bool = False,
     ) -> CaptureOptions:
-        """Build an instance from already-resolved field values.
+        """Build an instance from already-resolved field values (private).
 
         Applies the same invariants as ``__init__`` (via
         :func:`_validate_capture_values`) so this construction path -- used by
@@ -928,13 +822,26 @@ class CaptureOptions:
         _validate_capture_values(values)
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _CAPTURE_FIELDS, values)
+        object.__setattr__(instance, "_layers_to_save", _layers_to_save)
+        object.__setattr__(instance, "_layers_to_save_explicit", _layers_to_save_explicit)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
 
 
+# The public default of each capture field is its dataclass declaration above.
+_CAPTURE_DEFAULTS: Final[Mapping[str, Any]] = {
+    option_field.name: option_field.default
+    for option_field in fields(CaptureOptions)
+    if option_field.name in _CAPTURE_FIELDS
+}
+
+
 @dataclass(frozen=True, init=False)
-class SaveOptions:
-    """Grouped out-save options for ``trace``.
+class _SaveTransforms:
+    """Internal carrier of the save-transform fields of :class:`CaptureOptions`.
+
+    Built by :func:`_save_transforms_from_capture`; not a public option
+    class (``tl.options.SaveOptions`` was folded into ``CaptureOptions``).
 
     Parameters
     ----------
@@ -949,23 +856,23 @@ class SaveOptions:
 
     Examples
     --------
-    >>> opts = SaveOptions(activation_transform=lambda x: x.detach())
+    >>> opts = _SaveTransforms(activation_transform=lambda x: x.detach())
     >>> opts.save_raw_activations
     True
     """
 
-    activation_transform: ActivationPostfunc | None = None
-    grad_transform: GradientPostfunc | None = None
+    activation_transform: _ActivationPostfunc | None = None
+    grad_transform: _GradientPostfunc | None = None
     save_raw_activations: bool = True
     save_raw_gradients: bool = True
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
+        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
-        save_raw_gradients: bool | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen save option bundle."""
 
@@ -981,7 +888,7 @@ class SaveOptions:
                 "save_raw_activations", save_raw_activations, True, specified_fields
             ),
             "save_raw_gradients": _resolve_option_value(
-                "save_raw_gradients", save_raw_gradients, True, specified_fields
+                "save_raw_gradients", save_raw_grads, True, specified_fields
             ),
         }
         _set_frozen_fields(self, _SAVE_FIELDS, values)
@@ -1000,7 +907,7 @@ class SaveOptions:
     @classmethod
     def from_values(
         cls, values: Mapping[str, Any], specified_fields: frozenset[str]
-    ) -> SaveOptions:
+    ) -> _SaveTransforms:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
@@ -1011,10 +918,15 @@ class SaveOptions:
 
 #: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
 _REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
-    "mode": "use VisualizationOptions.view -- the mode alias was removed",
+    "mode": "use VisualizationOptions.rolled (a bool) -- the mode alias was removed",
+    "view": "use VisualizationOptions.rolled (True for the rolled graph); a picture is drawn whenever visualization options are passed",
+    "save_only": "use VisualizationOptions.open_viewer (True opens the viewer; the default never does)",
+    "for_paper": 'use VisualizationOptions.theme="paper"',
+    "return_graph": "read Drawing.dot on the returned Drawing",
     "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
     "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
     "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
+    "animate": "use trace.animate(site) -- the animation is its own door, not a draw keyword",
 }
 
 
@@ -1024,14 +936,18 @@ class VisualizationOptions:
 
     Parameters
     ----------
-    view:
-        Graph view: ``"none"``, ``"rolled"``, or ``"unrolled"``.
+    graph:
+        Which graph: ``"forward"``, ``"backward"`` or ``"combined"``.
+    rolled:
+        ``True`` draws each repeated module once (the rolled graph); ``False``
+        (default) draws every pass.
     depth:
         Maximum module nesting depth shown in the graph.
     container_path:
         Output path stem for rendered graph files.
-    save_only:
-        Whether rendering saves without opening a viewer.
+    open_viewer:
+        ``True`` opens the written picture in the system viewer (default
+        ``False``: never).
     file_format:
         Graph output file format.
     show_buffers:
@@ -1071,7 +987,9 @@ class VisualizationOptions:
     intervention_mode:
         Intervention overlay mode.
     show_cone:
-        Whether intervention cones are highlighted.
+        Whether the nodes and arrows an intervention changed downstream get the
+        translucent purple highlighter (off by default; the edited node is
+        always marked).
     node_overlay:
         Built-in overlay name, an external label->value score mapping, or a callable
         invoked as ``fn(node)`` to compute a per-node overlay value.
@@ -1098,25 +1016,22 @@ class VisualizationOptions:
         Optional Graphviz font size.
     dpi:
         Optional Graphviz output DPI.
-    for_paper:
-        Convenience toggle forcing the paper theme preset.
-    return_graph:
-        Whether rendering returns the renderer object instead of DOT source.
     order_siblings:
         Whether Graphviz ``dot`` renders should verify and apply execution-order
         placement for true parallel siblings.
 
     Examples
     --------
-    >>> opts = VisualizationOptions(view="rolled", depth=2)
+    >>> opts = VisualizationOptions(rolled=True, depth=2)
     >>> opts.layout
     'auto'
     """
 
-    view: VisModeLiteral = "none"
+    graph: Literal["forward", "backward", "combined"] = "forward"
+    rolled: bool = False
     depth: int = 1000
     container_path: str = "graph.gv"
-    save_only: bool = False
+    open_viewer: bool = False
     file_format: str = "pdf"
     show_buffers: BufferVisibilityLiteral = "meaningful"
     direction: VisDirectionLiteral = "bottomup"
@@ -1135,28 +1050,27 @@ class VisualizationOptions:
     renderer: VisRendererLiteral = "graphviz"
     theme: str = "torchlens"
     intervention_mode: VisInterventionModeLiteral = "node_mark"
-    show_cone: bool = True
+    show_cone: bool = False
     node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None
     node_label_fields: list[str] | None = None
     show_legend: bool | None = None
     color_by: str | Callable[[Any], Any] | None = None
     size_by: str | Callable[[Any], Any] | None = None
-    scale: str | None = None
+    size_scale: str | None = None
     stack_by: str | bool | Callable[[Any], Any] | None = None
     show_redundant_args: bool = False
     font_size: int | None = None
     dpi: int | None = None
-    for_paper: bool = False
-    return_graph: bool = False
     order_siblings: bool = True
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
-        view: VisModeLiteral | MissingType = MISSING,
+        graph: Literal["forward", "backward", "combined"] | MissingType = MISSING,
+        rolled: bool | MissingType = MISSING,
         depth: int | MissingType = MISSING,
         container_path: str | MissingType = MISSING,
-        save_only: bool | MissingType = MISSING,
+        open_viewer: bool | MissingType = MISSING,
         file_format: str | MissingType = MISSING,
         show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
@@ -1183,25 +1097,26 @@ class VisualizationOptions:
         show_legend: bool | None | MissingType = MISSING,
         color_by: str | Callable[[Any], Any] | None | MissingType = MISSING,
         size_by: str | Callable[[Any], Any] | None | MissingType = MISSING,
-        scale: str | None | MissingType = MISSING,
+        size_scale: str | None | MissingType = MISSING,
         stack_by: str | bool | Callable[[Any], Any] | None | MissingType = MISSING,
         show_redundant_args: bool | MissingType = MISSING,
         font_size: int | None | MissingType = MISSING,
         dpi: int | None | MissingType = MISSING,
-        for_paper: bool | MissingType = MISSING,
-        return_graph: bool | MissingType = MISSING,
         order_siblings: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen visualization option bundle."""
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
-            "view": _resolve_option_value("view", view, "none", specified_fields),
+            "graph": _resolve_option_value("graph", graph, "forward", specified_fields),
+            "rolled": _resolve_option_value("rolled", rolled, False, specified_fields),
             "depth": _resolve_option_value("depth", depth, 1000, specified_fields),
             "container_path": _resolve_option_value(
                 "container_path", container_path, "graph.gv", specified_fields
             ),
-            "save_only": _resolve_option_value("save_only", save_only, False, specified_fields),
+            "open_viewer": _resolve_option_value(
+                "open_viewer", open_viewer, False, specified_fields
+            ),
             "file_format": _resolve_option_value(
                 "file_format", file_format, "pdf", specified_fields
             ),
@@ -1248,7 +1163,7 @@ class VisualizationOptions:
             "intervention_mode": _resolve_option_value(
                 "intervention_mode", intervention_mode, "node_mark", specified_fields
             ),
-            "show_cone": _resolve_option_value("show_cone", show_cone, True, specified_fields),
+            "show_cone": _resolve_option_value("show_cone", show_cone, False, specified_fields),
             "node_overlay": _resolve_option_value(
                 "node_overlay", node_overlay, None, specified_fields
             ),
@@ -1260,17 +1175,13 @@ class VisualizationOptions:
             ),
             "color_by": _resolve_option_value("color_by", color_by, None, specified_fields),
             "size_by": _resolve_option_value("size_by", size_by, None, specified_fields),
-            "scale": _resolve_option_value("scale", scale, None, specified_fields),
+            "size_scale": _resolve_option_value("size_scale", size_scale, None, specified_fields),
             "stack_by": _resolve_option_value("stack_by", stack_by, None, specified_fields),
             "show_redundant_args": _resolve_option_value(
                 "show_redundant_args", show_redundant_args, False, specified_fields
             ),
             "font_size": _resolve_option_value("font_size", font_size, None, specified_fields),
             "dpi": _resolve_option_value("dpi", dpi, None, specified_fields),
-            "for_paper": _resolve_option_value("for_paper", for_paper, False, specified_fields),
-            "return_graph": _resolve_option_value(
-                "return_graph", return_graph, False, specified_fields
-            ),
             "order_siblings": _resolve_option_value(
                 "order_siblings", order_siblings, True, specified_fields
             ),
@@ -1291,14 +1202,14 @@ class VisualizationOptions:
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
 
-            from .utils.facade import refuse_removed_member
+            from ._utils.facade import refuse_removed_member
 
             refuse_removed_member(
                 "VisualizationOptions", name, _REMOVED_VISUALIZATION_OPTION_MEMBERS
             )
             return object.__getattribute__(self, name)
 
-    def as_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
 
         return {field_name: getattr(self, field_name) for field_name in _VISUALIZATION_FIELDS}
@@ -1348,6 +1259,11 @@ class ReplayOptions:
     chunk_size:
         Forward chunk size for rerun chunking sugar. Splits positional input
         along dimension 0 and appends compatible chunks.
+    allow_changed_params:
+        Replay with a parameter's current value when it changed since capture
+        (an optimizer step, ``load_state_dict``, an in-place edit). Default
+        ``False`` refuses with ``replay_param_changed_since_capture``; ``True``
+        names the parameters used in ``trace.last_run["replayed_with_changed_params"]``.
 
     Examples
     --------
@@ -1361,15 +1277,17 @@ class ReplayOptions:
     differentiable: bool = False
     append: bool = False
     chunk_size: int | None = None
+    allow_changed_params: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- an options group's constructor takes one keyword per field
         self,
         strict: bool | MissingType = MISSING,
         hooks: dict[Any, Any] | None | MissingType = MISSING,
         differentiable: bool | MissingType = MISSING,
         append: bool | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
+        allow_changed_params: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen replay option bundle."""
 
@@ -1382,6 +1300,9 @@ class ReplayOptions:
             ),
             "append": _resolve_option_value("append", append, False, specified_fields),
             "chunk_size": _resolve_option_value("chunk_size", chunk_size, None, specified_fields),
+            "allow_changed_params": _resolve_option_value(
+                "allow_changed_params", allow_changed_params, False, specified_fields
+            ),
         }
         _set_frozen_fields(self, _REPLAY_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
@@ -1420,6 +1341,12 @@ class InterventionOptions:
         Whether root-mutation warnings are suppressed for intentional mutation.
     strict:
         Whether selector and propagation checks raise instead of warning.
+    allow_changed_params:
+        Let the replay engine use a parameter's current value when it changed
+        since capture. Default ``False`` refuses with
+        ``replay_param_changed_since_capture``; ``True`` names the parameters used
+        in ``trace.last_run["replayed_with_changed_params"]``. The rerun engine
+        always runs the live model and ignores it.
 
     Examples
     --------
@@ -1431,6 +1358,7 @@ class InterventionOptions:
     engine: str = "auto"
     confirm_mutation: bool = False
     strict: bool = False
+    allow_changed_params: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -1438,6 +1366,7 @@ class InterventionOptions:
         engine: str | MissingType = MISSING,
         confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
+        allow_changed_params: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen intervention option bundle."""
 
@@ -1448,6 +1377,9 @@ class InterventionOptions:
                 "confirm_mutation", confirm_mutation, False, specified_fields
             ),
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
+            "allow_changed_params": _resolve_option_value(
+                "allow_changed_params", allow_changed_params, False, specified_fields
+            ),
         }
         _set_frozen_fields(self, _INTERVENTION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
@@ -1477,28 +1409,28 @@ class InterventionOptions:
 
 
 @dataclass(frozen=True, init=False)
-class StreamingOptions:
+class StorageOptions:
     """Grouped streaming-save options for ``trace``.
 
     Parameters
     ----------
-    bundle_path:
+    path:
         Portable bundle directory for streamed out saves.
     retain_in_memory:
         Whether streamed outs remain in memory.
-    out_callback:
+    on_save:
         Callback invoked with ``(label, tensor)`` for each saved out.
     include_custom_attributes:
         Whether harvested module attributes (``Module.custom_attributes``)
         are persisted verbatim in the streamed bundle. The streamed-bundle
-        counterpart of ``tl.save(..., include_custom_attributes=)`` (R62:
+        counterpart of ``trace.save(..., include_custom_attributes=)`` (R62:
         the streaming path had no opt-out and reopened the token-leak class
         the save-path fix closed).
     include_buffer_values:
         Whether captured pre-forward buffer values
         (``Trace._buffer_initial_values``) are persisted in the streamed
         bundle. The streamed-bundle counterpart of
-        ``tl.save(..., include_buffer_values=)`` (R62 buffer extension).
+        ``trace.save(..., include_buffer_values=)`` (R62 buffer extension).
     async_writes:
         Whether ``trace(..., storage=...)`` blob writes overlap forward
         capture through a bounded single-worker pipeline instead of pausing
@@ -1518,14 +1450,14 @@ class StreamingOptions:
 
     Examples
     --------
-    >>> opts = StreamingOptions(bundle_path="run.tlspec", retain_in_memory=False)
+    >>> opts = StorageOptions(path="run.tlspec", retain_in_memory=False)
     >>> opts.retain_in_memory
     False
     """
 
-    bundle_path: str | Path | None = None
+    path: str | Path | None = None
     retain_in_memory: bool = True
-    out_callback: Callable[[str, torch.Tensor], None] | None = None
+    on_save: Callable[[str, torch.Tensor], None] | None = None
     include_custom_attributes: bool = True
     include_buffer_values: bool = True
     async_writes: bool | None = None
@@ -1534,9 +1466,9 @@ class StreamingOptions:
 
     def __init__(
         self,
-        bundle_path: str | Path | None | MissingType = MISSING,
+        path: str | Path | None | MissingType = MISSING,
         retain_in_memory: bool | MissingType = MISSING,
-        out_callback: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
+        on_save: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
         *,
         include_custom_attributes: bool | MissingType = MISSING,
         include_buffer_values: bool | MissingType = MISSING,
@@ -1547,15 +1479,11 @@ class StreamingOptions:
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
-            "bundle_path": _resolve_option_value(
-                "bundle_path", bundle_path, None, specified_fields
-            ),
+            "path": _resolve_option_value("path", path, None, specified_fields),
             "retain_in_memory": _resolve_option_value(
                 "retain_in_memory", retain_in_memory, True, specified_fields
             ),
-            "out_callback": _resolve_option_value(
-                "out_callback", out_callback, None, specified_fields
-            ),
+            "on_save": _resolve_option_value("on_save", on_save, None, specified_fields),
             "include_custom_attributes": _resolve_option_value(
                 "include_custom_attributes", include_custom_attributes, True, specified_fields
             ),
@@ -1587,7 +1515,7 @@ class StreamingOptions:
         cls,
         values: Mapping[str, Any],
         specified_fields: frozenset[str],
-    ) -> StreamingOptions:
+    ) -> StorageOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
@@ -1604,47 +1532,47 @@ def to_disk(
     include_buffer_values: bool = True,
     async_writes: bool | None = None,
     max_pending_bytes: int | None = None,
-) -> StreamingOptions:
+) -> StorageOptions:
     """Return storage options that stream selected payloads to a bundle.
 
     Parameters
     ----------
     path:
-        Destination bundle directory. The path must not already exist.
+        Destination bundle directory; it must not exist yet (``bundle_path_exists``).
     retain_in_memory:
-        Whether streamed payloads should also remain as RAM copies.
+        Whether streamed payloads also remain as RAM copies. The model output the forward
+        returns stays in memory either way (the output op's payload may alias it). A streamed
+        trace does not run: ``trace.run(...)`` refuses ``trace_option_unsupported`` (a run would
+        re-capture into RAM while the bundle at ``path`` kept the first capture); capture again.
     include_custom_attributes:
         Whether harvested module attributes are persisted verbatim in the
-        streamed bundle (the ``tl.save`` opt-out, mirrored for streaming).
+        streamed bundle (the ``Trace.save`` opt-out, mirrored for streaming).
     include_buffer_values:
         Whether captured pre-forward buffer values are persisted in the
-        streamed bundle (the ``tl.save`` opt-out, mirrored for streaming).
+        streamed bundle (the ``Trace.save`` opt-out, mirrored for streaming).
     async_writes:
-        Whether ``trace(..., storage=...)`` blob writes overlap capture on a
-        bounded single-worker pipeline instead of pausing the forward for
-        each write (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI
-        sprint). Tri-state: ``None`` (default) means async for ``trace``
-        captures and synchronous for ``tl.record`` streaming; ``False``
-        forces synchronous writes; ``True`` requires the async pipeline and
-        refuses typed where it cannot be honored (``tl.record``). Writes
-        land in submission order, a failed write raises
-        ``TorchLensIOError`` and marks the bundle PARTIAL, and finalization
-        waits for every pending write before the bundle publishes.
+        Whether ``trace(..., storage=...)`` blob writes overlap capture on a bounded
+        single-worker pipeline instead of pausing the forward for each write
+        (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI sprint). Tri-state:
+        ``None`` (default) means async for ``trace`` captures and synchronous for
+        ``tl.record`` streaming; ``False`` forces synchronous writes; ``True`` requires the
+        async pipeline and refuses typed where it cannot be honored (``tl.record``). Writes
+        land in submission order, a failed write raises ``ArtifactError`` and marks the
+        bundle PARTIAL, and finalization waits for every pending write before the bundle
+        publishes.
     max_pending_bytes:
-        Pending snapshot byte budget for the async pipeline (``None`` uses
-        the 256 MiB default). Once pending writes hold this many bytes,
-        capture blocks until the disk catches up, bounding the RAM the
-        deferred writes may occupy.
+        Pending snapshot byte budget for the async pipeline (``None`` uses the
+        256 MiB default); once pending writes hold this many bytes, capture blocks
+        until the disk catches up, bounding the RAM the deferred writes may occupy.
 
     Returns
     -------
-    StreamingOptions
-        Storage options suitable for ``trace(..., storage=...)`` and
-        ``record(..., streaming=...)``.
+    StorageOptions
+        Storage options for ``trace(..., storage=...)`` and ``record(..., streaming=...)``.
     """
 
-    return StreamingOptions(
-        bundle_path=path,
+    return StorageOptions(
+        path=path,
         retain_in_memory=retain_in_memory,
         include_custom_attributes=include_custom_attributes,
         include_buffer_values=include_buffer_values,
@@ -1656,11 +1584,12 @@ def to_disk(
 def merge_capture_options(
     *,
     capture: CaptureOptions | None,
+    _layers_to_save: Any = MISSING,
     **flat_values: Any,
 ) -> CaptureOptions:
-    """Merge individual capture kwargs into a grouped options object."""
+    """Merge capture kwargs, preserving the private resolved ``save=`` selection."""
 
-    return cast(
+    merged = cast(
         CaptureOptions,
         _merge_grouped_options(
             option=capture,
@@ -1673,31 +1602,29 @@ def merge_capture_options(
             ),
         ),
     )
+    explicit = _layers_to_save is not MISSING or getattr(capture, "_layers_to_save_explicit", False)
+    if _layers_to_save is MISSING:
+        _layers_to_save = getattr(capture, "_layers_to_save", "all")
+    object.__setattr__(merged, "_layers_to_save", _layers_to_save)
+    object.__setattr__(merged, "_layers_to_save_explicit", explicit)
+    return merged
 
 
-def merge_save_options(*, save: SaveOptions | None, **flat_values: Any) -> SaveOptions:
-    """Merge individual save kwargs into a grouped options object."""
+def _save_transforms_from_capture(capture: CaptureOptions) -> _SaveTransforms:
+    """Return the save-transform carrier for a merged ``CaptureOptions``."""
 
-    return cast(
-        SaveOptions,
-        _merge_grouped_options(
-            option=save,
-            option_factory=SaveOptions,
-            flat_to_group=_SAVE_FLAT_TO_GROUP,
-            flat_values=flat_values,
-            group_name="save",
-            conflict_message=(
-                "conflicting save options: pass either SaveOptions or individual kwargs, not both"
-            ),
-        ),
+    return _SaveTransforms(
+        activation_transform=capture.activation_transform,
+        grad_transform=capture.grad_transform,
+        save_raw_activations=capture.save_raw_activations,
+        save_raw_grads=capture.save_raw_grads,
     )
 
 
 def merge_visualization_options(
     *,
-    function_default_mode: VisModeLiteral,
     visualization: VisualizationOptions | None,
-    view: VisModeLiteral | MissingType = MISSING,
+    rolled: bool | MissingType = MISSING,
     depth: int | MissingType = MISSING,
     layout: VisNodePlacementLiteral | MissingType = MISSING,
     node_style: VisNodeModeLiteral | MissingType = MISSING,
@@ -1707,23 +1634,14 @@ def merge_visualization_options(
     order_siblings: bool | MissingType = MISSING,
 ) -> VisualizationOptions:
     """Merge the canonical flat visualization kwargs into a grouped options object."""
-
     if visualization is None:
-        values = VisualizationOptions().as_dict()
-        values["view"] = function_default_mode
+        values = VisualizationOptions().to_dict()
         specified_fields: frozenset[str] = frozenset()
     else:
-        values = visualization.as_dict()
+        values = visualization.to_dict()
         specified_fields = _explicit_fields(visualization)
-        if "view" not in specified_fields:
-            # The grouped object's non-explicit view default ("none") must not
-            # shadow the calling function's default mode: show_model_graph
-            # with a VisualizationOptions that leaves view unset used to merge
-            # to view="none" and silently render NOTHING (D04 integration fix).
-            values["view"] = function_default_mode
-
     flat_values: dict[str, Any] = {
-        "view": view,
+        "rolled": rolled,
         "depth": depth,
         "layout": layout,
         "node_style": node_style,
@@ -1791,105 +1709,72 @@ def merge_intervention_options(
 
 def merge_streaming_options(
     *,
-    streaming: StreamingOptions | None,
+    streaming: StorageOptions | None,
     **flat_values: Any,
-) -> StreamingOptions:
+) -> StorageOptions:
     """Merge individual streaming kwargs into a grouped options object."""
 
     return cast(
-        StreamingOptions,
+        StorageOptions,
         _merge_grouped_options(
             option=streaming,
-            option_factory=StreamingOptions,
+            option_factory=StorageOptions,
             flat_to_group=_STREAMING_FLAT_TO_GROUP,
             flat_values=flat_values,
             group_name="streaming",
             conflict_message=(
-                "conflicting streaming options: pass either StreamingOptions or individual kwargs, "
+                "conflicting streaming options: pass either StorageOptions or individual kwargs, "
                 "not both"
             ),
         ),
     )
 
 
-def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[str, Any]:
-    """Translate grouped visualization options into ``Trace.draw`` kwargs.
-
-    Parameters
-    ----------
-    visualization:
-        Resolved grouped visualization options.
-
-    Returns
-    -------
-    dict[str, Any]
-        Keyword arguments expected by ``Trace.draw``.
-    """
-
-    kwargs: dict[str, Any] = {
-        "vis_mode": visualization.view,
-        "vis_call_depth": visualization.depth,
-        "vis_outpath": visualization.container_path,
-        "vis_graph_overrides": visualization.graph_overrides,
-        "node_mode": visualization.node_style,
-        "node_spec_fn": visualization.node_spec_fn,
-        "collapsed_node_spec_fn": visualization.collapsed_node_spec_fn,
-        "collapse_fn": visualization.collapse_fn,
-        "collapse": visualization.collapse,
-        "skip_fn": visualization.skip_fn,
-        "vis_edge_overrides": visualization.edge_overrides,
-        "vis_grad_edge_overrides": visualization.grad_edge_overrides,
-        "vis_module_overrides": visualization.module_overrides,
-        "vis_save_only": visualization.save_only,
-        "vis_fileformat": visualization.file_format,
-        "show_buffer_layers": visualization.show_buffers,
-        "direction": visualization.direction,
-        "vis_node_placement": visualization.layout,
-        "vis_renderer": visualization.renderer,
-        "vis_theme": visualization.theme,
-        "vis_intervention_mode": visualization.intervention_mode,
-        "vis_show_cone": visualization.show_cone,
-    }
-    if visualization.fold_repeats is not None or visualization.is_field_explicit("fold_repeats"):
-        kwargs["fold_repeats"] = visualization.fold_repeats
-    phase7_kwargs = {
-        "node_overlay": visualization.node_overlay,
-        "node_label_fields": visualization.node_label_fields,
-        "show_legend": visualization.show_legend,
-        "color_by": visualization.color_by,
-        "size_by": visualization.size_by,
-        "scale": visualization.scale,
-        "stack_by": visualization.stack_by,
-        "show_redundant_args": visualization.show_redundant_args,
-        "font_size": visualization.font_size,
-        "dpi": visualization.dpi,
-        "for_paper": visualization.for_paper,
-        "return_graph": visualization.return_graph,
-        "order_siblings": visualization.order_siblings,
-    }
-    for field_name, value in phase7_kwargs.items():
-        if field_name == "order_siblings":
-            should_include = visualization.is_field_explicit(field_name) or value is False
-        else:
-            should_include = visualization.is_field_explicit(field_name) or (
-                value is not None and value is not False
-            )
-        if should_include:
-            kwargs[field_name] = value
-    return kwargs
-
-
 __all__ = [
+    "RecordingOptions",
+    "HtmlReportOptions",
     "CaptureOptions",
-    "EchoOptions",
-    "EpisodeSpec",
+    "NarrationOptions",
+    "EpisodeOptions",
     "InterventionOptions",
-    "OptionReceiptEntry",
     "ReplayOptions",
-    "SaveOptions",
-    "StreamingOptions",
-    "option_receipt",
-    "to_disk",
+    "StorageOptions",
     "VisualizationOptions",
     "suppress_mutate_warnings",
 ]
+
+
+if TYPE_CHECKING:
+    from torchlens.export._report import HtmlReportOptions
+
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "HtmlReportOptions": ("torchlens.export._report", "HtmlReportOptions"),
+    "RecordingOptions": ("torchlens.recording.options", "RecordingOptions"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve exports whose defining modules would import-cycle if loaded eagerly.
+
+    Parameters
+    ----------
+    name:
+        Attribute requested from this namespace.
+
+    Returns
+    -------
+    Any
+        The exported object.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not an export of this namespace.
+    """
+
+    if name in _LAZY_EXPORTS:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+        value = getattr(importlib.import_module(module_name), attr_name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

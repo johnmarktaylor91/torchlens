@@ -1,6 +1,6 @@
 """``bundle.vary(mapping)`` — one explicit edit or identity PER member (F03 item 5).
 
-The teachable law (ledger memo Decision 2): **do = one edit to all members;
+The teachable law: **do = one edit to all members;
 vary = one explicit edit or identity per member; both take the same spec
 objects.** Broadcast-versus-vary is the scientific content of the call, and
 a silently unedited member is the single most expensive quiet asymmetry an
@@ -84,7 +84,7 @@ def _normalize_values(assignments: dict[str, Any]) -> dict[str, Any]:
     one reused SamplingPlan object yields one donor group across members.
     """
 
-    from ..intervention.spec import InterventionSpec, when
+    from ..intervention.spec import Recipe, when
     from ..intervention.stochastic import assign_batch_donor_groups
 
     pair_names = [
@@ -95,7 +95,7 @@ def _normalize_values(assignments: dict[str, Any]) -> dict[str, Any]:
     for name, (selection, edit) in zip(pair_names, normalized_pairs, strict=True):
         lowered[name] = when(selection, edit)
     for name, value in lowered.items():
-        if value is None or isinstance(value, InterventionSpec):
+        if value is None or isinstance(value, Recipe):
             continue
         raise BundleExperimentError(
             f"vary() value for member {name!r} must be an InterventionSpec, a "
@@ -143,10 +143,10 @@ def _apply_member_specs(
                 # canonical v9 EVENT audit row (hash-chained).
                 append_event_audit_row(member, events[-1])
             outcomes[name] = "completed"
-            spec_digests[name] = value.spec_digest
+            spec_digests[name] = value.digest
         except Exception as exc:  # noqa: BLE001 - disclosed partial outcome
             outcomes[name] = "failed"
-            spec_digests[name] = getattr(value, "spec_digest", None)
+            spec_digests[name] = getattr(value, "digest", None)
             failure = (name, exc)
             break
     return outcomes, spec_digests, failure
@@ -214,14 +214,6 @@ def bundle_vary(
         )
     lowered = _normalize_values(assignments)
 
-    # Emission (item 9b): ONE material step per vary call, started BEFORE
-    # material work; per-member outcomes live in the MATERIAL record (the
-    # chronology row), never as per-member ledger steps. Unarmed = zero rows.
-    from ..experiment._ledger import active_ledger
-
-    armed = active_ledger()
-    step_id = armed.material_step("vary") if armed is not None else None
-
     # ---- material phase (no rollback claimed) ----------------------------
     outcomes, spec_digests, failure = _apply_member_specs(bundle, lowered)
 
@@ -242,21 +234,6 @@ def bundle_vary(
         anchor["operation_id"] = operation.operation_id
         bundle._member_construction[name] = anchor
 
-    if armed is not None and step_id is not None:
-        from ..experiment._ledger import EvidenceRef
-
-        armed.finalize_step(
-            step_id,
-            outcome="completed" if failure is None else "partial_failure",
-            refs=[
-                EvidenceRef(
-                    kind="bundle",
-                    uri=f"live://{bundle.bundle_id}",
-                    object_id=f"{bundle.bundle_id}:{operation.operation_id}",
-                )
-            ],
-            material_result=bundle,
-        )
     if failure is not None:
         failed_member, original = failure
         raise BundleExperimentError(

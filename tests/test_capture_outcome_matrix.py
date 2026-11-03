@@ -19,11 +19,12 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CaptureOutcomeError,
     CapturePhase,
     CaptureStatus,
 )
+from torchlens.errors import TorchLensWarning, TraceCaptureError
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -52,8 +53,7 @@ def test_transform_introduced_nan_stays_complete() -> None:
     trace = tl.trace(
         ThreeStageModel(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(raise_on_nan=True),
-        save=tl.options.SaveOptions(activation_transform=poison),
+        capture=tl.options.CaptureOptions(on_nonfinite="raise", activation_transform=poison),
     )
     assert trace.outcome.status is CaptureStatus.COMPLETE
 
@@ -70,10 +70,9 @@ def test_raw_nan_aborts_even_when_transform_sanitizes() -> None:
         tl.trace(
             NaNProducingModel(),
             torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
-            save=tl.options.SaveOptions(activation_transform=sanitize),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise", activation_transform=sanitize),
         )
-    outcome = tl.partial.from_failed_capture(exc_info.value).trace.outcome
+    outcome = exc_info.value.partial_trace.trace.outcome
     assert outcome.status is CaptureStatus.ABORTED_NONFINITE
 
 
@@ -85,16 +84,20 @@ def test_raw_nan_aborts_even_when_transform_sanitizes() -> None:
 def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
     """A halt with no recoverable tensor frontier fails typed at FINALIZE."""
 
-    import torchlens.backends.torch.ops as torch_ops
+    import torchlens._capture.stop as stop_module
+    import torchlens.backends.torch._ops_exhaustive as ops_exhaustive
+    import torchlens.backends.torch._ops_predicate_events as ops_predicate_events
     from torchlens import _state
-    from torchlens.fastlog._halt import HaltSignal
+    from torchlens.recording._halt import StopSignal
 
-    original = torch_ops.evaluate_halt_stop
+    original = stop_module.evaluate_halt_stop
 
     def _strip_frontier(trace, ctx, options, frontier_output=None):
         return original(trace, ctx, options, frontier_output=None)
 
-    monkeypatch.setattr(torch_ops, "evaluate_halt_stop", _strip_frontier)
+    # The home module and the capture modules that bound the evaluator by import.
+    for module in (stop_module, ops_exhaustive, ops_predicate_events):
+        monkeypatch.setattr(module, "evaluate_halt_stop", _strip_frontier)
 
     captured: list = []
 
@@ -107,24 +110,29 @@ def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
         return False
 
     with pytest.raises(RuntimeError, match="could not identify a tensor frontier") as exc_info:
-        tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=_halt_and_orphan)
-    assert isinstance(exc_info.value.__cause__, HaltSignal)
+        tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=_halt_and_orphan)
+    assert isinstance(exc_info.value.__cause__, StopSignal)
     outcome = captured[0].outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.phase is CapturePhase.FINALIZE
-    assert "halted finalization failed" in (outcome.settlement_note or "")
+    assert "halted finalization failed" in (outcome.note or "")
 
 
 def test_never_fired_halt_predicate_stays_complete() -> None:
-    """A halt predicate that never fires yields an ordinary COMPLETE capture."""
+    """A halt predicate that never fires yields an ordinary COMPLETE capture.
 
-    trace = tl.trace(
-        ThreeStageModel(),
-        torch.ones(1, 3),
-        halt=lambda ctx: ctx.kind == "op" and ctx.func_name == "definitely_absent",
-    )
-    assert trace.halted is False
+    The callable never-fired policy warns (the capture ran the full forward)
+    but the product stays COMPLETE.
+    """
+
+    with pytest.warns(TorchLensWarning, match="never fired"):
+        trace = tl.trace(
+            ThreeStageModel(),
+            torch.ones(1, 3),
+            stop_after=lambda ctx: ctx.kind == "op" and ctx.func_name == "definitely_absent",
+        )
+    assert trace.is_stopped is False
     assert trace.outcome.status is CaptureStatus.COMPLETE
 
 
@@ -138,15 +146,15 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
         ThreeStageModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        halt=halt_on_relu,
+        stop_after=halt_on_relu,
     )
     cooked = recording.to_trace()
-    assert cooked.outcome.status is CaptureStatus.HALTED
+    assert cooked.outcome.status is CaptureStatus.STOPPED
 
     from torchlens.errors import RunnablePreflightError
 
     with pytest.raises(RunnablePreflightError):
-        tl.save(cooked, tmp_path / "cooked_halted.tlspec", level="runnable", overwrite=True)
+        cooked.save(tmp_path / "cooked_halted.tlspec", level="runnable", overwrite=True)
     with pytest.raises(CaptureOutcomeError) as exc_info:
         cooked.push()
     assert exc_info.value.fields["code"] == "N5"
@@ -158,7 +166,7 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
 
 
 def test_memory_error_in_postprocess_settles_failed(monkeypatch) -> None:
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     captured: list = []
 
@@ -166,9 +174,10 @@ def test_memory_error_in_postprocess_settles_failed(monkeypatch) -> None:
         captured.append(trace)
         raise MemoryError("planted OOM")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
-    with pytest.raises(MemoryError):
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
+    with pytest.raises(TraceCaptureError) as _tce_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
+    assert isinstance(_tce_info.value.__cause__, MemoryError)
     outcome = captured[0].outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
@@ -189,10 +198,17 @@ def test_gated_entries_consult_the_chokepoint() -> None:
     consumer of the capability table.
     """
 
-    validation_source = (TORCHLENS_DIR / "data_classes" / "_trace_validation.py").read_text(
-        encoding="utf-8"
+    # The gated entry bodies live in the record-rebuild destination modules
+    # (the `Trace` methods are thin door calls); read all three.
+    validation_source = "".join(
+        (TORCHLENS_DIR / part).read_text(encoding="utf-8")
+        for part in (
+            "validation/_trace_checks.py",
+            "intervention/_trace_run.py",
+            "backends/torch/_trace_backward.py",
+        )
     )
-    gate_calls = re.findall(r'require_capture_capability\(self, "([a-z_]+)"\)', validation_source)
+    gate_calls = re.findall(r'require_capture_capability\(trace, "([a-z_]+)"\)', validation_source)
     # save_new_outs, push, push_from, run (entry pre-gate + loaded-sparse +
     # analysis-load pre-gate + unified-live + legacy-live), log_backward,
     # recording_backward, validate_forward_pass, check_metadata_invariants.
@@ -220,7 +236,7 @@ def test_gated_entries_consult_the_chokepoint() -> None:
     # No inline second authority: nothing outside the authority module reads
     # the capability table directly.
     for path in TORCHLENS_DIR.rglob("*.py"):
-        if path.name == "outcome.py" and path.parent.name == "capture":
+        if path.name == "outcome.py" and path.parent.name == "_capture":
             continue
         text = path.read_text(encoding="utf-8")
         assert "CAPTURE_OUTCOME_CAPABILITIES[" not in text, str(path)

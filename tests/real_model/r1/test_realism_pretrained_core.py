@@ -33,7 +33,7 @@ def test_distilgpt2_real_tokenizer_trace_matches_direct(r1_loader):
     encoded = tokenizer(_prompt("clean-factual-1")["clean"], return_tensors="pt")
     with torch.no_grad():
         direct = model(**encoded).logits
-    trace = tl.trace(model, (), dict(encoded))
+    trace = tl.trace(model, (), input_kwargs=dict(encoded))
     assert trace.outcome.status.name == "COMPLETE"
     matches = [
         op
@@ -49,7 +49,7 @@ def test_albert_real_cross_layer_sharing_is_multi_pass(r1_loader):
     loaded = r1_loader("r1-albert-base-v2")
     model, tokenizer = loaded["model"], loaded["tokenizer"]
     encoded = tokenizer(_prompt("encoder-sentence-1")["text"], return_tensors="pt")
-    trace = tl.trace(model, (), dict(encoded))
+    trace = tl.trace(model, (), input_kwargs=dict(encoded))
     assert trace.outcome.status.name == "COMPLETE"
     max_passes = 0
     for layer in trace.layers:

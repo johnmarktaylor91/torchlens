@@ -7,13 +7,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
-    from .invariants import (
-        MetadataInvariantError,
-        _dtype_values_match,
-        _resolve_trace_label,
-        op_has_genuine_replacement_evidence,
-    )
+    from .._data_classes.trace import Trace
 
 __all__ = (
     "_check_backend_neutral_graph_topology",
@@ -45,13 +39,9 @@ def _check_backend_neutral_graph_topology(ml: Trace) -> None:
 
     name = "backend_neutral_graph_topology"
     labels = {
-        getattr(layer, "label", getattr(layer, "layer_label", ""))
-        for layer in getattr(ml, "layer_list", ())
-    } | {
-        getattr(layer, "layer_label", getattr(layer, "label", ""))
-        for layer in getattr(ml, "layer_list", ())
-    }
-    for layer in getattr(ml, "layer_list", ()):
+        getattr(layer, "label", getattr(layer, "layer_label", "")) for layer in ml._layer_list
+    } | {getattr(layer, "layer_label", getattr(layer, "label", "")) for layer in ml._layer_list}
+    for layer in ml._layer_list:
         label = getattr(layer, "layer_label", getattr(layer, "label", type(layer).__name__))
         parents = list(getattr(layer, "parents", ()) or ())
         children = list(getattr(layer, "children", ()) or ())
@@ -135,7 +125,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
     name = "edge_use_parent_arg_consistency"
     valid_edge_uses = {"arg", "kwarg", "container", "module", "buffer", "output", "control"}
     valid_arg_kinds = {"positional", "keyword"}
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         layer_label = getattr(layer, "layer_label", type(layer).__name__)
         for record in getattr(layer, "_edge_uses", ()) or ():
             edge_use = getattr(record, "edge_use", None)
@@ -211,8 +201,8 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
     # traces (caught by the validation-decision golden's TinyRecurrent).
     # Each op record carries its own row and its own pass-exact
     # parents/parent_arg_positions staging.
-    for layer in getattr(ml, "layer_list", ()) or ():
-        for op in getattr(layer, "ops", ()) or ():
+    for layer in ml._layer_list or ():
+        for op in getattr(layer, "ops", None) or (layer,):
             row = getattr(op, "_row", None)
             if row is None:
                 continue
@@ -290,7 +280,7 @@ def _check_op_log_fields(ml: Trace) -> None:
     """
     name = "op_log_fields"
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         label = lpl.layer_label
 
         # Tensor shape/dtype consistency when outs are saved
@@ -308,12 +298,12 @@ def _check_op_log_fields(ml: Trace) -> None:
                 )
 
         # Pass numbering
-        if lpl.pass_index < 1:
-            raise MetadataInvariantError(name, f"Layer {label}: pass_index={lpl.pass_index} < 1")
-        if lpl.num_passes < lpl.pass_index:
+        if lpl.pass_number < 1:
+            raise MetadataInvariantError(name, f"Layer {label}: pass_index={lpl.pass_number} < 1")
+        if lpl.num_passes < lpl.pass_number:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: num_passes={lpl.num_passes} < pass_index={lpl.pass_index}",
+                f"Layer {label}: num_passes={lpl.num_passes} < pass_index={lpl.pass_number}",
             )
 
         # A GENUINE raw-forward-hook output replacement is legitimately
@@ -329,7 +319,7 @@ def _check_op_log_fields(ml: Trace) -> None:
         # event) now fails this invariant, per the 2026-06-02 lesson.
         is_functionless_replacement = (
             lpl.func_name == "intervention_replacement"
-            and getattr(lpl, "intervention_replaced", False)
+            and getattr(lpl, "is_edited", False)
             and not getattr(lpl, "is_internal_source", False)
             and op_has_genuine_replacement_evidence(lpl, ml)
         )
@@ -474,7 +464,7 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
     """
 
     name = "payload_metadata_invariants"
-    for op in ml.layer_list:
+    for op in ml._layer_list:
         label = getattr(op, "label", getattr(op, "layer_label", type(op).__name__))
         _check_live_payload_metadata(
             name,
@@ -706,3 +696,19 @@ def _payload_memory(payload: object) -> int | None:
     if not callable(nelement) or not callable(element_size):
         return None
     return int(nelement() * element_size())
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_backward_flow import (  # noqa: E402
+    op_has_genuine_replacement_evidence,
+)
+from ._invariants_buffers import (  # noqa: E402
+    _resolve_trace_label,
+)
+from ._invariants_conditional_base import (  # noqa: E402
+    _dtype_values_match,
+)
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

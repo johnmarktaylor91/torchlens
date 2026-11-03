@@ -21,7 +21,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.utils.tensor_utils import (
+from torchlens._utils.tensor_utils import (
     _ACCUMULATING_REPLAY_ULP_HEADROOM,
     _DTYPE_FLOAT_TOLERANCES,
     _LOW_PRECISION_REPLAY_ULP_HEADROOM,
@@ -96,7 +96,7 @@ def test_rows_are_exactly_the_derived_ulp_model() -> None:
 def test_fp32_row_is_the_exported_legacy_pair() -> None:
     """The facade constants and the fp32 replay row must not drift apart."""
 
-    from torchlens.utils.tensor_utils import (
+    from torchlens._utils.tensor_utils import (
         MAX_FLOATING_POINT_TOLERANCE,
         REL_FLOATING_POINT_TOLERANCE,
     )
@@ -174,7 +174,7 @@ def test_comparator_self_test_bounds_the_effective_band(
     absurdly TIGHT band fails the accept-side sentinel too.
     """
 
-    from torchlens.utils import tensor_utils as tensor_utils_mod
+    from torchlens._utils import tensor_utils as tensor_utils_mod
     from torchlens.validation.core import _comparator_self_test
 
     _comparator_self_test()  # healthy band passes

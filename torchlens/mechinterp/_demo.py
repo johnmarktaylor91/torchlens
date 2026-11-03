@@ -13,17 +13,18 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import torch
+
+import torchlens as tl
+import torchlens.mechinterp as mi
+
 
 def tlens_agreement_demo() -> dict[str, Any]:
     """Decomposition + DLA agreeing with TransformerLens on real gpt2."""
 
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-    import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    import torchlens as tl
-    import torchlens.mechinterp as mi
 
     model = AutoModelForCausalLM.from_pretrained("gpt2").eval()
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -32,7 +33,8 @@ def tlens_agreement_demo() -> dict[str, Any]:
     log = tl.trace(
         model,
         ids,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
     dec = mi.residual_decomposition(log)
@@ -44,7 +46,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     dla = mi.direct_logit_contributions(log, answer=paris, vs=london)
     assert dla.identity_receipt["result"] == "verified"  # noqa: S101 -- the demo IS its own gate
     print("DLA (' Paris' - ' London') top contributors:")
-    for label, score in dla.top(5):
+    for label, score in dla.topk(5):
         print(f"  {label}: {score:+.3f}")
 
     inspection = mi.inspect_prompt(log, answer=paris, tokenizer=tokenizer)
@@ -53,26 +55,38 @@ def tlens_agreement_demo() -> dict[str, Any]:
 
     scores = mi.head_scores(log, kind="induction")
     print("induction heads on the FUSED default-loaded model (no eager reload):")
-    for name, score in scores.top(3):
+    for name, score in scores.topk(3):
         print(f"  {name}: {score:.3f}")
 
     results: dict[str, Any] = {
         "decomposition_rows": len(dec),
-        "dla_top": dla.top(5),
-        "induction_top": scores.top(3),
+        "dla_top": dla.topk(5),
+        "induction_top": scores.topk(3),
     }
+
+    exact = _tlens_parity_rows(prompt)
+    if exact is not None:
+        results["same_object_exact_rows"] = exact
+    return results
+
+
+def _tlens_parity_rows(prompt: str) -> int | None:
+    """Count decomposed gpt2 rows equal to TransformerLens's own residual cache.
+
+    Returns ``None`` (after saying so) when transformer-lens is not installed.
+    """
 
     try:
         from transformer_lens import HookedTransformer
     except ImportError:
         print("(transformer-lens not installed; parity section skipped)")
-        return results
+        return None
 
     tlens = HookedTransformer.from_pretrained_no_processing("gpt2")
     tlens.eval()
     tokens = tlens.to_tokens(prompt)
     _, cache = tlens.run_with_cache(tokens)
-    log2 = tl.trace(tlens, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log2 = tl.trace(tlens, tokens, save="all")
     dec2 = mi.residual_decomposition(log2)
     stack, _labels = cache.decompose_resid(layer=-1, return_labels=True)
     exact = sum(
@@ -80,8 +94,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     )
     assert exact == len(dec2) == 26  # noqa: S101 -- the demo IS its own gate
     print(f"same-object parity: {exact}/26 decomposed rows torch.equal to TLens's own cache")
-    results["same_object_exact_rows"] = exact
-    return results
+    return exact
 
 
 if __name__ == "__main__":

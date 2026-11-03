@@ -34,11 +34,11 @@ from typing import TYPE_CHECKING, Any, NoReturn
 import torch
 
 from ._torch_symbols import torch_attr
-from .format_contract import BlobRef, TorchLensIOError
+from .format_contract import ArtifactError, BlobRef
 from .scrub import BlobSpec
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = [
     "append_injected_op_rows",
@@ -99,9 +99,9 @@ def append_injected_op_rows(
     records = injected_ops(trace)
     if not records:
         return
-    rows = scrubbed_state.get("layer_list")
+    rows = scrubbed_state.get("_layer_list")
     if not isinstance(rows, list):
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Scrubbed state has no layer_list to carry injected-op rows.",
             code="injection_persist_state_invalid",
         )
@@ -109,7 +109,7 @@ def append_injected_op_rows(
     for record in records:
         host_site_key = record.provenance.host_site_key
         if not isinstance(host_site_key, str) or not host_site_key:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"injected op {record.label!r} has no resolved host site key; the "
                 "persisted injected-op identity anchors on the host's structural "
                 "position and cannot be written without one",
@@ -171,8 +171,8 @@ def _synthesize_row(
 ) -> Any:
     """Build one already-scrubbed op row for one injected record."""
 
-    from ..constants import LAYER_PASS_LOG_FIELD_ORDER
-    from ..data_classes.op import Op
+    from .._constants import LAYER_PASS_LOG_FIELD_ORDER
+    from .._data_classes.op import Op
 
     out_value: Any = None
     args_encoded: Any = None
@@ -277,7 +277,7 @@ def _encode_value(
         }
     # _snapshot_call_values admits nothing else; a foreign object here means
     # the record was tampered with in-session -- refuse rather than launder.
-    raise TorchLensIOError(
+    raise ArtifactError(
         f"injected op {label!r} carries an unencodable replay arg of type {type(value).__name__}",
         code="injection_persist_arg_unencodable",
     )
@@ -299,7 +299,7 @@ def split_restored_injected_rows(trace: Any) -> None:
     check here is fail-closed: forged provenance refuses, never degrades.
     """
 
-    rows = trace.__dict__.get("layer_list")
+    rows = trace.__dict__.get("_layer_list")
     if not isinstance(rows, list):
         return
     injected = [op for op in rows if getattr(op, "injection_provenance", None) is not None]
@@ -317,7 +317,7 @@ def split_restored_injected_rows(trace: Any) -> None:
 def _refuse_codec(message: str, reason: str) -> NoReturn:
     """Raise one typed codec-envelope load refusal."""
 
-    raise TorchLensIOError(
+    raise ArtifactError(
         f"{message} -- the artifact's injected-op codec envelope is forged or hand-edited",
         code="artifact_injection_codec_invalid",
         field="Op.annotations.injection_codec_v1",
@@ -428,7 +428,7 @@ def _pass_qualified_label(op: Any) -> str:
     """The ``layer_label:pass_index`` spelling of one restored model op row."""
 
     layer_label = str(getattr(op, "layer_label", ""))
-    pass_index = getattr(op, "pass_index", None)
+    pass_index = getattr(op, "pass_number", None)
     return f"{layer_label}:{pass_index}" if pass_index is not None else layer_label
 
 
@@ -468,7 +468,7 @@ def _validate_host_anchor(
             f"op at host site key {host_site_key!r} carries that label",
             "host_label_mismatch",
         )
-    host_pass = getattr(host, "pass_index", None)
+    host_pass = getattr(host, "pass_number", None)
     if host_pass is not None and record["host_pass"] != host_pass:
         _refuse_codec(
             f"injected-op row {label!r} claims host_pass {record['host_pass']!r}, but its "
@@ -499,9 +499,9 @@ def _validate_row_op_identity(row: Any, label: str) -> None:
                 f"injected-op row {label!r} carries illegal {field_name} {value!r}",
                 "record_func",
             )
-    if getattr(row, "intervention_replaced", None):
+    if getattr(row, "is_edited", None):
         _refuse_codec(
-            f"injected-op row {label!r} claims intervention_replaced",
+            f"injected-op row {label!r} claims is_edited",
             "record_func",
         )
     for relation in ("parents", "children"):
@@ -786,8 +786,8 @@ def _classify_callable(callable_ref: Any) -> str | None:
 
     if callable_ref is None:
         return "callable_ref_unavailable"
+    from ..intervention._resolver_registry import resolve_function_registry_key
     from ..intervention.errors import ReplayPreconditionError, UntrustedCallableError
-    from ..intervention.resolver import resolve_function_registry_key
 
     try:
         resolve_function_registry_key(callable_ref)

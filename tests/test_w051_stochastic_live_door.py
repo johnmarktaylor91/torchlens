@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention import OneDatum, reference, sample_from, sampling_records
+from torchlens._data_classes._layer_sites import layer_site_key
+from torchlens.intervention import population, sample_from
+from torchlens.intervention.population import OneDatum
 from torchlens.intervention.stochastic import _mint_donor_group_id
 
 
@@ -37,9 +40,9 @@ class _TwoBlockWithPrologue(_TwoBlock):
 
 def _coordinates(trace: tl.Trace) -> list[tuple[tuple, list[int]]]:
     return [
-        (tuple(row["logical_firing_coordinate"]), row["donor_ids"])
-        for row in sampling_records(trace)
-        if row["share_draw"] == "per_firing"
+        (tuple(row.logical_firing_coordinate), row.draw_indices)
+        for row in sampling_draws(trace)
+        if row.share_draw == "per_firing"
     ]
 
 
@@ -50,10 +53,10 @@ def test_live_door_matches_replay_door() -> None:
     model = _TwoBlock()
     torch.manual_seed(100)
     x = torch.randn(5, 4)
-    options = tl.options.CaptureOptions(intervention_ready=True, random_seed=100)
+    options = tl.options.CaptureOptions(replayable=True, seed=100)
     log = tl.trace(model, x, capture=options)
     baseline = log["relu_1_2"].out
-    donors = reference(torch.stack([baseline + k for k in range(1, 6)]), origin="d")
+    donors = population(torch.stack([baseline + k for k in range(1, 6)]), origin="d")
     plan = sample_from(donors, seed=3)
 
     fork = log.fork()
@@ -76,7 +79,7 @@ def test_live_door_matches_replay_door() -> None:
         site_key, pass_index, _step = coordinate
         assert isinstance(site_key, str) and site_key.startswith("s1|")
         assert pass_index == 1
-    assert {live["relu_1_2"].site_key, live["relu_2_4"].site_key} == {
+    assert {layer_site_key(live["relu_1_2"]), layer_site_key(live["relu_2_4"])} == {
         coordinate[0] for coordinate, _d in replay
     }, "the stamped live key IS the key postprocess mints"
 
@@ -90,9 +93,9 @@ def test_live_coordinate_is_stable_under_unrelated_upstream_op() -> None:
     with_prologue.load_state_dict(plain.state_dict())
     torch.manual_seed(100)
     x = torch.randn(5, 4)
-    donors = reference(torch.randn(5, 5, 4), origin="d")
+    donors = population(torch.randn(5, 5, 4), origin="d")
     plan = sample_from(donors, seed=3)
-    options = tl.options.CaptureOptions(random_seed=100)
+    options = tl.options.CaptureOptions(seed=100)
     live_plain = tl.trace(
         plain, x, capture=options, intervene=tl.when(tl.func("relu"), tl.patch_from(plan))
     )
@@ -103,8 +106,8 @@ def test_live_coordinate_is_stable_under_unrelated_upstream_op() -> None:
         intervene=tl.when(tl.func("relu"), tl.patch_from(plan)),
     )
     assert _coordinates(live_plain) == _coordinates(live_prologue)
-    labels_plain = [op.label for op in live_plain.ops if op.layer_type == "relu"]
-    labels_prologue = [op.label for op in live_prologue.ops if op.layer_type == "relu"]
+    labels_plain = [op.label for op in live_plain.ops if op.type == "relu"]
+    labels_prologue = [op.label for op in live_prologue.ops if op.type == "relu"]
     assert labels_plain != labels_prologue, "the ordinal labels DID shift; the coordinate did not"
 
 

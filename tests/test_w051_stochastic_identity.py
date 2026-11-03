@@ -16,11 +16,12 @@ import textwrap
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention import reference, sample_from, sampling_records
+from torchlens.intervention import population, sample_from
 
 
 class _TwoBlock(nn.Module):
@@ -38,7 +39,7 @@ def _capture(model: nn.Module, seed: int, **kwargs: object) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(5, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True, random_seed=seed, **kwargs),
+        capture=tl.options.CaptureOptions(replayable=True, seed=seed, **kwargs),
     )
 
 
@@ -54,13 +55,13 @@ def test_address_identity_ignores_object_identity() -> None:
     """Two populations over EQUAL captures share one identity; the object address never enters."""
 
     subject, donors = _fixture()
-    first = reference(donors, origin="d")
+    first = population(donors, origin="d")
     torch.manual_seed(0)
     fresh_model = _TwoBlock()
     fresh_donors = [_capture(fresh_model, seed) for seed in (1, 2, 3)]
-    second = reference(fresh_donors, origin="d")
+    second = population(fresh_donors, origin="d")
     assert first.digest_kind == "address"
-    assert first.population_identity == second.population_identity
+    assert first.identity == second.identity
     plan_a = sample_from(first, seed=3)
     plan_b = sample_from(second, seed=3)
     assert plan_a.donor_group_id == plan_b.donor_group_id
@@ -68,7 +69,7 @@ def test_address_identity_ignores_object_identity() -> None:
     fork_a.do(tl.label("relu_1_2"), tl.patch_from(plan_a))
     fork_b = subject.fork()
     fork_b.do(tl.label("relu_1_2"), tl.patch_from(plan_b))
-    assert sampling_records(fork_a)[-1]["donor_ids"] == sampling_records(fork_b)[-1]["donor_ids"]
+    assert sampling_draws(fork_a)[-1].draw_indices == sampling_draws(fork_b)[-1].draw_indices
 
 
 @pytest.mark.smoke
@@ -78,17 +79,17 @@ def test_content_digest_hashes_retained_payloads() -> None:
     torch.manual_seed(0)
     model = _TwoBlock()
     torch.manual_seed(1)
-    run_one = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(random_seed=7))
+    run_one = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(seed=7))
     torch.manual_seed(2)
-    run_two = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(random_seed=7))
-    address_one = reference([run_one], origin="o")
-    address_two = reference([run_two], origin="o")
-    assert address_one.population_identity == address_two.population_identity
-    content_one = reference([run_one], origin="o", digest_population=True)
-    content_two = reference([run_two], origin="o", digest_population=True)
+    run_two = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(seed=7))
+    address_one = population([run_one], origin="o")
+    address_two = population([run_two], origin="o")
+    assert address_one.identity == address_two.identity
+    content_one = population([run_one], origin="o", digest_population=True)
+    content_two = population([run_two], origin="o", digest_population=True)
     assert content_one.digest_kind == content_two.digest_kind == "content"
-    assert content_one.population_identity != content_two.population_identity
-    again = reference([run_one], origin="o", digest_population=True)
+    assert content_one.identity != content_two.identity
+    again = population([run_one], origin="o", digest_population=True)
     assert again.content_digest == content_one.content_digest
 
 
@@ -102,10 +103,10 @@ def test_content_digest_refuses_without_retained_payloads() -> None:
         unsaved = tl.trace(model, torch.randn(5, 4), save=tl.func("tanh"))
     assert not any(op.has_saved_activation for op in unsaved.ops)
     with pytest.raises(InvalidArgumentError) as info:
-        reference([unsaved], origin="o", digest_population=True)
+        population([unsaved], origin="o", digest_population=True)
     assert info.value.fields["code"] == "population_digest_unavailable"
     # The address identity stays available for the same capture.
-    assert reference([unsaved], origin="o").digest_kind == "address"
+    assert population([unsaved], origin="o").digest_kind == "address"
 
 
 _TWO_PROCESS_SCRIPT = textwrap.dedent(
@@ -113,7 +114,8 @@ _TWO_PROCESS_SCRIPT = textwrap.dedent(
     import torch
     from torch import nn
     import torchlens as tl
-    from torchlens.intervention import reference, sample_from, sampling_records
+    from torchlens.intervention import population, sample_from
+    from support.sampling import sampling_draws
 
     class TwoBlock(nn.Module):
         def __init__(self):
@@ -126,20 +128,20 @@ _TWO_PROCESS_SCRIPT = textwrap.dedent(
     def capture(model, seed):
         torch.manual_seed(seed)
         return tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(
-            intervention_ready=True, random_seed=seed))
+            replayable=True, seed=seed))
 
     torch.manual_seed(0)
     model = TwoBlock()
     subject = capture(model, 100)
     donors = [capture(model, seed) for seed in (1, 2, 3)]
     for digest in (False, True):
-        ref = reference(donors, origin="d", digest_population=digest)
+        ref = population(donors, origin="d", digest_population=digest)
         plan = sample_from(ref, seed=3)
         fork = subject.fork()
         fork.do(tl.label("relu_1_2"), tl.patch_from(plan))
-        record = sampling_records(fork)[-1]
-        print(ref.digest_kind, ref.population_identity, plan.donor_group_id,
-              record["derived_seed"], record["donor_ids"])
+        record = sampling_draws(fork)[-1]
+        print(ref.digest_kind, ref.identity, plan.donor_group_id,
+              record.derived_seed, record.draw_indices)
     """
 )
 
@@ -151,7 +153,9 @@ def test_two_process_golden_reproduces_every_draw() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(tl.__file__)))
     outputs = []
     for hash_seed in ("1", "2"):
-        env = dict(os.environ, PYTHONHASHSEED=hash_seed, PYTHONPATH=root)
+        # The child imports tests/support, so the tests directory joins the path.
+        search_path = os.pathsep.join((root, os.path.join(root, "tests")))
+        env = dict(os.environ, PYTHONHASHSEED=hash_seed, PYTHONPATH=search_path)
         completed = subprocess.run(
             [sys.executable, "-c", _TWO_PROCESS_SCRIPT],
             capture_output=True,

@@ -84,9 +84,7 @@ class FamilySpec:
     dims: dict[str, int]
     # Families whose upstream class takes no attn_implementation axis at all
     # (attention-free or plain torch) carry a single "eager" impl entry.
-    # input_args covers plain-torch families: the kwargs-only spelling on a
-    # plain module raises "got multiple values" today (enumerated-red row in
-    # expectations.KNOWN_RED, pinned by the axes suite).
+    # input_args covers plain-torch families that take positional inputs.
     input_args: Callable[[], tuple[Any, ...]] = lambda: ()
 
 

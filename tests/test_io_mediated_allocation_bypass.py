@@ -83,6 +83,7 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _alloc_refusal_reason,
     _is_alloc_constructor_type,
+    _PurePythonBundleUnpickler,
 )
 from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens.options import CaptureOptions
@@ -93,7 +94,7 @@ from torchlens.options import CaptureOptions
 _TENSOR_BASE = getattr(torch._C, "TensorBase", None) or torch._C._TensorBase
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -275,7 +276,7 @@ def test_reconstruct_belt_fires_white_box_and_fails_closed() -> None:
     """``load_reduce`` refuses the mediator on the stack, and on a malformed arg tuple."""
 
     helper = next(iter(_NUMPY_RECONSTRUCT_FUNCS))
-    unpickler = SafeBundleUnpickler(io.BytesIO(b""))
+    unpickler = _PurePythonBundleUnpickler(io.BytesIO(b""))
     unpickler.stack = [helper, (np.ndarray, (_N,), b"b")]  # type: ignore[attr-defined]
     with pytest.raises(pickle.UnpicklingError, match="mediated allocation"):
         unpickler.load_reduce()
@@ -777,6 +778,8 @@ def test_honest_artifact_round_trip_unaffected(
 
     loaded = tl.load(path)
 
-    assert loaded.num_ops == trace.num_ops
-    assert [str(op.label) for op in loaded.layer_list] == [str(op.label) for op in trace.layer_list]
+    assert loaded._num_ops == trace._num_ops
+    assert [str(op.label) for op in loaded._layer_list] == [
+        str(op.label) for op in trace._layer_list
+    ]
     tl.validation.validate_tlspec(path)

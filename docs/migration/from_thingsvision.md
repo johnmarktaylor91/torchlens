@@ -20,7 +20,7 @@ The shape of the migration:
 | bundled matched preprocessing | Resolve YOUR loader's own preprocessing and verify it: `torchlens.preprocessing.resolve(...)` / `.audit(...)`. |
 | `extractor.show_model()` | `torchlens.inventory.list_sites(model, x)` -- structured rows with copy-paste-safe selectors, shapes, and pass indices. |
 | `extract_features(batches, module_names=[...])` | `tl.extract(model, x, [...])` (one batch) or `tl.extract_dataset(...)` (datasets, disk artifacts, resume). |
-| `save_features(features, out_path, file_format=...)` | disk-mode `tl.extract_dataset(..., output_dir=...)` + `tl.load_extraction(...)`; per-site adapters in `torchlens.bridge`. |
+| `save_features(features, out_path, file_format=...)` | disk-mode `tl.extract_dataset(..., output_dir=...)` + `tl.load(...)`; per-site adapters in `torchlens.bridge`. |
 
 Two things to watch when carrying habits over:
 
@@ -34,7 +34,7 @@ Two things to watch when carrying habits over:
   On `tl.extract_dataset`, `transform=` transforms OUTPUTS before storage
   (thingsvision's `apply_transforms` habit). For input preprocessing in
   `extract_dataset`, use `input_transform=` -- carrying the trace habit into
-  `extract_dataset(transform=...)` would silently z-score your FEATURES
+  `extract_dataset(output_transform=...)` would silently z-score your FEATURES
   instead of your PIXELS.
 
 ## thingsvision and TorchLens cannot share one environment
@@ -101,13 +101,13 @@ import torchlens.preprocessing as pp
 weights = ResNet50_Weights.IMAGENET1K_V2
 model = resnet50(weights=weights).eval()
 pre = pp.resolve(weights)               # the loader's own declared recipe
-print(pre.record.description)           # resize=232 crop=224 (V2 -- not 256/224!)
+print(pre.preprocessing.description)           # resize=232 crop=224 (V2 -- not 256/224!)
 
 features = tl.extract_dataset(
     model,
     images,                             # any iterable of PIL images
     ["avgpool"],
-    output_dir="resnet50_features",
+    path="resnet50_features",
     input_transform=pre,                # applied AND recorded, verdict "verified"
     stimulus_ids=image_ids,
 )
@@ -131,7 +131,7 @@ model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").eval()
 processor = AutoImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
 pre = pp.resolve(processor)
 
-pixel_values = pre.transform(images)["pixel_values"]
+pixel_values = pre.input_transform(images)["pixel_values"]
 out = tl.extract(model, [input_ids, pixel_values], ["vision_model.post_layernorm"])
 with torch.no_grad():
     image_embeds = model.visual_projection(out["vision_model.post_layernorm"])
@@ -149,7 +149,7 @@ extraction artifact plus per-site adapters -- the artifact's manifest is the
 row-order authority and carries the input-preprocessing provenance block:
 
 ```python
-loaded = tl.load_extraction("resnet50_features")
+loaded = tl.load("resnet50_features")
 print(loaded.input_preprocessing["verdict"])    # "verified" / "mismatch" / "unknown"
 
 from torchlens.bridge import rsatoolbox as tl_rsa
@@ -159,3 +159,8 @@ dataset = tl_rsa.dataset("resnet50_features", site="avgpool")  # layer-wise RSA
 For gLocal and other learned alignment transforms, keep using thingsvision's
 own implementations over the exported matrices -- see
 [bring your own alignment](../neuroai/byo_alignment.md).
+
+To keep large layers small during extraction, pass
+`transform={"layer4": tl.transforms.srp(n_components, seed=0)}` to
+`tl.extract_dataset`: sparse random projection, the speed trick DeepJuice uses for
+brain benchmarking (worked example in [model zoos](from_model_zoos.md)).

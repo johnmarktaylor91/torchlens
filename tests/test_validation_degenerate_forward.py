@@ -24,7 +24,7 @@ from torch import nn
 import torchlens as tl
 import torchlens.validation._degenerate_forward as degenerate_forward
 import torchlens.validation.core as validation_core
-from torchlens.user_funcs import _run_model_and_save_specified_outs
+from torchlens._user_funcs import _run_model_and_save_specified_outs
 from torchlens.validation import last_validation_failure
 from torchlens.validation._degenerate_forward import (
     degenerate_forward_kind,
@@ -164,7 +164,7 @@ def test_all_nan_forward_fails_as_degenerate_forward() -> None:
     assert _validate(model, torch.full((2, 4), float("nan"))) is False
     failure = last_validation_failure()
     assert failure is not None, "a degenerate forward must still record its failure"
-    assert failure.check == CHECK_DEGENERATE_FORWARD, failure.summary()
+    assert failure.check_name == CHECK_DEGENERATE_FORWARD, failure.summary()
     assert failure.extra["degenerate_kind"] == "non_finite_output"
     assert failure.op_label is not None and failure.op_label.startswith("batchnorm")
 
@@ -176,7 +176,7 @@ def test_zero_gradient_autograd_grad_forward_fails_as_degenerate_forward() -> No
     assert _validate(_ZeroHeadEnergy(), torch.randn(2, 3), torch.randn(2, 3)) is False
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == CHECK_DEGENERATE_FORWARD, failure.summary()
+    assert failure.check_name == CHECK_DEGENERATE_FORWARD, failure.summary()
     assert failure.extra["degenerate_kind"] == "zero_gradient"
     assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")
 
@@ -189,7 +189,7 @@ def test_mis_recorded_parent_in_finite_forward_stays_a_perturbation_failure() ->
         assert _validate(_TanhMul(), torch.randn(2, 4)) is False
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == CHECK_PERTURBATION, failure.summary()
+    assert failure.check_name == CHECK_PERTURBATION, failure.summary()
     assert "degenerate_kind" not in failure.extra
     assert failure.op_label is not None and failure.op_label.startswith("mul")
 
@@ -204,7 +204,7 @@ def test_mis_recorded_parent_with_partly_nan_output_stays_a_perturbation_failure
         assert _validate(_TanhMul(), x) is False
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == CHECK_PERTURBATION, failure.summary()
+    assert failure.check_name == CHECK_PERTURBATION, failure.summary()
 
 
 def _op(out: Any, func: Any = None) -> Any:
@@ -232,7 +232,7 @@ def test_zero_output_is_degenerate_only_for_autograd_grad() -> None:
     zero = _op(torch.zeros(3))
     assert degenerate_forward_kind(zero) is None
     failure = perturbation_insensitive_failure(zero, "relu_1_1", ["input_1"])
-    assert failure.check == CHECK_PERTURBATION
+    assert failure.check_name == CHECK_PERTURBATION
     assert failure.extra == {"perturbed_parents": ["input_1"]}
 
 
@@ -246,7 +246,7 @@ def test_all_nan_final_outputs_fail_the_run_as_degenerate_forward() -> None:
     assert _validate(_Mlp(), x) is False
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == CHECK_DEGENERATE_FORWARD, failure.summary()
+    assert failure.check_name == CHECK_DEGENERATE_FORWARD, failure.summary()
     assert failure.extra["degenerate_kind"] == "non_finite_output"
     assert failure.extra["scope"] == "final_outputs"
     assert failure.op_label is not None and failure.op_label.startswith("output")
@@ -258,7 +258,7 @@ def test_all_inf_final_outputs_fail_the_run_as_degenerate_forward() -> None:
     torch.manual_seed(0)
     assert _validate(_Mlp(), torch.full((2, 4), float("inf"))) is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == CHECK_DEGENERATE_FORWARD
+    assert failure is not None and failure.check_name == CHECK_DEGENERATE_FORWARD
 
 
 def test_partly_nan_final_outputs_keep_todays_outcome() -> None:
@@ -282,7 +282,7 @@ def test_all_zero_final_outputs_keep_todays_outcome() -> None:
     after = _validate(_ZeroOutput(), x)
     assert after is before
     failure = last_validation_failure()
-    assert failure is None or failure.check != CHECK_DEGENERATE_FORWARD
+    assert failure is None or failure.check_name != CHECK_DEGENERATE_FORWARD
 
 
 def test_run_guard_ignores_empty_mixed_and_zero_outputs() -> None:
@@ -316,16 +316,16 @@ def test_direct_trace_validate_forward_pass_fails_all_nan_outputs() -> None:
             mark_layer_depths=False,
             detach_saved_activations=False,
             save_grads=False,
-            save_arg_values=True,
-            random_seed=0,
-            save_rng_states=True,
+            save_args=True,
+            seed=0,
+            save_rng=True,
         )
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             assert trace.validate_forward_pass([ground_truth]) is False
         failure = get_validation_failure(trace)
-        assert failure is not None and failure.check == CHECK_DEGENERATE_FORWARD
+        assert failure is not None and failure.check_name == CHECK_DEGENERATE_FORWARD
         assert trace.validation_replay_status.state == "failed"
     finally:
         trace.cleanup()

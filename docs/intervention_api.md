@@ -1,7 +1,14 @@
 # Intervention API Reference
 
-This page documents the public v2 intervention API that shipped in the current
-branch. It avoids proposed naming changes from separate design workstreams.
+This page documents the public intervention API: selectors, edit helpers, hooks,
+replay and bundles.
+
+To apply one intervention to many forwards or a `generate()` loop, use `spec.bind(model)`
+(capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec)` (the
+model output is `recording.output`) when you need activations too, or rerun a steered trace with
+`trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
+entry "Guarded fast rerun"). Recipe: "Steering many forwards / generation" in
+[agent-reference/common-patterns.md](agent-reference/common-patterns.md).
 
 ## Selectors
 
@@ -12,15 +19,16 @@ Selectors resolve against completed `Trace.layers` records.
 | `tl.label` | `label(name: str)` | Exact final, raw, short, or pass-qualified label. |
 | `tl.func` | `func(name: str)` | Match captured function name OR normalized layer type such as `"relu"` or `"add"`. |
 | `tl.module` | `module(address: str)` | Match a module output boundary. |
-| `tl.contains` | `contains(substring: str)` | Case-insensitive label substring search. |
-| `tl.regex` | `regex(pattern: str)` | Case-sensitive `re.search` over labels. |
+| `tl.label_contains` | `label_contains(substring: str)` | Case-insensitive label substring search. |
+| `tl.label_matches` | `label_matches(pattern: str)` | Case-sensitive `re.search` over labels. |
+| `tl.all_sites` | `all_sites()` | Every site; the named form of `tl.label_matches(".*")`. `tl.all_sites() - region` is the complement of `region` in the whole trace. |
 | `tl.where` | `where(predicate, *, name_hint=None)` | Predicate over layer pass records; non-portable. |
 | `tl.in_module` | `in_module(address: str)` | Match sites contained in a module address. |
-| `tl.grad_fn_label` | `grad_fn_label(name: str)` | Exact backward grad_fn label (backward sites only). |
+| `tl.grad_fn` | `grad_fn(name=None, *, label=None, is_custom=None)` | Backward grad_fn by autograd class name, label substring or custom flag (backward sites only). |
 
 One interpreter evaluates every selector in every lifecycle (capture-time
-`save=`, post-hoc `find_sites`, live hooks); `contains` is case-insensitive and
-`regex` case-sensitive everywhere. Post-hoc `contains`/`regex` search the
+`save=`, post-hoc `find_sites`, live hooks); `label_contains` is case-insensitive and
+`label_matches` case-sensitive everywhere. Post-hoc `label_contains`/`label_matches` search the
 final `layer_label` only; exact `tl.label` additionally matches raw, short,
 and pass-qualified spellings. Capture-only selectors (`tl.followed_by`,
 `tl.preceded_by`) and mutator-only selectors (`tl.facet`, `tl.head`) refuse
@@ -59,8 +67,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -72,7 +79,7 @@ conditional = tl.trace(
     model,
     x,
     intervene=tl.when(tl.func("relu") & tl.preceded_by(tl.in_module("block")), tl.zero_ablate()),
-    lookback=4,
+capture=CaptureOptions(lookback=4),
 )
 ```
 
@@ -81,22 +88,21 @@ portable selector after discovery.
 
 ## Forward Helpers
 
-Forward helpers return `HelperSpec` objects that can be passed to `set`,
+Forward helpers return `Edit` objects that can be passed to `set`,
 `attach_hooks`, `do`, live capture `hooks=...`, replay, or rerun.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
-| `tl.zero_ablate` | `zero_ablate(*, force_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
-| `tl.mean_ablate` | `mean_ablate(source=None, *, over="self", force_shape_change=False)` | Portable for supported tensor/self sources; batch-dependent policies can block append. |
-| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, force_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
-| `tl.steer` | `steer(direction, magnitude=1.0, *, coef=None, feature_axis=None, force_shape_change=False)` | Portable when `direction` is serializable tensor data. |
-| `tl.scale` | `scale(factor, *, force_shape_change=False)` | Portable built-in and append-compatible. |
-| `tl.clamp` | `clamp(*, min=None, max=None, force_shape_change=False)` | Portable built-in and append-compatible. |
-| `tl.noise` | `noise(std, *, seed=None, force_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
-| `tl.project_onto` | `project_onto(direction, *, feature_axis=None, force_shape_change=False)` | Portable when `direction` is tensor data. |
-| `tl.project_off` | `project_off(direction, *, feature_axis=None, force_shape_change=False)` | Portable when `direction` is tensor data. |
-| `tl.swap_with` | `swap_with(other_label, *, force_shape_change=False)` | Tensor and Op-like (`.out`) sources work in memory; **string labels are not supported and raise `HookValueError` immediately** -- no execution path resolves a bare label to another site's tensor today. |
-| `tl.splice_module` | `splice_module(module, *, input="in", output="out", force_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
+| `tl.zero_ablate` | `zero_ablate(*, allow_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
+| `tl.mean_ablate` | `mean_ablate(source=None, *, dim, allow_shape_change=False)` | The one mean door; `dim` is required (`None` for every axis, else the axes). Portable for self and tensor sources; a population source is audit-only; the self mean couples the batch and blocks append. |
+| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
+| `tl.steer` | `steer(direction, strength=1.0, *, coef=None, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
+| `tl.scale` | `scale(factor, *, allow_shape_change=False)` | Portable built-in and append-compatible. |
+| `tl.clamp` | `clamp(*, low=None, high=None, allow_shape_change=False)` | Portable built-in and append-compatible. |
+| `tl.add_noise` | `add_noise(std, *, seed=None, allow_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
+| `tl.project_onto` | `project_onto(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
+| `tl.project_out` | `project_out(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
+| `tl.splice_module` | `splice_module(module, *, input_route="in", output_route="out", allow_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
 
 The packaged SAE splice experiment, `torchlens.bridge.sae.splice(...)`
 (documented-unstable), composes `splice_module` with fork + push: it swaps a
@@ -107,29 +113,44 @@ reconstruction fidelity plus output-level causal effect. The optional
 the feature-level causal-testing knob. See
 `notebooks/sae_splice_tutorial.ipynb` for the end-to-end experiment.
 
-## Backward Helpers
+## Gradient Sites
 
-Backward helpers are Tier-1 live/rerun-only helpers.
+A gradient is addressed as a site, not chosen by a keyword. `tl.grad("relu_3")` names the gradient of
+relu_3's OUTPUT (the tensor `trace["relu_3"].grad` stores), a bare `"relu_3"` names its activation, and
+`tl.grad("relu_3") | "relu_3"` names both. `tl.grad` is an address; it never calls autograd. It wraps a
+forward site once and refuses node selectors (`tl.grad_fn`, ...), facets and selections.
 
-| Helper | Signature | Portability |
-| --- | --- | --- |
-| `tl.bwd_hook` | `bwd_hook(fn)` | Live/rerun-only; not portable. |
-| `tl.grad_zero` | `grad_zero(*, force_shape_change=False)` | Live/rerun-only; not portable. |
-| `tl.grad_scale` | `grad_scale(factor, *, force_shape_change=False)` | Live/rerun-only; not portable. |
+There are no gradient-only helpers. The ordinary edits apply to whichever tensor the site names:
+
+| Edit | On `tl.grad(site)` |
+| --- | --- |
+| `tl.scale(f)`, `tl.zero_ablate()`, `tl.clamp(low=lo, high=hi)`, `tl.add_noise(std, seed=)` | Scale, zero, clamp or add noise to the gradient. |
+| `tl.clip_norm(max_norm, norm_type=2.0)` | Rescale the gradient so its norm is at most `max_norm`, per tensor. Portable. |
+| A callable `fn(grad, *, ctx)` | Receives the gradient; return a replacement or `None`. Audit-only when saved. |
+
+Edits that read recorded forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`,
+`tl.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
+
+`trace.do(tl.grad(site), edit, model=model, inputs=x)` reruns the forward with the edit armed; the next
+`result.backward(loss)` applies it. `loss=lambda t: ...` (a callable of the returned trace) does both in
+one call. The audit row status is `"armed"` until a backward settles it. Without `model=` and `x=` (or
+`intervention=tl.options.InterventionOptions(engine="set_only")` to arm in place), `do` refuses
+`replay_gradient_edit_unsupported`.
 
 Hook callables receive one positional tensor and a required keyword-only
-`hook` context. For forward hooks the positional tensor is the activation; for
-backward hooks it is the gradient. The positional parameter is matched by
-position, so `def hook(activation, *, hook): ...` and
-`lambda g, *, hook: ...` are both valid. Hooks must return the replacement
+`ctx` context. For an activation site the positional tensor is the activation; for
+a gradient site it is the gradient. The positional parameter is matched by
+position, so `def hook(activation, *, ctx): ...` and
+`lambda g, *, ctx: ...` are both valid. `ctx.state` is the per-(site, hook) scratch dict,
+`ctx.run_state` the run-scoped one, and `ctx.signal` is `"forward"` or `"backward"`. Hooks must return the replacement
 tensor.
 
 ## Attribution Patching
 
-Attribution-patching examples in this guide use the `(corrupt - clean) * patched`
+Attribution-patching examples in this guide use the `(corrupted_graph - clean) * patched`
 sign convention so positive scores mean the patched activation moves the run
 toward the corrupt direction under that local linearization. The more common
-TransformerLens presentation is `grad * (clean - corrupt)`. Both are valid as
+TransformerLens presentation is `grad * (clean - corrupted_graph)`. Both are valid as
 long as the sign convention is named and used consistently.
 
 ## Raw PyTorch Forward Hooks
@@ -150,9 +171,19 @@ finally:
     handle.remove()
 ```
 
-If a raw hook returns a new tensor, TorchLens instruments that replacement and
-marks the corresponding layer pass with `intervention_replaced=True`, so
-downstream op-level graph structure remains available.
+If a raw hook returns a new tensor, TorchLens instruments that replacement, so
+downstream op-level graph structure remains available: torch ops the hook runs
+are traced as ordinary ops, and a tensor with no traceable provenance is
+recorded as an `interventionreplacement_*` op marked `is_edited=True`.
+
+A capture-time module edit (`intervene=tl.when(tl.module("block"), ...)`) is
+always recorded as its own `interventionreplacement_*` op, with
+`is_edited=True` and its fire records on `.interventions`, placed
+between the module's last op and that op's consumers. The module's last op keeps
+the value it computed, before the edit. The edited value is the replacement
+op's `.out`, and it is what `tl.module("block")` reads as the module's output.
+Every later op is renumbered (a label's last number is its position), so compare
+traces through `Bundle` site reads, which pair ops by structure, not by label.
 
 ## Capture-Time Recording
 
@@ -176,15 +207,16 @@ capability statement).
 Forward exceptions keep the historical behavior unless you opt in. With
 `on_forward_error="attach_partial"`, TorchLens attaches `exc.partial_recording` and re-raises
 the original exception. With `on_forward_error="return_partial"`, `tl.record(...)` returns a
-failed partial `Recording`; `return_output=True` returns `(None, partial)` because there is no
-valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
-string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields. user-op
+failed partial `Recording`; its `output` refuses with `output_forward_failed` because there is
+no valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
+string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials are not topology-complete, so `Recording.to_trace()` and
-`Recording.log_backward()` reject them.
+`Recording.backward()` reject them.
 
-For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
-`tl.partial.from_failed_capture(exc)`.
+A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`, chained
+`from` the forward's own exception (`exc.__cause__`); inspect the partial capture on
+`exc.partial_trace`.
 
 ## Trace Mutators
 
@@ -192,7 +224,7 @@ For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
 | --- | --- |
 | `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
 | `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
-| `log.do(...)` / `tl.do(log, ...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
+| `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
 | `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
@@ -201,7 +233,7 @@ For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
 There are two distinct intervention paths, and they do not mix implicitly:
 (1) edit a SAVED value and push the effect downstream on the captured DAG
 (`do()` on a resolved selection, `push_from`, direct writes), and (2)
-intervene on a FRESH execution (`do(..., model=..., x=..., intervention=InterventionOptions(engine="rerun"))`
+intervene on a FRESH execution (`do(..., model=..., inputs=..., intervention=InterventionOptions(engine="rerun"))`
 or a new capture with `intervene=...`). A new-input `run(inputs=...)` on a
 trace carrying path-1 value-edits is a fresh execution — the edits do NOT
 apply to it, and TorchLens discloses that at the run door with
@@ -209,18 +241,64 @@ apply to it, and TorchLens discloses that at the run door with
 silently returning an un-edited verified run. The run itself proceeds:
 this is a disclosure, never a refusal.
 
-`Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
+`log.do([(selection, edit), ...])` applies a list of selection and edit pairs
+as one transaction with one intervention event. Activation (ACT) pairs attach
+together and push once. A batch may also carry parameter selections
+(`tl.param(...)`) and dataflow edge selections (from `log.graph.edges`); on the
+replay engine the pairs then run in order exactly as one `do()` per pair would
+(each run of consecutive activation pairs attaches and pushes together; each
+parameter or edge pair goes through its own substitution path), and the result
+equals those calls made one at a time. The batch is atomic: if any pair is
+refused, every value, hook, audit row and history record the batch wrote is
+put back, and the trace keeps only the one error event for the failed call.
+Parameter and edge edits apply on the replay engine only, so a mixed batch on
+another engine refuses with `selection_batch_cross_kind` before anything runs;
+pass `intervention=tl.options.InterventionOptions(engine="replay")`. Leaf sites
+(inputs and buffers) still cannot join a batch (`selection_batch_leaf_unsupported`).
+
+The two engines differ sharply in cost when you sweep many edits over one
+captured input. On the 144-head ablation sweep of a 12-layer, 12-head GPT-2
+configuration (585 captured ops; `benchmarks/head_sweep_engine_cost.py`), the
+push engine (`engine="replay"`) took about 2.1 minutes for all 144 heads
+(129 s and 125 s in two runs; median 0.60-0.62 s per head) and the rerun
+engine (`engine="rerun"`) about 34 minutes (2052 s and 2008 s; median
+13.5-13.7 s per head), on CPU with four torch threads (torch 2.13) on a shared
+32-core x86-64 Linux host. Both engines produce bitwise-identical ablated
+traces on all 144 heads, so the difference is cost only. A rerun re-executes
+every captured op, and from an intervention-ready source it also runs under
+the host RNG monitor, so its cost is the same for every site; push cost grows
+with the edited site's downstream cone. Prefer push for many edits on one
+captured input, and use rerun when the edit must see a fresh execution.
+A rerun from an intervention-ready source also snapshots the model state
+before its forward pass, as every intervention-ready capture does; each state
+entry whose bytes are unchanged since the source capture shares the source's
+snapshot instead of being cloned again, so on this sweep a rerun copies about
+54 MB of tensors instead of about 706 MB, and an entry that changed (an
+in-place weight edit, say) is cloned afresh. Every edit on either engine
+starts with `trace.fork()`, whose cost is fixed by the size of the trace, not
+by the edit: on this 585-op trace a fork takes about 0.08-0.09 s and makes
+about 419,000 Python calls (about 580,000 before its label tables were copied
+directly), which is the floor under the fastest push edits. A rerun that
+refreshes its fork in place releases the capture it discarded before it
+returns, so a fork made right after a rerun costs the same as any other
+(about 420,000 calls; about 1.25 million before, when that capture's cleanup
+ran inside whatever came next, typically the next fork).
+
+`Trace.draw(intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
-`log.set(...)` or `log.do(...)`. Capture-time `intervene=...` calls record
+`log.set(...)` or `log.do(...)`. Each edited node gets a purple ring and a
+last row naming the edit (`Δ zero_ablate`), and the header names the edits;
+`show_cone=True` (off by default) adds a translucent purple underlay
+under the arrows and node outlines the edit changed downstream. Capture-time `intervene=...` calls record
 fire metadata on matched layers, but they are not replay plans and are not
 drawn as planned sites.
 
 ## Bundle
 
-Construct with `tl.bundle(...)` or `tl.Bundle(...)`:
+Construct with `tl.Bundle(...)`:
 
 ```python
-bundle = tl.bundle({"clean": clean_log, "patched": patched_log}, baseline="clean")
+bundle = tl.Bundle({"clean": clean_log, "patched": patched_log}, baseline="clean")
 ```
 
 Common operations:
@@ -229,11 +307,16 @@ Common operations:
 | --- | --- |
 | `bundle.names` | Member names in order. |
 | `bundle["clean"]` | Access one `Trace`. |
-| `bundle.node(site)` | Return a `SuperOp` across members after relationship checks. |
-| `bundle.compare_at(site)` | Pairwise comparison matrix at a shared site. |
-| `bundle.joint_metric(fn)` | Apply a metric to the whole bundle. |
-| `bundle.do(...)`, `bundle.attach_hooks(...)`, `bundle.push()`, `bundle.run(model, x)` | Apply mutator/propagation calls to each member (the former `replay`/`rerun` aliases are removed). |
+| `bundle.at(site)` | Return the `Super*` view of one site (a label or a selector) across members after relationship checks. |
+| `bundle.at(site).compare()` | Pairwise comparison matrix at a shared site, after the comparison gate. |
+| `fn(bundle)` | A metric over the whole bundle is a plain call; `bundle.map(fn)` is the per-member door. |
+| `bundle.do(...)`, `bundle.run(model, x)` | Apply an edit (do applies and replays it) or a re-run to each member. |
 | `bundle.fork(name=None)` | Fork all members into a new bundle. |
+
+Site reads (`most_changed`, `compare`) pair ops across members through the
+bundle's structural alignment, not by literal label, so an op renumbered by an
+inserted edit op still meets its counterpart. A site that only some members have
+(such as the replacement op a module edit inserts) is not scored.
 
 Relationship gates are intentional, and they check two predicates separately:
 a model-axis floor (`node` needs `same_param_shapes`; comparison reads need
@@ -243,11 +326,11 @@ proof of input equality, unprovable input identity refuses fail-closed
 (`bundle_gate_input_identity_unproven`), and members joined by an ordering
 relation (`successor_of`/`forked_from`/`escalates`) are not comparison
 operands regardless of rank (`bundle_gate_ordering_topology`). Pair-scoped
-reads (`diff_pair(a, b)`, `most_changed` baseline pairs) gate only the
+reads (`compare(a, b)`, `most_changed` baseline pairs) gate only the
 operands they actually read.
 
 ## Cohort Migration
 
 | TransformerLens pattern | TorchLens pattern |
 | --- | --- |
-| `act_patch` attribution patching | Attach a `tl.bwd_hook(...)` gradient observer at the site, then `log.run(model, x)` under the active spec and score from the captured gradients/outs. |
+| `act_patch` attribution patching | Attach a `tl.observers.tap(tl.grad(site))` gradient observer (or a callable on `tl.grad(site)`), run `log.run(model, x)` under the active spec, call `result.backward(loss)` and score from the captured gradients/outs. |

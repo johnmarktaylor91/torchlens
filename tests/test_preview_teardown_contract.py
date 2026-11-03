@@ -102,9 +102,9 @@ def test_mlx_teardown_failure_escapes_productless(monkeypatch: pytest.MonkeyPatc
     import mlx.core as mx
 
     import torchlens as tl
+    from torchlens._capture.outcome import outcome_for
     from torchlens.backends.mlx import backend as mlx_backend_mod
     from torchlens.backends.mlx.wrappers import is_mlx_wrapped
-    from torchlens.capture.outcome import outcome_for
 
     seen: dict[str, Any] = {}
 
@@ -135,9 +135,9 @@ def test_paddle_teardown_failure_escapes_productless(
     paddle = pytest.importorskip("paddle")
 
     import torchlens as tl
+    from torchlens._capture.outcome import outcome_for
     from torchlens.backends.paddle import backend as paddle_backend_mod
     from torchlens.backends.paddle.wrappers import is_paddle_wrapped
-    from torchlens.capture.outcome import outcome_for
 
     seen: dict[str, Any] = {}
 

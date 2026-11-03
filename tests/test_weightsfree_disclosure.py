@@ -51,9 +51,9 @@ def test_envelope_stamped_and_load_valid() -> None:
     from torchlens._io.forgery_validation import _validate_structure_evidence
 
     trace = _meta_capture()
-    assert trace.structure_evidence is not None
+    assert trace.graph.structure_evidence is not None
     _validate_structure_evidence(trace)  # raises on any schema violation
-    envelope = trace.structure_evidence
+    envelope = trace.graph.structure_evidence
     assert envelope["substrate"] == "meta"
     assert envelope["factory_device_policy"] == "torchlens_owned"
     assert envelope["outcome"] == "complete"
@@ -63,7 +63,7 @@ def test_envelope_stamped_and_load_valid() -> None:
 
 def test_ordinary_capture_carries_no_envelope() -> None:
     trace = tl.trace(Toy(), torch.randn(2, 4))
-    assert trace.structure_evidence is None
+    assert trace.graph.structure_evidence is None
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ def _channel_summary(trace, tmp_path):
 
 
 def _channel_slice_summary(trace, tmp_path):
-    labels = [layer.label for layer in trace.layer_list]
+    labels = [layer.label for layer in trace._layer_list]
     return trace.between([labels[0]], [labels[-1]]).summary()
 
 
@@ -128,7 +128,7 @@ def _channel_agent_json(trace, tmp_path):
 
 
 def _channel_explain(trace, tmp_path):
-    return tl.report.explain(trace)
+    return trace.explain()
 
 
 def _channel_csv(trace, tmp_path):
@@ -182,7 +182,7 @@ def test_dot_render_carries_banner(tmp_path) -> None:
     """The rendered graph caption carries the banner (memo L7's named hole)."""
 
     trace = _meta_capture()
-    trace.draw(vis_outpath=str(tmp_path / "graph"), vis_save_only=True, vis_fileformat="dot")
+    trace.draw(path=str(tmp_path / "graph"), file_format="dot")
     candidates = list(tmp_path.glob("graph*"))
     assert candidates, "draw produced no graph artifact"
     text = "".join(path.read_text(encoding="utf-8", errors="ignore") for path in candidates).lower()
@@ -198,7 +198,7 @@ def test_dot_render_carries_banner(tmp_path) -> None:
     "export_name", ["chrome_trace", "speedscope", "flamegraph", "memory_timeline"]
 )
 def test_measurement_exports_refuse_typed(export_name: str, tmp_path) -> None:
-    from torchlens.capture.structure_only import StructureOnlyCapabilityError
+    from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
     trace = _meta_capture()
     exporter = getattr(tl.export, export_name)
@@ -209,7 +209,7 @@ def test_measurement_exports_refuse_typed(export_name: str, tmp_path) -> None:
 
 def test_xarray_refuses_through_values_code(tmp_path) -> None:
     pytest.importorskip("xarray")
-    from torchlens.capture.structure_only import StructureOnlyCapabilityError
+    from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
     trace = _meta_capture()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:

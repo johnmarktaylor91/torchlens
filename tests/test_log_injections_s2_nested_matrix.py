@@ -30,6 +30,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 
@@ -64,7 +65,7 @@ def test_nested_trace_inside_hook_refuses_reentrant(chain) -> None:
 
     model, x = chain
 
-    def nested(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def nested(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Attempt a nested capture mid-hook."""
 
         tl.trace(nn.Linear(4, 4).eval(), torch.randn(2, 4))
@@ -90,20 +91,21 @@ def test_hook_calls_never_fire_other_rules_nesting_path_flat(chain) -> None:
 
     model, x = chain
 
-    def outer(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def outer(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Inject a tanh call that textually matches the second rule."""
 
         return torch.tanh(out)
 
-    def never(out: torch.Tensor, *, hook) -> torch.Tensor:  # pragma: no cover
+    def never(out: torch.Tensor, *, ctx) -> torch.Tensor:  # pragma: no cover
         """Second rule's hook; firing inside the first hook would be a bug."""
 
         raise AssertionError("a hook fired on an injected op")
 
     spec = tl.when(tl.func("relu"), outer) & tl.when(tl.func("tanh"), never)
-    with pytest.raises(AssertionError):
+    with pytest.raises(TraceCaptureError) as _tce_info:
         # the MODEL tanh legitimately fires the second rule
         tl.trace(model, x, intervene=spec, capture=_LOGGED)
+    assert isinstance(_tce_info.value.__cause__, AssertionError)
     relu_only = tl.when(tl.func("relu"), outer)
     logged = tl.trace(model, x, intervene=relu_only, capture=_LOGGED)
     records = logged.injected_ops
@@ -120,13 +122,13 @@ def test_replay_fork_do_records_nothing_and_preserves_records(chain) -> None:
     logged = tl.trace(
         model,
         x,
-        intervene=tl.when(tl.func("relu"), lambda out, *, hook: torch.sigmoid(out)),
-        capture=tl.options.CaptureOptions(log_injections=True, intervention_ready=True),
+        intervene=tl.when(tl.func("relu"), lambda out, *, ctx: torch.sigmoid(out)),
+        capture=tl.options.CaptureOptions(log_injections=True, replayable=True),
     )
     before = logged.injected_ops
     assert len(before) == 1
     fork = logged.fork()
-    fork.do(tl.units("tanh_1_4", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("tanh_1_4", [(0, 0)])], tl.zero_ablate())
     assert logged.injected_ops == before
     fork_records = getattr(fork, "injected_ops", ())
     # the fork never gains NEW records from replay-side execution
@@ -144,7 +146,7 @@ def test_record_has_no_injection_spelling_and_cooked_traces_are_empty(chain) -> 
         model,
         x,
         save=tl.func("relu"),
-        intervene=tl.when(tl.func("relu"), lambda out, *, hook: torch.sigmoid(out)),
+        intervene=tl.when(tl.func("relu"), lambda out, *, ctx: torch.sigmoid(out)),
     )
     cooked = recording.to_trace()
     assert cooked.injected_ops == ()
@@ -171,7 +173,7 @@ def test_episode_intervene_refusal_keeps_injections_unreachable(chain) -> None:
 
     model, x = chain
     root = _Root(model).eval()
-    spec = tl.options.EpisodeSpec(stepped_module=model, n_steps=3)
+    spec = tl.options.EpisodeOptions(stepped_module=model, num_steps=3)
     for capture in (None, _LOGGED):
         kwargs = {"capture": capture} if capture is not None else {}
         with pytest.raises(Exception) as excinfo:
@@ -179,7 +181,7 @@ def test_episode_intervene_refusal_keeps_injections_unreachable(chain) -> None:
                 root,
                 x,
                 episode=spec,
-                intervene=tl.when(tl.func("relu"), lambda out, *, hook: out),
+                intervene=tl.when(tl.func("relu"), lambda out, *, ctx: out),
                 **kwargs,
             )
         assert "episode" in type(excinfo.value).__name__.lower() or "episode" in str(excinfo.value)

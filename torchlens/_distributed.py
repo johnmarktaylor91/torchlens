@@ -10,17 +10,17 @@ silently wrong.
 Concretely, on a ``parallelize_module``-wrapped ``nn.Linear`` (tensor parallel),
 capture used to report ``0 total modules`` and ``0 params total; 0 B``, with the
 ``linear`` op itself absent from the graph and replaced by bare ``viewas``
-nodes, while ``tl.compat.report`` reported all-pass for the same model.
+nodes, while ``tl.report.doctor`` reported all-pass for the same model.
 All-pass-then-silently-wrong is the worst possible ordering, so this module
 centralises the detection used by *both* surfaces:
 
-* :func:`torchlens.compat.report` gains ``dtensor``, ``device_mesh``,
+* :func:`torchlens.report.doctor` gains ``dtensor``, ``device_mesh``,
   ``tensor_parallel``, and ``pipeline_parallel`` rows, and
 * capture entry (:func:`torchlens._robustness.check_model_and_input_variants`)
   refuses with :class:`DistributedCaptureUnsupportedError` rather than returning
   a wrong trace.
 
-Detection is capability-probed through :mod:`torchlens.utils._torch_compat`
+Detection is capability-probed through :mod:`torchlens._utils._torch_compat`
 (never a ``torch.__version__`` parse) and costs a handful of ``sys.modules``
 lookups when no distributed namespace has been imported, which is the
 overwhelmingly common case.
@@ -41,12 +41,12 @@ from typing import Any
 import torch
 from torch import nn
 
-from .errors._base import CompatibilityError
-from .utils._torch_compat import (
+from ._utils._torch_compat import (
     get_device_mesh_type,
     get_dtensor_type,
     get_pipelining_module_types,
 )
+from .errors._base import CompatibilityError
 
 __all__ = [
     "DistributedCaptureUnsupportedError",
@@ -107,7 +107,7 @@ _SHARDED_TENSOR_MODULE_SENTINELS: tuple[str, ...] = (
 
 _DOCS_POINTER = (
     "See 'Distributed and Sharded Execution' in LIMITATIONS.md; run "
-    "torchlens.compat.report(model, x) for the full compatibility table."
+    "torchlens.report.doctor(model, x) for the full compatibility table."
 )
 
 # ``nn.Module`` owns these instance attributes itself; none can hold a
@@ -1045,7 +1045,8 @@ def _build_findings(evidence: _Evidence) -> tuple[DistributedFinding, ...]:
                     "Trace the undistributed module. Cross-rank merging "
                     "(tl.merge_ranks) covers dense-parameter captures with "
                     "explicit collectives; DTensor/TP capture stays refused "
-                    "until its capture fidelity is proven."
+                    "until its capture fidelity is proven (planned design: "
+                    "docs/reference/tensor_parallel_design.md)."
                 ),
                 sites=tp_sites,
                 exact=evidence.tp_module_exact,

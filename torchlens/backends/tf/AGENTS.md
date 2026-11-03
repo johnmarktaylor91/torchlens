@@ -1,7 +1,8 @@
 # backends/tf/ - Implementation Guide
 
-TensorFlow preview backend. Tier-1 standalone spec (no `capture_backend`); the
-`BackendSpec` in `../default_specs.py` is the only capability truth.
+TensorFlow preview backend. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+`BackendSpec` in `../default_specs.py` and its protocol shell in
+`../_protocols/tf.py` are the capability truth (contract: `../AGENTS.md`).
 
 ## backend.py
 - `TFBackend.capture_trace()` is the standalone entry. Eager `op_callbacks` live
@@ -10,8 +11,8 @@ TensorFlow preview backend. Tier-1 standalone spec (no `capture_backend`); the
 - `intervene=` combined with `grad_options=` refuses typed (the derived-gradient
   replay reruns the un-intervened forward). Both surfaces require eager live
   capture; the static path refuses each.
-- `halt=` and `recipes=` refuse typed as deferred on TF (NOT torch-only
-  elsewhere: Paddle's preview ships both `halt=` and `recipes=`), even though
+- `stop_after=` and `facets=` refuse typed as deferred on TF (NOT torch-only
+  elsewhere: Paddle's preview ships both `stop_after=` and `facets=`), even though
   the registry `interventions` flag admits them through the shared option
   gate.
 - `_finish_trace(recurrence_detection=...)` runs the shared neutral grouper via
@@ -61,7 +62,7 @@ TensorFlow preview backend. Tier-1 standalone spec (no `capture_backend`); the
   `get_tf_capability_snapshot()` feed doctor/compat reporting.
 
 ## Local Invariants
-- Deferred surfaces refuse typed, never silently no-op: `halt=`, `recipes=`,
+- Deferred surfaces refuse typed, never silently no-op: `stop_after=`, `facets=`,
   true backward capture, value-dependent predicate conditions.
 - `grad_options=` and `intervene=` never combine; static FuncGraph captures
   refuse both and keep `recurrence_detection=False`.

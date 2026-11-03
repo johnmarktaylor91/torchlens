@@ -13,12 +13,12 @@ import torch.nn as nn
 from test_leverage_div_fixtures import ReusedReluNet
 
 import torchlens as tl
+from torchlens._capture.preflight import address_preflight
 from torchlens._errors import InvalidArgumentError
 from torchlens._save_budget import SaveBudgetExceededError
-from torchlens.capture.preflight import address_preflight
 from torchlens.errors._base import TorchLensWarning
 
-_SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
+_SAVE_ALL = {"capture": tl.options.CaptureOptions()}
 
 
 def _traced_toy():
@@ -40,7 +40,7 @@ def test_overlay_zero_match_refuses(tmp_path):
     _, _, trace = _traced_toy()
     scores = {"s1|relu|relu||1": 1.0, "some_foreign_label": 2.0}
     with pytest.raises(InvalidArgumentError) as excinfo:
-        trace.draw(node_overlay=scores, vis_outpath=str(tmp_path / "g"), vis_save_only=True)
+        trace.draw(node_overlay=scores, path=str(tmp_path / "g"))
     assert excinfo.value.fields["code"] == "node_overlay_zero_match"
 
 
@@ -50,7 +50,7 @@ def test_overlay_partial_match_discloses(tmp_path):
     _, _, trace = _traced_toy()
     scores = {"relu_1_2": 1.0, "not_a_real_label": 2.0}
     with pytest.warns(TorchLensWarning) as warning_records:
-        trace.draw(node_overlay=scores, vis_outpath=str(tmp_path / "g"), vis_save_only=True)
+        trace.draw(node_overlay=scores, path=str(tmp_path / "g"))
     codes = {getattr(record.message, "fields", {}).get("code") for record in warning_records}
     assert "node_overlay_partial_match" in codes
 
@@ -59,7 +59,7 @@ def test_overlay_full_match_renders_silently(tmp_path, recwarn):
     """A fully-realized mapping renders without overlay warnings."""
 
     _, _, trace = _traced_toy()
-    trace.draw(node_overlay={"relu_1_2": 1.0}, vis_outpath=str(tmp_path / "g"), vis_save_only=True)
+    trace.draw(node_overlay={"relu_1_2": 1.0}, path=str(tmp_path / "g"))
     codes = {getattr(record.message, "fields", {}).get("code", None) for record in recwarn.list}
     assert "node_overlay_partial_match" not in codes
 
@@ -68,10 +68,12 @@ def test_overlay_full_match_renders_silently(tmp_path, recwarn):
 def test_overlay_selection_source_lowers_to_selected_counts(tmp_path):
     """Element-mask law: a Selection paints selected COUNTS, never membership."""
 
-    from torchlens.visualization.overlays import resolve_overlay_request
+    from torchlens._visualization.overlays import resolve_overlay_request
 
     _, _, trace = _traced_toy()
-    selection = tl.units("relu_1_2", [(0, 0, 0, 0), (0, 1, 1, 1)]).resolve(trace)
+    # grouping rule row 28: the reused relu instance is one Layer with 2 passes,
+    # so the selection addresses its first pass by the pass-qualified label.
+    selection = trace[tl.units("relu_1_2:1", [(0, 0, 0, 0), (0, 1, 1, 1)])]
     scores = resolve_overlay_request(trace, selection)
     assert scores == {"relu_1_2": 2}  # 2 selected elements, not "member: yes"
 
@@ -97,8 +99,10 @@ def test_cone_of_effect_op_origins_still_work():
     from torchlens.intervention.replay import cone_of_effect
 
     _, _, trace = _traced_toy()
-    cone = cone_of_effect(trace, trace["relu_1_2"].ops)
-    assert any(op.layer_label == "relu_2_4" for op in cone)
+    # grouping rule row 28: the reused relu instance is one Layer with 2 passes;
+    # the cone from its first call reaches its second call downstream.
+    cone = cone_of_effect(trace, [trace["relu_1_2:1"]])
+    assert any(op.label == "relu_1_2:2" for op in cone)
 
 
 def test_do_accepts_find_sites_output():
@@ -107,22 +111,22 @@ def test_do_accepts_find_sites_output():
     torch.manual_seed(0)
     model = ReusedReluNet()
     x = torch.rand(1, 2, 3, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = trace.fork()
     sites = trace.find_sites("conv2d_1_1")
     fork.do(sites, tl.zero_ablate())
     assert fork.intervention_audit  # fire evidence, never silence
 
 
-@pytest.mark.smoke
 def test_do_empty_site_table_refuses():
     from torchlens.intervention.errors import SiteResolutionError
-    from torchlens.intervention.resolver import SiteTable
 
     _, _, trace = _traced_toy()
     fork = trace.fork()
+    nothing = trace.find_sites(tl.func("tanh"))  # the toy has no tanh
+    assert len(nothing) == 0
     with pytest.raises(SiteResolutionError) as excinfo:
-        fork.do(SiteTable((), query="nothing"), tl.zero_ablate())
+        fork.do(nothing, tl.zero_ablate())
     assert excinfo.value.fields["code"] == "site_table_empty"
 
 
@@ -143,8 +147,8 @@ def test_when_refuses_raw_string_at_build():
 def test_escrow_spill_budget_refuses_typed():
     """Crossing the declared spill bound refuses with the accounting on fields."""
 
-    from torchlens.capture.plan import RetentionKind, RetentionProfile
-    from torchlens.capture.session import CaptureSession
+    from torchlens._capture.plan import RetentionKind, RetentionProfile
+    from torchlens._capture.session import CaptureSession
 
     profile = RetentionProfile(
         activation_kind=RetentionKind.ACTIVATION,
@@ -170,7 +174,7 @@ def test_escrow_spill_budget_refuses_typed():
 
 
 def test_escrow_budget_none_disables_bound(tmp_path):
-    from torchlens.capture.plan import RetentionProfile
+    from torchlens._capture.plan import RetentionProfile
 
     profile = RetentionProfile(escrow_spill_budget_bytes=None)
     assert profile.escrow_spill_budget_bytes is None
@@ -197,6 +201,42 @@ def test_address_preflight_output_and_ordinal_deferred():
     report = address_preflight(["output", 5])
     assert all(v.resolution == "deferred" for v in report.verdicts)
     assert report.escrowing
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [
+        lambda: ~tl.module("conv1"),
+        lambda: tl.module("conv1") | tl.func("relu"),
+    ],
+    ids=["not_module", "module_or_func"],
+)
+def test_address_preflight_mixed_module_selector_deferred(selector):
+    """``tl.module`` joined with a non-module term by ``|``, or negated, escrows every op."""
+
+    report = address_preflight(selector())
+    (verdict,) = report.verdicts
+    assert verdict.resolution == "deferred"
+    assert report.escrowing
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [
+        lambda: tl.module("conv1"),
+        lambda: tl.module("conv1") | tl.module("conv2"),
+        lambda: tl.module("conv1") & tl.func("relu"),
+        lambda: tl.func("relu"),
+    ],
+    ids=["module", "module_union", "module_and_func", "func"],
+)
+def test_address_preflight_pure_module_union_and_func_live(selector):
+    """Module-bounded selectors (``|`` unions, ``&`` intersections) and plain ones stay live."""
+
+    report = address_preflight(selector())
+    (verdict,) = report.verdicts
+    assert verdict.resolution == "live"
+    assert not report.escrowing
 
 
 class _NoSitesModel(nn.Module):

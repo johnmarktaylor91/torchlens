@@ -5,8 +5,8 @@ can answer, per record contract: which field names are DECLARED, which of
 them PERSIST (``FieldPolicy`` other than ``DROP``), what evidence TIER each
 persisted field carries, and which legacy alias spellings a reader still
 accepts. Everything here is DERIVED from the existing single sources of
-truth -- the per-class ``FIELD_POLICY`` tables (built from ``*_FIELD_ORDER``
-+ ``PORTABLE_STATE_SPEC``) and the raw ``PORTABLE_STATE_SPEC`` dicts on
+truth -- the per-class ``_FIELD_POLICY`` tables (built from ``*_FIELD_ORDER``
++ ``_PORTABLE_STATE_SPEC``) and the raw ``_PORTABLE_STATE_SPEC`` dicts on
 nested value classes -- so the registry can never drift from the code that
 actually serializes state. It declares NO new fields and moves NONE: field-set
 changes land only at the coordinated schema write (C07), through the
@@ -36,7 +36,7 @@ from functools import cache
 from importlib import import_module
 from typing import Any
 
-from . import FieldPolicy
+from ._field_policy import FieldPolicy
 
 
 class FieldTier(str, Enum):
@@ -52,44 +52,45 @@ class FieldTier(str, Enum):
 #: the lockstep test there guards the catalog list, the registry test here
 #: guards this mapping against it).
 RECORD_CONTRACT_CLASSES: dict[str, tuple[str, str]] = {
-    "trace": ("torchlens.data_classes.trace", "Trace"),
-    "op": ("torchlens.data_classes.op", "Op"),
-    "layer": ("torchlens.data_classes.layer", "Layer"),
-    "param": ("torchlens.data_classes.param", "Param"),
-    "buffer": ("torchlens.data_classes.buffer", "Buffer"),
-    "grad_fn": ("torchlens.data_classes.grad_fn", "GradFn"),
-    "grad_fn_call": ("torchlens.data_classes.grad_fn_call", "GradFnCall"),
-    "module_call": ("torchlens.data_classes.module", "ModuleCall"),
-    "module": ("torchlens.data_classes.module", "Module"),
-    "backward_pass": ("torchlens.data_classes.backward_pass", "BackwardPass"),
-    "func_call_location": ("torchlens.data_classes.func_call_location", "FuncCallLocation"),
-    "aten_op": ("torchlens.data_classes.aten_op", "AtenOp"),
+    "trace": ("torchlens._data_classes.trace", "Trace"),
+    "op": ("torchlens._data_classes.op", "Op"),
+    "layer": ("torchlens._data_classes.layer", "Layer"),
+    "param": ("torchlens._data_classes.param", "Param"),
+    "buffer": ("torchlens._data_classes.buffer", "Buffer"),
+    "grad_fn": ("torchlens._data_classes.grad_fn", "GradFn"),
+    "grad_fn_call": ("torchlens._data_classes.grad_fn_call", "GradFnCall"),
+    "module_call": ("torchlens._data_classes.module", "ModuleCall"),
+    "module": ("torchlens._data_classes.module", "Module"),
+    "backward_pass": ("torchlens._data_classes.backward_pass", "BackwardPass"),
+    "func_call_location": ("torchlens._data_classes.func_call_location", "FuncCallLocation"),
+    "aten_op": ("torchlens._data_classes.aten_op", "AtenOp"),
 }
 
-#: Modules that declare nested value-object ``PORTABLE_STATE_SPEC`` tables
+#: Modules that declare nested value-object ``_PORTABLE_STATE_SPEC`` tables
 #: (component contracts riding inside record state). Guarded by the source
 #: scan in tests/test_tlspec_envelope_registry.py: a new spec-declaring file
 #: not listed here fails that test, so the writer contract can never silently
 #: miss a component grammar.
 COMPONENT_SPEC_MODULES: tuple[str, ...] = (
-    "torchlens.data_classes._layer_accessors",
-    "torchlens.data_classes.aten_op",
-    "torchlens.data_classes.backward_pass",
-    "torchlens.data_classes.buffer",
-    "torchlens.data_classes.derived_grad",
-    "torchlens.data_classes.func_call_location",
-    "torchlens.data_classes.grad_fn",
-    "torchlens.data_classes.grad_fn_call",
-    "torchlens.data_classes.layer",
-    "torchlens.data_classes.module",
-    "torchlens.data_classes.op",
-    "torchlens.data_classes.prehook",
-    "torchlens.data_classes.trace",
+    "torchlens._data_classes._layer_accessors",
+    "torchlens._data_classes.aten_op",
+    "torchlens._data_classes.backward_pass",
+    "torchlens._data_classes.buffer",
+    "torchlens._data_classes.derived_grad",
+    "torchlens._data_classes.func_call_location",
+    "torchlens._data_classes.grad_fn",
+    "torchlens._data_classes.grad_fn_call",
+    "torchlens._data_classes.layer",
+    "torchlens._data_classes.module",
+    "torchlens._data_classes.op",
+    "torchlens._data_classes.prehook",
+    "torchlens._data_classes._trace_field_spec",
+    "torchlens._data_classes.trace",
     "torchlens.intervention.types",
-    "torchlens.ir.container",
-    "torchlens.ir.container_registry",
-    "torchlens.ir.events",
-    "torchlens.kernel_telemetry",
+    "torchlens._ir.container",
+    "torchlens._ir.container_registry",
+    "torchlens._ir.events",
+    "torchlens._kernel_telemetry",
 )
 
 #: Tier overrides for persisted fields with census evidence (DIGEST-AUDIT 4b,
@@ -111,8 +112,8 @@ _FIELD_TIER_OVERRIDES: dict[str, dict[str, FieldTier]] = {
         "internal_source_ancestors": FieldTier.DERIVED,
         "output_descendants": FieldTier.DERIVED,
         # P4c label projections (derivation caveats r2 C7 -- still derived).
-        "label_short": FieldTier.DERIVED,
-        "layer_label_short": FieldTier.DERIVED,
+        "short_label": FieldTier.DERIVED,
+        "short_layer_label": FieldTier.DERIVED,
         "lookup_keys": FieldTier.DERIVED,
         # E2 P6: never a real value on any backend; P7 KEEP-OPT candidates.
         "bytes_delta_at_call": FieldTier.ENRICHMENT,
@@ -122,7 +123,7 @@ _FIELD_TIER_OVERRIDES: dict[str, dict[str, FieldTier]] = {
         "code_context": FieldTier.ENRICHMENT,
     },
     "trace": {
-        "code_context": FieldTier.ENRICHMENT,
+        "_source_frames": FieldTier.ENRICHMENT,
     },
 }
 
@@ -151,7 +152,7 @@ def record_field_policies(record_key: str) -> dict[str, FieldPolicy]:
     """
 
     cls = _resolve_record_class(record_key)
-    field_policy = getattr(cls, "FIELD_POLICY")  # noqa: B009 -- typed as bare `type`
+    field_policy = getattr(cls, "_FIELD_POLICY")  # noqa: B009 -- typed as bare `type`
     return {name: row.portable_policy for name, row in field_policy.items()}
 
 
@@ -178,7 +179,7 @@ def field_tiers(record_key: str) -> dict[str, FieldTier]:
 
 
 def component_spec_tables() -> dict[str, dict[str, str]]:
-    """Collect every nested value-object ``PORTABLE_STATE_SPEC`` table.
+    """Collect every nested value-object ``_PORTABLE_STATE_SPEC`` table.
 
     Returns
     -------
@@ -195,7 +196,7 @@ def component_spec_tables() -> dict[str, dict[str, str]]:
             obj = getattr(module, attr_name)
             if not isinstance(obj, type):
                 continue
-            spec = obj.__dict__.get("PORTABLE_STATE_SPEC")
+            spec = obj.__dict__.get("_PORTABLE_STATE_SPEC")
             if not isinstance(spec, dict) or not spec:
                 continue
             qualname = f"{obj.__module__}.{obj.__qualname__}"
@@ -208,7 +209,7 @@ def known_state_keys(cls: type, *, extra: frozenset[str] = frozenset()) -> froze
 
     Used by the load-time known/unknown partition (state contract, MEMO 3.3):
     declared policy rows, default-fill spellings, class-declared legacy
-    aliases (``PORTABLE_STATE_ALIASES``), the version envelope, plus any
+    aliases (``_PORTABLE_STATE_ALIASES``), the version envelope, plus any
     call-site extras (keys the owning ``__setstate__`` consumes and pops
     before installing state).
 
@@ -226,19 +227,19 @@ def known_state_keys(cls: type, *, extra: frozenset[str] = frozenset()) -> froze
     """
 
     known: set[str] = {"tlspec_version", "_tlspec_prerelease"}
-    field_policy = getattr(cls, "FIELD_POLICY", None)
+    field_policy = getattr(cls, "_FIELD_POLICY", None)
     if field_policy:
         known.update(field_policy.keys())
-    spec = getattr(cls, "PORTABLE_STATE_SPEC", None)
+    spec = getattr(cls, "_PORTABLE_STATE_SPEC", None)
     if isinstance(spec, dict):
         known.update(spec.keys())
-    defaults = getattr(cls, "DEFAULT_FILL_STATE", None)
+    defaults = getattr(cls, "_DEFAULT_FILL_STATE", None)
     if isinstance(defaults, dict):
         known.update(defaults.keys())
-    aliases = getattr(cls, "PORTABLE_STATE_ALIASES", None)
+    aliases = getattr(cls, "_PORTABLE_STATE_ALIASES", None)
     if aliases:
         known.update(aliases)
-    mirror = getattr(cls, "PORTABLE_STATE_MIRROR_CONTRACT", None)
+    mirror = getattr(cls, "_PORTABLE_STATE_MIRROR_CONTRACT", None)
     if mirror is not None:
         # Aggregate facades (Layer over Op) pickle the mirrored record's
         # field surface; fold the mirrored contract into the known set.
@@ -252,7 +253,8 @@ def registry_snapshot() -> dict[str, Any]:
     """One JSON-serializable snapshot of the whole registry.
 
     The canonical input to the writer contract digest and the committed
-    contract-of-record golden (``torchlens/schemas/writer_contract_v9.json``).
+    contract-of-record golden
+    (``torchlens/schemas/writer_contract_v<TLSPEC_VERSION>.json``).
     """
 
     records: dict[str, Any] = {}
@@ -260,7 +262,7 @@ def registry_snapshot() -> dict[str, Any]:
         policies = record_field_policies(record_key)
         tiers = field_tiers(record_key)
         cls = _resolve_record_class(record_key)
-        aliases = sorted(getattr(cls, "PORTABLE_STATE_ALIASES", ()) or ())
+        aliases = sorted(getattr(cls, "_PORTABLE_STATE_ALIASES", ()) or ())
         records[record_key] = {
             "class": f"{cls.__module__}.{cls.__qualname__}",
             "field_policies": {name: policy.value for name, policy in sorted(policies.items())},

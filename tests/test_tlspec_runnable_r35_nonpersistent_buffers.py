@@ -18,12 +18,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     StateSource,
 )
+from torchlens.options import CaptureOptions
 
 
 class _MixedBufferModel(nn.Module):
@@ -42,12 +42,10 @@ def _save(model: nn.Module, x: Any, path: Path, **save_kwargs: Any) -> Path:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     with pytest.warns(UserWarning, match="NON-persistent") if _fresh_warning() else _null():
-        tl.save(trace, str(path), level="runnable", **save_kwargs)
+        trace.save(str(path), level="runnable", **save_kwargs)
     return path
 
 
@@ -159,10 +157,10 @@ def test_r35_unused_nonpersistent_buffer_needs_no_family(tmp_path: Path) -> None
     trace = tl.trace(
         _UnusedBufferModel().eval(),
         x,
-        capture=CaptureOptions(intervention_ready=True, cache=False),
+        capture=CaptureOptions(replayable=True, cache=False),
     )
     path = tmp_path / "unused.tlspec"
-    tl.save(trace, str(path), level="runnable")
+    trace.save(str(path), level="runnable")
     manifest = json.loads((path / "manifest.json").read_text())
     assert manifest["run"]["payload_layers"]["nonpersistent_buffers"]["present"] is False
     result = tl.load(str(path)).run(inputs=x)

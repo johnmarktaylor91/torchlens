@@ -7,7 +7,7 @@ import pytest
 paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 
@@ -36,10 +36,10 @@ def test_paddle_relu_single_op_smoke() -> None:
     x = _input()
     trace = tl.trace(lambda value: paddle.nn.functional.relu(value), x, backend="paddle")
 
-    assert trace.backend == "paddle"
-    assert trace.has_backward_pass is False
-    assert trace.module_identity_mode == "function_root"
-    assert trace.num_ops == 1
+    assert trace.provenance.backend == "paddle"
+    assert trace.autograd.has_backward_pass is False
+    assert trace.options.module_identity_mode == "function_root"
+    assert trace._num_ops == 1
     assert any("relu" in label for label in trace.layer_labels)
     # Torch parity: output_layers resolves through the conditional label map
     # -- the bare layer_label for this single-pass op, not the internal raw
@@ -73,7 +73,7 @@ def test_paddle_two_layer_mlp_parents_and_labels() -> None:
 
     trace = tl.trace(MLP(), _input(), backend="paddle")
 
-    assert trace.backend == "paddle"
+    assert trace.provenance.backend == "paddle"
     assert "input.arg_0" in trace.layer_labels
     linear1_label = next(label for label in trace.op_labels if "linear_1_" in label)
     relu_label = next(label for label in trace.op_labels if "relu" in label)
@@ -100,7 +100,7 @@ def test_paddle_source_input_labels_and_function_root() -> None:
 
     trace = tl.trace(raw_callable, (_input(), _input()), backend="paddle")
 
-    assert trace.module_identity_mode == "function_root"
+    assert trace.options.module_identity_mode == "function_root"
     assert {"input.arg_0", "input.arg_1"} <= set(trace.layer_labels)
     add_label = next(label for label in trace.op_labels if "__add__" in label)
     input0_label = next(label for label in trace.op_labels if label.startswith("input.arg_0"))
@@ -146,8 +146,8 @@ def test_paddle_capture_options_does_not_reject_the_whole_object() -> None:
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
 
-    assert trace.backend == "paddle"
-    assert trace.num_ops > 0
+    assert trace.provenance.backend == "paddle"
+    assert trace._num_ops > 0
 
 
 def test_paddle_dygraph_guard_rejects_static_or_pir(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -160,14 +160,14 @@ def test_paddle_dygraph_guard_rejects_static_or_pir(monkeypatch: pytest.MonkeyPa
 
 
 def test_paddle_preview_rejects_random_seed() -> None:
-    """Paddle preview rejects random_seed instead of storing inert metadata."""
+    """Paddle preview refuses an explicit seed instead of storing inert metadata."""
 
-    with pytest.raises(BackendUnsupportedError, match="random_seed"):
+    with pytest.raises(BackendUnsupportedError, match="explicit seed is refused"):
         tl.trace(
             lambda x: x + 1,
             _input(),
             backend="paddle",
-            capture=tl.options.CaptureOptions(random_seed=123),
+            capture=tl.options.CaptureOptions(seed=123),
         )
 
 
@@ -198,7 +198,7 @@ def test_paddle_std_internal_escape_is_depth_exempt() -> None:
         lambda x: paddle.std(x), paddle.ones([2, 2], dtype="float32"), backend="paddle"
     )
 
-    assert trace.num_ops == 1
+    assert trace._num_ops == 1
     assert any("std" in label for label in trace.layer_labels)
 
 

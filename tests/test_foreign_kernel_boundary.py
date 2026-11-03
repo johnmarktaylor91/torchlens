@@ -4,7 +4,7 @@ Positive: a numpy round trip and a dlpack round trip inside ``Function.forward``
 captured as ONE ``autogradfunction`` boundary op that validates through replay, with the
 armed completeness census clean. Control: an ordinary custom Function (interior in torch)
 is captured exactly as before. Armed negative: a plain ``.numpy()`` round trip in a module
-forward (no Function) still fails completeness.
+forward (no Function) is never collapsed into a Function boundary.
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ from torch import nn
 
 import torchlens as tl
 from tests import example_models
-from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._errors import CaptureGapWarning
+from torchlens._record_type import record_type
 from torchlens.backends.torch._function_boundary import (
     FOREIGN_FUNCTION_FUNC_NAME,
     FOREIGN_FUNCTION_TRANSFORM_KIND,
@@ -29,7 +30,7 @@ from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_B
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.errors import TorchLensWarning
 from torchlens.validation import last_validation_failure, validate_forward_pass
-from torchlens.validation.diagnostics import CHECK_COMPLETENESS
+from torchlens.validation.diagnostics import CHECK_REPLAY
 
 
 class _NumpyDoubleFunction(torch.autograd.Function):
@@ -115,7 +116,7 @@ class _PlainNumpyRoundTripModel(nn.Module):
 def _boundary_ops(trace: tl.Trace) -> list:
     """Return the ``autogradfunction`` ops of a trace."""
 
-    return [op for op in trace.layer_list if op.func_name == FOREIGN_FUNCTION_FUNC_NAME]
+    return [op for op in trace._layer_list if op.func_name == FOREIGN_FUNCTION_FUNC_NAME]
 
 
 def _assert_one_boundary(trace: tl.Trace, function: type[torch.autograd.Function]) -> None:
@@ -131,10 +132,10 @@ def _assert_one_boundary(trace: tl.Trace, function: type[torch.autograd.Function
     assert is_foreign_function_recorder(op.func)
     # The interior (detach, the host re-entry constructor) is not in the graph.
     interior_types = {"detach", "fromnumpy", "fromdlpack", "contiguous", "zeroslike"}
-    assert not any(op.layer_type in interior_types for op in trace.layer_list)
+    assert not any(op.type in interior_types for op in trace._layer_list)
     # Parents are the Function's tensor inputs; the child is the consumer of its output.
-    assert [trace[label].layer_type for label in op.parents] == ["linear"]
-    assert [trace[label].layer_type for label in op.children] == ["relu"]
+    assert [record_type(trace[label]) for label in op.parents] == ["linear"]
+    assert [record_type(trace[label]) for label in op.children] == ["relu"]
 
 
 def _assert_validates_clean(model: nn.Module, x: torch.Tensor) -> None:
@@ -144,7 +145,7 @@ def _assert_validates_clean(model: nn.Module, x: torch.Tensor) -> None:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={})
     assert last_validation_failure() is None
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
 @pytest.mark.parametrize(
@@ -167,8 +168,7 @@ def test_foreign_function_is_one_boundary_op_and_validates(function) -> None:
     with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op") as record:
         trace = tl.trace(model, x)
     codes = [getattr(w.message, "fields", {}).get("code") for w in record]
-    # The literal, not the module constant: the provocation census reads code literals.
-    assert "foreign_kernel_boundary" in codes
+    assert "foreign_kernel_boundary" in codes  # literal: the error-code coverage scan reads it
     _assert_one_boundary(trace, function)
     op = _boundary_ops(trace)[0]
     torch.testing.assert_close(op.out, function.apply(model.fc(x)))
@@ -185,13 +185,13 @@ def test_foreign_function_owns_its_interior_dispatches() -> None:
     with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
         trace = tl.trace(model, torch.randn(3, 4))
 
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
     assert trace.completeness_diagnostics == []
-    owners = {entry["owner_wrapper"] for entry in trace.completeness_decompositions}
+    owners = {entry["owner_wrapper"] for entry in trace.health.completeness_decompositions}
     assert FOREIGN_FUNCTION_WRAPPER_NAME in owners
     boundary_rows = [
         entry
-        for entry in trace.completeness_decompositions
+        for entry in trace.health.completeness_decompositions
         if entry["owner_wrapper"] == FOREIGN_FUNCTION_WRAPPER_NAME
     ]
     assert len(boundary_rows) == 1
@@ -199,7 +199,7 @@ def test_foreign_function_owns_its_interior_dispatches() -> None:
     assert boundary_rows[0]["capture_accounted"] is True
     # The interior detach was re-owned: no owner row of its own survives.
     assert not any(
-        entry["owner_func_name"] == "detach" for entry in trace.completeness_decompositions
+        entry["owner_func_name"] == "detach" for entry in trace.health.completeness_decompositions
     )
 
 
@@ -209,7 +209,7 @@ def test_boundary_selector_and_row_are_wired() -> None:
     model = _ForeignFunctionModel(_NumpyDoubleFunction)
     with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
         trace = tl.trace(model, torch.randn(2, 4), save=tl.func_transform("autograd.Function"))
-    saved = [op for op in trace.layer_list if op.has_saved_activation]
+    saved = [op for op in trace._layer_list if op.has_saved_activation]
     assert [op.func_name for op in saved] == [FOREIGN_FUNCTION_FUNC_NAME]
     rows = [
         row
@@ -228,21 +228,20 @@ def test_ordinary_custom_function_is_captured_as_before() -> None:
         warnings.simplefilter("error", TorchLensWarning)
         trace = tl.trace(model, x)
     assert _boundary_ops(trace) == []
-    types = [op.layer_type for op in trace.layer_list]
+    types = [op.type for op in trace._layer_list]
     assert "mul" in types
-    assert not any(op.is_transform for op in trace.layer_list)
+    assert not any(op.is_transform for op in trace._layer_list)
     _assert_validates_clean(model, x)
 
 
 def test_plain_numpy_round_trip_is_not_collapsed() -> None:
-    """Armed negative: without a Function the round trip stays the visible hole it is today.
+    """Armed negative: without a Function nothing is collapsed into an ``autogradfunction`` op.
 
-    Nothing is collapsed and no boundary op appears: ``from_numpy`` is a parentless
-    source op and the output has no input ancestor, exactly as on the base tree. (On the
-    base tree forward validation PASSES this model, because a parentless constructor
-    replays deterministically; the completeness check fails only on a dispatcher-visible
-    unowned op such as ``to_dlpack``'s ``as_strided``. Recorded as a finding in the lane
-    report; this test pins that the boundary never reaches outside a Function.)
+    The plain round trip is the foreign data round trip's territory
+    (``tests/test_foreign_data_roundtrip.py``): the host constructor is one ``foreigndata``
+    op whose parent is the departed tensor, the ``detach`` stays visible, and the host
+    arithmetic in the gap makes validation fail with a typed reason instead of the former
+    silent constant replay.
     """
 
     model = _PlainNumpyRoundTripModel()
@@ -251,18 +250,18 @@ def test_plain_numpy_round_trip_is_not_collapsed() -> None:
         warnings.simplefilter("error", TorchLensWarning)
         trace = tl.trace(model, x)
     assert _boundary_ops(trace) == []
-    from_numpy_ops = [op for op in trace.layer_list if op.layer_type == "fromnumpy"]
-    assert len(from_numpy_ops) == 1
-    assert list(from_numpy_ops[0].parents) == []
-    assert not trace.output_ops[0].input_ancestors
-    assert any(op.layer_type == "detach" for op in trace.layer_list)
+    assert not any(op.type == "fromnumpy" for op in trace._layer_list)
+    round_trips = [op for op in trace._layer_list if op.func_name == "foreigndata"]
+    assert len(round_trips) == 1
+    assert [record_type(trace[label]) for label in round_trips[0].parents] == ["detach"]
+    assert trace.output_ops[0].input_ancestors
+    assert any(op.type == "detach" for op in trace._layer_list)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        base_verdict = validate_forward_pass(model, [x], input_kwargs={})
+        assert validate_forward_pass(model, [x], input_kwargs={}) is False
     failure = last_validation_failure()
-    # The verdict is whatever the base tree gives (True today); the only thing the
-    # boundary may never do is turn this plain round trip into a boundary op.
-    assert base_verdict is True or (failure is not None and failure.check == CHECK_COMPLETENESS)
+    assert failure is not None and failure.check_name == CHECK_REPLAY
+    assert failure.extra["reason"] == "foreign_data_roundtrip_unreplayable"
 
 
 class _ForeignHandle:

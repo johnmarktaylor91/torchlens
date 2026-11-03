@@ -1,11 +1,11 @@
-"""Pickle / ``tl.save`` parity for intervention-spec-carrying traces.
+"""Pickle / ``Trace.save`` parity for intervention-spec-carrying traces.
 
 Pre-fix, plain ``pickle`` of a Trace captured with ``intervene=`` failed
 (``zero_ablate.<locals>.factory`` and ``when.<locals>._predicate`` are local
-closures) while ``tl.save`` of the same trace succeeded -- a serialization
+closures) while ``Trace.save`` of the same trace succeeded -- a serialization
 split on one object. Two aligned fixes:
 
-* ``HelperSpec`` pickle hooks drop the builtin factory closure and rebuild it
+* ``Edit`` pickle hooks drop the builtin factory closure and rebuild it
   at restore through the SAME builtin registry ``tl.load`` uses
   (``rebuild_builtin_helper``); ``opaque_audit`` factories drop to the
   canonical factory-less audit-only form.
@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.types import HelperSpec
+from torchlens.intervention.types import Edit
 
 
 class _Net(nn.Module):
@@ -58,15 +58,15 @@ def intervened_trace() -> Iterator[tl.Trace]:
 
 
 def test_builtin_helper_spec_pickle_rebuilds_factory() -> None:
-    """A builtin ``HelperSpec`` pickles; the restored factory works."""
+    """A builtin ``Edit`` pickles; the restored factory works."""
 
     spec = tl.zero_ablate()
     restored = pickle.loads(pickle.dumps(spec))
-    assert isinstance(restored, HelperSpec)
-    assert restored.helper_name == spec.helper_name
+    assert isinstance(restored, Edit)
+    assert restored.name == spec.name
     assert restored.factory is not None
     hook = restored()
-    out = hook(torch.ones(3), hook=None)
+    out = hook(torch.ones(3), ctx=None)
     assert torch.equal(out, torch.zeros(3))
 
 
@@ -77,7 +77,7 @@ def test_builtin_helper_spec_pickle_preserves_args() -> None:
     restored = pickle.loads(pickle.dumps(spec))
     assert restored.args == spec.args
     hook = restored()
-    out = hook(torch.ones(3), hook=None)
+    out = hook(torch.ones(3), ctx=None)
     assert torch.allclose(out, torch.full((3,), 0.5))
 
 
@@ -90,16 +90,16 @@ def test_helper_spec_deepcopy_keeps_factory_identity() -> None:
 
 
 def test_intervened_trace_pickles_like_it_saves(intervened_trace: tl.Trace, tmp_path) -> None:
-    """The RED-capable parity case: pickle succeeds where tl.save succeeds."""
+    """The RED-capable parity case: pickle succeeds where Trace.save succeeds."""
 
     blob = pickle.dumps(intervened_trace)
     restored = pickle.loads(blob)
-    assert len(restored.layer_list) == len(intervened_trace.layer_list)
+    assert len(restored._layer_list) == len(intervened_trace._layer_list)
     # The saved (intervened) activation payload survives the round-trip.
     assert torch.equal(restored["relu_1_2"].ops[0].out, intervened_trace["relu_1_2"].ops[0].out)
-    # tl.save of the very same object keeps working (the parity claim).
+    # Trace.save of the very same object keeps working (the parity claim).
     path = str(tmp_path / "iv.tlspec")
-    tl.save(intervened_trace, path)
+    intervened_trace.save(path)
     assert tl.load(path)["relu_1_2"] is not None
 
 
@@ -109,7 +109,7 @@ def test_intervened_fork_pickles(intervened_trace: tl.Trace) -> None:
 
     fork = intervened_trace.fork()
     restored = pickle.loads(pickle.dumps(fork))
-    assert len(restored.layer_list) == len(fork.layer_list)
+    assert len(restored._layer_list) == len(fork._layer_list)
 
 
 def test_pickled_trace_matches_loaded_predicate_carrier_form(
@@ -127,17 +127,17 @@ def test_pickled_trace_matches_loaded_predicate_carrier_form(
 def test_add_and_replace_with_pickle_round_trip() -> None:
     """R10-1: ``add``/``replace_with`` mint portability="builtin" specs but
     were missing from the rebuild registry -- pickling (and therefore
-    tl.save/tl.load of a trace intervened with them) minted a dead artifact
+    Trace.save/tl.load of a trace intervened with them) minted a dead artifact
     that raised ``intervention_helper_unknown`` at restore."""
 
     added = pickle.loads(pickle.dumps(tl.add(1.5)))
-    assert added.helper_name == "add"
+    assert added.name == "add"
     assert added.args == (1.5,)
     assert callable(added.factory)
 
     replacement = torch.ones(2)
     replaced = pickle.loads(pickle.dumps(tl.replace_with(replacement)))
-    assert replaced.helper_name == "replace_with"
+    assert replaced.name == "replace_with"
     assert torch.equal(replaced.args[0], replacement)
     assert callable(replaced.factory)
 
@@ -170,12 +170,12 @@ def test_every_minted_builtin_helper_name_is_rebuildable() -> None:
                 first = node.args[0]
                 if isinstance(first, ast.Constant) and isinstance(first.value, str):
                     minted.add(first.value)
-            if func_name == "HelperSpec":
-                name_kw = next((kw.value for kw in node.keywords if kw.arg == "helper_name"), None)
+            if func_name == "Edit":
+                name_kw = next((kw.value for kw in node.keywords if kw.arg == "name"), None)
                 if isinstance(name_kw, ast.Constant) and isinstance(name_kw.value, str):
                     minted.add(name_kw.value)
 
-    assert {"zero_ablate", "add", "replace_with", "grad_scale"} <= minted, (
+    assert {"zero_ablate", "add", "replace_with", "clip_norm"} <= minted, (
         f"AST sweep lost its anchors -- helper minting moved: {sorted(minted)}"
     )
     unknown: list[str] = []

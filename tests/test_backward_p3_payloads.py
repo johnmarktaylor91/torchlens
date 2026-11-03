@@ -49,9 +49,7 @@ def _trace_with_two_backward_passes() -> tl.Trace:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     loss = trace[trace.output_layers[0]].out
     trace.log_backward(loss, retain_graph=True)
     trace.log_backward(loss, retain_graph=True)
@@ -78,26 +76,22 @@ def test_save_grads_is_the_trace_side_public_surface() -> None:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     try:
-        assert trace.save_grads is True
+        assert trace.options.save_grads is True
         assert not hasattr(trace, "save_gradients")
         assert not hasattr(trace, "gradients_to_save")
     finally:
         trace.cleanup()
 
     with pytest.raises(TypeError):
-        tl.trace(
-            model, x, save_gradients=True, capture=tl.options.CaptureOptions(layers_to_save="all")
-        )  # type: ignore[call-arg]
+        tl.trace(model, x, save_gradients=True, save="all")  # type: ignore[call-arg]
     with pytest.raises(TypeError):
         tl.trace(
             model,
             x,
             gradients_to_save="all",
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )  # type: ignore[call-arg]
 
 
@@ -119,9 +113,7 @@ def test_log_backward_save_grads_override_widens_and_narrows_payloads() -> None:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=False)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=False), save="all")
     try:
         loss = trace[trace.output_layers[0]].out
         trace.log_backward(loss, retain_graph=True, save_grads=True)
@@ -133,7 +125,9 @@ def test_log_backward_save_grads_override_widens_and_narrows_payloads() -> None:
         ]
         assert second_pass_records
         assert all(record.grad is None for record in second_pass_records)
-        assert [pass_record.save_grads_policy for pass_record in trace.backward_passes] == [
+        assert [
+            pass_record.save_grads_policy for pass_record in trace.autograd.backward_passes
+        ] == [
             "True",
             "None",
         ]
@@ -150,7 +144,8 @@ def test_save_grads_predicate_can_select_backward_pass() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=tl.in_backward_pass(2)),
+        capture=tl.options.CaptureOptions(save_grads=tl.in_backward_pass(2)),
+        save="all",
     )
     try:
         loss = trace[trace.output_layers[0]].out
@@ -179,8 +174,8 @@ def test_grad_transform_is_projected_per_backward_pass() -> None:
     trace = tl.trace(
         model,
         x,
-        grad_transform=lambda grad: grad.mean(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
+        capture=tl.options.CaptureOptions(save_grads=True, grad_transform=lambda grad: grad.mean()),
+        save="all",
     )
     try:
         loss = trace[trace.output_layers[0]].out
@@ -204,9 +199,12 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
     trace = tl.trace(
         model,
         x,
-        grad_transform=lambda grad: grad.mean(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
-        save=tl.options.SaveOptions(save_raw_gradients=False),
+        capture=tl.options.CaptureOptions(
+            save_grads=True,
+            grad_transform=lambda grad: grad.mean(),
+            save_raw_grads=False,
+        ),
+        save="all",
     )
     try:
         loss = trace[trace.output_layers[0]].out
@@ -229,8 +227,8 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
             for record in saved_op.grads
             if record.is_saved
         )
-        assert trace.total_backward_memory == expected_backward_memory
-        assert trace.total_gradient_memory == expected_gradient_memory
+        assert trace.cost.total_backward_memory == expected_backward_memory
+        assert trace.cost.total_grad_memory == expected_gradient_memory
     finally:
         trace.cleanup()
 
@@ -251,15 +249,15 @@ def test_backward_accessors_to_pandas_do_not_raise_on_multiple_calls() -> None:
 
     trace = _trace_with_two_backward_passes()
     try:
-        grad_fns_frame = trace.grad_fns.to_pandas()
-        grad_fn_calls_frame = trace.grad_fn_calls.to_pandas()
-        backward_passes_frame = trace.backward_passes.to_pandas()
+        grad_fns_frame = trace.autograd.grad_fns.to_pandas()
+        grad_fn_calls_frame = trace.autograd.grad_fn_calls.to_pandas()
+        backward_passes_frame = trace.autograd.backward_passes.to_pandas()
         assert not grad_fns_frame.empty
         assert not grad_fn_calls_frame.empty
         assert not backward_passes_frame.empty
         assert "backward_duration" in grad_fns_frame.columns
         assert "total_backward_duration" in grad_fns_frame.columns
-        assert backward_passes_frame["pass_index"].tolist() == [1, 2]
+        assert backward_passes_frame["pass_number"].tolist() == [1, 2]
     finally:
         trace.cleanup()
 
@@ -273,7 +271,7 @@ def test_tlspec_round_trip_preserves_per_pass_op_grads(tmp_path: Path) -> None:
         op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
         expected_label = op.label
         expected_grads = [record.grad.detach().clone() for record in op.grads]
-        tl.save(trace, bundle_path)
+        trace.save(bundle_path)
     finally:
         trace.cleanup()
 
@@ -289,7 +287,7 @@ def test_tlspec_round_trip_preserves_per_pass_op_grads(tmp_path: Path) -> None:
 
 
 def test_total_backward_memory_counts_unique_saved_payload_refs() -> None:
-    """Trace.total_backward_memory is derived from saved OpGradObserved payload refs."""
+    """Trace.cost.total_backward_memory is derived from saved OpGradObserved payload refs."""
 
     trace = _trace_with_two_backward_passes()
     try:
@@ -299,8 +297,8 @@ def test_total_backward_memory_counts_unique_saved_payload_refs() -> None:
             for record in op.grads
             if record.grad is not None
         )
-        assert trace.total_backward_memory == expected
-        assert trace.total_gradient_memory == expected
+        assert trace.cost.total_backward_memory == expected
+        assert trace.cost.total_grad_memory == expected
     finally:
         trace.cleanup()
 
@@ -311,9 +309,7 @@ def test_param_grads_capture_accumulategrad_increments() -> None:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     try:
         loss = trace[trace.output_layers[0]].out
         trace.log_backward(loss)

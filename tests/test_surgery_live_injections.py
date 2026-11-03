@@ -62,7 +62,7 @@ class _TwoRelu(nn.Module):
         return torch.relu(self.fc2(torch.relu(self.fc1(x))))
 
 
-def _sae_like(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     """SAE-style injected computation: encode, gate, decode (5 torch calls)."""
 
     z = torch.relu(out @ torch.eye(out.shape[-1]))
@@ -91,9 +91,9 @@ def test_injection_misfire_two_edit_labels_never_shift(chain) -> None:
     spec = tl.when(tl.func("relu"), _sae_like) & tl.when(tl.func("tanh"), tl.scale(0.5))
     base = tl.trace(model, x, intervene=spec)
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
-    assert [op.label for op in logged.layer_list] == [op.label for op in base.layer_list]
-    assert [op.raw_label for op in logged.layer_list] == [op.raw_label for op in base.layer_list]
-    assert [op.site_key for op in logged.layer_list] == [op.site_key for op in base.layer_list]
+    assert [op.label for op in logged._layer_list] == [op.label for op in base._layer_list]
+    assert [op.raw_label for op in logged._layer_list] == [op.raw_label for op in base._layer_list]
+    assert [op.site_key for op in logged._layer_list] == [op.site_key for op in base._layer_list]
     # the LATER edit fired identically: same tanh output in both runs
     assert torch.allclose(logged["tanh_1_4"].out, base["tanh_1_4"].out)
     assert len(logged.injected_ops) > 0
@@ -142,7 +142,7 @@ def test_injection_firing_index_advances_per_fire() -> None:
     torch.manual_seed(0)
     model = _TwoRelu().eval()
     x = torch.randn(2, 4)
-    spec = tl.when(tl.func("relu"), lambda out, *, hook: torch.sigmoid(out))
+    spec = tl.when(tl.func("relu"), lambda out, *, ctx: torch.sigmoid(out))
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
     firing_indexes = sorted({r.provenance.firing_index for r in logged.injected_ops})
     assert firing_indexes == [1, 2]
@@ -156,7 +156,7 @@ def test_injection_query_split_and_model_family_untouched(chain) -> None:
 
     model, x = chain
     logged = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
-    assert [op.label for op in logged.model_ops] == [op.label for op in logged.layer_list]
+    assert [op.label for op in logged.model_ops] == [op.label for op in logged._layer_list]
     injected_labels = {record.label for record in logged.injected_ops}
     model_labels = {op.label for op in logged.model_ops}
     assert injected_labels and not (injected_labels & model_labels)
@@ -188,7 +188,7 @@ def test_injection_selectors_never_fire_on_injected_ops(chain) -> None:
         from torchlens._errors import PayloadUnavailableError
 
         saved = []
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             try:
                 if op.out is not None:
                     saved.append(op.label)
@@ -216,16 +216,16 @@ def test_injection_save_persists_at_analysis_level(chain, tmp_path) -> None:
 
     model, x = chain
     logged = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
-    tl.save(logged, str(tmp_path / "logged.tlspec"))
+    logged.save(str(tmp_path / "logged.tlspec"))
     loaded = tl.load(str(tmp_path / "logged.tlspec"))
     assert len(loaded.injected_ops) == len(logged.injected_ops)
     with pytest.raises(Exception) as excinfo:
-        tl.save(logged, str(tmp_path / "run.tlspec"), level="runnable")
+        logged.save(str(tmp_path / "run.tlspec"), level="runnable")
     assert excinfo.value.fields["code"] == "injection_logged_runnable_unsupported"
     # an armed-but-unfired capture (no injected ops) saves normally
     clean = tl.trace(model, x, capture=_LOGGED)
     assert len(clean.injected_ops) == 0
-    tl.save(clean, str(tmp_path / "clean.tlspec"))
+    clean.save(str(tmp_path / "clean.tlspec"))
 
 
 def test_injection_validation_tripwire_unchanged(chain) -> None:
@@ -259,7 +259,7 @@ def test_injection_hook_exception_cleans_recorder(chain) -> None:
 
     model, x = chain
 
-    def _boom(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def _boom(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Inject one op, then raise."""
 
         torch.sigmoid(out)
@@ -278,32 +278,32 @@ def test_injection_off_by_default_and_plain_capture_unaffected(chain) -> None:
     assert tl.options.CaptureOptions().log_injections is False
     plain = tl.trace(model, x)
     assert plain.injected_ops == ()
-    assert [op.label for op in plain.model_ops] == [op.label for op in plain.layer_list]
+    assert [op.label for op in plain.model_ops] == [op.label for op in plain._layer_list]
 
 
 def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
     """FIX-2 enrollment pin: the intervene fire counter has a real scrub policy.
 
     ``_tl_intervene_selector_fire_count`` sat in the external-write ledger
-    with NO ``PORTABLE_STATE_SPEC`` row, so any save reached while the
+    with NO ``_PORTABLE_STATE_SPEC`` row, so any save reached while the
     counter was live (streamed ``to_disk`` finalize runs before the settle
     epilogue pops it; deferred backward selectors keep it past ``trace()``)
-    refused with ``TorchLensIOError`` and downgraded runnable honesty
+    refused with ``ArtifactError`` and downgraded runnable honesty
     verdicts through the witness-coverage path. It is now enrolled exactly
     like its sibling ``_tl_save_selector_fire_count``: a declared
     ``FieldPolicy.DROP`` session field, owned, with the dead ledger row
     deleted (declared and exempted are disjoint by gate).
     """
 
-    from torchlens.data_classes._trace_components import (
+    from torchlens._data_classes._trace_components import (
         TRACE_EXTERNAL_WRITE_EXEMPTIONS,
         TRACE_FIELD_OWNERSHIP,
     )
-    from torchlens.data_classes.field_policy import FieldPolicy
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.field_policy import FieldPolicy
+    from torchlens._data_classes.trace import Trace
 
     name = "_tl_intervene_selector_fire_count"
-    assert Trace.PORTABLE_STATE_SPEC[name] is FieldPolicy.DROP
+    assert Trace._PORTABLE_STATE_SPEC[name] is FieldPolicy.DROP
     assert TRACE_FIELD_OWNERSHIP[name] == "session"
     assert name not in TRACE_EXTERNAL_WRITE_EXEMPTIONS
 

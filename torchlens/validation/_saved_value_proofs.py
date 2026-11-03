@@ -9,39 +9,38 @@ saved co-arguments, and returns non-exempt for anything else:
 - division: the saved dividend is all zero, so the divisor (``args[1]``) only
   scales a zero;
 - bitwise/logical and: the other saved operand is all zero/False;
-- bool or: the other saved operand is all True;
-- einsum: another saved operand is all zero (einsum is multilinear, every term
-  of every output element carries one factor from each operand);
-- eval-mode ``batch_norm``: ``input - running_mean`` is exactly zero, so the
-  ``running_var`` (``args[4]``) only scales a zero;
+- bool or: the other saved operand is all True (the out-of-place spellings are
+  proved first by ``_operand_value_proofs``; this covers the in-place ones);
 - pow: the saved exponent is all zero, so the base (``args[0]``) is raised to 0,
   or the saved base is all one, so the exponent (``args[1]``) is irrelevant;
-- sdpa: there is one key position and no dropout, so its softmax weight is
-  exactly one whatever the query (``args[0]``), key (``args[1]``) or additive
-  float mask (``args[3]``) holds;
+- sdpa: there is one key position and every softmax row is well defined, so
+  the lone softmax weight is exactly one whatever the additive float mask
+  (``args[3]``) holds (the query and key edges are the ``_sdpa_value_proofs``);
 - ``__setitem__``: the perturbed parent is an integer index component that
-  addresses a destination dim of size 1, where every valid index is position 0;
-- ``scatter_reduce``: ``include_self=False`` and the index covers every
-  destination slot along ``dim``, so the destination (``args[0]``) is never read;
-- split: the output chunk has zero elements and its shape is fixed by the
-  parent's shape and the integer split sizes;
-- matmul family (``bmm``, ``mm``, ``matmul``): the product has zero elements
-  while the perturbed operand has some, so the other operand's free (or batch)
-  extent is empty and no element exists for the perturbed values to reach.
+  addresses a destination dim of size 1, where every valid index is position 0.
+
+Zero einsum operands, eval-mode batch norm at its running mean, unread
+``scatter_reduce`` destinations and empty split chunks or matmul products are
+proved by ``_operand_value_proofs`` and the overwrite decision before this
+module is consulted.
 
 Split from ``validation/exemptions.py`` (R43 file-size ratchet), which dispatches
-here from its posthoc value-proof and overwrite decisions.
+here from its posthoc value-proof decision.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
 
-from ..data_classes.op import Op
-from ._destination_coverage import _scatter_index_fully_overwrites_dim
+from ._posthoc_decision import PosthocPerturbDecision
+from ._sdpa_value_proofs import _output_equals_value_rows, sdpa_softmax_rows_well_defined
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
-from .exemptions import PosthocPerturbDecision
+
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 _NOT_PROVED = PosthocPerturbDecision(False, "not_value_proved")
 
@@ -86,18 +85,6 @@ DISJUNCTION_FUNC_NAMES = frozenset(
     }
 )
 POW_FUNC_NAMES = frozenset({"__pow__", "__ipow__", "pow", "pow_"})
-SCATTER_REDUCE_FUNC_NAMES = frozenset({"scatter_reduce", "scatter_reduce_", "scatterreduce"})
-SPLIT_FUNC_NAMES = frozenset({"split", "split_with_sizes", "splitwithsizes"})
-MATMUL_FUNC_NAMES = frozenset({"bmm", "mm", "matmul", "__matmul__", "__rmatmul__"})
-VALUE_PROOF_FUNC_NAMES = (
-    DIVISION_FUNC_NAMES
-    | MATMUL_FUNC_NAMES
-    | CONJUNCTION_FUNC_NAMES
-    | DISJUNCTION_FUNC_NAMES
-    | POW_FUNC_NAMES
-    | SPLIT_FUNC_NAMES
-    | frozenset({"einsum", "batch_norm", "__setitem__", "scaled_dot_product_attention"})
-)
 
 
 def _perturbed_arg_keys(layer: Op, layers_to_perturb: list[str]) -> set[Any] | None:
@@ -213,73 +200,6 @@ def _disjunction_decision(
     )
 
 
-def _einsum_operand_keys(args: tuple[Any, ...]) -> list[Any] | None:
-    """Return the positional keys of einsum's operands, or None for other call shapes."""
-
-    if not args or not isinstance(args[0], str):
-        return None
-    if len(args) == 2 and isinstance(args[1], (list, tuple)):
-        return [(1, index) for index in range(len(args[1]))]
-    return list(range(1, len(args)))
-
-
-def _einsum_operand(args: tuple[Any, ...], key: Any) -> Any:
-    """Return the saved einsum operand stored at positional ``key``."""
-
-    if isinstance(key, tuple):
-        return args[key[0]][key[1]]
-    return args[key]
-
-
-def _einsum_decision(layer: Op, keys: set[Any], args: tuple[Any, ...]) -> PosthocPerturbDecision:
-    """Exempt an einsum operand when another saved operand is all zero."""
-
-    operand_keys = _einsum_operand_keys(args)
-    if operand_keys is None or len(keys) != 1 or not keys.issubset(operand_keys):
-        return _NOT_PROVED
-    if not (_saved_output_all_finite(layer) and _output_all_equal(layer, 0.0)):
-        return _NOT_PROVED
-    for key in operand_keys:
-        if key not in keys and _is_all_zero_value(_einsum_operand(args, key)):
-            return PosthocPerturbDecision(
-                True,
-                "multiplicative_zero_annihilator",
-                f"einsum is multilinear and its non-perturbed operand {key} is all zero",
-            )
-    return _NOT_PROVED
-
-
-def _batch_norm_centered_input_decision(
-    layer: Op, keys: set[Any], args: tuple[Any, ...]
-) -> PosthocPerturbDecision:
-    """Exempt eval-mode ``running_var`` when ``input - running_mean`` is exactly zero.
-
-    The layout is ATen's ``(input, weight, bias, running_mean, running_var,
-    training, ...)``; eval mode computes ``(input - running_mean) /
-    sqrt(running_var + eps) * weight + bias``, so a zero centred input leaves
-    only ``bias`` whatever ``running_var`` is.
-    """
-
-    if keys != {4} or len(args) <= 5 or args[5] is not False:
-        return _NOT_PROVED
-    data, running_mean = args[0], args[3]
-    if not isinstance(data, torch.Tensor) or not isinstance(running_mean, torch.Tensor):
-        return _NOT_PROVED
-    if data.ndim < 2 or running_mean.shape != (data.shape[1],) or data.numel() == 0:
-        return _NOT_PROVED
-    if not _saved_output_all_finite(layer):
-        return _NOT_PROVED
-    stat_shape = (1, data.shape[1]) + (1,) * (data.ndim - 2)
-    centered = data - running_mean.to(data.device).reshape(stat_shape)
-    if not bool(torch.all(torch.eq(centered, 0)).item()):
-        return _NOT_PROVED
-    return PosthocPerturbDecision(
-        True,
-        "norm_centered_input_running_var",
-        "eval batch_norm input equals running_mean exactly, so running_var only scales a zero",
-    )
-
-
 def _is_all_one_value(value: Any) -> bool:
     """Return whether ``value`` is a real scalar or non-empty tensor equal to one everywhere."""
 
@@ -331,31 +251,34 @@ def _is_bool_mask(component: Any) -> bool:
 def _sdpa_singleton_key_decision(
     layer: Op, keys: set[Any], args: tuple[Any, ...]
 ) -> PosthocPerturbDecision:
-    """Exempt sdpa's query, key or additive mask when there is one key position.
+    """Exempt sdpa's additive float mask when there is one key position.
 
     Softmax over a single key position is exactly one for any finite score, so
-    with no dropout every query reads the lone value row whatever the query, key
-    or an additive float mask hold. A bool mask can mask the lone key out and is
-    never exempted; a masked-out lone key makes the output non-finite, which is
-    refused.
+    with every softmax row well defined (finite query and key, no dropout, a
+    finite scale and a mask that keeps the lone key in every row) and the saved
+    output equal to the value rows, an additive float mask cannot reach the
+    output. A bool mask can mask the lone key out and is never exempted. The
+    query and key edges of the same call are the ``sdpa_single_key_identity``
+    and ``sdpa_single_key_key_edge`` proofs, which carry the same precondition.
     """
 
-    if keys not in ({0}, {1}, {3}) or len(args) < 3 or not isinstance(args[1], torch.Tensor):
+    if keys != {3} or len(args) < 3 or not isinstance(args[1], torch.Tensor):
         return _NOT_PROVED
     kwargs = getattr(layer, "saved_kwargs", None) or {}
     mask = kwargs.get("attn_mask", args[3] if len(args) > 3 else None)
-    if keys == {3} and not (isinstance(mask, torch.Tensor) and mask.is_floating_point()):
+    if not (isinstance(mask, torch.Tensor) and mask.is_floating_point()):
         return _NOT_PROVED
-    dropout_p = kwargs.get("dropout_p", args[4] if len(args) > 4 else 0.0)
-    if args[1].ndim < 2 or args[1].shape[-2] != 1 or dropout_p != 0:
+    if args[1].ndim < 2 or args[1].shape[-2] != 1:
         return _NOT_PROVED
-    if not _saved_output_all_finite(layer):
+    if not sdpa_softmax_rows_well_defined(layer, args):
+        return _NOT_PROVED
+    if not _output_equals_value_rows(getattr(layer, "out", None), args[2]):
         return _NOT_PROVED
     return PosthocPerturbDecision(
         True,
         "sdpa_singleton_key",
-        "there is one key position, so its softmax weight is exactly one and the "
-        "query, key and additive mask values cannot reach the output",
+        "there is one key position and every softmax row is well defined, so its "
+        "softmax weight is exactly one and the additive mask values cannot reach the output",
     )
 
 
@@ -455,108 +378,11 @@ def _key_is_integer_index_into_singleton_dim(
     return bool(destination.shape[dim] == 1)
 
 
-def scatter_reduce_excluded_destination_decision(
-    layer: Op, layers_to_perturb: list[str], args: tuple[Any, ...]
-) -> PosthocPerturbDecision:
-    """Exempt a ``scatter_reduce`` destination that ``include_self=False`` never reads.
-
-    Parameters
-    ----------
-    layer:
-        ``scatter_reduce``/``scatter_reduce_`` op whose unchanged perturbed
-        replay is being classified.
-    layers_to_perturb:
-        Parent labels selected for perturbation.
-    args:
-        Saved positional arguments ``(input, dim, index, src, reduce, ...)``.
-
-    Returns
-    -------
-    PosthocPerturbDecision
-        Exempt only when the perturbed parent is the destination alone,
-        ``include_self`` is explicitly False and every destination slot along
-        ``dim`` receives at least one scattered value.
-    """
-
-    keys = _perturbed_arg_keys(layer, layers_to_perturb)
-    if layer.func_name not in SCATTER_REDUCE_FUNC_NAMES or keys != {0} or not args:
-        return _NOT_PROVED
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
-    include_self = kwargs.get("include_self", args[5] if len(args) > 5 else True)
-    dest = args[0]
-    dim = kwargs.get("dim", args[1] if len(args) > 1 else None)
-    index = kwargs.get("index", args[2] if len(args) > 2 else None)
-    if include_self is not False or not isinstance(dest, torch.Tensor):
-        return _NOT_PROVED
-    if type(dim) is not int or not isinstance(index, torch.Tensor) or dest.ndim == 0:
-        return _NOT_PROVED
-    dim = dim + dest.ndim if dim < 0 else dim
-    if not 0 <= dim < dest.ndim or not _scatter_index_fully_overwrites_dim(dest, dim, index):
-        return _NOT_PROVED
-    return PosthocPerturbDecision(
-        True,
-        "scatter_reduce_excluded_destination",
-        "include_self=False and the index reaches every destination slot along dim, "
-        "so the destination's prior values are never reduced into the output",
-    )
-
-
-def _empty_split_chunk_decision(
-    layer: Op, keys: set[Any], args: tuple[Any, ...]
-) -> PosthocPerturbDecision:
-    """Exempt the input of a split whose output chunk is empty by its integer sizes."""
-
-    out = getattr(layer, "out", None)
-    if keys != {0} or not isinstance(out, torch.Tensor) or out.numel() != 0:
-        return _NOT_PROVED
-    if len(args) < 2 or not isinstance(args[0], torch.Tensor):
-        return _NOT_PROVED
-    sizes = args[1]
-    size_items = sizes if isinstance(sizes, (list, tuple)) else (sizes,)
-    if not all(type(size) is int for size in size_items):
-        return _NOT_PROVED
-    return PosthocPerturbDecision(
-        True,
-        "empty_split_chunk",
-        "the split chunk has zero elements, its shape fixed by the input shape and "
-        "integer split sizes, so no input value can reach it",
-    )
-
-
-def _empty_matmul_product_decision(
-    layer: Op, keys: set[Any], args: tuple[Any, ...]
-) -> PosthocPerturbDecision:
-    """Exempt a non-empty operand of a matrix product that has zero elements."""
-
-    out = getattr(layer, "out", None)
-    if not isinstance(out, torch.Tensor) or out.numel() != 0 or len(keys) != 1:
-        return _NOT_PROVED
-    (key,) = keys
-    if key not in (0, 1) or len(args) < 2:
-        return _NOT_PROVED
-    operands = args[:2]
-    if not all(isinstance(operand, torch.Tensor) for operand in operands):
-        return _NOT_PROVED
-    if operands[key].numel() == 0:
-        return _NOT_PROVED
-    return PosthocPerturbDecision(
-        True,
-        "empty_matmul_product",
-        "the matrix product has zero elements while this operand has some, so the "
-        "other operand's free or batch extent is empty and no output element exists "
-        "for this operand's values to reach",
-    )
-
-
 _DECISIONS_BY_FAMILY = (
     (DIVISION_FUNC_NAMES, _division_decision),
     (CONJUNCTION_FUNC_NAMES, _conjunction_decision),
     (DISJUNCTION_FUNC_NAMES, _disjunction_decision),
     (POW_FUNC_NAMES, _pow_decision),
-    (SPLIT_FUNC_NAMES, _empty_split_chunk_decision),
-    (MATMUL_FUNC_NAMES, _empty_matmul_product_decision),
-    (frozenset({"einsum"}), _einsum_decision),
-    (frozenset({"batch_norm"}), _batch_norm_centered_input_decision),
     (frozenset({"__setitem__"}), _setitem_singleton_index_decision),
     (frozenset({"scaled_dot_product_attention"}), _sdpa_singleton_key_decision),
 )

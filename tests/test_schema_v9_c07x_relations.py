@@ -351,7 +351,7 @@ def test_default_from_payload_policy_is_refuse() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Item 2 legs (a) + (c) end to end through tl.save / tl.load.
+# Item 2 legs (a) + (c) end to end through Trace.save / tl.load.
 # ---------------------------------------------------------------------------
 
 
@@ -382,7 +382,7 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
     ]
     assert opaque_warnings, "the opaque-kinds disclosure must carry its warning code"
     assert isinstance(loaded, Bundle)
-    opaque_rows = [row for row in loaded.member_relations if isinstance(row, OpaqueRelationRow)]
+    opaque_rows = [row for row in loaded.relations if isinstance(row, OpaqueRelationRow)]
     assert [row.kind for row in opaque_rows] == ["someorg.custody_of"]
 
     resaved = tmp_path / "resaved.tlspec"
@@ -423,7 +423,7 @@ def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: 
 def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: Bundle) -> None:
     """The historical silent load-then-destroy is banned in both directions."""
 
-    from torchlens._io.format_errors import TorchLensIOError
+    from torchlens._io.format_errors import ArtifactError
 
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
     metadata_path = tmp_path / "bundle.tlspec" / "bundle.json"
@@ -431,7 +431,7 @@ def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: 
     metadata["experiment_index"] = {"runs": [1]}
     metadata_path.write_text(json.dumps(metadata))
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == "bundle_section_unknown"
 
@@ -470,5 +470,5 @@ def test_unknown_evidence_schema_id_loads_opaque(tmp_path, two_member_bundle: Bu
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
     loaded = tl.load(path)
     assert isinstance(loaded, Bundle)
-    kinds = [r.kind for r in loaded.member_relations]
+    kinds = [r.kind for r in loaded.relations]
     assert "successor_of" in kinds

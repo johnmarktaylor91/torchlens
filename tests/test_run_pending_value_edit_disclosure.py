@@ -44,7 +44,8 @@ def _traced() -> tuple[Small, torch.Tensor, tl.Trace]:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
+        save="all",
     )
     log._tl_test_model_keepalive = model
     return model, x, log
@@ -56,7 +57,7 @@ def test_new_input_run_on_value_edited_fork_discloses() -> None:
     _model, _x, log = _traced()
     fork = log.fork()
     fork.do(
-        tl.units("relu_1_2:1", [(0, 0)]).resolve(fork),
+        fork[tl.units("relu_1_2:1", [(0, 0)])],
         tl.replace_with(torch.full((2, 4), 3.0)),
     )
 

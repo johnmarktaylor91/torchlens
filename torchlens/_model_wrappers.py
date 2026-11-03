@@ -77,11 +77,15 @@ def check_model_wrapper(model: Any) -> None:
         "AttributeError.\n"
         "Trace a PRISTINE copy of the underlying model instead:\n"
         "  - reload the HF model fresh (AutoModelForCausalLM.from_pretrained(...)) and "
-        "trace that, or\n"
-        "  - trace a transformer_lens HookedTransformer directly (it captures fully).\n"
+        "trace that: this path keeps working as HookedTransformer is retired, or\n"
+        "  - trace a transformer_lens HookedTransformer directly while you still use "
+        "one (it captures fully).\n"
         "Note: transformer_lens's bridge/boot machinery MUTATES the HF model it wraps "
         "IN PLACE, so a model that has already passed through the bridge should be "
         "reloaded fresh, not reused. See docs/migration/from_transformerlens.md.",
         code="model_wrapper_uninstrumentable",
-        remedy=("Trace a pristine reloaded HF model or a HookedTransformer instead of the bridge"),
+        remedy=(
+            "Reload the HF model fresh and trace it instead of the bridge "
+            "(or trace a HookedTransformer while you still use one)"
+        ),
     )

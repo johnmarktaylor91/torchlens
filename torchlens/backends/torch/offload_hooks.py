@@ -45,7 +45,7 @@ from ..._state import pause_logging
 from ._tl import get_param_meta, set_param_meta
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 __all__ = [
     "install_offload_hook_shims",
@@ -79,7 +79,7 @@ def _restamp_materialized_params(trace: Trace, module: nn.Module, hook: Any) -> 
     defeating the offload the user configured.
     """
 
-    param_accessor = getattr(trace, "param_logs", None)
+    param_accessor = trace._param_logs
     records = getattr(param_accessor, "_dict", None)
     if not records:
         return  # predicate-mode capture: no session param logs to mirror.

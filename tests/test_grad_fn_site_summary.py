@@ -15,7 +15,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.quantities import Duration
+from torchlens._quantities import Duration
 
 
 class _ReusedModule(nn.Module):
@@ -37,8 +37,7 @@ def _backward_trace(model: nn.Module | None = None) -> tl.Trace:
     trace = tl.trace(
         model if model is not None else _ReusedModule(),
         torch.randn(3, 4),
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.log_backward(trace.output_ops[0].out.sum())
     return trace
@@ -90,7 +89,7 @@ def test_rollup_counts_survive_load_without_timing(tmp_path) -> None:
     live_summary = trace.grad_fn_site_summary
     path = tmp_path / "site_summary.tlspec"
     with tl._io.prerelease.activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     loaded_summary = loaded.grad_fn_site_summary
     assert set(loaded_summary) == set(live_summary)
@@ -107,7 +106,7 @@ def test_rollup_counts_survive_load_without_timing(tmp_path) -> None:
 
 def test_keyless_op_backed_rollup_refuses_site_key_unavailable(monkeypatch) -> None:
     trace = _backward_trace()
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         monkeypatch.setattr(type(op), "site_key", None, raising=False)
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = trace.grad_fn_site_summary

@@ -2,12 +2,12 @@
 
 | SAELens operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
-| Attach an SAE to a hook point | `torchlens.bridge.sae.splice(model_or_log, inputs, site=..., sae=...)` -- the packaged splice experiment (fork + `tl.splice_module` + replay); reports reconstruction fidelity plus output-level causal effect | Ships. Duck-typed SAE (`encode`/`decode` pair); no SAE package required. Tutorial: `notebooks/sae_splice_tutorial.ipynb`. |
+| Attach an SAE to a hook point | `torchlens.bridge.sae.splice(model_or_log, inputs, site=..., sae=...)` -- the packaged splice experiment (fork + `tl.splice_module` + replay); reports reconstruction fidelity (MSE, fraction of variance explained pooled over per-dimension variance as SAELens reports it, and per dimension) plus output-level causal effect, and with `tokens=` next-token CE loss recovered and KL divergence. Pretrained SAEs: the [pretrained-SAE recipe](../recipes/pretrained_saes.md) (SAELens loads, TorchLens runs) | Ships. Duck-typed SAE (`encode`/`decode` pair); no SAE package required. Tutorial: `notebooks/sae_splice_tutorial.ipynb`. |
 | Ablate / edit SAE features | `splice(..., latents_edit=fn)` -- the per-feature causal knob (a callable over the latent tensor) | Ships as part of the splice experiment. |
 | Manual attach at any site | `tl.splice_module(sae_like_module)` at a discovered site | Equivalent for shape-preserving PyTorch modules. |
-| Train an SAE | Bring your own optimizer over activations from `tl.extract_dataset` / `tl.trace` | TorchLens deliberately ships no trainers; it feeds external training machinery and then measures the trained artifact causally. |
-| Feature steering | `tl.steer(direction, magnitude=...)` or a custom hook | Equivalent for tensor directions. |
-| Read feature activations | `SpliceResult` carries the latents; or a hook side-channel through `hook.run_ctx` | Equivalent for local analysis. |
+| Train an SAE | Bring your own optimizer over activations from `tl.extract_dataset` / `tl.trace`; the [SAE training hand-off](../sae_training_handoff.md) walks it end to end | TorchLens deliberately ships no trainers; it feeds external training machinery and then measures the trained artifact causally. |
+| Feature steering | `tl.steer(direction, strength=...)` or a custom hook | Equivalent for tensor directions. |
+| Read feature activations | `SpliceResult.latents` is the SAE encoder output for the clean site activation, exactly as `sae.encode` returned it, and `SpliceResult.edited_latents` the latents after `latents_edit=` (what the decoder consumed). Both are kept by default; `splice(..., keep_latents=False)` drops them, and a warning fires once per session when they pass 256 MiB | Equivalent for local analysis. |
 | TransformerLens hook-name alignment | `torchlens.mechinterp.resolve_alias(log, name)`, or discover TorchLens labels and save exact labels | TLens spellings resolve against the trace. |
 | SAE dashboards / feature stores | No built-in equivalent | Out of scope by design; use SAELens/Neuronpedia tooling on activations TorchLens extracts. |
 | Publish intervention recipe | `save_intervention(level="portable")` when using built-ins/tensors | Portable if no opaque SAE module is required. |
@@ -19,3 +19,9 @@ the naming session. The boundary statement, kept honest: TorchLens measures
 and intervenes on SAEs (reconstruction fidelity, causal effect, feature-level
 edits) but ships no SAE training, storage, or dashboard machinery -- that
 remains SAELens's home turf, credited in `docs/acknowledgments.md`.
+
+Where the field has moved: SAEs are now used mainly as a discovery tool (finding
+candidate features), while monitoring a deployed model is done with trained linear
+probes on captured activations. TorchLens serves both by extracting activations
+(`tl.trace`, `tl.extract_dataset`); it ships no probe trainer, so fit probes with
+scikit-learn or your own optimizer on the extracted arrays.

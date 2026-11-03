@@ -17,7 +17,7 @@ from safetensors.torch import load_file
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError, streaming as streaming_module
+from torchlens._io import ArtifactError, streaming as streaming_module
 from torchlens._io.streaming import BundleStreamWriter
 from torchlens._io.streaming_async import (
     AsyncWriteEngine,
@@ -144,7 +144,7 @@ def test_duplicate_blob_id_refuses_while_write_is_still_queued(tmp_path: Path) -
     writer = BundleStreamWriter(tmp_path / "bundle.tlspec")
     writer.arm_async_writes()
     writer.submit_blob("0000000001", torch.ones(4), kind="out", label="first")
-    with pytest.raises(TorchLensIOError, match="Duplicate streaming blob_id"):
+    with pytest.raises(ArtifactError, match="Duplicate streaming blob_id"):
         writer.submit_blob("0000000001", torch.ones(4), kind="out", label="second")
 
 
@@ -168,7 +168,7 @@ def test_async_and_sync_bundles_are_byte_identical(tmp_path: Path) -> None:
     }
     loaded_async = tl.load(tmp_path / "async.tlspec")
     loaded_sync = tl.load(tmp_path / "sync.tlspec")
-    for index in range(len(loaded_async.layer_list)):
+    for index in range(len(loaded_async._layer_list)):
         assert torch.equal(loaded_async[index].out, loaded_sync[index].out)
 
 
@@ -178,9 +178,9 @@ def test_async_worker_logs_no_spurious_ops(tmp_path: Path) -> None:
     x = torch.randn(4, 8)
     plain = tl.trace(_model(), x)
     streamed = tl.trace(_model(), x, storage=tl.to_disk(tmp_path / "b.tlspec"))
-    assert len(streamed.layer_list) == len(plain.layer_list)
-    assert [op.layer_label for op in streamed.layer_list] == [
-        op.layer_label for op in plain.layer_list
+    assert len(streamed._layer_list) == len(plain._layer_list)
+    assert [op.layer_label for op in streamed._layer_list] == [
+        op.layer_label for op in plain._layer_list
     ]
 
 
@@ -192,7 +192,7 @@ def test_record_refuses_explicit_async_writes(tmp_path: Path) -> None:
             _model(),
             torch.randn(4, 8),
             save=tl.func("relu"),
-            streaming=tl.to_disk(tmp_path / "r.tlspec", async_writes=True),
+            storage=tl.to_disk(tmp_path / "r.tlspec", async_writes=True),
         )
 
 
@@ -241,7 +241,7 @@ def test_injected_write_failure_is_typed_and_marks_partial(
     monkeypatch.setattr(streaming_module, "save_file", fake)
 
     bundle = tmp_path / "broken.tlspec"
-    with pytest.raises((TorchLensIOError, Exception)) as excinfo:
+    with pytest.raises((ArtifactError, Exception)) as excinfo:
         tl.trace(_model(), torch.randn(4, 8), storage=tl.to_disk(bundle))
     chain_text = ""
     err: BaseException | None = excinfo.value
@@ -249,7 +249,7 @@ def test_injected_write_failure_is_typed_and_marks_partial(
         chain_text += f"{type(err).__name__}: {err}\n"
         err = err.__cause__
     assert "injected" in chain_text
-    assert any(isinstance(e, TorchLensIOError) for e in _exception_chain(excinfo.value))
+    assert any(isinstance(e, ArtifactError) for e in _exception_chain(excinfo.value))
 
     # Never a silently incomplete artifact presented as complete:
     assert not bundle.exists()
@@ -297,15 +297,15 @@ def test_finalize_waits_for_every_slow_pending_write(
 
     manifest = _manifest(bundle)
     assert manifest["tensors"], "expected streamed blobs"
-    from torchlens._io.manifest import sha256_of_file
+    from torchlens._utils.hashing import sha256_file
 
     for entry in manifest["tensors"]:
         blob_path = bundle / entry["relative_path"]
         assert blob_path.exists()
-        assert sha256_of_file(blob_path) == entry["sha256"]
+        assert sha256_file(blob_path) == entry["sha256"]
     loaded = tl.load(bundle)
     reference = tl.trace(_model(), x)
-    for index in range(len(loaded.layer_list)):
+    for index in range(len(loaded._layer_list)):
         assert torch.equal(loaded[index].out, reference[index].out)
 
 

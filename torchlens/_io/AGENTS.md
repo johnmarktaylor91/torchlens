@@ -4,11 +4,13 @@ This package is the untrusted-artifact save/load surface: a loaded `.tlspec` bun
 hostile input, and every load path here is fail-closed.
 
 ## bundle.py
-- `save()` and `load()` (typed overloads) are the main entry points behind `tl.save()`/`tl.load()`.
+- `save()` and `load()` (typed overloads) are the main entry points behind `trace.save()`/`tl.load()`.
 - `_RenameAwareUnpickler` reads `metadata.pkl` through the default-deny `SafeBundleUnpickler`
   allowlist while preserving the locked `_RENAMED_PICKLE_GLOBALS` class/module remap; each
   remapped target is still gated through the allowlist.
 - `cleanup_tmp()` removes stale partial-save temp directories.
+- `_root_manifest.load_by_root_manifest()` routes merged, fastlog and extraction directories by
+  their root manifest (after the earlier-major refusal) before `load()` parses a trace manifest.
 
 ## _safe_unpickle.py
 - `SafeBundleUnpickler` is the restricted default-deny unpickler (class allowlist, mirrors
@@ -19,6 +21,8 @@ hostile input, and every load path here is fail-closed.
   `allowed_custom_callable_modules` allowlist, which stays enforced even alongside broad trust.
 - Trust keys on the resolved object's REAL module, never the pickled path; known-dangerous
   modules (`os`, `sys`, `subprocess`, `builtins`, `importlib`, ...) are hard-denied.
+- `_pre3_module_paths.refuse_pre_3_module_path()` (called from `find_class`) refuses a pickled
+  module path only torchlens 2.x wrote, with `ArtifactTooOldError`.
 - No file bytes ever reach `torch.load`: `torch.storage._load_from_bytes` (the storage leg of
   torch's default tensor reduction) is refused by name. Plain metadata tensors (annotation
   values, small raw inputs/outputs) are written by `_canonical_pickle.py` through the
@@ -26,10 +30,28 @@ hostile input, and every load path here is fail-closed.
   `requires_grad`, device), which validates every argument, checks the byte length exactly
   and yields a non-resizable storage. Older files that embedded a tensor refuse typed with a
   re-save remedy.
+- The load runs on the C `pickle.Unpickler` behind a static pre-scan of the opcode stream
+  (`_pickle_prescan.py`): the pre-scan resolves every global through the same `find_class`
+  policy, runs the allocation belt on every statically known construction, classifies every
+  BUILD target and refuses stream corruption; the C phase hands REDUCE callables back wrapped
+  in a `GuardedCallable` that runs the belt on the real arguments. A stream shape the pre-scan
+  cannot classify runs through `_PurePythonBundleUnpickler`, the same policy per opcode on the
+  pure-Python machine. The belt text lives once, in `_construction_refusal` / `_build_refusal`;
+  the belt's vocabulary (the torch I/O type denylist, the storage and tensor constructor sets,
+  `_alloc_refusal_reason`, `_SAFE_EXPLICIT_GLOBALS`, `_safe_getattr`) lives in `_alloc_belt.py`
+  and is re-exported by `_safe_unpickle.py` for the hardening tests that pin it.
+  `tests/test_unpickle_c_path.py` is the equivalence proof between the two machines. The
+  fast-path unpickler must die with its load: the C memo is not traversed by the cyclic
+  collector on every supported Python, so `load()` clears it and the dry-run planner releases
+  its resolver and probe classes when the dry run ends (a retained unpickler pinned every loaded
+  object through its owner's first `gc.collect()`).
+- The opcode-count ceiling (`bundle._MAX_METADATA_PKL_OPCODES`) is enforced by the pre-scan on
+  every load through `max_opcodes=`; the load sites map `OpcodeCeilingExceeded` to the
+  `metadata_object_count_exceeded` artifact error.
 
 ## manifest.py / tlspec.py
 - `Manifest`, `TensorEntry`, `Provenance`; `enforce_version_policy()` gates artifact versions;
-  `sha256_of_file()` hashes blobs.
+  `torchlens._utils.hashing.sha256_file()` hashes blobs.
 - `_TlSpecWriter` writes unified bundles; `coerce_tlspec_save_level()` validates save levels.
 
 ## scrub.py / rehydrate.py / accessor_rebuild.py
@@ -58,7 +80,7 @@ hostile input, and every load path here is fail-closed.
   streams blobs to disk.
 
 ## Small support modules
-- `__init__.py`: `TorchLensIOError`, `ArtifactVersionBelowFloorError` (rehydration floor),
+- `__init__.py`: `ArtifactError`, `ArtifactTooOldError` (rehydration floor),
   `FieldPolicy`, `read_tlspec_version()`.
 - `_artifact_strings.py`: artifact-string validation incl. the MANDATORY
   device-token gate (see payload_codec above).
@@ -76,7 +98,7 @@ hostile input, and every load path here is fail-closed.
 ## Local invariants
 - Fail-closed everywhere: unknown pickle globals raise, oversized/deep JSON refuses,
   symlinked bundle members are rejected.
-- Artifacts older than tlspec v6 refuse with `ArtifactVersionBelowFloorError`
+- Artifacts older than the current tlspec (saved by torchlens 2.x) refuse with `ArtifactTooOldError`
   (drop-not-resurrect; no field-alias ladders).
 - The sparse runnable core must stay tensor-value-free:
   `assert_sparse_core_has_no_tensor_payload()` enforces it at descriptor build.

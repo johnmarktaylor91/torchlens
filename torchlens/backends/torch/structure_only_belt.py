@@ -44,7 +44,6 @@ import functools
 import inspect
 import threading
 import types
-import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -53,8 +52,10 @@ from typing import Any, Final
 import torch
 
 from ... import _state
+from ..._utils._exception_notes import defer_failure_note
+from ..._utils._torch_symbols import torch_attr
 from ...errors._base import TorchLensError
-from ...utils._torch_symbols import torch_attr
+from ._completeness_cross_thread import _internal_read_active
 from ._tl import DescriptorCompatProperty, get_tensor_label
 from .completeness_witness import (
     _TORCHLENS_ROOT,
@@ -63,7 +64,6 @@ from .completeness_witness import (
     INVISIBLE_HOST_ESCAPE_FUNCS,
     INVISIBLE_HOST_ESCAPE_PROPERTIES,
     STORAGE_BRIDGE_ESCAPE_FUNCS,
-    _internal_read_active,
 )
 
 _TORCH_ROOT: Final[Path] = Path(torch.__file__).resolve().parent
@@ -160,7 +160,7 @@ def _classify_consumer_kind(filename: str, line: int) -> str:
     """
 
     try:
-        from ...postprocess.ast_branches import classify_bool
+        from ..._postprocess.ast_branches import classify_bool
 
         kind = classify_bool(filename, line).kind
     except Exception:  # noqa: BLE001 — classification must never mask the refusal
@@ -187,7 +187,7 @@ def _raise_teaching_refusal(
 ) -> None:
     """Raise the sec-2.3 typed teaching refusal for one user-frame escape."""
 
-    from ...capture.structure_only import ValueDependentBranchError
+    from ..._capture.structure_only import ValueDependentBranchError
 
     consumer_kind = _classify_consumer_kind(filename, line)
     substrate = _tensor_substrate(tensor)
@@ -351,13 +351,13 @@ def _install_property_belt(
 def structure_only_escape_belt(trace: Any) -> Iterator[None]:
     """LAYER 1: install the escalated escape belt for one capture.
 
-    No-op unless ``trace.structure_only`` (default path zero-diff). Install
+    No-op unless ``trace.options.structure_only`` (default path zero-diff). Install
     and unwind are BaseException-safe with shadow-aware restore (the R07
     unwind standard): a name set on ``torch.Tensor`` that shadowed a C-level
     slot member must be DELETED on restore, never written back.
     """
 
-    if not bool(getattr(trace, "structure_only", False)):
+    if not bool(trace._options_structure_only):
         yield
         return
 
@@ -457,16 +457,6 @@ def _raised_by_raise_statement(tb: types.TracebackType) -> bool:
     return False
 
 
-def _annotate_guarded(exc: BaseException, note: str) -> None:
-    """The guarded PEP-678 house idiom (3.10 degrades to a RuntimeWarning)."""
-
-    add_note = getattr(exc, "add_note", None)
-    if add_note is not None:
-        add_note(note)
-    else:  # Python 3.10: no PEP 678 notes — surface via warning.
-        warnings.warn(note, RuntimeWarning, stacklevel=3)
-
-
 _USER_ANNOTATION: Final[str] = (
     "torchlens: raised during structure-only capture; tensors here may be meta (no values)"
 )
@@ -556,12 +546,12 @@ def _frame_operand_substrates(frame: types.FrameType) -> tuple[bool, bool]:
 def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
     """LAYER 2: classify exceptions escaping the user forward (memo 2.2/2.4).
 
-    No-op unless ``trace.structure_only``. TorchLens-typed exceptions
+    No-op unless ``trace.options.structure_only``. TorchLens-typed exceptions
     (including Layer-1 refusals and halt/stop signals) always pass through
     byte-untouched.
     """
 
-    if not bool(getattr(trace, "structure_only", False)):
+    if not bool(trace._options_structure_only):
         yield
         return
     try:
@@ -576,7 +566,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
         innermost_external = _is_external(innermost_path)
         user_raised = innermost_external and _raised_by_raise_statement(innermost)
         if user_raised:
-            _annotate_guarded(exc, _USER_ANNOTATION)
+            defer_failure_note(trace, exc, _USER_ANNOTATION)
             raise
         externals = _external_frames(exc)
         # The INNERMOST external frame is the failing callsite (a traceback
@@ -588,7 +578,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
         )
         entry_frame = f"{externals[0][0]}:{externals[0][1]}" if externals else None
         if isinstance(exc, NotImplementedError):
-            from ...capture.structure_only import MetaKernelUnavailableError
+            from ..._capture.structure_only import MetaKernelUnavailableError
 
             op_name = _wrapper_op_name(exc)
             location = f"{failing_file}:{failing_line}" if failing_file else "<unknown>"
@@ -652,7 +642,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
             # C-level callee died at an external CALL site (the
             # unenumerated-escape shape, e.g. tensor.tobytes() on meta). The
             # exception family + provenance decide; message text never does.
-            from ...capture.structure_only import ValueDependentBranchError
+            from ..._capture.structure_only import ValueDependentBranchError
 
             location = f"{failing_file}:{failing_line}" if failing_file else "<unknown>"
             raise ValueDependentBranchError(
@@ -680,5 +670,5 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
                 ),
             ) from exc
         # Unclassifiable: propagate unchanged with the guarded annotation.
-        _annotate_guarded(exc, _USER_ANNOTATION)
+        defer_failure_note(trace, exc, _USER_ANNOTATION)
         raise

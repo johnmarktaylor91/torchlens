@@ -31,22 +31,22 @@ _CONTAINER_FRAME_GUTTER_PX = 5
 # The 16 rolled demo configs the placement sweep was calibrated against:
 # the 12 committed fixtures plus 4 extra inspection models.
 DEMO_CONFIGS: list[tuple[str, type[nn.Module], dict[str, object]]] = [
-    ("inside_outside_relu", demos.InsideOutsideRelu, {"vis_call_depth": 1}),
-    ("inside_outside_relu_separable", demos.InsideOutsideReluSeparable, {"vis_call_depth": 1}),
-    ("inside_outside_block_collapsed", demos.InsideOutsideBlock, {"vis_call_depth": 1}),
-    ("inside_outside_block_expanded", demos.InsideOutsideBlock, {"vis_call_depth": 1000}),
-    ("deep_loop_body", demos.DeepLoopBody, {"vis_call_depth": 1000}),
-    ("rnn_cell", demos.TanhRNNCellLoop, {"vis_call_depth": 1000}),
-    ("repeated_block_stack_collapsed", demos.RepeatedBlockStack, {"vis_call_depth": 1}),
-    ("repeated_block_stack_expanded", demos.RepeatedBlockStack, {"vis_call_depth": 1000}),
-    ("two_distinct_loops", demos.TwoDistinctLoops, {"vis_call_depth": 1}),
-    ("buffer_loop", demos.BufferRewriteLoops, {"show_buffer_layers": "always"}),
-    ("nested_loop", demos.NestedLoopBlock, {"vis_call_depth": 1}),
-    ("parallel_fanout", demos.ParallelFanout, {"vis_call_depth": 1}),
-    ("collapsed_block_recurrence", demos.CollapsedBlockRecurrence, {"vis_call_depth": 1000}),
-    ("inside_outside_loop", demos.InsideOutsideLoop, {"vis_call_depth": 1}),
-    ("parallel_siblings_loop", demos.ParallelSiblingsLoop, {"vis_call_depth": 1000}),
-    ("shared_two_site_recurrences", demos.SharedTwoSiteRecurrences, {"vis_call_depth": 1}),
+    ("inside_outside_relu", demos.InsideOutsideRelu, {"depth": 1}),
+    ("inside_outside_relu_separable", demos.InsideOutsideReluSeparable, {"depth": 1}),
+    ("inside_outside_block_collapsed", demos.InsideOutsideBlock, {"depth": 1}),
+    ("inside_outside_block_expanded", demos.InsideOutsideBlock, {"depth": 1000}),
+    ("deep_loop_body", demos.DeepLoopBody, {"depth": 1000}),
+    ("rnn_cell", demos.TanhRNNCellLoop, {"depth": 1000}),
+    ("repeated_block_stack_collapsed", demos.RepeatedBlockStack, {"depth": 1}),
+    ("repeated_block_stack_expanded", demos.RepeatedBlockStack, {"depth": 1000}),
+    ("two_distinct_loops", demos.TwoDistinctLoops, {"depth": 1}),
+    ("buffer_loop", demos.BufferRewriteLoops, {"show_buffers": "always"}),
+    ("nested_loop", demos.NestedLoopBlock, {"depth": 1}),
+    ("parallel_fanout", demos.ParallelFanout, {"depth": 1}),
+    ("collapsed_block_recurrence", demos.CollapsedBlockRecurrence, {"depth": 1000}),
+    ("inside_outside_loop", demos.InsideOutsideLoop, {"depth": 1}),
+    ("parallel_siblings_loop", demos.ParallelSiblingsLoop, {"depth": 1000}),
+    ("shared_two_site_recurrences", demos.SharedTwoSiteRecurrences, {"depth": 1}),
 ]
 
 
@@ -62,12 +62,11 @@ def test_rolled_edge_labels_have_zero_hard_violations(
 
     trace = demos._trace(model_cls())
     gv_source = trace.draw(
-        vis_mode="rolled",
-        vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / name),
+        rolled=True,
+        file_format="dot",
+        path=str(tmp_path / name),
         **kwargs,
-    )
+    ).dot
     result = audit_gv_source(gv_source)
     assert result.hard_violation_count == 0, result.describe_violations(name)
 
@@ -209,14 +208,13 @@ def test_container_edge_labels_are_midpoint_and_geometry_clean(tmp_path: Path) -
     trace = tl.trace(
         _ContainerLabelModel(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     gv_source = trace.draw(
         show_containers="labels",
-        vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "container_labels"),
-    )
+        file_format="dot",
+        path=str(tmp_path / "container_labels"),
+    ).dot
 
     assert '<FONT POINT-SIZE="8">left</FONT>' in gv_source
     assert '<FONT POINT-SIZE="8">right</FONT>' in gv_source
@@ -255,9 +253,8 @@ def test_container_nodes_have_native_svg_frame_margin(
     )
     trace.draw(
         show_containers="nodes",
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / name),
+        file_format="svg",
+        path=str(tmp_path / name),
     )
 
     edge_brightness = _native_svg_outer_frame_min_brightness(tmp_path / f"{name}.svg")

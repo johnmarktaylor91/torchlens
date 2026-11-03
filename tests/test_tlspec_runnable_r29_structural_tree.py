@@ -23,9 +23,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 
 def _save(model: nn.Module, args: object, path: Path) -> Path:
@@ -34,9 +34,7 @@ def _save(model: nn.Module, args: object, path: Path) -> Path:
     trace = tl.trace(
         model,
         args,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_activations=True)
     return path

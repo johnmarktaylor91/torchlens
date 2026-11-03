@@ -17,13 +17,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.visualization.collapse_patterns import (
+from torchlens._visualization.collapse_patterns import (
     IDIOMATIC_PATTERNS,
     match_patterns,
     parse_patterns,
     resolve_pattern_request,
 )
-from torchlens.visualization.collapse_plan import RenderContext
+from torchlens._visualization.collapse_plan import RenderContext
 
 
 class _Cbr(nn.Module):
@@ -175,17 +175,15 @@ def test_draw_pattern_only_view_and_combination_refusal(cbr_trace, tmp_path) -> 
         dot = cbr_trace.draw(
             collapse="none",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             order_siblings=False,
-        )
+        ).dot
     assert dot.count("PATTERN 'ConvBnRelu'") == 3
     with pytest.raises(InvalidArgumentError) as excinfo:
         cbr_trace.draw(
             collapse="auto",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
         )
     assert excinfo.value.fields["code"] == "pattern_collapse_combination_unsupported"
 
@@ -193,9 +191,7 @@ def test_draw_pattern_only_view_and_combination_refusal(cbr_trace, tmp_path) -> 
 def test_patterns_default_off(cbr_trace) -> None:
     """No fold_patterns argument means zero chips (memo D11: default off)."""
 
-    dot = cbr_trace.draw(
-        collapse="none", vis_save_only=True, vis_fileformat="dot", order_siblings=False
-    )
+    dot = cbr_trace.draw(collapse="none", file_format="dot", order_siblings=False).dot
     assert "PATTERN" not in dot
 
 
@@ -225,10 +221,9 @@ def test_reserved_text_grammar_lint(cbr_trace) -> None:
         dot = cbr_trace.draw(
             collapse="none",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             order_siblings=False,
-        )
+        ).dot
     pattern_lines = [line for line in dot.splitlines() if "PATTERN" in line]
     assert len(pattern_lines) == 3
     for line in pattern_lines:
@@ -244,8 +239,7 @@ def test_rank_layout_refuses_pattern_chips(cbr_trace) -> None:
         cbr_trace.draw(
             collapse="none",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            vis_node_placement="rank",
-            vis_save_only=True,
-            vis_fileformat="dot",
+            layout="rank",
+            file_format="dot",
         )
     assert excinfo.value.fields["code"] == "pattern_rank_layout_unsupported"

@@ -15,8 +15,8 @@ naming sprint; error codes are the contract.
 | `_frozen.py` | `frozen=` three-state contract; slot-targeted prehooks; FORK-1 detector (both branches behind `FROZEN_DEFAULT_DISCLOSURE_BRANCH`) |
 | `_facet_bridge.py` | semantic-evidence-only MLP-out resolver; frozen-policy registry (the R10 seam) |
 | `_read.py` | orchestration: population law (D9/D10), reductions (D15), provenance |
-| `_table.py` | `ReadRow`/`ReadTable`/`TableProvenance`; pandas adapter; scalar `read_table_v1` persistence |
-| `_edge_plumbing.py` | `GradInputUseMap` fail-closed contract; origin-namespaced pass stamps (deferred-EAP plumbing) |
+| `_table.py` | `ReadRow`/`ReadTable`/`TableProvenance`; pandas adapter; scalar `read_table_v1` persistence; `edge_read_table` (EDGE rows for `torchlens.mechinterp.edge_scores`) |
+| `_edge_plumbing.py` | `GradInputUseMap` fail-closed contract; origin-namespaced pass stamps (edge-grain plumbing; EAP over the component graph does not use it) |
 | `_errors.py` | `ReadError` / `ReadInternalError` (codes on `fields["code"]`) |
 
 ## Invariants a change here must never break
@@ -35,7 +35,7 @@ naming sprint; error codes are the contract.
   artifact is standalone JSON through the bounded reader. F04 has NO
   field_intent rows -- adding one is a C07-owner amendment, not a lane edit.
 - Explicit enumeration is a contract; implicit population is a filter (D9,
-  both here and at the `by=` door in `torchlens/selection_values.py`).
+  both here and at the `by=` door in `torchlens/_selection/values.py`).
 
 Tests: `tests/test_onebackward_*.py` (core, hookband, refusals, frozen,
 bydoor, edgeplumbing, realmodel).

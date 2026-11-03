@@ -6,7 +6,6 @@ import pytest
 import torch
 from torch import nn
 
-import torchlens as tl
 from torchlens import trace as trace_fn
 
 
@@ -75,10 +74,10 @@ def test_distilbert_ffn_current_class_populates_facets() -> None:
     log = trace_fn(
         _FFNModel(FFN()),
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     view = log.modules["ffn"].facets
-    assert view.recipe_source == "distilbert_ffn"
+    assert view.function_source == "distilbert_ffn"
     assert view.up_out.shape == (2, 3, 16)
     assert view.intermediate.shape == (2, 3, 16)
     assert view.down_out.shape == (2, 3, 8)
@@ -96,10 +95,10 @@ def test_distilbert_ffn_legacy_class_still_populates_facets() -> None:
     log = trace_fn(
         _FFNModel(DistilBertFFN()),
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     view = log.modules["ffn"].facets
-    assert view.recipe_source == "distilbert_ffn"
+    assert view.function_source == "distilbert_ffn"
     assert view.up_out.shape == (2, 3, 16)
     assert view.intermediate.shape == (2, 3, 16)
     assert view.down_out.shape == (2, 3, 8)
@@ -137,10 +136,10 @@ def test_real_distilbert_ffn_facets_populate() -> None:
     log = trace_fn(
         model,
         torch.randint(0, 100, (1, 8)),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     view = log.modules[ffn_addrs[0]].facets
-    assert view.recipe_source == "distilbert_ffn"
+    assert view.function_source == "distilbert_ffn"
     assert view.up_out.ndim == 3 and view.up_out.shape[0] == 1
     assert view.intermediate.shape == view.up_out.shape
     assert view.down_out.ndim == 3 and view.down_out.shape[0] == 1

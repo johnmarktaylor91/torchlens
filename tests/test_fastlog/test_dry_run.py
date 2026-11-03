@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import RecordContext
+from torchlens.recording import RecordContext
 
 
 def _mlp() -> nn.Module:
@@ -32,7 +32,7 @@ def _keep_relu(ctx: RecordContext) -> bool:
 def test_print_tree_has_non_empty_output() -> None:
     """print_tree returns non-empty tree text."""
 
-    trace = tl.fastlog.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
+    trace = tl.recording.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
 
     assert trace.print_tree().strip()
 
@@ -40,7 +40,7 @@ def test_print_tree_has_non_empty_output() -> None:
 def test_to_pandas_has_expected_columns() -> None:
     """to_pandas returns the expected public columns."""
 
-    trace = tl.fastlog.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
+    trace = tl.recording.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
 
     assert list(trace.to_pandas().columns) == [
         "call_index",
@@ -54,10 +54,10 @@ def test_to_pandas_has_expected_columns() -> None:
 
 
 def test_repredicate_changes_decisions_without_changing_events() -> None:
-    """repredicate changes decisions while preserving event identity."""
+    """filter changes decisions while preserving event identity."""
 
-    trace = tl.fastlog.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
-    updated = trace.repredicate(other_keep_op=_keep_relu)
+    trace = tl.recording.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
+    updated = trace.filter(other_keep_op=_keep_relu)
 
     assert updated.events is trace.events
     assert updated.decisions != trace.decisions
@@ -66,8 +66,8 @@ def test_repredicate_changes_decisions_without_changing_events() -> None:
 def test_show_graph_renders_without_error(tmp_path: Path) -> None:
     """show_graph returns DOT and Graphviz can render it."""
 
-    trace = tl.fastlog.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
-    dot = trace.draw(vis_outpath=str(tmp_path / "dry_run"), vis_fileformat="png")
+    trace = tl.recording.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
+    dot = trace.draw(vis_outpath=str(tmp_path / "dry_run"), vis_fileformat="png").dot
 
     assert "digraph" in dot
     assert (tmp_path / "dry_run.png").exists()
@@ -87,7 +87,7 @@ def test_dry_run_uses_live_predicate_decisions_without_reinvoking() -> None:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
     inputs = torch.randn(2, 4)
 
-    trace = tl.fastlog.dry_run(model, inputs, save=first_two_ops)
+    trace = tl.recording.dry_run(model, inputs, save=first_two_ops)
     dry_run_calls = calls["n"]
     dry_run_labels = [
         ctx.label
@@ -96,7 +96,7 @@ def test_dry_run_uses_live_predicate_decisions_without_reinvoking() -> None:
     ]
 
     calls["n"] = 0
-    recording = tl.fastlog.record(model, inputs, save=first_two_ops)
+    recording = tl.record(model, inputs, save=first_two_ops)
     record_calls = calls["n"]
     kept_labels = [record.ctx.label for record in recording.records]
 

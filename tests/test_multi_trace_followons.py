@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import _visualization
 from torchlens.intervention._topology.topology import compare_topology
 
 
@@ -126,9 +127,9 @@ def _bundle() -> tl.Bundle:
 
     torch.manual_seed(20)
     x = torch.randn(2, 3)
-    first = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    second = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    return tl.bundle({"first": first, "second": second})
+    first = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(replayable=True))
+    second = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(replayable=True))
+    return tl.Bundle({"first": first, "second": second})
 
 
 def test_supergraph_accessor_and_module_type_labels() -> None:
@@ -145,11 +146,9 @@ def test_compare_topology_rejects_reordered_graphs() -> None:
     """Reordered unique-fingerprint graphs are not reported identical."""
 
     x = torch.randn(2, 3)
-    first = tl.trace(
-        _ReorderedReluSigmoid(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    first = tl.trace(_ReorderedReluSigmoid(), x, capture=tl.options.CaptureOptions(replayable=True))
     second = tl.trace(
-        _ReorderedSigmoidRelu(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
+        _ReorderedSigmoidRelu(), x, capture=tl.options.CaptureOptions(replayable=True)
     )
 
     diff = compare_topology(first, second)
@@ -163,17 +162,17 @@ def test_supergraph_topological_order_respects_edges_after_reordered_bundle() ->
     """Merged bundles with reordered graphs stay acyclic and edge-consistent."""
 
     x = torch.randn(2, 3)
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {
             "first": tl.trace(
                 _ReorderedReluSigmoid(),
                 x,
-                capture=tl.options.CaptureOptions(intervention_ready=True),
+                capture=tl.options.CaptureOptions(replayable=True),
             ),
             "second": tl.trace(
                 _ReorderedSigmoidRelu(),
                 x,
-                capture=tl.options.CaptureOptions(intervention_ready=True),
+                capture=tl.options.CaptureOptions(replayable=True),
             ),
         }
     )
@@ -198,19 +197,19 @@ def test_super_buffer_views_use_public_live_values_and_param_reads_refuse() -> N
 
     import pytest
 
-    from torchlens.errors import CheckpointSeriesLiveParamsError
+    from torchlens.errors import ParamEvidenceMissingError
 
     x = torch.randn(2, 3)
     model_a = _BufferParamModel(scale=1.0, weight=1.0)
     model_b = _BufferParamModel(scale=2.0, weight=3.0)
-    trace_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    trace_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    bundle = tl.bundle({"a": trace_a, "b": trace_b})
+    trace_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(replayable=True))
+    trace_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(replayable=True))
+    bundle = tl.Bundle({"a": trace_a, "b": trace_b})
 
     buffer_out = bundle.buffers["scale"].out
     assert torch.equal(buffer_out, torch.cat([model_a.scale, model_b.scale], dim=0))
 
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = bundle.params["linear.weight"].weight_norm_diff
     assert excinfo.value.fields["code"] == "checkpoint_series_live_params"
 
@@ -219,19 +218,17 @@ def test_show_bundle_graph_rolled_and_backward_modes(tmp_path: Path) -> None:
     """show_bundle_graph handles rolled and backward bundle render modes."""
 
     bundle = _bundle()
-    rolled_source = tl.show_bundle_graph(
+    rolled_source = _visualization.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "rolled_bundle"),
+        path=str(tmp_path / "rolled_bundle"),
         vis_mode="rolled",
-        vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
-    backward_source = tl.show_bundle_graph(
+    backward_source = _visualization.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "backward_bundle"),
-        direction="backward",
-        vis_save_only=True,
-        vis_fileformat="svg",
+        path=str(tmp_path / "backward_bundle"),
+        signal="backward",
+        file_format="svg",
     )
 
     assert rolled_source is not None
@@ -245,12 +242,11 @@ def test_bundle_backward_regression_path(tmp_path: Path) -> None:
     """Bundle backward rendering emits per-member backward subgraphs."""
 
     bundle = _bundle()
-    source = tl.show_bundle_graph(
+    source = _visualization.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "backward_bundle_regression"),
-        direction="backward",
-        vis_save_only=True,
-        vis_fileformat="svg",
+        path=str(tmp_path / "backward_bundle_regression"),
+        signal="backward",
+        file_format="svg",
     )
 
     assert source is not None
@@ -263,12 +259,11 @@ def test_bundle_backward_no_unified_supergraph(tmp_path: Path) -> None:
     """Bundle backward rendering stays per-member in P6."""
 
     bundle = _bundle()
-    source = tl.show_bundle_graph(
+    source = _visualization.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "backward_bundle_no_supergraph"),
-        direction="backward",
-        vis_save_only=True,
-        vis_fileformat="svg",
+        path=str(tmp_path / "backward_bundle_no_supergraph"),
+        signal="backward",
+        file_format="svg",
     )
 
     assert source is not None
@@ -282,13 +277,12 @@ def test_bundle_graph_style_primitives_and_chrome_trace_diff(tmp_path: Path) -> 
     bundle = _bundle()
     first_node = bundle.supergraph.topological_order[0]
     first_edge = next(iter(bundle.supergraph.edges))
-    source = tl.show_bundle_graph(
+    source = _visualization.show_bundle_graph(
         bundle,
-        vis_outpath=str(tmp_path / "styled_bundle"),
+        path=str(tmp_path / "styled_bundle"),
         vis_node_overrides={first_node: {"fillcolor": "#DDEAF7"}},
         vis_edge_overrides={first_edge: {"color": "#0072B2"}},
-        vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     trace_path = tl.export.chrome_trace_diff(bundle, tmp_path / "trace_diff.json")

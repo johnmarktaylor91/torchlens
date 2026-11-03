@@ -1,0 +1,33 @@
+# partial/ - Implementation Guide
+
+Failed-capture recovery (`tl._partial`). A capture whose forward raises
+raises `tl.errors.TraceCaptureError` (chained `from` the forward's exception);
+its `partial_trace` is a `PartialTrace` for post-mortem inspection. TorchLens's
+own errors propagate as themselves and carry `partial_trace` too. `__all__` is
+exactly `["PartialTrace"]`.
+
+## Surface
+
+- `PartialTrace.from_trace(trace, exception)` builds the wrapper; the capture
+  door attaches it as the raised error's `partial_trace`.
+- `PartialTrace` is a THIN wrapper, not a `Trace` subclass: it holds the
+  partially populated `trace`, the `original_exception`, and exposes
+  `raw_layers` (tuple of raw `Op` records), `outcome` (the settled
+  `CaptureOutcome`, see `docs/reference/capture_outcomes.md`),
+  `first_nonfinite()`, `audit()` (-> `HealthReport`, same as
+  `Trace.audit`), `draw()`, and `show(method="graph"|"repr"|"html")`.
+
+## Gotchas
+
+- `partial.explain()` has a dedicated partial path (text +
+  `capture_status="partial"` JSON) built on recorded evidence only; fields
+  without evidence report `"unknown"`, never inferred.
+- Failed partials are analysis-only: conversion/replay surfaces refuse
+  through the capture-outcome gates (N-gates), not here.
+- Exception text is folded through `safe_exception_str` — keep new fields
+  string-only.
+
+## Tests
+
+`tests/test_capture_failure_reporting.py`, `tests/test_capture_outcome_gates.py`
+(partial/outcome surfaces), `tests/test_report_explain.py` (partial explain).

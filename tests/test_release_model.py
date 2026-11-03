@@ -85,9 +85,9 @@ def test_retrace_after_release_matches_fresh_model() -> None:
     retraced = tl.trace(model, inputs)
     fresh = tl.trace(fresh_model, inputs)
 
-    assert len(retraced.layer_list) == len(fresh.layer_list)
-    assert [op.layer_label for op in retraced.layer_list] == [
-        op.layer_label for op in fresh.layer_list
+    assert len(retraced._layer_list) == len(fresh._layer_list)
+    assert [op.layer_label for op in retraced._layer_list] == [
+        op.layer_label for op in fresh._layer_list
     ]
 
 
@@ -104,8 +104,8 @@ def test_releasing_one_model_preserves_an_independent_prepared_model() -> None:
 
     assert get_module_meta(second.linear) is not None
     assert not is_forward_call_decorated(second.linear.forward)
-    assert [op.layer_label for op in repeated_second.layer_list] == [
-        op.layer_label for op in initial_second.layer_list
+    assert [op.layer_label for op in repeated_second._layer_list] == [
+        op.layer_label for op in initial_second._layer_list
     ]
 
 
@@ -379,8 +379,8 @@ def test_faulted_release_evicts_preparation_bookkeeping(monkeypatch) -> None:
     # ... so the next capture re-prepares from scratch with full containment.
     control = tl.trace(_new_model(), inputs)
     retraced = tl.trace(model, inputs)
-    assert [op.layer_label for op in retraced.layer_list] == [
-        op.layer_label for op in control.layer_list
+    assert [op.layer_label for op in retraced._layer_list] == [
+        op.layer_label for op in control._layer_list
     ]
     control_modules = [tuple(control[label].modules) for label in ("linear_1_1", "relu_1_2")]
     retraced_modules = [tuple(retraced[label].modules) for label in ("linear_1_1", "relu_1_2")]

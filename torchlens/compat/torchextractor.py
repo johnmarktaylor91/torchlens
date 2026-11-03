@@ -52,12 +52,12 @@ class Extractor:
 
         return extract(self.model, x, self.layers)
 
-    def forward(self, x: Any) -> dict[str, torch.Tensor]:
+    def forward(self, inputs: Any) -> dict[str, torch.Tensor]:
         """Extract features for one model input.
 
         Parameters
         ----------
-        x:
+        inputs:
             Input passed to the wrapped model.
 
         Returns
@@ -66,7 +66,7 @@ class Extractor:
             Mapping from layer names to outs.
         """
 
-        return self(x)
+        return self(inputs)
 
 
 __all__ = ["Extractor"]

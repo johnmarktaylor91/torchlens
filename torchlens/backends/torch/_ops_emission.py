@@ -1,5 +1,7 @@
 """Output logging, event emission, and live-hook dispatch."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -7,7 +9,7 @@ import torch
 
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
-from ...data_classes.internal_types import FuncExecutionContext
+from ..._data_classes.internal_types import FuncExecutionContext
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -16,25 +18,12 @@ from ._tl import (
     session_label_storage_intact,
     session_meta_is_anchored,
 )
+from ._view_writeback import data_alias_write_reaches_base
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
+    from .ops import CaptureProducerPolicy  # annotations only; runtime binding at the bottom
 
-from .ops import (
-    CaptureProducerPolicy,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _SETTER_MUTATION_FUNC_NAMES,
-        CaptureProducerMode,
-        _apply_live_hooks_to_outputs_legacy,
-        _is_inplace_augmented_assignment_dunder,
-        _session_validated_parameter,
-        _tensor_has_known_provenance,
-        _trace_intervene_options,
-        get_capture_producer_policy,
-    )
 
 __all__ = (
     "_unattributed_tensor_arg_positions",
@@ -45,7 +34,7 @@ __all__ = (
 
 
 def _unattributed_tensor_arg_positions(
-    trace: "Trace",
+    trace: Trace,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     func_name: str,
@@ -164,12 +153,8 @@ def _unattributed_tensor_arg_positions(
             any(has_input_rooted_tensor(value) for value in args[1:])
             or any(has_input_rooted_tensor(value) for value in kwargs.values())
         )
+        and not data_alias_write_reaches_base(trace, args[0])
     )
-    if unsafe_receiver_with_graph_rhs:
-        # Local import: this function is rebound into ``ops``'s globals.
-        from ._view_writeback import data_alias_write_reaches_base
-
-        unsafe_receiver_with_graph_rhs = not data_alias_write_reaches_base(trace, args[0])
 
     def child_slot(slot: tuple[str, Any] | None, inner_key: Any) -> tuple[str, Any] | None:
         """Return the recorder slot key for a container member, or ``None`` past depth 2."""
@@ -190,14 +175,11 @@ def _unattributed_tensor_arg_positions(
         """
 
         if isinstance(value, torch.Tensor):
-            # A ``.data`` getter now has a canonical detach graph node, but a
-            # subsequent receiver mutation writes through an alias whose effect
-            # reaches the base tensor in the graph only through storage-alias
-            # label propagation (default captures, a labeled base sharing the
-            # receiver's elements). Where it does not, preserve the provenance
-            # warning for that unsafe lvalue position when an input-derived RHS
-            # would otherwise appear fully represented, while the independent
-            # data-alias witness ceilings replay.
+            # A ``.data`` getter has a canonical detach graph node, but a receiver mutation
+            # through it reaches the base only via storage-alias label propagation (a labeled
+            # base sharing the receiver's elements). Where it does not, preserve the provenance
+            # warning for that unsafe lvalue position when an input-derived RHS would otherwise
+            # appear fully represented; the data-alias witness ceilings replay independently.
             unsafe_data_alias_receiver = path == "arg0" and unsafe_receiver_with_graph_rhs
             # ``t.data = rhs`` (round-31 M6, r28 reconcile): the setter is
             # logged as the canonical single-argument ``detach(rhs)`` call, so
@@ -270,7 +252,7 @@ def _unattributed_tensor_arg_positions(
 
 
 def log_function_output_tensors(
-    self: "Trace",
+    self: Trace,
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
@@ -309,8 +291,8 @@ def log_function_output_tensors(
     # path pays one attribute read; imports stay INSIDE the branch because
     # ops.py rebinds this function under its own globals (the split-module
     # pattern), so module-level helpers here are not visible at runtime.
-    if getattr(self, "structure_only", False):
-        from ...capture._weightsfree_admission import weightsfree_meta_active
+    if self._options_structure_only:
+        from ..._capture._weightsfree_admission import weightsfree_meta_active
 
         if weightsfree_meta_active(self):
             from ._weightsfree_transparency import caller_is_torch_decomposition
@@ -319,7 +301,7 @@ def log_function_output_tensors(
                 return False
     policy = getattr(self, "_capture_producer_policy", None)
     if policy is None:
-        policy = get_capture_producer_policy(cast(CaptureProducerMode, self.capture_mode))
+        policy = get_capture_producer_policy(cast(CaptureProducerMode, self._options_mode))
         self._capture_producer_policy = policy
     layer_counter_before = self._raw_graph_ws.layer_counter
     _emit_operation_events(
@@ -341,7 +323,7 @@ def log_function_output_tensors(
 
 def _emit_operation_events(
     policy: CaptureProducerPolicy,
-    self: "Trace",
+    self: Trace,
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
@@ -404,7 +386,7 @@ def _emit_operation_events(
 
 
 def apply_live_hooks_to_outputs(
-    self: "Trace",
+    self: Trace,
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
@@ -454,9 +436,19 @@ def apply_live_hooks_to_outputs(
         Fired hook results are stored temporarily on the tensor being logged.
     """
 
-    predicate_intervene_active = _trace_intervene_options(self) is not None
-    intervention_active = bool(_st._active_hook_plan) or predicate_intervene_active
-    if not intervention_active or self.capture_mode not in {"exhaustive", "predicate"}:
+    intervene_options = _trace_intervene_options(self)
+    hook_plan = _st._active_hook_plan
+    if (not hook_plan and intervene_options is None) or self._options_mode not in {
+        "exhaustive",
+        "predicate",
+    }:
+        return out_orig
+    if (intervene_options is None or not _intervene_reaches_op_door(intervene_options)) and (
+        not hook_plan or not _hook_plan_reaches_op_door(hook_plan)
+    ):
+        # Module-exit-only selectors (the intervene= spec, or the hook plan tl.trace lowers a
+        # tl.module(...) spec into) fire at the module-boundary door; the per-op check would
+        # build a site context for every op output and never match.
         return out_orig
     return _apply_live_hooks_to_outputs_legacy(
         self,
@@ -471,3 +463,25 @@ def apply_live_hooks_to_outputs(
         call_input_snapshots,
         record_is_inplace,
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_arguments import (  # noqa: E402
+    _session_validated_parameter,
+    _tensor_has_known_provenance,
+)
+from ._ops_capture_records import (  # noqa: E402
+    _is_inplace_augmented_assignment_dunder,
+    get_capture_producer_policy,
+)
+from ._ops_interventions import (  # noqa: E402
+    _apply_live_hooks_to_outputs_legacy,
+    _hook_plan_reaches_op_door,
+    _intervene_reaches_op_door,
+    _trace_intervene_options,
+)
+from .ops import (  # noqa: E402
+    _SETTER_MUTATION_FUNC_NAMES,
+    CaptureProducerMode,
+)

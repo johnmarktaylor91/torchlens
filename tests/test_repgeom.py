@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import repgeom
-from torchlens.visualization.node_spec import NodeSpec
+from torchlens._visualization.node_spec import NodeSpec
 from torchlens.viz.node_plots import _DRAW_SCALE, _legend_bbox, _legend_height
 
 ANALYTIC_POINTS = np.array(
@@ -145,8 +145,8 @@ def _trace_with_mds_and_images() -> Any:
     """
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.raw_input = _pil_stimuli(8)
-    repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=8)
+    trace.input = _pil_stimuli(8)
+    repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     return trace
 
 
@@ -193,7 +193,7 @@ def _mds_trace(model: nn.Module, save: Any) -> tl.Trace:
     torch.manual_seed(1001)
     zeros = np.zeros((ANALYTIC_POINTS.shape[0], 3), dtype=np.float64)
     x = torch.tensor(np.concatenate([ANALYTIC_POINTS, zeros], axis=1), dtype=torch.float32)
-    return tl.trace(model, x, save=save, capture=tl.options.CaptureOptions(random_seed=1001))
+    return tl.trace(model, x, save=save, capture=tl.options.CaptureOptions(seed=1001))
 
 
 def test_classical_mds_recovers_closed_form_asymmetric_fixture() -> None:
@@ -205,7 +205,7 @@ def test_classical_mds_recovers_closed_form_asymmetric_fixture() -> None:
     assert eigenvalues[0] > eigenvalues[1] > 0.0
 
     distances = _pairwise_distances(ANALYTIC_POINTS)
-    embedding, info = repgeom.classical_mds(distances, n_components=2)
+    embedding, info = repgeom.classical_mds(distances, num_components=2)
 
     assert info["effective_rank"] == 2
     assert np.allclose(_pairwise_distances(embedding), distances, atol=1e-9)
@@ -241,7 +241,7 @@ def test_classical_mds_min_n_gate_raises_clear_error() -> None:
     """MDS should reject too-small visualization batches."""
 
     with pytest.raises(ValueError, match="too few stimuli"):
-        repgeom.classical_mds(ANALYTIC_POINTS[:7], min_n=8)
+        repgeom.classical_mds(ANALYTIC_POINTS[:7], min_stimuli=8)
 
 
 def test_classical_mds_rank_deficient_duplicate_gate_raises_clear_error() -> None:
@@ -251,7 +251,7 @@ def test_classical_mds_rank_deficient_duplicate_gate_raises_clear_error() -> Non
     points[3] = points[0]
 
     with pytest.raises(ValueError, match="rank-deficient|duplicate"):
-        repgeom.classical_mds(points, min_n=8)
+        repgeom.classical_mds(points, min_stimuli=8)
 
 
 def test_classical_mds_negative_eigenvalue_clip_reports_discarded_fraction() -> None:
@@ -261,7 +261,7 @@ def test_classical_mds_negative_eigenvalue_clip_reports_discarded_fraction() -> 
     distances[0, 1] = 25.0
     distances[1, 0] = 25.0
 
-    embedding, info = repgeom.classical_mds(distances, min_n=8)
+    embedding, info = repgeom.classical_mds(distances, min_stimuli=8)
 
     assert embedding.shape == (8, 2)
     assert info["negative_eigenvalue_count"] > 0
@@ -293,7 +293,7 @@ def test_classical_mds_warns_on_ambiguous_square_feature_matrix() -> None:
     )
 
     with pytest.warns(UserWarning, match="ambiguous square input"):
-        embedding, info = repgeom.classical_mds(features, min_n=3)
+        embedding, info = repgeom.classical_mds(features, min_stimuli=3)
 
     assert embedding.shape == (4, 2)
     assert info["input_kind"] == "distances"
@@ -315,21 +315,23 @@ def test_classical_mds_explicit_input_kind_resolves_the_ambiguity() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         as_distances, distance_info = repgeom.classical_mds(
-            ambiguous, min_n=3, input_kind="distances"
+            ambiguous, min_stimuli=3, input_kind="distances"
         )
-        as_features, feature_info = repgeom.classical_mds(ambiguous, min_n=3, input_kind="features")
+        as_features, feature_info = repgeom.classical_mds(
+            ambiguous, min_stimuli=3, input_kind="features"
+        )
 
     assert distance_info["input_kind"] == "distances"
     assert feature_info["input_kind"] == "features"
     assert not np.allclose(as_distances, as_features)
 
     auto_embedding, _ = repgeom.classical_mds(
-        repgeom.activation_distance_matrix(ambiguous), min_n=3, input_kind="distances"
+        repgeom.activation_distance_matrix(ambiguous), min_stimuli=3, input_kind="distances"
     )
     assert np.allclose(auto_embedding, as_features)
 
     with pytest.raises(ValueError, match="input_kind must be one of"):
-        repgeom.classical_mds(ambiguous, min_n=3, input_kind="dist")
+        repgeom.classical_mds(ambiguous, min_stimuli=3, input_kind="dist")
 
 
 def test_activation_distance_matrix_metrics() -> None:
@@ -374,12 +376,12 @@ def test_rdm_alias_matches_activation_distance_matrix_for_core_metrics() -> None
 def test_rdm_degenerate_min_n_and_angular_metrics_raise_clear_errors() -> None:
     """RDM public paths should reject too-small and zero-norm cases clearly."""
 
-    with pytest.raises(ValueError, match="min_n must be at least 2"):
-        repgeom.rdm_evolution(_mds_trace(_MDSClassifier(), tl.func("linear")), min_n=1)
+    with pytest.raises(ValueError, match="min_stimuli must be at least 2"):
+        repgeom.rdm_evolution(_mds_trace(_MDSClassifier(), tl.func("linear")), min_stimuli=1)
 
     trace = tl.trace(nn.Linear(3, 3), torch.ones(1, 3), save=tl.func("linear"))
     with pytest.raises(ValueError, match="too few stimuli"):
-        repgeom.rdm_evolution(trace, min_n=2)
+        repgeom.rdm_evolution(trace, min_stimuli=2)
 
     with pytest.raises(ValueError, match="cosine distance is undefined for zero-norm stimuli"):
         repgeom.rdm(np.array([[0.0, 0.0], [1.0, 0.0]]), metric="cosine")
@@ -428,7 +430,7 @@ def test_mds_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Pa
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
     linear_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
 
-    coords_by_key = repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=8)
+    coords_by_key = repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=8)
 
     assert list(coords_by_key) == [f"layer:{layer.layer_label}" for layer in linear_layers]
     assert trace._annotation_blobs is not None
@@ -440,7 +442,7 @@ def test_mds_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Pa
         assert torch.equal(trace._annotation_blobs[f"mds:{key}"], torch.from_numpy(coords))
 
     raw_second_distances = repgeom.activation_distance_matrix(linear_layers[1].out)
-    raw_second_coords, _info = repgeom.classical_mds(raw_second_distances, min_n=8)
+    raw_second_coords, _info = repgeom.classical_mds(raw_second_distances, min_stimuli=8)
     expected_second = repgeom.procrustes_align(raw_second_coords, coords_by_key[first_key])
     assert np.allclose(coords_by_key[second_key], expected_second)
 
@@ -457,7 +459,7 @@ def test_mds_evolution_returned_coords_do_not_alias_annotations() -> None:
     """Returned MDS arrays should not share memory with stored trace annotations."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    coords_by_key = repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=8)
+    coords_by_key = repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     first_key = next(iter(coords_by_key))
     before = float(trace._annotation_blobs[f"mds:{first_key}"][0, 0].item())
 
@@ -472,7 +474,7 @@ def test_rdm_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Pa
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
     linear_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
 
-    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
 
     assert list(matrices_by_key) == [f"layer:{layer.layer_label}" for layer in linear_layers]
     assert trace._annotation_blobs is not None
@@ -494,7 +496,7 @@ def test_rdm_evolution_returned_matrices_do_not_alias_annotations() -> None:
     """Returned RDM arrays should not share memory with stored trace annotations."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     first_key = next(iter(matrices_by_key))
     before = float(trace._annotation_blobs[f"rdm:{first_key}"][0, 1].item())
 
@@ -506,10 +508,10 @@ def test_rdm_evolution_returned_matrices_do_not_alias_annotations() -> None:
 def test_scree_and_effective_dimensionality_low_rank_fixture() -> None:
     """Scree helpers should recover a sorted non-negative low-rank spectrum."""
 
-    eigenvalues = repgeom.scree(ANALYTIC_POINTS, min_n=8)
+    eigenvalues = repgeom.scree(ANALYTIC_POINTS, min_stimuli=8)
     info = repgeom.effective_dimensionality(
         ANALYTIC_POINTS,
-        min_n=8,
+        min_stimuli=8,
         variance_threshold=0.90,
     )
 
@@ -536,7 +538,7 @@ def test_effective_dimensionality_caps_components_at_spectrum_length() -> None:
     """
 
     info = repgeom.effective_dimensionality(
-        np.eye(3, dtype=np.float64), min_n=3, variance_threshold=1.0
+        np.eye(3, dtype=np.float64), min_stimuli=3, variance_threshold=1.0
     )
 
     n_components = info["n_components_for_threshold"]
@@ -553,7 +555,7 @@ def test_effective_dimensionality_all_zero_fixture_is_safe() -> None:
 
     activations = np.zeros((5, 4), dtype=np.float64)
     with np.errstate(all="raise"):
-        info = repgeom.effective_dimensionality(activations, min_n=3)
+        info = repgeom.effective_dimensionality(activations, min_stimuli=3)
 
     assert np.array_equal(info["eigenvalues"], np.zeros(5))
     assert np.array_equal(info["variance_explained"], np.zeros(5))
@@ -570,7 +572,7 @@ def test_scree_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
     linear_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
 
-    spectra_by_key = repgeom.scree_evolution(trace, save=tl.func("linear"), min_n=8)
+    spectra_by_key = repgeom.scree_evolution(trace, save=tl.func("linear"), min_stimuli=8)
 
     assert list(spectra_by_key) == [f"layer:{layer.layer_label}" for layer in linear_layers]
     assert trace._annotation_blobs is not None
@@ -594,7 +596,7 @@ def test_mds_scatter_node_spec_sets_draw_time_image_for_annotated_layer() -> Non
 
     trace = _trace_with_mds_and_images()
     layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
-    hook = repgeom.mds_scatter_node_spec(max_thumbnails=8)
+    hook = tl.viz.nodes.mds_scatter(max_thumbnails=8)
     spec = NodeSpec(lines=[layer.layer_label])
 
     result = hook(layer, spec)
@@ -619,10 +621,10 @@ def test_rdm_node_spec_sets_one_draw_time_heatmap_for_annotated_layer() -> None:
     """The RDM hook should set one bounded heatmap image for annotated layers."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.raw_input = _pil_stimuli(8)
-    repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+    trace.input = _pil_stimuli(8)
+    repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
-    hook = repgeom.rdm_node_spec(max_stimuli=8)
+    hook = tl.viz.nodes.rdm(max_stimuli=8)
     spec = NodeSpec(lines=[layer.layer_label])
 
     result = hook(layer, spec)
@@ -649,9 +651,9 @@ def test_scree_node_spec_sets_one_draw_time_image_for_annotated_layer() -> None:
     """The scree hook should set one bounded line-plot image for annotated layers."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    repgeom.scree_evolution(trace, save=tl.func("linear"), min_n=8)
+    repgeom.scree_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
-    hook = repgeom.scree_node_spec(max_components=8)
+    hook = tl.viz.nodes.scree(max_components=8)
     spec = NodeSpec(lines=[layer.layer_label])
 
     result = hook(layer, spec)
@@ -702,10 +704,9 @@ def test_mds_scatter_draw_uses_one_contained_image_per_annotated_node(tmp_path: 
     output_path = tmp_path / "scatter_contained.svg"
 
     trace.draw(
-        vis_outpath=str(output_path),
-        vis_save_only=True,
-        vis_fileformat="svg",
-        node_spec_fn=repgeom.mds_scatter_node_spec(max_thumbnails=8),
+        path=str(output_path),
+        file_format="svg",
+        node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
     )
 
     svg_text = output_path.read_text(encoding="utf-8")
@@ -738,10 +739,9 @@ def test_mds_scatter_draw_embeds_data_uri_and_survives_save_load(tmp_path: Path)
     output_path = tmp_path / "scatter.svg"
 
     loaded.draw(
-        vis_outpath=str(output_path),
-        vis_save_only=True,
-        vis_fileformat="svg",
-        node_spec_fn=repgeom.mds_scatter_node_spec(max_thumbnails=8),
+        path=str(output_path),
+        file_format="svg",
+        node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
     )
 
     svg_text = output_path.read_text(encoding="utf-8")
@@ -756,8 +756,8 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
     """RDM SVG output should inline one heatmap image per annotated node after reload."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.raw_input = _pil_stimuli(8)
-    repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+    trace.input = _pil_stimuli(8)
+    repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     annotated_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
     bundle_path = tmp_path / "rdm_source.tlspec"
     trace.save(bundle_path)
@@ -765,10 +765,9 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
     output_path = tmp_path / "rdm.svg"
 
     loaded.draw(
-        vis_outpath=str(output_path),
-        vis_save_only=True,
-        vis_fileformat="svg",
-        node_spec_fn=repgeom.rdm_node_spec(max_stimuli=8),
+        path=str(output_path),
+        file_format="svg",
+        node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8),
     )
 
     svg_text = output_path.read_text(encoding="utf-8")
@@ -796,7 +795,7 @@ def test_scree_node_spec_draw_uses_one_contained_image_and_survives_save_load(
     """Scree SVG output should inline one plot image per annotated node after reload."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    repgeom.scree_evolution(trace, save=tl.func("linear"), min_n=8)
+    repgeom.scree_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     annotated_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
     bundle_path = tmp_path / "scree_source.tlspec"
     trace.save(bundle_path)
@@ -804,10 +803,9 @@ def test_scree_node_spec_draw_uses_one_contained_image_and_survives_save_load(
     output_path = tmp_path / "scree.svg"
 
     loaded.draw(
-        vis_outpath=str(output_path),
-        vis_save_only=True,
-        vis_fileformat="svg",
-        node_spec_fn=repgeom.scree_node_spec(max_components=8),
+        path=str(output_path),
+        file_format="svg",
+        node_spec_fn=tl.viz.nodes.scree(max_components=8),
     )
 
     svg_text = output_path.read_text(encoding="utf-8")
@@ -838,7 +836,7 @@ def test_mds_scatter_cap_overlap_and_more_indicator(tmp_path: Path) -> None:
     layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
     assert trace._annotation_blobs is not None
     trace._annotation_blobs[f"layer:{layer.layer_label}"] = torch.zeros(8, 2)
-    hook = repgeom.mds_scatter_node_spec(max_thumbnails=3, thumbnail_size=28)
+    hook = tl.viz.nodes.mds_scatter(max_thumbnails=3, thumbnail_size=28)
 
     first = hook(layer, NodeSpec(lines=[layer.layer_label]))
     second = hook(layer, NodeSpec(lines=[layer.layer_label]))
@@ -853,9 +851,8 @@ def test_mds_scatter_cap_overlap_and_more_indicator(tmp_path: Path) -> None:
 
     output_path = tmp_path / "scatter_cap.svg"
     trace.draw(
-        vis_outpath=str(output_path),
-        vis_save_only=True,
-        vis_fileformat="svg",
+        path=str(output_path),
+        file_format="svg",
         node_spec_fn=hook,
     )
     assert "+5 more" in output_path.read_text(encoding="utf-8")
@@ -865,9 +862,9 @@ def test_mds_scatter_fallback_renders_points_without_raw_images() -> None:
     """Coords without matching raw PIL images should render a points fallback."""
 
     trace = _trace_with_mds_and_images()
-    trace.raw_input = None
+    trace.input = None
     layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
-    hook = repgeom.mds_scatter_node_spec(max_thumbnails=8)
+    hook = tl.viz.nodes.mds_scatter(max_thumbnails=8)
 
     result = hook(layer, NodeSpec(lines=[layer.layer_label]))
 
@@ -890,8 +887,8 @@ def test_mds_scatter_off_keeps_default_render_byte_identical(tmp_path: Path) -> 
     first_path = tmp_path / "default_first.svg"
     second_path = tmp_path / "default_second.svg"
 
-    trace.draw(vis_outpath=str(first_path), vis_save_only=True, vis_fileformat="svg")
-    trace.draw(vis_outpath=str(second_path), vis_save_only=True, vis_fileformat="svg")
+    trace.draw(path=str(first_path), file_format="svg")
+    trace.draw(path=str(second_path), file_format="svg")
 
     assert first_path.read_bytes() == second_path.read_bytes()
 
@@ -906,8 +903,8 @@ def test_plain_trace_draw_without_rdm_hook_does_not_create_annotation_blobs(
     second_path = tmp_path / "plain_default_second.svg"
 
     assert trace._annotation_blobs is None
-    trace.draw(vis_outpath=str(first_path), vis_save_only=True, vis_fileformat="svg")
-    trace.draw(vis_outpath=str(second_path), vis_save_only=True, vis_fileformat="svg")
+    trace.draw(path=str(first_path), file_format="svg")
+    trace.draw(path=str(second_path), file_format="svg")
 
     assert trace._annotation_blobs is None
     assert first_path.read_bytes() == second_path.read_bytes()
@@ -918,8 +915,8 @@ def test_mds_scatter_import_does_not_load_matplotlib() -> None:
 
     script = """
 import sys
-import torchlens.repgeom as repgeom
-repgeom.mds_scatter_node_spec()
+import torchlens.viz.nodes as viz_nodes
+viz_nodes.mds_scatter()
 print('matplotlib' in sys.modules)
 """
     result = subprocess.run(
@@ -937,7 +934,7 @@ def test_mds_evolution_recurrent_aggregate_requires_pass_selection() -> None:
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
 
     with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
-        repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=8)
+        repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=8)
 
 
 def test_mds_evolution_default_recurrent_saved_layer_requires_pass_selection() -> None:
@@ -946,18 +943,16 @@ def test_mds_evolution_default_recurrent_saved_layer_requires_pass_selection() -
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
 
     with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
-        repgeom.mds_evolution(trace, min_n=8)
+        repgeom.mds_evolution(trace, min_stimuli=8)
 
 
 def test_mds_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     """A single recurrent pass selection should read op.out and store op coords."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(
-        op for op in trace.layer_list if op.layer_type == "linear" and op.pass_index == 2
-    )
+    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
 
-    coords_by_key = repgeom.mds_evolution(trace, save=tl.label(linear_op.label), min_n=8)
+    coords_by_key = repgeom.mds_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
 
     key = f"op:{linear_op.label}"
     assert list(coords_by_key) == [key]
@@ -966,33 +961,139 @@ def test_mds_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     assert torch.equal(trace._annotation_blobs[f"mds:{key}"], torch.from_numpy(coords_by_key[key]))
 
 
-def test_rdm_evolution_recurrent_aggregate_requires_pass_selection() -> None:
-    """Aggregate recurrent layers should raise the same pass-selection error for RDM."""
+def _hand_recurrent_linear_rdms() -> list[np.ndarray]:
+    """Return per-pass euclidean RDMs of ``_RecurrentMDS``'s linear op, by hand.
+
+    The recurrent linear has identity weight and zero bias, so pass ``k``'s
+    output is ``tanh`` applied ``k - 1`` times to the input. Built in numpy
+    from the input alone, independent of TorchLens capture.
+
+    Returns
+    -------
+    list[np.ndarray]
+        Square RDMs for passes 1, 2 and 3, in pass order.
+    """
+
+    zeros = np.zeros((ANALYTIC_POINTS.shape[0], 3), dtype=np.float64)
+    passes = []
+    hidden = np.concatenate([ANALYTIC_POINTS, zeros], axis=1).astype(np.float32)
+    for _index in range(3):
+        passes.append(_pairwise_distances(hidden.astype(np.float64)))
+        hidden = np.tanh(hidden)
+    return passes
+
+
+def _recurrent_linear_ops(trace: tl.Trace) -> list[Any]:
+    """Return the recurrent linear's per-pass ops in pass order.
+
+    Parameters
+    ----------
+    trace:
+        Trace of ``_RecurrentMDS``.
+
+    Returns
+    -------
+    list[Any]
+        The three linear ops, sorted by pass index.
+    """
+
+    ops = [op for op in trace._layer_list if op.type == "linear"]
+    return sorted(ops, key=lambda op: op.pass_number)
+
+
+def test_rdm_evolution_default_sweep_expands_recurrent_passes() -> None:
+    """U24.2: the default sweep yields one RDM per pass, equal to hand-built RDMs."""
+
+    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+    ops = _recurrent_linear_ops(trace)
+    expected = _hand_recurrent_linear_rdms()
+
+    matrices_by_key = repgeom.rdm_evolution(trace, min_stimuli=8)
+
+    keys = [f"op:{op.label}" for op in ops]
+    assert len(ops) == 3
+    assert [op.pass_number for op in ops] == [1, 2, 3]
+    assert list(matrices_by_key) == keys
+    assert trace._annotation_blobs is not None
+    for key, hand_rdm in zip(keys, expected, strict=True):
+        assert matrices_by_key.payload_basis[key] == "raw"
+        np.testing.assert_allclose(matrices_by_key[key], hand_rdm, rtol=0, atol=1e-5)
+        assert torch.equal(
+            trace._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrices_by_key[key])
+        )
+    # The passes are distinct objects: tanh contracts every pass after the first.
+    assert not np.allclose(matrices_by_key[keys[0]], matrices_by_key[keys[1]])
+
+
+def test_rdm_evolution_selector_matching_every_pass_expands() -> None:
+    """U24.2: a selector matching all passes gives the same per-pass RDMs."""
+
+    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+    ops = _recurrent_linear_ops(trace)
+    expected = _hand_recurrent_linear_rdms()
+
+    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
+
+    assert list(matrices_by_key) == [f"op:{op.label}" for op in ops]
+    for hand_rdm, matrix in zip(expected, matrices_by_key.values(), strict=True):
+        np.testing.assert_allclose(matrix, hand_rdm, rtol=0, atol=1e-5)
+
+
+def test_rdm_evolution_recurrent_expansion_leaves_mds_refusal() -> None:
+    """U24.2: expansion leaves mds_evolution's recurrent refusal unchanged."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
 
     with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
-        repgeom.rdm_evolution(trace, save=tl.func("linear"), min_n=8)
+        repgeom.mds_evolution(trace, min_stimuli=8)
+    assert trace._annotation_blobs is None
+    assert len(repgeom.rdm_evolution(trace, min_stimuli=8)) == 3
 
 
-def test_rdm_evolution_default_recurrent_saved_layer_requires_pass_selection() -> None:
-    """Default recurrent RDM selection should not silently omit saved passes."""
+@pytest.mark.parametrize(
+    ("metric", "expected"),
+    [
+        ("euclidean", "rdm/*/euclidean"),
+        ("cosine", "rdm/*/cosine"),
+        ("correlation", "rdm/*/correlation"),
+        ("manhattan", None),
+    ],
+)
+def test_rdm_evolution_records_similarity_repository_id(metric: str, expected: Any) -> None:
+    """U56.3: the result names its exact RDM variant in the catalogue, or None."""
 
-    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
+    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
 
-    with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
-        repgeom.rdm_evolution(trace, min_n=8)
+    result = repgeom.rdm_evolution(trace, metric=metric, min_stimuli=8)
+
+    assert result.similarity_repository_id == expected
+    assert repgeom.mds_evolution(trace, min_stimuli=8).similarity_repository_id is None
+
+
+def test_similarity_repository_table_covers_every_metric_and_method() -> None:
+    """U56.3: every rdm metric and rdm_compare method has a decided table entry."""
+
+    from torchlens.repgeom import _similarity_ids as ids
+    from torchlens.repgeom._geometry import DistanceMetric
+
+    metrics = set(DistanceMetric.__args__)
+    assert set(ids.RDM_IDS) == metrics
+    assert set(ids.RSA_IDS) == {
+        (metric, method) for metric in metrics for method in ("pearson", "spearman", "kendall")
+    }
+    assert tl.stats.CKA.similarity_repository_id == ids.LINEAR_CKA_ID
+    for key, identifier in [*ids.RDM_IDS.items(), *ids.RSA_IDS.items()]:
+        if identifier is not None:
+            assert identifier.split("/")[1] == "*", key
 
 
 def test_rdm_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     """A single recurrent pass selection should read op.out and store op RDM."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(
-        op for op in trace.layer_list if op.layer_type == "linear" and op.pass_index == 2
-    )
+    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
 
-    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.label(linear_op.label), min_n=8)
+    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
 
     key = f"op:{linear_op.label}"
     assert list(matrices_by_key) == [key]
@@ -1007,11 +1108,9 @@ def test_scree_evolution_recurrent_pass_qualified_selector_uses_op_key(tmp_path:
     """A single recurrent pass selection should read op.out and store op scree."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(
-        op for op in trace.layer_list if op.layer_type == "linear" and op.pass_index == 2
-    )
+    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
 
-    spectra_by_key = repgeom.scree_evolution(trace, save=tl.label(linear_op.label), min_n=8)
+    spectra_by_key = repgeom.scree_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
 
     key = f"op:{linear_op.label}"
     assert list(spectra_by_key) == [key]
@@ -1036,7 +1135,7 @@ def test_scree_evolution_default_recurrent_saved_layer_requires_pass_selection()
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
 
     with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
-        repgeom.scree_evolution(trace, min_n=8)
+        repgeom.scree_evolution(trace, min_stimuli=8)
 
 
 def test_mds_evolution_unsaved_activation_raises_capture_guidance() -> None:
@@ -1045,7 +1144,7 @@ def test_mds_evolution_unsaved_activation_raises_capture_guidance() -> None:
     trace = _mds_trace(_MDSClassifier(), tl.func("tanh"))
 
     with pytest.raises(ValueError, match="capture with save=.*MDS layers"):
-        repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=8)
+        repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=8)
 
 
 def test_mds_evolution_min_n_gate_is_honored() -> None:
@@ -1054,4 +1153,4 @@ def test_mds_evolution_min_n_gate_is_honored() -> None:
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
 
     with pytest.raises(ValueError, match="too few stimuli"):
-        repgeom.mds_evolution(trace, save=tl.func("linear"), min_n=9)
+        repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=9)

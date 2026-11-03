@@ -19,9 +19,10 @@ from typing import Any
 
 import torch
 
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._errors import InvalidArgumentError
+from ..._utils.display import atomic_write_text
 from ...errors._base import TorchLensError
-from ...utils.display import atomic_write_text
 from ._collection import to_model_explorer_dict
 from ._ids import LEGACY_ID_PREFIX
 from ._validate import validate_model_explorer_payload
@@ -33,7 +34,7 @@ _DELTA_PROVIDER = "bundle_delta (L2 norm of out difference per op)"
 
 def model_explorer_diff(
     members: Any,
-    out_dir: str | Path,
+    path: str | Path,
     *,
     label: str | None = None,
     privacy_profile: str = "local",
@@ -45,7 +46,7 @@ def model_explorer_diff(
     members:
         A TorchLens ``Bundle`` with exactly two members, or a two-item
         sequence of ``Trace`` objects (subject, reference).
-    out_dir:
+    path:
         Destination directory for the paired collections, per-pane
         ``bundle_delta`` node data, sync config, manifest, and README.
     label:
@@ -60,9 +61,9 @@ def model_explorer_diff(
     """
 
     left, right, names = _resolve_pair(members)
-    destination = Path(out_dir)
+    destination = Path(path)
     destination.mkdir(parents=True, exist_ok=True)
-    base = str(label or getattr(left, "model_class_name", None) or "model")
+    base = str(label or (left._source_class_name if is_live_trace(left) else None) or "model")
     payloads = {}
     for side, trace, name in (("left", left, names[0]), ("right", right, names[1])):
         payload = to_model_explorer_dict(

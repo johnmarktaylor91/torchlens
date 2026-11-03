@@ -63,20 +63,22 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..selection import (
-    ResolvedSelection,
-    SelectionError,
-    SiteEntry,
+from torchlens._selection.errors import SelectionError
+
+from .._record_type import first_op
+from .._selection.selection import (
+    Selection,
+    Site,
     _apply_invalid,
 )
 from .masked_edit import _derive_masked_edit, _validate_edited
-from .types import FireRecord, HelperSpec, LiteralTensor
+from .types import Edit, FireRecord, LiteralTensor
 
 if TYPE_CHECKING:
-    from ..data_classes.param import Param
-    from ..data_classes.trace import Trace
+    from .._data_classes.param import Param
+    from .._data_classes.trace import Trace
 
-__all__ = ["apply_param_substitution_do"]
+__all__ = ["apply_param_substitution_do", "buffer_operand_selection"]
 
 #: Marker distinguishing param-derived tier-(ii) entries from edge-selection
 #: entries in the shared ``Op.edge_substitutions`` store. The replay
@@ -95,7 +97,7 @@ def _engine_refusal(engine: str) -> SelectionError:
         f"written. engine={engine!r} is unsupported (on rerun the capture "
         "pipeline would snapshot the substituted value into captured "
         "consumed-value fields; set_only has no consumption to substitute). "
-        "Use fork.do(tl.params(...), edit) with engine='replay' (the "
+        "Use fork.do(tl.param(...), edit) with engine='replay' (the "
         "default when no model/x is passed).",
         code="param_substitution_engine_unsupported",
         engine=engine,
@@ -114,10 +116,10 @@ def _underivable(message: str, **fields: Any) -> SelectionError:
     )
 
 
-def _param_for_entry(trace: Trace, entry: SiteEntry) -> Param:
+def _param_for_entry(trace: Trace, entry: Site) -> Param:
     """Return the Param record addressed by one resolved PARAM entry."""
 
-    address = entry.site_key[0]
+    address = entry.key[0]
     for param in getattr(trace, "params", ()):
         if getattr(param, "address", None) == address or param.name == address:
             return param
@@ -223,12 +225,12 @@ def _param_occurrences_for_op(
 
 
 def _substituted_value(
-    entry: SiteEntry,
+    entry: Site,
     edit: Any,
     resolve_digest: str,
     consumed: torch.Tensor,
     site_label: str,
-) -> tuple[torch.Tensor, HelperSpec | None, str]:
+) -> tuple[torch.Tensor, Edit | None, str]:
     """Compute the substituted value under the edit-then-scatter contract.
 
     The hook receives a detached CLONE of the current parameter value, so
@@ -246,13 +248,13 @@ def _substituted_value(
     context = hooks_module.make_hook_context(
         name=helper_name,
         timing="post",
-        direction="forward",
-        layer_log=None,
-        run_ctx={},
+        signal="forward",
+        op=None,
+        run_context={},
         args=(consumed,),
         kwargs={},
     )
-    substituted = hook_callable(consumed, hook=context)
+    substituted = hook_callable(consumed, ctx=context)
     substituted = _validate_edited(substituted, consumed, site_label)
     return substituted, helper_spec, helper_name
 
@@ -269,7 +271,7 @@ class _Staging:
 
 def apply_param_substitution_do(
     trace: Trace,
-    resolved: ResolvedSelection,
+    resolved: Selection,
     edit: Any,
     *,
     engine: str,
@@ -303,7 +305,7 @@ def apply_param_substitution_do(
     replay_module = importlib.import_module("torchlens.intervention.replay")
     replay_module._preflight_log(trace)
 
-    if not isinstance(edit, HelperSpec) and not callable(edit):
+    if not isinstance(edit, Edit) and not callable(edit):
         if not isinstance(edit, torch.Tensor):
             # Same validation as the string-label path: lifting a scalar
             # through the tensor-only replace_with helper used to crash
@@ -324,9 +326,9 @@ def apply_param_substitution_do(
     staging = _Staging()
     try:
         for entry in resolved:
-            if entry.selected_count == 0:
+            if entry.num_selected == 0:
                 continue
-            _stage_param_entry(trace, entry, edit, resolved.resolve_digest, staging)
+            _stage_param_entry(trace, entry, edit, resolved.digest, staging)
         _propagate_staged(trace, staging, strict=strict)
     except Exception:
         _rollback_param_substitutions(staging.committed)
@@ -341,14 +343,14 @@ def apply_param_substitution_do(
 
 def _stage_param_entry(
     trace: Trace,
-    entry: SiteEntry,
+    entry: Site,
     edit: Any,
     resolve_digest: str,
     staging: _Staging,
 ) -> None:
     """Derive one entry's occurrences, compute its value, stage the stores."""
 
-    param_address = entry.site_key[0]
+    param_address = entry.key[0]
     occurrences_by_op = _derive_entry_occurrences(trace, entry)
     matched_values = [
         value for _, _, occurrences in occurrences_by_op for _, _, value in occurrences
@@ -363,7 +365,7 @@ def _stage_param_entry(
     staged = _existing_param_substitution(occurrences_by_op, param_address)
     with torch.no_grad():
         # Edits COMPOSE like replay hooks (AUD-CODE 4.10): a second
-        # ``do(tl.params(p), scale(0.5))`` derives from the value the
+        # ``do(tl.param(p), scale(0.5))`` derives from the value the
         # consumers currently see (the staged "as if" value), so it yields a
         # quarter, never a fresh half computed from the untouched live param.
         consumed = (staged if staged is not None else first_value).detach().clone()
@@ -439,7 +441,7 @@ def _staged_param_value(payload: Any, param_address: str) -> torch.Tensor | None
 
 
 def _derive_entry_occurrences(
-    trace: Trace, entry: SiteEntry
+    trace: Trace, entry: Site
 ) -> list[tuple[Any, str, list[tuple[str, tuple[Any, ...], torch.Tensor]]]]:
     """Resolve one PARAM entry to ``(op, consumer_label, occurrences)`` rows."""
 
@@ -447,7 +449,7 @@ def _derive_entry_occurrences(
 
     replay_module = importlib.import_module("torchlens.intervention.replay")
     param = _param_for_entry(trace, entry)
-    param_address = entry.site_key[0]
+    param_address = entry.key[0]
     live_param, barcode = _live_param_identity(param)
     if live_param is None and barcode is None:
         raise _underivable(
@@ -465,15 +467,15 @@ def _derive_entry_occurrences(
     rows: list[tuple[Any, str, list[tuple[str, tuple[Any, ...], torch.Tensor]]]] = []
     staged_op_ids: set[int] = set()
     for consumer_label in consumers:
-        layer = trace.layer_dict_all_keys.get(consumer_label)
-        if layer is None or not getattr(layer, "ops", None):
+        layer = trace._layer_dict_all_keys.get(consumer_label)
+        if layer is None or (getattr(layer, "ops", None) is not None and not layer.ops):
             raise _underivable(
                 f"consumer {consumer_label!r} of parameter {param_address!r} "
                 "is not present on this trace.",
                 param_address=param_address,
                 site=consumer_label,
             )
-        child_op = layer.ops[0]
+        child_op = first_op(layer)
         if (
             int(getattr(child_op, "num_passes", 1) or 1) > 1
             and consumer_label == child_op.layer_label
@@ -523,7 +525,7 @@ def _check_multipass_coverage(
         num_passes = int(getattr(child_op, "num_passes", 1) or 1)
         if num_passes > 1:
             covered.setdefault(child_op.layer_label, set()).add(
-                int(getattr(child_op, "pass_index", 0) or 0)
+                int(getattr(child_op, "pass_number", 0) or 0)
             )
             total_passes[child_op.layer_label] = num_passes
     for bare_label, seen in covered.items():
@@ -594,7 +596,7 @@ def _propagate_staged(trace: Trace, staging: _Staging, *, strict: bool) -> None:
         preserve_origins=False,
     )
     for label, records in staging.pending_records.items():
-        trace.layer_dict_all_keys[label].ops[0].interventions.extend(records)
+        first_op(trace._layer_dict_all_keys[label]).edits.extend(records)
 
 
 def _stamp_param_kind(child_op: Any, store_key: tuple[Any, ...], param_address: str) -> None:
@@ -616,7 +618,7 @@ def _stamp_param_kind(child_op: Any, store_key: tuple[Any, ...], param_address: 
 
 def _param_fire_record(
     child_op: Any,
-    helper_spec: HelperSpec | None,
+    helper_spec: Edit | None,
     helper_name: str,
     address: tuple[Any, ...],
     meta: dict[str, Any],
@@ -631,7 +633,7 @@ def _param_fire_record(
         func_call_id=child_op.func_call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
-        helper=(
+        edit=(
             dataclasses.replace(
                 helper_spec,
                 selection_recipe={
@@ -648,8 +650,8 @@ def _param_fire_record(
         ),
         site_label=child_op.layer_label,
         timing="post",
-        direction="forward",
-        helper_name=helper_name,
+        signal="forward",
+        edit_name=helper_name,
         # Parameter substitution replaces no node's OUTPUT: the child's
         # output is derived by re-execution, so the node-level
         # corroboration key must not fire (same rule as edge substitution).
@@ -668,3 +670,75 @@ def _rollback_param_substitutions(committed: list[tuple[Any, tuple[Any, ...]]]) 
         stamps.pop(store_key, None)
         child_op._internal_set("edge_substitutions", store or None)
         child_op._internal_set("edge_replacement_stamps", stamps or None)
+
+
+def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
+    """Lower a ``tl.param(name)`` selection naming a registered BUFFER (N-IV-9).
+
+    Buffers are not parameters: they are versioned graph nodes (one plain op
+    per observed version, ``docs/buffers.md``), so the operand a buffer
+    what-if substitutes is the buffer's INITIAL version node, the value every
+    consumer reads before any in-forward write. The selection is lowered to
+    that leaf site with the same element mask, and the ordinary leaf-site edit
+    path commits it and replays the cone; written versions thread the edited
+    value through ``do()`` replay exactly as for any buffer edit.
+
+    Parameters
+    ----------
+    trace:
+        Trace the edit targets.
+    selection:
+        The PARAM-kind selection given to ``do()``.
+
+    Returns
+    -------
+    Any
+        The equivalent ACT unit selection, or ``None`` when the selection is
+        not a single named-buffer term (parameters keep parameter substitution).
+
+    Raises
+    ------
+    SelectionError
+        ``selection_unresolvable`` when the buffer has no recorded version or
+        the mask does not match the buffer's shape.
+    """
+
+    from .._selection.selection import _ParamTerm, units
+
+    node = getattr(selection, "_node", None)
+    if not isinstance(node, _ParamTerm):
+        return None
+    if any(
+        getattr(param, "address", None) == node.name or param.name == node.name
+        for param in getattr(trace, "params", ())
+    ):
+        return None
+    buffers = getattr(trace, "buffers", None)
+    buffer = buffers[node.name] if buffers is not None and node.name in buffers else None
+    if buffer is None or getattr(buffer, "address", None) != node.name:
+        # Full buffer addresses only: a short name is never guessed.
+        return None
+    versions = tuple(getattr(buffer, "versions", ()) or ())
+    initial = versions[0] if versions else None
+    value = getattr(initial, "out", None)
+    if initial is None or not isinstance(value, torch.Tensor):
+        raise SelectionError(
+            f"buffer {node.name!r} has no recorded initial version with a saved value, so "
+            "its consumers' operand cannot be substituted. Remedy: re-capture with "
+            "replayable=True so buffer versions keep their values.",
+            code="param_substitution_occurrence_underivable",
+            param_address=node.name,
+        )
+    if node.mask is None:
+        mask = torch.ones(tuple(value.shape), dtype=torch.bool)
+    elif tuple(node.mask.shape) == tuple(value.shape):
+        mask = node.mask
+    else:
+        raise SelectionError(
+            f"supplied mask shape {tuple(node.mask.shape)!r} does not match buffer "
+            f"{node.name!r} shape {tuple(value.shape)!r}. Remedy: pass a bool mask over "
+            "the buffer's shape, or no mask for the whole buffer.",
+            code="param_substitution_occurrence_underivable",
+            param_address=node.name,
+        )
+    return units(str(initial.label), mask)

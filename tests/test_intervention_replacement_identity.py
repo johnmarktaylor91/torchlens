@@ -64,10 +64,10 @@ def test_user_hook_shared_object_cannot_steal_labels() -> None:
 
     shared = torch.ones(3)
 
-    def reuse_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def reuse_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Return the same live object at every matched site."""
 
-        del out, hook
+        del out, ctx
         return shared
 
     log = tl.trace(
@@ -79,7 +79,7 @@ def test_user_hook_shared_object_cannot_steal_labels() -> None:
     assert first_children == ("mul_1_4",)
     assert second_children == ("mul_2_5",)
     # The internal mint must not enter the captured graph.
-    assert not any("clone" in op.label for op in log.layer_list)
+    assert not any("clone" in op.label for op in log._layer_list)
 
 
 def test_inplace_mutating_hook_records_replaced_true() -> None:
@@ -93,10 +93,10 @@ def test_inplace_mutating_hook_records_replaced_true() -> None:
     carried the false no-replacement claim.
     """
 
-    def inplace_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def inplace_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Zero the output in place and hand back the same object."""
 
-        del hook
+        del ctx
         out.mul_(0)
         return out
 
@@ -107,8 +107,8 @@ def test_inplace_mutating_hook_records_replaced_true() -> None:
         intervene=tl.when(tl.func("relu"), inplace_hook),
     )
     op = log["relu_1_2"]
-    assert op.intervention_replaced is True
-    fire_records = list(op.interventions)
+    assert op.is_edited is True
+    fire_records = list(op.edits)
     assert fire_records and fire_records[-1].replaced is True
     assert bool((op.out == 0).all())
 
@@ -124,10 +124,10 @@ def test_data_alias_mutating_hook_records_replaced_true() -> None:
     mutation.
     """
 
-    def data_alias_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def data_alias_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Zero the output through the autograd-invisible ``.data`` channel."""
 
-        del hook
+        del ctx
         out.data.mul_(0)
         return out
 
@@ -138,7 +138,44 @@ def test_data_alias_mutating_hook_records_replaced_true() -> None:
         intervene=tl.when(tl.func("relu"), data_alias_hook),
     )
     op = log["relu_1_2"]
-    assert op.intervention_replaced is True
-    fire_records = list(op.interventions)
+    assert op.is_edited is True
+    fire_records = list(op.edits)
     assert fire_records and fire_records[-1].replaced is True
     assert bool((op.out == 0).all())
+
+
+class _IdentityReturnModel(nn.Module):
+    """A ``to`` call that returns its receiver unchanged (already on the device)."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Move ``value`` to the device it is already on, then double it."""
+
+        return value.to(value.device) * 2
+
+
+def test_identity_return_site_accepts_replacement() -> None:
+    """A fired edit at a non-mutating same-object return is recorded as replaced.
+
+    ``x.to(device)`` with ``x`` already there returns ``x`` itself. The live
+    site read label presence as mutation, so the hook runner looked for a
+    mutated receiver to copy the edit into, found none for ``to``, refused the
+    replacement with a warning and minted ``replaced=False`` on a rule that
+    had fired: ``on_zero_fire="error"`` stayed quiet while no op recorded the
+    edit. A non-mutating identity return hands its replacement to the caller
+    like any functional op, and the receiver keeps its value.
+    """
+
+    value = torch.randn(3)
+    original = value.clone()
+    log = tl.trace(
+        _IdentityReturnModel().eval(),
+        value,
+        intervene=tl.when(tl.func("to"), tl.scale(0.5)),
+        on_zero_fire="error",
+    )
+    op = log["to_1_1"]
+    assert op.is_edited is True
+    assert op.edits[-1].replaced is True
+    assert torch.allclose(op.out, original * 0.5)
+    assert torch.allclose(log.output_ops[0].out, original)
+    assert torch.equal(value, original)

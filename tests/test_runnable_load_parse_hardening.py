@@ -15,8 +15,8 @@ from torchlens._io.runnable_load import (
     _parse_rng_profile,
     _validated_dtype_literal,
 )
+from torchlens._runnable import ReadinessStatus
 from torchlens.options import CaptureOptions
-from torchlens.runnable import ReadinessStatus
 
 
 class TinyModel(nn.Module):
@@ -42,7 +42,7 @@ def runnable_manifest(tmp_path: Path) -> tuple[Path, Path, dict]:
         TinyModel(),
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -156,7 +156,7 @@ def test_encode_literal_exact_type_discipline() -> None:
     from collections import OrderedDict, namedtuple
 
     from torchlens._io.runnable import _encode_literal, _UnsupportedLiteralError
-    from torchlens._runnable_verification import _decode_literal
+    from torchlens._runnable.verification import _decode_literal
 
     # Exact builtins and the ratified torch.Size allowlist still encode.
     assert _decode_literal(_encode_literal([1, 2])) == [1, 2]
@@ -216,14 +216,14 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     honest reason and a stable error code (fields were empty before).
     """
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
     from torchlens.errors import RunnablePreflightError
 
     captured = tl.trace(
         TinyModel(),
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -232,7 +232,7 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     captured.save(with_weights, level="runnable", include_weights=True)
     loaded = tl.load(with_weights)
     with pytest.raises(RunnablePreflightError) as preflight:
-        tl.save(loaded, tmp_path / "resave.tlspec", level="runnable", include_weights=True)
+        loaded.save(tmp_path / "resave.tlspec", level="runnable", include_weights=True)
     assert preflight.value.fields["code"] == "sparse_preflight_failed"
     assert preflight.value.fields["diagnostics"]
 
@@ -240,7 +240,7 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
         TinyModel(),
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -248,7 +248,7 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     without_weights = tmp_path / "no-weights.tlspec"
     recaptured.save(without_weights, level="runnable")
     loaded_bare = tl.load(without_weights)
-    with pytest.raises(TorchLensIOError) as refusal:
-        tl.save(loaded_bare, tmp_path / "resave2.tlspec", level="runnable")
+    with pytest.raises(ArtifactError) as refusal:
+        loaded_bare.save(tmp_path / "resave2.tlspec", level="runnable")
     assert refusal.value.fields["code"] == "run_capability_unavailable"
     assert refusal.value.fields["detection_stage"] == "runnable_resave_state_universe"

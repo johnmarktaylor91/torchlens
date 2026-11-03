@@ -9,9 +9,8 @@ from typing import Any
 
 import numpy as np
 
-from ...fastlog.types import CaptureSpec
-from ...ir.capture_events import CaptureEvents
-from ...ir.events import (
+from ..._ir.capture_events import CaptureEvents
+from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
     ModuleFrame,
@@ -19,9 +18,10 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir.predicate import RecordContext
-from ...ir.refs import DtypeRef, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
+from ..._ir.predicate import RecordContext
+from ..._ir.refs import DtypeRef, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ...recording.types import CaptureSpec
 from ...validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
@@ -679,7 +679,7 @@ def _selected_fetch_names(
         # Graph outputs are always fetched, so a typo'd predicate still
         # produced payloads for them -- but the SELECTOR matched nothing,
         # exactly the silent-typo case the shared disclosure family warns on.
-        from ...postprocess._selective_save import warn_zero_match_save_predicate
+        from ..._postprocess._selective_save import warn_zero_match_save_predicate
 
         warn_zero_match_save_predicate("tf")
     return tuple(dict.fromkeys((*output_names, *names)))
@@ -1355,7 +1355,7 @@ def _base_event(
         is_scalar_bool=output.shape == () and output.dtype is not None and "bool" in output.dtype,
         bool_value=_bool_value(output.payload),
         intervention_fired=False,
-        intervention_replaced=False,
+        is_edited=False,
         fire_results=(),
         intervention_template_ref=None,
         record_context=record_context,
@@ -1408,7 +1408,7 @@ def _record_context_for_symbolic(
         {
             "address": frame.address,
             "module_type": frame.module_type,
-            "pass_index": frame.call_index,
+            "pass_number": frame.call_index,
         }
         for frame in modules
     )
@@ -1416,7 +1416,7 @@ def _record_context_for_symbolic(
         kind="op",
         label=label_raw,
         raw_label=label_raw,
-        pass_index=1,
+        pass_number=1,
         event_index=raw_index,
         step_index=raw_index,
         layer_type=op_type.lower(),
@@ -1425,7 +1425,7 @@ def _record_context_for_symbolic(
         func_name=op_type,
         address=modules[-1].address if modules else None,
         module_type=modules[-1].module_type if modules else None,
-        module_pass_index=modules[-1].call_index if modules else None,
+        module_pass_number=modules[-1].call_index if modules else None,
         module_stack=module_frames,
         recent_events=(),
         recent_ops=(),

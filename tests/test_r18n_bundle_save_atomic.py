@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import ArtifactError
 
 
 class _TinyBundleModel(nn.Module):
@@ -54,9 +55,7 @@ def _build_bundle(seed: int) -> tl.Bundle:
     torch.manual_seed(seed)
     model = _TinyBundleModel()
     x = torch.randn(2, 4)
-    member = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=seed)
-    )
+    member = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=seed), save="all")
     return tl.Bundle({f"m{seed}": member})
 
 
@@ -142,8 +141,9 @@ def test_overwrite_false_on_existing_raises(tmp_path: Path) -> None:
     target = tmp_path / "bundle.tlspec"
     _build_bundle(0).save(target, overwrite=True)
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(ArtifactError) as info:
         _build_bundle(1).save(target, overwrite=False)
+    assert info.value.fields.get("code") == "bundle_path_exists"
 
     # The refusal left the original bundle exactly as it was.
     assert list(tl.load(target).members) == ["m0"]

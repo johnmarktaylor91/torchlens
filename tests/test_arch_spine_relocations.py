@@ -13,7 +13,7 @@ historical spelling + pickle-visible identity):
 
 PUBLISHED-CLOSURE HANDOFF (move not executed in C01): the intervention
 triple (``intervention/types`` + ``errors`` + ``selectors``) drags
-``SelectionError`` and ``_SelectionOperand`` out of ``torchlens.selection``
+``SelectionError`` and ``_SelectionOperand`` out of ``torchlens._selection.selection``
 -- "six modules move" vs "drag the selection substrate too" is exactly the
 decision Rule V2 requires publishing, and lane C03 is concurrently
 rewriting those same modules (immutable InterventionSpec). The move rides a
@@ -26,6 +26,7 @@ from __future__ import annotations
 import ast
 import importlib
 import pickle
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -59,7 +60,7 @@ class TestTraceStateRelocation:
 
 class TestNodeSpecRelocation:
     def test_shim_and_home_serve_one_object(self) -> None:
-        shim = importlib.import_module("torchlens.visualization.node_spec")
+        shim = importlib.import_module("torchlens._visualization.node_spec")
         home = importlib.import_module("torchlens._vocab.node_spec")
         assert shim.NodeSpec is home.NodeSpec
         assert shim.NodeSpecFn is home.NodeSpecFn
@@ -69,7 +70,7 @@ class TestNodeSpecRelocation:
 
     def test_pickle_identity_is_the_historical_path(self) -> None:
         home = importlib.import_module("torchlens._vocab.node_spec")
-        assert home.NodeSpec.__module__ == "torchlens.visualization.node_spec"
+        assert home.NodeSpec.__module__ == "torchlens._visualization.node_spec"
         spec = home.NodeSpec(lines=["a"])
         assert pickle.loads(pickle.dumps(spec)) == spec
 
@@ -100,8 +101,8 @@ class TestNodeSpecRelocation:
 
 class TestSiteKeyRelocation:
     def test_shim_and_home_serve_one_object(self) -> None:
-        shim = importlib.import_module("torchlens.postprocess._site_key")
-        home = importlib.import_module("torchlens.data_classes._site_key")
+        shim = importlib.import_module("torchlens._postprocess._site_key")
+        home = importlib.import_module("torchlens._data_classes._site_key")
         assert shim.SiteKeyMinter is home.SiteKeyMinter
         assert shim.parse_site_key is home.parse_site_key
         assert shim.SITE_KEY_PREFIX == home.SITE_KEY_PREFIX
@@ -111,10 +112,10 @@ class TestSiteKeyRelocation:
         for consumer in (
             "torchlens/backends/_finalize.py",
             "torchlens/backends/jax/_site_dialect.py",
-            "torchlens/data_classes/_trace_inventory.py",
+            "torchlens/_data_classes/_trace_inventory.py",
             "torchlens/validation/_invariants_sites.py",
             "torchlens/_io/forgery_validation.py",
-            "torchlens/postprocess/loop_detection.py",
+            "torchlens/_postprocess/loop_detection.py",
         ):
             source = (REPO / consumer).read_text()
             assert "postprocess._site_key" not in source, (
@@ -126,18 +127,30 @@ class TestInterventionTripleHandoff:
     """The published-closure facts for the deferred intervention-triple move."""
 
     def test_closure_still_drags_the_selection_substrate(self) -> None:
-        """The blocker is real: types/errors eagerly import torchlens.selection.
+        """The blocker is real: types eagerly imports torchlens._selection.
 
-        If this test starts failing, the closure shrank (C03 or a later lane
-        broke the selection dependency) and the triple move is unblocked --
-        execute it as the C01/F35 amendment instead of deleting this pin.
+        The substrate is a package (``torchlens/_selection/``), so the eager
+        import is spelled per submodule (``from .._selection.selection import``,
+        ``from .._selection.target import``). ``intervention/errors.py`` left the
+        closure with the capture batch: it takes ``SelectionError`` from
+        ``torchlens._errors`` and re-exports the site-error family from the leaf
+        ``_selection/errors.py`` (which imports only ``_errors`` and
+        ``errors._base``); ``types.py`` still drags the substrate. If this test
+        starts failing, the closure shrank (C03 or a later lane broke the
+        selection dependency) and the triple move is unblocked -- execute it as
+        the C01/F35 amendment instead of deleting this pin.
         """
 
         types_source = (REPO / "torchlens/intervention/types.py").read_text()
         errors_source = (REPO / "torchlens/intervention/errors.py").read_text()
-        assert "from ..selection import" in types_source
-        assert "from ..selection import" in errors_source
+        eager = re.compile(r"^from \.\._selection(\.\w+)? import", re.MULTILINE)
+        assert eager.search(types_source)
+        assert "from .._selection import" not in errors_source
+        assert "from .._selection.errors import" in errors_source
+        assert "from .._errors import" in errors_source
 
     def test_selectors_depend_on_types(self) -> None:
-        selectors_source = (REPO / "torchlens/intervention/selectors.py").read_text()
-        assert "from .types import" in selectors_source
+        """Selectors take their target vocabulary from the substrate's own target module."""
+
+        selectors_source = (REPO / "torchlens/_selection/selectors.py").read_text()
+        assert "from .target import" in selectors_source

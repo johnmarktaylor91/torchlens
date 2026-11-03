@@ -26,9 +26,22 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.validation.core as validation_core
+from torchlens._state import pause_logging
 from torchlens.validation import last_validation_failure
 
 _GLOBAL_OFFSET = torch.randn(3)
+
+
+def _unseen(t: torch.Tensor) -> torch.Tensor:
+    """Copy ``t`` with logging paused: a tensor the capture never sees.
+
+    A pre-forward closure or global tensor is recorded as a ``constant`` source
+    op, so a genuine provenance gap is planted with a tensor first built
+    mid-forward while logging is paused.
+    """
+
+    with pause_logging():
+        return t.clone()
 
 
 def _validate(model: nn.Module, *inputs: torch.Tensor) -> bool:
@@ -126,7 +139,7 @@ class _TwoCallsDifferentArity(nn.Module):
 
 
 class _GradWithGlobal(nn.Module):
-    """A recorded grad in a model that also reads an unrecorded module-global tensor."""
+    """A recorded grad in a model that also reads a tensor the capture never saw."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -135,7 +148,7 @@ class _GradWithGlobal(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         loss = (x * self.w).pow(2).sum()
         (g,) = torch.autograd.grad(loss, [self.w], create_graph=True)
-        return (self.w - g) * x + _GLOBAL_OFFSET
+        return (self.w - g) * x + _unseen(_GLOBAL_OFFSET)
 
 
 def test_autograd_grad_in_forward_is_a_recorded_boundary_op() -> None:
@@ -194,9 +207,11 @@ def test_nested_and_dependent_input_grads_replay_faithfully(
 ) -> None:
     """A grad inside another grad's subgraph, and an input that depends on another input.
 
-    The end-to-end validation of these captures stops earlier, on a backward-graph
-    metadata invariant for higher-order grad_fn handles that fails on the base too,
-    so the replay and perturbation checks are pinned on the validator's own capture.
+    The replay and perturbation checks are pinned on the validator's own capture, and
+    the end-to-end verdict must be True: a second-order grad inside forward used to fail
+    the backward-graph metadata invariants (a forward op applied to the first gradient
+    was inferred into order 2 while the nodes its differentiation created kept order 2
+    instead of 3), and the recorded failure was never asserted here.
     """
 
     results: list[tuple[str, Any]] = []
@@ -217,7 +232,9 @@ def test_nested_and_dependent_input_grads_replay_faithfully(
 
     torch.manual_seed(0)
     with _tampered_validation(check):
-        _validate(model_factory(), torch.randn(*shape))
+        verdict = _validate(model_factory(), torch.randn(*shape))
+    assert verdict is True, last_validation_failure()
+    assert last_validation_failure() is None
     assert results
     assert {label: r.decision for label, r in results} == {
         label: "validated" for label, _ in results
@@ -237,7 +254,7 @@ def test_forged_autograd_grad_func_fails_replay() -> None:
     with _tampered_validation(forge):
         assert _validate(_TwoLosses(), torch.randn(2, 3)) is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "forward_replay"
+    assert failure is not None and failure.check_name == "forward_replay"
     assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")
 
 
@@ -289,7 +306,7 @@ def test_unrecorded_tensor_beside_a_recorded_grad_still_fails_source_provenance(
     torch.manual_seed(0)
     assert _validate(_GradWithGlobal(), torch.randn(3)) is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
     assert list(failure.extra.get("reasons", [])) == ["unattributed_tensor_args"]
     assert failure.op_label is not None and failure.op_label.startswith("add")
 
@@ -361,5 +378,5 @@ def test_identically_zero_grad_still_fails_its_input_perturbation() -> None:
     torch.manual_seed(0)
     assert _validate(model, torch.randn(2, 3), torch.randn(2, 3)) is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "perturbation"
+    assert failure is not None and failure.check_name == "perturbation"
     assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")

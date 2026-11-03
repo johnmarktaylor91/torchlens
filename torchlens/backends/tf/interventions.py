@@ -8,7 +8,7 @@ capture spine:
 1. Module-boundary sites (``tl.module`` / ``tl.in_module`` conditions)
    substitute Keras/`tf.Module` call outputs through the existing module
    ``__call__`` patch.
-2. Op-level sites (``tl.func`` / ``tl.label`` / ``tl.contains`` conditions)
+2. Op-level sites (``tl.func`` / ``tl.label`` / ``tl.label_contains`` conditions)
    substitute returns of a curated registry of python entry points that
    Keras-3 eager execution actually flows through.
 
@@ -28,15 +28,19 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from ...intervention.selectors import BaseSelector
-from ...intervention.types import HelperSpec, InterventionDecision
-from ...ir.intervention import FireResult
-from ...ir.op_record import amend_module_exit_intervention
-from ...postprocess._selective_save import (
+from ..._ir.intervention import FireResult
+from ..._ir.op_record import amend_module_exit_intervention
+from ..._postprocess._selective_save import (
     _STATIC_INTERVENTION_SELECTOR_KINDS,
     reject_selector_outside_kinds,
 )
+from ..._selection.selectors import BaseSelector
+from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
+from ._tensor_leaves import _is_tf_tensor_like, _map_tensor_leaves
+
+#: Refusal code for gradient-universe sites (registered in `_protocols.tf`).
+_TF_REFUSAL_BACKWARD = "backward_capture_unsupported"
 
 # Alias of the neutral authority table (the ``output`` drop is declared
 # there) -- never re-spell the kinds here.
@@ -192,20 +196,16 @@ def normalize_tf_interventions(intervene: Any, tf: Any) -> TFInterventionPlan:
             raise BackendUnsupportedError(
                 "tf backend supports trace(intervene=...) built from "
                 "tl.when(selector, action) with static selectors such as tl.func, "
-                "tl.label, tl.module, tl.in_module, tl.contains, and boolean "
+                "tl.label, tl.module, tl.in_module, tl.label_contains, and boolean "
                 "composites; value-dependent callable conditions need predicate-time "
                 "semantics the tf preview does not implement."
             )
+        _reject_gradient_site(selector)
         reject_selector_outside_kinds(
             selector,
             allowed=_TF_INTERVENTION_SELECTOR_KINDS,
             backend_name="tf",
         )
-        if decision.direction != "forward":
-            raise BackendUnsupportedError(
-                "tf backend interventions are forward-only; direction="
-                f"{decision.direction!r} requires true backward capture."
-            )
         hook = _resolve_tf_hook(decision, tf)
         level: Literal["module", "op"] = (
             "module" if _selector_kinds(selector) <= _MODULE_ONLY_KINDS else "op"
@@ -226,6 +226,20 @@ def normalize_tf_interventions(intervene: Any, tf: Any) -> TFInterventionPlan:
         op_sites=tuple(site for site in normalized if site.level == "op"),
         module_sites=tuple(site for site in normalized if site.level == "module"),
     )
+
+
+def _reject_gradient_site(selector: BaseSelector) -> None:
+    """Refuse a site outside the activation universe: the tf preview is forward-only."""
+
+    from ...intervention.hooks import split_site_branches
+
+    if any(universe != "activation" for universe, _branch in split_site_branches(selector)):
+        raise BackendUnsupportedError(
+            "tf backend interventions are forward-only; the site "
+            f"{selector!r} addresses a gradient, which needs true backward capture "
+            "that the tf preview does not declare. Use the PyTorch backend for gradient edits.",
+            code=_TF_REFUSAL_BACKWARD,
+        )
 
 
 def _selector_kinds(selector: Any) -> frozenset[str]:
@@ -281,7 +295,7 @@ def _resolve_tf_hook(decision: InterventionDecision, tf: Any) -> Callable[[Any],
     """
 
     hook = decision.hook
-    if isinstance(hook, HelperSpec):
+    if isinstance(hook, Edit):
         return _tf_helper_hook(hook, tf)
     if callable(hook):
         return _tf_callable_hook(hook)
@@ -290,7 +304,7 @@ def _resolve_tf_hook(decision: InterventionDecision, tf: Any) -> Callable[[Any],
     )
 
 
-def _tf_helper_hook(spec: HelperSpec, tf: Any) -> Callable[[Any], Any]:
+def _tf_helper_hook(spec: Edit, tf: Any) -> Callable[[Any], Any]:
     """Return the TensorFlow implementation for a curated helper spec.
 
     Parameters
@@ -306,17 +320,17 @@ def _tf_helper_hook(spec: HelperSpec, tf: Any) -> Callable[[Any], Any]:
         TensorFlow replacement callable.
     """
 
-    if spec.helper_name == "zero_ablate":
+    if spec.name == "zero_ablate":
         return lambda out: tf.zeros_like(out)
-    if spec.helper_name == "scale":
+    if spec.name == "scale":
         factor = spec.args[0]
         return lambda out: out * tf.cast(factor, out.dtype)
-    if spec.helper_name == "add":
+    if spec.name == "add":
         delta = spec.args[0]
         return lambda out: out + tf.cast(delta, out.dtype)
     raise BackendUnsupportedError(
         f"tf backend interventions implement the curated helpers zero_ablate, scale, "
-        f"and add; helper {spec.helper_name!r} has no TensorFlow implementation. Pass "
+        f"and add; helper {spec.name!r} has no TensorFlow implementation. Pass "
         "a callable action for custom replacements."
     )
 
@@ -339,8 +353,8 @@ def _tf_callable_hook(hook: Callable[..., Any]) -> Callable[[Any], Any]:
         parameter_names = set(inspect.signature(hook).parameters)
     except (TypeError, ValueError):
         parameter_names = set()
-    if "hook" in parameter_names:
-        return lambda out: hook(out, hook=None)
+    if "ctx" in parameter_names:
+        return lambda out: hook(out, ctx=None)
     return hook
 
 
@@ -531,7 +545,7 @@ def apply_tf_module_intervention(
             {
                 "address": item.address,
                 "module_type": item.module_type,
-                "pass_index": item.call_index,
+                "pass_number": item.call_index,
             }
             for item in module_stack
         ),
@@ -663,7 +677,7 @@ def _mark_intervention_event(session: Any, label: str, fire_result: FireResult) 
             event.seq,
             label,
             intervention_fired=True,
-            intervention_replaced=fire_result.replaced,
+            is_edited=fire_result.replaced,
             fire_results=(*event.fire_results, fire_result),
         )
     )
@@ -759,59 +773,6 @@ def _producer_label(session: Any, tensor: Any) -> str | None:
         return session.producer_by_ref.get(ref())
     except TypeError:
         return None
-
-
-def _map_tensor_leaves(value: Any, tf: Any, fn: Callable[[Any], Any]) -> Any:
-    """Apply ``fn`` to every tensor leaf of a wrapped-call return value.
-
-    Parameters
-    ----------
-    value
-        Wrapped-call return container or tensor.
-    tf
-        Imported TensorFlow module.
-    fn
-        Leaf transformation.
-
-    Returns
-    -------
-    Any
-        Value with transformed tensor leaves.
-    """
-
-    if _is_tf_tensor_like(value, tf):
-        return fn(value)
-    if isinstance(value, tuple):
-        return tuple(_map_tensor_leaves(item, tf, fn) for item in value)
-    if isinstance(value, list):
-        return [_map_tensor_leaves(item, tf, fn) for item in value]
-    if isinstance(value, dict):
-        return {key: _map_tensor_leaves(item, tf, fn) for key, item in value.items()}
-    return value
-
-
-def _is_tf_tensor_like(value: Any, tf: Any) -> bool:
-    """Return whether ``value`` is a TensorFlow tensor or variable.
-
-    Parameters
-    ----------
-    value
-        Candidate value.
-    tf
-        Imported TensorFlow module.
-
-    Returns
-    -------
-    bool
-        True for tensors and variables.
-    """
-
-    tensor_type = getattr(tf, "Tensor", None)
-    variable_type = getattr(tf, "Variable", None)
-    return bool(
-        (tensor_type is not None and isinstance(value, tensor_type))
-        or (variable_type is not None and isinstance(value, variable_type))
-    )
 
 
 __all__ = [

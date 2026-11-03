@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._stacking import (
+from torchlens._visualization._stacking import (
     STACK_AUTO_DISPLAY,
     check_lockstep_license,
     resolve_stack_by,
@@ -199,11 +199,10 @@ def mlp_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _state(log: tl.Trace) -> Any:
@@ -227,7 +226,7 @@ def test_resolve_auto_forms() -> None:
 
 
 def test_resolve_field_and_callable_kinds() -> None:
-    assert resolve_stack_by("pass_index", "unrolled").source_kind == "field"
+    assert resolve_stack_by("pass_number", "unrolled").source_kind == "field"
     assert resolve_stack_by(lambda node: 1, "unrolled").source_kind == "callable"
 
 
@@ -245,7 +244,7 @@ def test_non_string_non_callable_refuses() -> None:
 
 def test_rolled_mode_refuses(lockstep_log: tl.Trace, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
-        _draw(lockstep_log, tmp_path, stack_by=True, vis_mode="rolled")
+        _draw(lockstep_log, tmp_path, stack_by=True, rolled=True)
     assert excinfo.value.fields["code"] == "stack_by_requires_unrolled"
 
 
@@ -330,22 +329,22 @@ def test_single_pass_stem_stays_unannotated(tmp_path: Path) -> None:
 def test_caption_and_legend_disclose_annotation(lockstep_log: tl.Trace, tmp_path: Path) -> None:
     dot = _draw(lockstep_log, tmp_path, stack_by=True)
     assert "stacked by: pass_index (auto)" in dot
-    # vizmech 13 (D28): the channel disclosure rides the ONE table legend node.
-    legend_line = next(line for line in dot.splitlines() if line.strip().startswith("tl_legend"))
+    # The channel disclosure rides the header block, under the header.
+    legend_line = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
     assert "stack_by: pass_index (auto)" in legend_line
 
 
 def test_explicit_field_bypasses_license(chained_log: tl.Trace, tmp_path: Path) -> None:
     """Non-lockstep loops get their figure via explicit annotation."""
 
-    dot = _draw(chained_log, tmp_path, stack_by="pass_index")
+    dot = _draw(chained_log, tmp_path, stack_by="pass_number")
     state = _state(chained_log)
     assert state.stack_groups
-    assert "stacked by: pass_index" in dot
+    assert "stacked by: pass_number" in dot
 
 
 def test_callable_bypasses_license_with_disclosure(chained_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(chained_log, tmp_path, stack_by=lambda node: int(node.pass_index))
+    _draw(chained_log, tmp_path, stack_by=lambda node: int(node.pass_number))
     state = _state(chained_log)
     assert state.stack_groups
     assert any("callable" in note for note in state.stack_notes)
@@ -413,7 +412,7 @@ def test_stack_composes_with_color(lockstep_log: tl.Trace, tmp_path: Path) -> No
 
 
 def test_request_hash_ignores_stack_fields() -> None:
-    from torchlens.visualization.request import ResolvedRenderRequest
+    from torchlens._visualization.request import ResolvedRenderRequest
 
     base = ResolvedRenderRequest()
     stacked = ResolvedRenderRequest(stack_by=True, encoding=object())
@@ -423,7 +422,7 @@ def test_request_hash_ignores_stack_fields() -> None:
 def test_rank_groups_ride_render_ir(lockstep_log: tl.Trace, tmp_path: Path) -> None:
     """The rank groups travel on RenderIR as a typed record (memo 4.1)."""
 
-    from torchlens.visualization.render_ir import RenderIRRankGroup
+    from torchlens._visualization.render_ir import RenderIRRankGroup
 
     _draw(lockstep_log, tmp_path, stack_by=True)
     state = _state(lockstep_log)

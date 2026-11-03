@@ -12,15 +12,18 @@ from __future__ import annotations
 import io
 import re
 import warnings
+from dataclasses import replace
 
 import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._snoop._format import render_line, render_stats_segment
 from torchlens._source_links import terminal_file_line_link
-from torchlens.options import EchoOptions
-from torchlens.snoop import NarrationEvent, NarrationStats, render_line, render_stats_segment
+from torchlens.options import NarrationOptions
+from torchlens.stats import FamilyEvidence, tensor_stats
+from torchlens.types import NarrationEvent
 
 _ESCAPE_BYTES = re.compile("[\x1b\x9d\x07]")
 
@@ -48,7 +51,7 @@ def _run_transcript(seed: int) -> str:
     torch.manual_seed(seed)
     x = torch.randn(2, 4)
     sink = io.StringIO()
-    tl.record(model, x, echo=EchoOptions(select=True, sink=sink, stats="sampled"))
+    tl.record(model, x, narrate=NarrationOptions(sites=True, sink=sink, stats="sampled"))
     return sink.getvalue()
 
 
@@ -84,7 +87,16 @@ def test_sampled_stats_segment_never_claims_finiteness() -> None:
     """HARD GATE: the grammar renders with the finiteness family absent."""
 
     segment = render_stats_segment(
-        NarrationStats(policy="sampled", population=6912, sample_size=4096, mean=0.01, sd=0.71)
+        replace(
+            tensor_stats(torch.ones(6912)),
+            mean=0.01,
+            std=0.71,
+            finite_min=None,
+            finite_max=None,
+            mean_evidence=FamilyEvidence("sampled", 6912, 4096),
+            std_evidence=FamilyEvidence("sampled", 6912, 4096),
+            nonfinite_evidence=FamilyEvidence("unavailable", 6912, reason="sampled narration"),
+        )
     )
     assert "sampled=4096/6912" in segment
     assert "~=" in segment
@@ -97,13 +109,20 @@ def test_exact_stats_segment_prints_census_or_clearance() -> None:
     """Exact rungs print nonzero census tokens, or the exact clearance."""
 
     dirty = render_stats_segment(
-        NarrationStats(
-            policy="exact", population=10, mean=1.0, nan_count=2, posinf_count=0, neginf_count=1
+        replace(
+            tensor_stats(torch.ones(10)),
+            mean=1.0,
+            std=None,
+            finite_min=None,
+            finite_max=None,
+            num_nan=2,
+            num_posinf=0,
+            num_neginf=1,
         )
     )
     assert "nan=2" in dirty and "-inf=1" in dirty and "+inf=" not in dirty
     clean = render_stats_segment(
-        NarrationStats(policy="exact", population=10, nan_count=0, posinf_count=0, neginf_count=0)
+        replace(tensor_stats(torch.ones(10)), mean=None, std=None, finite_min=None, finite_max=None)
     )
     assert clean == "finite"
 
@@ -125,7 +144,7 @@ def test_max_lines_suppression_is_announced_and_counted() -> None:
     tl.record(
         SmallNet(),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink, max_lines=1),
+        narrate=NarrationOptions(sites=True, sink=sink, max_lines=1),
     )
     lines = [line for line in sink.getvalue().split("\n") if line]
     markers = [line for line in lines if "max_lines=1 reached" in line]
@@ -145,7 +164,7 @@ def test_zero_match_scoped_capture_warns_once_with_code() -> None:
         tl.record(
             SmallNet(),
             torch.randn(2, 4),
-            echo=EchoOptions(select=tl.func("softmax"), sink=sink),
+            narrate=NarrationOptions(sites=tl.func("softmax"), sink=sink),
         )
     codes = [getattr(item.message, "fields", {}).get("code") for item in caught]
     assert codes.count("echo_zero_match") == 1
@@ -160,7 +179,7 @@ def test_matched_scoped_capture_does_not_warn() -> None:
         tl.record(
             SmallNet(),
             torch.randn(2, 4),
-            echo=EchoOptions(select=tl.func("relu"), sink=sink),
+            narrate=NarrationOptions(sites=tl.func("relu"), sink=sink),
         )
     codes = [getattr(item.message, "fields", {}).get("code") for item in caught]
     assert "echo_zero_match" not in codes
@@ -183,6 +202,46 @@ def test_file_sink_flushes_per_line(tmp_path) -> None:
             lines_at_first_call.append(len(target.read_text().splitlines()))
             return y + 1
 
-    tl.record(SpyModule(), torch.randn(2, 4), echo=EchoOptions(select=True, sink=str(target)))
+    tl.record(
+        SpyModule(), torch.randn(2, 4), narrate=NarrationOptions(sites=True, sink=str(target))
+    )
     assert lines_at_first_call and lines_at_first_call[0] >= 1
     assert len(target.read_text().splitlines()) > lines_at_first_call[0]
+
+
+@pytest.mark.parametrize("verdict", [True, False])
+def test_reuse_verdict_grammar_has_no_invented_count(verdict: bool) -> None:
+    """Positive verdicts say presence; negative verdicts prove exact finiteness."""
+
+    from types import SimpleNamespace
+
+    from torchlens._snoop._stats import reuse_stats
+
+    trace = SimpleNamespace(_nonfinite_capture={"events": {"raw": verdict}})
+    record = reuse_stats(trace, "raw", shape=(10,), dtype="f32", device="cpu")
+    assert record is not None
+    assert render_stats_segment(record) == ("nonfinite present" if verdict else "finite")
+
+
+def test_sampled_nonfinite_evidence_cannot_clear_even_with_zero_counts() -> None:
+    """A planted sampled zero census must never become a finiteness clearance."""
+
+    record = replace(
+        tensor_stats(torch.ones(10)),
+        nonfinite_evidence=FamilyEvidence("sampled", 10, 4),
+    )
+    line = render_stats_segment(record)
+    assert "finite" not in line and "nan=" not in line and "inf=" not in line
+
+
+def test_mixed_evidence_marks_only_sampled_families() -> None:
+    """An exact census stays exact when a different family was sampled."""
+
+    record = replace(
+        tensor_stats(torch.arange(32.0)),
+        std_evidence=FamilyEvidence("sampled", 32, 8),
+    )
+    line = render_stats_segment(record)
+    assert "mean=" in line and "mean~=" not in line
+    assert "sd~=" in line and "sampled=8/32" in line
+    assert line.endswith("finite")

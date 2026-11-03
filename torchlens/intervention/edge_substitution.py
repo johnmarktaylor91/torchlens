@@ -34,7 +34,7 @@ carries the per-edge intervened marker (FireRecord.edge_address); the
 producer view (what did the producer compute) stays ``parent.out``,
 untouched. Neither surface lies; the edge provenance record is the bridge.
 
-Node-level ``intervention_replaced`` is deliberately NOT set: edge
+Node-level ``is_edited`` is deliberately NOT set: edge
 substitution replaces no node's output (the child's output is DERIVED from
 the substituted input by re-execution), so the node-level corroboration key
 correctly never fires for edges.
@@ -43,45 +43,28 @@ correctly never fires for edges.
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..selection import (
-    ResolvedSelection,
-    SelectionError,
+from torchlens._selection.errors import SelectionError
+
+from .._record_type import first_op
+from .._selection.selection import (
+    Selection,
     _apply_invalid,
     _require_edge_provenance,
     _trace_edge_records,
     edge_address_of,
 )
+from ._replay_values import tensor_content_digest
 from .masked_edit import _validate_edited
-from .types import HelperSpec
+from .types import Edit
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = ["apply_edge_substitution_do"]
-
-
-def tensor_content_digest(value: torch.Tensor) -> str:
-    """Return the sha256 of a tensor's raw element bytes (dtype-agnostic).
-
-    The bytes are read through a flat ``uint8`` view of the contiguous
-    payload, so the digest is byte-identical to the historical
-    ``numpy().tobytes()`` spelling for every numpy-representable dtype and
-    additionally covers dtypes numpy cannot represent (``bfloat16``,
-    ``float8``). Two tensors of the same shape and dtype digest equal iff
-    they are bitwise equal (NaN payloads included); the digest carries no
-    shape or dtype, so callers compare digests only within one site.
-    """
-
-    payload = value.detach().cpu().contiguous()
-    if payload.numel() == 0:
-        return hashlib.sha256(b"").hexdigest()
-    raw = payload.view(-1).view(torch.uint8)
-    return hashlib.sha256(raw.numpy().tobytes()).hexdigest()
 
 
 def _value_digest(value: torch.Tensor) -> str:
@@ -164,17 +147,17 @@ def _current_edge_value(
     return _consumed_value(trace, parent_op, child_op)
 
 
-def _edit_hook(edit: Any, site_label: str) -> tuple[Any, HelperSpec | None, str]:
+def _edit_hook(edit: Any, site_label: str) -> tuple[Any, Edit | None, str]:
     """Normalize the edit into a hook callable + disclosure identity."""
 
-    if isinstance(edit, HelperSpec):
+    if isinstance(edit, Edit):
         if edit.factory is None:
             raise _apply_invalid(
                 "not_maskable",
-                f"edit {edit.helper_name!r} has no runtime factory.",
+                f"edit {edit.name!r} has no runtime factory.",
                 site=site_label,
             )
-        return edit.factory(), edit, edit.helper_name
+        return edit.factory(), edit, edit.name
     if callable(edit):
         return edit, None, getattr(edit, "__name__", "hook")
     if not isinstance(edit, torch.Tensor):
@@ -195,12 +178,12 @@ def _edit_hook(edit: Any, site_label: str) -> tuple[Any, HelperSpec | None, str]
     spec = replace_with(edit)
     if spec.factory is None:
         raise RuntimeError("replace_with spec lost its factory")
-    return spec.factory(), spec, spec.helper_name
+    return spec.factory(), spec, spec.name
 
 
 def apply_edge_substitution_do(
     trace: Trace,
-    resolved: ResolvedSelection,
+    resolved: Selection,
     edit: Any,
     *,
     engine: str,
@@ -214,7 +197,7 @@ def apply_edge_substitution_do(
     ------
     SelectionError
         ``edge_intervention_engine_unsupported`` off the replay engine;
-        ``edge_provenance_unavailable`` without an intervention_ready
+        ``edge_provenance_unavailable`` without an replayable
         capture; ``selection_apply_invalid`` for ineligible payloads.
     """
 
@@ -240,9 +223,9 @@ def apply_edge_substitution_do(
     committed: list[tuple[Any, tuple[Any, ...]]] = []
     try:
         for entry in resolved:
-            if entry.selected_count == 0:
+            if entry.num_selected == 0:
                 continue
-            address = entry.site_key
+            address = entry.key
             record = family.get(tuple(address))
             if record is None:
                 raise SelectionError(
@@ -252,8 +235,8 @@ def apply_edge_substitution_do(
                     reason="site_not_in_trace",
                     site=repr(address),
                 )
-            child_op = trace.layer_dict_all_keys[record.child_label].ops[0]
-            parent_op = trace.layer_dict_all_keys[record.parent_label].ops[0]
+            child_op = first_op(trace._layer_dict_all_keys[record.child_label])
+            parent_op = first_op(trace._layer_dict_all_keys[record.parent_label])
             child_func_call_id, arg_kind, arg_path = address
             if len(arg_path) != 1:
                 raise _apply_invalid(
@@ -269,13 +252,13 @@ def apply_edge_substitution_do(
             context = hooks_module.make_hook_context(
                 name=helper_name,
                 timing="post",
-                direction="forward",
-                layer_log=child_op,
-                run_ctx={},
+                signal="forward",
+                op=child_op,
+                run_context={},
                 args=(consumed,),
                 kwargs={},
             )
-            substituted = hook_callable(consumed, hook=context)
+            substituted = hook_callable(consumed, ctx=context)
             substituted = _validate_edited(substituted, consumed, record.child_label)
 
             new_out = _reexecute_child_with_substitution(
@@ -288,7 +271,7 @@ def apply_edge_substitution_do(
                 substituted,
                 meta={
                     "parent_label": record.parent_label,
-                    "resolve_digest": resolved.resolve_digest,
+                    "resolve_digest": resolved.digest,
                     "helper_name": helper_name,
                 },
             )
@@ -302,11 +285,11 @@ def apply_edge_substitution_do(
                 func_call_id=child_op.func_call_id,
                 container_path=tuple(child_op.container_path or ()),
                 engine="replay",
-                helper=(
+                edit=(
                     dataclasses.replace(
                         helper_spec,
                         selection_recipe={
-                            "resolve_digest": resolved.resolve_digest,
+                            "resolve_digest": resolved.digest,
                             "edge_address": repr(tuple(address)),
                         },
                     )
@@ -315,8 +298,8 @@ def apply_edge_substitution_do(
                 ),
                 site_label=child_op.layer_label,
                 timing="post",
-                direction="forward",
-                helper_name=helper_name,
+                signal="forward",
+                edit_name=helper_name,
                 # Edge substitution replaces no node's OUTPUT: the child's
                 # output is derived by re-execution, so the node-level
                 # corroboration key must not fire.
@@ -390,6 +373,112 @@ def _reexecute_child_with_substitution(
     return replay_module._slice_output_by_path(
         output, replay_module._replay_container_path(child_op, trace)
     )
+
+
+def _recompute_path(
+    trace: Trace, record: Any, target_label: str
+) -> tuple[Any, list[Any], Any] | str:
+    """Return the edge's child op, the ops from it to the target, and the label-key map.
+
+    Returns the reason instead when the path cannot be re-executed locally.
+    """
+
+    import importlib
+
+    replay_module = importlib.import_module("torchlens.intervention.replay")
+    site_key = replay_module._replay_site_key
+    child_op = first_op(trace._layer_dict_all_keys[record.child_label])
+    target_key = site_key(trace.ops[target_label])
+    cone = replay_module.cone_of_effect(trace, [child_op])
+    keys = [site_key(op) for op in cone]
+    if target_key not in keys:
+        return (
+            f"op {target_label!r} is not downstream of edge "
+            f"{record.parent_label!r} -> {record.child_label!r}, so substituting the edge "
+            "cannot change it."
+        )
+    label_keys = replay_module._label_key_map(trace)
+    between = cone[keys.index(site_key(child_op)) + 1 : keys.index(target_key) + 1]
+    needed = {target_key}
+    for op in reversed(between):
+        if site_key(op) in needed:
+            for parent in op.parents:
+                needed.update(label_keys.get(parent, ()))
+    path = [op for op in between if site_key(op) in needed]
+    buffers = [op.label for op in path if getattr(op, "is_buffer", False)]
+    if buffers:
+        return (
+            f"the path from edge child {record.child_label!r} to {target_label!r} "
+            f"passes buffer record {buffers[0]!r}, which local re-execution does not thread."
+        )
+    return child_op, path, label_keys
+
+
+def _recompute_with_substitution(
+    trace: Trace,
+    record: Any,
+    substituted: list[torch.Tensor],
+    target_label: str,
+    *,
+    strict: bool = False,
+) -> list[torch.Tensor] | str:
+    """Return what op ``target_label`` computes when edge ``record`` consumes each value.
+
+    One result per value in ``substituted``. Read-only: the trace is not
+    modified and nothing is stored or audited. Only the ops on a path from
+    the edge's child to the target are re-executed (the path is found once
+    for all values), each from capture truth with the replay engine's own
+    argument reconstruction and parameter splicing, so each value equals
+    what an edge substitution followed by a push leaves at the target, bit
+    for bit, without forking the trace or replaying the rest of the cone.
+
+    Returns the reason as a string instead when the target is not
+    downstream of the edge's child or the path passes a buffer record; the
+    caller refuses with its own code.
+
+    Raises
+    ------
+    SelectionError
+        ``selection_apply_invalid`` for a nested argument path.
+    """
+
+    import importlib
+
+    replay_module = importlib.import_module("torchlens.intervention.replay")
+    site_key = replay_module._replay_site_key
+    found = _recompute_path(trace, record, target_label)
+    if isinstance(found, str):
+        return found
+    child_op, path, label_keys = found
+    address = edge_address_of(record)
+    results = []
+    for value in substituted:
+        overlay: dict[str, torch.Tensor] = {
+            site_key(child_op): _reexecute_child_with_substitution(
+                trace, child_op, address, value, strict=strict
+            )
+        }
+        for op in path:
+            args, kwargs = replay_module._reconstruct_args_from_template(
+                replay_module._template_for_site(op),
+                op,
+                trace,
+                overlay,
+                strict=strict,
+                label_keys=label_keys,
+            )
+            args, kwargs = replay_module._splice_param_substitutions([op], args, kwargs)
+            if replay_module._call_mutates_tensor_args(op, kwargs):
+                args = replay_module._clone_tensors_in(args)
+                kwargs = {
+                    name: replay_module._clone_tensors_in(item) for name, item in kwargs.items()
+                }
+            output = replay_module._execute_replay_func_strict(op, args, kwargs)
+            overlay[site_key(op)] = replay_module._slice_output_by_path(
+                output, replay_module._replay_container_path(op, trace)
+            )
+        results.append(overlay[site_key(path[-1])] if path else overlay[site_key(child_op)])
+    return results
 
 
 def _record_edge_substitution(

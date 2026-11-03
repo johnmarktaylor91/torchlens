@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import os
 import platform
@@ -304,7 +305,7 @@ def _select_fastlog_names(model: torch.nn.Module, x: Any, fraction: float) -> se
 
     import torchlens as tl
 
-    trace = tl.fastlog.dry_run(model, x, save=lambda _ctx: True)
+    trace = tl.recording.dry_run(model, x, save=lambda _ctx: True)
     names = [
         getattr(ctx, "func_name", "") for ctx in trace.contexts if getattr(ctx, "func_name", "")
     ]
@@ -340,7 +341,7 @@ def _fastlog_op_halt_index(model: torch.nn.Module, x: Any, fraction: float) -> i
 
     import torchlens as tl
 
-    trace = tl.fastlog.dry_run(model, x, save=lambda _ctx: True)
+    trace = tl.recording.dry_run(model, x, save=lambda _ctx: True)
     op_count = sum(1 for ctx in trace.contexts if getattr(ctx, "kind", None) == "op")
     return max(1, int(op_count * fraction))
 
@@ -378,10 +379,10 @@ def _record_no_save_invariant(trace: Any, state: dict[str, Any]) -> None:
     saved_activation_count = _saved_activation_count(trace)
     state["no_save_layers_to_save"] = "[]"
     state["no_save_num_ops"] = getattr(trace, "num_ops", None)
-    state["no_save_num_saved_ops"] = getattr(trace, "num_saved_ops", None)
+    state["no_save_num_saved_ops"] = len(trace.saved_ops) if hasattr(trace, "saved_ops") else None
     state["no_save_saved_activation_count"] = saved_activation_count
     state["no_save_invariant_passed"] = (
-        getattr(trace, "num_saved_ops", None) == 0 and saved_activation_count == 0
+        len(getattr(trace, "saved_ops", ())) == 0 and saved_activation_count == 0
     )
 
 
@@ -446,7 +447,7 @@ def _operation(
         def trace_profile() -> Any:
             """Run profiled trace and expose phase timings in benchmark metadata."""
 
-            trace = tl.trace(model, x, profile=True)
+            trace = tl.trace(model, x)
             state["phase_timings"] = getattr(trace, "_phase_timings", {})
             state["profile_enabled"] = getattr(trace, "profile_enabled", False)
             return trace
@@ -463,13 +464,11 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.trace(
-            model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-        )
+        return lambda: tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     if operation == "tl_rerun":
         import torchlens as tl
 
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
         state["rerun_policy"] = "steady_state"
         return lambda: trace.run(model, x)
     if operation in {"rerun_metadata_only", "rerun_no_save"}:
@@ -483,7 +482,7 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.fastlog.record(model, x, default_op=False, default_module=True)
+        return lambda: tl.record(model, x, default_op=False, default_module=True)
     if operation == "fastlog_zero":
         import torchlens as tl
 
@@ -491,7 +490,7 @@ def _operation(
         state["fastlog_zero_policy"] = (
             "save=False predicate, default_op=False, default_module=False"
         )
-        return lambda: tl.fastlog.record(
+        return lambda: tl.record(
             model,
             x,
             save=lambda _ctx: False,
@@ -510,7 +509,7 @@ def _operation(
             model,
             x,
             save=lambda _ctx: False,
-            halt=lambda ctx: (
+            stop_after=lambda ctx: (
                 ctx.kind == "op" and isinstance(ctx.raw_index, int) and ctx.raw_index >= halt_index
             ),
         )
@@ -520,7 +519,7 @@ def _operation(
         _prime_target_model(model, x, device)
         names = _select_fastlog_names(model, x, 0.10)
         state["fastlog_selected_func_names"] = sorted(names)
-        return lambda: tl.fastlog.record(
+        return lambda: tl.record(
             model,
             x,
             save=lambda ctx: getattr(ctx, "func_name", None) in names,
@@ -533,7 +532,7 @@ def _operation(
         _prime_target_model(model, x, device)
         names = _select_fastlog_names(model, x, 0.50)
         state["fastlog_selected_func_names"] = sorted(names)
-        return lambda: tl.fastlog.record(
+        return lambda: tl.record(
             model,
             x,
             save=lambda ctx: getattr(ctx, "func_name", None) in names,
@@ -544,7 +543,7 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.fastlog.record(model, x, default_op=True, default_module=True)
+        return lambda: tl.record(model, x, default_op=True, default_module=True)
     if operation == "aux_validate":
         import torchlens as tl
 
@@ -553,7 +552,7 @@ def _operation(
     if operation == "aux_compat_report":
         import torchlens as tl
 
-        return lambda: tl.compat.report(model, x)
+        return lambda: tl.report.doctor(model, x)
     if operation == "aux_save":
         import torchlens as tl
 
@@ -754,7 +753,10 @@ def _run_memory(fn: OperationFn, device: str, memory_runs: int) -> dict[str, Any
     -------
     dict[str, Any]
         Memory metrics. Peak fields are phase-local and cover transients
-        INSIDE the measured calls (r4 b6-sol R33): the RSS high-water mark
+        INSIDE the measured calls (r4 b6-sol R33). Collectable garbage is
+        freed before the baselines are read (``pre_phase_gc_collected``
+        counts the objects), so memory the process held only as garbage is
+        not in the baseline and cannot be released mid-phase. The RSS high-water mark
         is reset before the loop where the platform allows
         (``rss_high_water_phase_local`` reports which semantics apply), and
         a concurrent sampler thread polls RSS/USS during the runs, so an
@@ -764,6 +766,12 @@ def _run_memory(fn: OperationFn, device: str, memory_runs: int) -> dict[str, Any
     """
 
     metrics: dict[str, Any] = {"memory_run_count": memory_runs}
+    # Free garbage the process already holds before any baseline is read. A
+    # collection that runs inside the phase (the sampler thread's own
+    # allocations trigger them) would otherwise release memory that was resident
+    # at the reset, so a transient of the same size or smaller never lifts the
+    # high water above it and the phase peak reads 0.0.
+    metrics["pre_phase_gc_collected"] = gc.collect()
     try:
         import psutil
 

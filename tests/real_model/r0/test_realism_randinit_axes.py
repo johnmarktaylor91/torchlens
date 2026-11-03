@@ -7,7 +7,7 @@ pass-qualification pin on distilgpt2's 2-pass residual adds (D7 class 8,
 OPUS Q5), and resolved-config-fingerprint rows for the silent config-flag
 class (D7 class 4). Plus the FLIPPED container-output replay row (FIX-A
 landed: the edit now lands through the ModelOutput container) and the
-enumerated-red pin for the kwargs-only plain-module transport defect.
+flipped kwargs-only plain-module transport row (traced == direct output).
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ from tests.real_model.r0.expectations import (
     EAGER_SDPA_FACET_DIFF,
     EXPECTED_TRACE_PARAM_COLLISIONS,
     FORWARD_KWARG_CORPUS,
-    KNOWN_RED_BY_ID,
     SDPA_UNSUPPORTED_FAMILIES,
     load_expectations,
 )
@@ -172,7 +171,9 @@ def test_kwargs_identity_discriminates_a_dropped_mask(r0_capture):
     assert not torch.equal(masked_direct, unmasked_direct), (
         "fixture defect: the mask must change the computation for this row to discriminate"
     )
-    trace = tl.trace(model, (), {"input_ids": kwargs["input_ids"], "attention_mask": mask})
+    trace = tl.trace(
+        model, (), input_kwargs={"input_ids": kwargs["input_ids"], "attention_mask": mask}
+    )
     matches = [
         op
         for op in trace.output_ops
@@ -218,6 +219,17 @@ class _LogitsOnly(nn.Module):
         return self.inner(input_ids=input_ids).logits
 
 
+class _HiddenOnly(nn.Module):
+    """An encoder wrapped to its bare last-hidden-state tensor."""
+
+    def __init__(self, inner: nn.Module) -> None:
+        super().__init__()
+        self.inner = inner
+
+    def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
+        return self.inner(input_ids=input_ids).last_hidden_state
+
+
 def _multipass_add_sites(trace) -> list[str]:
     sites = []
     for layer in trace.layers:
@@ -227,44 +239,56 @@ def _multipass_add_sites(trace) -> list[str]:
     return sites
 
 
+def _hidden_add_sites(trace) -> list[str]:
+    """Every add layer whose first pass is a (batch, seq, hidden) activation."""
+
+    sites = []
+    for layer in trace.layers:
+        ops = getattr(layer, "ops", None)
+        first = ops[0] if ops else layer
+        if "add" in first.label and first.out is not None and first.out.dim() == 3:
+            sites.append(first.label.split(":")[0])
+    return sites
+
+
 @pytest.mark.heavy  # measured 7.0-11.1s across CI rows (round-2/3 CI triage,
 # 2026-10-01): consistently over the smoke ceiling (a real distilgpt2 capture plus
 # a multi-fork pass-qualified edit/donor round trip), not a one-off load spike.
-def test_pass_qualification_pin_on_distilgpt2_two_pass_adds():
+def test_pass_qualification_pin_on_albert_two_pass_adds():
     """The OPUS-Q5 pin: pass-qualified edits land on exactly the addressed pass.
 
-    A plain shrunk distilgpt2 forward (use_cache=False) carries 2-pass
-    residual-add sites -- no ALBERT, no generation loop needed. Bare labels
-    refuse; the pass-1 edit changes pass 1, recomputes downstream, and an
-    identity donor patch is a no-op.
+    grouping rule rows 12 and 26: a distilgpt2 ``ModuleList`` of distinct
+    blocks has single-pass residual adds (row 12), so the 2-pass residual-add
+    sites now come from ALBERT, whose encoder calls ONE shared layer module
+    once per depth (row 26: each add inside it is one layer with a pass per
+    call). Bare labels refuse; the pass-1 edit changes pass 1, recomputes
+    downstream, and an identity donor patch is a no-op.
     """
 
     import torchlens as tl
 
-    spec = FAMILY_BY_NAME["distilgpt2"]
+    spec = FAMILY_BY_NAME["albert"]
     torch.manual_seed(SEED)
-    model = _LogitsOnly(spec.build("sdpa")).eval()
+    model = _HiddenOnly(spec.build("sdpa")).eval()
     ids = spec.input_kwargs()["input_ids"]
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     sites = _multipass_add_sites(trace)
     assert len(sites) >= 2, (
-        f"expected 2-pass residual-add sites on the 2-layer distilgpt2, found {sites}"
+        f"expected 2-pass residual-add sites on the 2-layer shared ALBERT, found {sites}"
     )
     site = sites[0]
     # Bare label refuses typed on a multi-pass site.
     fork_bare = trace.fork()
     with pytest.raises(Exception, match="ambiguous|multipass_bare_label"):
         fork_bare.do(
-            tl.units(site, torch.ones_like(trace[f"{site}:1"].out, dtype=torch.bool)).resolve(
-                fork_bare
-            ),
+            fork_bare[tl.units(site, torch.ones_like(trace[f"{site}:1"].out, dtype=torch.bool))],
             tl.zero_ablate(),
         )
     # Pass-qualified zero-ablation of one slice of pass 1.
     fork = trace.fork()
     mask = torch.zeros_like(trace[f"{site}:1"].out, dtype=torch.bool)
     mask[0, 0, :] = True
-    fork.do(tl.units(f"{site}:1", mask).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units(f"{site}:1", mask)], tl.zero_ablate())
     assert torch.all(fork[f"{site}:1"].out[0, 0, :] == 0), "edited slice not ablated"
     assert torch.equal(fork[f"{site}:1"].out[0, 1:, :], trace[f"{site}:1"].out[0, 1:, :]), (
         "untouched elements of the addressed pass moved"
@@ -277,7 +301,7 @@ def test_pass_qualification_pin_on_distilgpt2_two_pass_adds():
     )
     # Identity donor: patch pass 2 from the unedited source trace -> no-op.
     fork_donor = trace.fork()
-    fork_donor.do(tl.units(f"{site}:2", mask).resolve(fork_donor), tl.patch_from(trace))
+    fork_donor.do(fork_donor[tl.units(f"{site}:2", mask)], tl.patch_from(trace))
     assert torch.equal(fork_donor.output_ops[0].out, trace.output_ops[0].out), (
         "identity-donor patch changed the output"
     )
@@ -305,16 +329,22 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     model = spec.build("sdpa")
     ids = spec.input_kwargs()["input_ids"]
     trace = tl.trace(
-        model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model,
+        (),
+        input_kwargs={"input_ids": ids},
+        capture=tl.options.CaptureOptions(replayable=True),
     )
-    sites = _multipass_add_sites(trace)
+    # grouping rule row 12: distilgpt2's residual adds are single-pass layers;
+    # the container path needs only an edited hidden-state add, so any one serves.
+    sites = _hidden_add_sites(trace)
+    assert sites, "no hidden-state add site on the distilgpt2 capture"
     fork = trace.fork()
     mask = torch.zeros_like(trace[f"{sites[0]}:1"].out, dtype=torch.bool)
     mask[0, 0, :] = True
-    fork.do(tl.units(f"{sites[0]}:1", mask).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units(f"{sites[0]}:1", mask)], tl.zero_ablate())
     assert torch.all(fork[f"{sites[0]}:1"].out[0, 0, :] == 0), "edited slice not ablated"
     output_nodes = [
-        op for op in fork.layer_list if getattr(op, "is_output", False) and op.out is not None
+        op for op in fork._layer_list if getattr(op, "is_output", False) and op.out is not None
     ]
     assert output_nodes, "no boundary output nodes on the ModelOutput-container trace"
     for node in output_nodes:
@@ -327,10 +357,14 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     assert moved, "the edit never reached the model-output container"
 
 
-def test_kwargs_only_plain_module_enumerated_red():
-    import torchlens as tl
+def test_kwargs_only_plain_module_traces():
+    """A keyword-only call on a plain module reaches ``forward(x=...)`` once.
 
-    red = KNOWN_RED_BY_ID["kwargs-only-plain-module"]
+    Formerly the enumerated-red row ``kwargs-only-plain-module``: an empty
+    positional tuple on a single-parameter forward was wrapped into ``[[]]``,
+    so ``x`` arrived twice ("got multiple values for argument").
+    """
+    import torchlens as tl
 
     class Plain(nn.Module):
         def __init__(self) -> None:
@@ -343,18 +377,10 @@ def test_kwargs_only_plain_module_enumerated_red():
     torch.manual_seed(SEED)
     model = Plain().eval()
     value = torch.randn(2, 4)
-    try:
-        tl.trace(model, (), {"x": value})
-    except TypeError as exc:
-        assert red.message_substring in str(exc), (
-            f"kwargs-only transport failure signature drifted: {exc}"
-        )
-        return
-    pytest.fail(
-        f"STALE enumerated-red row {red.red_id!r}: kwargs-only tl.trace on a"
-        f" plain module now works. {red.owner} fixed the transport -- delete"
-        " the KNOWN_RED row and flip this to assert traced == direct output."
-    )
+    trace = tl.trace(model, (), input_kwargs={"x": value})
+    direct = model(x=value)
+    traced = trace[trace.output_layers[0]].out
+    assert torch.equal(traced, direct)
 
 
 def test_config_fingerprint_use_cache_row():
@@ -391,8 +417,10 @@ def test_config_fingerprint_use_cache_row():
     assert fp_no_cache != fp_cache
     generator = torch.Generator().manual_seed(SEED)
     ids = torch.randint(0, VOCAB, (1, 8), generator=generator)
-    ops_no_cache = len(tl.trace(model_no_cache, (), {"input_ids": ids}).ops)
-    ops_cache = len(tl.trace(model_cache, (), {"input_ids": ids}).ops)
+    # Every captured row (layer_list): use_cache adds output rows, which the
+    # counted ``trace.ops`` view leaves out (sumfam F1).
+    ops_no_cache = len(tl.trace(model_no_cache, (), input_kwargs={"input_ids": ids})._layer_list)
+    ops_cache = len(tl.trace(model_cache, (), input_kwargs={"input_ids": ids})._layer_list)
     assert ops_no_cache != ops_cache, (
         "use_cache flipped without changing the captured graph? the"
         " config-fingerprint class lost its measured basis; re-measure"

@@ -34,7 +34,7 @@ def test_child_process_capture_refusal_is_typed(monkeypatch: pytest.MonkeyPatch)
 
     import multiprocessing as mp
 
-    from torchlens.utils.display import warn_parallel
+    from torchlens._utils.display import warn_parallel
 
     class _FakeChild:
         """Stand in for a non-rank, non-daemonic child process."""
@@ -48,7 +48,7 @@ def test_child_process_capture_refusal_is_typed(monkeypatch: pytest.MonkeyPatch)
     # PID stamp), so the fake must present a parent to read as a child.
     monkeypatch.setattr(mp, "parent_process", lambda: _FakeChild())
 
-    with pytest.raises(tl.errors.CaptureContextError) as refusal:
+    with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
 
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
@@ -68,7 +68,7 @@ def test_child_process_guard_ignores_spoofed_main_process_name(
 
     import multiprocessing as mp
 
-    from torchlens.utils.display import warn_parallel
+    from torchlens._utils.display import warn_parallel
 
     class _SpoofedChild:
         """A child process wearing the main process's name."""
@@ -79,7 +79,7 @@ def test_child_process_guard_ignores_spoofed_main_process_name(
     monkeypatch.setattr(mp, "current_process", lambda: _SpoofedChild())
     monkeypatch.setattr(mp, "parent_process", lambda: _SpoofedChild())
 
-    with pytest.raises(tl.errors.CaptureContextError) as refusal:
+    with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
 
@@ -96,8 +96,8 @@ def test_child_process_guard_refuses_fork_inherited_group_stamp(
 
     import multiprocessing as mp
 
-    import torchlens.utils.display as display_mod
-    from torchlens.utils.display import warn_parallel
+    import torchlens._utils.display as display_mod
+    from torchlens._utils.display import warn_parallel
 
     class _FakeChild:
         """A non-daemonic child claiming rank via an inherited group flag."""
@@ -135,7 +135,7 @@ def test_child_process_guard_refuses_fork_inherited_group_stamp(
     # the interpreter's importer) as the rank.
     monkeypatch.setattr(display_mod, "_WARN_PARALLEL_IMPORT_PID", os.getpid() + 1)
     monkeypatch.setitem(display_mod._DIST_GROUP_OBSERVED_PID, "pid", os.getpid() + 1)
-    with pytest.raises(tl.errors.CaptureContextError) as refusal:
+    with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
 
@@ -156,8 +156,8 @@ def test_child_process_guard_import_pid_rank_reclaims_stolen_stamp(
 
     import multiprocessing as mp
 
-    import torchlens.utils.display as display_mod
-    from torchlens.utils.display import warn_parallel
+    import torchlens._utils.display as display_mod
+    from torchlens._utils.display import warn_parallel
 
     class _FakeRank:
         """The real rank process (spawn-style: fresh import, own import PID)."""
@@ -196,7 +196,7 @@ def test_child_process_guard_import_pid_rank_reclaims_stolen_stamp(
     # reclaim rule is import-PID-only and never readmits a fork child.
     monkeypatch.setattr(display_mod, "_WARN_PARALLEL_IMPORT_PID", os.getpid() + 1)
     monkeypatch.setitem(display_mod._DIST_GROUP_OBSERVED_PID, "pid", stolen_pid)
-    with pytest.raises(tl.errors.CaptureContextError) as refusal:
+    with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
 
@@ -204,7 +204,7 @@ def test_child_process_guard_import_pid_rank_reclaims_stolen_stamp(
 def test_main_process_capture_is_never_refused() -> None:
     """The guard is a no-op in the main process, including from a worker thread."""
 
-    from torchlens.utils.display import warn_parallel
+    from torchlens._utils.display import warn_parallel
 
     warn_parallel()
     errors: list[BaseException] = []
@@ -276,8 +276,8 @@ def test_main_process_rank_stamps_ownership_so_fork_children_stay_refused(
 
     import multiprocessing as mp
 
-    import torchlens.utils.display as display_mod
-    from torchlens.utils.display import warn_parallel
+    import torchlens._utils.display as display_mod
+    from torchlens._utils.display import warn_parallel
 
     class _MainProcess:
         name = "MainProcess"
@@ -312,7 +312,7 @@ def test_main_process_rank_stamps_ownership_so_fork_children_stay_refused(
     # stamp) must be refused instead of setdefault-ing its own pid.
     monkeypatch.setattr(display_mod.os, "getpid", lambda: real_pid + 1)
     try:
-        with pytest.raises(tl.errors.CaptureContextError) as refusal:
+        with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
             warn_parallel()
     finally:
         monkeypatch.undo()

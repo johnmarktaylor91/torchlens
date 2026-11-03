@@ -60,14 +60,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
+from torchlens._utils.rng import host_nondeterminism_monitor, inventory_types as rng_inventory_types
+from torchlens._utils.rng.inventory_types import _AMBIENT_BRIDGE_LEAF_TYPES, _rng_exempt_instances
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.utils import rng as rng_mod
-from torchlens.utils.rng import (
-    _AMBIENT_BRIDGE_LEAF_TYPES,
-    _rng_exempt_instances,
-    host_nondeterminism_monitor,
-)
 
 
 def _make_monitor(model: nn.Module) -> host_nondeterminism_monitor:
@@ -313,7 +309,7 @@ def test_benign_deep_model_not_over_walked_or_ceilinged(monkeypatch: Any) -> Non
 
     torchvision = pytest.importorskip("torchvision")
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 50_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 50_000)
     model = torchvision.models.resnet18()
     monitor = _make_monitor(model)
     assert monitor._sweep_model_generators() == []
@@ -326,7 +322,7 @@ def test_benign_plain_model_with_callables_not_ceilinged(monkeypatch: Any) -> No
     function references (whose ``__globals__`` must be identity-excluded, not
     walked into the module namespace)."""
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 50_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 50_000)
 
     class _Benign(nn.Module):
         def __init__(self) -> None:
@@ -668,16 +664,16 @@ def test_hidden_generator_preexisting_thread_draw_is_unverifiable(
             model,
             x.clone(),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
-                random_seed=1,
+                seed=1,
             ),
         )
         path = tmp_path / "hidden_generator.tlspec"
         shutil.rmtree(path, ignore_errors=True)
         trace.save(path, level="runnable", include_weights=True, include_activations=True)
-        report = tl.load(path).run(inputs=x.clone(), on_divergence="return_diverged").report
+        report = tl.load(path).run(inputs=x.clone(), on_divergence="return").report
         assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
         assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
         assert "host_rng" in report.nondeterministic_sources
@@ -710,10 +706,10 @@ def test_benign_model_with_c_callables_stays_verified(tmp_path: Path) -> None:
         _Benign().eval(),
         x.clone(),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
-            random_seed=1,
+            seed=1,
         ),
     )
     path = tmp_path / "benign_c_callables.tlspec"
@@ -753,7 +749,7 @@ def test_sweep_independent_of_ambient_abc_cache_state(monkeypatch: Any) -> None:
     and the cap was exhausted BEFORE the model's generator (the r55 full-suite
     failure on ``test_r47_generator_container_subclass``)."""
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 20_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 20_000)
     planted: list[Any] = []
     ambient_keep: list[Any] = []
     for i in range(400):
@@ -852,16 +848,16 @@ def test_ambient_graph_subclass_generator_draw_still_unverifiable(tmp_path: Path
             _Model().eval(),
             x.clone(),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
-                random_seed=1,
+                seed=1,
             ),
         )
         path = tmp_path / "ambient_subclass.tlspec"
         shutil.rmtree(path, ignore_errors=True)
         trace.save(path, level="runnable", include_weights=True, include_activations=True)
-        report = tl.load(path).run(inputs=x.clone(), on_divergence="return_diverged").report
+        report = tl.load(path).run(inputs=x.clone(), on_divergence="return").report
         assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
         assert "host_rng" in report.nondeterministic_sources
     finally:
@@ -902,7 +898,7 @@ def test_wrapped_torch_op_model_attribute_bounded_under_large_ambient_graph(
         isinstance(inst, cabc.Collection)
         ambient_keep.append(inst)
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 50_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 50_000)
 
     class _OpCaching(nn.Module):
         def __init__(self) -> None:
@@ -950,7 +946,7 @@ def test_synthetic_globals_function_attribute_never_walks_its_namespace(
     shared_ids = host_nondeterminism_monitor._shared_namespace_dict_ids()
     assert id(generated.__globals__) not in shared_ids  # genuinely unregistered
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 50_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 50_000)
     model = _HolderModel(generated)
     monitor = _make_monitor(model)
     snapshots = monitor._sweep_model_generators()

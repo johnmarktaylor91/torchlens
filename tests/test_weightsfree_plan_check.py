@@ -72,7 +72,7 @@ def test_plan_check_value_callable_refuses_typed() -> None:
 
 @pytest.mark.smoke
 def test_plan_check_refuted_source_refuses() -> None:
-    from torchlens.capture.structure_only import StructureOnlyCapabilityError
+    from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
     trace = _meta_trace()
     real = tl.trace(Toy(width=6), torch.randn(2, 4))
@@ -85,10 +85,10 @@ def test_plan_check_refuted_source_refuses() -> None:
 def test_plan_check_never_arms_the_capture() -> None:
     trace = _meta_trace()
     trace.check_plan([("relu_1_2", torch.empty(2, 4, device="meta"))])
-    assert not bool(getattr(trace, "intervention_ready", False))
+    assert not bool(getattr(trace, "is_replayable", False))
     # The runnable refusal is untouched by a successful plan check.
     with pytest.raises(Exception) as excinfo:
-        tl.save(trace, "/tmp/never-written.tlspec", level="runnable")
+        trace.save("/tmp/never-written.tlspec", level="runnable")
     assert "structure_only" in str(getattr(excinfo.value, "fields", {}).get("code", "")) or (
         "runnable" in str(excinfo.value)
     )

@@ -172,7 +172,7 @@ class JSONLSink:
                 "tag": point.tag,
                 "step": point.step,
                 "counts": list(point.counts),
-                "edges": list(point.edges),
+                "edges": list(point.bin_edges),
                 "summary": point.summary,
             }
         )

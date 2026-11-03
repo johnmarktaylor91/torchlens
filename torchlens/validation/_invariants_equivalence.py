@@ -4,20 +4,13 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
+
+from .._record_type import record_type
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
-    from .invariants import (
-        _EQUIVALENT_OPS_UNAVAILABLE,
-        _RAW_LABEL_BEARING_DICT_FIELDS,
-        _RAW_LABEL_BEARING_LIST_FIELDS,
-        _RAW_LABEL_BEARING_SCALAR_FIELDS,
-        _RAW_LABEL_PATTERN,
-        MetadataInvariantError,
-        _retained_orphan_op_labels,
-    )
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 __all__ = (
     "_canonical_equivalent_ops",
@@ -70,6 +63,38 @@ def _canonical_equivalent_ops(owner: object) -> object:
     return _EQUIVALENT_OPS_UNAVAILABLE
 
 
+def _equivalence_members(ml: Trace) -> tuple[dict[str, set], dict[str, object]]:
+    """Map each grouped op label to its ``op_equivalence_classes`` group and key."""
+
+    # Membership index: per-op ``equivalence_class`` carries the module suffix
+    # appended at op creation (plus loop-detection ``_argsig`` splits), while
+    # the trace dict keys are pre-suffix, so a key-based lookup misses for
+    # EVERY parameterized in-module layer and the symmetry group comparison
+    # silently skipped -- symmetric corruption of ``equivalent_ops`` on all
+    # passes of a shared in-module layer passed the whole suite. Resolving the
+    # expected group by MEMBERSHIP (the same reconciliation the recurrent-group
+    # consistency check at the bottom of this module already uses) makes the
+    # invariant actually run for suffixed classes; the key lookup stays first
+    # so a label scrubbed OUT of its group still resolves the group and fails.
+    #
+    # The stamped class is NOT a key in the registry's namespace, though: the
+    # module path is joined without a separator, so it can spell an UNRELATED
+    # registry key (in a ``Sequential`` the ReLU at module "1" is stamped
+    # ``relu_<hash>_module1`` + "1", the key of the ReLU at module "11"), and
+    # the key lookup then compared an honest op against a foreign group. An
+    # op's own registry key always PREFIXES its stamped class (torch appends
+    # the module path to it; other backends stamp the key itself), so the
+    # group that holds the op under such a key is its own and is taken first.
+    group_by_member: dict[str, set] = {}
+    key_by_member: dict[str, object] = {}
+    for group_key, group in ml._graph_op_equivalence_classes.items():
+        if isinstance(group, set):
+            for member_label in group:
+                group_by_member[member_label] = group
+                key_by_member[member_label] = group_key
+    return group_by_member, key_by_member
+
+
 def _check_equivalence_symmetry(ml: Trace) -> None:
     """Check L: op_equivalence_classes groups reference valid Op labels.
 
@@ -80,11 +105,12 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
       and stay in the final op-label namespace.
     """
     name = "equivalence_symmetry"
+    call_site_grouped = _is_call_site_grouped(ml)
     label_set = set(ml.op_labels) | _retained_orphan_op_labels(ml)
 
     # op_equivalence_classes is keyed by equivalence type descriptors (not Op labels),
     # with values being sets of Op labels in that equivalence group.
-    for eq_type, equiv_set in ml.op_equivalence_classes.items():
+    for eq_type, equiv_set in ml._graph_op_equivalence_classes.items():
         if not isinstance(equiv_set, set):
             raise MetadataInvariantError(
                 name,
@@ -99,7 +125,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
 
     # Each Op that appears in any equivalence group should exist.
     all_equiv_labels = set()
-    for equiv_set in ml.op_equivalence_classes.values():
+    for equiv_set in ml._graph_op_equivalence_classes.values():
         all_equiv_labels.update(equiv_set)
     extra = all_equiv_labels - label_set
     if extra:
@@ -122,28 +148,16 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
     # be recycled onto a different object mid-check.
     verified_op_pairs: set[tuple[int, int]] = set()
     verified_keepalive: list[object] = []
-    # Membership index: per-op ``equivalence_class`` carries the module suffix
-    # appended at op creation (plus loop-detection ``_argsig`` splits), while
-    # the trace dict keys are pre-suffix, so a key-based lookup misses for
-    # EVERY parameterized in-module layer and the group comparison below
-    # silently skipped -- symmetric corruption of ``equivalent_ops`` on all
-    # passes of a shared in-module layer passed the whole suite. Resolving the
-    # expected group by MEMBERSHIP (the same reconciliation the recurrent-group
-    # consistency check at the bottom of this module already uses) makes the
-    # invariant actually run for suffixed classes; the key lookup stays first
-    # so a label scrubbed OUT of its group still resolves the group and fails.
-    group_by_member: dict[str, set] = {}
-    for group in ml.op_equivalence_classes.values():
-        if isinstance(group, set):
-            for member_label in group:
-                group_by_member[member_label] = group
-    for op in ml.layer_list:
+    group_by_member, key_by_member = _equivalence_members(ml)
+    for op in ml._layer_list:
         equivalence_class = getattr(op, "equivalence_class", None)
-        expected_group = (
-            ml.op_equivalence_classes.get(equivalence_class)
-            if isinstance(equivalence_class, str)
-            else None
-        )
+        expected_group = None
+        if isinstance(equivalence_class, str):
+            member_key = key_by_member.get(op.label)
+            if isinstance(member_key, str) and equivalence_class.startswith(member_key):
+                expected_group = group_by_member[op.label]
+            else:
+                expected_group = ml._graph_op_equivalence_classes.get(equivalence_class)
         if expected_group is None:
             expected_group = group_by_member.get(op.label)
         canonical = _canonical_equivalent_ops(op)
@@ -177,7 +191,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
     # Same argument for the per-Layer body, whose verdict is a pure function of the
     # layer's canonical object and the ordered canonical objects of its passes.
     verified_layer_keys: set[tuple[int, tuple[int, ...]]] = set()
-    for layer in ml.layer_logs.values():
+    for layer in ml._layer_logs.values():
         layer_canonical = _canonical_equivalent_ops(layer)
         pass_canonicals = [_canonical_equivalent_ops(op) for op in layer.ops.values()]
         layer_key: tuple[int, tuple[int, ...]] | None = None
@@ -202,16 +216,33 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
                     name,
                     f"Layer {layer.layer_label}.equivalent_ops contains '{label}' not in op_labels",
                 )
-        pass_equivalent_ops = {
-            frozenset(getattr(op, "equivalent_ops", set())) for op in layer.ops.values()
-        }
+        pass_ops = list(layer.ops.values())
+        pass_equivalent_ops = {frozenset(getattr(op, "equivalent_ops", set())) for op in pass_ops}
         if len(pass_equivalent_ops) > 1:
-            raise MetadataInvariantError(
-                name,
-                f"Layer {layer.layer_label} ops disagree on equivalent_ops: "
-                f"{sorted(sorted(group) for group in pass_equivalent_ops)}",
+            # Under callsite_v1 the passes of one layer may sit in different
+            # equivalence sets exactly when their classes differ only in what
+            # the grouping rule says is not evidence (argument/shape hash rows
+            # 49 and 50, parameter identity row 51, module path rows 30 and 31);
+            # the layer then serves one of its passes' sets.
+            narrowed = call_site_grouped and all(
+                _equivalence_classes_agree(
+                    pass_ops[0], pass_ops[0].equivalence_class, op, op.equivalence_class, True
+                )
+                for op in pass_ops
             )
-        if pass_equivalent_ops and equivalent_ops != set(next(iter(pass_equivalent_ops))):
+            if not narrowed:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {layer.layer_label} ops disagree on equivalent_ops: "
+                    f"{sorted(sorted(group) for group in pass_equivalent_ops)}",
+                )
+            if frozenset(equivalent_ops) not in pass_equivalent_ops:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer {layer.layer_label}.equivalent_ops={sorted(equivalent_ops)} is "
+                    "none of its passes' equivalent_ops",
+                )
+        elif pass_equivalent_ops and equivalent_ops != set(next(iter(pass_equivalent_ops))):
             raise MetadataInvariantError(
                 name,
                 f"Layer {layer.layer_label}.equivalent_ops={sorted(equivalent_ops)} != "
@@ -238,7 +269,7 @@ def _check_graph_ordering(ml: Trace) -> None:
     # raw_index uniqueness and monotonicity
     seen_rt_nums: dict[int, str] = {}
     prev_rt = -1
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         rt = lpl.raw_index
         if rt in seen_rt_nums:
             raise MetadataInvariantError(
@@ -259,7 +290,7 @@ def _check_graph_ordering(ml: Trace) -> None:
     buffer_set = set(ml.buffer_layers)
     output_set = set(ml.output_layers)
     seen_op_nums: dict[int, str] = {}
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         label = lpl.layer_label
         if label in input_set or label in buffer_set or label in output_set:
             continue
@@ -273,9 +304,9 @@ def _check_graph_ordering(ml: Trace) -> None:
             seen_op_nums[op] = label
 
     # Topological order: parent.raw_index < child.raw_index
-    rt_map = {lpl.layer_label: lpl.raw_index for lpl in ml.layer_list}
-    rt_map.update({lpl.label: lpl.raw_index for lpl in ml.layer_list})
-    for lpl in ml.layer_list:
+    rt_map = {lpl.layer_label: lpl.raw_index for lpl in ml._layer_list}
+    rt_map.update({lpl.label: lpl.raw_index for lpl in ml._layer_list})
+    for lpl in ml._layer_list:
         for p in lpl.parents:
             if rt_map.get(p, -1) >= lpl.raw_index:
                 raise MetadataInvariantError(
@@ -291,7 +322,7 @@ def _check_graph_ordering(ml: Trace) -> None:
     for label in ml.layer_labels:
         if _RAW_LABEL_PATTERN.search(label):
             raise MetadataInvariantError(name, f"Raw label '{label}' survived postprocessing")
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         for field in _RAW_LABEL_BEARING_LIST_FIELDS:
             for item in getattr(lpl, field, ()) or ():
                 if isinstance(item, str) and _RAW_LABEL_PATTERN.search(item):
@@ -338,12 +369,34 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     - Parameter sharing rule: layers with same (func_name,
       sorted(_param_barcodes)) must share layer_label.
     - Equivalence group consistency: all members of a recurrent_ops
-      group belong to the same Trace.op_equivalence_classes set.
+      group belong to the same Trace.graph.op_equivalence_classes set.
+
+    Call-site grouping (``callsite_v1``, grouping rule section 3) replaces two
+    of these, and only for traces stamped with that detector:
+
+    - Old: layers sharing (func_name, param barcodes, equivalence_class) are
+      one layer. New: two different layers never share a call-site key
+      (contract (ii)), and every pass of a layer has one func_name and one
+      call-site key (i), and every recurrent group one key (iii). Shared
+      weights are not evidence (rows 18, 19, 25, 59).
+    - Old: every pass of a layer has one equivalence_class and one
+      op_equivalence_classes set. New: the same, except that the class may
+      differ in exactly the components the rule says are not evidence: the
+      argument/shape hash (rows 49, 50), parameter identity (row 51) and the
+      module path (rows 30, 31). Layer type, in-place marker and output index
+      must still match (:func:`_equivalence_classes_agree`).
+
+    The call-site key is internal and never persisted, so (i) to (iii) are
+    re-checked here only for a live capture that kept its side table
+    (``postprocess._call_site_contract``); otherwise they are reported as not
+    checked (validation diagnostic ``call_site_contract_unchecked``), never
+    passed. Step 7 checks them on every capture.
 
     Note: subgraph-level adjacency (Rule 3 from loop_detection.py) cannot
     be verified post-hoc from metadata alone.
     """
     name = "loop_detection"
+    call_site_grouped = _is_call_site_grouped(ml)
     label_set = set(ml.op_labels)
 
     # O(1) member-label resolution: inline the first steps of the
@@ -351,8 +404,8 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # layer_dict_all_keys) and delegate anything else to the full lookup, so
     # every resolution (including ambiguous-key errors) matches ``ml[label]``.
     _MISS = object()
-    layer_logs = ml.layer_logs
-    all_keys = ml.layer_dict_all_keys
+    layer_logs = ml._layer_logs
+    all_keys = ml._layer_dict_all_keys
     ambiguous_keys = getattr(ml, "_ambiguous_lookup_keys", {})
 
     def _resolve(member_label: str) -> Op:
@@ -386,7 +439,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # at its first computational member (matching the original scan order).
     group_func_checked: dict[frozenset[str], bool] = {}
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         slo = lpl.recurrent_ops
 
         group_key = member_group.get(lpl.label)
@@ -461,9 +514,11 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
                     f"(no_pass='{member.layer_label}') differ",
                 )
 
-        # All members share equivalence_class
+        # All members share equivalence_class (per component under callsite_v1)
         for member_label, member in members:
-            if member.equivalence_class != lpl.equivalence_class:
+            if not _equivalence_classes_agree(
+                lpl, lpl.equivalence_class, member, member.equivalence_class, call_site_grouped
+            ):
                 raise MetadataInvariantError(
                     name,
                     f"recurrent_ops type mismatch: '{lpl.layer_label}' "
@@ -496,7 +551,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
         if group_key not in groups_seen:
             pass_indices = []
             for member_label, member in members:
-                pass_indices.append(member.pass_index)
+                pass_indices.append(member.pass_number)
             expected = set(range(1, len(slo) + 1))
             actual = set(pass_indices)
             if actual != expected:
@@ -516,9 +571,11 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # same output-specific equivalence class must share layer_label. The
     # equivalence class keeps distinct outputs of a multi-output parameterized op
     # from being collapsed into one logical layer.
+    # Under callsite_v1 call-site contract (ii) replaces it (shared weights are
+    # not evidence, rows 18, 19, 25, 59); see the docstring.
     param_groups: dict[tuple[str, tuple[str, ...], str], list[Op]] = defaultdict(list)
-    for lpl in ml.layer_list:
-        if lpl.uses_params and lpl._param_barcodes:
+    for lpl in [] if call_site_grouped else ml._layer_list:
+        if lpl.has_params and lpl._param_barcodes:
             key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.equivalence_class)
             param_groups[key].append(lpl)
 
@@ -534,12 +591,12 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
 
     # Equivalence group ↔ same_layer consistency: all members of a
     # recurrent_ops group must belong to the same equivalence set.
-    # Note: Trace.op_equivalence_classes keys use the pre-module-suffix type
+    # Note: Trace.graph.op_equivalence_classes keys use the pre-module-suffix type
     # (from loop_detection), while per-layer equivalence_class has
     # a module suffix appended by control_flow.py. So we check group membership
     # consistency, not exact key matching.
     op_label_to_equiv_key: dict[str, str] = {}
-    for eq_type, equiv_set in ml.op_equivalence_classes.items():
+    for eq_type, equiv_set in ml._graph_op_equivalence_classes.items():
         for label in equiv_set:
             op_label_to_equiv_key[label] = eq_type
 
@@ -549,13 +606,145 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
             continue
         # All members of a same-layer group should be in the same equivalence set
         equiv_keys = set()
+        keyed_members: list[tuple[Op, str]] = []
         for member_label in slo:
             member = _resolve(member_label)
             if member.label in op_label_to_equiv_key:
                 equiv_keys.add(op_label_to_equiv_key[member.label])
+                keyed_members.append((member, op_label_to_equiv_key[member.label]))
         equiv_stems = {re.sub(r"_outindex\d+$", "", equiv_key) for equiv_key in equiv_keys}
-        if len(equiv_keys) > 1 and len(equiv_stems) > 1:
+        if call_site_grouped and keyed_members:
+            anchor, anchor_key = keyed_members[0]
+            spans = not all(
+                _equivalence_classes_agree(anchor, anchor_key, member, key, True)
+                for member, key in keyed_members
+            )
+        else:
+            spans = len(equiv_keys) > 1 and len(equiv_stems) > 1
+        if spans:
             raise MetadataInvariantError(
                 name,
                 f"recurrent_ops group {sorted(slo)} spans multiple equivalence types: {equiv_keys}",
             )
+    if call_site_grouped:
+        _check_call_site_contract_post_hoc(ml, groups_seen, member_group, _resolve)
+
+
+_OUTINDEX_TOKEN = re.compile(r"_outindex(\d+)")
+
+
+def _is_call_site_grouped(trace: Trace) -> bool:
+    """Whether step 7 grouped this trace by call site (stamp ``detector``)."""
+
+    stamp = trace._options_grouping_policy
+    return isinstance(stamp, dict) and stamp.get("detector") == "callsite_v1"
+
+
+def _equivalence_class_components(op: Op, equivalence_class: object) -> tuple[object, ...]:
+    """The components of an equivalence class that call-site passes must share.
+
+    Layer type, the in-place marker and the output-index tokens. The rest of
+    the class (argument/shape hash, parameter barcodes, module path) is what
+    the grouping rule says is not evidence (rows 30, 31, 49, 50, 51).
+    """
+
+    layer_type = str(record_type(op, ""))
+    text = str(equivalence_class)
+    return (
+        layer_type,
+        text.startswith(f"{layer_type}_"),
+        text.startswith(f"{layer_type}_inplace_"),
+        tuple(_OUTINDEX_TOKEN.findall(text)),
+    )
+
+
+def _equivalence_classes_agree(
+    anchor: Op, anchor_class: object, member: Op, member_class: object, call_site_grouped: bool
+) -> bool:
+    """Whether two passes' equivalence classes agree under the trace's grouper.
+
+    Exact equality under ``grouper_v1``. Under ``callsite_v1`` equal classes
+    agree, and different classes agree only when they differ in nothing but
+    the argument/shape hash, parameter identity and module path: layer type,
+    in-place marker and output index must match, and each class must carry
+    its op's own layer type.
+    """
+
+    if anchor_class == member_class:
+        return True
+    if not call_site_grouped:
+        return False
+    anchor_parts = _equivalence_class_components(anchor, anchor_class)
+    member_parts = _equivalence_class_components(member, member_class)
+    return anchor_parts == member_parts and bool(anchor_parts[1])
+
+
+def _check_call_site_contract_post_hoc(
+    trace: Trace,
+    groups_seen: dict[frozenset[str], list[str]],
+    member_group: dict[str, frozenset[str]],
+    resolve: Any,
+) -> None:
+    """Re-check call-site contract (i) to (iii), or report it as not checked.
+
+    The call-site key is internal and never persisted (grouping rule section
+    3), so only a live capture that kept its side table can be re-checked; a
+    loaded trace or a fork records the validation diagnostic
+    ``call_site_contract_unchecked`` instead of passing silently.
+    """
+
+    from .._postprocess._call_site_contract import (
+        CallSiteEntry,
+        call_site_classes_for,
+        call_site_contract_violation,
+    )
+    from .invariants import MetadataInvariantError
+
+    classes = call_site_classes_for(trace)
+    if classes is None:
+        from .diagnostics import ValidationDiagnostic, record_validation_diagnostic
+
+        record_validation_diagnostic(
+            trace,
+            ValidationDiagnostic(
+                check_name="call_site_contract_unchecked",
+                message=(
+                    "Call-site grouping contract (i) to (iii) not checked: this trace "
+                    "carries no call-site side table (the key is never persisted; step 7 "
+                    "checked it at capture)."
+                ),
+                extra={"detector": "callsite_v1"},
+            ),
+        )
+        return
+    group_raw: dict[frozenset[str], tuple[str, ...]] = {
+        key: tuple(resolve(label)._label_raw for label in labels)
+        for key, labels in groups_seen.items()
+    }
+    entries = [
+        CallSiteEntry(
+            raw_label=op._label_raw,
+            layer=op.layer_label,
+            func_name=op.func_name,
+            group=group_raw.get(member_group.get(op.label, frozenset()), (op._label_raw,)),
+        )
+        for op in trace._layer_list
+    ]
+    violation = call_site_contract_violation(entries, classes)
+    if violation is not None:
+        raise MetadataInvariantError("loop_detection", violation)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_topology import (  # noqa: E402
+    _retained_orphan_op_labels,
+)
+from .invariants import (  # noqa: E402
+    _EQUIVALENT_OPS_UNAVAILABLE,
+    _RAW_LABEL_BEARING_DICT_FIELDS,
+    _RAW_LABEL_BEARING_LIST_FIELDS,
+    _RAW_LABEL_BEARING_SCALAR_FIELDS,
+    _RAW_LABEL_PATTERN,
+    MetadataInvariantError,
+)

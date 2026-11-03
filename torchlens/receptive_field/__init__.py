@@ -7,18 +7,13 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
-from ..utils.tensor_utils import layer_grad_tolerances_for_dtype
+from .._utils.tensor_utils import layer_grad_tolerances_for_dtype
+from . import _influence  # noqa: F401  (registers the resolver behind .of())
 from ._errors import (
-    AmbiguousCallError,
     AmbiguousInputError,
-    AmbiguousPassError,
-    AmbiguousTargetError,
     BackendUnsupportedError,
-    NoInfluencePathError,
     ReceptiveFieldConfigurationError,
     ReceptiveFieldError,
-    ReceptiveFieldUnavailableError,
-    ReceptiveFieldValidationError,
 )
 from ._rules import (
     ReceptiveFieldRule,
@@ -27,7 +22,7 @@ from ._rules import (
     rules as _registered_rules,
 )
 from ._types import (
-    GradientReceptiveField,
+    GradReceptiveField,
     GridLayout,
     ReceptiveField,
     ReceptiveFieldAlignment,
@@ -53,8 +48,8 @@ rules = _registered_rules
 
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)
@@ -132,7 +127,7 @@ def _op_by_label(trace: Trace, label: str) -> Op | None:
         Canonical captured operation when present.
     """
 
-    return next((op for op in trace.layer_list if op.label == label), None)
+    return next((op for op in trace._layer_list if op.label == label), None)
 
 
 def _empirical_adjoint_checks(
@@ -168,9 +163,9 @@ def _empirical_adjoint_checks(
 
     checks: list[EmpiricalAdjointCheck] = []
     for validation in containment:
-        for role, receptive in validation.gradient.items():
+        for role, receptive in validation.grad.items():
             far_label = next(
-                (op.label for op in trace.layer_list if str(op.io_role or op.label) == role),
+                (op.label for op in trace._layer_list if str(op.io_role or op.label) == role),
                 "",
             )
             support = torch.nonzero(receptive.support_mask, as_tuple=False)
@@ -220,7 +215,7 @@ def _empirical_adjoint_checks(
                 else:
                     # A single source selects a single field, never the role mapping.
                     receptive_probe = cast(
-                        GradientReceptiveField,
+                        GradReceptiveField,
                         gradient_for_unit(
                             target,
                             target_unit,
@@ -245,8 +240,8 @@ def _empirical_adjoint_checks(
                     )
                 )
                 continue
-            if not isinstance(projective, GradientReceptiveField) or not isinstance(
-                receptive_probe, GradientReceptiveField
+            if not isinstance(projective, GradReceptiveField) or not isinstance(
+                receptive_probe, GradReceptiveField
             ):
                 checks.append(
                     EmpiricalAdjointCheck(
@@ -371,48 +366,22 @@ def verify(
     )
 
 
-def self_check(
-    trace: Trace,
-    *,
-    empirical_adjoint_atol: float | None = None,
-    empirical_adjoint_rtol: float | None = None,
-    **kwargs: object,
-) -> ReceptiveFieldVerification:
-    """Alias :func:`verify` for interactive RF self-consistency diagnostics."""
-
-    return verify(
-        trace,
-        empirical_adjoint_atol=empirical_adjoint_atol,
-        empirical_adjoint_rtol=empirical_adjoint_rtol,
-        **kwargs,
-    )
-
-
 __all__ = [
-    "AmbiguousCallError",
     "AmbiguousInputError",
-    "AmbiguousTargetError",
-    "AmbiguousPassError",
-    "BackendUnsupportedError",
     "EmpiricalAdjointCheck",
-    "GradientReceptiveField",
+    "GradReceptiveField",
     "GridLayout",
     "ReceptiveField",
     "ReceptiveFieldAlignment",
     "ReceptiveFieldAxis",
     "ReceptiveFieldBox",
     "ReceptiveFieldBoxAxis",
-    "ReceptiveFieldConfigurationError",
     "ReceptiveFieldDirection",
-    "ReceptiveFieldError",
-    "NoInfluencePathError",
     "ReceptiveFieldProfile",
     "ReceptiveFieldRule",
     "ReceptiveFieldRuleContext",
     "ReceptiveFieldStatus",
-    "ReceptiveFieldUnavailableError",
     "ReceptiveFieldValidation",
-    "ReceptiveFieldValidationError",
     "ReceptiveFieldValidationStatus",
     "ReceptiveFieldVerification",
     "ReceptiveFieldView",
@@ -420,7 +389,6 @@ __all__ = [
     "register_rf_rule",
     "cross_validate",
     "node_spec",
-    "self_check",
     "verify",
     "rules",
 ]

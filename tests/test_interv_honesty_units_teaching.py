@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens.errors import SelectionError
 
 
 class _ConvNet(nn.Module):
@@ -22,9 +22,9 @@ class _ConvNet(nn.Module):
         return torch.relu(self.c1(x))
 
 
-def _log(*, intervention_ready: bool = False) -> tl.Trace:
+def _log(*, replayable: bool = False) -> tl.Trace:
     torch.manual_seed(0)
-    capture = tl.options.CaptureOptions(intervention_ready=intervention_ready)
+    capture = tl.options.CaptureOptions(replayable=replayable)
     return tl.trace(_ConvNet().eval(), torch.randn(2, 1, 4, 4), capture=capture)
 
 
@@ -34,7 +34,7 @@ def test_partial_rank_unit_index_teaches_full_coordinates() -> None:
 
     log = _log()
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("relu_1_2", [(1,)]).resolve(log)
+        log[tl.units("relu_1_2", [(1,)])]
     assert excinfo.value.fields["code"] == "selection_unresolvable"
     assert excinfo.value.fields["reason"] == "mask_shape_mismatch"
     message = str(excinfo.value)
@@ -51,7 +51,7 @@ def test_full_rank_out_of_range_message_unchanged() -> None:
 
     log = _log()
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("relu_1_2", [(9, 9, 9, 9)]).resolve(log)
+        log[tl.units("relu_1_2", [(9, 9, 9, 9)])]
     assert excinfo.value.fields["reason"] == "mask_shape_mismatch"
     assert "outside" in str(excinfo.value)
 
@@ -69,7 +69,7 @@ def test_live_unseeded_note_never_leaks_raw_labels() -> None:
     )
     notes = [
         record.determinism_note
-        for record in (log["relu_1_2"].interventions or [])
+        for record in (log["relu_1_2"].edits or [])
         if record.determinism_note
     ]
     assert notes, "unseeded scramble must disclose nondeterminism"
@@ -91,18 +91,18 @@ def test_note_keeps_public_labels_and_drops_internal_ones() -> None:
 
     public = make_hook_context(
         name="scramble_elements",
-        layer_log={"layer_label": "relu_1_2", "label": "relu_1_2:1"},
-        run_ctx={},
+        op={"layer_label": "relu_1_2", "label": "relu_1_2:1"},
+        run_context={},
     )
     _enqueue_nondeterminism_note(public, "scramble_elements")
-    assert public.run_ctx["ledger_notes"] == [
+    assert public.run_state["ledger_notes"] == [
         "scramble_elements used unseeded stochastic RNG at relu_1_2:1"
     ]
 
     raw_only = make_hook_context(
         name="scramble_elements",
-        layer_log={"layer_label": "relu_1_3_raw", "label": "relu_1_3_raw"},
-        run_ctx={},
+        op={"layer_label": "relu_1_3_raw", "label": "relu_1_3_raw"},
+        run_context={},
     )
     _enqueue_nondeterminism_note(raw_only, "scramble_elements")
-    assert raw_only.run_ctx["ledger_notes"] == ["scramble_elements used unseeded stochastic RNG"]
+    assert raw_only.run_state["ledger_notes"] == ["scramble_elements used unseeded stochastic RNG"]

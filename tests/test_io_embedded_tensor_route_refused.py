@@ -29,7 +29,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._io._inline_tensor import INLINE_TENSOR_GLOBAL, rebuild_inline_tensor
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
@@ -171,12 +171,12 @@ def test_load_from_bytes_refused_inside_a_valid_bundle(
     tl.trace(_Model(), torch.ones(2, 3), capture=CaptureOptions(cache=False)).save(path)
     (path / "metadata.pkl").write_bytes(_nested_payload())
 
-    with pytest.raises(TorchLensIOError) as caught:
+    with pytest.raises(ArtifactError) as caught:
         tl.load(path)
     assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
     assert isinstance(caught.value.__cause__, pickle.UnpicklingError)
     assert "torch.storage._load_from_bytes" in str(caught.value.__cause__)
-    assert "re-saved" in str(caught.value.__cause__)
+    assert "capture the model again" in str(caught.value.__cause__)
     assert torch_load_tripwire == []
 
 

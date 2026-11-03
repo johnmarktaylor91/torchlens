@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ...ir.container import (
+from ..._ir.container import (
     ContainerSpec,
     DataclassField,
     DictKey,
@@ -21,32 +21,26 @@ from ...ir.container import (
     namedtuple_type_can_carry_instance_state,
     reconstruction_is_lossy,
 )
-from ...ir.container_registry import OUTPUT_TREE_MAX_DEPTH
-from ...utils.introspection import (
+from ..._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
+from ..._ir.distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    DISTRIBUTION_STATE_UNRECORDABLE,
+    distribution_children,
+    distribution_layout,
+    is_distribution,
+)
+from ..._utils.introspection import (
     get_vars_of_type_from_obj,
 )
 
 if TYPE_CHECKING:
     pass
 
-if TYPE_CHECKING:
-    from .ops import (
-        _UNSUPPORTED_OUTPUT_CONTAINER_WARNED,
-        _container_type_ref,
-        _fallback_address_to_path,
-        _is_hf_model_output,
-        _is_namedtuple_instance,
-        _iter_sequence_items,
-        _leaf_is_reconstructable,
-        _literal_value_supported,
-        _mapping_reconstruction,
-        _torch_return_type_fields,
-        _try_build_container_spec,
-    )
 
 __all__ = (
     "_build_container_spec",
     "_build_container_spec_unguarded",
+    "_distribution_container_spec",
     "_known_output_container_children",
     "_walk_supported_output_container",
     "_prove_runnable_output_lossless",
@@ -109,22 +103,9 @@ def _build_container_spec_unguarded(
     child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
     registered = get_registered_container(type(value))
     if registered is not None:
-        children, aux_data = registered.flatten(value)
-        for index, item in enumerate(children):
-            child_spec = _try_build_container_spec(
-                item, _depth=_depth + 1, _in_progress=_in_progress
-            )
-            if child_spec is not None:
-                child_specs.append((TupleIndex(index), child_spec))
-        module, qualname = _container_type_ref(value)
-        return ContainerSpec(
-            kind="registered",
-            length=len(children),
-            type_module=module,
-            type_qualname=qualname,
-            child_specs=tuple(child_specs),
-            aux_data=aux_data,
-        )
+        return _registered_container_spec(value, registered, _depth, _in_progress)
+    if is_distribution(value):
+        return _distribution_container_spec(value, _depth=_depth, _in_progress=_in_progress)
     if _is_hf_model_output(value):
         keys = tuple(value.keys())
         reconstructable = True
@@ -290,6 +271,69 @@ def _build_container_spec_unguarded(
     return None
 
 
+def _registered_container_spec(
+    value: Any, registered: Any, _depth: int, _in_progress: set[int]
+) -> ContainerSpec:
+    """Build the spec for a registered container through its ``flatten`` hook."""
+
+    child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
+    children, aux_data = registered.flatten(value)
+    for index, item in enumerate(children):
+        child_spec = _try_build_container_spec(item, _depth=_depth + 1, _in_progress=_in_progress)
+        if child_spec is not None:
+            child_specs.append((TupleIndex(index), child_spec))
+    module, qualname = _container_type_ref(value)
+    return ContainerSpec(
+        kind="registered",
+        length=len(children),
+        type_module=module,
+        type_qualname=qualname,
+        child_specs=tuple(child_specs),
+        aux_data=aux_data,
+    )
+
+
+def _distribution_container_spec(
+    value: Any,
+    *,
+    _depth: int,
+    _in_progress: set[int],
+) -> ContainerSpec:
+    """Build the spec for a ``torch.distributions`` output.
+
+    Each recorded attribute is a ``NamedField`` child (a tensor leaf or a nested
+    distribution's spec); literal state and tensor aliases ride in ``aux_data``.
+    An attribute the contract cannot record flags the spec lossy; the attribute
+    paths stay addressable.
+    """
+
+    layout = distribution_layout(value)
+    instance_dict = vars(value)
+    child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
+    lossy = bool(layout.lossy_reason)
+    for name in layout.fields:
+        child_spec = _try_build_container_spec(
+            instance_dict[name], _depth=_depth + 1, _in_progress=_in_progress
+        )
+        if child_spec is not None:
+            child_specs.append((NamedField(name), child_spec))
+            if child_spec.kind == "opaque":
+                module, qualname = _container_type_ref(value)
+                return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
+            lossy = lossy or child_spec.lossy_reconstruction
+    module, qualname = _container_type_ref(value)
+    return ContainerSpec(
+        kind=DISTRIBUTION_CONTAINER_KIND,
+        length=len(layout.fields),
+        fields=layout.fields,
+        type_module=module,
+        type_qualname=qualname,
+        child_specs=tuple(child_specs),
+        aux_data=layout.aux_data(),
+        lossy_reconstruction=lossy,
+    )
+
+
 def _known_output_container_children(
     out: Any,
 ) -> list[tuple[OutputPathComponent, Any]] | None:
@@ -305,6 +349,8 @@ def _known_output_container_children(
     if registered is not None:
         children, _aux_data = registered.flatten(out)
         return [(TupleIndex(index), item) for index, item in enumerate(children)]
+    if is_distribution(out):
+        return [(NamedField(name), child) for name, child in distribution_children(out)]
     if _is_hf_model_output(out):
         return [(HFKey(key), out[key]) for key in out.keys()]
     torch_fields = _torch_return_type_fields(out)
@@ -466,23 +512,9 @@ def _prove_runnable_output_lossless_unguarded(
 
     registered = get_registered_container(type(value))
     if registered is not None:
-        if not getattr(registered, "state_complete", False):
-            instance_dict = getattr(value, "__dict__", None)
-            if isinstance(instance_dict, dict) and any(
-                item is not None for item in instance_dict.values()
-            ):
-                # r37 3-ADJ-3: registration without the explicit state_complete
-                # declaration cannot prove the hooks round-trip this instance's
-                # extra state -- refuse at save rather than drop it on replay.
-                return False, f"registered_container_instance_state:{type(value).__qualname__}"
-        children, _aux = registered.flatten(value)
-        for item in children:
-            proved, reason = _prove_runnable_output_lossless(
-                item, _depth=_depth + 1, _in_progress=_in_progress
-            )
-            if not proved:
-                return False, reason
-        return True, ""
+        return _prove_registered_lossless(value, registered, _depth, _in_progress)
+    if is_distribution(value):
+        return _prove_distribution_lossless(value, _depth, _in_progress)
     if _is_hf_model_output(value):
         for key in value.keys():
             proved, reason = _prove_runnable_output_lossless(
@@ -555,6 +587,60 @@ def _prove_runnable_output_lossless_unguarded(
                 return False, reason
         return True, ""
     return False, f"opaque_leaf:{type(value).__qualname__}"
+
+
+def _prove_registered_lossless(
+    value: Any, registered: Any, _depth: int, _in_progress: set[int]
+) -> tuple[bool, str]:
+    """Prove a registered container's instance state and children lossless."""
+
+    if not getattr(registered, "state_complete", False):
+        instance_dict = getattr(value, "__dict__", None)
+        if isinstance(instance_dict, dict) and any(
+            item is not None for item in instance_dict.values()
+        ):
+            # r37 3-ADJ-3: registration without the explicit state_complete
+            # declaration cannot prove the hooks round-trip this instance's
+            # extra state -- refuse at save rather than drop it on replay.
+            return False, f"registered_container_instance_state:{type(value).__qualname__}"
+    children, _aux = registered.flatten(value)
+    for item in children:
+        proved, reason = _prove_runnable_output_lossless(
+            item, _depth=_depth + 1, _in_progress=_in_progress
+        )
+        if not proved:
+            return False, reason
+    return True, ""
+
+
+def _prove_distribution_lossless(
+    value: Any, _depth: int, _in_progress: set[int]
+) -> tuple[bool, str]:
+    """Prove a ``torch.distributions`` output's recorded state and children lossless."""
+
+    layout = distribution_layout(value)
+    if layout.lossy_reason:
+        return False, layout.lossy_reason
+    instance_dict = vars(value)
+    for name in layout.fields:
+        proved, reason = _prove_runnable_output_lossless(
+            instance_dict[name], _depth=_depth + 1, _in_progress=_in_progress
+        )
+        if not proved:
+            return False, reason
+    return True, ""
+
+
+def lossy_distribution_output_reason(output: Any) -> str:
+    """Return the lossy reason when ``output`` holds a ``torch.distributions`` object
+    capture cannot record losslessly, else an empty string."""
+
+    if output is None or isinstance(output, torch.Tensor):
+        return ""
+    proved, reason = _prove_runnable_output_lossless(output)
+    if proved or not reason.startswith(DISTRIBUTION_STATE_UNRECORDABLE):
+        return ""
+    return reason
 
 
 def runnable_output_losslessness(
@@ -667,3 +753,24 @@ def _walk_output_tensors_with_paths(
         return
 
     yield from _walk_supported_output_container(out, root_spec=root_spec, path=())
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_arguments import (  # noqa: E402
+    _literal_value_supported,
+)
+from ._ops_container_base import (  # noqa: E402
+    _container_type_ref,
+    _fallback_address_to_path,
+    _is_hf_model_output,
+    _is_namedtuple_instance,
+    _iter_sequence_items,
+    _leaf_is_reconstructable,
+    _mapping_reconstruction,
+    _torch_return_type_fields,
+    _try_build_container_spec,
+)
+from .ops import (  # noqa: E402
+    _UNSUPPORTED_OUTPUT_CONTAINER_WARNED,
+)

@@ -15,14 +15,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
-from torchlens.visualization import _render_utils
-from torchlens.visualization._rank_layout_internal import layout as rank_layout
-from torchlens.visualization._render_common import GraphvizRenderError
-from torchlens.visualization._render_dot import _strip_render_extension
-from torchlens.visualization._render_utils import render_dot_to_file
-from torchlens.visualization.collapse_plan import RenderContext
-from torchlens.visualization.render_ir import build_render_ir
+from torchlens._data_classes.trace import Trace
+from torchlens._record_type import record_type
+from torchlens._visualization import _render_utils
+from torchlens._visualization._rank_layout_internal import layout as rank_layout
+from torchlens._visualization._render_common import GraphvizRenderError, GraphvizUnavailableError
+from torchlens._visualization._render_dot import _strip_render_extension
+from torchlens._visualization._render_utils import render_dot_to_file
+from torchlens._visualization.collapse_plan import RenderContext
+from torchlens._visualization.render_ir import build_render_ir
 
 
 class _TinyRenderModel(nn.Module):
@@ -183,11 +184,10 @@ def test_skip_fn_omits_unrolled_skipped_node(tmp_path: Path) -> None:
 
     dot = trace.draw(
         skip_fn=lambda layer: layer.func_name == "relu",
-        vis_outpath=str(tmp_path / "skip_relu"),
-        vis_save_only=True,
-        vis_fileformat="dot",
+        path=str(tmp_path / "skip_relu"),
+        file_format="dot",
         order_siblings=False,
-    )
+    ).dot
 
     assert "relu_1_2" not in dot
 
@@ -207,7 +207,7 @@ def test_bounded_render_child_dies_with_hard_parent_death(tmp_path: Path) -> Non
 
     parent_script = (
         "import os, subprocess, sys, threading, time\n"
-        "from torchlens.visualization._render_utils import run_bounded_subprocess\n"
+        "from torchlens._visualization._render_utils import run_bounded_subprocess\n"
         "t = threading.Thread(\n"
         "    target=lambda: run_bounded_subprocess(['sleep', '30'], timeout=60),\n"
         "    daemon=True,\n"
@@ -273,7 +273,7 @@ def test_missing_graphviz_binary_refuses_typed(
     (b8 R65).
     """
 
-    from torchlens.visualization._render_common import GraphvizUnavailableError
+    from torchlens._visualization._render_common import GraphvizUnavailableError
 
     trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
     empty_bin = tmp_path / "emptybin"
@@ -282,8 +282,7 @@ def test_missing_graphviz_binary_refuses_typed(
 
     with pytest.raises(GraphvizUnavailableError) as exc_info:
         trace.draw(
-            vis_outpath=str(tmp_path / "graph"),
-            vis_save_only=True,
+            path=str(tmp_path / "graph"),
             order_siblings=False,
         )
     assert exc_info.value.fields["code"] == "graphviz_binary_unavailable"
@@ -299,7 +298,7 @@ def test_render_ir_honors_skip_fn_without_repeat_folds() -> None:
     def skip_relu(layer: Any) -> bool:
         """Skip relu layers."""
 
-        return getattr(layer, "layer_type", None) == "relu"
+        return record_type(layer, None) == "relu"
 
     render_ir = build_render_ir(
         trace,
@@ -333,11 +332,10 @@ def test_hidden_buffer_update_node_is_not_rendered(tmp_path: Path) -> None:
     trace = tl.trace(model, torch.randn(4, 8))
 
     dot = trace.draw(
-        vis_outpath=str(tmp_path / "batchnorm_hidden_buffers"),
-        vis_save_only=True,
-        vis_fileformat="dot",
+        path=str(tmp_path / "batchnorm_hidden_buffers"),
+        file_format="dot",
         order_siblings=False,
-    )
+    ).dot
 
     assert "add_1_2" not in dot
     assert "batchnorm_1_3" in dot
@@ -349,12 +347,11 @@ def test_lstmcell_rolled_count_uses_calls_not_outputs(tmp_path: Path) -> None:
     trace = tl.trace(_LSTMCellSeq(), torch.randn(4, 1, 6))
 
     dot = trace.draw(
-        vis_mode="rolled",
-        vis_outpath=str(tmp_path / "lstmcell_rolled"),
-        vis_save_only=True,
-        vis_fileformat="dot",
+        rolled=True,
+        path=str(tmp_path / "lstmcell_rolled"),
+        file_format="dot",
         order_siblings=False,
-    )
+    ).dot
 
     assert "lstmcell_1_4 (x4)" in dot
     assert "lstmcell_1_4 (x8)" not in dot
@@ -366,12 +363,11 @@ def test_dark_theme_themes_caption_and_parameter_nodes(tmp_path: Path) -> None:
     trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
 
     dot = trace.draw(
-        vis_theme="dark",
-        vis_outpath=str(tmp_path / "dark"),
-        vis_save_only=True,
-        vis_fileformat="dot",
+        theme="dark",
+        path=str(tmp_path / "dark"),
+        file_format="dot",
         order_siblings=False,
-    )
+    ).dot
 
     assert "FONT COLOR='#F9FAFB'" in dot
     assert 'fillcolor="#374151"' in dot
@@ -390,13 +386,12 @@ def test_rank_layout_embeds_code_panel(tmp_path: Path) -> None:
     trace = tl.trace(model, torch.randn(1, 4))
 
     dot = trace.draw(
-        vis_node_placement="rank",
+        layout="rank",
         code_panel=lambda _model: "def forward(self, x):\n    return self[1](self[0](x))",
-        vis_outpath=str(tmp_path / "rank_code_panel"),
-        vis_save_only=True,
-        vis_fileformat="svg",
+        path=str(tmp_path / "rank_code_panel"),
+        file_format="svg",
         order_siblings=False,
-    )
+    ).dot
 
     assert "cluster_torchlens_code_panel" in dot
     assert "Source code" in dot
@@ -439,10 +434,9 @@ def test_rank_layout_failure_preserves_dot_source(
     try:
         with pytest.raises(RuntimeError, match="forced neato failure"):
             trace.draw(
-                vis_node_placement="rank",
-                vis_outpath=str(outpath),
-                vis_save_only=True,
-                vis_fileformat="svg",
+                layout="rank",
+                path=str(outpath),
+                file_format="svg",
                 order_siblings=False,
             )
     finally:
@@ -488,8 +482,7 @@ def test_draw_bool_flag_kwarg_refuses_non_bool_typed(
 
     with pytest.raises(InvalidArgumentError, match="order_siblings") as excinfo:
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "bool_flag"),
-            vis_save_only=True,
+            path=str(tmp_path / "bool_flag"),
             order_siblings="no",  # type: ignore[arg-type]
         )
     assert excinfo.value.fields["code"] == "visualization_bool_option_invalid"
@@ -505,8 +498,7 @@ def test_draw_show_containers_vocabulary_refuses_typed(
 
     with pytest.raises(InvalidArgumentError, match="show_containers") as excinfo:
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "containers_vocab"),
-            vis_save_only=True,
+            path=str(tmp_path / "containers_vocab"),
             show_containers="everything",  # type: ignore[arg-type]
         )
     assert excinfo.value.fields["code"] == "visualization_show_containers_invalid"
@@ -523,9 +515,8 @@ def test_forward_render_timeout_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="timed out.*lowering dpi.*direct SVG.*node cap"):
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "forward"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            path=str(tmp_path / "forward"),
+            file_format="svg",
             order_siblings=False,
         )
 
@@ -540,10 +531,10 @@ def test_backward_render_timeout_raises_typed_error(
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _raise_timeout)
 
     with pytest.raises(GraphvizRenderError, match="timed out.*lowering dpi.*direct SVG.*node cap"):
-        backward_trace.draw_backward(
-            vis_outpath=str(tmp_path / "backward"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+        backward_trace.draw(
+            graph="backward",
+            path=str(tmp_path / "backward"),
+            file_format="svg",
         )
 
 
@@ -557,10 +548,10 @@ def test_combined_render_timeout_raises_typed_error(
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _raise_timeout)
 
     with pytest.raises(GraphvizRenderError, match="timed out.*lowering dpi.*direct SVG.*node cap"):
-        backward_trace.draw_combined(
-            vis_outpath=str(tmp_path / "combined"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+        backward_trace.draw(
+            graph="combined",
+            path=str(tmp_path / "combined"),
+            file_format="svg",
         )
 
 
@@ -575,9 +566,8 @@ def test_forward_zero_byte_render_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="zero-byte.*lowering dpi.*direct SVG.*node cap"):
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "forward_empty"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            path=str(tmp_path / "forward_empty"),
+            file_format="svg",
             order_siblings=False,
         )
 
@@ -592,10 +582,10 @@ def test_backward_zero_byte_render_raises_typed_error(
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _write_zero_byte_output)
 
     with pytest.raises(GraphvizRenderError, match="zero-byte.*lowering dpi.*direct SVG.*node cap"):
-        backward_trace.draw_backward(
-            vis_outpath=str(tmp_path / "backward_empty"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+        backward_trace.draw(
+            graph="backward",
+            path=str(tmp_path / "backward_empty"),
+            file_format="svg",
         )
 
 
@@ -609,10 +599,10 @@ def test_combined_zero_byte_render_raises_typed_error(
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _write_zero_byte_output)
 
     with pytest.raises(GraphvizRenderError, match="zero-byte.*lowering dpi.*direct SVG.*node cap"):
-        backward_trace.draw_combined(
-            vis_outpath=str(tmp_path / "combined_empty"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+        backward_trace.draw(
+            graph="combined",
+            path=str(tmp_path / "combined_empty"),
+            file_format="svg",
         )
 
 
@@ -627,9 +617,8 @@ def test_forward_called_process_error_raises_typed_error(
 
     with pytest.raises(GraphvizRenderError, match="Graphviz failed.*graphviz failed"):
         forward_trace.draw(
-            vis_outpath=str(tmp_path / "forward_failed"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            path=str(tmp_path / "forward_failed"),
+            file_format="svg",
             order_siblings=False,
         )
 
@@ -644,10 +633,10 @@ def test_backward_called_process_error_raises_typed_error(
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _raise_called_process_error)
 
     with pytest.raises(GraphvizRenderError, match="Graphviz failed.*graphviz failed"):
-        backward_trace.draw_backward(
-            vis_outpath=str(tmp_path / "backward_failed"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+        backward_trace.draw(
+            graph="backward",
+            path=str(tmp_path / "backward_failed"),
+            file_format="svg",
         )
 
 
@@ -661,10 +650,10 @@ def test_combined_called_process_error_raises_typed_error(
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _raise_called_process_error)
 
     with pytest.raises(GraphvizRenderError, match="Graphviz failed.*graphviz failed"):
-        backward_trace.draw_combined(
-            vis_outpath=str(tmp_path / "combined_failed"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+        backward_trace.draw(
+            graph="combined",
+            path=str(tmp_path / "combined_failed"),
+            file_format="svg",
         )
 
 
@@ -679,10 +668,10 @@ def test_combined_render_keeps_dot_source_on_graphviz_failure(
     dot_path = tmp_path / "combined_failed"
 
     with pytest.raises(GraphvizRenderError, match="DOT source was saved"):
-        backward_trace.draw_combined(
-            vis_outpath=str(tmp_path / "combined_failed"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+        backward_trace.draw(
+            graph="combined",
+            path=str(tmp_path / "combined_failed"),
+            file_format="svg",
         )
 
     assert dot_path.exists()
@@ -695,7 +684,7 @@ def test_grad_edges_use_preserved_edge_cluster_key(
 ) -> None:
     """Forward render passes grad edges the same LCA cluster as dataflow edges."""
 
-    import torchlens.visualization._render_edges as _render_edges
+    import torchlens._visualization._render_edges as _render_edges
 
     modules_by_edge: dict[tuple[str, str], str | int] = {}
     original_add_grad_edge = _render_edges._add_grad_edge
@@ -709,6 +698,7 @@ def test_grad_edges_use_preserved_edge_cluster_key(
         module_edge_dict: dict[str, object],
         graphviz_graph: object,
         overrides: object,
+        **endpoint_names: str,
     ) -> None:
         """Capture grad-edge cluster keys before delegating to the real implementation."""
 
@@ -727,6 +717,7 @@ def test_grad_edges_use_preserved_edge_cluster_key(
             module_edge_dict,  # type: ignore[arg-type]
             graphviz_graph,  # type: ignore[arg-type]
             overrides,  # type: ignore[arg-type]
+            **endpoint_names,
         )
 
     # Patch in the CALLER's module namespace: _render_edges holds its own binding
@@ -741,9 +732,8 @@ def test_grad_edges_use_preserved_edge_cluster_key(
     try:
         trace.log_backward(trace[trace.output_layers[0]].out)
         trace.draw(
-            vis_outpath=str(tmp_path / "nested_grad"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            path=str(tmp_path / "nested_grad"),
+            file_format="svg",
             order_siblings=False,
         )
     finally:
@@ -778,11 +768,10 @@ def test_module_cluster_title_escapes_html_special_moduledict_key(tmp_path: Path
         # ModuleDict key previously broke the HTML-like label parser
         # mid-render of the "heads.score & rank" module cluster.
         dot = trace.draw(
-            vis_outpath=str(outpath),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            path=str(outpath),
+            file_format="svg",
             order_siblings=False,
-        )
+        ).dot
     finally:
         trace.cleanup()
 
@@ -809,29 +798,28 @@ def test_rank_engine_cluster_subgraph_id_quotes_moduledict_special_key(
     containing ``<``, ``>``, and ``&`` together produces an unquoted
     subgraph name like ``subgraph cluster_heads_a<b>&c_pass1 {``, which
     ``neato`` rejects with a raw ``syntax error near '>'`` -- a real crash on
-    the rank engine, reachable by default whenever ``vis_node_placement=
+    the rank engine, reachable by default whenever ``layout=
     "auto"`` promotes to rank for a large enough graph.
 
-    Exercises the *explicit* rank engine (``vis_node_placement="rank"``),
+    Exercises the *explicit* rank engine (``layout="rank"``),
     which the shipped ``test_module_cluster_title_escapes_html_special_
     moduledict_key`` test above never does (it only calls ``draw()`` with
     default -- i.e. dot-engine -- settings), plus the default dot engine for
     parity.
     """
 
-    for engine_kwargs in ({}, {"vis_node_placement": "rank"}):
+    for engine_kwargs in ({}, {"layout": "rank"}):
         trace = tl.trace(_ModuleDictAngleAmpersandKeyModel(), torch.randn(2, 3))
         outpath = tmp_path / f"moduledict_angle_amp{'_rank' if engine_kwargs else '_dot'}"
         try:
             # Must not raise: neither a GraphvizRenderError (dot engine) nor a
             # RuntimeError from a failed `neato` subprocess (rank engine).
             dot = trace.draw(
-                vis_outpath=str(outpath),
-                vis_save_only=True,
-                vis_fileformat="svg",
+                path=str(outpath),
+                file_format="svg",
                 order_siblings=False,
                 **engine_kwargs,
-            )
+            ).dot
         finally:
             trace.cleanup()
 
@@ -853,7 +841,7 @@ def test_container_edge_label_escapes_html_special_dict_key(tmp_path: Path) -> N
     previously interpolated raw container-path text into a Graphviz
     HTML-like edge label. A ``DictKey``/``HFKey`` output-dict key containing
     ``&``, ``<``, or ``>`` is a realistic shape -- container path components
-    render as ``str(component.key)`` (``_container_component_role`` in
+    render as ``str(component._key)`` (``_container_component_role`` in
     ``_render_leaf.py``) -- and previously broke Graphviz's HTML-like label
     parser, raising ``GraphvizRenderError`` on ``draw()``. Now the text is
     escaped before interpolation. Renders to an actual SVG file (not just
@@ -872,11 +860,10 @@ def test_container_edge_label_escapes_html_special_dict_key(tmp_path: Path) -> N
         # previously broke the HTML-like label parser mid-render.
         dot = trace.draw(
             show_containers="nodes",
-            vis_outpath=str(outpath),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            path=str(outpath),
+            file_format="svg",
             order_siblings=False,
-        )
+        ).dot
     finally:
         trace.cleanup()
 
@@ -896,9 +883,8 @@ def test_large_composed_pdf_contains_visible_graph_region(tmp_path: Path) -> Non
     pdf_path = tmp_path / "large_composed.pdf"
     try:
         trace.draw(
-            vis_outpath=str(pdf_path.with_suffix("")),
-            vis_save_only=True,
-            vis_fileformat="pdf",
+            path=str(pdf_path.with_suffix("")),
+            file_format="pdf",
             code_panel=lambda _model: "def forward(self, x):\n    return x",
             order_siblings=False,
         )
@@ -950,7 +936,7 @@ def test_rank_layout_escapes_html_special_chars_in_arg_edge_use_labels(
     """Rank-engine arg-position labels must escape HTML specials.
 
     ``_add_arg_label`` (the rank-layout engine's argument-position labeler,
-    ``torchlens/visualization/_rank_layout_internal/layout.py``) builds its
+    ``torchlens/_visualization/_rank_layout_internal/layout.py``) builds its
     label text from ``render_edge.argument_label``, which for ``Op`` children
     is derived from ``edge_uses[].arg_path`` (see
     ``_edge_use_argument_label``/``_arg_path_label_value`` in
@@ -982,12 +968,11 @@ def test_rank_layout_escapes_html_special_chars_in_arg_edge_use_labels(
         sub_op._edge_uses = mutated_edge_uses  # type: ignore[attr-defined]
 
         dot = trace.draw(
-            vis_node_placement="rank",
-            vis_outpath=str(tmp_path / "rank_html_escape"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            layout="rank",
+            path=str(tmp_path / "rank_html_escape"),
+            file_format="svg",
             order_siblings=False,
-        )
+        ).dot
     finally:
         trace.cleanup()
 
@@ -1012,12 +997,11 @@ def test_rank_layout_model_class_name_html_specials_render_cleanly(
     trace = tl.trace(model_cls(), torch.randn(3))
     try:
         dot = trace.draw(
-            vis_node_placement="rank",
-            vis_outpath=str(tmp_path / "rank_class_name_escape"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            layout="rank",
+            path=str(tmp_path / "rank_class_name_escape"),
+            file_format="svg",
             order_siblings=False,
-        )
+        ).dot
     finally:
         trace.cleanup()
 
@@ -1030,7 +1014,7 @@ def _attach_probe_image(trace: Trace) -> Path:
 
     from PIL import Image
 
-    from torchlens.utils.display import ensure_trace_visualizer_dir
+    from torchlens._utils.display import ensure_trace_visualizer_dir
 
     root = ensure_trace_visualizer_dir(trace)
     image_path = root / "probe.png"
@@ -1061,9 +1045,8 @@ def test_saved_dot_source_free_of_per_run_temp_imagepath(tmp_path: Path) -> None
         outpath = tmp_path / "temp_free"
         trace.draw(
             node_spec_fn=spec_fn,
-            vis_fileformat="dot",
-            vis_save_only=True,
-            vis_outpath=str(outpath),
+            file_format="dot",
+            path=str(outpath),
         )
         source = (tmp_path / "temp_free.dot").read_text()
     finally:
@@ -1097,9 +1080,8 @@ def test_node_image_renders_without_in_source_imagepath(tmp_path: Path) -> None:
         outpath = tmp_path / "image_inlined"
         trace.draw(
             node_spec_fn=spec_fn,
-            vis_fileformat="svg",
-            vis_save_only=True,
-            vis_outpath=str(outpath),
+            file_format="svg",
+            path=str(outpath),
         )
         svg = (tmp_path / "image_inlined.svg").read_text()
     finally:
@@ -1125,7 +1107,7 @@ def test_final_viewer_child_is_reaped_without_another_launch(
     import os
     import time
 
-    from torchlens.visualization import _render_utils
+    from torchlens._visualization import _render_utils
 
     stub_dir = tmp_path / "bin"
     stub_dir.mkdir()
@@ -1161,7 +1143,7 @@ def test_tooltip_reprs_mask_memory_addresses() -> None:
 
     import re
 
-    from torchlens.visualization import _render_nodes
+    from torchlens._visualization import _render_nodes
 
     address = re.compile(r"0x[0-9a-fA-F]{4,}")
 
@@ -1229,10 +1211,9 @@ def test_collapsed_module_boundary_edge_discloses_multiplicity(tmp_path: Path) -
     trace = tl.trace(_TwoOutOuter(), torch.randn(2, 4))
     outpath = tmp_path / "twoout"
     trace.draw(
-        vis_call_depth=1,
-        vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(outpath),
+        depth=1,
+        file_format="dot",
+        path=str(outpath),
     )
     source = (tmp_path / "twoout.dot").read_text()
     boundary_edge_lines = [
@@ -1252,14 +1233,14 @@ def test_downstream_intervening_inference_builds_reverse_edges_once() -> None:
 
     ``_infer_intervening_module_downstream`` built the O(E) reverse autograd
     edge map to seed the BFS, then ``_infer_intervening_module_bfs`` rebuilt
-    the identical map -- two full ``trace.grad_fns`` sweeps per intervening
+    the identical map -- two full ``trace.autograd.grad_fns`` sweeps per intervening
     grad_fn. The prebuilt map is now passed through, so the grad_fn table is
     swept exactly once.
     """
 
     from types import SimpleNamespace
 
-    from torchlens.visualization._render_leaf import _infer_intervening_module_downstream
+    from torchlens._visualization._render_leaf import _infer_intervening_module_downstream
 
     class _CountingGradFns(list):
         """Grad-fn table that counts full sweeps."""
@@ -1274,8 +1255,8 @@ def test_downstream_intervening_inference_builds_reverse_edges_once() -> None:
         SimpleNamespace(grad_fn_object_id=i, next_grad_fn_ids=[i + 1], op=None) for i in range(5)
     )
     trace = SimpleNamespace(
-        grad_fns=grad_fns,
-        grad_fn_logs={fn.grad_fn_object_id: fn for fn in grad_fns},
+        autograd=SimpleNamespace(grad_fns=grad_fns),
+        _grad_fn_logs={fn.grad_fn_object_id: fn for fn in grad_fns},
     )
     handle = SimpleNamespace(grad_fn_object_id=3, next_grad_fn_ids=[4], op=None)
 
@@ -1284,7 +1265,7 @@ def test_downstream_intervening_inference_builds_reverse_edges_once() -> None:
 
     assert result is None  # no module-anchored grad_fn in the stub chain
     assert _CountingGradFns.iter_calls == 1, (
-        f"downstream inference swept trace.grad_fns {_CountingGradFns.iter_calls} "
+        f"downstream inference swept trace.autograd.grad_fns {_CountingGradFns.iter_calls} "
         "times -- the duplicate reverse-edge build is back"
     )
 
@@ -1301,7 +1282,7 @@ def test_code_panel_tooltip_shows_basename_not_absolute_path() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.visualization.code_panel import _source_text_to_html_rows
+    from torchlens._visualization.code_panel import _source_text_to_html_rows
 
     source_text = SimpleNamespace(
         file_path="/home/canary_user_zq81/models/canary_src.py",
@@ -1315,3 +1296,40 @@ def test_code_panel_tooltip_shows_basename_not_absolute_path() -> None:
     assert "canary_src.py" in tooltip
     assert "canary_user_zq81" not in tooltip
     assert "/home/" not in tooltip
+
+
+def test_rank_layout_without_neato_plugin_names_the_plugin_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Graphviz without its neato plugin raises the typed install error.
+
+    Graphviz 14 packaging ships neato's layout engine as a separate package,
+    so the binary runs but exits 1 naming the missing engine; the error must
+    carry that remedy instead of a bare neato failure.
+    """
+
+    def neato_without_plugin(**kwargs: Any) -> subprocess.CompletedProcess:
+        """Return what Graphviz 14's neato prints without its layout plugin."""
+
+        return subprocess.CompletedProcess(
+            args=["neato"],
+            returncode=1,
+            stdout="",
+            stderr='There is no layout engine support for "neato"\nUse one of: dot\n',
+        )
+
+    monkeypatch.setattr(rank_layout, "_run_neato", neato_without_plugin)
+    with pytest.raises(GraphvizUnavailableError) as exc_info:
+        rank_layout._run_neato_with_fallbacks(
+            rendered_path=str(tmp_path / "graph.svg"),
+            source_path=str(tmp_path / "graph"),
+            vis_fileformat="svg",
+            spline_mode="true",
+            render_timeout=30,
+        )
+    assert isinstance(exc_info.value, RuntimeError)
+    assert exc_info.value.fields["code"] == "graphviz_binary_unavailable"
+    assert "libgvplugin-neato-layout8" in exc_info.value.fields["remedy"]
+    assert "layout='dot'" in exc_info.value.fields["remedy"]
+    assert 'no layout engine support for "neato"' in str(exc_info.value)

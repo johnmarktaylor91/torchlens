@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_coupling import (
+from torchlens._capture._episode_coupling import (
     CouplingFire,
     CouplingSession,
     attest_coupling,
@@ -29,7 +29,7 @@ from torchlens.capture._episode_coupling import (
     settlement_fire_counts,
 )
 from torchlens.errors.episode import EpisodeCaptureError
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class Step(nn.Module):
@@ -57,8 +57,8 @@ def _episode_trace(model: Root, x: torch.Tensor, **kwargs) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        episode=EpisodeSpec(
-            stepped_module=model.step, n_steps=model.n_steps, step_output_kind="digest"
+        episode=EpisodeOptions(
+            stepped_module=model.step, num_steps=model.n_steps, step_output_kind="digest"
         ),
         **kwargs,
     )
@@ -70,7 +70,7 @@ def _fire(step, site="relu_1_2", replaced=True):
         site=site,
         helper="zero_ablate",
         timing="post",
-        direction="forward",
+        signal="forward",
         replaced=replaced,
     )
 
@@ -264,7 +264,7 @@ def test_attestation_survives_save_load(tmp_path):
     model = Root()
     log = _episode_trace(model, torch.randn(2, 4))
     target = tmp_path / "episode.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     attestation = loaded.episode_coupling
     assert attestation is not None and attestation.bound is True
@@ -310,12 +310,11 @@ def test_do_quarantines_inherited_episode_evidence():
     log = _episode_trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(replayable=True, save_mode="reference"),
     )
     fork = log.fork()
     assert fork.annotations["episode"].get("rows") is not None  # inherited
-    fork.do(tl.units("relu_1_2:2", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("relu_1_2:2", [(0, 0)])], tl.zero_ablate())
     quarantined = fork.annotations["episode"]
     assert quarantined.get("quarantined") is True
     assert quarantined.get("code") == "episode_evidence_dropped_perturbed_replay"

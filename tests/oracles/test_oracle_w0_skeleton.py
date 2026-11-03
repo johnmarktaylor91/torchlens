@@ -36,7 +36,7 @@ def test_every_template_declares_a_positive_control() -> None:
 
 
 @pytest.mark.smoke_cells(
-    "test_positive_control_passes_on_the_live_tree[torchlens.aggregate]",
+    "test_positive_control_passes_on_the_live_tree[torchlens.stats.aggregate]",
     "test_positive_control_passes_on_the_live_tree[torchlens.extract]",
 )
 @pytest.mark.parametrize("template", SEED_TEMPLATES, ids=lambda t: t.door)

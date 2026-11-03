@@ -22,6 +22,7 @@ import pytest
 import torch
 
 from tests.oracles._invocation_templates import SEED_TEMPLATES, InvocationTemplate
+from torchlens.errors import TraceCaptureError
 
 
 def _state_digest(model: torch.nn.Module) -> str:
@@ -111,8 +112,9 @@ def test_exception_stage_injection_restores_state_and_reads_stay_sane() -> None:
     hooks_before = _hook_count(model)
 
     model.fail = True
-    with pytest.raises(RuntimeError, match="planted mid-forward"):
+    with pytest.raises(TraceCaptureError, match="planted mid-forward") as _tce_info:
         tl.trace(model, example)
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert _state_digest(model) == state_before, (
         "a FAILED capture left the model's parameters/buffers mutated"
@@ -163,7 +165,7 @@ EXTRA_TEMPLATE_DOORS: tuple[tuple[str, Any], ...] = (
     (
         "torchlens.sweep",
         lambda tl, model, x: tl.sweep(
-            model, x, at=tl.func("relu"), values=[0.0], include_baseline=True
+            model, x, site=tl.func("relu"), values=[0.0], include_baseline=True
         ),
     ),
     (

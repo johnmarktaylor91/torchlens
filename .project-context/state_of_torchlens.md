@@ -15,9 +15,9 @@ visualization helpers, optional bridges, and stub appliance namespaces.
 validation, and core data-class names for the current 2.x surface.
 
 ### Capture and Extraction
-- `trace` - backend-resolved capture returning `Trace`; `torchlens.user_funcs.trace`.
-- `fastlog` - torch-only sparse predicate-recording namespace; `torchlens.fastlog`.
-- `record` - torch-only sparse predicate recorder returning `Recording`; `torchlens.fastlog._record_one_shot.record`.
+- `trace` - backend-resolved capture returning `Trace`; `torchlens._user_funcs.trace`.
+- `fastlog` - torch-only sparse predicate-recording namespace; `torchlens.recording`.
+- `record` - torch-only sparse predicate recorder returning `Recording`; `torchlens.recording._record_one_shot.record`.
 - `pluck` - capture one layer activation by label/query; `torchlens.__init__.pluck` (the removed `peek` raises a teaching redirect).
 - `extract` - extract one or more layer activations; `torchlens.__init__.extract`.
 - `extract_dataset` - batched extraction helper over an iterable; `torchlens.__init__.extract_dataset` (the removed `batched_extract` raises a teaching redirect).
@@ -30,9 +30,9 @@ validation, and core data-class names for the current 2.x surface.
 - `validate` - consolidated validator with `scope=`; `torchlens.validation.consolidated.validate`.
 
 ### Data Classes
-- `Trace` - top-level capture container; `torchlens.data_classes.trace.Trace`.
-- `Layer` - aggregate layer across one or more Op passes; `torchlens.data_classes.layer.Layer`.
-- `Op` - one per-pass tensor operation record; `torchlens.data_classes.op.Op`.
+- `Trace` - top-level capture container; `torchlens._data_classes.trace.Trace`.
+- `Layer` - aggregate layer across one or more Op passes; `torchlens._data_classes.layer.Layer`.
+- `Op` - one per-pass tensor operation record; `torchlens._data_classes.op.Op`.
 
 ### Intervention Containers and Execution
 - `Bundle` - named collection of logs/specs with multi-trace helpers; `torchlens.intervention.bundle.Bundle`.
@@ -79,48 +79,48 @@ validation, and core data-class names for the current 2.x surface.
 |------|------------------|----------------|
 | `torchlens/__init__.py` | Top-level exports, lazy facade, teaching redirects for removed names, `pluck`, `extract`, `extract_dataset` | Public API shape |
 | `torchlens/_state.py` | Logging toggle, active log, wrapper maps, prepared model registry | Global state and decoration invariants |
-| `torchlens/constants.py` | FIELD_ORDER tuples, torch function discovery | Field additions and wrapper coverage |
-| `torchlens/user_funcs.py` | Capture, summary, graph display, validation entry points | Main user workflows |
+| `torchlens/_constants.py` | FIELD_ORDER tuples, torch function discovery | Field additions and wrapper coverage |
+| `torchlens/_user_funcs.py` | Capture, summary, graph display, validation entry points | Main user workflows |
 | `torchlens/options.py` | Capture/save/vis/replay/intervention/streaming options | Grouped option behavior |
 | `torchlens/observers.py` | `tap`, `span`, active span storage | User instrumentation during capture |
 | `torchlens/_io/` | Portable bundle internals, manifests, lazy refs, streaming writer | `.tlspec` and save/load implementation |
 | `torchlens/io/` | Public I/O/admin helpers | `inspect_tlspec`, `detect_tlspec_format`, moved admin APIs |
-| `torchlens/capture/` | Forward/backward runtime logging | Wrapper handoff and raw `Op` construction |
+| `torchlens/_capture/` | Forward/backward runtime logging | Wrapper handoff and raw `Op` construction |
 | `torchlens/backends/torch/` | Lazy torch wrapping and model preparation | Torch namespace lifecycle, module wrappers |
-| `torchlens/postprocess/` | 26-step graph cleanup/finalization | Labels, loops, conditionals, modules, streaming finalization |
-| `torchlens/data_classes/` | `Trace`, `Layer`, `Op`, module/param/buffer/grad records | User-visible capture data structures |
+| `torchlens/_postprocess/` | 26-step graph cleanup/finalization | Labels, loops, conditionals, modules, streaming finalization |
+| `torchlens/_data_classes/` | `Trace`, `Layer`, `Op`, module/param/buffer/grad records | User-visible capture data structures |
 | `torchlens/validation/` | Forward/backward replay, invariants, `.tlspec` schema | Correctness checks |
-| `torchlens/visualization/` | Graphviz dot and the pure-Python rank layout, NodeSpec, themes and lenses, overlays, bundle diff, fastlog preview | Rendering and visual customization |
+| `torchlens/_visualization/` | Graphviz dot and the pure-Python rank layout, NodeSpec, themes and lenses, overlays, bundle diff, fastlog preview | Rendering and visual customization |
 | `torchlens/intervention/` | Bundle, sites, selectors, hooks, helpers, replay/rerun/save | Intervention API |
 | `torchlens/intervention/_topology/`, `torchlens/bundle/` | Bundle supergraph, topology diff, node views, metrics | Cross-log comparisons |
-| `torchlens/fastlog/` | Sparse predicate recording and storage | Low-overhead selected activation capture |
+| `torchlens/recording/` | Sparse predicate recording and storage | Low-overhead selected activation capture |
 | `torchlens/bridge/` | Optional external-tool adapters | Captum, HF, SHAP, SAE Lens, profiler, LIT, etc. |
 | `torchlens/compat/` | Migration helpers and compatibility report | Interop with torchextractor, FX, HF/timm, torchshow/lovely |
 | `torchlens/export/` | Static SVG/HTML/tracing exports | Artifact export without full viewer extras |
 | `torchlens/report/` | `explain(log)` and capture-time scalar logging | Human-readable log summaries |
 | `torchlens/stats/` | Streaming stats and `aggregate()` | Dataset-scale activation summaries |
 | `torchlens/callbacks/` | Lightning callback integration | Training-loop adapters |
-| `torchlens/partial/` | Partial capture wrapper for failed forwards | Debugging failed captures |
+| `torchlens/_partial/` | Partial capture wrapper for failed forwards | Debugging failed captures |
 | `torchlens/experimental/` | Unstable helpers, Dagua opt-in, node styles | Experimental APIs |
 | `torchlens/viz/` | Convenience visual namespace | Bundle diff and heatmap helpers |
-| `torchlens/accessors/` | Moved accessor aliases | Non-top-level public accessor imports |
+| `torchlens/appliances/` | Moved accessor aliases | Non-top-level public accessor imports |
 | `torchlens/types.py` | Moved type aliases | Public types not in top-level `__all__` |
 | `torchlens/agent/` | Read-only agent inspection surface: registry, envelope, overview, query, stats, compare, torch-free CLI | Agent and MCP tooling |
 | `torchlens/attribution/onebackward/` | One-backward `(node, slot)` attribution reads | Gradient reads over existing op fields |
 | `torchlens/brainpipe.py` | Memory-planned whole-model extraction (plan, table, run, npz) | Large extraction runs under a byte budget |
-| `torchlens/checks/` | Training sanity checks (`audit_params`, gradient-flow audit) | Parameter and gradient health |
-| `torchlens/conformance/` | Capture conformance packs C0-C2 | Third-party conformance testing |
+| `torchlens/debug/_checks/` | Training sanity checks (exposed as `tl.debug.ChecksSession` and friends) (`audit_params`, gradient-flow audit) | Parameter and gradient health |
+| `tests/conformance/` | Capture conformance packs C0-C2 (test-side harness) | Third-party conformance testing |
 | `torchlens/differential.py` | The guarded cross-capture delta projection | Comparing two captures |
-| `torchlens/ecosystem/` | Compat window, `tl.migrate`, provider discovery | Version support and migration |
+| `torchlens/_ecosystem/` | Provider discovery | Entry-point providers |
 | `torchlens/experiment/` | Multi-run experiments: lineage, sweeps, site sweeps, ledger | Experiment provenance |
 | `torchlens/features.py`, `torchlens/inventory.py` | Feature-matrix shaping; site inventory | "What can I extract?" |
 | `torchlens/mechinterp/` | Mech-interp kit validated against TransformerLens oracles | Residual decomposition, DLA, head patching |
-| `torchlens/observability/`, `torchlens/observe/` | Observability substrates (record schema, history, profiles) and the user-facing observe verbs | Training-time and memory diagnostics |
-| `torchlens/preprocessing/`, `torchlens/quickstart/` | Input provenance and the quickstart input ladder | Input handling |
-| `torchlens/snoop/` | Live per-op narration (`echo=`) and post-hoc narration | Debugging a forward pass |
+| `torchlens/_observability/`, `torchlens/_observe/` | Observability substrates (record schema, history, profiles) and the user-facing observe verbs | Training-time and memory diagnostics |
+| `torchlens/preprocessing/`, `torchlens/_quickstart/` | Input provenance and the quickstart input ladder | Input handling |
+| `torchlens/_snoop/` | Live per-op narration (`echo=`) and post-hoc narration | Debugging a forward pass |
 | `torchlens/trackers/` | Attach-once training watch engine and sinks | TensorBoard/wandb/JSONL tracking |
 | `torchlens/transforms/` | Built-in activation transforms behind one declared contract | Transform behavior |
-| `torchlens/tviz/` | Transformer pictures (heatmaps, attention, token strips) | Transformer visuals |
+| `torchlens/transformer/` | Transformer pictures (heatmaps, attention, token strips) | Transformer visuals |
 | `torchlens/_registry/`, `torchlens/_vocab/` | Private registry kernel and relocated vocabulary closures | Internal architecture |
 | `torchlens/_extraction/`, `torchlens/_data_substrate/` | Extraction v2 runtime and data substrates | `extract_dataset` internals |
 
@@ -261,7 +261,7 @@ objects yet.
 
 | Appliance | Extra | Docstring intent | Current state |
 |-----------|-------|------------------|---------------|
-| `torchlens.notebook` | `notebook` | IPython/Jupyter notebook integration | Import gate for `IPython` and `jupyter_client`, no public objects |
+| `torchlens.report._notebook` | `notebook` | IPython/Jupyter notebook integration | Import gate for `IPython` and `jupyter_client`, no public objects |
 | `torchlens.neuro` | `neuro` | RDM, CKA, Brain-Score, representation helpers | Import gate for `rsatoolbox` and `brainscore_core`, no public objects |
 
 The earlier empty `viewer`, `paper`, and `llm` stub packages were removed (`chore: remove empty
@@ -297,25 +297,25 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 |----------|------------|
 | Where is the logging toggle? | `torchlens/_state.py` |
 | Where does wrapping happen? | `torchlens/backends/torch/wrappers.py`, `torchlens/backends/torch/model_prep.py` |
-| Where is the main forward capture? | `torchlens/capture/trace.py` |
+| Where is the main forward capture? | `torchlens/_capture/trace.py` |
 | Where are raw operation records built? | `torchlens/backends/torch/ops.py` and its `_ops_*.py` helpers |
 | Where are inputs/buffers logged? | `torchlens/backends/torch/sources.py` |
 | Where is backward capture? | `torchlens/backends/torch/backward.py` |
-| Where are labels assigned? | `torchlens/postprocess/labeling.py` |
-| Where is loop detection? | `torchlens/postprocess/loop_detection.py` |
-| Where is conditional branch attribution? | `torchlens/postprocess/control_flow.py`, `torchlens/postprocess/ast_branches.py` |
-| Where are Layers and Modules built? | `torchlens/postprocess/finalization.py` |
-| Where are field orders defined? | `torchlens/constants.py` |
-| Where is `Trace.__getitem__` behavior? | `torchlens/data_classes/interface.py` and `trace.py` |
+| Where are labels assigned? | `torchlens/_postprocess/labeling.py` |
+| Where is loop detection? | `torchlens/_postprocess/loop_detection.py` |
+| Where is conditional branch attribution? | `torchlens/_postprocess/control_flow.py`, `torchlens/_postprocess/ast_branches.py` |
+| Where are Layers and Modules built? | `torchlens/_postprocess/finalization.py` |
+| Where are field orders defined? | `torchlens/_constants.py` |
+| Where is `Trace.__getitem__` behavior? | `torchlens/_data_classes/interface.py` and `trace.py` |
 | Where is portable save/load? | `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py` |
 | Where is manifest schema validation? | `torchlens/validation/__init__.py`, `torchlens/schemas/tlspec_manifest_v1.json`, `torchlens/schemas/tlspec_manifest_v2.json` |
-| Where is Graphviz rendering? | `torchlens/visualization/_render_dot.py` (orchestration) + `_render_nodes.py`/`_render_edges.py`/`_render_leaf.py` (emission) |
-| Where is the large-graph rank layout? | `torchlens/visualization/_rank_layout_internal/layout.py` |
-| Where is NodeSpec customization? | `torchlens/visualization/node_spec.py`, `torchlens/visualization/modes.py` |
-| Where is bundle diff rendering? | `torchlens/visualization/bundle_diff.py` |
-| Where is fastlog storage decided? | `torchlens/fastlog/_storage_resolver.py` |
+| Where is Graphviz rendering? | `torchlens/_visualization/_render_dot.py` (orchestration) + `_render_nodes.py`/`_render_edges.py`/`_render_leaf.py` (emission) |
+| Where is the large-graph rank layout? | `torchlens/_visualization/_rank_layout_internal/layout.py` |
+| Where is NodeSpec customization? | `torchlens/_visualization/node_spec.py`, `torchlens/_visualization/modes.py` |
+| Where is bundle diff rendering? | `torchlens/_visualization/bundle_diff.py` |
+| Where is fastlog storage decided? | `torchlens/recording/_storage_resolver.py` |
 | Where are bridge integrations? | `torchlens/bridge/` |
-| Where is compat reporting? | `torchlens/compat/_report.py` |
+| Where is the environment and model report (`tl.report.doctor`)? | `torchlens/report/_doctor.py` (entry point), `torchlens/report/_environment.py` (environment checks), `torchlens/compat/_report.py` (model checks) |
 | Where are observer taps/spans? | `torchlens/observers.py` |
 | Where are release guards? | `scripts/no_major_parser.py`, `scripts/check_no_breaking_markers.py`, `pyproject.toml` |
 

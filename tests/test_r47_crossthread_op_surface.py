@@ -36,20 +36,25 @@ from typing import Any
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+import torchlens.backends.torch._completeness_cross_thread
+import torchlens.backends.torch._completeness_patches
+import torchlens.backends.torch.wrappers as wrappers_module
 from torchlens import _state
-from torchlens.backends.torch import completeness_witness as cw
-from torchlens.backends.torch.completeness_witness import (
+from torchlens._runnable import PathFaithfulness
+from torchlens.backends.torch._completeness_cross_thread import (
     _torch_ops_call_classes,
-    host_escape_has_cross_thread_captured_tensor,
     host_escape_observer_install_failed,
 )
+from torchlens.backends.torch._completeness_escape_state import (
+    host_escape_has_cross_thread_captured_tensor,
+)
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 
 def _gate_pos() -> torch.Tensor:
@@ -174,7 +179,7 @@ def test_crossthread_captured_operand_consumption_ceilings(
         torch.manual_seed(0)
         data = torch.randn(1, 4)
         model = _CrossThreadModel(_CONSUMERS[surface], runner)
-        trace = tl.trace(model, (_gate_pos(), data), capture=CaptureOptions(random_seed=1, **_CAP))
+        trace = tl.trace(model, (_gate_pos(), data), capture=CaptureOptions(seed=1, **_CAP))
         assert host_escape_has_cross_thread_captured_tensor(trace), (
             f"{surface}/{thread_mode}: captured-operand consumption did not ceiling"
         )
@@ -221,7 +226,7 @@ def test_benign_own_tensor_worker_stays_verified(
     try:
         model = _BenignOwnTensorModel(runner, use_aten=use_aten)
         x = torch.randn(2, 4)
-        trace = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+        trace = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
         assert not host_escape_has_cross_thread_captured_tensor(trace)
         path = tmp_path / f"benign_{thread_mode}_{use_aten}.tlspec"
         shutil.rmtree(path, ignore_errors=True)
@@ -248,7 +253,7 @@ def test_idle_worker_stays_verified(tmp_path: Path) -> None:
                 return self.lin(x).relu()
 
         x = torch.randn(2, 4)
-        trace = tl.trace(_IdleModel(), x, capture=CaptureOptions(random_seed=1, **_CAP))
+        trace = tl.trace(_IdleModel(), x, capture=CaptureOptions(seed=1, **_CAP))
         assert not host_escape_has_cross_thread_captured_tensor(trace)
         path = tmp_path / "idle.tlspec"
         shutil.rmtree(path, ignore_errors=True)
@@ -292,10 +297,12 @@ def test_patches_installed_while_armed_and_restored_after() -> None:
             return self.lin(x).relu()
 
     model = _ProbeModel()
-    tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(random_seed=1, **_CAP))
+    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(seed=1, **_CAP))
 
-    assert model.during["count"] == len(originals)
-    assert model.during["all_patched"] is True, "not every torch._ops call class was patched"
+    assert stashed(log, "during")["count"] == len(originals)
+    assert stashed(log, "during")["all_patched"] is True, (
+        "not every torch._ops call class was patched"
+    )
     # restored: original identity, no lingering wrapper marker
     for cls, original in originals.items():
         current = cls.__dict__.get("__call__")
@@ -308,13 +315,15 @@ def test_disarmed_torch_ops_call_is_pure_passthrough(monkeypatch: pytest.MonkeyP
     never invokes the operand observer."""
 
     calls = {"n": 0}
-    real = cw.observe_nonowner_operands
+    real = torchlens.backends.torch._completeness_cross_thread.observe_nonowner_operands
 
     def _spy(args: Any, kwargs: Any) -> None:
         calls["n"] += 1
         real(args, kwargs)
 
-    monkeypatch.setattr(cw, "observe_nonowner_operands", _spy)
+    # The home module and every module that binds the name by import.
+    for module in (torchlens.backends.torch._completeness_cross_thread, wrappers_module):
+        monkeypatch.setattr(module, "observe_nonowner_operands", _spy)
     assert _state._nonowner_belt_armed is False
     out = torch.ops.aten.mul.Tensor(torch.ones(2), torch.tensor(3.0))
     assert out.tolist() == [3.0, 3.0]
@@ -356,7 +365,12 @@ def test_install_failure_marks_observer_incomplete(monkeypatch: pytest.MonkeyPat
     """An empty scan (install failure surrogate) fails CLOSED: the observer-install-failed flag is
     set so the descriptor is INCOMPLETE, never a silent 'no non-owner op touch'."""
 
-    monkeypatch.setattr(cw, "_torch_ops_call_classes", lambda: ())
+    # The home module and every module that binds the name by import.
+    for module in (
+        torchlens.backends.torch._completeness_cross_thread,
+        torchlens.backends.torch._completeness_patches,
+    ):
+        monkeypatch.setattr(module, "_torch_ops_call_classes", lambda: ())
 
     class _M(nn.Module):
         def __init__(self) -> None:
@@ -366,7 +380,7 @@ def test_install_failure_marks_observer_incomplete(monkeypatch: pytest.MonkeyPat
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return self.lin(x).relu()
 
-    trace = tl.trace(_M(), torch.randn(2, 4), capture=CaptureOptions(random_seed=1, **_CAP))
+    trace = tl.trace(_M(), torch.randn(2, 4), capture=CaptureOptions(seed=1, **_CAP))
     assert host_escape_observer_install_failed(trace)
 
 
@@ -402,9 +416,7 @@ def test_variable_functions_private_spelling_residual(tmp_path: Path) -> None:
 
         torch.manual_seed(0)
         data = torch.randn(1, 4)
-        trace = tl.trace(
-            _VFModel(), (_gate_pos(), data), capture=CaptureOptions(random_seed=1, **_CAP)
-        )
+        trace = tl.trace(_VFModel(), (_gate_pos(), data), capture=CaptureOptions(seed=1, **_CAP))
         # If this ever ceilings, the residual is CLOSED and the xfail flips to XPASS.
         assert host_escape_has_cross_thread_captured_tensor(trace)
     finally:

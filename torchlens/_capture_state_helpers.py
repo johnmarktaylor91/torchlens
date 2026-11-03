@@ -23,26 +23,32 @@ import torch
 from torch import nn
 
 from . import _state
+from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
+from ._data_classes.trace import Trace
 from ._plain_attr_fidelity import (
+    _PLAIN_ATTR_IGNORED_NAMES,
+    _module_plain_attr_names,
     assert_copy_kept_instance_attrs,
     is_registered_tensor_alias,
     restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
-from .data_classes.trace import Trace
-from .utils._package_frames import is_torchlens_code
-from .utils._torch_compat import (
+from ._utils._package_frames import is_torchlens_code
+from ._utils._torch_compat import (
     force_eager_stance_scope,
     get_dynamo_optimized_module_type,
     get_fsdp_wrapper_type,
     is_dynamo_compiled_callable,
 )
+from ._utils.input_leaves import move_input_tensor
+from ._utils.tensor_leaves import iter_tensors
+from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
+from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 
 # Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
 # under the R43 file-size ratchet. Re-exported here because the historical import
 # surface for the capture-cache key helpers is torchlens._capture_state_helpers.
 from ._capture_fingerprint import (  # noqa: F401  isort: skip
-    _iter_tensor_inputs,
     _ATTRIBUTE_FRAGMENT_DEPTH_CEILING,
     _ATTRIBUTE_FRAGMENT_ITEM_CEILING,
     _attribute_state_fragment,
@@ -89,7 +95,6 @@ unchanged while a class is alive; a class that has been collected can no longer
 be the subject of a duplicate warning, since any later model is by definition a
 different type.
 """
-_PLAIN_ATTR_IGNORED_NAMES = frozenset({"_parameters", "_buffers", "_modules"})
 _PLAIN_ATTR_MAX_CONTAINER_ITEMS = 128
 _PLAIN_ATTR_MAX_TENSOR_NUMEL = 4096
 _PLAIN_ATTR_MAX_DEPTH = 64
@@ -112,10 +117,16 @@ class CompiledCapturePrep:
         original eager Python and their interiors are logged with full verified
         semantics; when ``False`` (torch < 2.6, or the stance failed to
         engage), inventoried sites keep the honest bypass-and-disclose path.
+    fused_attention_held:
+        Dotted addresses of the ``nn.MultiheadAttention`` /
+        ``nn.TransformerEncoderLayer`` modules whose fused fast path
+        :func:`hold_fused_attention_fastpath_off` holds off for the capture
+        scope; empty when the model has none or torch lacks the public switch.
     """
 
     sites: tuple[str, ...]
     force_eager_stance: bool
+    fused_attention_held: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -276,8 +287,9 @@ def _warn_compiled_plain_callables_forced_eager_once(sites: tuple[str, ...]) -> 
         f"{', '.join(sites)}; this capture runs their original eager Python under "
         "torch.compiler.set_stance('force_eager'), so their interiors ARE logged. "
         "Compiled caches are untouched; captured values are eager-path values, and "
-        "TorchLens wrapper install/uninstall can cost one bounded recompile on the "
-        "next compiled call after capture.",
+        "TorchLens wrapper install/uninstall can cost a bounded burst of "
+        "recompilations on the first compiled call after each capture, then steady "
+        "state.",
         UserWarning,
         stacklevel=4,
     )
@@ -529,16 +541,20 @@ def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
     ``dynamo_region_not_logged`` ceiling.
     """
 
-    with unwrap_compiled_submodules(model):
+    with unwrap_compiled_submodules(model), hold_fused_attention_fastpath_off(model) as held:
         sites = compiled_plain_callable_sites(model)
         with force_eager_stance_scope() as stance_active:
             if stance_active:
                 if sites:
                     _warn_compiled_plain_callables_forced_eager_once(sites)
-                yield CompiledCapturePrep(sites=sites, force_eager_stance=True)
+                yield CompiledCapturePrep(
+                    sites=sites, force_eager_stance=True, fused_attention_held=held
+                )
             else:
                 with bypass_compiled_plain_callables(model):
-                    yield CompiledCapturePrep(sites=sites, force_eager_stance=False)
+                    yield CompiledCapturePrep(
+                        sites=sites, force_eager_stance=False, fused_attention_held=held
+                    )
 
 
 @contextmanager
@@ -1121,26 +1137,10 @@ def _plain_attr_restore_value(snapshot: Any) -> Any:
     return _snapshot_plain_attr_value(snapshot, "<snapshot>")
 
 
-def _module_plain_attr_names(module: nn.Module) -> set[str]:
-    """Return plain attribute names to snapshot for a module.
-
-    Parameters
-    ----------
-    module:
-        Module whose non-registered attributes should be inspected.
-
-    Returns
-    -------
-    set[str]
-        Attribute names excluding registered parameter, buffer, and child
-        module storage.
-    """
-
-    return set(module.__dict__) - _PLAIN_ATTR_IGNORED_NAMES
-
-
 class _ModuleTreePlainAttrSnapshot:
     """Snapshot of small value-comparable plain attributes in a module tree."""
+
+    copy_failure: str = ""  # why the deepcopy this snapshot replaces failed, if it did
 
     def __init__(self, model: nn.Module) -> None:
         """Capture a model's plain module-tree attributes.
@@ -1296,19 +1296,16 @@ def _model_for_ground_truth_validation(
         assert_copy_kept_instance_attrs(model, copied_model)
         _strip_copied_forward_decorations(copied_model)
         return copied_model, None
-    except Exception:
-        model_type = type(model)
-        if model_type not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
-            _VALIDATION_DEEPCOPY_WARNING_TYPES.add(model_type)
-            warnings.warn(
-                "TorchLens validate_forward_pass could not deepcopy the model for the "
-                "ground-truth run; falling back to state_dict snapshot/restore. "
-                "Non-registered mutable state may cause false negatives for this model.",
-                RuntimeWarning,
-                stacklevel=3,
-            )
+    except Exception as exc:  # noqa: BLE001 - any copy failure falls back; the warning names it
+        copy_failure = describe_copy_failure(exc)
+        if type(model) not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
+            _VALIDATION_DEEPCOPY_WARNING_TYPES.add(type(model))
+            warn_copy_failed(model, exc, run="ground-truth")
+        del exc  # its traceback would pin the partial copy's tensors on the device
         try:
-            return model, _ModuleTreePlainAttrSnapshot(model)
+            snapshot = _ModuleTreePlainAttrSnapshot(model)
+            snapshot.copy_failure = copy_failure
+            return model, snapshot
         except RuntimeError:
             warnings.warn(
                 "TorchLens validate_forward_pass could not snapshot non-registered mutable "
@@ -1367,39 +1364,16 @@ def _model_for_validation_replay(
         _strip_copied_forward_decorations(copied_model)
         restore_simple_plain_attrs_on_copy(model, copied_model)
         return copied_model, None, True
-    except Exception:
-        warnings.warn(
-            "TorchLens validation replay against live model state; model could not be copied.",
-            RuntimeWarning,
-            stacklevel=3,
-        )
+    except Exception as exc:  # noqa: BLE001 - any copy failure falls back; the warning names it
+        copy_failure = describe_copy_failure(exc)
+        warn_copy_failed(model, exc, run="replay")
+        del exc  # its traceback would pin the partial copy's tensors on the device
         try:
-            return model, _ModuleTreePlainAttrSnapshot(model), False
+            snapshot = _ModuleTreePlainAttrSnapshot(model)
+            snapshot.copy_failure = copy_failure
+            return model, snapshot, False
         except RuntimeError:
             return model, None, False
-
-
-def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) -> bool:
-    """Retroactively keep or discard a captured batch log.
-
-    Parameters
-    ----------
-    trace:
-        Captured log to decide on.
-    predicate:
-        Callable receiving the log and returning whether to keep it.
-
-    Returns
-    -------
-    bool
-        True when the log was kept.
-    """
-
-    keep = bool(predicate(trace))
-    if not keep:
-        trace.cleanup()
-    trace.recording_kept = keep
-    return keep
 
 
 def _qualname_for_model(model: nn.Module) -> str:
@@ -1450,19 +1424,6 @@ def _fingerprint_model_weights(model: nn.Module) -> str:
     return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
 
 
-def _is_uninitialized_param(value: Any) -> bool:
-    """Return whether ``value`` is a lazy (uninitialized) parameter or buffer.
-
-    Shape/numel/storage access on such values raises until the first forward
-    materializes them in place. One implementation, shared with the payload
-    copy path (see ``utils.tensor_utils._is_uninitialized_lazy_tensor``).
-    """
-
-    from .utils.tensor_utils import _is_uninitialized_lazy_tensor
-
-    return _is_uninitialized_lazy_tensor(value)
-
-
 def _input_id_for_relationship_evidence(input_args: Any) -> int:
     """Return the input identity used for relationship evidence.
 
@@ -1478,7 +1439,7 @@ def _input_id_for_relationship_evidence(input_args: Any) -> int:
         the input container.
     """
 
-    tensors = _iter_tensor_inputs(input_args)
+    tensors = list(iter_tensors(input_args, sort_keys=True))
     if len(tensors) == 1:
         return id(tensors[0])
     return id(input_args)
@@ -1509,7 +1470,7 @@ def _hash_input_signatures(input_args: Any, input_kwargs: Any) -> str:
     path 2: a shape/dtype/device hash is value-blind).
     """
 
-    tensors = _iter_tensor_inputs((input_args, input_kwargs))
+    tensors = list(iter_tensors((input_args, input_kwargs), sort_keys=True))
     entries = [(tuple(tensor.shape), str(tensor.dtype), str(tensor.device)) for tensor in tensors]
     return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
 
@@ -1838,7 +1799,7 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
         Log to make pickle-compatible in place.
     """
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in trace._layer_list:
         for field_name in (
             "out",
             "transformed_out",
@@ -1851,7 +1812,7 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
         layer.grad_fn_handle = None
         layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
         layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
-    for layer_log in getattr(trace, "layer_logs", {}).values():
+    for layer_log in trace._layer_logs.values():
         # ``Layer.transformed_out``/``transformed_grad`` are read-only proxies that read
         # through to the underlying ``Layer.ops[i]`` -- the real tensors live on the Op
         # objects, which expose ``_internal_set`` (the Layer view does not, so a raw
@@ -2130,10 +2091,8 @@ def _move_tensors_to_device_inner(
         Subtree to move.
     device:
         Target device.
-    _depth:
-        Internal recursion depth (callers must not supply this).
-    _in_progress:
-        Internal path-scoped ancestor-id set (callers must not supply this).
+    _depth, _in_progress:
+        Internal recursion depth and path-scoped ancestor-id set (callers must not supply these).
     """
 
     import dataclasses as _dataclasses
@@ -2147,8 +2106,7 @@ def _move_tensors_to_device_inner(
         raise_input_tree_cycle_refusal,
         raise_input_tree_depth_refusal,
     )
-    from torchlens.ir.container import get_registered_container
-    from torchlens.utils.arg_handling import move_input_tensor
+    from torchlens._ir.container import get_registered_container
 
     if isinstance(obj, torch.Tensor):
         target = torch.device(device) if not isinstance(device, torch.device) else device
@@ -2238,7 +2196,7 @@ def _move_tensors_to_device_inner(
             # A tuple SUBCLASS (namedtuple, structseq, torch.Size, user class):
             # the shared identity-verified ladder, probing under pause_logging so
             # no constructor side effect can enter the captured graph.
-            from torchlens.utils.arg_handling import rebuild_tuple_like
+            from torchlens._utils.arg_handling import rebuild_tuple_like
 
             rebuilt = rebuild_tuple_like(obj_type, moved_sequence)
             return rebuilt if rebuilt is not None else _UNMOVED
@@ -2302,7 +2260,7 @@ def _move_tensors_to_device_inner(
                 ]
                 if type(obj) is dict:
                     return dict(moved_pairs)
-                from torchlens.utils.arg_handling import rebuild_mapping_like
+                from torchlens._utils.arg_handling import rebuild_mapping_like
 
                 rebuilt = rebuild_mapping_like(obj, moved_pairs)
                 return rebuilt if rebuilt is not None else _UNMOVED
@@ -2317,7 +2275,7 @@ def _move_tensors_to_device_inner(
             moved_state, changed = _children(state_items[name] for name in state_names)
             if not changed:
                 return _UNMOVED
-            from torchlens.utils.arg_handling import _inert_state_enumeration_total
+            from torchlens._utils.arg_handling import _inert_state_enumeration_total
 
             if not _inert_state_enumeration_total(type(obj), ()):
                 return _UNMOVED
@@ -2340,7 +2298,7 @@ def _move_tensors_to_device_inner(
         obj_type = type(obj)
         if obj_type is list:
             return list(moved_sequence)
-        from torchlens.utils.arg_handling import rebuild_list_like
+        from torchlens._utils.arg_handling import rebuild_list_like
 
         rebuilt = rebuild_list_like(obj, moved_sequence)
         return rebuilt if rebuilt is not None else _UNMOVED

@@ -1,134 +1,115 @@
 name: Release
 
+# A release is cut by pushing a version tag (vX.Y.Z) that the maintainer
+# creates by hand on a commit of main whose pyproject.toml and
+# torchlens/__init__.py already carry that version. Nothing in CI computes,
+# bumps or commits a version: the tag is the only trigger that publishes.
+# Pull requests to main run the same build as a dry run (no token, no
+# upload), so a broken build or lock is caught before a tag is ever pushed.
 on:
-  push:
+  pull_request:
     branches: [main]
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: "release-${{ github.ref }}"
+  cancel-in-progress: false
+
 jobs:
-  lint:
+  gates:
+    # The tag commit must pass the pull-request gates again before upload.
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
-    uses: ./.github/workflows/lint.yml
+    uses: ./.github/workflows/pr.yml
 
-  tests:
-    permissions:
-      contents: read
-    uses: ./.github/workflows/tests.yml
-
-  quality:
-    permissions:
-      contents: read
-    uses: ./.github/workflows/quality.yml
-
-  release:
-    needs: [lint, tests, quality]
-    permissions:
-      contents: write
-      id-token: write
+  build:
+    name: Build reproducible artifacts
     runs-on: ubuntu-24.04
-    concurrency: release
-    # Bound the repo-write App token's lifetime (r7 R82): without this the
-    # job inherits GitHub's 6-hour default, and a hung pip resolve or PyPI
-    # upload holds a live push-capable credential on the runner for all of
-    # it. A healthy release completes in well under 30 minutes.
-    timeout-minutes: 30
-    # Belt-and-suspenders with the `[skip ci]` token in the release commit
-    # message: never run a release on the bot's own release commit, so a missing
-    # skip token can't reignite the runaway release loop.
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
-
+    timeout-minutes: 20
     steps:
-      - name: Generate app token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          # Minimal scope (zizmor github-app, T13.3): without an explicit
-          # permission input the minted token inherits the App installation's
-          # FULL permission set, and checkout persists it to disk for the
-          # whole job — including the pip install and semantic-release steps.
-          # Everything this job does (push the release commit + tag, create
-          # the GitHub Release) needs exactly repository contents: write.
-          permission-contents: write
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          # Must satisfy the package's requires-python (>=3.10): semantic-release's
-          # build_command builds the shipped sdist/wheel on THIS interpreter, and a
-          # 3.9 builder produced release artifacts on a Python the package itself
-          # refuses to install on (T13.7).
           python-version: "3.11"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-          token: ${{ steps.app-token.outputs.token }}
-
-      # The full semantic-release stack is hash-locked (r4 b2-sol R61): the
-      # historical install-before-checkout ordering only kept the credential
-      # away from RESOLUTION time -- the resolved packages persisted in the
-      # environment and executed later with the repo-write App token, so a
-      # compromised or dependency-confused TRANSITIVE could still push with
-      # it. --require-hashes verifies every wheel against the reviewed lock
-      # (.github/workflows/release-requirements.txt) and --only-binary :all:
-      # refuses sdists, so pip executes no package code at install and the
-      # code that later runs with the token is byte-audited. The install now
-      # follows checkout because the lock file lives in the repo; that is
-      # safe under hash verification. Everything else installed later is
-      # exact-pinned (build== inside build_command).
-      - name: Install dependencies (hash-locked)
+      - name: Install the hash-locked builder
+        # build and its setuptools backend come only from the hash-verified
+        # lock, wheels only, so no unpinned package code runs at build time.
         run: >
           pip install --require-hashes --only-binary :all:
           -r .github/workflows/release-requirements.txt
 
-      # NO file is LFS-tracked at HEAD (r7 R82: the dead .gitattributes rules
-      # that once justified this block are deleted -- they leaked private
-      # internal-notes filenames in a PUBLIC repo). LFS objects from that era
-      # remain only in REMOTE history, so git-lfs can still activate on ref
-      # pushes that traverse those commits from a checkout with lfs disabled
-      # (pointers only, no LFS content locally); the objects already live on
-      # the remote, so an incomplete push stays safe. Without this belt, a
-      # rejected tag push meant the tag never got created and
-      # (pre-`[skip ci]`) every run re-released -> the 1599-commit runaway.
-      # `locksverify=false` separately sidesteps the locking-API failure
-      # caused by the App's bracketed credential URL (`torchlens-release[bot]`).
-      - name: Let git-lfs tolerate the CI tag push
-        run: |
-          git config lfs.allowincompletepush true
-          git config lfs.locksverify false
-
-      - name: Semantic Release
-        id: release
+      - name: Refuse a tag that does not match the package version
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: semantic-release version
+          TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
 
-      # `semantic-release version` only builds dist/* when it cuts a new version.
-      # Non-releasing commits (ci/docs/chore/test/refactor pushed on their own)
-      # produce no dist/, so gate the publish steps on artifacts actually existing
-      # -- otherwise the PyPI upload fails with "FileNotFoundError: dist" and the
-      # Release job goes red even though nothing was meant to ship. When a real
-      # release IS cut, dist/* exists and both steps run normally.
-      # PEP 740 attestations are ON (the action's default). `attestations:
-      # false` was a 2026-02-24 debugging leftover (579506df, "enable verbose
-      # PyPI upload and disable attestations for debugging") whose verbose
-      # half was reverted while the attestation half silently shipped for six
-      # months with no explanatory comment. The job already has
-      # `id-token: write` + OIDC trusted publishing, which is all PyPI needs
-      # to accept provenance. If attestation upload ever breaks a release,
-      # set `attestations: false` WITH a dated comment and an owner decision,
-      # never as a silent debug flag (grind r5, b10 R86-1).
+          tag = os.environ["TAG"].removeprefix("v")
+          toml_version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          init_text = Path("torchlens/__init__.py").read_text()
+          init_version = re.search(r'^__version__ = "([^"]+)"', init_text, re.M).group(1)
+          print(f"tag {tag}, pyproject {toml_version}, __init__ {init_version}")
+          if not tag == toml_version == init_version:
+              raise SystemExit("tag, pyproject.toml and torchlens/__init__.py disagree; refusing to publish")
+          PY
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor HEAD origin/main || {
+            echo "tag ${TAG} is not on main; refusing to publish"
+            exit 1
+          }
+
+      - name: Build wheel and sdist
+        run: |
+          SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)" python -m build --no-isolation
+          SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)" \
+            python scripts/normalize_sdist.py dist/*.tar.gz dist/*.whl
+          ls -l dist/
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  publish:
+    name: Publish to PyPI and GitHub Releases
+    needs: [gates, build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist/
+
+      # PyPI trusted publishing (OIDC, no API token). PyPA documents its own
+      # publish action by tag; this is pinned to the v1.14.2 commit.
       - name: Publish to PyPI
-        if: ${{ hashFiles('dist/**') != '' }}
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
-      - name: Publish to GitHub Releases
-        if: ${{ hashFiles('dist/**') != '' }}
+      - name: Create the GitHub Release
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: semantic-release publish
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --verify-tag --generate-notes

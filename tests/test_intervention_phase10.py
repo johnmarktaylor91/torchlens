@@ -15,14 +15,16 @@ from example_models import TinyReluAdd as _ReluModel
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.container import TupleIndex
+from torchlens._ir.selector_eval import selector_from_spec
+from torchlens._selection.selectors import output_at
+from torchlens.intervention import check_spec_compat
+from torchlens.intervention._resolver_registry import function_registry_key_from_callable
 from torchlens.intervention.errors import (
     MultiMatchWarning,
-    OpaqueCallableInExecutableSaveError,
+    OpaqueCallableError,
     ReplayPreconditionError,
     UntrustedCallableError,
-)
-from torchlens.intervention.resolver import (
-    function_registry_key_from_callable,
 )
 from torchlens.intervention.save import (
     _sync_spec_records_from_log,
@@ -31,17 +33,14 @@ from torchlens.intervention.save import (
     save_intervention,
 )
 from torchlens.intervention.types import (
+    Edit,
     FireRecord,
     FunctionRegistryKey,
-    HelperSpec,
     InterventionSpec,
 )
 from torchlens.io import load_intervention_spec
-from torchlens.ir.container import TupleIndex
-from torchlens.ir.selector_eval import selector_from_spec
-from torchlens.validation import check_spec_compat
 
-_INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention.resolver")
+_INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention._resolver_registry")
 
 
 class _TanhModel(nn.Module):
@@ -125,7 +124,7 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Tr
 
     model = model or _ReluModel()
     x = x if x is not None else torch.randn(2, 3)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 @pytest.mark.smoke
@@ -148,7 +147,7 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     assert tl.load(path) == spec
     compat = check_spec_compat(spec, _log(_ReluModel(), x))
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
@@ -158,7 +157,7 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
         _ReluModel(),
         torch.randn(2, 3),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("relu"): tl.zero_ablate()},
         ),
     )
@@ -171,7 +170,7 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
 
     assert spec.records
     assert all(isinstance(record, FireRecord) for record in spec.records)
-    assert any(record.direction == "forward" for record in spec.records)
+    assert any(record.signal == "forward" for record in spec.records)
     assert any(record.replaced is True for record in spec.records)
 
 
@@ -183,7 +182,7 @@ def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     log = tl.trace(
         _ReluModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
     )
     path = tmp_path / "predicate_intervention.tlspec"
@@ -206,7 +205,7 @@ def test_container_path_fire_records_save_at_default_level(tmp_path: Path) -> No
         _ChunkModel(),
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("chunk"): tl.zero_ablate()},
         ),
     )
@@ -244,7 +243,7 @@ def test_where_hook_save_manifest_tolerates_nonportable_predicate(tmp_path: Path
 
     for level in ("executable_with_callables", "portable"):
         path = tmp_path / f"where_{level}.tlspec"
-        with pytest.raises(OpaqueCallableInExecutableSaveError, match="Callable selector"):
+        with pytest.raises(OpaqueCallableError, match="Callable selector"):
             log.save_intervention(path, level=level)
 
 
@@ -254,16 +253,20 @@ def test_target_spec_selector_rehydration_covers_path_and_pattern_selectors() ->
     log = tl.trace(
         _ChunkModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
-    with pytest.warns(MultiMatchWarning):
-        output_labels = log.resolve_sites(tl.output_at(0).to_target_spec()).labels()
-    assert "chunk_1_2" in output_labels
-    with pytest.warns(MultiMatchWarning):
-        regex_labels = log.resolve_sites(tl.regex("chunk_[12]").to_target_spec()).labels()
-    assert regex_labels == ("chunk_1_2", "chunk_2_3")
-    assert repr(selector_from_spec("input_at", (0,), {})) == "tl.input_at((0,))"
+    output_spec = output_at(0).to_target_spec()
+    output_labels = log[
+        selector_from_spec(output_spec.selector_kind, output_spec.selector_value, {})
+    ].labels
+    assert "chunk_1_2:1" in output_labels
+    regex_spec = tl.label_matches("chunk_[12]").to_target_spec()
+    regex_labels = log[
+        selector_from_spec(regex_spec.selector_kind, regex_spec.selector_value, {})
+    ].labels
+    assert regex_labels == ("chunk_1_2:1", "chunk_2_3:1")
+    assert repr(selector_from_spec("input_at", (0,), {})) == "tl.model_input((0,))"
 
 
 def test_loaded_forward_hook_spec_executes_on_fresh_trace(tmp_path: Path) -> None:
@@ -291,7 +294,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     x = torch.ones(1, 4)
     output_log = _log(_ChunkModel(), x)
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        output_log.attach_hooks(tl.output_at(1), tl.zero_ablate(), confirm_mutation=True)
+        output_log.attach_hooks(output_at(1), tl.zero_ablate(), confirm_mutation=True)
     output_path = tmp_path / "loaded_output_at.tlspec"
     output_log.save_intervention(output_path, level="portable")
     output_spec = load_intervention_spec(output_path)
@@ -303,7 +306,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     assert torch.count_nonzero(output_tensor) == 0
 
     regex_log = _log(_ReluModel(), torch.ones(1, 3))
-    regex_log.attach_hooks(tl.regex("relu"), tl.scale(0.0), confirm_mutation=True)
+    regex_log.attach_hooks(tl.label_matches("relu"), tl.scale(0.0), confirm_mutation=True)
     regex_path = tmp_path / "loaded_regex.tlspec"
     regex_log.save_intervention(regex_path, level="portable")
     regex_spec = load_intervention_spec(regex_path)
@@ -312,6 +315,49 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     regex_rerun = regex_fresh.run(_ReluModel(), torch.ones(1, 3))
 
     assert torch.equal(regex_rerun[regex_rerun.output_layers[0]].out, torch.ones(1, 3))
+
+
+def test_stored_helper_keyword_outside_the_constructor_refuses_typed(tmp_path: Path) -> None:
+    """A saved builtin helper carrying a keyword its constructor does not take refuses typed.
+
+    This is the refusal a spec saved under different helper keywords meets (the 2.16
+    fixtures used to reach it through ``force_shape_change`` before the format stamp
+    refused them first); it must stay typed, never a raw ``TypeError``.
+    """
+
+    from torchlens._errors import InvalidArgumentError
+
+    log = tl.trace(
+        _ReluModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(
+            replayable=True,
+            hooks={tl.func("relu"): tl.zero_ablate()},
+        ),
+    )
+    path = tmp_path / "foreign_keyword.tlspec"
+    log.save_intervention(path, level="portable")
+    spec_path = path / "spec.json"
+    spec_json = json.loads(spec_path.read_text(encoding="utf-8"))
+
+    def _plant(value: Any) -> int:
+        planted = 0
+        if isinstance(value, dict):
+            if value.get("name") == "zero_ablate" and isinstance(value.get("kwargs"), dict):
+                value["kwargs"]["force_shape_change"] = False
+                planted += 1
+            planted += sum(_plant(item) for item in value.values())
+        elif isinstance(value, list):
+            planted += sum(_plant(item) for item in value)
+        return planted
+
+    assert _plant(spec_json) >= 1
+    spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        load_intervention_spec(path)
+    assert excinfo.value.fields["code"] == "intervention_helper_arguments_invalid"
+    assert "force_shape_change" in str(excinfo.value)
 
 
 def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Path) -> None:
@@ -323,7 +369,7 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
         "from pathlib import Path\n"
         "SENTINEL = Path(__file__).with_name('sentinel')\n"
         "SENTINEL.write_text('imported')\n"
-        "def hook(out, *, hook):\n"
+        "def hook(out, *, ctx):\n"
         "    return out * 0\n"
     )
     sys.path.insert(0, str(tmp_path))
@@ -376,7 +422,7 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
         "SENTINEL = Path(__file__).with_name('helper_sentinel')\n"
         "SENTINEL.write_text('imported')\n"
         "def make_hook():\n"
-        "    def hook(out, *, hook):\n"
+        "    def hook(out, *, ctx):\n"
         "        return out * 0\n"
         "    return hook\n"
     )
@@ -384,8 +430,8 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
     try:
         import side_effect_helper_mod
 
-        helper = HelperSpec(
-            helper_name="side_effect_helper",
+        helper = Edit(
+            name="side_effect_helper",
             portability="import_ref",
             factory=side_effect_helper_mod.make_hook,
         )
@@ -435,16 +481,16 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_clamp(0, 0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
     log.save_intervention(path, level="portable")
     spec = load_intervention_spec(path, trust_custom_callables=True)
 
-    backward_records = [record for record in spec.records if record.direction == "backward"]
+    backward_records = [record for record in spec.records if record.signal == "backward"]
     assert backward_records
-    assert backward_records[0].backward_pass_index == 1
+    assert backward_records[0].backward_pass_number == 1
     assert backward_records[0].call_index == 1
 
 
@@ -457,7 +503,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_scale(2.0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
@@ -488,7 +534,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_scale(2.0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
     path = tmp_path / "backward_before_pass.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -514,7 +560,7 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
         _ReluModel(),
         torch.randn(2, 3),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("relu"): tl.zero_ablate()},
         ),
     )
@@ -534,8 +580,14 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
     spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
     manifest_path.write_text(json.dumps(manifest_json), encoding="utf-8")
 
-    loaded = load_intervention_spec(path)
-    assert loaded.metadata["format_version"] == "1"
+    # format_version 1 is the spec format torchlens 2.x wrote: it refuses with the one
+    # 2.x error, never loads.
+    from torchlens.errors import ArtifactTooOldError
+
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        load_intervention_spec(path)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert excinfo.value.fields["observed"] == "intervention format_version=1"
 
     spec_json["format_version"] = "3"
     spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
@@ -550,13 +602,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.grad_clamp(0, 0),
+        edit=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
-        direction="backward",
-        helper_name="grad_clamp",
+        signal="backward",
+        edit_name="clamp",
         timestamp=1.0,
-        backward_pass_index=1,
+        backward_pass_number=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=0,
@@ -566,13 +618,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.grad_clamp(0, 0),
+        edit=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
-        direction="backward",
-        helper_name="grad_clamp",
+        signal="backward",
+        edit_name="clamp",
         timestamp=2.0,
-        backward_pass_index=1,
+        backward_pass_number=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=0,
@@ -582,13 +634,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.grad_clamp(0, 0),
+        edit=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
-        direction="backward",
-        helper_name="grad_clamp",
+        signal="backward",
+        edit_name="clamp",
         timestamp=1.0,
-        backward_pass_index=1,
+        backward_pass_number=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=1,
@@ -596,7 +648,7 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
     )
     spec = InterventionSpec(records=[first, duplicate, distinct_tuple])
 
-    _sync_spec_records_from_log(spec, SimpleNamespace(layer_list=[], grad_fn_logs={}))
+    _sync_spec_records_from_log(spec, SimpleNamespace(_layer_list=[], _grad_fn_logs={}))
 
     assert spec.records == [first, distinct_tuple]
 
@@ -607,7 +659,7 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
 
     log = _log()
 
-    def opaque_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def opaque_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Return out unchanged.
 
         Parameters
@@ -623,11 +675,11 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
             Input out.
         """
 
-        del hook
+        del ctx
         return out
 
     log.attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)
-    with pytest.raises(OpaqueCallableInExecutableSaveError):
+    with pytest.raises(OpaqueCallableError):
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
 
 
@@ -861,9 +913,9 @@ def test_red_team_custom_module_side_effect_is_not_imported(
 
 _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE = [
     ("torchlens._io.tlspec:os.system", "system"),
-    ("torchlens.utils:importlib.import_module", "import_module"),
-    ("torchlens.intervention.selectors:builtins.eval", "eval"),
-    ("torchlens.utils:subprocess.getoutput", "getoutput"),
+    ("torchlens.report._environment:importlib.import_module", "import_module"),
+    ("torchlens._selection.selectors:builtins.eval", "eval"),
+    ("torchlens.report._environment:subprocess.getoutput", "getoutput"),
 ]
 
 

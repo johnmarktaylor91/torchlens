@@ -79,7 +79,7 @@ def _setup() -> tuple[nn.Module, torch.Tensor]:
 def _steer() -> Any:
     """Return a deterministic steer at the site."""
 
-    return tl.steer(torch.linspace(-1.0, 1.0, _DIM), magnitude=3.0, feature_axis=-1)
+    return tl.steer(torch.linspace(-1.0, 1.0, _DIM), strength=3.0, dim=-1)
 
 
 def _save() -> Any:
@@ -100,7 +100,7 @@ def _site_outs(trace: Any) -> dict[str, torch.Tensor]:
 def _saved_labels(trace: Any) -> list[str]:
     """Return the labels of every op holding a saved activation."""
 
-    return [op.label for op in trace.layer_list if getattr(op, "has_saved_activation", False)]
+    return [op.label for op in trace._layer_list if getattr(op, "has_saved_activation", False)]
 
 
 def _rerun(trace: Any, model: nn.Module, x: torch.Tensor, **kwargs: Any) -> None:
@@ -192,7 +192,7 @@ def test_fork_do_rerun_engine_resaves_the_requested_sites(fresh: dict[str, Any])
             tl.module(_SITE),
             _steer(),
             model=model,
-            x=x,
+            inputs=x,
             intervention=tl.options.InterventionOptions(engine="rerun"),
         )
     _assert_matches_fresh(fork, fresh)

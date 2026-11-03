@@ -41,7 +41,7 @@ def test_gpt2_eiffel_headline_row(gpt2: tuple[object, object]) -> None:
     assert result.baseline["policy"] == "zeros_all"
     assert "decoder" in result.provenance["task_family"]
     assert "' Paris'" in result.target_repr
-    assert result.n_steps == 128
+    assert result.num_steps == 128
     assert result.cost["steps_per_batch"] == 8
     audit = result.cost["step_audit"]
     assert audit["mode"] == "per_call"
@@ -63,8 +63,8 @@ def test_gpt2_batched_matches_sequential(gpt2: tuple[object, object]) -> None:
 
     model, tokenizer = gpt2
     prompt = "The cat sat on the"
-    batched = attribution.text(model, tokenizer, prompt, n_steps=16, steps_per_batch=8)
-    sequential = attribution.text(model, tokenizer, prompt, n_steps=16, steps_per_batch=1)
+    batched = attribution.text(model, tokenizer, prompt, num_steps=16, steps_per_batch=8)
+    sequential = attribution.text(model, tokenizer, prompt, num_steps=16, steps_per_batch=1)
     torch.testing.assert_close(batched.scores, sequential.scores, rtol=1e-3, atol=1e-5)
 
 
@@ -114,7 +114,7 @@ def test_bert_mask_row_auto_pad_scaffold() -> None:
     # The zeros baseline carries NO bound; assert only that it runs and
     # discloses its explicit policy.
     zeros = attribution.text(
-        model, tokenizer, prompt, target=mask_scorer, baseline="zeros", n_steps=16
+        model, tokenizer, prompt, target=mask_scorer, baseline="zeros", num_steps=16
     )
     assert zeros.baseline["policy"] == "zeros_all"
 
@@ -128,6 +128,6 @@ def test_qwen_gqa_row() -> None:
         "Qwen/Qwen2.5-0.5B-Instruct", dtype=torch.float32
     )
     model.eval()
-    result = attribution.text(model, tokenizer, "The capital of France is", n_steps=32)
+    result = attribution.text(model, tokenizer, "The capital of France is", num_steps=32)
     assert result.baseline["policy"] == "zeros_all"
     assert torch.isfinite(result.scores).all()

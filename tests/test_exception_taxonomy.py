@@ -13,10 +13,11 @@ from typing import Any
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens import errors, user_funcs
+from torchlens import errors
+from torchlens._capture import run_entry
 from torchlens._io.tlspec import coerce_tlspec_save_level
-from torchlens.backends import (
-    BackendAmbiguityError,
+from torchlens.errors import (
+    AmbiguousBackendError,
     BackendMismatchError,
     BackendPayloadUnsupportedError,
     BackendRuntimeCompatibilityError,
@@ -47,10 +48,11 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ("torchlens._errors", "ArgumentTypeError", errors.ConfigurationError, "subclass"),
     ("torchlens._errors", "ArgumentConflictError", errors.ConfigurationError, "subclass"),
     ("torchlens._errors", "KeywordConflictError", errors.ConfigurationError, "subclass"),
-    ("torchlens._errors", "CaptureContextError", errors.CaptureError, "subclass"),
-    ("torchlens._errors", "TorchLensPostfuncError", errors.CaptureError, "subclass"),
-    ("torchlens._errors", "PostTraceParamUnavailable", errors.CaptureError, "subclass"),
-    ("torchlens._io", "TorchLensIOError", errors.CompatibilityError, "subclass"),
+    ("torchlens._errors", "CaptureNotActiveError", errors.CaptureError, "subclass"),
+    ("torchlens._errors", "UserTransformError", errors.CaptureError, "subclass"),
+    ("torchlens._errors", "TraceCaptureError", errors.CaptureError, "subclass"),
+    ("torchlens._errors", "ParamReleasedError", errors.CaptureError, "subclass"),
+    ("torchlens._io", "ArtifactError", errors.CompatibilityError, "subclass"),
     (
         "torchlens._robustness",
         "UnsupportedTensorVariantError",
@@ -64,21 +66,21 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
         "subclass",
     ),
     (
-        "torchlens.fastlog.exceptions",
+        "torchlens.recording.exceptions",
         "RecordingConfigError",
         errors.ConfigurationError,
         "subclass",
     ),
-    ("torchlens.fastlog.exceptions", "RecorderStateError", errors.CaptureError, "subclass"),
-    ("torchlens.fastlog.exceptions", "RecoveryError", errors.CaptureError, "subclass"),
-    ("torchlens.fastlog.exceptions", "BundleNotFinalizedError", errors.CaptureError, "subclass"),
+    ("torchlens.recording.exceptions", "RecorderStateError", errors.CaptureError, "subclass"),
+    ("torchlens.recording.exceptions", "RecoveryError", errors.CaptureError, "subclass"),
+    ("torchlens.recording.exceptions", "BundleNotFinalizedError", errors.CaptureError, "subclass"),
     (
-        "torchlens.fastlog.exceptions",
+        "torchlens.recording.exceptions",
         "RecordContextFieldError",
         errors.ConfigurationError,
         "subclass",
     ),
-    ("torchlens.fastlog.exceptions", "PredicateError", errors.CaptureError, "subclass"),
+    ("torchlens.recording.exceptions", "PredicateError", errors.CaptureError, "subclass"),
     (
         "torchlens.intervention.errors",
         "TorchLensInterventionError",
@@ -87,7 +89,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
-        "TorchLensInterventionWarning",
+        "InterventionWarning",
         errors.TorchLensWarning,
         "subclass",
     ),
@@ -105,7 +107,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
-        "MutateInPlaceWarning",
+        "TraceMutationWarning",
         errors.TorchLensWarning,
         "subclass",
     ),
@@ -135,7 +137,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
-        "OpaqueCallableInExecutableSaveError",
+        "OpaqueCallableError",
         errors.ConfigurationError,
         "subclass",
     ),
@@ -147,7 +149,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
-        "DirectWriteInExecutableSaveError",
+        "DirectWriteSaveError",
         errors.ConfigurationError,
         "subclass",
     ),
@@ -189,7 +191,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
-        "AppendStreamingNotSupportedError",
+        "AppendStreamingUnsupportedError",
         errors.ValidationError,
         "subclass",
     ),
@@ -225,7 +227,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
-        "SiteAmbiguityError",
+        "AmbiguousSiteError",
         errors.ConfigurationError,
         "subclass",
     ),
@@ -237,7 +239,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
-        "AxisAmbiguityError",
+        "AmbiguousAxisError",
         errors.ConfigurationError,
         "subclass",
     ),
@@ -280,7 +282,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
-        "BundleRelationshipError",
+        "BundleComparisonError",
         errors.ValidationError,
         "subclass",
     ),
@@ -299,6 +301,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
         "subclass",
     ),
     ("torchlens._errors", "BackwardStreamUnavailableError", errors.CaptureError, "subclass"),
+    ("torchlens._errors", "AtenOpsUnavailableError", errors.CaptureError, "subclass"),
     (
         "torchlens.intervention.errors",
         "NonExecutableSpecError",
@@ -313,7 +316,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
-        "BatchChunkInputAmbiguityError",
+        "AmbiguousBatchInputError",
         errors.ConfigurationError,
         "subclass",
     ),
@@ -372,18 +375,21 @@ _LINEAGE_PROBE_BUILTINS: tuple[type[BaseException], ...] = (
 )
 
 BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
+    "AmbiguousCallError": ("ValueError",),
     "AmbiguousGroupLifetimeError": ("RuntimeError",),
+    "AmbiguousLabelError": ("KeyError",),
     "AmbiguousOpLookupError": ("ValueError",),
+    "AmbiguousPassError": ("ValueError",),
+    "AmbiguousTargetError": ("ValueError",),
     "AppendBatchDependenceError": ("ValueError",),
     "AppendMismatchError": ("ValueError",),
     "AppendStateValidationWarning": ("Warning",),
-    "AppendStreamingNotSupportedError": ("ValueError",),
+    "AppendStreamingUnsupportedError": ("ValueError",),
     "ArgumentConflictError": ("ValueError",),
     "ArgumentTypeError": ("TypeError",),
-    "ArtifactSchemaAgeWarning": ("Warning",),
-    "ArtifactVersionBelowFloorError": ("RuntimeError",),
-    "AxisAmbiguityError": ("ValueError",),
-    "BackendAmbiguityError": ("ValueError",),
+    "ArtifactTooOldError": ("RuntimeError",),
+    "AmbiguousAxisError": ("ValueError",),
+    "AmbiguousBackendError": ("ValueError",),
     "BackendCapabilityConformanceError": ("ValueError", "RuntimeError"),
     "BackendMismatchError": ("ValueError",),
     "BackendPayloadUnsupportedError": ("ValueError", "RuntimeError"),
@@ -391,20 +397,21 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "BackendRuntimeCompatibilityError": ("ValueError",),
     "BackendUnsupportedError": ("ValueError", "RuntimeError"),
     "BackwardStreamUnavailableError": ("RuntimeError",),
+    "AtenOpsUnavailableError": ("RuntimeError",),
     "BaselineUndeterminedError": ("ValueError",),
-    "BatchChunkInputAmbiguityError": ("ValueError",),
+    "AmbiguousBatchInputError": ("ValueError",),
     "BatchNormTrainModeWarning": ("Warning",),
     "BundleMemberError": ("ValueError",),
     "BundleNotFinalizedError": ("RuntimeError",),
-    "BundleRelationshipError": ("ValueError",),
+    "BundleComparisonError": ("ValueError",),
     "CaptureAttemptFailedWarning": ("Warning",),
-    "CaptureContextError": ("RuntimeError",),
+    "CaptureNotActiveError": ("RuntimeError",),
     "CaptureError": (),
     "ChunkedForwardConfigError": ("ValueError",),
     # ValueError lineage is load-bearing: the runnable run wrapper reports the
     # container-spec tripwire as a typed RunPreconditionError denial (R64-3).
     "ContainerReconstructionError": ("ValueError",),
-    # ValueError lineage is load-bearing (R64-4): the other three tl.save
+    # ValueError lineage is load-bearing (R64-4): the other three Trace.save
     # door refusals are ValueError-lineage; except ValueError must catch all.
     "CaptureOutcomeError": ("ValueError",),
     "CompileCountsUnavailableError": ("RuntimeError",),
@@ -413,11 +420,12 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "ConfigurationError": (),
     "ControlFlowDivergenceError": ("RuntimeError",),
     "ControlFlowDivergenceWarning": ("Warning",),
+    "DatasetExtractionResumeError": ("RuntimeError",),
     "DeadParentError": ("ValueError",),
     "DiagnosticSeverityError": ("ValueError",),
     "DirectActivationWriteWarning": ("Warning",),
     "DirectWriteIgnoredWarning": ("Warning",),
-    "DirectWriteInExecutableSaveError": ("ValueError",),
+    "DirectWriteSaveError": ("ValueError",),
     "DistributedCaptureUnsupportedError": ("RuntimeError",),
     "EngineDispatchError": ("ValueError",),
     "GraphBreaksNormalizationError": ("RuntimeError",),
@@ -435,23 +443,35 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "InvalidArgumentError": ("ValueError",),
     "InvalidStorageError": ("ValueError",),
     "KeywordConflictError": ("TypeError",),
+    "LiveIndexWindowError": ("KeyError",),
     "LiveModeLabelError": ("ValueError",),
+    "MLXValueUnavailableError": ("RuntimeError",),
+    "MergeConflictError": ("RuntimeError",),
+    "MergeInputError": ("ValueError",),
+    "MergedArtifactError": (),
+    "MergedSurfaceUnsupportedError": ("RuntimeError",),
+    "MergedTraceError": (),
     "MetadataInvariantError": ("ValueError",),
     "ModelMismatchError": ("RuntimeError",),
     "MultiMatchWarning": ("Warning",),
     "MultiOutputModuleError": ("ValueError",),
-    "MutateInPlaceWarning": ("Warning",),
+    "NoInfluencePathError": ("ValueError",),
+    "ReceptiveFieldConfigurationError": ("ValueError",),
+    "ReceptiveFieldError": (),
+    "ReceptiveFieldUnavailableError": ("RuntimeError",),
+    "ReceptiveFieldValidationError": ("AssertionError",),
+    "SidecarError": (),
+    "TraceMutationWarning": ("Warning",),
     "MutatedReferenceError": ("RuntimeError",),
     "NoParentError": ("ValueError",),
     "NonExecutableSpecError": ("RuntimeError",),
-    "NumericAttestationError": ("RuntimeError",),
-    "OpaqueCallableInExecutableSaveError": ("ValueError",),
+    "ReplayValueMismatchError": ("RuntimeError",),
+    "OpaqueCallableError": ("ValueError",),
     "OutputAttributionError": ("RuntimeError",),
-    "PartialCaptureLookupError": ("ValueError",),
     "PathDivergenceError": ("ValueError", "RuntimeError"),
     "PayloadUnavailableError": ("ValueError",),
     "PoisonedRunError": ("RuntimeError",),
-    "PostTraceParamUnavailable": ("RuntimeError",),
+    "ParamReleasedError": ("RuntimeError",),
     "PredicateError": ("RuntimeError",),
     "ReattachError": ("RuntimeError",),
     "RecordBindingError": ("RuntimeError",),
@@ -481,7 +501,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "EpisodeLedgerError": ("ValueError",),
     "SelectorCompositionError": ("ValueError",),
     "ShapeInferenceError": ("RuntimeError",),
-    "SiteAmbiguityError": ("ValueError",),
+    "AmbiguousSiteError": ("ValueError",),
     "SiteResolutionError": ("ValueError",),
     "SparseCorePayloadError": ("AssertionError",),
     "SpecMutationError": ("ValueError",),
@@ -492,13 +512,15 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "StopSignalSwallowedError": ("RuntimeError",),
     "StructuralHashMismatchError": ("AssertionError",),
     "TorchCapabilityWarning": ("Warning",),
-    "TorchLensCaptureGapError": ("RuntimeError",),
-    "TorchLensCaptureGapWarning": ("Warning",),
+    "CaptureGapError": ("RuntimeError",),
+    "CaptureGapWarning": ("Warning",),
     "TorchLensError": (),
-    "TorchLensIOError": ("RuntimeError",),
+    "ArtifactError": ("RuntimeError",),
     "TorchLensInterventionError": ("RuntimeError",),
-    "TorchLensInterventionWarning": ("Warning",),
-    "TorchLensPostfuncError": ("RuntimeError",),
+    "InterventionWarning": ("Warning",),
+    "TraceCaptureError": (),
+    "TransformContractError": ("RuntimeError",),
+    "UserTransformError": ("RuntimeError",),
     "TorchLensWarning": ("Warning",),
     "TraceNotReproducibleWarning": ("Warning",),
     "TrainingModeConfigError": ("ValueError",),
@@ -517,7 +539,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     # doors via the landed train, the facade/lazy-state/dependency teaching
     # doors via the A10 entry-facade lane.
     "ArtifactRuntimeIncompatibleError": ("RuntimeError",),
-    "ArtifactVersionAboveRuntimeError": ("RuntimeError",),
+    "ArtifactTooNewError": ("RuntimeError",),
     "FacadeTeachingError": ("AttributeError",),
     "LazyStateUnsupportedError": ("RuntimeError",),
     "MissingDependencyError": ("AttributeError",),
@@ -527,7 +549,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     # BundleExperimentError, defined beside them in errors/episode.py but
     # never imported into the registry.
     "BundleExperimentError": ("RuntimeError",),
-    "CheckpointSeriesLiveParamsError": ("RuntimeError",),
+    "ParamEvidenceMissingError": ("RuntimeError",),
     "EpisodeJoinError": ("RuntimeError",),
     "BindingPreflightError": ("ValueError",),
     "BindingRuntimeError": ("RuntimeError",),
@@ -551,6 +573,9 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "CheckConfigError": (),
     "CheckLifecycleError": (),
     "CheckViolationError": (),
+    "AttributionError": ("ValueError",),
+    "LogitLensError": ("RuntimeError",),
+    "MissingFacetError": ("KeyError",),
     "ReadError": ("ValueError",),
     "ReadInternalError": ("RuntimeError",),
     "GradFnWalkError": (),
@@ -561,14 +586,15 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "NeuroHandoffError": ("ValueError",),
     "PreprocessingAuditError": ("RuntimeError",),
     "NormReconstructionError": ("RuntimeError",),
-    "EchoConfigError": (),
-    "EchoStatsError": (),
+    "NarrationConfigError": (),
+    "NarrationStatsError": (),
     "FittedArtifactError": ("RuntimeError",),
-    "TvizError": ("RuntimeError",),
+    "RenderError": ("RuntimeError",),
     "RankRenderEndpointError": ("RuntimeError",),
+    "DecodeStyleUnknownError": ("ValueError",),
     "PluginLoadWarning": ("Warning",),
     "SynthesizedValueReadWarning": ("Warning",),
-    "SubclassConstructionUnderDispatchModeError": ("RuntimeError",),
+    "TensorSubclassUnsupportedError": ("RuntimeError",),
 }
 
 
@@ -730,10 +756,7 @@ def test_spec_portability_alias_is_unchanged() -> None:
 
     from torchlens.intervention import errors as intervention_errors
 
-    assert (
-        intervention_errors.SpecPortabilityError
-        is intervention_errors.OpaqueCallableInExecutableSaveError
-    )
+    assert intervention_errors.SpecPortabilityError is intervention_errors.OpaqueCallableError
 
 
 @pytest.mark.parametrize(
@@ -741,7 +764,7 @@ def test_spec_portability_alias_is_unchanged() -> None:
     (
         (UnknownBackendError, "unknown_backend"),
         (BackendMismatchError, "backend_mismatch"),
-        (BackendAmbiguityError, "backend_ambiguity"),
+        (AmbiguousBackendError, "backend_ambiguity"),
         (BackendUnsupportedError, "backend_unsupported"),
         (BackendPayloadUnsupportedError, "backend_payload_unsupported"),
         (BackendRuntimeCompatibilityError, "backend_runtime_compatibility"),
@@ -814,7 +837,6 @@ TOP_REFUSAL_CASES: tuple[tuple[str, Callable[[], object]], ...] = (
     (
         "option_group_keyword_conflict",
         lambda: merge_visualization_options(
-            function_default_mode="none",
             visualization=VisualizationOptions(layout="dot"),
             layout="rank",
         ),
@@ -843,10 +865,9 @@ def test_top_refusal_messages_name_a_remedy(
 @pytest.mark.parametrize(
     ("operation", "trigger"),
     (
-        ("record_kpi_in_graph", lambda: user_funcs.record_kpi_in_graph("score", 1.0)),
         (
             "register_tensor_connection",
-            lambda: user_funcs.register_tensor_connection(object(), object()),  # type: ignore[arg-type]
+            lambda: run_entry.register_tensor_connection(object(), object()),  # type: ignore[arg-type]
         ),
     ),
 )
@@ -856,7 +877,7 @@ def test_capture_context_refusals_name_the_active_trace_remedy(
 ) -> None:
     """Capture-only public helpers name both their operation and entry remedy."""
 
-    with pytest.raises(errors.CaptureContextError) as exc_info:
+    with pytest.raises(errors.CaptureNotActiveError) as exc_info:
         trigger()
 
     assert exc_info.value.fields["code"] == "capture_context_required"
@@ -871,7 +892,8 @@ def test_capture_context_refusals_name_the_active_trace_remedy(
         errors.InvalidArgumentError,
         errors.ArgumentTypeError,
         errors.ArgumentConflictError,
-        errors.CaptureContextError,
+        errors.CaptureNotActiveError,
+        errors.AtenOpsUnavailableError,
     ),
 )
 def test_actionable_refusal_pickle_round_trip(
@@ -903,7 +925,7 @@ def _multiarg_refusal_cases() -> tuple[tuple[BaseException, dict[str, object]], 
     pickle/deepcopy/process boundary — e.g. a spawn child's
     ``MetadataInvariantError`` arrived in the parent as ``TypeError:
     __init__() missing 1 required positional argument``. The
-    ``torchlens.merged`` ``MergedTraceError`` family shares the shape but is
+    ``torchlens._merged`` ``MergedTraceError`` family shares the shape but is
     governed by its own frozen-vocabulary contract and lane.
 
     Returns
@@ -917,7 +939,7 @@ def _multiarg_refusal_cases() -> tuple[tuple[BaseException, dict[str, object]], 
         DescriptorStructuralBoundError,
     )
     from torchlens._io.state_keys import PortableStateKeyError
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
     from torchlens.validation.invariants import MetadataInvariantError
 
     return (
@@ -972,12 +994,12 @@ def test_multiarg_refusals_survive_pickle_and_deepcopy() -> None:
             assert restored.fields == original.fields, label
 
 
-def test_save_argument_door_is_typed_and_redirects_save_all() -> None:
-    """The ``save=`` type door refuses typed and names the `'all'` remedy.
+def test_save_argument_door_is_typed_and_names_runnable_spellings() -> None:
+    """The ``save=`` type door refuses typed and its remedy names spellings that run.
 
-    ``save='all'`` was documented as a valid spelling while the door raised a
-    raw ``TypeError`` with no code or remedy; only ``layers_to_save`` accepts
-    ``'all'``. Historical ``TypeError`` lineage is preserved.
+    ``save='all'`` and the ``save=[...]`` list form are documented ``tl.trace``
+    spellings and run (U26.3-fix bug 6); an unsupported type still refuses with a
+    code and a remedy. Historical ``TypeError`` lineage is preserved.
     """
 
     import torch
@@ -986,12 +1008,18 @@ def test_save_argument_door_is_typed_and_redirects_save_all() -> None:
     import torchlens as tl
 
     with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        tl.trace(nn.Identity(), torch.randn(2), save="all")
+        tl.trace(nn.Identity(), torch.randn(2), save=3)
 
     assert exc_info.value.fields["code"] == "save_predicate_type_invalid"
     assert isinstance(exc_info.value, TypeError)
-    assert "layers_to_save='all'" in exc_info.value.fields["remedy"]
+    assert "save='all'" in exc_info.value.fields["remedy"]
     assert "Remedy:" in str(exc_info.value)
+    x = torch.randn(2)
+    saved_all = tl.trace(nn.Identity(), x, save="all")
+    default = tl.trace(nn.Identity(), x)
+    assert [op.label for op in saved_all._layer_list if op.has_saved_activation] == [
+        op.label for op in default._layer_list if op.has_saved_activation
+    ]
 
 
 def test_collapse_order_mode_door_names_its_narrower_domain() -> None:
@@ -1003,7 +1031,7 @@ def test_collapse_order_mode_door_names_its_narrower_domain() -> None:
     exactly the accepted set — never ``'none'`` or floats, which refuse here.
     """
 
-    from torchlens.visualization.auto_collapse import collapse_order
+    from torchlens._visualization.auto_collapse import collapse_order
 
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
         collapse_order(object(), mode="none")  # type: ignore[arg-type]
@@ -1029,7 +1057,7 @@ def test_code_panel_doors_split_render_from_config_refusals() -> None:
 
     from torch import nn
 
-    from torchlens.visualization.code_panel import resolve_code_panel_source
+    from torchlens._visualization.code_panel import resolve_code_panel_source
 
     model = nn.Identity()
     with pytest.raises(errors.ArgumentTypeError) as return_info:
@@ -1060,18 +1088,24 @@ def test_predicate_type_doors_split_by_surface() -> None:
     from torch import nn
 
     import torchlens as tl
-    from torchlens.fastlog.options import RecordingOptions
 
-    for kwarg in ("intervene", "halt"):
-        base = "intervention" if kwarg == "intervene" else "halt"
+    for kwarg, trace_code in (
+        ("intervene", "intervention_predicate_type_invalid"),
+        # the stop directive is one door (stop_after=, a site or a predicate):
+        # a value that is neither refuses under its own type code
+        ("stop_after", "stop_after_type_invalid"),
+    ):
         with pytest.raises(errors.ArgumentTypeError) as trace_info:
             tl.trace(nn.Identity(), torch.randn(2), **{kwarg: 123})
-        assert trace_info.value.fields["code"] == f"{base}_predicate_type_invalid"
+        assert trace_info.value.fields["code"] == trace_code
         assert isinstance(trace_info.value, TypeError)
         assert not isinstance(trace_info.value, ValueError)
 
+    # the record surface resolves both predicates in the Recorder (intervene=
+    # and stop_after= on the door); the recording_* codes keep ValueError lineage
+    for kwarg, base in (("intervene", "intervention"), ("stop_after", "halt")):
         with pytest.raises(errors.InvalidArgumentError) as record_info:
-            RecordingOptions(**{kwarg: 123})
+            tl.record(nn.Identity(), torch.randn(2), **{kwarg: 123})
         assert record_info.value.fields["code"] == f"recording_{base}_predicate_type_invalid"
         assert isinstance(record_info.value, ValueError)
         assert not isinstance(record_info.value, TypeError)
@@ -1095,7 +1129,6 @@ def test_option_group_conflict_doors_split_by_site_history() -> None:
 
     with pytest.raises(errors.KeywordConflictError) as keyword_info:
         merge_visualization_options(
-            function_default_mode="none",
             visualization=VisualizationOptions(layout="dot"),
             layout="rank",
         )
@@ -1104,31 +1137,10 @@ def test_option_group_conflict_doors_split_by_site_history() -> None:
     assert not isinstance(keyword_info.value, ValueError)
 
 
-def test_intervention_direction_doors_split_by_site_history() -> None:
-    """Predicate-side direction refusal keeps its historical TypeError lineage.
-
-    The door raised a raw ``TypeError`` since the 2.16 intervention era, and
-    the live capture-path callers catch ``TypeError`` to convert a bad
-    predicate result into ``PredicateError``. Its code is distinct from the
-    ValueError-lineage trace-side ``intervention_direction_invalid`` doors so
-    ``fields["code"]`` determines the catchable builtin.
-    """
-
-    from torchlens.intervention.predicates import as_intervention_decision
-
-    with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        as_intervention_decision(lambda out: out, direction="sideways")  # type: ignore[arg-type]
-
-    assert exc_info.value.fields["code"] == "intervention_action_direction_invalid"
-    assert isinstance(exc_info.value, TypeError)
-    assert not isinstance(exc_info.value, ValueError)
-    assert "Remedy:" in str(exc_info.value)
-
-
 def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Backward intervention normalization propagates typed selector refusals."""
 
-    def _raise_typed_refusal(selector: object) -> str:
+    def _raise_typed_refusal(selector: object) -> tuple[tuple[str, object], ...]:
         """Raise the typed selector refusal used to probe the former broad catch."""
 
         del selector
@@ -1140,12 +1152,12 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
         del context
 
     predicate.selector = object()  # type: ignore[attr-defined]
-    predicate.decision = InterventionDecision(action="transform")  # type: ignore[attr-defined]
-    from torchlens import _capture_intervention
-
-    monkeypatch.setattr(
-        _capture_intervention, "_selector_resolution_direction", _raise_typed_refusal
+    predicate.decision = InterventionDecision(  # type: ignore[attr-defined]
+        action="transform", hook=lambda out, *, ctx: out
     )
+    from torchlens._capture.prepare import resolve as _capture_intervention
+
+    monkeypatch.setattr(_capture_intervention, "split_site_branches", _raise_typed_refusal)
 
     with pytest.raises(SiteResolutionError) as exc_info:
         _capture_intervention._backward_intervention_spec_from_predicate(predicate)
@@ -1160,7 +1172,7 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
 # The lineage golden above pins only ``dir(torchlens.errors)`` — historically
 # ~24 exception classes defined elsewhere in the package sat OUTSIDE that
 # universe entirely (ReentrantTraceError, WildcardRecvUnsupportedError,
-# TorchCapabilityWarning, HaltSignal, ...), so a new stranded class could ship
+# TorchCapabilityWarning, StopSignal, ...), so a new stranded class could ship
 # with no conscious registration decision. The closure scan below statically
 # walks EVERY module in ``torchlens/`` for exception-lineage class definitions
 # and demands each one is EITHER resolvable through ``torchlens.errors`` OR on
@@ -1180,6 +1192,40 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # Metadata unpickler pre-scan control flow: private signals between the dry run and
+    # the load path, never raised to a caller (the load path catches both and either runs
+    # the pure-Python machine or refuses with the boundary's UnpicklingError).
+    "torchlens._io._pickle_prescan.StreamNeedsInterpreter": (
+        "private hand-off from the pre-scan to the pure-Python machine; caught by "
+        "SafeBundleUnpickler.load, never escapes"
+    ),
+    "torchlens._io._pickle_prescan._NotStatic": (
+        "private signal that a construction's arguments are only known at run time; "
+        "caught inside the pre-scan, never escapes"
+    ),
+    "torchlens._io._pickle_prescan._StopDryRun": (
+        "private signal that the policy refused a global; caught inside the pre-scan, "
+        "the refusal itself is re-raised by the real run"
+    ),
+    # Changed-parameter replay refusal: a private ReplayPreconditionError subclass
+    # whose only job is carrying prose plus the coded fields (callers catch the base).
+    "torchlens.intervention._param_fingerprint.ParamChangedSinceCaptureError": (
+        "private ReplayPreconditionError subclass; contracted by its code "
+        "replay_param_changed_since_capture, caught as ReplayPreconditionError"
+    ),
+    # Forward-validation copy-failure disclosure: a coded TorchLensWarning
+    # (S-18 contract row validation_model_copy_failed) private to validation.
+    "torchlens._validation_state_snapshot._ValidationCopyFailedWarning": (
+        "private validation disclosure; contracted by its S-18 code "
+        "validation_model_copy_failed, not a public class"
+    ),
+    # Forward-validation parameter-reference guard: raised when a parameter kept
+    # by reference changed, caught by the validation wrapper, which reruns on
+    # the copy path; never reaches the caller.
+    "torchlens._validation_argument_references._ParameterArgumentChanged": (
+        "internal validation carrier; caught by with_parameter_reference_fallback, "
+        "which reruns validation with every argument copied"
+    ),
     # autograd.grad boundary replay: raised only inside the subgraph replay and
     # caught by the replay executor, which records a failed validation.
     "torchlens.validation._autograd_grad_replay.AutogradGradReplayError": (
@@ -1188,22 +1234,27 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # L4 declared-state restore bracket: an INTERNAL carrier converted into
     # the typed run_state_restore_failed refusal at the transaction boundary
     # (never user-facing; parked by the L6 merge train post-merge repair).
-    "torchlens._runnable_state.LiveStateRestoreFailure": (
+    "torchlens._runnable.state_live.LiveStateRestoreFailure": (
         "internal mid-bracket carrier; surfaced as run_state_restore_failed"
+    ),
+    # tl.stats.aggregate(cache=True) key builder: raised while hashing a run's inputs
+    # and caught by run_cached, which raises stats_aggregate_cache_unkeyable.
+    "torchlens.stats._aggregate_cache._Unkeyable": (
+        "internal key-builder carrier; surfaced as stats_aggregate_cache_unkeyable"
     ),
     # -- L7a structure-only refusals + S3 registrar (DOCUMENTED-UNSTABLE;
     # their torchlens.errors registration rides the S2 author's ratification
     # PR together with the BUILTIN_LINEAGE_GOLDEN rows — this allowlist entry
     # is the pre-ratification parking spot, retired in that same PR) --
-    "torchlens.capture.structure_only.ValueDependentBranchError": (
+    "torchlens._capture.structure_only.ValueDependentBranchError": (
         "S2-gated structure-only teaching refusal; errors-namespace "
         "registration deferred to the S2 ratification PR"
     ),
-    "torchlens.capture.structure_only.MetaKernelUnavailableError": (
+    "torchlens._capture.structure_only.MetaKernelUnavailableError": (
         "S2-gated structure-only teaching refusal; errors-namespace "
         "registration deferred to the S2 ratification PR"
     ),
-    "torchlens.capture.structure_only.StructureOnlyCapabilityError": (
+    "torchlens._capture.structure_only.StructureOnlyCapabilityError": (
         "S2-gated structure-only chokepoint refusal; errors-namespace "
         "registration deferred to the S2 ratification PR"
     ),
@@ -1230,15 +1281,15 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # public facade home). These classes ARE registered through
     # torchlens.errors at that runtime home; the static scanner keys the
     # DEFINING file, so each carries its defining-path row here. --
-    "torchlens._io.format_errors.TorchLensIOError": (
+    "torchlens._io.format_errors.ArtifactError": (
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens._io; this row records the post-split defining file"
     ),
-    "torchlens._io.format_errors.ArtifactVersionBelowFloorError": (
+    "torchlens._io.format_errors.ArtifactTooOldError": (
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens._io; this row records the post-split defining file"
     ),
-    "torchlens._io.format_errors.ArtifactVersionAboveRuntimeError": (
+    "torchlens._io.format_errors.ArtifactTooNewError": (
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens._io; this row records the post-split defining file"
     ),
@@ -1250,15 +1301,10 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens._io; this row records the post-split defining file"
     ),
-    "torchlens._io.format_errors.ArtifactSchemaAgeWarning": (
-        "warning category defined in the C01 _io split's L0 error module "
-        "with __module__ preserved as torchlens._io; surfaced through "
-        "torchlens.errors at that runtime home"
-    ),
-    "torchlens._io.sidecar.SidecarError": (
-        "C01 sidecar-seam internal typed refusal (fail-closed sidecar "
-        "read/write); errors-namespace registration deferred to the naming "
-        "sprint with the sidecar spellings"
+    "torchlens.bundle._labels.AmbiguousLabelError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens.bundle; this row records the defining file (moved into the "
+        "label leaf so the leaf stops importing the package)"
     ),
     "torchlens._registry.kernel.RegistryError": (
         "private registry-kernel refusal (C01); surfaced through typed "
@@ -1268,74 +1314,70 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # -- C04 data substrates (DOCUMENTED-UNSTABLE pending the naming sprint;
     # registration rides the naming ratification with the tl.transforms /
     # extraction-v2 spellings) --
-    "torchlens.transforms._errors.TransformContractError": (
-        "C04 transforms-contract teaching refusal (ConfigurationError "
-        "subclass); errors-namespace registration deferred to the naming "
-        "sprint with the tl.transforms spellings"
-    ),
     "torchlens._data_substrate.artifact.ExtractionArtifactError": (
         "C04 extraction artifact-v2 typed refusal (ConfigurationError "
         "subclass); errors-namespace registration deferred to the naming "
         "sprint with the extraction-v2 spellings"
     ),
     # -- Internal control-flow signals / private helpers (never user-caught) --
-    "torchlens.fastlog._halt.HaltSignal": (
+    "torchlens.recording._halt.StopSignal": (
         "internal control-flow stop signal (BaseException); converted to recording status"
     ),
-    "torchlens._runnable_execution._ProjectionCountExceeded": (
+    "torchlens._fast_live_until.FastUntilReached": (
+        "internal control-flow cut signal (BaseException) for trace.run(fast=True, until=); "
+        "raised and caught inside the fast live session, never escapes _fast_run"
+    ),
+    "torchlens._runnable.execution._ProjectionCountExceeded": (
         "private internal bound signal; caught inside the projection walk"
     ),
-    "torchlens._runnable_execution._UnreadableProjectedOutput": (
+    "torchlens._runnable.execution._UnreadableProjectedOutput": (
         "private allocation-preflight signal (grind-r5 b7 R22); raised when a "
         "projected output's size cannot be read and converted by the caller to "
         "the typed op_allocation_preflight refusal"
     ),
-    "torchlens.user_funcs._CaptureCacheEntryOverCeilingError": (
+    "torchlens._capture.prepare.cache._CaptureCacheEntryOverCeilingError": (
         "private mid-stream byte-ceiling abort signal; raised and caught inside the "
-        "capture-cache writer, never escapes user_funcs"
+        "capture-cache writer, never escapes the capture cache module"
     ),
-    "torchlens.utils.rng._NotADigestableRng": (
+    "torchlens._utils.rng.inventory_types._NotADigestableRng": (
         "private RNG-classifier signal; caught inside the witness classifier"
     ),
     "torchlens._io.runnable._UnsupportedLiteralError": (
         "private save-time literal-classifier signal; converted to typed refusals"
     ),
-    "torchlens.utils._torch_compat._DynamoExplainOutputError": (
+    "torchlens.debug._dynamo_explain_shapes._DynamoExplainOutputError": (
         "private dynamo-explain probe failure; caught inside the capability probe"
     ),
-    "torchlens.capture.projections.LiveOpViewFieldNotYetWritten": (
+    "torchlens._capture.projections.LiveOpViewFieldNotYetWritten": (
         "internal AttributeError shim for not-yet-written live OpRecord view fields"
     ),
-    "torchlens.ir.op_record.OpRecordAttributeError": (
+    "torchlens._ir.op_record.OpRecordAttributeError": (
         "internal strict-protocol AttributeError for OpRecord facet access"
     ),
-    "torchlens.ir.op_record.AmendmentValidationError": (
+    "torchlens._ir.op_record.AmendmentValidationError": (
         "internal journal amendment-lane invariant; a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.AmendmentTargetError": (
+    "torchlens._ir.capture_events.AmendmentTargetError": (
         "internal journal invariant (amendment target); a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.LaneMergePolicyError": (
+    "torchlens._ir.capture_events.LaneMergePolicyError": (
         "internal journal invariant (lane merge policy); a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.SealedJournalWriteError": (
+    "torchlens._ir.capture_events.SealedJournalWriteError": (
         "internal sealed-journal write invariant; a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.SealedJournalAppendError": (
+    "torchlens._ir.capture_events.SealedJournalAppendError": (
         "internal sealed-journal append invariant; a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.SealedJournalAmendmentError": (
+    "torchlens._ir.capture_events.SealedJournalAmendmentError": (
         "internal sealed-journal amendment invariant; a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.SourceSequencingError": (
+    "torchlens._ir.capture_events.SourceSequencingError": (
         "internal journal source-sequencing invariant; a raise indicates a TorchLens bug"
     ),
     # ``ContainerReconstructionError`` left this allowlist (r3 b1-opus R64-3):
     # it escapes users from the public ``Op.multi_output_type`` property, so it
     # is registered on ``torchlens.errors`` with code ``container_spec_inadmissible``.
-    "torchlens.ir.live_index.LiveIndexWindowError": (
-        "internal lookback-window KeyError; caught by the windowed-save machinery"
-    ),
     # -- Errors governed by other contract docs / documented submodule homes --
     "torchlens._io.runnable_load.ContextFieldInvalidError": (
         "runnable contract-doc vocabulary (context_field_invalid); surfaced through "
@@ -1348,68 +1390,14 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "taxonomy member (TorchLensError); internal state-key codec error surfaced "
         "through the strict state binder"
     ),
-    "torchlens.merged._errors.MergedTraceError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md); "
-        "taxonomy member via TorchLensError"
-    ),
-    "torchlens.merged._errors.MergeConflictError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
-    ),
-    "torchlens.merged._errors.MergeInputError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
-    ),
-    "torchlens.merged._errors.MergedArtifactError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
-    ),
-    "torchlens.merged._errors.MergedSurfaceUnsupportedError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
-    ),
-    "torchlens.receptive_field._errors.ReceptiveFieldError": (
-        "public home is the lazy tl.receptive_field submodule; taxonomy member via TorchLensError"
-    ),
-    "torchlens.receptive_field._errors.AmbiguousCallError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
     "torchlens.receptive_field._errors.AmbiguousInputError": (
         "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.AmbiguousPassError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.AmbiguousTargetError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.NoInfluencePathError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.ReceptiveFieldConfigurationError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.ReceptiveFieldUnavailableError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.receptive_field._errors.ReceptiveFieldValidationError": (
-        "public home is the lazy tl.receptive_field submodule"
-    ),
-    "torchlens.attribution._result.AttributionError": (
-        "public home is torchlens.attribution.__all__; now based on "
-        "ConfigurationError + ValueError (F06 rebase for the S-17 coded-refusal "
-        "contract) but its registration home stays that surface's own review "
-        "decision"
     ),
     "torchlens.attribution._result.AttributionWarning": (
         "public home is the torchlens.attribution surface; a TorchLensWarning "
         "subclass carrying the S-18 coded metric/text disclosures (F06)"
     ),
-    "torchlens.bundle.AmbiguousLabelError": (
-        "public home is torchlens.bundle/torchlens.intervention.bundle __all__; plain "
-        "KeyError outside the taxonomy — rebase/registration is that surface's decision"
-    ),
-    "torchlens.semantic.facets.MissingFacetError": (
-        "public home is torchlens.semantic.__all__ (provisional surface); plain KeyError "
-        "outside the taxonomy"
-    ),
-    "torchlens.utils._multipass_access.MultiPassAmbiguityError": (
+    "torchlens._utils._multipass_access.MultiPassAmbiguityError": (
         "multi-pass access refusal raised via record accessors; plain ValueError outside "
         "the taxonomy — flagged for future taxonomy adoption"
     ),
@@ -1419,9 +1407,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     ),
     "torchlens.backends.tf.interventions.TFInterventionSiteUnreachableError": (
         "TF preview refusal catchable via its registered parent BackendUnsupportedError"
-    ),
-    "torchlens.ir.predicate.MLXValueUnavailableError": (
-        "MLX preview value-access refusal; preview-backend surface, not yet in the stable registry"
     ),
     # -- Post-tour sprint (2026-08-19). All five ARE user-facing refusals from
     # newly shipped features, so registering them on torchlens.errors is the
@@ -1433,17 +1418,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "raised by to_disk(async_writes=True) when a background write fails; "
         "errors-namespace registration deferred to the UI/API naming slate"
     ),
-    "torchlens._extraction.resume.DatasetExtractionResumeError": (
-        "raised by extract_dataset(resume=True) on a signature/manifest mismatch "
-        "(extraction_resume_* / extraction_manifest_invalid); defined in the F18 "
-        "resume module, re-exported by torchlens.dataset_extraction; registration "
-        "deferred to the UI/API naming slate"
-    ),
-    "torchlens.semantic.logit_lens.LogitLensError": (
-        "logit_lens refusal (it refuses rather than mislabel a non-standard final "
-        "norm); registration deferred to the UI/API naming slate"
-    ),
-    "torchlens.semantic.patching.PatchApplicationError": (
+    "torchlens._semantic.patching.PatchApplicationError": (
         "activation-patching ineffective-rerun refusal (patch_ineffective); "
         "registration deferred to the UI/API naming slate"
     ),
@@ -1457,7 +1432,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     ),
     # -- taxonomy closure: the three stranded classes that are NOT public
     # catch targets today --
-    "torchlens.visualization.collapse_estimator.FallbackDegrade": (
+    "torchlens._visualization.collapse_estimator.FallbackDegrade": (
         "internal control-flow signal of the smart-collapse quality planner: "
         "raised at budget checkpoints (allocation cap, watchdog) and caught at "
         "the selection entry, which degrades to the linear fallback; never "
@@ -1472,6 +1447,14 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "S2-gated weights-free admission/settlement refusal (CaptureError "
         "subclass); errors-namespace registration rides the S2 ratification "
         "PR with its structure-only siblings above"
+    ),
+    # Aliased output slots (net-f26): the flat leaf stream ran dry while a
+    # container spec was being rebuilt; an internal signal that carries the
+    # slot path up the recursion and is turned into the public ValueError by
+    # ``rebuild_container_from_spec`` once the full path is known.
+    "torchlens._ir.container._LeafStreamDry": (
+        "internal recursion signal carrying the dry slot path; caught by "
+        "rebuild_container_from_spec, which raises the public ValueError"
     ),
 }
 
@@ -1604,6 +1587,26 @@ def test_input_kwargs_type_invalid_provoked() -> None:
     assert excinfo.value.fields["code"] == "input_kwargs_type_invalid"
 
 
+def test_halt_predicate_type_invalid_provoked() -> None:
+    """A non-callable halt slot refuses typed at the torch backend capture entry.
+
+    ``tl.trace`` compiles ``stop_after=`` into the halt slot itself (an
+    unsupported type there refuses ``stop_after_type_invalid``), so the only
+    live door to this check is the backend spec's flat capture entry.
+    """
+
+    import torch
+
+    from torchlens._errors import ArgumentTypeError
+    from torchlens.backends import spec as backend_spec
+
+    model = torch.nn.Identity()
+    with pytest.raises(ArgumentTypeError) as excinfo:
+        backend_spec("torch").capture_trace(model, torch.ones(2), halt=123)
+    assert excinfo.value.fields["code"] == "halt_predicate_type_invalid"
+    assert excinfo.value.fields["argument"] == "halt"
+
+
 def test_layers_to_save_type_invalid_provoked() -> None:
     """A Tensor in the deprecated positional layers_to_save slot refuses typed.
 
@@ -1622,11 +1625,9 @@ def test_layers_to_save_type_invalid_provoked() -> None:
         tl.trace(model, torch.ones(2), None, torch.ones(2))  # type: ignore[misc]
     assert excinfo.value.fields["code"] == "extra_positional_input_invalid"
     with pytest.raises(ArgumentTypeError) as excinfo:
-        tl.trace(
-            model,
-            torch.ones(2),
-            capture=tl.options.CaptureOptions(layers_to_save=torch.ones(2)),  # type: ignore[arg-type]
-        )
+        from torchlens._capture.prepare.door import _trace_torch_model
+
+        _trace_torch_model(model, torch.ones(2), layers_to_save=torch.ones(2))  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "layers_to_save_type_invalid"
 
 

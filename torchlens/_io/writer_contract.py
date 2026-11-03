@@ -12,31 +12,30 @@ that made released v2.33.0 and v2.34.1 indistinguishable by stamp alone.
 Writer identity enters as the set of identity fields a conforming writer
 must STAMP (never the concrete version values): baking the release string
 into the digest would make every release trivially distinct and destroy the
-same-grammar signal the ledger keys on. Concrete writer identity lives in
-the compatibility ledger row next to the digest, not inside it.
+same-grammar signal the digest exists to give. Concrete writer identity lives in
+the manifest's own writer stamp, not inside the digest.
 
 The contract of record is committed at
-``torchlens/schemas/writer_contract_v{TLSPEC_VERSION}.json`` (v9 as of the
-C07 coordinated schema write; the superseded v8 contract stays pinned at
-``tests/release_goldens/writer_contract_v8.json`` for the reviewable
-cross-version field-set diff) and enforced by
+``torchlens/schemas/writer_contract_v{TLSPEC_VERSION}.json`` (v10 as of the
+batch-2 coordinated schema write; the superseded v8 and v9 contracts left
+with the 2.x readers) and enforced by
 ``tests/test_tlspec_envelope_contract.py``: regenerating from the live tree
 must reproduce the committed contract byte-for-byte, and a persisted field
 name that DISAPPEARS from the live contract must be covered by an alias rule
-or the diff test fails (alias-or-fail, MEMO 3.3) -- the per-PR cheap variant
-of the forward-load gate (MEMO 3.4/G8).
+or the diff test fails (alias-or-fail, MEMO 3.3).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 from importlib import resources
 from typing import Any
 
+from .._utils.hashing import sha256_canonical_json
 from . import MIN_TLSPEC_VERSION, MIN_TORCHLENS_VERSION_TEXT, TLSPEC_VERSION
 from ._json import loads_bounded
 from .field_registry import registry_snapshot
+from .format_contract import RESERVED_STEP_SCORE_CREDIT, RESERVED_STEP_SCORE_NAMES
 
 #: Identity fields a conforming writer stamps on every manifest (the
 #: REQUIREMENT is contract; the values are ledger data, deliberately outside
@@ -69,14 +68,14 @@ def _manifest_schema_ids() -> dict[str, str]:
         if not entry.name.startswith("tlspec_manifest_") or not entry.name.endswith(".json"):
             continue
         parsed = loads_bounded(entry.read_text(encoding="utf-8"))
-        ids[entry.name] = hashlib.sha256(_canonical_json(parsed).encode("utf-8")).hexdigest()
+        ids[entry.name] = sha256_canonical_json(parsed, default=None)
     return ids
 
 
 def _component_schema_versions() -> dict[str, Any]:
     """Versioned component-grammar constants riding inside bundles."""
 
-    from ..runnable import (
+    from .._runnable import (
         LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
         RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
         RUNNABLE_CALL_RECIPE_VERSION,
@@ -85,6 +84,8 @@ def _component_schema_versions() -> dict[str, Any]:
         RUNNABLE_TLSPEC_SCHEMA_VERSION,
         WITNESS_FAMILY_REGISTRY_VERSION,
     )
+    from ..bundle._fed_by import TOKEN_BOUNDARY_SCHEMA_ID
+    from ..bundle._relations import MEMBER_ROW_KINDS, PAIR_ROW_KINDS
 
     return {
         "runnable_descriptor": RUNNABLE_TLSPEC_SCHEMA_VERSION,
@@ -96,6 +97,26 @@ def _component_schema_versions() -> dict[str, Any]:
         "witness_family_registry": WITNESS_FAMILY_REGISTRY_VERSION,
         "state_dict_blob_family": "state_dict_v1",
         "nonpersistent_buffer_family": "runnable_nonpersistent_buffer_v1",
+        # v10 (harness bundles): the closed bundle relation-kind vocabulary
+        # (``fed_by`` joins here) and the member token-stream binding schema.
+        "bundle_relation_kinds": sorted(set(PAIR_ROW_KINDS) | set(MEMBER_ROW_KINDS)),
+        "token_boundary_schema": TOKEN_BOUNDARY_SCHEMA_ID,
+    }
+
+
+def _reserved_vocabularies() -> dict[str, Any]:
+    """Name vocabularies reserved for future persisted families (v10).
+
+    A reservation freezes the NAMES with the contract of record before any
+    writer exists; it declares no field slot and changes no load behaviour.
+    """
+
+    return {
+        "step_scores": {
+            "names": list(RESERVED_STEP_SCORE_NAMES),
+            "credit": RESERVED_STEP_SCORE_CREDIT,
+            "status": "reserved",
+        }
     }
 
 
@@ -117,6 +138,7 @@ def writer_contract() -> dict[str, Any]:
         "payload_codec_ids": list(PAYLOAD_CODEC_IDS),
         "manifest_schema_ids": _manifest_schema_ids(),
         "component_schema_versions": _component_schema_versions(),
+        "reserved_vocabularies": _reserved_vocabularies(),
         **registry_snapshot(),
     }
 
@@ -126,4 +148,4 @@ def writer_contract_digest(contract: dict[str, Any] | None = None) -> str:
 
     if contract is None:
         contract = writer_contract()
-    return hashlib.sha256(_canonical_json(contract).encode("utf-8")).hexdigest()
+    return sha256_canonical_json(contract, default=None)

@@ -1,32 +1,30 @@
-"""Private wave-0 ATen-profile recorder and observer-gap bridge."""
+"""ATen-profile recorder and observer-gap bridge for ``CaptureOptions(aten_ops=True)``.
+
+The recorder is armed per capture by the public switch (read in
+``_completeness_finalize._resolve_witness_requests``); there is no process-wide
+or test-only arm.
+"""
 
 from __future__ import annotations
 
 import hashlib
-import os
 import threading
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
-from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Any
 
 import torch
 
 from ... import _state
-from ...ir.events import (
+from ..._ir.events import (
     _AtenCallEvent,
     _AtenExecutionContext,
     _AtenTensorFact,
     _ModePausedInteriorEvent,
 )
-
-_RECORD_ATEN_FOR_TESTS: ContextVar[bool] = ContextVar(
-    "torchlens_record_aten_for_tests", default=False
-)
-_ACTIVE_BACKWARD_GRAD_FN_REFS: ContextVar[tuple[tuple[int, int, int], ...]] = ContextVar(
-    "torchlens_active_aten_grad_fn_refs", default=()
-)
+from ..._utils._torch_compat import get_current_autograd_node_fn
+from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,36 +49,6 @@ class _PendingAtenCall:
     execution_context: _AtenExecutionContext
 
 
-@contextmanager
-def _activate_aten_recording_for_tests() -> Iterator[None]:
-    """Arm the private wave-0 ATen recorder for one pytest scope.
-
-    Yields
-    ------
-    None
-        The recorder is enabled only for captures entered in this scope.
-
-    Raises
-    ------
-    RuntimeError
-        If called outside pytest.
-    """
-
-    if "PYTEST_CURRENT_TEST" not in os.environ:
-        raise RuntimeError("the wave-0 ATen recorder activation is test-only")
-    token = _RECORD_ATEN_FOR_TESTS.set(True)
-    try:
-        yield
-    finally:
-        _RECORD_ATEN_FOR_TESTS.reset(token)
-
-
-def _aten_recording_requested() -> bool:
-    """Return whether the private wave-0 recorder is armed in this context."""
-
-    return _RECORD_ATEN_FOR_TESTS.get()
-
-
 def _module_call_stack(trace: Any) -> tuple[tuple[str, int], ...]:
     """Snapshot the active exhaustive module stack as immutable value facts.
 
@@ -100,9 +68,9 @@ def _module_call_stack(trace: Any) -> tuple[tuple[str, int], ...]:
     rows: list[tuple[str, int]] = []
     for frame in frames:
         address = getattr(frame, "address", None)
-        pass_index = getattr(frame, "pass_index", None)
-        if isinstance(address, str) and isinstance(pass_index, int):
-            rows.append((address, pass_index))
+        pass_number = getattr(frame, "pass_number", None)
+        if isinstance(address, str) and isinstance(pass_number, int):
+            rows.append((address, pass_number))
     return tuple(rows)
 
 
@@ -348,7 +316,7 @@ def _execution_context(
         sdpa_policy=tuple(sdpa_policy),
         compile_stance="forced_eager",
         owner_thread_coverage=(threading.get_ident(),),
-        completeness_witness_mode=str(getattr(trace, "completeness_witness_mode", "off")),
+        completeness_witness_mode=str(trace.__dict__.get("_health_completeness_mode", "off")),
     )
 
 
@@ -383,8 +351,7 @@ def _prepare_aten_call(
 
     namespace, operator, overload, schema, fingerprint = _operator_parts(func)
     autocast = _autocast_context()
-    active_grad_refs = _ACTIVE_BACKWARD_GRAD_FN_REFS.get()
-    grad_ref = active_grad_refs[-1] if active_grad_refs else None
+    grad_ref = executing_grad_fn_ref(id(state.trace), resolver=get_current_autograd_node_fn())
     return _PendingAtenCall(
         capture_phase=state.capture_phase,
         forward_pass_index=1 if state.capture_phase == "forward" else None,
@@ -564,45 +531,6 @@ def _record_mode_paused_interior(trace: Any, *, owner_func_call_id: int | None) 
             owner_func_call_id=owner_func_call_id,
         )
     )
-
-
-def _begin_backward_grad_fn(
-    object_id: int,
-    call_index: int,
-    pass_index: int,
-) -> Token[tuple[tuple[int, int, int], ...]]:
-    """Push the active GradFn-call witness for one engine node.
-
-    Parameters
-    ----------
-    object_id
-        Captured GradFn object identity.
-    call_index
-        Predicted one-based call index.
-    pass_index
-        Active one-based backward pass index.
-
-    Returns
-    -------
-    contextvars.Token
-        Token used to restore the prior marker after the node fires.
-    """
-
-    current = _ACTIVE_BACKWARD_GRAD_FN_REFS.get()
-    return _ACTIVE_BACKWARD_GRAD_FN_REFS.set((*current, (object_id, call_index, pass_index)))
-
-
-def _end_backward_grad_fn(token: Token[tuple[tuple[int, int, int], ...]] | None) -> None:
-    """Restore the prior active GradFn marker.
-
-    Parameters
-    ----------
-    token
-        Token returned by :func:`_begin_backward_grad_fn`, or ``None``.
-    """
-
-    if token is not None:
-        _ACTIVE_BACKWARD_GRAD_FN_REFS.reset(token)
 
 
 @contextmanager

@@ -93,3 +93,723 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
 recorded: 2026-09-01T07:11:39.814192+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-05 with R2-38: tlspec v10 stamp
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9ca3adf7a2b8ee8390300a323cd8c149c515b7c (dirty)
+recorded: 2026-10-12T19:28:59.426374+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-05 with R2-38: tlspec v10 stamp
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9ca3adf7a2b8ee8390300a323cd8c149c515b7c (dirty)
+recorded: 2026-10-12T19:28:59.504228+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-05 with R2-38: tlspec v10 stamp
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9ca3adf7a2b8ee8390300a323cd8c149c515b7c (dirty)
+recorded: 2026-10-12T19:28:59.593319+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-05 with R2-38: tlspec v10 stamp
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9ca3adf7a2b8ee8390300a323cd8c149c515b7c (dirty)
+recorded: 2026-10-12T19:28:59.905590+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-05 with R2-38: tlspec v10 stamp
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9ca3adf7a2b8ee8390300a323cd8c149c515b7c (dirty)
+recorded: 2026-10-12T19:28:59.930185+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-05 with R2-38: tlspec v10 stamp
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9ca3adf7a2b8ee8390300a323cd8c149c515b7c (dirty)
+recorded: 2026-10-12T19:29:00.901012+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-05 with R2-38: tlspec v10 stamp
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9ca3adf7a2b8ee8390300a323cd8c149c515b7c (dirty)
+recorded: 2026-10-12T19:29:01.016764+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-05 with R2-38: tlspec v10 stamp
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9ca3adf7a2b8ee8390300a323cd8c149c515b7c (dirty)
+recorded: 2026-10-12T19:29:01.240036+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-37 (RUN-B phase 1 landed through SCHEMA): Trace.pinned_autograd_memory joins the public Trace surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cdd5c2f9ac0cff9f94420085613f0d9f6e2f50c9 (dirty)
+recorded: 2026-10-12T23:34:29.655797+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-37 (RUN-B phase 1 landed through SCHEMA): Trace.pinned_autograd_memory joins the public Trace surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cdd5c2f9ac0cff9f94420085613f0d9f6e2f50c9 (dirty)
+recorded: 2026-10-12T23:34:29.739539+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-37 (RUN-B phase 1 landed through SCHEMA): Trace.pinned_autograd_memory joins the public Trace surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cdd5c2f9ac0cff9f94420085613f0d9f6e2f50c9 (dirty)
+recorded: 2026-10-12T23:34:29.825453+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-37 (RUN-B phase 1 landed through SCHEMA): Trace.pinned_autograd_memory joins the public Trace surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cdd5c2f9ac0cff9f94420085613f0d9f6e2f50c9 (dirty)
+recorded: 2026-10-12T23:34:30.138146+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-37 (RUN-B phase 1 landed through SCHEMA): Trace.pinned_autograd_memory joins the public Trace surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cdd5c2f9ac0cff9f94420085613f0d9f6e2f50c9 (dirty)
+recorded: 2026-10-12T23:34:30.162354+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-37 (RUN-B phase 1 landed through SCHEMA): Trace.pinned_autograd_memory joins the public Trace surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cdd5c2f9ac0cff9f94420085613f0d9f6e2f50c9 (dirty)
+recorded: 2026-10-12T23:34:31.209777+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-37 (RUN-B phase 1 landed through SCHEMA): Trace.pinned_autograd_memory joins the public Trace surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cdd5c2f9ac0cff9f94420085613f0d9f6e2f50c9 (dirty)
+recorded: 2026-10-12T23:34:31.329162+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: R2-37 (RUN-B phase 1 landed through SCHEMA): Trace.pinned_autograd_memory joins the public Trace surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cdd5c2f9ac0cff9f94420085613f0d9f6e2f50c9 (dirty)
+recorded: 2026-10-12T23:34:31.528937+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: U26.1 (JMT ruling 2026-10-11, batch-2 lane SEL): a model-output alias node no longer re-claims the module-exit lookup keys of the op it aliases, so modules whose output is a model output resolve to their own op; output nodes lose those duplicate keys
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
+recorded: 2026-10-12T22:49:28.363521+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: U26.1 (JMT ruling 2026-10-11, batch-2 lane SEL): a model-output alias node no longer re-claims the module-exit lookup keys of the op it aliases, so modules whose output is a model output resolve to their own op; output nodes lose those duplicate keys
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
+recorded: 2026-10-12T22:49:28.444748+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: U26.1 (JMT ruling 2026-10-11, batch-2 lane SEL): a model-output alias node no longer re-claims the module-exit lookup keys of the op it aliases, so modules whose output is a model output resolve to their own op; output nodes lose those duplicate keys
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
+recorded: 2026-10-12T22:49:28.528868+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: U26.1 (JMT ruling 2026-10-11, batch-2 lane SEL): a model-output alias node no longer re-claims the module-exit lookup keys of the op it aliases, so modules whose output is a model output resolve to their own op; output nodes lose those duplicate keys
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
+recorded: 2026-10-12T22:49:28.908838+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: U26.1 (JMT ruling 2026-10-11, batch-2 lane SEL): a model-output alias node no longer re-claims the module-exit lookup keys of the op it aliases, so modules whose output is a model output resolve to their own op; output nodes lose those duplicate keys
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
+recorded: 2026-10-12T22:49:28.935479+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: U26.1 (JMT ruling 2026-10-11, batch-2 lane SEL): a model-output alias node no longer re-claims the module-exit lookup keys of the op it aliases, so modules whose output is a model output resolve to their own op; output nodes lose those duplicate keys
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
+recorded: 2026-10-12T22:49:29.946018+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: U26.1 (JMT ruling 2026-10-11, batch-2 lane SEL): a model-output alias node no longer re-claims the module-exit lookup keys of the op it aliases, so modules whose output is a model output resolve to their own op; output nodes lose those duplicate keys
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
+recorded: 2026-10-12T22:49:30.064822+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: U26.1 (JMT ruling 2026-10-11, batch-2 lane SEL): a model-output alias node no longer re-claims the module-exit lookup keys of the op it aliases, so modules whose output is a model output resolve to their own op; output nodes lose those duplicate keys
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 20c14e9e35d94b7d037c46e2904fd8e5ac95401c (dirty)
+recorded: 2026-10-12T22:49:30.309513+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: forks.13 (JMT 2026-10-12 1:01 AM PT, RULINGS-2B.md:22; batch-2 lane REPORT): MODEL_LOG_FIELD_ORDER gains Trace.forward_peak_memory_reason (KEEP)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 84cc0860fcb91aa969b445d3ff8a54d5f162280f (dirty)
+recorded: 2026-10-13T11:44:26.362991+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: sumfam F1: trace.ops keys and integer index cover the counted ops
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cf24117b905e59c20cc7fb305bc4e5d8743f376f (dirty)
+recorded: 2026-10-14T18:23:55.365018+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: sumfam F1: trace.ops keys and integer index cover the counted ops
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cf24117b905e59c20cc7fb305bc4e5d8743f376f (dirty)
+recorded: 2026-10-14T18:23:55.456106+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: sumfam F1: trace.ops keys and integer index cover the counted ops
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cf24117b905e59c20cc7fb305bc4e5d8743f376f (dirty)
+recorded: 2026-10-14T18:23:55.539795+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: sumfam F1: trace.ops keys and integer index cover the counted ops
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cf24117b905e59c20cc7fb305bc4e5d8743f376f (dirty)
+recorded: 2026-10-14T18:23:56.179899+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: sumfam F1: trace.ops keys and integer index cover the counted ops
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cf24117b905e59c20cc7fb305bc4e5d8743f376f (dirty)
+recorded: 2026-10-14T18:23:56.206913+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: sumfam F1: trace.ops keys and integer index cover the counted ops
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cf24117b905e59c20cc7fb305bc4e5d8743f376f (dirty)
+recorded: 2026-10-14T18:23:57.232356+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: sumfam F1: trace.ops keys and integer index cover the counted ops
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cf24117b905e59c20cc7fb305bc4e5d8743f376f (dirty)
+recorded: 2026-10-14T18:23:57.360227+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: sumfam F1: trace.ops keys and integer index cover the counted ops
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cf24117b905e59c20cc7fb305bc4e5d8743f376f (dirty)
+recorded: 2026-10-14T18:23:57.602240+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.483326+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.567435+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.666443+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.952489+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:23.970838+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:25.169562+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:25.299129+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: measure.2 (JMT 28 Oct 2026): CPU peaks opt-in; backward_peak_memory_reason and measure_host_peak_memory fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
+recorded: 2026-10-29T07:10:25.483928+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:31.808580+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:31.916067+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:32.034798+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:32.375969+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:32.401566+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:32.878704+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:33.038222+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:33.215589+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.178841+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.264871+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.365953+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.684353+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:23.703275+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:24.917137+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:25.103204+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 persisted-field pass (lane mp-v11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e9b364bf2e1686ce8525eb7b8f6efb0507069571 (dirty)
+recorded: 2026-10-31T14:50:25.282577+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:22.025553+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:22.110987+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:22.211021+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:22.535478+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:22.553437+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:23.828167+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:24.016996+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:24.192125+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest-2: private Trace._num_param_tensors and _num_saved_ops counters restored (Lead ruling 2026-10-31), output-path readers, test fakes and census follow-ups (lane mp-v11-rest-2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 958464d7640561a6da067eaaf0e7fe1fc07a0ed0 (dirty)
+recorded: 2026-10-31T18:41:42.880715+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest-2: private Trace._num_param_tensors and _num_saved_ops counters restored (Lead ruling 2026-10-31), output-path readers, test fakes and census follow-ups (lane mp-v11-rest-2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 958464d7640561a6da067eaaf0e7fe1fc07a0ed0 (dirty)
+recorded: 2026-10-31T18:41:43.039850+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest-2: private Trace._num_param_tensors and _num_saved_ops counters restored (Lead ruling 2026-10-31), output-path readers, test fakes and census follow-ups (lane mp-v11-rest-2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 958464d7640561a6da067eaaf0e7fe1fc07a0ed0 (dirty)
+recorded: 2026-10-31T18:41:43.217849+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest-2: private Trace._num_param_tensors and _num_saved_ops counters restored (Lead ruling 2026-10-31), output-path readers, test fakes and census follow-ups (lane mp-v11-rest-2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 958464d7640561a6da067eaaf0e7fe1fc07a0ed0 (dirty)
+recorded: 2026-10-31T18:41:43.746422+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest-2: private Trace._num_param_tensors and _num_saved_ops counters restored (Lead ruling 2026-10-31), output-path readers, test fakes and census follow-ups (lane mp-v11-rest-2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 958464d7640561a6da067eaaf0e7fe1fc07a0ed0 (dirty)
+recorded: 2026-10-31T18:41:43.772300+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest-2: private Trace._num_param_tensors and _num_saved_ops counters restored (Lead ruling 2026-10-31), output-path readers, test fakes and census follow-ups (lane mp-v11-rest-2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 958464d7640561a6da067eaaf0e7fe1fc07a0ed0 (dirty)
+recorded: 2026-10-31T18:41:45.665471+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest-2: private Trace._num_param_tensors and _num_saved_ops counters restored (Lead ruling 2026-10-31), output-path readers, test fakes and census follow-ups (lane mp-v11-rest-2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 958464d7640561a6da067eaaf0e7fe1fc07a0ed0 (dirty)
+recorded: 2026-10-31T18:41:45.934280+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11-rest-2: private Trace._num_param_tensors and _num_saved_ops counters restored (Lead ruling 2026-10-31), output-path readers, test fakes and census follow-ups (lane mp-v11-rest-2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 958464d7640561a6da067eaaf0e7fe1fc07a0ed0 (dirty)
+recorded: 2026-10-31T18:41:46.173828+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:54:54.811955+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:54:54.892232+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:54:54.985969+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:54:55.545980+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:54:55.577995+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:54:56.647211+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:54:56.882259+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: three-lane merge (lane v11-final)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
+recorded: 2026-10-31T20:54:57.159877+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:30.601813+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:30.720865+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:30.861185+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:31.420831+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:31.450551+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:33.056147+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:33.319543+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:33.616616+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: c2-rulings fixq2 on 02e30d758706eb98f3ed2f540962a0000505de35
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 02e30d758706eb98f3ed2f540962a0000505de35 (clean)
+recorded: 2026-11-03T01:20:30.815752+00:00

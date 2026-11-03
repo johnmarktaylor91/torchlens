@@ -18,13 +18,13 @@ from _source_corpus import package_ast, package_files
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture._structure_only_bridge import (
+from torchlens._capture._structure_only_bridge import (
     STRUCTURE_ONLY_BRIDGE_ENTRY_OPEN,
     compute_bound_state_digests,
     declared_slot_geometry_digest,
     validate_and_digest_bound_buffers,
 )
-from torchlens.capture.structure_only import (
+from torchlens._capture.structure_only import (
     StructureOnlyCapabilityError,
     require_structure_only_capability,
 )
@@ -115,7 +115,7 @@ def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
         require_structure_only_capability(log, "save_runnable")
     message = str(runnable_exc.value)
     assert "late-bind" in message
-    assert "intervention_ready=True" in message
+    assert "replayable=True" in message
     assert runnable_exc.value.fields["flip_event"] == "L7b amendment lands"
     with pytest.raises(StructureOnlyCapabilityError) as replay_exc:
         log.run(inputs=torch.randn(2, 3))
@@ -123,7 +123,7 @@ def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
 
 
 def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
-    """The structure_only + intervention_ready entry conflict names its
+    """The structure_only + replayable entry conflict names its
     capability row and the L7b amendment as the flip event."""
 
     from torchlens._errors import StructureOnlyOptionConflictError
@@ -132,7 +132,7 @@ def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
         tl.trace(
             _NonPersistentBufferModel(),
             torch.randn(2, 3),
-            capture=CaptureOptions(structure_only=True, intervention_ready=True),
+            capture=CaptureOptions(structure_only=True, replayable=True),
         )
     message = str(excinfo.value)
     assert "runnable_ready_composition" in message
@@ -146,15 +146,15 @@ def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
 
 
 def test_bound_digests_route_through_the_one_content_authority() -> None:
-    """Bind digests ARE tl.hash.content byte digests — one authority, and
+    """Bind digests ARE tl.fingerprint.content byte digests — one authority, and
     same-geometry different-bytes values digest differently."""
 
     a = torch.tensor([1.0, 2.0, 3.0])
     b = torch.tensor([1.0, 2.0, 4.0])
     digests = compute_bound_state_digests({"a": a, "b": b})
     assert set(digests) == {"a", "b"}
-    assert digests["a"] == tl.hash.content(a)
-    assert digests["b"] == tl.hash.content(b)
+    assert digests["a"] == tl.fingerprint.content(a)
+    assert digests["b"] == tl.fingerprint.content(b)
     assert digests["a"] != digests["b"]
 
 
@@ -177,7 +177,7 @@ def test_bound_digest_failure_refuses_and_chains_never_skips(monkeypatch) -> Non
     def _boom(value):
         raise ValueError("bytes unreadable")
 
-    monkeypatch.setattr(tl.hash, "content", _boom)
+    monkeypatch.setattr(tl.fingerprint, "content", _boom)
     with pytest.raises(StateBindingError) as excinfo:
         compute_bound_state_digests({"scale": torch.ones(3)})
     assert excinfo.value.fields["code"] == "state_metadata_mismatch"
@@ -220,7 +220,7 @@ def test_declared_digest_failure_degrades_to_the_sentinel_grammar(monkeypatch) -
     def _boom(value):
         raise RuntimeError("no geometry")
 
-    monkeypatch.setattr(tl.hash, "content", _boom)
+    monkeypatch.setattr(tl.fingerprint, "content", _boom)
     sentinel = declared_slot_geometry_digest(torch.ones(2))
     assert sentinel == "unavailable:RuntimeError"
     assert _SENTINEL_GRAMMAR.match(sentinel)
@@ -239,16 +239,14 @@ def loaded_runnable_trace(tmp_path):
     trace = tl.trace(
         model,
         torch.tensor([1.0, 2.0, 3.0]),
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     path = tmp_path / "bridge.tlspec"
     import warnings
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        tl.save(trace, str(path), level="runnable")
+        trace.save(str(path), level="runnable")
     return tl.load(str(path))
 
 
@@ -258,7 +256,7 @@ def test_late_bound_values_validate_through_the_s1_surface(loaded_runnable_trace
 
     bound = torch.tensor([5.0, 6.0, 7.0])
     binding = validate_and_digest_bound_buffers(
-        loaded_runnable_trace.runnable_descriptor,
+        loaded_runnable_trace._sparse_run_descriptor,
         {"scale": bound},
     )
     # The S1 validator stages by SLOT id (execution keying), one slot here.
@@ -266,8 +264,8 @@ def test_late_bound_values_validate_through_the_s1_surface(loaded_runnable_trace
     (slot_key,) = binding.staged
     assert set(binding.bind_digests) == set(binding.staged)
     assert set(binding.declared_digests) == set(binding.staged)
-    assert binding.bind_digests[slot_key] == tl.hash.content(binding.staged[slot_key])
-    assert binding.bind_digests[slot_key] == tl.hash.content(bound)
+    assert binding.bind_digests[slot_key] == tl.fingerprint.content(binding.staged[slot_key])
+    assert binding.bind_digests[slot_key] == tl.fingerprint.content(bound)
     # G2 on the real path: the two families never cross.
     assert binding.bind_digests[slot_key] != binding.declared_digests[slot_key]
 
@@ -278,7 +276,7 @@ def test_late_bound_geometry_violations_refuse_via_the_s1_validator(
     """Shape mismatches and missing keys refuse through the unchanged S1
     validator — the bridge adds digests, never a second validation layer."""
 
-    descriptor = loaded_runnable_trace.runnable_descriptor
+    descriptor = loaded_runnable_trace._sparse_run_descriptor
     with pytest.raises(StateBindingError):
         validate_and_digest_bound_buffers(descriptor, {"scale": torch.ones(7)})
     with pytest.raises(StateBindingError):

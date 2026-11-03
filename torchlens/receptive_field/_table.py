@@ -15,8 +15,8 @@ from ._types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ._engine import _ReceptiveFieldSolution
     from ._engine_forward import _ProjectiveFieldSolution
 
@@ -82,7 +82,7 @@ def _require_input_role(trace: Trace, input_op: Op | None) -> str | None:
 
     model_inputs = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if bool(getattr(op, "is_input", False)) and getattr(op, "io_role", None) is not None
     ]
 
@@ -148,17 +148,17 @@ def _entity_outputs(
     """
 
     if level == "op":
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             yield op.label, "op", 0, op.label
     elif level == "layer":
-        for layer in trace.layer_logs.values():
+        for layer in trace._layer_logs.values():
             for output_index, output_op in enumerate(layer.op_labels):
                 yield layer.layer_label, "layer", output_index, output_op
     elif level == "call":
         for call in trace.module_calls.values():
             for output_index, output_op in enumerate(call.output_ops):
                 yield (
-                    call.call_label,
+                    call.label,
                     "call",
                     output_index,
                     _resolved_output_label(trace, output_op),
@@ -191,7 +191,7 @@ def _kind_summary(descriptor: ReceptiveField) -> str:
     abbreviations = {"windowed": "win", "pointwise": "pt", "full": "full", "unknown": "unk"}
     return " ".join(
         f"axis{axis}:{abbreviations[kind]}"
-        for axis, kind in enumerate(descriptor.layout.axis_kinds)
+        for axis, kind in enumerate(descriptor.axis_roles.axis_kinds)
     )
 
 
@@ -244,7 +244,7 @@ def _row(
         "notes": descriptor.notes,
         "batch_coupled": descriptor.batch_coupled,
         "exact": bool(axes is not None and all(axis.exact for axis in axes)),
-        "layout": descriptor.layout,
+        "layout": descriptor.axis_roles,
     }
 
 
@@ -252,7 +252,7 @@ def build_rf_profile(
     trace: Trace,
     *,
     level: ReceptiveFieldProfileLevel = "op",
-    input: Op | None = None,
+    input_op: Op | None = None,
     statuses: Collection[ReceptiveFieldStatus] | None = None,
     sort_by: str | None = None,
     ascending: bool = True,
@@ -266,7 +266,7 @@ def build_rf_profile(
         Completed trace whose captured DAG is reported.
     level:
         ``"op"``, ``"layer"``, ``"call"``, or ``"module"`` granularity.
-    input:
+    input_op:
         Optional model-input operation handle. String layer names are rejected.
     statuses:
         Optional receptive-field statuses to retain.
@@ -277,7 +277,7 @@ def build_rf_profile(
     direction:
         ``"receptive"`` (default) reports per-input receptive fields;
         ``"projective"`` reports source-anchored projective fields keyed by
-        projection target. ``input=`` filtering applies only to the receptive
+        projection target. ``input_op=`` filtering applies only to the receptive
         direction.
 
     Returns
@@ -289,19 +289,19 @@ def build_rf_profile(
     if level not in {"op", "layer", "call", "module"}:
         raise ReceptiveFieldConfigurationError("level must be 'op', 'layer', 'call', or 'module'.")
     resolved_direction = ReceptiveFieldDirection(direction)
-    if resolved_direction is ReceptiveFieldDirection.PROJECTIVE and input is not None:
+    if resolved_direction is ReceptiveFieldDirection.PROJECTIVE and input_op is not None:
         # In projective mode each row is keyed by its projection TARGET, not a
         # model input, so a model-input filter can never match any row and would
         # silently return an empty table. Reject the misapplied filter instead of
         # lying with an empty result. (The handle is still validated so a bad
         # handle raises the same diagnostic in both directions.)
-        _require_input_role(trace, input)
+        _require_input_role(trace, input_op)
         raise ReceptiveFieldConfigurationError(
-            "input= filters model inputs and applies only to direction='receptive'; "
+            "input_op= filters model inputs and applies only to direction='receptive'; "
             "projective tables are keyed by projection target and cannot be filtered "
             "by a model input."
         )
-    requested_role = _require_input_role(trace, input)
+    requested_role = _require_input_role(trace, input_op)
     status_filter = None if statuses is None else frozenset(statuses)
     if status_filter is not None and not all(
         isinstance(status, ReceptiveFieldStatus) for status in status_filter

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import warnings
 
-import pytest
 import torch
 from torch import nn
 
@@ -36,7 +35,6 @@ class _SliceIadd(nn.Module):
         return m.moveaxis(1, 2)
 
 
-@pytest.mark.smoke
 def test_slice_augmented_assignment_validates() -> None:
     torch.manual_seed(0)
     model = _SliceIadd().eval()

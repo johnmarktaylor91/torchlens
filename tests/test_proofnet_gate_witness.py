@@ -51,7 +51,9 @@ MANIFEST_PATH = TESTS_DIR / "support" / "proofnet" / "gate_manifest.tsv"
 #: per this module's own definitions. The row already existed (reclassified,
 #: not new); this is the one-time correction of a wrong classification, not a
 #: new gate entering the tier.
-EXECUTES_NOWHERE_CEILING = 32
+#: 32 -> 30 (ci-shape): the `git` and `semantic_release` rows burned down when the
+#: no-major release chain and its release-environment-only tests were removed.
+EXECUTES_NOWHERE_CEILING = 30
 
 GALLERY_DIR = TESTS_DIR / "workflow_gallery"
 
@@ -152,30 +154,24 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
         "test_checkpoint_live_ref_real_models.py:97",
         "test_compare_gate_qwen.py:79",
         "test_distributed_census_topologies.py:109",
-        "test_distributed_honesty.py:740",
-        "test_distributed_honesty.py:756",
+        "test_distributed_honesty.py:741",
+        "test_distributed_honesty.py:757",
         "test_distributed_tierb_identity.py:76",
-        "test_docs_snippets.py:160",
-        "test_docs_snippets.py:364",
-        "test_input_coercion.py:380",
-        "test_intervention_phase7.py:614",
-        "test_intervention_phase7.py:621",
-        "test_layer_log.py:436",
+        "test_input_coercion.py:378",
+        "test_layer_log.py:435",
         "test_lit_bridge_real.py:53",
-        "test_mlp_recipes.py:127",
-        "test_output_aesthetics.py:1647",
-        "test_output_aesthetics.py:1699",
-        "test_punchlist_terminology_lint.py:154",
-        "test_real_world_models.py:1496",
-        "test_real_world_models.py:1728",
-        "test_removed_spelling_lint.py:349",
-        "test_tlspec_runnable_r41_crossthread_witness.py:465",
+        "test_mlp_recipes.py:126",
+        "test_output_aesthetics.py:1642",
+        "test_output_aesthetics.py:1690",
+        "test_real_world_models.py:1467",
+        "test_real_world_models.py:1698",
+        "test_tlspec_runnable_r41_crossthread_witness.py:467",
         "test_tlspec_runnable_r69_input_contract.py:779",
         "test_transforms_lib_real_models.py:290",
-        "test_weightsfree_hf.py:51",
-        "test_weightsfree_hf.py:131",
-        "test_weightsfree_hf.py:168",
-        "test_weightsfree_hf.py:205",
+        "test_weightsfree_hf.py:52",
+        "test_weightsfree_hf.py:134",
+        "test_weightsfree_hf.py:172",
+        "test_weightsfree_hf.py:210",
     }
 )
 
@@ -231,7 +227,8 @@ def test_except_skip_scanner_is_red_capable(tmp_path: Path) -> None:
 def test_executes_nowhere_tier_only_burns_down() -> None:
     """The unavailable-ok tier IS executes-nowhere: capped, monotone down."""
 
-    from tests.test_skip_audit import IMPORTORSKIP_LEDGER, UNAVAILABLE_OK
+    sys.path.insert(0, str(REPO_ROOT / "scripts" / "checks"))
+    from skip_audit import IMPORTORSKIP_LEDGER, UNAVAILABLE_OK
 
     rows = {
         target: note

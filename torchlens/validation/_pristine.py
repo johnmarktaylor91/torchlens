@@ -45,7 +45,7 @@ If the wrappers cannot be removed (a capture is active on this thread --
 only reachable by calling validation from inside a traced forward), the
 caller must REFUSE to bless rather than silently validating through the
 wrapper root; ``pristine_torch_oracle`` propagates the typed
-``CaptureContextError`` for the caller to convert into a fail-closed
+``CaptureNotActiveError`` for the caller to convert into a fail-closed
 verdict.
 """
 
@@ -54,6 +54,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, cast
+
+from torch import nn
+
+from .._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 
 if TYPE_CHECKING:
     from ..backends.torch.wrappers import CompletenessWitnessMode, EscapeDetectorMode
@@ -74,7 +78,7 @@ def pristine_torch_oracle() -> Iterator[bool]:
 
     Raises
     ------
-    torchlens.errors.CaptureContextError
+    torchlens.errors.CaptureNotActiveError
         If a capture is currently active (propagated from ``unwrap_torch``)
         or the unwrap ledger records a wrapper as an original callable
         (``code="pristine_ledger_poisoned"``). Callers convert either into
@@ -99,9 +103,9 @@ def pristine_torch_oracle() -> Iterator[bool]:
         None,
     )
     if poisoned is not None:
-        from .._errors import CaptureContextError
+        from .._errors import CaptureNotActiveError
 
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "the _decorated_to_orig unwrap ledger records a TorchLens wrapper "
             f"({getattr(poisoned, '__tl_wrapper_name__', '<unknown>')!s}) as an "
             "original callable, so the pristine-torch restoration cannot be "
@@ -128,3 +132,18 @@ def pristine_torch_oracle() -> Iterator[bool]:
             escape_detector=detector_mode,
             completeness_witness=witness_mode,
         )
+
+
+@contextmanager
+def pristine_ground_truth_oracle(model: nn.Module) -> Iterator[bool]:
+    """Run a ground-truth forward of ``model`` on pristine torch, kernels as captured.
+
+    The ground truth runs the SAME attention program capture records: the fused
+    MHA fast path is held off here exactly as the capture scope holds it
+    (``hold_fused_attention_fastpath_off``), since capture's forced
+    ``requires_grad`` alone would otherwise steer the two forwards onto different
+    kernels (wave-3 stress case 4). Yields and raises as :func:`pristine_torch_oracle`.
+    """
+
+    with pristine_torch_oracle() as pristine, hold_fused_attention_fastpath_off(model):
+        yield pristine

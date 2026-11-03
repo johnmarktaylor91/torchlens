@@ -41,8 +41,7 @@ def _scaled_backward_trace() -> tl.Trace:
     log = tl.trace(
         ThreeStep(),
         torch.randn(2, 4),
-        capture=CaptureOptions(save_grads=True, backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(save_grads=True, backward_ready=True, save_mode="reference"),
     )
     loss = list(log)[-1].out.sum() * SCALE  # what GradScaler.scale(loss) does
     loss.backward()
@@ -53,9 +52,9 @@ def test_scaled_backward_false_flags_and_hints() -> None:
     """Without the kwarg every op explodes and the AMP hint is disclosed."""
 
     pytest.importorskip("pandas")
-    from torchlens.debug import gradient_flow_audit
+    from torchlens.debug import grad_health
 
-    frame = gradient_flow_audit(_scaled_backward_trace())
+    frame = grad_health(_scaled_backward_trace()).to_pandas()
     measurable = len(frame) - int(frame.attrs.get("unavailable", 0))
     assert measurable > 0
     assert frame.attrs["exploding"] == measurable
@@ -67,9 +66,9 @@ def test_grad_scale_audits_in_unscaled_units() -> None:
     """grad_scale=scaler.get_scale() clears the false flags and is disclosed."""
 
     pytest.importorskip("pandas")
-    from torchlens.debug import gradient_flow_audit
+    from torchlens.debug import grad_health
 
-    frame = gradient_flow_audit(_scaled_backward_trace(), grad_scale=SCALE)
+    frame = grad_health(_scaled_backward_trace(), grad_scale=SCALE).to_pandas()
     assert frame.attrs["exploding"] == 0, (
         "unscaled toy gradients must not flag exploding once the disclosed "
         "loss scale is divided out"
@@ -84,11 +83,11 @@ def test_grad_scale_junk_refuses_typed(bad_scale: float) -> None:
 
     pytest.importorskip("pandas")
     from torchlens._errors import InvalidArgumentError
-    from torchlens.debug import gradient_flow_audit
+    from torchlens.debug import grad_health
 
     log = _scaled_backward_trace()
     with pytest.raises(InvalidArgumentError) as excinfo:
-        gradient_flow_audit(log, grad_scale=bad_scale)
+        grad_health(log, grad_scale=bad_scale)
     assert excinfo.value.fields["code"] == "grad_scale_invalid"
 
 
@@ -96,16 +95,15 @@ def test_unscaled_backward_stays_clean_without_hint() -> None:
     """A plain backward neither flags everything nor emits the AMP hint."""
 
     pytest.importorskip("pandas")
-    from torchlens.debug import gradient_flow_audit
+    from torchlens.debug import grad_health
 
     torch.manual_seed(20260826)
     log = tl.trace(
         ThreeStep(),
         torch.randn(2, 4),
-        capture=CaptureOptions(save_grads=True, backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(save_grads=True, backward_ready=True, save_mode="reference"),
     )
     list(log)[-1].out.sum().backward()
-    frame = gradient_flow_audit(log)
+    frame = grad_health(log).to_pandas()
     assert frame.attrs["exploding"] == 0
     assert "all_exploding_hint" not in frame.attrs

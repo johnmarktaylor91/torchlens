@@ -8,7 +8,7 @@ cached on the trace) and then return `ReceptiveFieldView`s — the laziness
 boundary is the property access itself, not the first view query.
 
 ## __init__.py
-- `verify(trace, ...)` is the public tripwire entry point; `self_check()` aliases it.
+- `verify(trace, ...)` is the public tripwire entry point.
 - `ReceptiveFieldVerification.verdict` is tri-state PASS / FAIL / INDETERMINATE;
   INDETERMINATE (unarmed) never reads as a pass via `.passed`.
 - Arming the gradient tripwire needs `requires_grad` inputs, `backward_ready=True`,
@@ -29,6 +29,12 @@ boundary is the property access itself, not the first view query.
 ## Queries and gradients
 - `_query.py` - `box_for_unit()` (receptive box for one output unit).
 - `_forward_query.py` - `box_for_source_unit()` (projective box for one input unit).
+- Window and clip maps (`_standard_window_index_set`, `map_transposed_convolution_index_set`,
+  `_IndexSet.clipped`) compute a one-progression index set in closed form and enumerate
+  otherwise; both paths must return the same canonical set (`tests/test_perf5_rf_invariant_cost.py`).
+- `_query._shared_query_scope()` lets many per-unit queries over one solution share graph
+  facts and rule results (the always-on metadata invariants open it); outside it every
+  query derives its own.
 - `_path.py` - `resolve_graph_point()`, `ancestor_labels()`, `descendant_labels()`,
   `require_path()` own graph-point resolution and path checks.
 - `_gradient.py` - `gradient_for_unit()`, the empirical VJP probe; snapshots and
@@ -37,10 +43,13 @@ boundary is the property access itself, not the first view query.
 
 ## Views, tables, viz
 - `_view.py` - `ReceptiveFieldView` with `at()`, `center_unit()`, `check()`,
-  `gradient()`, and `show()`; `show(gradient=True)` recomputes WITHOUT retain_graph
+  `gradient()`, and `show()`; `show(grad=True)` recomputes WITHOUT retain_graph
   and frees the autograd graph, so call it last or re-capture.
 - `_table.py` - `build_rf_profile()` backs `Trace.receptive_fields()` /
   `Trace.projective_fields()` (pandas required at call time).
+- `_trace_tables.py` - the `receptive_fields(trace, ...)` and
+  `projective_fields(trace, ...)` bodies the thin `Trace` methods reach through
+  `_data_classes._doors.receptive_field()`.
 - `_viz.py` - `show()` and `node_spec()` render overlays.
 - `_types.py` - frozen public dataclasses/enums (`ReceptiveField`,
   `ReceptiveFieldAxis`, `ReceptiveFieldBox`, `ReceptiveFieldStatus`,

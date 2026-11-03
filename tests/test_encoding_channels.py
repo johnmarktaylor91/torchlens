@@ -21,9 +21,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes._layer_spec import _LAYER_MIRROR_SPEC, _LAYER_STATE_ORDER
-from torchlens.data_classes.layer import Layer
-from torchlens.visualization._encoding import (
+from torchlens._data_classes._layer_spec import _LAYER_MIRROR_SPEC, _LAYER_STATE_ORDER
+from torchlens._data_classes.layer import Layer
+from torchlens._record_type import record_type
+from torchlens._visualization._encoding import (
     DARK_RAMP,
     LAYER_SOURCE_ROWS,
     LIGHT_RAMP,
@@ -36,7 +37,7 @@ from torchlens.visualization._encoding import (
     interpolate_hex,
     resolve_color_by,
 )
-from torchlens.visualization.node_spec import NodeSpec
+from torchlens._visualization.node_spec import NodeSpec
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -117,11 +118,10 @@ def uniform_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _state(log: tl.Trace) -> Any:
@@ -131,7 +131,13 @@ def _state(log: tl.Trace) -> Any:
 
 
 def _varying_layer(log: tl.Trace) -> Layer:
-    return next(layer for layer in log.layer_logs.values() if len(layer.ops) > 1)
+    # grouping rule rows 6 and 49: the loop's ``x[:n]`` getitem is now also one
+    # multi-pass Layer, but it does no FLOPs; the varying population is fc's linear.
+    return next(
+        layer
+        for layer in log._layer_logs.values()
+        if len(layer.ops) > 1 and layer.layer_label.startswith("linear_")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +220,7 @@ def test_plain_draw_untouched_by_channel_machinery(mlp_log: tl.Trace, tmp_path: 
 def test_request_hash_ignores_channel_fields() -> None:
     """Channels are presentation-only: the collapse-planning hash is untouched."""
 
-    from torchlens.visualization.request import ResolvedRenderRequest
+    from torchlens._visualization.request import ResolvedRenderRequest
 
     base = ResolvedRenderRequest(vis_mode="rolled")
     with_channel = ResolvedRenderRequest(vis_mode="rolled", color_by="bytes", encoding=object())
@@ -275,7 +281,7 @@ def test_callable_raise_chains_typed(mlp_log: tl.Trace, tmp_path: Path) -> None:
 
 def test_non_finite_degrades_to_unencoded(mlp_log: tl.Trace, tmp_path: Path) -> None:
     def source(node: Any) -> float:
-        return float("nan") if node.layer_type == "relu" else float(node.raw_index)
+        return float("nan") if record_type(node) == "relu" else float(node.raw_index)
 
     _draw(mlp_log, tmp_path, color_by=source)
     state = _state(mlp_log)
@@ -326,7 +332,7 @@ def test_auto_large_graph_forces_dot_with_notice(
 ) -> None:
     """AUTO + cost>threshold + channel: dot forced, notice names channel+cost."""
 
-    from torchlens.visualization._rank_layout_internal import layout as rank_layout
+    from torchlens._visualization._rank_layout_internal import layout as rank_layout
 
     monkeypatch.setattr(rank_layout, "RANK_LAYOUT_COST_THRESHOLD", 0)
     with pytest.warns(UserWarning, match="color_by"):
@@ -342,18 +348,24 @@ def test_auto_large_graph_forces_dot_with_notice(
 def test_legend_auto_with_channel_emits_channel_only(mlp_log: tl.Trace, tmp_path: Path) -> None:
     dot = _draw(mlp_log, tmp_path, color_by="bytes")
     assert "TorchLens encoding" in dot
-    assert "TorchLens legend" not in dot  # channel-only, not the role legend
+    assert 'ID="tl_key"' not in dot  # channel-only, not the role key
     assert "linear min-max" in dot
     assert "color_by: bytes" in dot
 
 
 def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    # color_by="bytes" repaints every node, inputs and outputs included, so no
+    # role fill is drawn and the key lists no input or output: the header
+    # block carries the encoding section and only the marks still drawn.
     dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=True)
-    assert "TorchLens legend" in dot
-    assert "TorchLens encoding" in dot
-    # One-table form (vizmech 13): both are SECTIONS of the one legend node,
-    # never two competing legend topologies.
-    assert dot.count("TorchLens legend") == 1
+    label = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
+    drawn = "\n".join(line for line in dot.splitlines() if not line.strip().startswith("graph ["))
+    assert '"#98FB98"' not in drawn and '"#ff9999"' not in drawn  # no input/output role fill
+    assert ">input<" not in label and ">output<" not in label
+    assert "TorchLens encoding" in label
+    # One block: the key and the channel section share the header label;
+    # there is no second legend topology.
+    assert "tl_legend" not in dot
     assert dot.count("TorchLens encoding") == 1
 
 
@@ -362,13 +374,14 @@ def test_legend_false_honored_even_with_channel(mlp_log: tl.Trace, tmp_path: Pat
 
     dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=False)
     assert "tl_legend" not in dot
+    assert "TorchLens encoding" not in dot and "tl_key" not in dot
 
 
 def test_legend_true_without_channel_keeps_todays_meaning(
     mlp_log: tl.Trace, tmp_path: Path
 ) -> None:
     dot = _draw(mlp_log, tmp_path, show_legend=True)
-    assert "TorchLens legend" in dot
+    assert 'ID="tl_key"' in dot
     assert "TorchLens encoding" not in dot
 
 
@@ -427,7 +440,7 @@ def test_intervention_border_composes_with_channel_fill(tmp_path: Path) -> None:
     fill = state.colors[relu_key]
     site_line = next(line for line in dot.splitlines() if "relu" in line and "fillcolor" in line)
     assert fill in site_line
-    assert "#FF00FF" in site_line  # intervention site border color
+    assert "#7B1FA2" in site_line  # edited node ring colour
 
 
 def test_collapsed_module_boxes_not_encoded(tmp_path: Path) -> None:
@@ -455,7 +468,7 @@ def test_varying_reconciled_field_unencoded_with_note(
 
     layer = _varying_layer(varying_log)
     assert "activation_memory" in layer.annotations["varying_across_passes"]
-    dot = _draw(varying_log, tmp_path, color_by="activation_memory", vis_mode="rolled")
+    dot = _draw(varying_log, tmp_path, color_by="activation_memory", rolled=True)
     state = _state(varying_log)
     assert layer.layer_label not in state.colors
     assert NOTE_VARIES in state.notes
@@ -467,7 +480,7 @@ def test_uniform_multipass_field_encodes(uniform_log: tl.Trace, tmp_path: Path) 
 
     layer = _varying_layer(uniform_log)
     assert "varying_across_passes" not in layer.annotations
-    _draw(uniform_log, tmp_path, color_by="activation_memory", vis_mode="rolled")
+    _draw(uniform_log, tmp_path, color_by="activation_memory", rolled=True)
     state = _state(uniform_log)
     assert layer.layer_label in state.colors
     assert NOTE_VARIES not in state.notes
@@ -477,12 +490,12 @@ def test_per_pass_builtin_degrades_on_rolled(varying_log: tl.Trace, tmp_path: Pa
     """'time' (func_duration) is per-pass: rolled nodes stay unencoded."""
 
     layer = _varying_layer(varying_log)
-    _draw(varying_log, tmp_path, color_by="time", vis_mode="rolled")
+    _draw(varying_log, tmp_path, color_by="time", rolled=True)
     state = _state(varying_log)
     assert layer.layer_label not in state.colors
     # The per-pass row carries its OWN note now (themes memo item 11): the
     # old pass-1 read painted a uniform mid-ramp from a min:1/max:1 domain.
-    from torchlens.visualization._encoding import NOTE_PER_PASS_ROLLED
+    from torchlens._visualization._encoding import NOTE_PER_PASS_ROLLED
 
     assert NOTE_PER_PASS_ROLLED in state.notes
 
@@ -490,11 +503,11 @@ def test_per_pass_builtin_degrades_on_rolled(varying_log: tl.Trace, tmp_path: Pa
 def test_single_pass_layers_unaffected_by_allowlist(varying_log: tl.Trace, tmp_path: Path) -> None:
     """Single-pass layers in the same graph encode normally."""
 
-    _draw(varying_log, tmp_path, color_by="activation_memory", vis_mode="rolled")
+    _draw(varying_log, tmp_path, color_by="activation_memory", rolled=True)
     state = _state(varying_log)
     single_pass = [
         layer.layer_label
-        for layer in varying_log.layer_logs.values()
+        for layer in varying_log._layer_logs.values()
         if len(layer.ops) == 1 and layer.activation_memory
     ]
     assert any(label in state.colors for label in single_pass)
@@ -508,7 +521,7 @@ def test_callable_on_rolled_bypasses_with_disclosure(varying_log: tl.Trace, tmp_
         varying_log,
         tmp_path,
         color_by=lambda node: float(node.total_flops_forward or 0),
-        vis_mode="rolled",
+        rolled=True,
     )
     state = _state(varying_log)
     assert layer.layer_label in state.colors
@@ -525,7 +538,7 @@ def test_callable_per_pass_read_on_rolled_chains_tripwire(
             varying_log,
             tmp_path,
             color_by=lambda node: float(node.func_duration),
-            vis_mode="rolled",
+            rolled=True,
         )
     assert excinfo.value.fields["code"] == "encoding_callable_error"
 
@@ -540,12 +553,12 @@ def test_alias_rows_flops(varying_log: tl.Trace, tmp_path: Path) -> None:
     """
 
     layer = _varying_layer(varying_log)
-    _draw(varying_log, tmp_path, color_by="flops_forward", vis_mode="rolled")
+    _draw(varying_log, tmp_path, color_by="flops_forward", rolled=True)
     per_pass_state = _state(varying_log)
     assert layer.layer_label not in per_pass_state.colors
     assert NOTE_VARIES in per_pass_state.notes
 
-    dot = _draw(varying_log, tmp_path, color_by="total_flops_forward", vis_mode="rolled")
+    dot = _draw(varying_log, tmp_path, color_by="total_flops_forward", rolled=True)
     total_state = _state(varying_log)
     assert layer.layer_label in total_state.colors
     assert any("total_flops_forward" in line for line in total_state.aggregation_lines)
@@ -568,7 +581,7 @@ def test_mirrored_per_call_numeric_unencoded(varying_log: tl.Trace, tmp_path: Pa
     assert layer.raw_index == per_pass_truth[0]  # the mirror IS a pass-1 projection
 
     for source in ("raw_index", "step_index", "ordinal_index", "transformed_gradient_memory"):
-        dot = _draw(varying_log, tmp_path, color_by=source, vis_mode="rolled")
+        dot = _draw(varying_log, tmp_path, color_by=source, rolled=True)
         state = _state(varying_log)
         assert layer.layer_label not in state.colors, source
         assert NOTE_FIRST_PASS_ONLY in state.notes, source
@@ -589,7 +602,7 @@ def test_mirrored_per_call_enumeration_matches_live_mirror_spec() -> None:
     assert {"raw_index", "step_index", "ordinal_index", "grad_fn_object_id", "buffer_pass"} <= (
         stored_members
     ), "the sol r4 MAJOR-1 correction regressed"
-    from torchlens.postprocess.finalization import (
+    from torchlens._postprocess.finalization import (
         _MULTIPASS_BYTES_FIELDS,
         _MULTIPASS_FLOPS_FIELDS,
         _MULTIPASS_SHAPE_FIELDS,
@@ -606,12 +619,12 @@ def test_unclassified_source_on_rolled_refuses(varying_log: tl.Trace, tmp_path: 
 
     # 'num_inputs' is a NUMERIC Op-schema field (legal at option validation,
     # encodable on single-pass nodes) with no declared Layer rolled row.
-    from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER
+    from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER
 
     assert "num_inputs" in LAYER_PASS_LOG_FIELD_ORDER
     assert "num_inputs" not in LAYER_SOURCE_ROWS
     with pytest.raises(Exception) as excinfo:
-        _draw(varying_log, tmp_path, color_by="num_inputs", vis_mode="rolled")
+        _draw(varying_log, tmp_path, color_by="num_inputs", rolled=True)
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
     assert "rolled" in str(excinfo.value)
 
@@ -622,7 +635,7 @@ def test_unrolled_per_pass_nodes_encode_their_own_pass(
     """Unrolled mode: per-pass Op nodes of the varying layer encode per-pass."""
 
     layer = _varying_layer(varying_log)
-    _draw(varying_log, tmp_path, color_by="activation_memory", vis_mode="unrolled")
+    _draw(varying_log, tmp_path, color_by="activation_memory", rolled=False)
     state = _state(varying_log)
     pass_keys = [key for key in state.values if key.startswith(layer.layer_label + ":")]
     assert len(pass_keys) == len(layer.ops)
@@ -670,13 +683,13 @@ def test_annotation_image_node_excluded_from_channel_and_domain(tmp_path: Path) 
     from PIL import Image
 
     Image.new("RGB", (8, 8), "red").save(image_path)
-    target = next(layer for layer in log.layer_list if layer.layer_type == "relu")
+    target = next(layer for layer in log._layer_list if layer.type == "relu")
     log.annotate(target.layer_label, image=str(image_path))
 
     def source(node: Any) -> float:
         # An extreme value: if the image node leaked into the domain, every
         # other node's normalized color would move.
-        return 1e9 if node.layer_type == "relu" else float(node.raw_index)
+        return 1e9 if record_type(node) == "relu" else float(node.raw_index)
 
     _draw(log, tmp_path, color_by=source)
     state = _state(log)
@@ -692,7 +705,7 @@ def test_visualizer_path_node_excluded(tmp_path: Path) -> None:
     from PIL import Image
 
     Image.new("RGB", (8, 8), "blue").save(image_path)
-    target = next(layer for layer in log.layer_list if layer.layer_type == "relu")
+    target = next(layer for layer in log._layer_list if layer.type == "relu")
     target.visualizer_path = str(image_path)
 
     _draw(log, tmp_path, color_by=lambda node: float(node.raw_index))
@@ -713,7 +726,7 @@ def test_interpolate_hex_endpoints_and_clamp() -> None:
 
 
 def test_bundle_diff_consumes_shared_interpolation() -> None:
-    from torchlens.visualization.bundle_diff import _delta_color
+    from torchlens._visualization.bundle_diff import _delta_color
 
     assert _delta_color(0.0, 1.0) == "#FFFFFF"
     assert _delta_color(1.0, 1.0) == interpolate_hex("#FFFFFF", "#C93F3F", 1.0)
@@ -724,9 +737,9 @@ def test_dark_theme_uses_dark_ramp(mlp_log: tl.Trace, tmp_path: Path) -> None:
     anchor is deliberately off-ground (never equal to the default fill --
     the white-on-white absence defect's dark analog)."""
 
-    from torchlens.visualization.themes import resolve_theme
+    from torchlens._visualization.themes import resolve_theme
 
-    _draw(mlp_log, tmp_path, color_by="bytes", vis_theme="dark")
+    _draw(mlp_log, tmp_path, color_by="bytes", theme="dark")
     state = _state(mlp_log)
     dark = resolve_theme("dark")
     assert state.ramp == (dark.ramp[0], dark.ramp[2])
@@ -746,5 +759,5 @@ def test_dagua_renderer_with_channel_refuses(mlp_log: tl.Trace, tmp_path: Path) 
     """The alternate label path never silently drops an active channel."""
 
     with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, color_by="bytes", vis_renderer="dagua")
+        _draw(mlp_log, tmp_path, color_by="bytes", renderer="dagua")
     assert excinfo.value.fields["code"] == "encoding_requires_dot_layout"

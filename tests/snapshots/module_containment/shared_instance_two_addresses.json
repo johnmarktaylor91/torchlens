@@ -111,16 +111,17 @@
     {
       "address": "self",
       "call_label": "self:1",
-      "forward_args_summary": "None",
-      "forward_kwargs_summary": "None",
+      "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
       "input_layers": [
         "input_1"
       ],
       "ops": [
-        "input_1",
-        "linear_1_1",
-        "add_1_2",
-        "output_1"
+        "input_1:1",
+        "linear_1_1:1",
+        "linear_1_1:2",
+        "add_1_2:1",
+        "output_1:1"
       ],
       "output_layers": [
         "output_1"
@@ -224,7 +225,7 @@
         "shared:1",
         "shared:2"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -262,7 +263,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "shared.linear",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -299,7 +300,7 @@
       "fx_call_index": 1,
       "fx_qualpath": "shared.linear",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -336,7 +337,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -366,7 +367,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,

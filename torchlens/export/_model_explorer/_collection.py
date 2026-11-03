@@ -18,9 +18,10 @@ import json
 from typing import Any
 
 from ..._capture_honesty import capture_honesty_facts
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._errors import InvalidArgumentError
 from ...errors._base import TorchLensError
-from .._common import _iter_layers
+from .._common import _iter_layers, _require_trace
 from ._attrs import AttrContext
 from ._build import GraphSpec, build_graph, build_rolled_graph, rolling_changes_identity
 from ._options import ModelExplorerOptions
@@ -35,12 +36,12 @@ EXECUTION_GRAPH_ID = "00-execution"
 ROLLED_GRAPH_ID = "01-rolled"
 
 
-def to_model_explorer_dict(log: Any, **options: Any) -> dict[str, Any]:
+def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
     """Build the Model Explorer graph-collection payload for one capture.
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace``.
     **options:
         Flat keyword spellings of :class:`ModelExplorerOptions` (an unknown
@@ -77,6 +78,7 @@ def to_model_explorer_dict(log: Any, **options: Any) -> dict[str, Any]:
         A strict vendor ``GraphCollection`` payload.
     """
 
+    _require_trace(trace, exporter="tl.export.model_explorer")
     opts = ModelExplorerOptions(**options)
     if opts.privacy_profile not in PRIVACY_PROFILES:
         raise InvalidArgumentError(
@@ -88,48 +90,48 @@ def to_model_explorer_dict(log: Any, **options: Any) -> dict[str, Any]:
         )
     collection_label = str(
         opts.label
-        or getattr(log, "trace_label", None)
-        or getattr(log, "model_class_name", None)
+        or getattr(trace, "name", None)
+        or (trace._source_class_name if is_live_trace(trace) else None)
         or "model"
     )
-    attr_context = _attr_context(log, opts.privacy_profile, opts.include_source)
-    entries = _iter_layers(log)
-    episode_ledger = _episode_ledger(log)
+    attr_context = _attr_context(trace, opts.privacy_profile, opts.include_source)
+    entries = _iter_layers(trace)
+    episode_ledger = _episode_ledger(trace)
     if episode_ledger is not None:
         from ._episode import EpisodeExportContext, build_episode_graphs
 
         graphs = build_episode_graphs(
-            log,
+            trace,
             entries,
             episode_ledger,
             EpisodeExportContext(
                 attr_context=attr_context,
-                root_facts=_base_root_facts(log, opts.privacy_profile),
+                root_facts=_base_root_facts(trace, opts.privacy_profile),
                 options=opts,
             ),
         )
         return {"label": collection_label, "graphs": graphs, "graphSorting": "name_asc"}
     graphs = [
         build_graph(
-            log,
+            trace,
             entries,
             GraphSpec(
                 graph_id=EXECUTION_GRAPH_ID,
                 attr_context=attr_context,
                 strict_namespace=opts.strict_namespace,
-                root_facts={**_base_root_facts(log, opts.privacy_profile), "view": "execution"},
+                root_facts={**_base_root_facts(trace, opts.privacy_profile), "view": "execution"},
             ),
         ).graph
     ]
     if opts.include_rolled is not False and rolling_changes_identity(entries):
         graphs.append(
             build_rolled_graph(
-                log,
+                trace,
                 entries,
                 graph_id=ROLLED_GRAPH_ID,
                 attr_context=attr_context,
                 root_facts={
-                    **_base_root_facts(log, opts.privacy_profile),
+                    **_base_root_facts(trace, opts.privacy_profile),
                     "view": "rolled (disclosed DAG projection)",
                 },
             ).graph
@@ -175,7 +177,7 @@ def _base_root_facts(log: Any, privacy_profile: str) -> dict[str, str]:
 
     facts: dict[str, str] = {
         "produced_by": f"torchlens {torchlens.__version__}",
-        "backend": str(getattr(log, "backend", "") or "unknown"),
+        "backend": str((log._provenance_backend if is_live_trace(log) else "") or "unknown"),
         "privacy_profile": privacy_profile,
     }
     for key, value in capture_honesty_facts(log).items():

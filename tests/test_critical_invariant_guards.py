@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-import torchlens.constants as tl_constants
+import torchlens._constants as tl_constants
 
 pytestmark = pytest.mark.smoke
 

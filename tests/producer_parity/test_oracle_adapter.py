@@ -19,10 +19,10 @@ def test_adapter_is_identity_on_op_events(monkeypatch: pytest.MonkeyPatch) -> No
     and re-projecting those events is the identity.
     """
 
-    import torchlens.postprocess as postprocess_module
-    import torchlens.postprocess._materialize as materialize_module
-    from torchlens.ir.events import OpEvent
-    from torchlens.ir.op_record import OpRecord
+    import torchlens._postprocess as postprocess_module
+    import torchlens._postprocess._materialize as materialize_module
+    from torchlens._ir.events import OpEvent
+    from torchlens._ir.op_record import OpRecord
 
     captured: list = []
     original = materialize_module.materialize_from_events

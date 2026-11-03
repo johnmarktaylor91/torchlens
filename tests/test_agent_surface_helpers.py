@@ -57,7 +57,7 @@ def save_clean_artifact(directory: Path) -> Path:
     model = RepeatedBlockNet().eval()
     log = tl.trace(model, deterministic_input(), save=tl.func("relu"))
     path = directory / "clean.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     return path
 
 
@@ -83,7 +83,7 @@ def save_ablated_artifact(directory: Path) -> Path:
         intervene=tl.when(tl.func("relu") & tl.in_module("blocks.1"), tl.zero_ablate()),
     )
     path = directory / "ablated.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     return path
 
 
@@ -120,5 +120,5 @@ def save_nan_artifact(directory: Path) -> Path:
 
     log = tl.trace(NaNHead().eval(), deterministic_input())
     path = directory / "nonfinite.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     return path

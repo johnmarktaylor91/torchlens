@@ -240,13 +240,13 @@ def _render_one(spec: ReferenceSpec, gallery_dir: Path) -> dict[str, Any]:
     try:
         log.draw(
             vis_renderer="dagua",
-            vis_theme="torchlens",
+            theme="torchlens",
             vis_mode=spec.vis_mode,
             direction=spec.vis_direction,
             vis_call_depth=spec.vis_nesting_depth,
             vis_save_only=True,
-            vis_fileformat="png",
-            vis_outpath=str(outpath),
+            file_format="png",
+            path=str(outpath),
         )
         audit = log.visualization_field_audit().to_dict()
         result = {
@@ -263,8 +263,8 @@ def _render_one(spec: ReferenceSpec, gallery_dir: Path) -> dict[str, Any]:
             "vis_nesting_depth": spec.vis_nesting_depth,
             "output_path": str(outpath),
             "num_nodes": len(log.layer_labels),
-            "is_recurrent": bool(log.is_recurrent),
-            "has_conditional_branching": bool(log.has_conditional_branching),
+            "is_recurrent": bool(log.graph.is_recurrent),
+            "has_conditional_branching": bool(log.graph.has_conditional_branching),
             "audit": audit,
         }
     except Exception as exc:

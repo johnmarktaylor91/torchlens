@@ -10,15 +10,15 @@ from collections import defaultdict
 import pytest
 import torch
 import torch.nn as nn
+from _forward_stash import stashed
 
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
 
 # ---------------------------------------------------------------------------
 # FIELD_ORDER sync tests
 # ---------------------------------------------------------------------------
-from torchlens.constants import (
+from torchlens._constants import (
     BUFFER_LOG_FIELD_ORDER,
     FUNC_CALL_LOCATION_FIELD_ORDER,
     LAYER_PASS_LOG_FIELD_ORDER,
@@ -27,14 +27,16 @@ from torchlens.constants import (
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
-from torchlens.utils.arg_handling import _safe_copy_arg
-from torchlens.utils.tensor_utils import (
+from torchlens._utils.arg_handling import _safe_copy_arg
+from torchlens._utils.tensor_utils import (
     get_memory_amount,
     get_memory_amount_from_metadata,
     print_override,
     safe_copy,
     safe_to,
 )
+from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
+from torchlens.errors import TraceCaptureError
 
 
 class TestFieldOrderSync:
@@ -73,7 +75,7 @@ class TestFieldOrderSync:
 
     def test_op_log_field_order_covers_init(self):
         """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in Op.__init__."""
-        from torchlens.data_classes.op import Op
+        from torchlens._data_classes.op import Op
 
         init_attrs = self._init_assigned_attrs(Op)
         # Private fields (prefixed _) are intentionally excluded from some FIELD_ORDERs,
@@ -87,7 +89,7 @@ class TestFieldOrderSync:
     def test_trace_field_order_covers_init(self):
         """Every public Trace init attr is declared, and user-facing ones are ordered.
 
-        A public NAME does not imply a user-facing FIELD. ``FIELD_POLICY`` is the
+        A public NAME does not imply a user-facing FIELD. ``_FIELD_POLICY`` is the
         source of truth (``MODEL_LOG_FIELD_ORDER`` is generated from it -- see
         ``test_record_field_policy.py::test_record_field_policy_is_field_order_source``),
         and a session-time knob may be public-named yet deliberately non-user-facing:
@@ -99,16 +101,16 @@ class TestFieldOrderSync:
         that is simply forgotten is undeclared and still fails here, while a field that
         is declared non-user-facing on purpose is provably outside the ordering contract.
         """
+        from torchlens._data_classes.trace import Trace
         from torchlens._io import FieldPolicy
-        from torchlens.data_classes.trace import Trace
 
         init_attrs = self._init_assigned_attrs(Trace)
         public_attrs = {a for a in init_attrs if not a.startswith("_")}
 
-        undeclared = public_attrs - set(Trace.FIELD_POLICY)
-        assert not undeclared, f"Trace public fields absent from FIELD_POLICY: {undeclared}"
+        undeclared = public_attrs - set(Trace._FIELD_POLICY)
+        assert not undeclared, f"Trace public fields absent from _FIELD_POLICY: {undeclared}"
 
-        user_facing = {a for a in public_attrs if Trace.FIELD_POLICY[a].user_facing}
+        user_facing = {a for a in public_attrs if Trace._FIELD_POLICY[a].user_facing}
         missing = user_facing - set(MODEL_LOG_FIELD_ORDER)
         assert not missing, f"Trace user-facing fields missing from FIELD_ORDER: {missing}"
         non_user_facing = public_attrs - user_facing
@@ -128,6 +130,9 @@ class TestFieldOrderSync:
             # F24 device-memory lane: fifth session knob, DROP, unordered, load
             # restores the default (CaptureOptions.track_device_memory).
             "track_device_memory",
+            # measure.2: sixth session knob, DROP, unordered, load restores the
+            # default (CaptureOptions.measure_host_peak_memory).
+            "measure_host_peak_memory",
         }
         portable_unordered = {
             "checkpoint_invocation_witness",
@@ -140,12 +145,12 @@ class TestFieldOrderSync:
         # the L9 markers are KEEP-but-unordered per the v8 bump ruling (the
         # portable_only_fields ledger in test_field_order_contract.py).
         for name in session_knobs:
-            assert Trace.FIELD_POLICY[name].portable_policy is FieldPolicy.DROP, name
+            assert Trace._FIELD_POLICY[name].portable_policy is FieldPolicy.DROP, name
         for name in portable_unordered:
-            assert Trace.FIELD_POLICY[name].portable_policy is FieldPolicy.KEEP, name
+            assert Trace._FIELD_POLICY[name].portable_policy is FieldPolicy.KEEP, name
 
     def test_module_call_log_field_order_covers_init(self):
-        from torchlens.data_classes.module import ModuleCall
+        from torchlens._data_classes.module import ModuleCall
 
         init_attrs = self._init_assigned_attrs(ModuleCall)
         order_set = set(MODULE_PASS_LOG_FIELD_ORDER)
@@ -154,7 +159,7 @@ class TestFieldOrderSync:
         assert not missing, f"ModuleCall public fields missing from FIELD_ORDER: {missing}"
 
     def test_module_log_field_order_covers_init(self):
-        from torchlens.data_classes.module import Module
+        from torchlens._data_classes.module import Module
 
         init_attrs = self._init_assigned_attrs(Module)
         order_set = set(MODULE_LOG_FIELD_ORDER)
@@ -173,19 +178,19 @@ class TestConstantsCrawl:
 
     def test_overridable_funcs_cached(self):
         """_get_torch_overridable_functions returns same object on repeated calls."""
-        from torchlens.constants import _get_torch_overridable_functions
+        from torchlens._constants import _get_torch_overridable_functions
 
         a = _get_torch_overridable_functions()
         b = _get_torch_overridable_functions()
         assert a is b
 
     def test_overridable_funcs_nonempty(self):
-        from torchlens.constants import OVERRIDABLE_FUNCS
+        from torchlens._constants import OVERRIDABLE_FUNCS
 
         assert len(OVERRIDABLE_FUNCS) > 100
 
     def test_orig_torch_funcs_includes_ignored(self):
-        from torchlens.constants import IGNORED_FUNCS, ORIG_TORCH_FUNCS
+        from torchlens._constants import IGNORED_FUNCS, ORIG_TORCH_FUNCS
 
         ignored_set = set(IGNORED_FUNCS)
         orig_set = set(ORIG_TORCH_FUNCS)
@@ -473,15 +478,17 @@ class TestModuleExceptionCleanup:
         """Model that raises should propagate exception."""
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
-        with pytest.raises(RuntimeError, match="Intentional test error"):
+        with pytest.raises(TraceCaptureError, match="Intentional test error") as _tce_info:
             trace_fn(model, x)
+        assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     def test_failing_model_cleanup(self):
         """After a failed forward pass, subsequent calls should work."""
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TraceCaptureError) as _tce_info2:
             trace_fn(model, x)
+        assert isinstance(_tce_info2.value.__cause__, RuntimeError)
         good_model = _SimpleLinear()
         log = trace_fn(good_model, torch.randn(2, 10))
         assert log is not None
@@ -571,7 +578,7 @@ class TestBufferMerge:
 class TestDeadTypeCheck:
     def test_nested_tensor_found(self):
         """Tensors nested in custom objects should be findable."""
-        from torchlens.utils.introspection import get_vars_of_type_from_obj
+        from torchlens._utils.introspection import get_vars_of_type_from_obj
 
         class Container:
             def __init__(self, t):
@@ -591,7 +598,7 @@ class TestDeadTypeCheck:
 class TestIPythonNotRequired:
     def test_display_module_loads(self):
         """display module should load without IPython."""
-        from torchlens.utils.display import in_notebook
+        from torchlens._utils.display import in_notebook
 
         assert in_notebook() is False
 
@@ -607,7 +614,7 @@ class TestCleanupReleasesReferences:
 
         The litmus: a no-op ``cleanup()`` would pass a bare "doesn't crash"
         check trivially, so assert the concrete reference-release effects the
-        docstring on ``torchlens.data_classes.cleanup.cleanup`` claims --
+        docstring on ``torchlens._data_classes.cleanup.cleanup`` claims --
         per-Op state cleared (breaking the Op<->Trace cycle) and cached
         ``Param`` references dropped to allow model GC -- rather than only
         that the call completes.
@@ -624,7 +631,7 @@ class TestCleanupReleasesReferences:
         # Force each Param's live reference to rehydrate (iteration triggers
         # rehydrate-on-iter after a normal capture) so we have a genuine
         # non-None reference to prove cleanup() releases.
-        param_logs = list(log.param_logs)
+        param_logs = list(log._param_logs)
         assert param_logs, "expected at least one captured Param"
         for param_log in param_logs:
             assert param_log._param_ref is not None
@@ -639,7 +646,7 @@ class TestCleanupReleasesReferences:
         # Op -> Trace circular reference via source_trace), and internal
         # containers not in MODEL_LOG_FIELD_ORDER must be gone.
         assert not hasattr(first_entry, "out")
-        assert not hasattr(log, "layer_logs")
+        assert not hasattr(log, "_layer_logs")
 
 
 # ---------------------------------------------------------------------------
@@ -681,7 +688,7 @@ class TestNestedTupleArgs:
         """
         model = _NestedListArgModel()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+        log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True))
 
         stack_entry = None
         for label in log.layer_labels:
@@ -697,7 +704,7 @@ class TestNestedTupleArgs:
         saved_list = stack_entry.saved_args[0]
         assert isinstance(saved_list, list)
         assert len(saved_list) == 2
-        live_pair = model._last_pair
+        live_pair = stashed(log, "_last_pair")
 
         # Identity: the saved container and its tensors must be copies, not references.
         assert saved_list is not live_pair
@@ -741,7 +748,7 @@ class TestDisplayLargeTensor:
         """
         model = nn.Linear(100, 2000)
         x = torch.randn(50, 100)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = trace_fn(model, x, save="all")
 
         clone_call_sizes: list[int] = []
         orig_clone = torch.Tensor.clone
@@ -773,7 +780,7 @@ class TestDisplayUsesLoggedShape:
         """shape should reflect capture-time shape."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = trace_fn(model, x, save="all")
         for label in log.layer_labels:
             entry = log[label]
             if entry.out is not None:
@@ -794,7 +801,7 @@ class TestDeferredRegistryPruneAmortization:
         import weakref
         from types import SimpleNamespace
 
-        from torchlens.utils import tensor_utils as tu
+        from torchlens._utils import tensor_utils as tu
 
         class _Referent:
             """Weak-referenceable stand-in for a pending alias."""
@@ -856,7 +863,7 @@ class TestDeferredRegistryPruneAmortization:
         import weakref
         from types import SimpleNamespace
 
-        from torchlens.utils import tensor_utils as tu
+        from torchlens._utils import tensor_utils as tu
 
         class _Referent:
             """Weak-referenceable stand-in for a pending alias."""
@@ -896,7 +903,7 @@ class TestDeferredRegistryPruneAmortization:
 
         import torch as _torch
 
-        from torchlens.utils import tensor_utils as tu
+        from torchlens._utils import tensor_utils as tu
 
         saved_pending = dict(tu._DEFER_PENDING)
         saved_dead = tu._defer_dead_alias_count

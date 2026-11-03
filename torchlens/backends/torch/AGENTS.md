@@ -8,7 +8,7 @@ Core capture path:
 - `model_prep.py` — prepare `nn.Module` objects for capture sessions (permanent +
   per-session). Release-time held torch-function-ref normalization moved OUT to
   `_held_refs.py` (`normalize_held_torch_function_refs`, called by
-  `release_model`).
+  `release_model`); quantized-module FLOPs estimation lives in `_quantized_flops.py`.
 - `ops.py` — log tensors produced by decorated torch operations; its implementation is
   split across the `_ops_*.py` family: `_ops_exhaustive.py` (exhaustive emission),
   `_ops_emission.py` (output logging / live-hook dispatch), `_ops_arguments.py`
@@ -21,8 +21,22 @@ Core capture path:
 - `sources.py` — log source tensors; `tensor_tracking.py` — provenance, family links,
   equivalence classes; `module_stack.py` — module-call stack;
   `prehook_provenance.py` — reversible forward-pre-hook input provenance;
-  `buffer_writes.py` — registered-buffer write capture; `backward.py` — backward
-  execution and autograd graph metadata.
+  `buffer_writes.py` — registered-buffer write capture; `_state_bytes.py` — byte
+  views of tensor state (the whole-storage snapshot the buffer-write tracker and the
+  completeness witness read, and the byte-exact compare the state restore uses, sparse
+  layouts through their components); `_held_tensor_scan.py` — the
+  bounded scan that stamps plain tensors a module holds outside `register_buffer`;
+  `backward.py` — backward execution and autograd graph metadata.
+- `_backward_roots.py` — autograd-entry roots: flattening an entry's root argument and
+  which roots of a multi-root backward each capture walks (every root whose graph
+  reaches it, and only those).
+- `_backward_markers.py` — the GradFn-call marker stack (each posthook removes its
+  own marker, so pushes and pops nest across captures hooking one node) and
+  `executing_grad_fn_ref`, the one executing-node resolver the census, the private
+  ATen recorder and the checkpoint unpack evidence all call.
+- `_grad_fn_source.py` — best-effort grad-fn source metadata for `GradFn` records
+  (custom-autograd detection; class and method source file, line, signature,
+  docstring), split out of `backward.py` under its size ratchet.
 
 Safety net and honesty:
 - `belt.py` — the mechanical BELT: protocol-invisible stale-reference coverage
@@ -61,7 +75,7 @@ Backend integration:
 
 ## Journal Producer (single since producer unification P7)
 - Every torch capture freezes decomposed `OpRecord` rows (`OpCore` + typed facets) through
-  the ONE commit tail `capture/projections.py::commit_op` (freeze -> atomic append): the
+  the ONE commit tail `_capture/projections.py::commit_op` (freeze -> atomic append): the
   three exhaustive `_make_layer_log_entry` sites via `ExhaustiveOpDraft` and the sparse
   `append_projected_event` sites via `SparseOpDraft`. The legacy `OpEvent` producer, its
   dual-path env switch, `_op_event_from_log`, and
@@ -70,7 +84,7 @@ Backend integration:
   (`CaptureEvents.append_amendment`, nine exact-set families) and folds through the ONE
   reducer `amended_op_records()`. grad-fn handles live ONLY in the journal side index
   (`grad_fn_handles_by_label_raw`); records never carry them. The one sanctioned in-place
-  carve-out — the fastlog ancestry backfill on a cook-owned `copy_for_replay` projection —
+  carve-out — the fastlog ancestry backfill on a cook-owned `_copy_for_replay` projection —
   is pinned (with every other op-lane mutator) by the closed ledger in
   `tests/producer_parity/test_op_lane_inplace_writers.py`.
 - Preview backends keep emitting compat `OpEvent`s until S15 and adapt at the one ingest

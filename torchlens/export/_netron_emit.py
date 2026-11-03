@@ -121,6 +121,10 @@ def _encode_node(node: NetronNode) -> dict[str, Any]:
         row["metadataProps"] = [
             {"key": "input_names", "value": repr([str(n) for n in node.input_names])}
         ]
+    if node.metadata:
+        row.setdefault("metadataProps", []).extend(
+            {"key": key, "value": value} for key, value in node.metadata
+        )
     return row
 
 

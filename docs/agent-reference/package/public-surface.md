@@ -1,9 +1,9 @@
 ## Public Surface
 
-`torchlens.__all__` is intentionally small and currently has 115 names. New user-facing
+`torchlens.__all__` is intentionally small and currently has 85 names. New user-facing
 objects should usually live under submodules (`torchlens.io`, `torchlens.options`,
 `torchlens.bridge`, `torchlens.errors`, etc.). Interim-phase policy is remove-and-rename,
-never deprecation shims (tests/test_deprecation_inventory.py pins the package
+never deprecation shims (scripts/checks/deprecation_inventory.py pins the package
 deprecation-free).
 
 Unified capture examples:
@@ -16,8 +16,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -38,7 +37,7 @@ resolved sparse DAG with staged, embedded capture, or N1-a state. Analysis-only 
 Runnable descriptors are `sparse_recorded_taken_path_v2`: every call carries a REQUIRED explicit
 `CallExecutionContext` and the descriptor one `AmbientExecutionContext`, both restored at replay or
 refused typed; legacy v1 artifacts load analysis-only with a typed readiness refusal.
-Use `tl.save(trace, path, level="runnable", include_weights=True)` to opt into the full capture-time
+Use `trace.save(path, level="runnable", include_weights=True)` to opt into the full capture-time
 `state_dict` (named parameters plus persistent buffers). It is a separate `state_dict_v1` blob
 family, not part of the tensor-value-free sparse core or a reconstructed model. Used non-persistent
 buffers always ship in the REQUIRED `runnable_nonpersistent_buffer_v1` family (declared state, not
@@ -47,16 +46,16 @@ Use `include_activations=True` independently to archive exactly the existing cap
 selection as `selected_activation_v2` (with physical `InputAttestationFingerprint` eligibility
 records). Inspect it through `Trace.archived_activations`; never use those blobs as DAG inputs.
 Eligible original-input/capture-equivalent-state runs byte-attest raw saved slots (`attested` or
-transactional `numeric_attestation_failed`), while changed-input (logical or physical),
+transactional `replay_value_mismatch`), while changed-input (logical or physical),
 random/non-equivalent-state, and nondeterministic-capture-context runs are `not_applicable`;
 `attested` always implies `verified`.
 `trace.run(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
 `verified|diverged|unverifiable` path faithfulness, and numeric attestation in its `RunResult`.
-Use `return_diverged` only when a permanently poisoned diagnostic result is intended. Match failures
+Use `on_divergence="return"` only when a permanently poisoned diagnostic result is intended. Match failures
 through `RunnableErrorCode`; the complete frozen taxonomy is in
 `docs/reference/runnable_tlspec_contract.md`. r37: overlapping/unprovable distinct-object state
 alias topology and zero-tensor-leaf or instance-stateful container outputs refuse at save
-(`state_alias_topology_unsupported` / `missing_output_container_contract`); tied live-identity
+(`state_alias_topology_unsupported` / `output_container_contract_missing`); tied live-identity
 state stages as one alias-group allocation; persisted context values validate at parse
 (`context_field_invalid`); non-global host RNG/entropy/clock touches permanently ceiling replay
 (r39: numpy instances via a chained `sys`/`threading.setprofile` classifier + a cheap
@@ -73,15 +72,14 @@ run preparation behind a no-allocation readiness capability gate.
 Provisional semantic I/O examples (review-day names):
 
 ```python
-classifier_trace = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
-)
-classifier_trace.output_table(top_n=5)
+classifier_trace = tl.trace(model, x)
+classifier_trace.output_table(k=5)
+classifier_trace.decode_output(style="classification", head="logits")  # read-time override
 
 input_trace = tl.trace(
     model,
     raw_text,
-    capture=tl.options.CaptureOptions(transform=text_to_tensor, save_raw_input="small"),
+    capture=tl.options.CaptureOptions(input_transform=text_to_tensor, save_raw_input="small"),
 )
 input_trace.draw(show_input_transform_summary=True)
 
@@ -89,36 +87,34 @@ mds_layers = tl.in_module("block1") | tl.in_module("block2")
 image_trace = tl.trace(
     model,
     image_list,
-    transform=image_batch_to_tensor,
+    capture=tl.options.CaptureOptions(input_transform=image_batch_to_tensor),
     save=mds_layers,
     save_raw_input=True,
-    output_style="classification",
 )
 image_trace.model_profile
-image_trace.output_table(top_n=5)
-tl.repgeom.mds_evolution(image_trace, save=mds_layers, min_n=8)
+image_trace.output_table(k=5)
+tl.repgeom.mds_evolution(image_trace, save=mds_layers, min_stimuli=8)
 tl.repgeom.rdm_evolution(image_trace, save=mds_layers)
-tl.viz.feature_map_evolution(image_trace, save=mds_layers)
+tl.viz.feature_maps(image_trace, save=mds_layers)
 tl.repgeom.scree_evolution(image_trace, save=mds_layers)
-image_trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
-image_trace.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
-image_trace.draw(node_spec_fn=tl.viz.feature_map_node_spec())
-image_trace.draw(node_spec_fn=tl.repgeom.scree_node_spec())
+image_trace.draw(node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8))
+image_trace.draw(node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8))
+image_trace.draw(node_spec_fn=tl.viz.nodes.feature_map())
+image_trace.draw(node_spec_fn=tl.viz.nodes.scree())
 ```
 
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
 is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target batch
 activations to have been saved at capture time; use a curated `save=` subset, not exhaustive
-`layers_to_save="all"`,
+`save="all"`,
 for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
 annotation payloads and compatibility review.
 Sprint C RDM, feature-map, and scree node visuals are PIL-only render-time images composed
 from `tl.viz.render_*` primitives and are provisional until review-day signoff.
 
 `record(keep_op=...)` and `record(keep_module=...)` are removed and raise `TypeError`.
-`record(save=...)` is the only selective-capture spelling. `capture=CaptureOptions(
-layers_to_save=[...])` remains the final-label selection door (the bare flat kwarg is
-removed); it is NOT two-pass-only —
+`record(save=...)` is the only selective-capture spelling. On `trace`, `save=[...]`
+also accepts final-label selections.
 `_trace_selector_helpers.py` builds a live single-pass predicate whenever early labels
 suffice, falling back to two-pass resolution otherwise. An
 unqualified recurrent layer label saves all passes, while `"label:2"` saves only pass 2.
@@ -134,5 +130,5 @@ FuncGraph static path is implemented for compiled/SavedModel entries (opaque reg
 honestly unverified). Static-label `intervene=` SHIPS for eager entries (two-level writable
 layer, fail-closed site reachability), and T1 derived gradients SHIP for eager entries via
 `tl.backends.tf.GradOptions` (graph-only captures refuse `grad_options` typed; `intervene=`
-cannot combine with `grad_options=`). Deferred: `halt=`/`recipes=`, true backward capture,
+cannot combine with `grad_options=`). Deferred: `stop_after=`/`recipes=`, true backward capture,
 and value-dependent predicates.

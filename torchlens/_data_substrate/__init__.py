@@ -9,7 +9,7 @@ signature compare); :mod:`model_identity` computes the D6 identity record
 whose resume comparison kills the random-init T-MODELSWAP hazard.
 
 Private substrate: the public doors are :func:`torchlens.extract_dataset` /
-:func:`torchlens.load_extraction`. Every spelling is DOCUMENTED-UNSTABLE
+:func:`torchlens.load`. Every spelling is DOCUMENTED-UNSTABLE
 pending the naming sprint.
 """
 
@@ -21,13 +21,12 @@ from .artifact import (
     MANIFEST_SCHEMA_V2,
     SIGNATURE_SEMANTIC_FIELDS,
     STIMULUS_IDS_FILENAME,
-    UNRECORDED_V1,
     ArtifactWriter,
     ExtractionArtifactError,
     compare_model_identity,
     compare_signatures,
-    migrate_v1_artifact,
     read_trusted_rows,
+    refuse_2x_manifest,
     repair_ledger_tail,
     shard_filename,
     stimulus_ids_digest,
@@ -61,7 +60,6 @@ __all__ = [
     "MODEL_STATE_DIGEST_VERSION",
     "SIGNATURE_SEMANTIC_FIELDS",
     "STIMULUS_IDS_FILENAME",
-    "UNRECORDED_V1",
     "VALUE_REDUCTION_ALGORITHM_ID",
     "VALUE_REDUCTION_ALGORITHM_VERSION",
     "ArtifactWriter",
@@ -71,7 +69,7 @@ __all__ = [
     "compare_signatures",
     "compute_model_identity",
     "merkle_digest",
-    "migrate_v1_artifact",
+    "refuse_2x_manifest",
     "read_trusted_rows",
     "repair_ledger_tail",
     "shard_filename",

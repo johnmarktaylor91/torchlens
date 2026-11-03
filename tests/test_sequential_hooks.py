@@ -32,7 +32,7 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
 
     order: list[str] = []
 
-    def add_one(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def add_one(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Add one to the out.
 
         Parameters
@@ -48,11 +48,11 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
             Shifted out.
         """
 
-        del hook
+        del ctx
         order.append("add")
         return out + 1
 
-    def times_two(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def times_two(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Double the out.
 
         Parameters
@@ -68,13 +68,13 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
             Scaled out.
         """
 
-        del hook
+        del ctx
         order.append("mul")
         return out * 2
 
     model = ReluModel()
     x = torch.tensor([[-1.0, 2.0]])
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     log.attach_hooks(tl.func("relu"), add_one, times_two, confirm_mutation=True)
 
     rerun_log = log.run(model, x)
@@ -89,10 +89,10 @@ def test_hook_handle_remove_and_context_manager_cleanup() -> None:
     log = tl.trace(
         ReluModel(),
         torch.randn(1, 2),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
-    def identity(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def identity(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Return out unchanged.
 
         Parameters
@@ -108,7 +108,7 @@ def test_hook_handle_remove_and_context_manager_cleanup() -> None:
             Original out.
         """
 
-        del hook
+        del ctx
         return out
 
     handle = log.attach_hooks(tl.func("relu"), identity, confirm_mutation=True)

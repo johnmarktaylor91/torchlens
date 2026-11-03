@@ -16,8 +16,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import site
+from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._errors import ArgumentTypeError
-from torchlens.intervention import site
 from torchlens.intervention.errors import SelectorCapabilityError
 from torchlens.intervention.site_keys import mint_keys_in_execution_order
 
@@ -63,7 +64,7 @@ def _ready(model: nn.Module) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -78,7 +79,7 @@ def test_site_selector_construction_refusals() -> None:
         site()
     assert excinfo.value.fields["code"] == "site_selector_empty"
     with pytest.raises(ArgumentTypeError) as excinfo:
-        site("s1||relu||1", op_type="relu")
+        site("s1||relu||1", func="relu")
     assert excinfo.value.fields["code"] == "site_selector_key_conflict"
     with pytest.raises(ArgumentTypeError) as excinfo:
         site("not-a-site-key")
@@ -88,7 +89,7 @@ def test_site_selector_construction_refusals() -> None:
 def test_site_classifies_structural() -> None:
     from torchlens.intervention.spec import classify_where
 
-    assert classify_where(site(op_type="relu")) == "structural"
+    assert classify_where(site(func="relu")) == "structural"
 
 
 # ---------------------------------------------------------------------------
@@ -98,12 +99,12 @@ def test_site_classifies_structural() -> None:
 
 def test_post_hoc_resolution_by_components_and_key() -> None:
     log = _ready(_TinyModel())
-    by_type = log.resolve_sites(site(op_type="relu"))
-    assert by_type.labels() == ("relu_1_2",)
-    key = log["relu_1_2"].site_key
-    assert log.resolve_sites(site(key)).labels() == ("relu_1_2",)
-    by_module = log.resolve_sites(site(module_path="fc1"))
-    assert "linear_1_1" in by_module.labels()
+    by_type = log[site(func="relu")]
+    assert by_type.labels == ("relu_1_2:1",)
+    key = layer_site_key(log["relu_1_2"])
+    assert log[site(key)].labels == ("relu_1_2:1",)
+    by_module = log[site(module_path="fc1")]
+    assert "linear_1_1:1" in by_module.labels
 
 
 def test_reused_module_calls_share_one_site_key_family() -> None:
@@ -119,12 +120,16 @@ def test_reused_module_calls_share_one_site_key_family() -> None:
     log = _ready(_ReusedModule())
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # fan-out disclosure, expected here
-        labels = log.resolve_sites(site(op_type="relu")).labels()
+        table = log[site(func="relu")]
+        # grouping rule row 28 (fork 1, module identity): the two calls of one
+        # relu instance are one Layer with 2 passes, so address them by op label.
+        assert len({log[label].layer_label for label in table.labels}) == 1
+        labels = list(table.labels)
         assert len(labels) == 2
         keys = {log.ops[label].site_key for label in labels}
         assert len(keys) == 1, "reused-module calls share ONE structural position key"
         (shared_key,) = keys
-        assert set(log.resolve_sites(site(shared_key)).labels()) == set(labels)
+        assert set(log[site(shared_key)].labels) == set(labels)
 
 
 # ---------------------------------------------------------------------------
@@ -134,14 +139,14 @@ def test_reused_module_calls_share_one_site_key_family() -> None:
 
 def test_live_site_intervention_fires_at_the_right_site() -> None:
     model = _TinyModel()
-    log = tl.trace(model, torch.randn(2, 4), intervene=tl.when(site(op_type="relu"), tl.scale(0.0)))
+    log = tl.trace(model, torch.randn(2, 4), intervene=tl.when(site(func="relu"), tl.scale(0.0)))
     assert torch.count_nonzero(log["relu_1_2"].out) == 0
     events = [
         row
         for row in log.state_history
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
-    assert events[-1]["site_keys"] == [log["relu_1_2"].site_key]
+    assert events[-1]["site_keys"] == [layer_site_key(log["relu_1_2"])]
 
 
 @pytest.mark.smoke
@@ -152,14 +157,14 @@ def test_live_minted_keys_match_posthoc_keys() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 4),
-        intervene=tl.when(site(op_type="relu"), tl.scale(1.0)),
+        intervene=tl.when(site(func="relu"), tl.scale(1.0)),
     )
     events = [
         row
         for row in log.state_history
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
-    assert events[-1]["site_keys"] == [log["relu_1_2"].site_key]
+    assert events[-1]["site_keys"] == [layer_site_key(log["relu_1_2"])]
 
 
 @pytest.mark.parametrize("model_cls", [_TinyModel, _ReusedModule, _Recurrent])
@@ -182,7 +187,7 @@ def test_recurrent_pass_qualified_ordinals_stay_distinct() -> None:
     (root instance) count 1..3, and each key resolves exactly one op."""
 
     log = _ready(_Recurrent())
-    relu_labels = [label for label in log.op_labels if log.ops[label].layer_type == "relu"]
+    relu_labels = [label for label in log.op_labels if log.ops[label].type == "relu"]
     keys = [log.ops[label].site_key for label in relu_labels]
     assert len(set(keys)) == len(keys) == 3
 
@@ -205,7 +210,7 @@ def test_unarmed_capture_surface_refuses_typed() -> None:
         tl.record(
             model,
             torch.randn(2, 4),
-            save=site(op_type="relu"),
+            save=site(func="relu"),
             on_predicate_error="fail-fast",
         )
     assert "site" in str(excinfo.value)
@@ -214,7 +219,7 @@ def test_unarmed_capture_surface_refuses_typed() -> None:
 def test_do_accepts_site_spec_on_the_replay_engine() -> None:
     log = _ready(_TinyModel())
     fork = log.fork()
-    fork.do(tl.when(site(op_type="relu"), tl.scale(0.0)))
+    fork.do(tl.when(site(func="relu"), tl.scale(0.0)))
     assert torch.count_nonzero(fork["relu_1_2"].out) == 0
 
 
@@ -225,6 +230,6 @@ def test_rerun_with_sticky_site_hook_refuses_at_preflight() -> None:
     model = _TinyModel()
     log = _ready(model)
     fork = log.fork()
-    fork.attach_hooks(site(op_type="relu"), tl.scale(0.0), confirm_mutation=True)
+    fork.attach_hooks(site(func="relu"), tl.scale(0.0), confirm_mutation=True)
     with pytest.raises(SelectorCapabilityError):
         fork.run(model, torch.randn(2, 4))

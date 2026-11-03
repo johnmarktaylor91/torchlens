@@ -18,12 +18,10 @@
         "out"
       ],
       "ops": [
-        "input_1:1",
         "linear_1_1:1",
         "tanh_1_2:1",
         "add_1_3:1",
-        "linear_2_4:1",
-        "output_1:1"
+        "linear_2_4:1"
       ],
       "params": [
         "proj.weight",
@@ -277,8 +275,6 @@
         "lookup_keys": [
           -1,
           5,
-          "out",
-          "out:1",
           "output",
           "output_1",
           "output_1",
@@ -312,13 +308,13 @@
     "param_source": "native-module"
   },
   "sha256_chunks": [
-    "69c5110f",
-    "fd378761",
-    "e54c5579",
-    "c7bb5d0b",
-    "33b6d471",
-    "2903cac7",
-    "25e48e6e",
-    "4e45ff3a"
+    "c5497e38",
+    "e1648532",
+    "14225f4f",
+    "04bd4be7",
+    "e91186d6",
+    "eb0bf232",
+    "7102a26a",
+    "4c52e735"
   ]
 }

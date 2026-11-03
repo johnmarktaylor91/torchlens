@@ -34,7 +34,7 @@ __all__ = [
     "UNCAPTURED_COLLECTIVE_OP",
     "UncapturedCollectiveOpError",
     "derive_collective_recognizer",
-    "has_vetted_snapshot",
+    "is_vetted_build",
 ]
 
 UNCAPTURED_COLLECTIVE_OP = "uncaptured_collective_op"
@@ -234,7 +234,7 @@ def _all_dispatcher_schemas() -> list[Any]:
     refusal -- the census cannot be vetted, so arming must not proceed.
     """
 
-    from ..utils._torch_compat import get_jit_all_schemas
+    from .._utils._torch_compat import get_jit_all_schemas
 
     schemas = get_jit_all_schemas()
     if schemas is None:
@@ -289,7 +289,7 @@ def _match_vetted_snapshot(
     names the added/removed ops per namespace for every snapshot that did not
     match (empty when ``matched`` is not ``None``). Shared by
     :func:`derive_collective_recognizer` (which raises on no match) and
-    :func:`has_vetted_snapshot` (which only asks the yes/no question).
+    :func:`is_vetted_build` (which only asks the yes/no question).
     """
 
     matched: tuple[str, dict[str, frozenset[str]]] | None = None
@@ -310,7 +310,7 @@ def _match_vetted_snapshot(
     return matched, per_snapshot_mismatches
 
 
-def has_vetted_snapshot() -> bool:
+def is_vetted_build() -> bool:
     """Capability probe: does this torch build match a censused snapshot?
 
     Cheap, read-only, and NEVER raises: answers whether the running torch's
@@ -319,7 +319,7 @@ def has_vetted_snapshot() -> bool:
     TorchLens-owned census fact, not a generic torch capability (it compares
     the runtime against OUR reviewed allowlist, not against a torch API's mere
     presence), so it lives here next to the snapshot table rather than in
-    ``torchlens/utils/_torch_compat.py``.
+    ``torchlens/_utils/_torch_compat.py``.
 
     Use this to gate tests and call sites that require full collective arming
     to succeed: on an unvetted torch, :func:`derive_collective_recognizer` (and

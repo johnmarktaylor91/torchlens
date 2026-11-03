@@ -142,7 +142,7 @@ _GREP_SKIP_PREFIXES = (
     "_decomp",
     "_prims",
     "_meta_registrations",
-    "utils/_sympy",
+    "_utils/_sympy",
 )
 
 # (relative source path, attribute name) pairs reviewed 2026-08-14:
@@ -617,7 +617,7 @@ class TestUnwrapSafety:
     def test_admission_epoch_check_refuses_unwrapped_process(self):
         # R54 second half: a capture admitted AFTER a concurrent unwrap
         # completes must refuse typed rather than run an unlogged forward.
-        from torchlens._errors import CaptureContextError
+        from torchlens._errors import CaptureNotActiveError
         from torchlens.backends.torch.backend import TorchBackend
 
         _ensure_wrapped()
@@ -625,7 +625,7 @@ class TestUnwrapSafety:
         saved = _state._is_decorated
         try:
             _state._is_decorated = False
-            with pytest.raises(CaptureContextError) as exc_info:
+            with pytest.raises(CaptureNotActiveError) as exc_info:
                 with TorchBackend().active_logging(session):
                     pass
             assert exc_info.value.fields["code"] == "wrappers_removed_before_capture"
@@ -689,7 +689,7 @@ class TestUnwrapSafety:
 
 
 def _has_fastpath_flag() -> bool:
-    from torchlens.utils import _torch_compat
+    from torchlens._utils import _torch_compat
 
     return bool(getattr(_torch_compat, "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG", False))
 
@@ -779,9 +779,9 @@ def test_import_callback_unwrap_race_cannot_corrupt_shim_state(
 
     import threading
 
+    from torchlens._utils import _torch_compat
     from torchlens.backends.torch import identity_shims
     from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-    from torchlens.utils import _torch_compat
 
     if not _torch_compat.HAS_ATTENTION_CAUSAL_BIAS:
         pytest.skip("causal-bias site absent on this torch")
@@ -861,11 +861,19 @@ _MEMBERSHIP_TABLE_REVIEWED: dict[tuple[str, str], str] = {
         "membership answers stay correct on both paths."
     ),
     ("torch.masked.maskedtensor.reductions", "TORCH_REDUCE_MAP"): (
-        "MaskedTensor reduction dispatch; eagerly imported with torch, and the "
-        "C-level __torch_function__ protocol supplies the ORIGINAL func operand."
+        "MaskedTensor reduction dispatch keyed on torch.* ORIGINALS; eagerly "
+        "imported with torch, and the C-level protocol reads a torch.* function "
+        "from the unpatched _VariableFunctions table, so the handler sees the "
+        "original."
     ),
     ("torch.masked.maskedtensor.reductions", "TENSOR_REDUCE_MAP"): (
-        "MaskedTensor reduction dispatch; same basis as TORCH_REDUCE_MAP."
+        "MaskedTensor reduction dispatch keyed on Tensor METHOD originals. The "
+        "C parser presents getattr(torch.Tensor, name) read at CALL time (the "
+        "wrapper during the wrap epoch), so a method call misses this table and "
+        "falls through to MaskedTensor's aten dispatch table, which computes the "
+        "same reduction (mt.sum() observed equal). Documented unshimmed residual: "
+        "the function table itself lives in the lazily imported _ops_refs, so a "
+        "fixed identity basis cannot be chosen at wrap time."
     ),
     ("torch._jit_internal", "boolean_dispatched"): (
         "TorchScript boolean-dispatch table; deliberately DUAL-KEYED by "
@@ -880,8 +888,12 @@ _MEMBERSHIP_TABLE_REVIEWED: dict[tuple[str, str], str] = {
     ),
     ("torch.nn.parameter", "UninitializedTensorMixin._allowed_methods"): (
         "Lazy-module materialization allowlist consulted from "
-        "UninitializedTensorMixin.__torch_function__, where the C-level "
-        "protocol supplies the ORIGINAL func operand; eagerly imported."
+        "UninitializedTensorMixin.__torch_function__. For TENSOR METHODS the "
+        "C-level protocol hands the handler the CURRENT torch.Tensor class "
+        "attribute (the wrapper during the wrap epoch), so the list is shimmed "
+        "with a ledger-resolving view while wrappers are installed "
+        "(identity_shims._install_lazy_module_allowlist_shim; wave-3 stress F2, "
+        "tests/test_identity_shims.py::TestLazyModuleAllowlist)."
     ),
     # The two torch._export sym-op tables surface only when a suite test
     # imports torch._export pre-wrap (lazy, not eagerly imported with torch).
@@ -913,10 +925,11 @@ _MEMBERSHIP_TABLE_REVIEWED: dict[tuple[str, str], str] = {
         "DLPack read-only-export allowlist keyed by torch.Tensor.__dlpack__ / "
         "__dlpack_device__; eagerly imported with torch (torch/__init__.py "
         "imports torch.utils.dlpack), so keys are pre-wrap originals. "
-        "Membership is checked inside ReadOnlyTensorWrapper.__torch_function__, "
-        "where the C-level __torch_function__ protocol supplies the ORIGINAL "
-        "func operand -- same basis as UninitializedTensorMixin._allowed_methods "
-        "and the MaskedTensor reduce maps above."
+        "Membership is checked inside ReadOnlyTensorWrapper.__torch_function__; "
+        "TorchLens never wraps Tensor.__dlpack__ / __dlpack_device__ on the "
+        "class (the function-boundary export patch is capture-scoped), so the "
+        "func operand the protocol hands the handler is the pre-wrap original "
+        "outside capture -- same basis as the MaskedTensor reduce maps above."
     ),
 }
 
@@ -1042,6 +1055,7 @@ _ORIGINAL_HOLDING_SITE_ALLOWLIST = {
     ("torch", "_segment_reduce"),
     ("torch", "_sym_sqrt"),
     ("torch.functional", "_add_docstr"),
+    ("torch.sparse", "_add_docstr"),
     ("torch.functional", "overload"),
     # torch 2.1.2 floor only (the CI 2.1.2/2.2.2 rows): ``torch.obj`` is an
     # undocumented module attribute whose underlying object IS, by identity,
@@ -1069,8 +1083,8 @@ def _inventory_namespaces() -> list[tuple[str, Any]]:
     those the gate was structurally unable to fail.
     """
 
-    from torchlens.constants import get_orig_torch_funcs
-    from torchlens.utils._torch_compat import get_optional_torch_namespace
+    from torchlens._constants import get_orig_torch_funcs
+    from torchlens._utils._torch_compat import get_optional_torch_namespace
 
     resolved: list[tuple[str, Any]] = []
     for ns_name in sorted({ns for ns, _ in get_orig_torch_funcs()}):
@@ -1140,8 +1154,8 @@ def test_curated_roster_rows_resolve_to_live_sites() -> None:
     is removed.
     """
 
-    from torchlens.constants import get_orig_torch_funcs
-    from torchlens.utils._torch_compat import get_optional_torch_namespace
+    from torchlens._constants import get_orig_torch_funcs
+    from torchlens._utils._torch_compat import get_optional_torch_namespace
 
     _ensure_wrapped()
     dead: set[tuple[str, str]] = set()

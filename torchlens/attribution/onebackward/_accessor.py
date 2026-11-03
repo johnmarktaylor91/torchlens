@@ -25,7 +25,8 @@ import weakref
 from dataclasses import dataclass
 from typing import Any
 
-from ...utils._torch_compat import get_gradient_edge_support
+from ..._data_classes._trace_missing_attrs import is_live_trace
+from ..._utils._torch_compat import get_gradient_edge_support
 from ._errors import ReadError
 
 __all__ = [
@@ -169,10 +170,12 @@ def _validity_token(trace: Any) -> tuple[Any, ...]:
     """
 
     refs = trace.__dict__.get("_backward_gradfn_refs")
+    cleaned = bool(trace.__dict__.get("_tl_cleaned_up", False))
+    # cleanup() deletes the pass counter; the cleaned flag carries that change.
     return (
-        int(getattr(trace, "num_backward_passes", 0)),
+        0 if cleaned else int(trace._num_backward_passes),
         None if refs is None else len(refs),
-        bool(trace.__dict__.get("_tl_cleaned_up", False)),
+        cleaned,
     )
 
 
@@ -196,7 +199,7 @@ def _refuse_trace(trace: Any, reason: str, detail: str, remedy: str) -> None:
         f"cannot serve one: {detail} Remedy: {remedy}",
         code="read_addressing_unavailable",
         reason=reason,
-        trace_backend=getattr(trace, "backend", None),
+        trace_backend=trace._provenance_backend if is_live_trace(trace) else None,
     )
 
 
@@ -211,7 +214,7 @@ def _check_trace_liveness(trace: Any) -> None:
         chunked / structure-only / detached / non-torch traces.
     """
 
-    backend = getattr(trace, "backend", None)
+    backend = trace._provenance_backend if is_live_trace(trace) else None
     if backend is not None and backend != _SUPPORTED_BACKEND:
         _refuse_trace(
             trace,
@@ -226,28 +229,31 @@ def _check_trace_liveness(trace: Any) -> None:
             "Trace.cleanup() released its autograd registry.",
             "re-capture the model and read before cleanup",
         )
-    if getattr(trace, "structure_only", False):
+    if trace._options_structure_only if is_live_trace(trace) else False:
         _refuse_trace(
             trace,
             "structure_only",
             "structure-only captures retain no values and no autograd graph.",
             "re-capture without CaptureOptions(structure_only=True)",
         )
-    if getattr(trace, "inference_only", False):
+    if trace._options_inference_only if is_live_trace(trace) else False:
         _refuse_trace(
             trace,
             "inference_only",
-            "inference-only captures discard the autograd graph.",
-            "re-capture without inference_only=True",
+            "inference-only captures discard the autograd graph. inference_only is "
+            "either passed explicitly or implied when the capture runs under "
+            "torch.no_grad() or torch.inference_mode().",
+            "re-capture with gradients enabled (outside torch.no_grad() and "
+            "torch.inference_mode()) and without inference_only=True",
         )
-    if getattr(trace, "chunked_forward", False):
+    if trace._options_chunk_size if is_live_trace(trace) else False:
         _refuse_trace(
             trace,
             "chunked_forward",
             "chunk-assembled traces hold no single live autograd graph.",
             "re-capture without forward chunking",
         )
-    if getattr(trace, "detach_saved_activations", False):
+    if trace._options_detach_saved_activations if is_live_trace(trace) else False:
         _refuse_trace(
             trace,
             "detached",
@@ -285,7 +291,7 @@ def _build_index(trace: Any, token: tuple[Any, ...]) -> ReadEdgeIndex:
     edges: dict[str, SiteEdge] = {}
     unaddressable: dict[str, str] = {}
     alias_members: dict[tuple[int, int], list[str]] = {}
-    for op in trace.ops:
+    for op in trace._layer_list:
         label = op.label
         resolved = _resolve_node(op, rejoin_map)
         if resolved is None:
@@ -300,7 +306,7 @@ def _build_index(trace: Any, token: tuple[Any, ...]) -> ReadEdgeIndex:
         shape = getattr(op, "shape", None)
         edge = SiteEdge(
             label=label,
-            pass_index=int(getattr(op, "pass_index", 1) or 1),
+            pass_index=int(getattr(op, "pass_number", 1) or 1),
             layer_label=getattr(op, "layer_label", label.rsplit(":", 1)[0]),
             site_key=getattr(op, "site_key", None),
             node=node,

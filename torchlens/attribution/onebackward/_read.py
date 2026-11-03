@@ -146,8 +146,8 @@ class _SitePayloads:
     def __init__(self, trace: Any) -> None:
         """Index ops by pass-qualified label for payload reads."""
 
-        self._ops = {op.label: op for op in trace.ops}
-        self._save_mode = getattr(trace, "save_mode", "copy")
+        self._ops = {op.label: op for op in trace._layer_list}
+        self._save_mode = trace._options_save_mode
         self._cache: dict[str, torch.Tensor | None] = {}
 
     @property
@@ -218,16 +218,16 @@ def _resolve_within_impl(
 
     if within is None:
         return (dict.fromkeys(index.edges), False)
-    from ...selection import ResolvedSelection, Selection
-    from ...selection_values import _lift_within
+    from ..._selection.selection import Selection, Selector
+    from ..._selection.values import _lift_within
 
     population: dict[str, torch.Tensor | None] = {}
-    if isinstance(within, ResolvedSelection):
+    if isinstance(within, Selection):
         resolved = within
     else:
         lifted = _lift_within(within, "read")
-        if isinstance(lifted, Selection):
-            resolved = lifted.resolve(trace)
+        if isinstance(lifted, Selector):
+            resolved = lifted._resolve(trace)
         else:
             raise ReadError(
                 "within= did not lift to a selection. Remedy: pass None, a "
@@ -244,7 +244,7 @@ def _resolve_within_impl(
             kind=resolved.kind,
         )
     for entry in resolved:
-        site_key = entry.site_key
+        site_key = entry.key
         label = f"{site_key[0]}:{site_key[1]}" if len(site_key) == 2 else str(site_key[0])
         mask = entry.mask
         population[label] = None if bool(mask.all()) else mask
@@ -499,13 +499,13 @@ class _RowBuilder:
             "retention": self._payloads.retention(label),
             "capture_status": self._capture_status,
             "resolution": "exact",
-            "frozen_requested": label in self._frozen_plan.sites,
-            "frozen_resolved": label in self._frozen_plan.sites,
+            "is_frozen_requested": label in self._frozen_plan.sites,
+            "is_frozen_resolved": label in self._frozen_plan.sites,
             "frozen_reached": None,
             "policy_digest": self._frozen_plan.digest,
-            "detached": True,
+            "is_detached": True,
             "sample_id": None,
-            "rescorable": True,
+            "is_rescorable": True,
         }
 
     def _emit(self, base: dict[str, Any]) -> None:
@@ -584,7 +584,7 @@ class _RowBuilder:
             return
         self.rows = {
             key: replace(row, frozen_reached=(_label_of(row) in fired))
-            if row.frozen_resolved
+            if row.is_frozen_resolved
             else row
             for key, row in self.rows.items()
         }

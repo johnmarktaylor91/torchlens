@@ -1,12 +1,9 @@
-"""The postprocess recording/enforcement axes matrix (design-ppdag-v3 §8.1).
+"""Capture axes that reach different ``postprocess()`` code paths.
 
 Every axis is one FRESH capture reaching ``postprocess()`` (refresh included
-— it is a fresh capture projected onto the source trace afterwards). The
-matrix is the shared input of the one-time declaration seeding sweep
-(``tools/record_postprocess_matrix.py``), the read-before-write findings
-classification, and the env-gated read-enforcement CI leg. A configuration
-that gates postprocess code paths belongs here: the honest residual of read
-enforcement is exactly the axes NOT in this matrix.
+-- it is a fresh capture projected onto the source trace afterwards). The
+matrix is shared test input (schema lockstep, buffer data model, step-6 merge).
+A configuration that gates postprocess code paths belongs here.
 """
 
 from __future__ import annotations
@@ -106,29 +103,33 @@ class DuplicateBufferModel(nn.Module):
     """Genuinely triggers step 6's ``_merge_buffer_entries`` (B2 axis).
 
     The merge needs two buffer nodes with the same module stack, the same
-    ``buffer_source``, the same address, and ``torch.equal`` values. A
-    module that reassigns its buffer to an equal-valued plain-attribute
-    tensor mid-forward (a cached mask, the speechbrain CRDNN pattern)
-    produces a second source-``None`` node that collides with the initial
-    read. The extra reassign-of-the-stash after an intervening version adds
-    a surviving node whose ``buffer_source`` names the REMOVED node, so the
-    merge's scalar ``buffer_source`` repoint (and its ``parent_arg_positions``
-    arg-0 mirror) fires too.
+    ``buffer_source``, the same address and the same recorded buffer version
+    (tensor object, storage, version counter), the later one not a journaled
+    write (values never decide a merge). Reassigning another buffer
+    to a view of ``mask`` is a journaled write to an overlapping storage, which
+    clears ``mask``'s live label without changing it, so the next read logs a
+    second node for the same version and it merges into the initial read.
+    Reassigning ``mask`` back to its original tensor (which carries the
+    merged-away node's label) after an intervening version adds a surviving
+    node whose ``buffer_source`` names the REMOVED node, so the merge's scalar
+    ``buffer_source`` repoint (and its ``parent_arg_positions`` arg-0 mirror)
+    fires too.
     """
 
     def __init__(self) -> None:
         super().__init__()
         self.register_buffer("mask", torch.ones(4))
-        self._stash = torch.ones(4)
+        self.register_buffer("alias", torch.zeros(2))
         self.lin = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        original = self.mask
         a = x * self.mask
-        self.mask = self._stash
-        b = a + self.mask  # source-None duplicate: merges into the initial node
+        self.alias = self.mask[:2]  # overlapping write: clears mask's live label
+        b = a + self.mask  # same-version re-log: merges into the initial node
         self.mask = self.mask + 0.0
         c = b * self.mask  # distinct source: survives as its own version
-        self.mask = self._stash
+        self.mask = original
         d = c + self.mask  # buffer_source names the merged-away node: repoint fires
         return self.lin(d)
 
@@ -141,21 +142,22 @@ class DivergentReachBufferModel(nn.Module):
     no axis able to observe it — every recorded merge already shared the
     survivor's reach, so its writes were pinned content no-ops and an
     effect-neutralizing revert left the whole gate green. Here the initial
-    read (the merge survivor) feeds only an input-connected DEAD END while
-    the equal-valued duplicate read feeds the output, so the merge must flip
-    the survivor's ``has_output_descendant`` False→True and grow
-    ``output_descendants`` — the axis that retired both step-6 pinned rows.
+    read (the merge survivor) feeds only dead ends (an input-connected product
+    and the slice another buffer is reassigned to) while the same-version
+    re-logged read feeds the output, so the merge must flip the survivor's
+    ``has_output_descendant`` False→True and grow ``output_descendants`` — the
+    axis that retired both step-6 pinned rows.
     """
 
     def __init__(self) -> None:
         super().__init__()
         self.register_buffer("mask", torch.ones(4))
-        self._stash = torch.ones(4)
+        self.register_buffer("alias", torch.zeros(2))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        _dead = x * self.mask  # survivor's only pre-merge child: dead end
-        self.mask = self._stash  # equal-valued reassign -> duplicate node
-        return x + self.mask  # duplicate's child reaches the output
+        _dead = x * self.mask  # survivor's pre-merge child: dead end
+        self.alias = self.mask[:2]  # overlapping write: clears mask's live label
+        return x + self.mask  # same-version re-log; its child reaches the output
 
 
 class BufferFromInputModel(nn.Module):
@@ -215,7 +217,7 @@ class AssigningVarNamesModel(nn.Module):
     Closes the matrix gap behind the ``("11.5", "var_names")`` permanent
     no-op row (module-internal calls never name the wrapped function in
     their assignment line, so the oracle axes resolve to the empty
-    default). Runs under ``save_code_context=True``.
+    default). Runs under ``save_source_context=True``.
     """
 
     def __init__(self) -> None:
@@ -243,15 +245,14 @@ def _axis_backward_armed() -> Any:
     return tl.trace(
         model,
         model_input.requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 
 def _axis_save_code_context() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(save_code_context=True))
+    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(save_source_context=True))
 
 
 def _axis_streaming(tmp_dir: str) -> Any:
@@ -309,7 +310,7 @@ def _axis_transform() -> Any:
     return tl.trace(
         model,
         model_input,
-        save=tl.options.SaveOptions(activation_transform=lambda t: t.detach().float() * 1.0),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.detach().float() * 1.0),
     )
 
 
@@ -396,17 +397,15 @@ def _axis_lookback(tmp_dir: str, *, streaming: bool, transform: bool) -> Any:
     kwargs: dict[str, Any] = {"save": tl.func("relu")}
     if streaming:
         kwargs["storage"] = tl.to_disk(Path(tmp_dir) / "lookback.tlspec")
+    capture_fields: dict[str, Any] = {"lookback": 2, "lookback_payload_policy": "detached_raw"}
     if transform:
-        # save= carries either the predicate or the SaveOptions bundle, so the
-        # relu selection moves to capture.layers_to_save when a transform rides.
-        kwargs["save"] = tl.options.SaveOptions(activation_transform=lambda t: t.detach() * 1.0)
-        kwargs["capture"] = tl.options.CaptureOptions(layers_to_save=tl.func("relu"))
+        # Capture transforms compose with the independent save predicate.
+        capture_fields["activation_transform"] = lambda t: t.detach() * 1.0
     return tl.trace(
         model,
         model_input,
-        lookback=2,
-        lookback_payload_policy="detached_raw",
         **kwargs,
+        capture=tl.options.CaptureOptions(**capture_fields),
     )
 
 
@@ -416,7 +415,7 @@ def _axis_deferred_retention() -> Any:
     # A final-label-only selector (negative index) defers the retention
     # decision to step 11.75 (resolve_deferred_retention), the axis that
     # populates its save_activation write family.
-    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(layers_to_save=[-2, -1]))
+    return tl.trace(model, model_input, save=[-2, -1])
 
 
 def _axis_transform_streaming(tmp_dir: str) -> Any:
@@ -427,14 +426,14 @@ def _axis_transform_streaming(tmp_dir: str) -> Any:
         model,
         model_input,
         storage=tl.to_disk(Path(tmp_dir) / "transform.tlspec"),
-        save=tl.options.SaveOptions(activation_transform=lambda t: t.detach() * 1.0),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.detach() * 1.0),
     )
 
 
 def _axis_halted() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    return tl.trace(model, model_input, halt=tl.func("relu"))
+    return tl.trace(model, model_input, stop_after=tl.func("relu"))
 
 
 def _axis_cooked_recording() -> Any:
@@ -447,7 +446,7 @@ def _axis_cooked_recording() -> Any:
 def _axis_cooked_recording_halted() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    recording = tl.record(model, model_input, save=tl.func("relu"), halt=tl.func("relu"))
+    recording = tl.record(model, model_input, save=tl.func("relu"), stop_after=tl.func("relu"))
     return recording.to_trace()
 
 
@@ -468,7 +467,7 @@ def _axis_var_names() -> Any:
     return tl.trace(
         AssigningVarNamesModel().eval(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
 
 

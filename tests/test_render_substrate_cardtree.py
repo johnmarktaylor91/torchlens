@@ -16,7 +16,8 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.notebook.cardtree import (
+from torchlens.errors import TraceCaptureError
+from torchlens.report._notebook.cardtree import (
     CARD_CSS_VERSION,
     Card,
     CardCollection,
@@ -137,9 +138,10 @@ def test_partial_trace_repr_html_is_failure_first() -> None:
             torch.relu(x)
             raise RuntimeError("mid-forward failure <with markup>")
 
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TraceCaptureError) as excinfo:
         tl.trace(Exploding(), torch.randn(2, 4))
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    partial = excinfo.value.partial_trace
     html = partial._repr_html_()
     assert "FAILED CAPTURE" in html
     assert "PartialTrace" in html

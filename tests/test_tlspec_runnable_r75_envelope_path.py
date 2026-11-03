@@ -26,11 +26,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, ReadinessStatus
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, ReadinessStatus
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 class _MetaBranch(nn.Module):

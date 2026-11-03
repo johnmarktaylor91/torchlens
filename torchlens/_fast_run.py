@@ -3,467 +3,143 @@
 from __future__ import annotations
 
 import threading
+import time
 import weakref
-from collections.abc import Callable, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
-from dataclasses import dataclass
 from typing import Any, cast
 
 import torch
 from torch import nn
 
+from torchlens._runnable import ContractCheck, ReadinessReport
+
 from . import _state
-from ._runnable_execution import (
-    _HOST_RNG_SOURCE_KIND,
-    _INPUT_CHECK_UNAVAILABLE,
-    _VIEW_OP_QUALNAMES,
-    _ambient_execution_context_restored,
-    _call_execution_context_entered,
-    _call_witness_checks,
-    _container_spec_reconstruction_lossy,
-    _contract_check,
-    _control_witness_source_slot_ids,
-    _declared_nondeterministic_sources,
-    _decode_literal,
-    _descriptor_has_seeded_rng,
-    _finalize_provider_run,
-    _first_failed_live_input_check,
-    _host_rng_unreproduced,
-    _input_alias_topology_checks,
-    _input_derived_layout_stale,
-    _input_literal_contract_checks,
-    _input_metadata_contract_checks,
-    _input_nontensor_tree_contract_checks,
-    _input_site_value,
-    _input_tree_contract_checks,
-    _live_runtime_input_leaves,
-    _mode_sensitive_op_unwitnessed,
-    _model_input_arity_positions,
-    _mutation_target_slot_id,
-    _nondeterministic_value_sources,
-    _out_argument_slot_id,
-    _output_container_spec,
-    _output_not_reproduced,
-    _path_faithfulness,
-    _post_execution_contract_checks,
-    _raise_failed_contract_as_divergence,
-    _raise_first_divergence,
-    _require_loaded_sparse_provider,
-    _runtime_mirror_clone,
-    _seed_run_generators,
-    _seeded_fork_devices,
-    _split_mixed_inputs,
-    _tensor_derived_scalar_stale,
-    _tensor_derived_scalar_witness_slot_ids,
-    _tensor_leaf_paths,
-    _top_level_input_site_contract_checks,
-    _unbound_state_escape_stale,
-    _uninit_taint_reaches,
-    _value_at_path,
-    _write_argument,
-    run_loaded_sparse_trace,
+from ._call_fingerprint import fingerprinting
+from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
+from ._data_classes._trace_accessors import boundary_label_rows
+from ._fast_live_plans import (
+    _admitted_collection_labels,
+    _drop_uncollected_payloads,
+    _FastOutputPlan,
+    _live_modules_by_address,
+    _lossy_output_failure,
+    _module_call_budget,
+    _output_tensor_leaves,
+    _pair_output_leaves,
+    build_direct_forward_routes,
+    build_function_plans,
+    build_module_plans,
+    collected_function_output,
+    direct_forward_routes_installed,
+    install_session_hooks,
+    repeats_last_function_output,
+    require_distinct_plan_modules,
+    save_payload_paused,
+    unobserved_hook_message,
 )
-from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
-from .errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
-from .ir.container import ContainerSpec, rebuild_container_from_spec
-from .runnable import (
-    ContractCheck,
+from ._fast_live_steer import (
+    SteerPlan,
+    clear_unrefreshed_shape_metadata,
+    fast_live_input_admission,
+    hooked_run_diagnostic,
+)
+from ._fast_live_until import (
+    FastUntilReached,
+    function_prefix_count,
+    rearm_cleared_sites,
+    resolve_fast_until,
+    truncate_after,
+)
+from ._fast_sparse_state import _compile_sparse_call, _CompiledSparseCall, _state_mutating_call_ids
+from ._ir.container import ContainerSpec, rebuild_container_from_spec
+from ._output_slot import returned, stopped
+from ._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
-    ReadinessReport,
     ReadinessStatus,
-    RunnableCallDescriptor,
     RunnableErrorCode,
     RunProvider,
     RunResult,
     SparseRunDescriptor,
     StateSource,
-    TensorSlotDescriptor,
     TensorSlotRole,
-    is_mode_sensitive_qualname,
     mark_trace_path_status,
 )
-from .utils._torch_compat import tensor_has_named_dims
-from .utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
+from ._runnable.attestation import (
+    _control_witness_source_slot_ids,
+    _declared_nondeterministic_sources,
+    _descriptor_has_seeded_rng,
+    _mode_sensitive_op_unwitnessed,
+    _nondeterministic_value_sources,
+    _uninit_taint_reaches,
+)
+from ._runnable.call_outputs import (
+    _container_spec_reconstruction_lossy,
+    _out_argument_slot_id,
+    _output_container_spec,
+    _output_not_reproduced,
+)
+from ._runnable.execution import _HOST_RNG_SOURCE_KIND
+from ._runnable.input_aliases import (
+    _input_alias_topology_checks,
+    _input_nontensor_tree_contract_checks,
+    _input_site_value,
+    _input_tree_contract_checks,
+    _split_mixed_inputs,
+)
+from ._runnable.input_metadata import (
+    _fast_input_check,
+    _input_literal_contract_checks,
+    _runtime_mirror_clone,
+    _top_level_input_site_contract_checks,
+)
+from ._runnable.input_sites import (
+    _INPUT_CHECK_UNAVAILABLE,
+    _first_failed_live_input_check,
+    _input_derived_layout_stale,
+    _input_metadata_contract_checks,
+    _model_input_arity_positions,
+    _require_loaded_sparse_provider,
+)
+from ._runnable.output_contracts import _call_witness_checks, _post_execution_contract_checks
+from ._runnable.path_faithfulness import _path_faithfulness
+from ._runnable.providers import (
+    _finalize_provider_run,
+    _host_rng_unreproduced,
+    _seed_run_generators,
+    _seeded_fork_devices,
+)
+from ._runnable.state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
+from ._runnable.state_context import _ambient_execution_context_restored
+from ._runnable.transaction import _live_runtime_input_leaves
+from ._runnable.verification import (
+    _contract_check,
+    _raise_failed_contract_as_divergence,
+    _raise_first_divergence,
+    _value_at_path,
+)
+from ._runnable.witness_contracts import (
+    _tensor_derived_scalar_stale,
+    _tensor_derived_scalar_witness_slot_ids,
+    _tensor_leaf_paths,
+    _unbound_state_escape_stale,
+)
+from ._utils.arg_handling import normalize_input_args
+from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
+from .backends.torch._ops_container_base import _try_build_container_spec
+from .errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
 
 
-@dataclass(frozen=True, slots=True)
-class _FastOutputPlan:
-    """Expected tensor leaves for one live module or functional call."""
-
-    address_or_name: str
-    op_labels: tuple[str, ...]
-    shapes: tuple[tuple[int, ...] | None, ...]
-    dtypes: tuple[str | None, ...]
-    save_labels: frozenset[str]
-
-
-@dataclass(frozen=True, slots=True)
-class _CompiledSparseCall:
-    """One sparse call with decoded literals and pre-indexed tensor bindings."""
-
-    descriptor: RunnableCallDescriptor
-    func: Callable[..., Any]
-    base_args: tuple[Any, ...]
-    base_kwargs: Mapping[str, Any]
-    top_level_tensor_args: tuple[tuple[str, int | str, str], ...]
-    nested_tensor_args: tuple[tuple[tuple[str | int, ...], str], ...]
-    requires_context: bool
-
-    def execute(self, slot_values: Mapping[str, torch.Tensor]) -> Any:
-        """Bind current tensor slots and invoke the resolved callable.
-
-        Parameters
-        ----------
-        slot_values:
-            Runtime tensor slot store.
-
-        Returns
-        -------
-        Any
-            Raw callable output.
-        """
-
-        args = list(self.base_args)
-        kwargs = dict(self.base_kwargs)
-        for root, key, slot_id in self.top_level_tensor_args:
-            try:
-                value = slot_values[slot_id]
-            except KeyError as exc:
-                raise RuntimeSignatureDriftError(
-                    f"Fast sparse call {self.descriptor.call_id!r} references unavailable "
-                    f"slot {slot_id!r}.",
-                    code=RunnableErrorCode.MISSING_TENSOR_SLOT.value,
-                    call_id=self.descriptor.call_id,
-                    slot_id=slot_id,
-                ) from exc
-            if root == "args":
-                args[cast(int, key)] = value
-            else:
-                kwargs[cast(str, key)] = value
-        for path, slot_id in self.nested_tensor_args:
-            try:
-                value = slot_values[slot_id]
-            except KeyError as exc:
-                raise RuntimeSignatureDriftError(
-                    f"Fast sparse call {self.descriptor.call_id!r} references unavailable "
-                    f"slot {slot_id!r}.",
-                    code=RunnableErrorCode.MISSING_TENSOR_SLOT.value,
-                    call_id=self.descriptor.call_id,
-                    slot_id=slot_id,
-                ) from exc
-            _write_argument(args, kwargs, path, value)
-        try:
-            if not self.requires_context:
-                return self.func(*args, **kwargs)
-            with _call_execution_context_entered(self.descriptor.execution_context):
-                return self.func(*args, **kwargs)
-        except RunCapabilityUnavailableError:
-            raise
-        except Exception as exc:
-            raise RuntimeSignatureDriftError(
-                f"Resolved callable rejected compiled fast recipe for "
-                f"{self.descriptor.call_id!r}: {exc}",
-                code=RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value,
-                call_id=self.descriptor.call_id,
-                affected_op_labels=self.descriptor.op_labels,
-            ) from exc
-
-
-def _compile_sparse_call(
-    call: RunnableCallDescriptor,
-    func: Callable[..., Any],
-    *,
-    ambient_grad_enabled: bool,
-    ambient_inference_mode: bool,
-) -> _CompiledSparseCall:
-    """Compile a sparse call's invariant literal tree and tensor assignments.
-
-    Parameters
-    ----------
-    call:
-        Frozen call recipe.
-    func:
-        Resolved callable.
-    ambient_grad_enabled:
-        Grad mode already restored around the compiled loop.
-    ambient_inference_mode:
-        Inference mode already restored around the compiled loop.
-
-    Returns
-    -------
-    _CompiledSparseCall
-        Reusable per-call binder.
-    """
-
-    args: list[Any] = [None] * call.num_positional_args
-    kwargs: dict[str, Any] = {}
-    for literal in call.literal_arguments:
-        _write_argument(args, kwargs, literal.argument_path, _decode_literal(literal.value))
-    top_level: list[tuple[str, int | str, str]] = []
-    nested: list[tuple[tuple[str | int, ...], str]] = []
-    for argument in call.tensor_arguments:
-        path = tuple(argument.argument_path)
-        if len(path) == 2 and path[0] in {"args", "kwargs"}:
-            top_level.append((cast(str, path[0]), path[1], argument.slot_id))
-        else:
-            nested.append((path, argument.slot_id))
-    return _CompiledSparseCall(
-        descriptor=call,
-        func=func,
-        base_args=tuple(args),
-        base_kwargs=kwargs,
-        top_level_tensor_args=tuple(top_level),
-        nested_tensor_args=tuple(nested),
-        requires_context=(
-            call.execution_context.grad_enabled != ambient_grad_enabled
-            or call.execution_context.inference_mode != ambient_inference_mode
-            or any(entry.enabled for entry in call.execution_context.autocast)
-        ),
-    )
-
-
-def _input_layout_ok(value: torch.Tensor) -> bool:
-    """Return whether an input is in the fast sparse executor's admitted domain."""
+def _is_opaque_output_root(output: Any) -> bool:
+    """Return whether a model output is a container capture walks only by attribute search."""
 
     return (
-        type(value) in {torch.Tensor, torch.nn.Parameter}
-        and value.layout == torch.strided
-        and not value.is_nested
-        and not bool(getattr(value, "is_meta", False))
-        and not bool(getattr(value, "is_quantized", False))
-        and not tensor_has_named_dims(value)
+        output is not None
+        and not isinstance(output, torch.Tensor)
+        and _try_build_container_spec(output) is None
     )
-
-
-def _fast_input_check(
-    slot: TensorSlotDescriptor,
-    value: Any,
-) -> tuple[ContractCheck, ...]:
-    """Build cheap shape/dtype/device/layout checks for one runtime input leaf.
-
-    Parameters
-    ----------
-    slot:
-        Persisted input slot contract.
-    value:
-        Runtime value resolved at that slot's path.
-
-    Returns
-    -------
-    tuple[ContractCheck, ...]
-        Ordered fast static-guard checks.
-    """
-
-    is_tensor = isinstance(value, torch.Tensor)
-    shape = tuple(value.shape) if is_tensor else None
-    dtype = str(value.dtype) if is_tensor else None
-    device_ok = bool(
-        is_tensor
-        and value.device.type == slot.device_type
-        and (
-            slot.device_index is None
-            or value.device.index is None
-            or value.device.index == slot.device_index
-        )
-    )
-    return (
-        _contract_check(
-            f"fast_input_type:{slot.slot_id}",
-            is_tensor,
-            RunnableErrorCode.INPUT_TREE_MISMATCH,
-            f"Runtime input at {slot.slot_id!r} is not a tensor.",
-        ),
-        _contract_check(
-            f"fast_input_shape:{slot.slot_id}",
-            shape == slot.shape,
-            RunnableErrorCode.INPUT_SHAPE_MISMATCH,
-            f"Runtime input shape {shape} does not match {slot.shape}.",
-        ),
-        _contract_check(
-            f"fast_input_dtype:{slot.slot_id}",
-            dtype == slot.dtype,
-            RunnableErrorCode.INPUT_DTYPE_MISMATCH,
-            f"Runtime input dtype {dtype} does not match {slot.dtype}.",
-        ),
-        _contract_check(
-            f"fast_input_device:{slot.slot_id}",
-            device_ok,
-            RunnableErrorCode.INPUT_TREE_MISMATCH,
-            f"Runtime input device does not match {slot.device_type}:{slot.device_index}.",
-        ),
-        _contract_check(
-            f"fast_input_layout:{slot.slot_id}",
-            bool(is_tensor and _input_layout_ok(value)),
-            RunnableErrorCode.INPUT_TREE_MISMATCH,
-            "Fast sparse execution accepts only plain dense strided tensor inputs.",
-        ),
-    )
-
-
-def _state_storage_closure(
-    descriptor: SparseRunDescriptor,
-    state_slot_ids: set[str],
-) -> set[str]:
-    """Return state slots plus every slot reachable through alias-producing calls.
-
-    Parameters
-    ----------
-    descriptor:
-        Frozen sparse replay descriptor.
-    state_slot_ids:
-        Parameter and buffer slot identifiers that seed sparse execution.
-
-    Returns
-    -------
-    set[str]
-        State-derived slots whose storage may alias cached staged state.
-    """
-
-    registry_qualnames = {
-        entry.registry_id: entry.key.qualname for entry in descriptor.callable_registry
-    }
-    closure = set(state_slot_ids)
-    changed = True
-    while changed:
-        changed = False
-        for slot in descriptor.tensor_slots:
-            if slot.version_of in closure and slot.slot_id not in closure:
-                closure.add(slot.slot_id)
-                changed = True
-        for call in descriptor.calls:
-            if registry_qualnames.get(call.registry_id) not in _VIEW_OP_QUALNAMES:
-                continue
-            if not any(argument.slot_id in closure for argument in call.tensor_arguments):
-                continue
-            for output_slot_id in call.output_slot_ids:
-                if output_slot_id not in closure:
-                    closure.add(output_slot_id)
-                    changed = True
-    return closure
-
-
-def _literal_bool_argument(call: RunnableCallDescriptor, name: str) -> bool | None:
-    """Return a recorded boolean call argument by keyword or positional name.
-
-    Parameters
-    ----------
-    call:
-        Frozen sparse call recipe.
-    name:
-        Callable parameter name to resolve.
-
-    Returns
-    -------
-    bool | None
-        Recorded boolean value, or ``None`` when absent or non-boolean.
-    """
-
-    try:
-        positional_index = call.argument_names.index(name)
-    except ValueError:
-        positional_index = None
-    for literal in call.literal_arguments:
-        path = tuple(literal.argument_path)
-        is_keyword = len(path) == 2 and path == ("kwargs", name)
-        is_positional = (
-            positional_index is not None and len(path) == 2 and path == ("args", positional_index)
-        )
-        if not (is_keyword or is_positional):
-            continue
-        value = _decode_literal(literal.value)
-        return value if isinstance(value, bool) else None
-    return None
-
-
-def _normalization_call_may_mutate_state(
-    call: RunnableCallDescriptor,
-    qualname: str | None,
-    state_slot_ids: set[str],
-) -> bool:
-    """Return whether a functional normalization call may update running state.
-
-    Parameters
-    ----------
-    call:
-        Frozen sparse call recipe.
-    qualname:
-        Resolved callable qualname from the registry.
-    state_slot_ids:
-        Parameter and buffer slot identifiers that seed sparse execution.
-
-    Returns
-    -------
-    bool
-        ``True`` when cached running statistics could be updated as a hidden
-        side effect. Unknown mode flags fail closed.
-    """
-
-    if not is_mode_sensitive_qualname(qualname):
-        return False
-    if not any(argument.slot_id in state_slot_ids for argument in call.tensor_arguments):
-        return False
-    tail = (qualname or "").rsplit(".", 1)[-1].removesuffix("_")
-    mode_argument = "use_input_stats" if tail.endswith("instance_norm") else "training"
-    return _literal_bool_argument(call, mode_argument) is not False
-
-
-def _state_mutating_call_ids(
-    descriptor: SparseRunDescriptor,
-    state_slot_ids: set[str],
-) -> tuple[str, ...]:
-    """Return calls that make cached sparse state unsafe across iterations.
-
-    Parameters
-    ----------
-    descriptor:
-        Frozen sparse replay descriptor.
-    state_slot_ids:
-        Parameter and buffer slot identifiers that seed sparse execution.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Ordered call identifiers that explicitly or implicitly mutate state.
-    """
-
-    registry_qualnames = {
-        entry.registry_id: entry.key.qualname for entry in descriptor.callable_registry
-    }
-    state_storage_ids = _state_storage_closure(descriptor, state_slot_ids)
-    return tuple(
-        call.call_id
-        for call in descriptor.calls
-        if (call.is_inplace and _mutation_target_slot_id(call) in state_storage_ids)
-        or _normalization_call_may_mutate_state(
-            call,
-            registry_qualnames.get(call.registry_id),
-            state_storage_ids,
-        )
-    )
-
-
-def _remove_fast_live_hooks(handles: list[Any]) -> None:
-    """Remove and discard module-hook handles without retaining their session.
-
-    Every handle gets its own removal attempt: ``weakref.finalize`` pops its
-    registry entry BEFORE invoking the callback, so this is the one chance to
-    remove these hooks -- a single raising ``remove()`` must never strand the
-    remaining handles on the user's modules forever. The first failure
-    re-raises only after every handle was attempted and the list cleared.
-    """
-
-    first_error: BaseException | None = None
-    for handle in handles:
-        try:
-            handle.remove()
-        except BaseException as exc:
-            if first_error is None:
-                first_error = exc
-    handles.clear()
-    if first_error is not None:
-        raise first_error
 
 
 class _FastSparseSession:
@@ -506,7 +182,7 @@ class _FastSparseSession:
         # iteration returned iteration-1 payloads on a verified trace.
         self.saved_labels = frozenset(
             key
-            for key, entry in source.layer_dict_all_keys.items()
+            for key, entry in source._layer_dict_all_keys.items()
             if bool(getattr(entry, "has_saved_activation", False))
         )
         aliases: dict[str, list[str]] = {}
@@ -757,14 +433,14 @@ class _FastSparseSession:
                     affected_op_labels=call.op_labels,
                 )
             if op_label in self.saved_labels:
-                op = self.target.layer_dict_all_keys.get(op_label)
+                op = self.target._layer_dict_all_keys.get(op_label)
                 if op is not None:
                     op.save_activation(
                         value,
                         (),
                         {},
                         False,
-                        activation_transform=getattr(self.target, "activation_transform", None),
+                        activation_transform=self.target._options_activation_transform,
                     )
         if call.control_obligations:
             return _call_witness_checks(self.descriptor, call, slot_values)
@@ -795,10 +471,10 @@ class _FastSparseSession:
             slot_values[slot.slot_id] = value
             op = next(
                 (
-                    self.target.layer_dict_all_keys.get(label)
+                    self.target._layer_dict_all_keys.get(label)
                     for label in self.target.output_layers
-                    if self.target.layer_dict_all_keys.get(label) is not None
-                    and getattr(self.target.layer_dict_all_keys[label], "container_path", ())
+                    if self.target._layer_dict_all_keys.get(label) is not None
+                    and getattr(self.target._layer_dict_all_keys[label], "container_path", ())
                     == (slot.output_path or ())
                 ),
                 None,
@@ -820,10 +496,10 @@ class _FastSparseSession:
             values.append((slot.output_path or (), value))
         spec = next(
             (
-                getattr(self.target.layer_dict_all_keys[label], "container_spec", None)
+                getattr(self.target._layer_dict_all_keys[label], "container_spec", None)
                 for label in self.target.output_layers
                 if isinstance(
-                    getattr(self.target.layer_dict_all_keys[label], "container_spec", None),
+                    getattr(self.target._layer_dict_all_keys[label], "container_spec", None),
                     ContainerSpec,
                 )
             ),
@@ -872,7 +548,7 @@ class _FastSparseSession:
                 )
         call_outputs: dict[str, Any] = {}
         checks: list[ContractCheck] = list(input_checks)
-        from .utils._torch_compat import autocast_is_enabled
+        from ._utils._torch_compat import autocast_is_enabled
 
         enabled_autocast = tuple(
             device for device in self.disabled_autocast_devices if bool(autocast_is_enabled(device))
@@ -998,183 +674,103 @@ class _FastSparseSession:
 class _FastLiveSession:
     """Native-forward collector guarded by selected-site and boundary call plans."""
 
-    def __init__(self, trace: Any, model: nn.Module) -> None:
-        """Build and install the targeted live-model collection plan."""
+    def __init__(self, trace: Any, model: nn.Module, *, target: Any | None = None) -> None:
+        """Build and install the targeted live-model collection plan.
+
+        Every result write (payloads, truncation, ledger, state) lands on the
+        target; the source is only read. The explicit ``fast=True`` door passes
+        a fork so the source stays untouched; the legacy rerun door passes
+        nothing and refreshes the trace in place.
+        """
 
         self.trace = trace
+        self.target = trace if target is None else target
         self.model_ref = weakref.ref(model)
         self.owner_thread_id: int | None = None
         self.active = False
         self.module_index = 0
         self.function_index = 0
-        self.last_function_output: tuple[str, int] | None = None
+        # The last collected functional event: its name, output object and
+        # tensor leaves, held strongly so a later same-name event is compared by
+        # object identity, never by a reusable ``id()``.
+        self.last_function_output: tuple[str, Any, tuple[Any, ...]] | None = None
+        # True while the session saves a payload: its own ``safe_copy`` clone
+        # and transform calls run through the wrapped torch functions and must
+        # not count as the model's events.
+        self.collection_paused = False
         self.failure: ContractCheck | None = None
-        self.module_plans = self._build_module_plans(trace)
-        self.function_plans = self._build_function_plans(trace)
-        boundary_layer_labels = set(getattr(trace, "input_layers", ())) | set(
-            getattr(trace, "output_layers", ())
+        self.module_plans = build_module_plans(trace)
+        self.function_plans = build_function_plans(
+            trace,
+            frozenset(label for plan in self.module_plans for label in plan.save_labels),
         )
-        supported_labels = {
-            label
-            for plan in (*self.module_plans, *self.function_plans)
-            for label in plan.save_labels
-        } | {op.label for op in trace.layer_list if op.layer_label in boundary_layer_labels}
-        unsupported_function_labels = tuple(
-            op.label
-            for op in trace.layer_list
-            if bool(getattr(op, "has_saved_activation", False))
-            and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
-            and op.label not in supported_labels
+        self.planned_module_calls, self.expected_module_calls = _module_call_budget(
+            trace, self.module_plans
         )
-        if unsupported_function_labels:
-            raise RunCapabilityUnavailableError(
-                "fast=True collects functional operations only when they were explicitly "
-                "requested by the capture save predicate. Recapture with save=tl.func(...) "
-                f"for: {', '.join(unsupported_function_labels[:8])}.",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                detection_stage="fast_live_function_plan",
-            )
-        modules = dict(model.named_modules())
+        self.module_call_counts: dict[str, int] = {}
+        self.stop_at: tuple[str, int] | None = None
+        self.cleared_by_until: tuple[str, ...] = ()
+        supported_labels = _admitted_collection_labels(
+            trace, (*self.module_plans, *self.function_plans)
+        )
+        modules = _live_modules_by_address(model)
         plan_addresses = tuple(dict.fromkeys(plan.address_or_name for plan in self.module_plans))
         # Every typed refusal must fire BEFORE the unsupported-activation wipe
         # below: a refused session must never destroy the user's saved payloads.
-        for address in plan_addresses:
-            if modules.get("" if address == "self" else address) is None:
-                raise RunCapabilityUnavailableError(
-                    f"Captured module address {address!r} is absent from the live model.",
-                    code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                    detection_stage="fast_live_module_plan",
-                )
-        for op in trace.layer_list:
-            if (
-                bool(getattr(op, "has_saved_activation", False))
-                and op.label not in supported_labels
-            ):
-                op._internal_set("out", None)
-                op._internal_set("transformed_out", None)
-                op._internal_set("has_saved_activation", False)
+        require_distinct_plan_modules(modules, plan_addresses)
+        # Steered reruns: the staged spec lowers to module-boundary hooks that
+        # must run BEFORE the collection hooks below (torch fires forward hooks
+        # in registration order), so the collected site value is the
+        # post-intervention value, exactly as capture saves it. The plan
+        # refuses typed (fast_rerun_target_unsupported) before any hook or wipe.
+        self.steer_plan = SteerPlan(trace, model)
+        # Modules capture entered by a direct ``forward()`` call fire no hook;
+        # each run routes exactly those through a per-run ``forward`` wrapper.
+        self.direct_routes = build_direct_forward_routes(
+            model, modules, plan_addresses, self.steer_plan.modules
+        )
+        _drop_uncollected_payloads(self.target, supported_labels)
         self.function_names = frozenset(plan.address_or_name for plan in self.function_plans)
+        # The ordered call fingerprint sealed at capture time is the structure
+        # guard that admits a different-size input; ``None`` on a trace that
+        # never captured keeps the exact-size guard.
+        self.fingerprint_reference = getattr(trace, "_raw_call_fingerprint", None)
+        self.shape_varied = False
+        self.shape_metadata_cleared = False
+        self.allow_size_change = True
+        self.poison_on_divergence = True
+        # The explicit fast door reports a run verdict, so a hooked run settles
+        # unverifiable there (see ``_finalize_run``).
+        self.reports_hooked_ceiling = True
+        self.output_transform: Any = None
+        self.last_fingerprint: tuple[int, int] | None = None
+        self.refreshed_labels: frozenset[str] = frozenset(supported_labels)
         self.handles: list[Any] = []
-        self._hook_finalizer = weakref.finalize(self, _remove_fast_live_hooks, self.handles)
-        session_ref = weakref.ref(self)
-        try:
-            for address in plan_addresses:
-                module = modules["" if address == "self" else address]
-
-                def hook(
-                    _module: nn.Module,
-                    _args: tuple[Any, ...],
-                    output: Any,
-                    *,
-                    module_address: str = address,
-                    ref: weakref.ReferenceType[_FastLiveSession] = session_ref,
-                ) -> None:
-                    """Forward one module boundary to the active session."""
-
-                    session = ref()
-                    if session is not None:
-                        session.capture_module(module_address, output)
-
-                self.handles.append(module.register_forward_hook(hook))
-        except BaseException:
-            self._hook_finalizer()
-            raise
-
-    @staticmethod
-    def _build_module_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
-        """Derive the exact atomic-module call sequence from the captured trace."""
-
-        seen: set[str] = set()
-        plans: list[_FastOutputPlan] = []
-        for op in trace.layer_list:
-            call_label = getattr(op, "atomic_module_call", None)
-            if not call_label or call_label in seen:
-                continue
-            seen.add(call_label)
-            module_call = trace.module_calls[call_label]
-            resolved = tuple(trace.layer_dict_all_keys[label] for label in module_call.output_ops)
-            if not any(bool(getattr(item, "has_saved_activation", False)) for item in resolved):
-                continue
-            labels = tuple(item.label for item in resolved)
-            plans.append(
-                _FastOutputPlan(
-                    address_or_name=call_label.rsplit(":", 1)[0],
-                    op_labels=labels,
-                    shapes=tuple(
-                        tuple(item.shape) if item.shape is not None else None for item in resolved
-                    ),
-                    dtypes=tuple(
-                        str(item.dtype) if item.dtype is not None else None for item in resolved
-                    ),
-                    save_labels=frozenset(
-                        label
-                        for label, item in zip(labels, resolved)
-                        if bool(getattr(item, "has_saved_activation", False))
-                    ),
-                )
-            )
-        return tuple(plans)
-
-    @staticmethod
-    def _build_function_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
-        """Derive scoped functional calls needed by explicitly saved non-module ops."""
-
-        if getattr(trace, "_predicate_save_options", None) is None:
-            return ()
-        target_names = {
-            str(op.func_name)
-            for op in trace.layer_list
-            if bool(getattr(op, "has_saved_activation", False))
-            and not bool(getattr(op, "is_atomic_module", False))
-            and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
-        }
-        plans: list[_FastOutputPlan] = []
-        ops = [op for op in trace.layer_list if str(getattr(op, "func_name", "")) in target_names]
-        index = 0
-        while index < len(ops):
-            first = ops[index]
-            group = [first]
-            spec = getattr(first, "container_spec", None)
-            if spec is not None:
-                next_index = index + 1
-                while (
-                    next_index < len(ops)
-                    and ops[next_index].raw_index == group[-1].raw_index + 1
-                    and getattr(ops[next_index], "container_spec", None) is spec
-                ):
-                    group.append(ops[next_index])
-                    next_index += 1
-            labels = tuple(item.label for item in group)
-            plans.append(
-                _FastOutputPlan(
-                    address_or_name=str(first.func_name),
-                    op_labels=labels,
-                    shapes=tuple(
-                        tuple(item.shape) if item.shape is not None else None for item in group
-                    ),
-                    dtypes=tuple(
-                        str(item.dtype) if item.dtype is not None else None for item in group
-                    ),
-                    save_labels=frozenset(
-                        item.label
-                        for item in group
-                        if bool(getattr(item, "has_saved_activation", False))
-                        and not bool(getattr(item, "is_atomic_module", False))
-                    ),
-                )
-            )
-            index += len(group)
-        return tuple(plans)
+        self._hook_finalizer = install_session_hooks(self, model, modules, plan_addresses)
 
     def close(self) -> None:
         """Remove persistent module hooks owned by this session."""
 
         self._hook_finalizer()
 
-    def _poison_and_raise(self, failed: ContractCheck) -> None:
-        """Poison the half-refreshed user Trace, then raise the typed divergence.
+    def _admits_size_change(self, expected_shape: tuple[int, ...], value: torch.Tensor) -> bool:
+        """Return whether a same-rank size difference is admitted on this run.
 
-        Boundary payloads are overwritten in place as the native forward passes
+        Size changes are admitted only when the capture sealed a call
+        fingerprint (the structure guard that replaces size equality) and the
+        rank is unchanged; dtype is checked by the caller as before.
+        """
+
+        return (
+            self.allow_size_change
+            and self.fingerprint_reference is not None
+            and value.ndim == len(expected_shape)
+        )
+
+    def _poison_and_raise(self, failed: ContractCheck) -> None:
+        """Poison the half-refreshed result Trace, then raise the typed divergence.
+
+        Boundary payloads are overwritten on the target as the native forward passes
         each site, so a divergence detected at site N leaves sites 1..N-1 holding
         new-input activations while later sites keep capture-time ones. The
         mixed-activation Trace must never pass downstream faithful consumers
@@ -1183,7 +779,22 @@ class _FastLiveSession:
         on divergence" posture plus an honest mark on the user-owned object.
         """
 
-        mark_trace_path_status(self.trace, PathFaithfulness.DIVERGED, failed.diagnostic)
+        if self.poison_on_divergence:
+            mark_trace_path_status(self.target, PathFaithfulness.DIVERGED, failed.diagnostic)
+        diagnostic = failed.diagnostic
+        if (
+            diagnostic is not None
+            and diagnostic.code is RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
+        ):
+            # A site this run cannot observe (a module entered by a direct
+            # forward() call) is a capability refusal, not a path change; the
+            # half-refreshed Trace is poisoned above all the same.
+            raise RunCapabilityUnavailableError(
+                diagnostic.message,
+                code=diagnostic.code.value,
+                provider=RunProvider.LIVE,
+                detection_stage=failed.name,
+            )
         _raise_failed_contract_as_divergence(failed, fork=None)
 
     def wants_function(self, func_name: str) -> bool:
@@ -1191,6 +802,7 @@ class _FastLiveSession:
 
         return (
             self.active
+            and not self.collection_paused
             and threading.get_ident() == self.owner_thread_id
             and func_name in self.function_names
         )
@@ -1198,21 +810,20 @@ class _FastLiveSession:
     def _capture_plan_output(self, plan: _FastOutputPlan, output: Any) -> None:
         """Check one runtime output tree and save only selected captured labels."""
 
-        paths = _tensor_leaf_paths(output)
-        if len(paths) != len(plan.op_labels):
+        values, reason = _pair_output_leaves(output, plan.paths, len(plan.op_labels))
+        if values is None:
             self.failure = _contract_check(
                 f"fast_live_output_count:{plan.address_or_name}",
                 False,
                 RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
-                f"Fast live site {plan.address_or_name!r} produced {len(paths)} tensor leaves; "
-                f"the capture recorded {len(plan.op_labels)}.",
+                f"Fast live site {plan.address_or_name!r} output structure changed from the "
+                f"capture: {reason}.",
                 affected_op_labels=plan.op_labels,
             )
             return
-        for label, expected_shape, expected_dtype, path in zip(
-            plan.op_labels, plan.shapes, plan.dtypes, paths
+        for label, expected_shape, expected_dtype, value in zip(
+            plan.op_labels, plan.shapes, plan.dtypes, values
         ):
-            value = _value_at_path(output, path)
             if not isinstance(value, torch.Tensor):
                 self.failure = _contract_check(
                     f"fast_live_output_type:{label}",
@@ -1223,15 +834,17 @@ class _FastLiveSession:
                 )
                 return
             if expected_shape is not None and tuple(value.shape) != expected_shape:
-                self.failure = _contract_check(
-                    f"fast_live_output_shape:{label}",
-                    False,
-                    RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
-                    f"Fast live site {label!r} shape changed from {expected_shape} to "
-                    f"{tuple(value.shape)}.",
-                    affected_op_labels=(label,),
-                )
-                return
+                if not self._admits_size_change(expected_shape, value):
+                    self.failure = _contract_check(
+                        f"fast_live_output_shape:{label}",
+                        False,
+                        RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
+                        f"Fast live site {label!r} shape changed from {expected_shape} to "
+                        f"{tuple(value.shape)}.",
+                        affected_op_labels=(label,),
+                    )
+                    return
+                self.shape_varied = True
             if expected_dtype is not None and str(value.dtype) != expected_dtype:
                 self.failure = _contract_check(
                     f"fast_live_output_dtype:{label}",
@@ -1243,19 +856,28 @@ class _FastLiveSession:
                 )
                 return
             if label in plan.save_labels:
-                op = self.trace.layer_dict_all_keys[label]
-                op.save_activation(
-                    value,
-                    (),
-                    {},
-                    False,
-                    activation_transform=getattr(self.trace, "activation_transform", None),
-                )
+                save_payload_paused(self, self.target._layer_dict_all_keys[label], value)
 
     def capture_module(self, address: str, output: Any) -> None:
         """Collect and guard one atomic-module forward-hook event."""
 
         if not self.active or threading.get_ident() != self.owner_thread_id or self.failure:
+            return
+        call_index = self.module_call_counts.get(address, 0) + 1
+        self.module_call_counts[address] = call_index
+        if call_index > self.expected_module_calls.get(address, call_index):
+            self.failure = _contract_check(
+                "fast_live_module_extra_call",
+                False,
+                RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
+                f"Live model called module {address!r} {call_index} times; the capture "
+                f"recorded {self.expected_module_calls[address]}.",
+            )
+            return
+        if call_index not in self.planned_module_calls.get(address, frozenset()):
+            # An unsaved call of a module whose other calls are saved: nothing
+            # to collect; the per-address call count and the call fingerprint
+            # still guard the structure.
             return
         if self.module_index >= len(self.module_plans):
             self.failure = _contract_check(
@@ -1266,27 +888,52 @@ class _FastLiveSession:
             )
             return
         plan = self.module_plans[self.module_index]
-        if plan.address_or_name != address:
+        if plan.address_or_name != address or int(plan.call_index or 1) != call_index:
+            if plan.address_or_name.startswith(f"{address}."):
+                # The pending plan is a module nested in the one that just
+                # returned, so it exited inside this call without firing its
+                # forward hook: torch hooks observe ``module(x)`` only, never
+                # a direct ``module.forward(x)`` call, which capture's forward
+                # decoration does record. Not a path change: a site this run
+                # cannot observe.
+                self.failure = _contract_check(
+                    "fast_live_module_hook_unobserved",
+                    False,
+                    RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                    unobserved_hook_message(plan, address),
+                    affected_op_labels=plan.op_labels,
+                )
+                return
             self.failure = _contract_check(
                 "fast_live_module_path",
                 False,
                 RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
-                f"Live module path changed: expected {plan.address_or_name!r}, got {address!r}.",
+                "Live module path changed: expected "
+                f"{plan.address_or_name!r} call {plan.call_index or 1}, got {address!r} "
+                f"call {call_index}.",
                 affected_op_labels=plan.op_labels,
             )
             return
         self.module_index += 1
         self._capture_plan_output(plan, output)
+        if self.stop_at == ("module", self.module_index - 1) and self.failure is None:
+            raise FastUntilReached
 
-    def capture_function(self, func_name: str, output: Any) -> None:
+    def capture_function(
+        self,
+        func_name: str,
+        output: Any,
+        args: tuple[Any, ...] = (),
+        property_accessor: str | None = None,
+    ) -> None:
         """Collect and guard one explicitly requested functional-op event."""
 
         if not self.wants_function(func_name) or self.failure:
             return
-        output_identity = (func_name, id(output))
-        if output_identity == self.last_function_output:
+        output = collected_function_output(func_name, output, args, property_accessor)
+        if repeats_last_function_output(self.last_function_output, func_name, output):
             return
-        self.last_function_output = output_identity
+        self.last_function_output = (func_name, output, _output_tensor_leaves(output))
         if self.function_index >= len(self.function_plans):
             self.failure = _contract_check(
                 "fast_live_function_extra",
@@ -1308,6 +955,8 @@ class _FastLiveSession:
             return
         self.function_index += 1
         self._capture_plan_output(plan, output)
+        if self.stop_at == ("function", self.function_index - 1) and self.failure is None:
+            raise FastUntilReached
 
     @contextmanager
     def activated(self) -> Any:
@@ -1318,9 +967,12 @@ class _FastLiveSession:
             raise RuntimeError("Fast live runs cannot be nested or concurrent.")
         self.owner_thread_id = threading.get_ident()
         self.module_index = 0
+        self.module_call_counts = {}
         self.function_index = 0
         self.last_function_output = None
         self.failure = None
+        self.shape_varied = False
+        self.steer_plan.reset()
         self.active = True
         _state._active_fast_run_collector = self
         try:
@@ -1329,17 +981,18 @@ class _FastLiveSession:
             _state._active_fast_run_collector = prior
             self.active = False
             self.owner_thread_id = None
+            self.last_function_output = None
 
-    def run(self, inputs: Any, *, seed: int | None) -> RunResult:
-        """Execute one native forward and enforce the cached static graph guard."""
+    def _admit_inputs(self, inputs: Any) -> tuple[Any, Mapping[str, Any], bool]:
+        """Split the runtime inputs and admit them against the captured input boundary.
 
-        model = self.model_ref()
-        if model is None:
-            raise RunCapabilityUnavailableError(
-                "The fast live session's source model is no longer available.",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                provider=RunProvider.LIVE,
-            )
+        Returns
+        -------
+        tuple[Any, Mapping[str, Any], bool]
+            Positional inputs, keyword inputs, and whether a sealed call fingerprint
+            re-admitted a changed input size.
+        """
+
         input_args = inputs
         input_kwargs: Mapping[str, Any] = {}
         if (
@@ -1351,6 +1004,19 @@ class _FastLiveSession:
             input_args = list(args)
             input_kwargs = dict(kwargs)
         failed_input = _first_failed_live_input_check(self.trace, input_args, input_kwargs)
+        input_size_changed = False
+        if (
+            isinstance(failed_input, ContractCheck)
+            and failed_input.name.startswith("input_shape:")
+            and self.allow_size_change
+            and self.fingerprint_reference is not None
+        ):
+            # Size equality is not the guard when the capture sealed a call
+            # fingerprint: re-admit on rank, dtype, device and arity, and let
+            # the fingerprint settle the structure after the forward.
+            failed_input, input_size_changed = fast_live_input_admission(
+                self.trace, input_args, input_kwargs, allow_shape_change=True
+            )
         if failed_input is _INPUT_CHECK_UNAVAILABLE:
             # This consultation has ADMISSION power (it runs BEFORE the
             # forward), so a broken guard must refuse, never read as
@@ -1364,16 +1030,117 @@ class _FastLiveSession:
             )
         if failed_input is not None:
             _raise_failed_contract_as_divergence(failed_input, fork=None)
+        return input_args, input_kwargs, input_size_changed
+
+    @contextmanager
+    def _forward_scope(self, model: nn.Module, routes: Any) -> Iterator[Any]:
+        """Enter everything one native forward runs under; yield the fingerprint.
+
+        The native forward must run the attention program the capture recorded
+        (its call fingerprint is compared against the trace's), so the fused
+        fast path is held off exactly as at capture entry.
+        """
+
+        with (
+            self.activated(),
+            self.steer_plan.context(),
+            routes,
+            fingerprinting() as fingerprint,
+            hold_fused_attention_fastpath_off(model),
+        ):
+            yield fingerprint
+
+    def _live_model(self) -> nn.Module:
+        """Return the live source model, refusing once it has been collected."""
+
+        model = self.model_ref()
+        if model is None:
+            raise RunCapabilityUnavailableError(
+                "The fast live session's source model is no longer available.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                provider=RunProvider.LIVE,
+            )
+        return model
+
+    def run(self, inputs: Any, *, seed: int | None, until: Any = None) -> RunResult:
+        """Execute one native forward and enforce the cached static graph guard.
+
+        ``until`` names a saved module the forward stops after: the
+        prefix keeps every per-call guard, the cut is disclosed as a
+        ``RunTruncation``, and the call fingerprint (a whole-forward guard)
+        cannot be compared, so the verdict is ``unverifiable``.
+        """
+
+        self.run_started_at = time.monotonic()
+        model = self._live_model()
+        input_args, input_kwargs, input_size_changed = self._admit_inputs(inputs)
+        rearm_cleared_sites(self.target, self.cleared_by_until)
+        self.cleared_by_until = ()
+        self.stop_at = (
+            None
+            if until is None
+            else resolve_fast_until(self.trace, self.module_plans, self.function_plans, until)
+        )
+        self.steer_plan.refuse_changed_helpers()
         if seed is not None:
             set_random_seed(seed)
-        with self.activated():
-            if isinstance(input_args, list):
-                output = model(*input_args, **dict(input_kwargs))
-            else:
-                output = model(input_args, **dict(input_kwargs))
+        truncation = None
+        routes = direct_forward_routes_installed(self.direct_routes, weakref.ref(self))
+        with self._forward_scope(model, routes) as fingerprint:
+            try:
+                # Bind positional inputs exactly as capture and the ordinary live
+                # run do (a tuple or list spreads; a one-parameter forward takes a
+                # multi-element sequence whole), so one input tree means one call.
+                output = model(*normalize_input_args(input_args, model), **dict(input_kwargs))
+            except FastUntilReached:
+                output = None
+                truncation = until
+        self.shape_varied = self.shape_varied or input_size_changed
+        self.last_fingerprint = None if truncation is not None else fingerprint.value
         if self.failure is not None:
             self._poison_and_raise(self.failure)
-        if self.module_index != len(self.module_plans):
+        if truncation is not None:
+            truncation = self._settle_truncated_prefix(until, input_args, input_kwargs)
+
+            self.target._output_slot = stopped("live run ended at until=")
+        else:
+            self._check_full_path()
+            self._refresh_boundary_payloads(input_args, input_kwargs, output)
+        if self.shape_varied and not self.shape_metadata_cleared:
+            # Honesty rule: a native forward refreshes only the saved sites and
+            # the boundary ops. Every other op's shape and size metadata would
+            # otherwise read capture-time numbers as if they were this run's,
+            # so they take the not-available spelling (None) once and for all.
+            clear_unrefreshed_shape_metadata(self.target, self.refreshed_labels)
+            self.shape_metadata_cleared = True
+        # A cut forward leaves downstream staged hooks unfired by design.
+        unfired = self.steer_plan.warn_unfired() if truncation is None else ()
+        self._record_fast_run(seed=seed, unfired=unfired, until=until)
+        return self._finalize_run(output, seed=seed, truncation=truncation)
+
+    def _check_full_path(self) -> None:
+        """Enforce the whole-forward guards: call fingerprint and every planned call."""
+
+        if self.fingerprint_reference is not None and self.last_fingerprint != tuple(
+            self.fingerprint_reference
+        ):
+            # The ordered call fingerprint is the structure guard: the same
+            # module-entry and torch-call sequence as the capture, independent
+            # of tensor sizes. A mismatch is a different taken path (another
+            # branch arm, a size-dependent loop count), refused typed.
+            failed = _contract_check(
+                "fast_live_call_fingerprint",
+                False,
+                RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
+                "Live forward executed a different op structure than the capture: "
+                f"call fingerprint {self.last_fingerprint} against recorded "
+                f"{tuple(self.fingerprint_reference)}.",
+            )
+            self._poison_and_raise(failed)
+        if self.module_index != len(self.module_plans) or any(
+            self.module_call_counts.get(address, 0) != count
+            for address, count in self.expected_module_calls.items()
+        ):
             failed = _contract_check(
                 "fast_live_module_missing",
                 False,
@@ -1391,11 +1158,36 @@ class _FastLiveSession:
                 f"{len(self.function_plans)} requested calls.",
             )
             self._poison_and_raise(failed)
-        self._refresh_boundary_payloads(input_args, input_kwargs, output)
+
+    def _settle_truncated_prefix(
+        self, until: Any, input_args: Any, input_kwargs: Mapping[str, Any]
+    ) -> Any:
+        """Check the executed prefix of a cut forward, then clear what did not run."""
+
+        kind, index = cast(tuple[str, int], self.stop_at)
+        stop_plan = (self.module_plans if kind == "module" else self.function_plans)[index]
+        expected_functions = function_prefix_count(self.trace, stop_plan, self.function_plans)
+        if self.function_index != expected_functions:
+            self._poison_and_raise(
+                _contract_check(
+                    "fast_until_prefix",
+                    False,
+                    RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE,
+                    f"Live forward reached until={until!r} after {self.function_index} of the "
+                    f"{expected_functions} functional calls the capture ran before it.",
+                )
+            )
+        self._refresh_boundary_payloads(input_args, input_kwargs, None, inputs_only=True)
+        truncation, self.cleared_by_until = truncate_after(self.target, stop_plan, until)
+        return truncation
+
+    def _finalize_run(self, output: Any, *, seed: int | None, truncation: Any) -> RunResult:
+        """Settle one fast run's report through the shared provider finalizer."""
+
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
-            backend=str(getattr(self.trace, "backend", "torch")),
+            backend=str(self.trace._provenance_backend),
             capability="guarded_static_native_forward",
             resolver_records=(),
             state_sources_available=(StateSource.LIVE_MODEL_STATE,),
@@ -1414,7 +1206,14 @@ class _FastLiveSession:
         # container at UNVERIFIABLE. fast=True must never improve the verdict the
         # ordinary provider would settle on the same trace.
         lossy = _container_spec_reconstruction_lossy(_output_container_spec(self.trace))
-        provisional = PathFaithfulness.UNVERIFIABLE if lossy else PathFaithfulness.VERIFIED
+        # A run that applied staged user edits is an edited forward: unverifiable and
+        # not pristine until a hook-aware check exists, never VERIFIED.
+        hooked = hooked_run_diagnostic(self.trace) if self.reports_hooked_ceiling else None
+        provisional = (
+            PathFaithfulness.UNVERIFIABLE
+            if lossy or truncation is not None or hooked is not None
+            else PathFaithfulness.VERIFIED
+        )
         # Same declaration contract as the ordinary live provider (deephunt
         # F2): a host-RNG capture's fast report must not read as a
         # deterministic-looking empty tuple next to VERIFIED.
@@ -1425,7 +1224,7 @@ class _FastLiveSession:
             else ()
         )
         return _finalize_provider_run(
-            fork=self.trace,
+            fork=self.target,
             output=output,
             readiness=readiness,
             state_source=StateSource.LIVE_MODEL_STATE,
@@ -1434,22 +1233,108 @@ class _FastLiveSession:
             random_filled_slot_ids=(),
             contract_checks=(guard_check,),
             provisional_path_faithfulness=provisional,
-            provisional_mismatch=None,
+            provisional_mismatch=hooked,
             numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
             divergence_policy=DivergencePolicy.RAISE,
             nondeterministic_sources=nondeterministic_sources,
             # The fast-live "fork" IS the user's live Trace: an inherited
             # divergence must raise without evicting it from the registry.
             unregister_fork_on_divergence=False,
+            truncation=truncation,
         )
 
-    def _refresh_boundary_payloads(
-        self,
-        input_args: Any,
-        input_kwargs: Mapping[str, Any],
-        output: Any,
+    def _record_fast_run(
+        self, *, seed: int | None, unfired: tuple[str, ...], until: Any = None
     ) -> None:
-        """Refresh saved model-input/output payloads from the native call boundaries."""
+        """Stamp ``last_run``, the operation ledger and the state for one fast run."""
+
+        from ._trace_state import TraceState
+
+        trace = self.target
+        hook_count = len(self.steer_plan.hook_plan)
+        record = {
+            "op": "rerun",
+            "engine": "guarded_fast",
+            "started_at": self.run_started_at,
+            "strict": True,
+            "append": False,
+            "hook_count": hook_count,
+            "hook_fire_count": self.steer_plan.fire_count,
+            "unfired_hook_count": len(unfired),
+            "divergence_count": 0,
+            "fast_refresh": True,
+            "shape_varied": self.shape_varied,
+            "call_fingerprint": self.last_fingerprint,
+        }
+        trace.last_run = {
+            "engine": "guarded_fast",
+            "timestamp": time.monotonic(),
+            "started_at": self.run_started_at,
+            "duration_s": time.monotonic() - self.run_started_at,
+            "spec_revision": trace._spec_revision,
+            "strict": True,
+            "append": False,
+            "seed": seed,
+            "hooks": hook_count,
+            "hooks_fired": self.steer_plan.fire_count,
+            "hooks_unfired": len(unfired),
+            "divergence_count": 0,
+            "fast_refresh": True,
+            "fast_refused": None,
+            "shape_varied": self.shape_varied,
+            "call_fingerprint": self.last_fingerprint,
+            "refreshed_labels": tuple(sorted(self.refreshed_labels)),
+            "until": until,
+        }
+        trace._record_operation(**record)
+        trace.state = TraceState.RERUN_PROPAGATED
+
+    def _match_native_output_leaves(self, output: Any, output_labels: tuple[str, ...]) -> list[Any]:
+        """Pair each captured output op with its leaf in the native output, by container path.
+
+        Output ops record their path in the model output (``container_path``);
+        an opaque root (every path empty) keeps the positional pairing. A
+        different leaf count, a missing path or an extra path is a structural
+        divergence and refuses exactly as before.
+        """
+
+        captured_paths = [
+            tuple(getattr(self.trace._layer_dict_all_keys[label], "container_path", None) or ())
+            for label in output_labels
+        ]
+        lossy_failure = _lossy_output_failure(output, output_labels)
+        if lossy_failure is not None:
+            self._poison_and_raise(lossy_failure)
+        values, reason = _pair_output_leaves(output, captured_paths, len(output_labels))
+        if values is None and _is_opaque_output_root(output):
+            # Capture records an unsupported output container (a plain class)
+            # under one empty address; the fast run cannot pair leaves with it.
+            failed = _contract_check(
+                "fast_live_model_output_opaque",
+                False,
+                RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                f"The model returns a {type(output).__qualname__}, an output container "
+                "capture does not walk with stable paths; the captured boundary kept "
+                f"{len(output_labels)} output op(s) for it while the live object holds "
+                f"{reason.split(' tensor leaves')[0]} tensor leaves. The fast run cannot "
+                "pair them; the full run records this output as the capture did.",
+                affected_op_labels=output_labels,
+            )
+            self._poison_and_raise(failed)
+        if values is None:
+            failed = _contract_check(
+                "fast_live_model_output_structure",
+                False,
+                RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
+                f"Native model output tensor structure changed from the captured boundary: {reason}.",
+                affected_op_labels=output_labels,
+            )
+            self._poison_and_raise(failed)
+        assert values is not None
+        return values
+
+    def _refresh_input_payloads(self, input_args: Any, input_kwargs: Mapping[str, Any]) -> None:
+        """Refresh saved model-input payloads from the native call's input leaves."""
 
         input_leaves = _live_runtime_input_leaves(input_args, input_kwargs)
         if input_leaves is not None:
@@ -1467,24 +1352,31 @@ class _FastLiveSession:
                     affected_op_labels=input_labels,
                 )
                 self._poison_and_raise(failed)
-            for label, value in zip(input_labels, input_leaves, strict=True):
-                op = self.trace.layer_dict_all_keys[label]
-                if bool(getattr(op, "has_saved_activation", False)):
+            # A folded input Layer is listed once per pass under one bare
+            # label, which ``layer_dict_all_keys`` maps to the LAST pass; the
+            # per-listing rule refreshes each pass with its own input.
+            input_ops = boundary_label_rows(input_labels, self.target.__getitem__)
+            for op, value in zip(input_ops, input_leaves, strict=True):
+                if op is not None and bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)
-        output_paths = _tensor_leaf_paths(output)
+
+    def _refresh_boundary_payloads(
+        self,
+        input_args: Any,
+        input_kwargs: Mapping[str, Any],
+        output: Any,
+        *,
+        inputs_only: bool = False,
+    ) -> None:
+        """Refresh saved model-input/output payloads from the native call boundaries."""
+
+        self._refresh_input_payloads(input_args, input_kwargs)
+        if inputs_only:
+            return
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
-        if len(output_paths) != len(output_labels):
-            failed = _contract_check(
-                "fast_live_model_output_structure",
-                False,
-                RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
-                "Native model output tensor structure changed from the captured boundary.",
-                affected_op_labels=output_labels,
-            )
-            self._poison_and_raise(failed)
-        for label, path in zip(output_labels, output_paths):
-            value = _value_at_path(output, path)
-            op = self.trace.layer_dict_all_keys[label]
+        output_values = self._match_native_output_leaves(output, output_labels)
+        for label, value in zip(output_labels, output_values, strict=True):
+            op = self.target._layer_dict_all_keys[label]
             expected_shape = tuple(op.shape) if op.shape is not None else None
             expected_dtype = str(op.dtype) if op.dtype is not None else None
             if not isinstance(value, torch.Tensor):
@@ -1497,15 +1389,17 @@ class _FastLiveSession:
                 )
                 self._poison_and_raise(failed)
             if expected_shape is not None and tuple(value.shape) != expected_shape:
-                failed = _contract_check(
-                    f"fast_live_model_output_shape:{label}",
-                    False,
-                    RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
-                    f"Native model output {label!r} shape changed from {expected_shape} to "
-                    f"{tuple(value.shape)}.",
-                    affected_op_labels=(label,),
-                )
-                self._poison_and_raise(failed)
+                if not self._admits_size_change(expected_shape, value):
+                    failed = _contract_check(
+                        f"fast_live_model_output_shape:{label}",
+                        False,
+                        RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
+                        f"Native model output {label!r} shape changed from {expected_shape} "
+                        f"to {tuple(value.shape)}.",
+                        affected_op_labels=(label,),
+                    )
+                    self._poison_and_raise(failed)
+                self.shape_varied = True
             if expected_dtype is not None and str(value.dtype) != expected_dtype:
                 failed = _contract_check(
                     f"fast_live_model_output_dtype:{label}",
@@ -1518,72 +1412,20 @@ class _FastLiveSession:
                 self._poison_and_raise(failed)
             if isinstance(value, torch.Tensor) and bool(getattr(op, "has_saved_activation", False)):
                 op.save_activation(value, (), {}, False)
+        # Same rule as capture (_capture/trace.py): the transformed raw output
+        # is stored when an output transform exists; the save scope is
+        # otherwise untouched, so a sparse save stays sparse on a rerun.
+        transform = self.output_transform
+        self.target._output_slot = returned(output)
+        self.target.transformed_output = transform(output) if transform is not None else None
 
 
-def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
-    """Run or initialize the explicit verify-once loaded sparse fast path.
-
-    Parameters
-    ----------
-    trace:
-        Loaded sparse source Trace.
-    inputs:
-        Runtime input tree.
-    seed:
-        Seed pinned for the lifetime of the fast session.
-
-    Returns
-    -------
-    RunResult
-        First ordinary verified result or a later compiled fast result.
-    """
-
-    session = trace.__dict__.get("_fast_run_session")
-    if isinstance(session, _FastSparseSession):
-        return session.run(inputs, seed=seed)
-    result = run_loaded_sparse_trace(
-        trace,
-        inputs,
-        seed=seed,
-        on_divergence=DivergencePolicy.RAISE,
-    )
-    if result.report.path_faithfulness is not PathFaithfulness.VERIFIED:
-        raise RunCapabilityUnavailableError(
-            "fast=True requires a fully verified first sparse run; this artifact settled "
-            f"{result.report.path_faithfulness.value}.",
-            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-            detection_stage="fast_verify_once",
-        )
-    trace.__dict__["_fast_run_session"] = _FastSparseSession.build(
-        trace,
-        result.trace,
-        seed=seed,
-    )
-    return result
-
-
-def run_fast_live_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
-    """Run the explicit native-forward targeted-collection live fast path."""
+def live_source_model(trace: Any) -> nn.Module | None:
+    """Return the live model a Trace retains weakly, or ``None`` once it is collected."""
 
     source_ref = getattr(trace, "_source_model_ref", None)
     model = source_ref() if source_ref is not None else None
-    if not isinstance(model, nn.Module):
-        raise RunCapabilityUnavailableError(
-            "The live Trace no longer retains its source model: the trace "
-            "holds it only weakly, so live-run availability depends on the "
-            "caller keeping a strong reference (an inline-constructed model "
-            "is collected at the first gc pass after capture). Keep the "
-            "model alive, or save/load a runnable artifact instead.",
-            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-            provider=RunProvider.LIVE,
-        )
-    session = trace.__dict__.get("_fast_run_session")
-    if not isinstance(session, _FastLiveSession) or session.model_ref() is not model:
-        if hasattr(session, "close"):
-            session.close()
-        session = _FastLiveSession(trace, model)
-        trace.__dict__["_fast_run_session"] = session
-    return session.run(inputs, seed=seed)
+    return model if isinstance(model, nn.Module) else None
 
 
 def close_fast_run_session(trace: Any) -> None:

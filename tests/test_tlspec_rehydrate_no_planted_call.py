@@ -30,13 +30,13 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens._io.rehydrate import _assign_rehydrated_field
 from torchlens._io.state_keys import (
     PortableStateKeyError,
     refuse_callable_shadowing_state_keys,
 )
-from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 
@@ -51,10 +51,10 @@ class _M(nn.Module):
 
 def _build(tmp_path: Path) -> Path:
     torch.manual_seed(0)
-    cap = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+    cap = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
     trace = tl.trace(_M().eval(), torch.randn(2, 4), capture=cap)
     bundle = tmp_path / "base.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 
@@ -72,29 +72,40 @@ def _repickle_metadata(bundle: Path, mutate) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_planted_internal_set_not_invoked_on_load(tmp_path: Path) -> None:
-    """A planted ``_internal_set`` (numpy.dtype) is NOT invoked; the load refuses typed.
+@pytest.mark.parametrize(
+    "planted_key",
+    ["_internal_set", "save"],
+    ids=["planted_internal_set_not_invoked_on_load", "shadow_key_refused_on_load"],
+)
+def test_planted_key_refused_on_load(tmp_path: Path, planted_key: str) -> None:
+    """A planted metadata key (numpy.dtype value) is NOT invoked; the load refuses typed.
 
-    Before the sec_3 fix, loading raised ``TypeError: data type ... not
-    understood`` -- proof the planted ``numpy.dtype`` was called from
-    ``_assign_rehydrated_field``. Layer 1 (class-static setter resolution,
+    ``_internal_set``: before the sec_3 fix, loading raised ``TypeError: data
+    type ... not understood`` -- proof the planted ``numpy.dtype`` was called
+    from ``_assign_rehydrated_field``. Layer 1 (class-static setter resolution,
     unit-pinned below) made the planted key inert; since the persisted-state
     contract (MEMO 3.3), the governed load refuses the unknown key OUTRIGHT --
     typed, before any state mutation, and provably without invoking the
     planted callable (a ``TypeError`` here would mean it ran).
+    ``_internal_set`` is not a ``Trace`` method, so the narrow layer-2 filter
+    does not catch it; the unknown-field partition refuses it first and
+    layer 1 (class-static resolution) stays the backstop, unit-pinned below.
+
+    ``save``: planting a method-shadow key in metadata refuses the load, typed.
+    On the governed artifact path the unknown-field partition (MEMO 3.3)
+    fires FIRST -- a method name is never a declared field, so the plant
+    refuses before the layer-2 shadow filter is even consulted. The filter's
+    own refusal stays end-to-end-pinned on the session-pickle path below.
     """
 
     from torchlens._io import UnknownPersistedFieldError
 
     bundle = _build(tmp_path)
-    # ``_internal_set`` is not a ``Trace`` method, so the narrow layer-2 filter
-    # does not catch it; the unknown-field partition refuses it first and
-    # layer 1 (class-static resolution) stays the backstop, unit-pinned below.
-    _repickle_metadata(bundle, lambda state: state.__setitem__("_internal_set", numpy.dtype))
+    _repickle_metadata(bundle, lambda state: state.__setitem__(planted_key, numpy.dtype))
 
     with pytest.raises(UnknownPersistedFieldError) as excinfo:
         tl.load(str(bundle))
-    assert "_internal_set" in excinfo.value.fields["unknown_fields"]
+    assert planted_key in excinfo.value.fields["unknown_fields"]
 
 
 def test_assign_rehydrated_field_ignores_instance_setter() -> None:
@@ -156,24 +167,6 @@ def test_property_backed_fields_are_not_refused() -> None:
     # A representative slice of real field-style names must pass unrefused.
     for name in property_names:
         refuse_callable_shadowing_state_keys(Trace, {name: object()})  # must not raise
-
-
-def test_shadow_key_refused_on_load(tmp_path: Path) -> None:
-    """Planting a method-shadow key (``save``) in metadata refuses the load, typed.
-
-    On the governed artifact path the unknown-field partition (MEMO 3.3)
-    fires FIRST -- a method name is never a declared field, so the plant
-    refuses before the layer-2 shadow filter is even consulted. The filter's
-    own refusal stays end-to-end-pinned on the session-pickle path below.
-    """
-
-    from torchlens._io import UnknownPersistedFieldError
-
-    bundle = _build(tmp_path)
-    _repickle_metadata(bundle, lambda state: state.__setitem__("save", numpy.dtype))
-    with pytest.raises(UnknownPersistedFieldError) as excinfo:
-        tl.load(str(bundle))
-    assert "save" in excinfo.value.fields["unknown_fields"]
 
 
 def test_shadow_key_refused_on_session_pickle_restore() -> None:

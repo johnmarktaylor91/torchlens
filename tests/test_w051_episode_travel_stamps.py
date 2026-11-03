@@ -2,7 +2,7 @@
 
 Audit finding AUD-CODE 1.1: ``run()`` on an episode capture dropped the
 ledger to a travel note (capture_kind read ``plain``) but left every
-``Op.episode_step`` stamp in place, so ``tl.save`` succeeded and ``tl.load``
+``Op.episode_step`` stamp in place, so ``Trace.save`` succeeded and ``tl.load``
 refused ``artifact_episode_step_invalid`` -- an unloadable artifact minted
 from the user's own product. The fix scrubs the stamps in the travel policy;
 the load gate is deliberately UNCHANGED (a stamp without a declaration is
@@ -16,13 +16,13 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._annotations_travel import (
+from torchlens import at_step
+from torchlens._capture._annotations_travel import (
     scrub_episode_step_stamps,
     scrub_fresh_execution_annotations,
 )
 from torchlens.errors import TorchLensError
-from torchlens.intervention import at_step
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 V = 16
 N_STEPS = 3
@@ -54,14 +54,14 @@ class _Greedy(nn.Module):
 
 
 def _stamped(trace: tl.Trace) -> list[str]:
-    return [str(op.label) for op in trace.layer_list if op.episode_step is not None]
+    return [str(op.label) for op in trace._layer_list if op.episode_step is not None]
 
 
 def _episode(model: _Greedy, **extra) -> tl.Trace:
     return tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
         **extra,
     )
 
@@ -75,7 +75,7 @@ def test_run_product_round_trips_save_load(tmp_path) -> None:
     result = trace.run(inputs=torch.tensor([[9]]))
     product = result.trace
     assert product is not trace
-    assert product.capture_kind == "plain"
+    assert product.provenance.kind == "plain"
     assert _stamped(product) == []
     note = product.annotations["episode"]
     assert note["code"] == "episode_evidence_dropped_fresh_execution"
@@ -85,27 +85,29 @@ def test_run_product_round_trips_save_load(tmp_path) -> None:
     assert "rows" in trace.annotations["episode"]
 
     path = tmp_path / "product.tlspec"
-    tl.save(product, path)
+    product.save(path)
     loaded = tl.load(path)
-    assert loaded.capture_kind == "plain"
+    assert loaded.provenance.kind == "plain"
     assert _stamped(loaded) == []
 
 
 def test_guarded_fast_live_product_round_trips_save_load(tmp_path) -> None:
-    """The guarded-fast LIVE path refreshes the user's own trace in place."""
+    """The guarded-fast LIVE path returns a plain product and leaves the source stamped."""
 
     model = _Greedy()
     trace = _episode(model, save=tl.func("cat"))
     assert _stamped(trace)
     result = trace.run(inputs=torch.tensor([[1]]), fast=True)
-    assert result.trace is trace
-    assert trace.capture_kind == "plain"
-    assert _stamped(trace) == []
+    product = result.trace
+    assert product is not trace
+    assert product.provenance.kind == "plain"
+    assert _stamped(product) == []
+    assert _stamped(trace)
 
     path = tmp_path / "fast.tlspec"
-    tl.save(trace, path)
+    product.save(path)
     loaded = tl.load(path)
-    assert loaded.capture_kind == "plain"
+    assert loaded.provenance.kind == "plain"
     assert _stamped(loaded) == []
 
 
@@ -116,7 +118,7 @@ def test_at_step_never_answers_from_stale_stamps() -> None:
     trace = _episode(model)
     product = trace.run(inputs=torch.tensor([[9]])).trace
     with pytest.raises(TorchLensError) as info:
-        product.resolve_sites(at_step(1))
+        product[at_step(1)]
     assert info.value.fields["code"] == "episode_step_selector_without_episode"
 
 
@@ -140,9 +142,9 @@ def test_load_gate_still_refuses_stamps_without_declaration(tmp_path) -> None:
     """Tripwire law: the fix scrubs stamps; it never relaxes the load gate."""
 
     plain = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
-    plain.layer_list[0].episode_step = 0
+    plain._layer_list[0].episode_step = 0
     path = tmp_path / "forged.tlspec"
-    tl.save(plain, path)
+    plain.save(path)
     with pytest.raises(TorchLensError) as info:
         tl.load(path)
     assert info.value.fields["code"] == "artifact_episode_step_invalid"

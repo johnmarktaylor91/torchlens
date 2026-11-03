@@ -49,7 +49,7 @@ def loop():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     try:
         yield model, x, trace
@@ -75,7 +75,7 @@ def _hand_truth(model: _Loop, x: torch.Tensor, edits: dict[int, str]) -> dict[st
 
 
 def _edge_into(trace: tl.Trace, pass_index: int):
-    return next(e for e in trace.edges if e.child_label == f"relu_1_2:{pass_index}")
+    return next(e for e in trace.graph.edges if e.child_label == f"relu_1_2:{pass_index}")
 
 
 @pytest.mark.parametrize("pass_index", [1, 2])
@@ -101,16 +101,16 @@ def test_fire_record_and_store_land_on_the_addressed_pass(loop) -> None:
     fork.do(edge.__selection__(), tl.zero_ablate())
     address = (edge.child_func_call_id, edge.arg_kind, edge.arg_path)
 
-    hit = fork["relu_1_2:1"].ops[0]
+    hit = fork["relu_1_2:1"]
     assert list(hit.edge_substitutions) == [(edge.arg_kind, edge.arg_path)]
     assert hit.edge_replacement_stamps[(edge.arg_kind, edge.arg_path)]["verdict"] is True
-    fires = [r for r in hit.interventions if r.edge_address is not None]
+    fires = [r for r in hit.edits if r.edge_address is not None]
     assert [r.edge_address for r in fires] == [address]
     assert fires[0].call_label == "relu_1_2:1"
     for other in (2, 3):
-        op = fork[f"relu_1_2:{other}"].ops[0]
+        op = fork[f"relu_1_2:{other}"]
         assert not (op.edge_substitutions or {})
-        assert not [r for r in op.interventions if r.edge_address is not None]
+        assert not [r for r in op.edits if r.edge_address is not None]
 
 
 def test_audit_row_describes_the_real_effect(loop) -> None:
@@ -122,7 +122,7 @@ def test_audit_row_describes_the_real_effect(loop) -> None:
     assert audit["kind"] == "EDGE"
     row = audit["edges"][0]
     assert row["child"] == "relu_1_2:1" and row["parent"] == "linear_1_1:1"
-    store_value = fork["relu_1_2:1"].ops[0].edge_substitutions[(edge.arg_kind, edge.arg_path)]
+    store_value = fork["relu_1_2:1"].edge_substitutions[(edge.arg_kind, edge.arg_path)]
     assert row["value_digest"] == tensor_content_digest(store_value["value"])
     assert bool((store_value["value"] == 0).all())
     assert fork.last_run["origins"] == ("relu_1_2:1",)
@@ -173,3 +173,21 @@ def test_tensor_content_digest_is_dtype_agnostic_and_byte_exact() -> None:
     assert tensor_content_digest(half) == tensor_content_digest(half.clone())
     assert tensor_content_digest(torch.tensor(3.0)) == tensor_content_digest(torch.tensor(3.0))
     assert tensor_content_digest(torch.empty(0)) == tensor_content_digest(torch.empty(0))
+
+
+def test_tensor_content_digest_accepts_a_strided_one_element_payload() -> None:
+    """A ``(1,)`` slice with a non-unit stride digests like its dense copy.
+
+    ``contiguous()`` leaves such a payload alone (a size-1 dimension is
+    contiguous at any stride), and the byte view used to raise on it: a fork
+    replay over a captured ``(1,)`` row slice crashed in the digest.
+    """
+
+    base = torch.arange(8.0).reshape(2, 4)
+    strided = base[:1, 2]
+    assert strided.shape == (1,) and strided.stride() != (1,)
+    assert tensor_content_digest(strided) == tensor_content_digest(strided.clone())
+    assert tensor_content_digest(strided) == tensor_content_digest(torch.tensor([2.0]))
+    assert tensor_content_digest(strided) != tensor_content_digest(base[:1, 3])
+    scalar_view = base[1:2, 1:2]
+    assert tensor_content_digest(scalar_view) == tensor_content_digest(torch.tensor([[5.0]]))

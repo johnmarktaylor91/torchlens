@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import heapq
 import math
-import random
-from collections.abc import Iterable
+import warnings
 from typing import Any, Protocol, cast
 
 import torch
+
+from .._errors import InvalidArgumentError
+from ..errors import TorchLensWarning
 
 __tl_layer__ = "L5"
 
@@ -21,7 +22,7 @@ class StreamingStat(Protocol):
     def update(self, value: Any) -> None:
         """Update the accumulator with one batch value."""
 
-    def result(self) -> Any:
+    def compute(self) -> Any:
         """Return the finalized statistic value."""
 
 
@@ -82,7 +83,7 @@ class Mean:
         self._mean = self._mean + (batch_mean - self._mean) * (batch_count / total)
         self._count = total
 
-    def result(self) -> float:
+    def compute(self) -> float:
         """Return the finalized mean.
 
         Returns
@@ -128,156 +129,10 @@ class Norm:
             return
         self._mean.update(torch.linalg.vector_norm(tensor, ord=self.p))
 
-    def result(self) -> float:
+    def compute(self) -> float:
         """Return the finalized mean norm."""
 
-        return self._mean.result()
-
-
-class Quantile:
-    """Reservoir-sampling running quantile estimator.
-
-    The estimate is exact while at most ``reservoir_size`` values have been
-    seen; beyond that it is a uniform subsample, whose quantile standard
-    error is ~``sqrt(q * (1 - q) / reservoir_size)`` in RANK space (about
-    +/-0.55 percentile points at the median with the default reservoir).
-
-    Sampling uses a PRIVATE ``random.Random(seed)`` stream: it never draws
-    from (or perturbs) the process-global ``random`` module, which capture
-    replay snapshots and restores as a protected engine, and two runs with
-    the same seed and the same update stream produce identical estimates.
-    """
-
-    def __init__(
-        self,
-        quantiles: Iterable[float] = (0.5, 0.95, 0.99),
-        name: str | None = None,
-        reservoir_size: int = 8192,
-        seed: int | None = 0,
-    ) -> None:
-        """Initialize the estimator.
-
-        Parameters
-        ----------
-        quantiles:
-            Quantiles in ``[0, 1]`` to estimate.
-        name:
-            Optional metric name.
-        reservoir_size:
-            Maximum sampled values retained in memory.
-        seed:
-            Seed for the private sampling stream. The default ``0`` makes
-            estimates reproducible run-to-run; pass ``None`` for a
-            fresh-entropy stream (still decoupled from the global engine).
-        """
-
-        self.name = name
-        self.quantiles = tuple(float(q) for q in quantiles)
-        self.reservoir_size = int(reservoir_size)
-        self.seed = seed
-        self._rng = random.Random(seed)
-        self._seen = 0
-        self._reservoir: list[float] = []
-
-    def update(self, value: Any) -> None:
-        """Update the reservoir.
-
-        Parameters
-        ----------
-        value:
-            Tensor-like batch value.
-        """
-
-        items = _as_float_tensor(value).tolist()
-        start = 0
-        free = self.reservoir_size - len(self._reservoir)
-        if free > 0:
-            # Fill phase: the first reservoir_size values are all retained,
-            # so bulk-extend instead of looping (algorithm-R equivalent).
-            start = min(free, len(items))
-            self._reservoir.extend(float(item) for item in items[:start])
-            self._seen += start
-        for item in items[start:]:
-            self._seen += 1
-            replacement = self._rng.randint(0, self._seen - 1)
-            if replacement < self.reservoir_size:
-                self._reservoir[replacement] = float(item)
-
-    def result(self) -> dict[float, float]:
-        """Return finalized quantile estimates.
-
-        Returns
-        -------
-        dict[float, float]
-            Mapping from requested quantile to estimated value.
-        """
-
-        if not self._reservoir:
-            return dict.fromkeys(self.quantiles, math.nan)
-        tensor = torch.tensor(self._reservoir, dtype=torch.float64)
-        return {q: float(torch.quantile(tensor, q).item()) for q in self.quantiles}
-
-
-class TopK:
-    """Streaming top-k value tracker."""
-
-    def __init__(self, k: int = 10, name: str | None = None) -> None:
-        """Initialize the tracker.
-
-        Parameters
-        ----------
-        k:
-            Number of largest scalar values to retain.
-        name:
-            Optional metric name.
-        """
-
-        self.name = name
-        self.k = int(k)
-        self._heap: list[float] = []
-
-    def update(self, value: Any) -> None:
-        """Update the tracked top-k values.
-
-        NaN values are ignored: they have no order, so they can neither rank
-        among the top k nor displace a real value. The batch is reduced with
-        ``torch.topk`` and merged with the retained values (identical
-        semantics to the former per-element Python loop at a fraction of the
-        cost -- the loop was ~50x slower than ``torch.topk`` on real batches).
-
-        Parameters
-        ----------
-        value:
-            Tensor-like batch value.
-        """
-
-        if self.k <= 0:
-            return
-        tensor = _as_float_tensor(value)
-        tensor = tensor[~tensor.isnan()]
-        if tensor.numel() == 0:
-            return
-        if tensor.numel() > self.k:
-            tensor = torch.topk(tensor, self.k).values
-        if self._heap:
-            merged = torch.cat([torch.tensor(self._heap, dtype=torch.float64), tensor])
-        else:
-            merged = tensor
-        if merged.numel() > self.k:
-            merged = torch.topk(merged, self.k).values
-        self._heap = [float(item) for item in merged.tolist()]
-        heapq.heapify(self._heap)
-
-    def result(self) -> list[float]:
-        """Return top values in descending order.
-
-        Returns
-        -------
-        list[float]
-            Retained top-k values.
-        """
-
-        return sorted(self._heap, reverse=True)
+        return self._mean.compute()
 
 
 class Covariance:
@@ -344,7 +199,7 @@ class Covariance:
         self._mean += delta * (rows / total)
         self._count = total
 
-    def result(self) -> torch.Tensor:
+    def compute(self) -> torch.Tensor:
         """Return the finalized covariance matrix.
 
         Returns
@@ -512,7 +367,7 @@ class CrossCovariance:
         self._mean_b += delta_b * (rows / total)
         self._count = total
 
-    def result(self) -> torch.Tensor:
+    def compute(self) -> torch.Tensor:
         """Return the finalized sample cross-covariance matrix.
 
         Returns
@@ -529,6 +384,91 @@ class CrossCovariance:
         return self._m2 / (self._count - 1)
 
 
+def _refuse_nonfinite_cka_input(matrix: torch.Tensor, argument: str) -> None:
+    """Refuse NaN/Inf CKA input typed, matching ``tl.repgeom.rdm``.
+
+    Parameters
+    ----------
+    matrix:
+        Feature matrix about to enter the CKA reduction.
+    argument:
+        Which representation (``"a"`` or ``"b"``) the matrix came from.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``cka_input_nonfinite`` when any entry is NaN or infinite.
+    """
+
+    if bool(torch.isfinite(matrix).all()):
+        return
+    raise InvalidArgumentError(
+        f"CKA input {argument!r} contains NaN or infinite values; CKA would "
+        "silently return NaN or a meaningless score",
+        code="cka_input_nonfinite",
+        remedy=(
+            "clean or mask the non-finite entries first (for example "
+            "torch.nan_to_num(x) or drop the affected rows), as tl.repgeom.rdm requires"
+        ),
+        argument=argument,
+    )
+
+
+def _warn_zero_variance_cka() -> float:
+    """Warn that a zero-variance representation makes CKA undefined; return NaN."""
+
+    warnings.warn(
+        TorchLensWarning(
+            "CKA is undefined because a representation has zero variance (every row "
+            "is identical after centering); returning NaN. Remedy: check the site "
+            "selection and the inputs, a constant activation carries no geometry",
+            code="cka_zero_variance",
+        ),
+        stacklevel=3,
+    )
+    return math.nan
+
+
+#: Similarity-repository identifier of linear CKA with the biased Gretton HSIC.
+LINEAR_CKA_ID = "measure/*/cka-kernel=linear-hsic=gretton-score"
+
+
+class SimilarityScore(float):
+    """A similarity score that names the exact measure variant it computes.
+
+    It is a ``float`` (arithmetic, comparison, ``repr`` and JSON encoding are a
+    float's) with one extra attribute, ``similarity_repository_id``: the
+    similarity-repository catalogue identifier of the variant, for example
+    ``measure/*/cka-kernel=linear-hsic=gretton-score``. :meth:`to_dict` is the
+    serialized form that keeps the identifier; arithmetic on a score returns a
+    plain ``float``. Spelling DOCUMENTED-UNSTABLE.
+    """
+
+    similarity_repository_id: str | None
+
+    def __new__(cls, value: float, similarity_repository_id: str | None) -> SimilarityScore:
+        """Create a score from its value and its measure identifier."""
+
+        score = super().__new__(cls, value)
+        score.similarity_repository_id = similarity_repository_id
+        return score
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Pickle with the identifier."""
+
+        return (type(self), (float(self), self.similarity_repository_id))
+
+    def __repr__(self) -> str:
+        """Return the float's repr."""
+
+        return float.__repr__(self)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return ``{"score": float, "similarity_repository_id": str | None}``."""
+
+        return {"score": float(self), "similarity_repository_id": self.similarity_repository_id}
+
+
 class CKA:
     r"""Streaming linear centered kernel alignment accumulator.
 
@@ -541,9 +481,18 @@ class CKA:
         {\lVert C_{AA}\rVert_F\,\lVert C_{BB}\rVert_F}.
 
     Only feature-sized covariance terms are retained. If either input has
-    zero variance, ``result()`` returns NaN because the alignment denominator
-    is zero. This follows the linear CKA formulation of Kornblith et al. (2019).
+    zero variance, ``compute()`` returns NaN (warning ``cka_zero_variance``)
+    because the alignment denominator is zero; a NaN or infinite batch refuses
+    ``cka_input_nonfinite`` at ``update()``. This follows the linear CKA formulation of Kornblith et al. (2019).
+
+    The variant is the similarity-repository's
+    ``cka-kernel=linear-hsic=gretton-score`` (linear kernel, biased Gretton
+    HSIC); :attr:`similarity_repository_id` records it (spelling
+    DOCUMENTED-UNSTABLE).
     """
+
+    #: Similarity-repository identifier of the exact CKA variant computed.
+    similarity_repository_id: str = LINEAR_CKA_ID
 
     def __init__(
         self,
@@ -584,32 +533,36 @@ class CKA:
 
         matrix_a = _as_feature_matrix(a)
         matrix_b = _as_feature_matrix(b)
+        _refuse_nonfinite_cka_input(matrix_a, "a")
+        _refuse_nonfinite_cka_input(matrix_b, "b")
         self._cross.update(matrix_a, matrix_b)
         self._covariance_a.update(matrix_a)
         self._covariance_b.update(matrix_b)
 
-    def result(self) -> float:
+    def compute(self) -> SimilarityScore:
         """Return the finalized linear CKA value.
 
         Returns
         -------
-        float
-            Linear CKA, or NaN when either representation has zero variance.
+        SimilarityScore
+            Linear CKA as a float carrying ``similarity_repository_id``, or NaN
+            (with a ``cka_zero_variance`` warning) when either representation
+            has zero variance.
         """
 
-        cross = self._cross.result()
-        covariance_a = self._covariance_a.result()
-        covariance_b = self._covariance_b.result()
+        cross = self._cross.compute()
+        covariance_a = self._covariance_a.compute()
+        covariance_b = self._covariance_b.compute()
         numerator = torch.linalg.matrix_norm(cross, ord="fro").square()
         denominator = torch.linalg.matrix_norm(covariance_a, ord="fro") * torch.linalg.matrix_norm(
             covariance_b, ord="fro"
         )
         if denominator.item() == 0.0:
-            return math.nan
-        return float((numerator / denominator).item())
+            return SimilarityScore(_warn_zero_variance_cka(), LINEAR_CKA_ID)
+        return SimilarityScore(float((numerator / denominator).item()), LINEAR_CKA_ID)
 
 
-def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
+def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> SimilarityScore:
     r"""Compute one-shot linear centered kernel alignment.
 
     Linear CKA is
@@ -620,10 +573,14 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
         \frac{\lVert C_{AB}\rVert_F^2}
         {\lVert C_{AA}\rVert_F\,\lVert C_{BB}\rVert_F}.
 
-    This is the linear CKA measure described by Kornblith et al. (2019).
+    This is the linear CKA measure described by Kornblith et al. (2019): the
+    similarity-repository's ``cka-kernel=linear-hsic=gretton-score`` (linear
+    kernel, biased Gretton HSIC), the same variant as :class:`CKA`.
     Inputs are treated as ``(n_observations, n_features)`` matrices; the
     default computes on CPU ``float64`` (bit-identical to the historical
-    behavior). A zero-variance input produces NaN.
+    behavior). A zero-variance input produces NaN with a ``cka_zero_variance``
+    warning; NaN or infinite input refuses ``cka_input_nonfinite``, as
+    ``tl.repgeom.rdm`` does.
 
     Parameters
     ----------
@@ -639,8 +596,14 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
 
     Returns
     -------
-    float
-        Linear CKA value, or NaN for a degenerate zero-variance input.
+    SimilarityScore
+        Linear CKA as a float carrying ``similarity_repository_id``, or NaN for a
+        degenerate zero-variance input.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``cka_input_nonfinite`` when either input holds NaN or Inf.
     """
 
     resolved_device, resolved_dtype = _resolve_placement(device, dtype)
@@ -650,6 +613,8 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
         raise ValueError(
             f"CKA requires matched row counts; got {matrix_a.shape[0]} and {matrix_b.shape[0]}."
         )
+    _refuse_nonfinite_cka_input(matrix_a, "a")
+    _refuse_nonfinite_cka_input(matrix_b, "b")
 
     centered_a = matrix_a - matrix_a.mean(dim=0, keepdim=True)
     centered_b = matrix_b - matrix_b.mean(dim=0, keepdim=True)
@@ -659,27 +624,27 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
         gram_b, ord="fro"
     )
     if denominator.item() == 0.0:
-        return math.nan
+        return SimilarityScore(_warn_zero_variance_cka(), LINEAR_CKA_ID)
     numerator = torch.sum(gram_a * gram_b)
-    return float((numerator / denominator).item())
+    return SimilarityScore(float((numerator / denominator).item()), LINEAR_CKA_ID)
 
 
 class PCA:
     """Simple incremental PCA backed by running covariance."""
 
-    def __init__(self, n_components: int, name: str | None = None) -> None:
+    def __init__(self, num_components: int, name: str | None = None) -> None:
         """Initialize the estimator.
 
         Parameters
         ----------
-        n_components:
+        num_components:
             Number of principal components to return.
         name:
             Optional metric name.
         """
 
         self.name = name
-        self.n_components = int(n_components)
+        self.n_components = int(num_components)
         self._covariance = Covariance(name=name)
 
     def update(self, value: Any) -> None:
@@ -708,7 +673,7 @@ class PCA:
             descending eigenvalues.
         """
 
-        cov = self._covariance.result()
+        cov = self._covariance.compute()
         if cov.numel() == 0:
             return (
                 torch.empty((0, 0), dtype=torch.float64),
@@ -721,7 +686,7 @@ class PCA:
         flip = torch.where(torch.gather(components, 1, anchor) < 0, -1.0, 1.0)
         return components * flip, values[order]
 
-    def result(self) -> dict[str, Any]:
+    def compute(self) -> dict[str, Any]:
         """Return components, variances, and the P6 additive fit facts.
 
         Returns
@@ -788,8 +753,8 @@ class PCA:
             components=components,
             mean=mean,
             explained_variance=explained,
-            n_samples=self._covariance._count,
-            n_features=int(mean.numel()),
+            num_samples=self._covariance._count,
+            num_features=int(mean.numel()),
             fit_scope=str(fit_scope),
             digest=fitted_digest(components, mean, explained),
         )

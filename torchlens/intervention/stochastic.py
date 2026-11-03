@@ -15,7 +15,7 @@ pass, step, and site. The fix is one stateless mechanism:
 - ``seed=`` is a REQUIRED int or the literal ``"auto"``; ``None`` never
   reaches a hook (D4).
 - ``"auto"`` canonicalizes ONCE per capture into
-  ``base_seed = H(trace.random_seed, rule_identity, population_identity)``
+  ``base_seed = H(trace._options_seed, rule_identity, population_identity)``
   (D5 with the DIS-4 adjudication: the identity component is PERSISTED helper
   identity, never a transient construction ordinal) -- never the ambient
   global RNG, and recorded.
@@ -51,12 +51,10 @@ pass, step, and site. The fix is one stateless mechanism:
   across sites via one plan identity). The shipped ``noise`` /
   ``scramble_elements`` keep their frozen ``per_rule`` behavior forever.
 
-Every firing routes its audit through C03's ONE FireRecord builder: realized
-draws land as ``ledger_notes`` (lifted into ``FireRecord.determinism_note`` by
-``build_fire_record``) plus a structured session-side record served by
-:func:`sampling_records`. No new persisted field is introduced (the C07 field
-census is frozen; a structured ``sampling`` FireRecord field would need its
-own adjudicated the field-intent ledger row first).
+Every firing routes its audit through C03's ONE FireRecord builder: each realized
+draw lands as a typed :class:`~torchlens.intervention.types.SamplingRecord` that
+``build_fire_record`` lifts into the persisted ``FireRecord.sampling``, and as a
+``ledger_notes`` line lifted into ``determinism_note``. No draw is session-only.
 
 Axis law (D24/D25): axes are NEVER inferred from rank. The ladder is explicit
 ``axis=`` > facet/recipe-declared semantic role > registered model/site
@@ -77,24 +75,21 @@ import hashlib
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import torch
 
 from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 from .hooks import HookContext
-from .population import OneDatum, PerRowDatums, Reference
-from .types import HelperSpec
+from .population import OneDatum, PerRowDatums, Population
+from .types import Edit, SamplingRecord
 
 __all__ = [
     "SamplingPlan",
-    "mean_fill",
-    "mean_from",
     "permute_batch",
     "resample_rows_from",
     "sample_from",
-    "sampling_records",
     "set_direction_mean",
 ]
 
@@ -227,7 +222,7 @@ def _require_seed(seed: Any, verb: str) -> int | str:
             "edits, so unacknowledged stochasticity never reaches a hook",
             code="sampling_seed_required",
             remedy="pass an explicit integer seed, or seed='auto' to derive one "
-            "from the capture's recorded trace.random_seed",
+            "from the capture's recorded trace.options.seed",
             argument="seed",
         )
     return seed
@@ -238,23 +233,23 @@ def _base_seed(
     *,
     rule_identity: str,
     population_identity: str,
-    hook: HookContext,
+    ctx: HookContext,
     verb: str,
 ) -> int:
     """Resolve the base seed for one firing (D5, DIS-4 spelling).
 
     An explicit int is its own base. ``"auto"`` derives from the capture's
-    recorded ``trace.random_seed`` (threaded through ``run_ctx`` by the
+    recorded ``trace.options.seed`` (threaded through ``run_ctx`` by the
     live/replay doors), the helper's persisted identity, and the population
     identity -- never the ambient RNG, never a transient construction ordinal.
     """
 
     if isinstance(seed, int):
         return seed
-    trace_seed = hook.run_ctx.get("trace_random_seed")
+    trace_seed = ctx.run_state.get("trace_random_seed")
     if trace_seed is None:
         raise InvalidArgumentError(
-            f"{verb} seed='auto' needs the capture's recorded trace.random_seed, "
+            f"{verb} seed='auto' needs the capture's recorded trace.options.seed, "
             "and this door's run context does not carry one",
             code="sampling_trace_seed_unavailable",
             remedy="pass an explicit integer seed=, or run the edit on a door "
@@ -264,7 +259,7 @@ def _base_seed(
     return _hash_seed("auto_base", trace_seed, rule_identity, population_identity)
 
 
-def _firing_coordinate(hook: HookContext, share_draw: str) -> tuple[Any, ...]:
+def _firing_coordinate(ctx: HookContext, share_draw: str) -> tuple[Any, ...]:
     """Build the LOGICAL firing coordinate (D6) for one hook fire.
 
     ``per_firing``: ``(site, pass_index, generation_step)`` where ``site`` is
@@ -283,9 +278,9 @@ def _firing_coordinate(hook: HookContext, share_draw: str) -> tuple[Any, ...]:
 
     if share_draw == "per_rule":
         return ()
-    layer_log = hook.layer_log or {}
-    pass_index = layer_log.get("pass_index")
-    generation_step = hook.run_ctx.get("generation_step")
+    layer_log = ctx.op or {}
+    pass_index = layer_log.get("pass_number")
+    generation_step = ctx.run_state.get("generation_step")
     if share_draw == "per_group":
         return (pass_index, generation_step)
     site = layer_log.get("site_key") or layer_log.get("label") or layer_log.get("layer_label")
@@ -315,24 +310,42 @@ def _derived_seed(  # noqa: PLR0913 -- the D6 formula's seven NAMED components A
     )
 
 
-def _leaf_path(hook: HookContext) -> tuple[int, ...]:
+def _leaf_path(ctx: HookContext) -> tuple[int, ...]:
     """Read the composed-leaf path threaded by ``tl.compose`` (D6/D20)."""
 
-    path = hook.ctx.get("compose_leaf_path", ())
+    path = ctx.state.get("compose_leaf_path", ())
     return tuple(path) if isinstance(path, (tuple, list)) else ()
 
 
-def _record_sampling(hook: HookContext, verb: str, record: dict[str, Any]) -> None:
-    """Land one realized-draw record on the session and the note stream.
+def _record_sampling(ctx: HookContext, verb: str, record: dict[str, Any]) -> None:
+    """Land one realized draw on the pending FireRecord and the note stream.
 
-    The structured dict rides ``run_ctx["sampling_records"]`` (session-time;
-    served by :func:`sampling_records`); the compact rendering is enqueued as
-    a ``ledger_notes`` entry so C03's ONE FireRecord builder lifts it into the
-    persisted ``FireRecord.determinism_note`` -- no parallel audit path.
+    The typed :class:`SamplingRecord` waits in ``run_state["sampling_draws"]`` until the
+    ONE FireRecord builder pops it into ``FireRecord.sampling``; its compact rendering is
+    a ``ledger_notes`` entry the same builder lifts into ``determinism_note``.
     """
 
-    hook.run_ctx.setdefault("sampling_records", []).append(dict(record))
     draw = record.get("donor_ids", record.get("permutation"))
+    coordinate = record.get("logical_firing_coordinate")
+    ctx.run_state.setdefault("sampling_draws", []).append(
+        SamplingRecord(
+            verb=verb,
+            base_seed=record.get("base_seed"),
+            derived_seed=record.get("derived_seed"),
+            share_draw=record.get("share_draw"),
+            logical_firing_coordinate=(
+                tuple(coordinate) if isinstance(coordinate, (list, tuple)) else coordinate
+            ),
+            eligible_count=record.get("eligible_count"),
+            population_count=record.get("population_count"),
+            population_identity=record.get("population_identity"),
+            donor_group_id=record.get("donor_group_id"),
+            draw_indices=(
+                tuple(int(index) for index in draw) if isinstance(draw, (list, tuple)) else ()
+            ),
+            realized_draw_digest=record.get("realized_draw_digest"),
+        )
+    )
     draw_repr = repr(list(draw)[:16]) if isinstance(draw, (list, tuple)) else repr(draw)
     note = (
         f"sampling[{verb}] base_seed={record.get('base_seed')} "
@@ -342,8 +355,8 @@ def _record_sampling(hook: HookContext, verb: str, record: dict[str, Any]) -> No
         f"draw={draw_repr} draw_digest={record.get('realized_draw_digest')} "
         f"population={record.get('population_identity')}"
     )
-    hook.run_ctx.setdefault("ledger_notes", []).append(note)
-    state_history = hook.run_ctx.get("state_history")
+    ctx.run_state.setdefault("ledger_notes", []).append(note)
+    state_history = ctx.run_state.get("state_history")
     if isinstance(state_history, list):
         state_history.append(note)
 
@@ -352,21 +365,6 @@ def _draw_digest(indices: Sequence[int]) -> str:
     """Hash the realized index vector (cheap; never the tensor payload)."""
 
     return hashlib.sha256(",".join(str(i) for i in indices).encode()).hexdigest()[:16]
-
-
-def sampling_records(trace: Any) -> tuple[dict[str, Any], ...]:
-    """Return the session-time realized-draw records of a trace's last run.
-
-    Session-only by design: the persisted carriers are the FireRecord's
-    ``determinism_note`` (via the ONE builder's note lift) and the helper's
-    KEEP-persisted identity kwargs; the structured per-draw record family is
-    a declared C07-amendment follow-up, never smuggled through free kwargs.
-    """
-
-    run_ctx = getattr(trace, "last_run", None)
-    if not isinstance(run_ctx, dict):
-        return ()
-    return tuple(run_ctx.get("sampling_records", ()))
 
 
 # ----------------------------------------------------------------------
@@ -380,9 +378,9 @@ def _resolve_over_axes(
     Parameters
     ----------
     over:
-        ``"all"``, ``"self"`` (warns; maps to ``"all"``), an explicit int
-        axis, a tuple of ints, or a named token (refuses until axis-role
-        evidence exists).
+        ``"all"``, an explicit int axis, a tuple of ints, or a named token
+        (refuses until axis-role evidence exists). ``tl.mean_ablate`` spells
+        the global mean ``dim=None`` and resolves it before calling here.
     ndim:
         Concrete rank for range validation; ``None`` runs the vocabulary
         check only (construction time, before any value exists).
@@ -396,29 +394,18 @@ def _resolve_over_axes(
         known).
     """
 
-    if over == "self":
-        warnings.warn(
-            TorchLensWarning(
-                f"{verb}(over='self') is the legacy spelling of the explicit "
-                "global-scalar mean; it maps to over='all'. Remedy: spell "
-                "over='all' directly",
-                code="mean_over_self_alias",
-            ),
-            stacklevel=3,
-        )
-        return "all"
     if over == "all":
         return "all"
     if isinstance(over, str) and over in _NAMED_AXIS_TOKENS:
         raise InvalidArgumentError(
-            f"{verb}(over={over!r}) names a semantic axis, and no axis-role "
+            f"{verb}(dim={over!r}) names a semantic axis, and no axis-role "
             "evidence is registered for this site: the axis ladder is explicit "
             "axis integers > facet/recipe-declared semantic role > registered "
             "model/site metadata > this refusal. An axis is never inferred "
             "from rank (on stock nn.TransformerEncoderLayer axis 0 is TIME)",
             code="axis_semantics_unknown",
             remedy="pass the explicit integer axis (or tuple of axes) for this site's geometry",
-            argument="over",
+            argument="dim",
         )
     axes: tuple[Any, ...]
     if isinstance(over, bool):
@@ -434,12 +421,12 @@ def _resolve_over_axes(
             repr(token) for token in _NAMED_AXIS_TOKENS
         )
         raise InvalidArgumentError(
-            f"{verb}(over={over!r}) is outside the closed over= vocabulary "
+            f"{verb}(dim={over!r}) is outside the closed dim= vocabulary "
             f"({supported}); an accepted-but-ignored token is the audit-only-"
             "label defect this gate exists to kill",
             code="intervention_over_invalid",
-            remedy="pass over='all' for the explicit global scalar, or explicit integer axes",
-            argument="over",
+            remedy="pass dim='all' for the explicit global scalar, or explicit integer axes",
+            argument="dim",
         )
     if ndim is None:
         return tuple(int(axis) for axis in axes)
@@ -456,7 +443,7 @@ def _normalize_over_axes(axes: tuple[Any, ...], ndim: int, verb: str) -> tuple[i
                 f"{verb} axis {axis} is out of range for rank {ndim}",
                 code="sampling_geometry_mismatch",
                 remedy=f"pass axes in [-{ndim}, {ndim - 1}]",
-                argument="over",
+                argument="dim",
             )
         normalized.append(axis % ndim)
     return tuple(dict.fromkeys(normalized))
@@ -513,7 +500,7 @@ class SamplingPlan:
     clause selections so kwargs coincidence never shares a group.
     """
 
-    population: Reference
+    population: Population
     agree_on: Callable[[Any], Any] | None
     matching: Any
     seed: int | str
@@ -525,10 +512,7 @@ class SamplingPlan:
     def rule_identity(self) -> str:
         """Persisted identity string entering the auto-seed derivation (DIS-4)."""
 
-        return (
-            f"sample_from|{self.population.population_identity}|"
-            f"{self.share_draw}|{self.donor_group_id}"
-        )
+        return f"sample_from|{self.population.identity}|{self.share_draw}|{self.donor_group_id}"
 
     def identity_kwargs(self) -> dict[str, Any]:
         """JSON-scalar identity facts persisted on the helper spec (D14).
@@ -542,7 +526,7 @@ class SamplingPlan:
             "seed": self.seed,
             "share_draw": self.share_draw,
             "donor_group_id": self.donor_group_id,
-            "population_identity": self.population.population_identity,
+            "population_identity": self.population.identity,
             "population_count": len(self.population),
             "population_digest_kind": self.population.digest_kind,
             "population_origin": self.population.origin,
@@ -599,7 +583,7 @@ def _check_agreement_pair(agree_on: Any, matching: Any, verb: str) -> None:
 
 
 def _disclose_class_size(
-    eligible_count: int, *, strict: bool, verb: str, hook: HookContext | None
+    eligible_count: int, *, strict: bool, verb: str, ctx: HookContext | None
 ) -> None:
     """Apply the D15 class-size-one rule: disclose by default, refuse strict.
 
@@ -632,7 +616,7 @@ def _disclose_class_size(
 
 
 def sample_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D1/D7/D15): the six declared inputs ARE the plan
-    population: Reference,
+    population: Population,
     *,
     agree_on: Callable[[Any], Any] | None = None,
     matching: Any = None,
@@ -669,7 +653,7 @@ def sample_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D1/D7/D
         The immutable plan; apply it with ``tl.patch_from(plan)``.
     """
 
-    if not isinstance(population, Reference):
+    if not isinstance(population, Population):
         raise InvalidArgumentError(
             f"sample_from takes the population noun, received {type(population).__name__}",
             code="population_source_invalid",
@@ -701,12 +685,12 @@ def sample_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D1/D7/D
         share_draw=share_draw,
         strict=strict,
         donor_group_id=_mint_donor_group_id(
-            population.population_identity, validated_seed, share_draw, matching_value, agree_on
+            population.identity, validated_seed, share_draw, matching_value, agree_on
         ),
     )
 
 
-def _resolve_trace_donor(member: Any, hook: HookContext, out: torch.Tensor) -> torch.Tensor:
+def _resolve_trace_donor(member: Any, ctx: HookContext, out: torch.Tensor) -> torch.Tensor:
     """Resolve one trace member's donor value at the CURRENT site, pass-qualified.
 
     Reuses the shipped pass-qualified donor resolution (A04: a bare label on a
@@ -716,7 +700,7 @@ def _resolve_trace_donor(member: Any, hook: HookContext, out: torch.Tensor) -> t
 
     from .helpers import _resolve_patch_donor_site
 
-    site_label, source_site = _resolve_patch_donor_site(member, hook.layer_log)
+    site_label, source_site = _resolve_patch_donor_site(member, ctx.op)
     value = source_site.out
     if not isinstance(value, torch.Tensor):
         raise InvalidArgumentError(
@@ -764,7 +748,7 @@ def _prove_event_geometry(
     )
 
 
-def plan_patch_helper(plan: SamplingPlan) -> HelperSpec:
+def plan_patch_helper(plan: SamplingPlan) -> Edit:
     """Lower ``tl.patch_from(plan)`` onto the sampling substrate.
 
     One coherent donor per logical firing event (D1): the derived-seed law
@@ -780,27 +764,27 @@ def plan_patch_helper(plan: SamplingPlan) -> HelperSpec:
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime donor-patching hook for this plan."""
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Replace the site value with one sampled coherent donor."""
 
             eligible = ref.eligible_indices(plan.agree_on, plan.matching)
             _disclose_class_size(
-                len(eligible), strict=plan.strict, verb="patch_from(plan)", hook=hook
+                len(eligible), strict=plan.strict, verb="patch_from(plan)", ctx=ctx
             )
             base = _base_seed(
                 plan.seed,
                 rule_identity=plan.rule_identity,
-                population_identity=ref.population_identity,
-                hook=hook,
+                population_identity=ref.identity,
+                ctx=ctx,
                 verb="patch_from(plan)",
             )
-            coordinate = _firing_coordinate(hook, plan.share_draw)
+            coordinate = _firing_coordinate(ctx, plan.share_draw)
             derived = _derived_seed(
                 base,
-                population_identity=ref.population_identity,
+                population_identity=ref.identity,
                 donor_group_id=plan.donor_group_id,
                 coordinate=coordinate,
-                leaf_path=_leaf_path(hook),
+                leaf_path=_leaf_path(ctx),
             )
             generator = torch.Generator()
             generator.manual_seed(derived)
@@ -808,16 +792,16 @@ def plan_patch_helper(plan: SamplingPlan) -> HelperSpec:
             member_index = eligible[position]
             member = ref.members[member_index]
             if ref.kind == "trace":
-                donor = _resolve_trace_donor(member, hook, out)
+                donor = _resolve_trace_donor(member, ctx, out)
             else:
                 donor = member
             _prove_event_geometry(donor, out, verb="patch_from(plan)")
             _record_sampling(
-                hook,
+                ctx,
                 "patch_from",
                 {
                     "stochastic": True,
-                    "population_identity": ref.population_identity,
+                    "population_identity": ref.identity,
                     "digest_kind": ref.digest_kind,
                     "population_count": len(ref),
                     "eligible_count": len(eligible),
@@ -831,7 +815,7 @@ def plan_patch_helper(plan: SamplingPlan) -> HelperSpec:
                     "realized_draw_digest": _draw_digest([member_index]),
                     "replacement_mode": "whole_event",
                     "donor_grad": "detached",
-                    "recomputation": bool(hook.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                 },
             )
             # External donors are detached snapshots by design (D37): target
@@ -845,7 +829,7 @@ def plan_patch_helper(plan: SamplingPlan) -> HelperSpec:
         kwargs={"plan": "sampling_plan", **plan.identity_kwargs()},
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
         metadata={"stochastic": True, "seeded": True},
     )
     # Session-only handle for the D8 batch normalizer (object-identity
@@ -945,7 +929,7 @@ def assign_batch_donor_groups(
 # ----------------------------------------------------------------------
 # the named lowerings: permute_batch / resample_rows_from
 # ----------------------------------------------------------------------
-def permute_batch(*, seed: int | str, axis: int | None = None) -> HelperSpec:
+def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
     """Create the self-population batch-row exchange (a draw WITHOUT replacement).
 
     D24: REFUSES without a derived-or-explicit axis (a positional default is a
@@ -963,7 +947,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> HelperSpec:
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime batch-permutation hook."""
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Exchange whole rows of the batch axis under the derived seed."""
 
             fire_axis = _normalize_fire_axis(explicit_axis, out, "permute_batch")
@@ -979,23 +963,22 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> HelperSpec:
                     argument="axis",
                 )
             self_identity = (
-                f"self:{tuple(out.shape)!r}:{out.dtype}:"
-                f"{hook.layer_log.get('label') if hook.layer_log else None}"
+                f"self:{tuple(out.shape)!r}:{out.dtype}:{ctx.op.get('label') if ctx.op else None}"
             )
             base = _base_seed(
                 validated_seed,
                 rule_identity=f"permute_batch|axis={explicit_axis}",
                 population_identity=self_identity,
-                hook=hook,
+                ctx=ctx,
                 verb="permute_batch",
             )
-            coordinate = _firing_coordinate(hook, "per_firing")
+            coordinate = _firing_coordinate(ctx, "per_firing")
             derived = _derived_seed(
                 base,
                 population_identity=self_identity,
                 donor_group_id="self",
                 coordinate=coordinate,
-                leaf_path=_leaf_path(hook),
+                leaf_path=_leaf_path(ctx),
             )
             generator = torch.Generator()
             generator.manual_seed(derived)
@@ -1017,7 +1000,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> HelperSpec:
                 "realized_draw_digest": _draw_digest(indices),
                 "replacement_mode": "row_exchange",
                 "donor_grad": "graph_connected_permuted",
-                "recomputation": bool(hook.run_ctx.get("recomputation", False)),
+                "recomputation": bool(ctx.run_state.get("recomputation", False)),
                 "axis": fire_axis,
                 "axis_proof": "explicit",
             }
@@ -1025,7 +1008,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> HelperSpec:
                 # Identity permutations are legal and DISCLOSED (D24): a
                 # derangement default would silently exclude legal draws.
                 record["identity_permutation"] = True
-            _record_sampling(hook, "permute_batch", record)
+            _record_sampling(ctx, "permute_batch", record)
             return out.index_select(fire_axis, permutation.to(out.device))
 
         return _hook
@@ -1036,8 +1019,8 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> HelperSpec:
         "permute_batch",
         kwargs={"seed": validated_seed, "axis": explicit_axis},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
         metadata={
             "stochastic": True,
             "seeded": True,
@@ -1049,14 +1032,14 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> HelperSpec:
 
 
 def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D16/D24): the six declared inputs ARE the plan
-    source: Reference,
+    source: Population,
     *,
     seed: int | str,
     axis: int | None = None,
     group_by: Callable[[Any], Any] | None = None,
     matching: Any = None,
     strict: bool = False,
-) -> HelperSpec:
+) -> Edit:
     """Create whole-row coherent donor sampling WITH replacement.
 
     THE field-standard resampling ablation (never the elementwise scramble --
@@ -1083,7 +1066,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
         Refuse agreement classes of size 1 (D15).
     """
 
-    if not isinstance(source, Reference):
+    if not isinstance(source, Population):
         raise InvalidArgumentError(
             f"resample_rows_from takes the population noun, received {type(source).__name__}",
             code="population_source_invalid",
@@ -1111,14 +1094,14 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
     # only, so cross-site draw sharing cannot arise and no batch
     # normalization entry is needed).
     donor_group_id = _mint_donor_group_id(
-        source.population_identity, validated_seed, "per_firing", matching_carrier, group_by
+        source.identity, validated_seed, "per_firing", matching_carrier, group_by
     )
-    rule_identity = f"resample_rows_from|{source.population_identity}|{donor_group_id}"
+    rule_identity = f"resample_rows_from|{source.identity}|{donor_group_id}"
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime per-row donor-sampling hook."""
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Replace every subject row with one sampled coherent donor row."""
 
             fire_axis = _normalize_fire_axis(explicit_axis, out, "resample_rows_from")
@@ -1140,11 +1123,11 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
             base = _base_seed(
                 validated_seed,
                 rule_identity=rule_identity,
-                population_identity=source.population_identity,
-                hook=hook,
+                population_identity=source.identity,
+                ctx=ctx,
                 verb="resample_rows_from",
             )
-            coordinate = _firing_coordinate(hook, "per_firing")
+            coordinate = _firing_coordinate(ctx, "per_firing")
             eligible_cache: dict[int, tuple[int, ...]] = {}
             donor_ids: list[int] = []
             rows: list[torch.Tensor] = []
@@ -1155,15 +1138,15 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
                     eligible = source.eligible_indices(group_by, row_datums[row])
                     eligible_cache[cache_key] = eligible
                     _disclose_class_size(
-                        len(eligible), strict=strict, verb="resample_rows_from", hook=hook
+                        len(eligible), strict=strict, verb="resample_rows_from", ctx=ctx
                     )
                 derived = _derived_seed(
                     base,
-                    population_identity=source.population_identity,
+                    population_identity=source.identity,
                     donor_group_id=donor_group_id,
                     coordinate=coordinate,
                     target_row=row,
-                    leaf_path=_leaf_path(hook),
+                    leaf_path=_leaf_path(ctx),
                 )
                 generator = torch.Generator()
                 generator.manual_seed(derived)
@@ -1174,11 +1157,11 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
                     source.members[member_index].detach().to(device=out.device, dtype=out.dtype)
                 )
             _record_sampling(
-                hook,
+                ctx,
                 "resample_rows_from",
                 {
                     "stochastic": True,
-                    "population_identity": source.population_identity,
+                    "population_identity": source.identity,
                     "digest_kind": source.digest_kind,
                     "population_count": len(source),
                     # The eligible CLASS size: distinct members eligible for
@@ -1200,7 +1183,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
                     "realized_draw_digest": _draw_digest(donor_ids),
                     "replacement_mode": "per_row",
                     "donor_grad": "detached",
-                    "recomputation": bool(hook.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                     "axis": fire_axis,
                     "axis_proof": "explicit",
                 },
@@ -1217,13 +1200,13 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
             "seed": validated_seed,
             "axis": explicit_axis,
             "donor_group_id": donor_group_id,
-            "population_identity": source.population_identity,
+            "population_identity": source.identity,
             "population_count": len(source),
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
         metadata={
             "stochastic": True,
             "seeded": True,
@@ -1234,186 +1217,40 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
 
 
 # ----------------------------------------------------------------------
-# deterministic reductions as edits (D3): mean_from / mean_fill
-# ----------------------------------------------------------------------
-def mean_from(
-    ref: Reference,
-    *,
-    group_by: Callable[[Any], Any] | None = None,
-    matching: Any = None,
-) -> HelperSpec:
-    """Create the deterministic elementwise evidence-set mean fill.
-
-    A mean is a reduction, never a draw (D3): the fill tensor is computed
-    eagerly at construction (populations are prepared before hooks install,
-    D10), the record says ``stochastic=False``, and no seed is ever invented.
-
-    DOCUMENTED-UNSTABLE spelling pending naming-session ratification.
-    """
-
-    _check_agreement_pair(group_by, matching, "mean_from")
-    fill = ref.mean(group_by=group_by, matching=matching)
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime evidence-mean fill hook."""
-
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Fill the site with the prepared evidence-set mean."""
-
-            _prove_event_geometry(fill, out, verb="mean_from")
-            _record_sampling(
-                hook,
-                "mean_from",
-                {
-                    "stochastic": False,
-                    "population_identity": ref.population_identity,
-                    "digest_kind": ref.digest_kind,
-                    "population_count": len(ref),
-                    "eligible_count": None,
-                    "base_seed": None,
-                    "derived_seed": None,
-                    "donor_group_id": None,
-                    "share_draw": None,
-                    "logical_firing_coordinate": (),
-                    "realized_draw_digest": None,
-                    "replacement_mode": "evidence_mean",
-                    "donor_grad": "detached",
-                    "recomputation": bool(hook.run_ctx.get("recomputation", False)),
-                },
-            )
-            return fill.detach().to(device=out.device, dtype=out.dtype).clone()
-
-        return _hook
-
-    from .helpers import _helper_spec
-
-    return _helper_spec(
-        "mean_from",
-        kwargs={
-            "population_identity": ref.population_identity,
-            "population_count": len(ref),
-        },
-        factory=factory,
-        portability="opaque_audit",
-        batch_independent=True,
-        metadata={"stochastic": False},
-    )
-
-
-def mean_fill(
-    ref: Reference | None = None,
-    *,
-    over: Any,
-    force_shape_change: bool = False,
-) -> HelperSpec:
-    """Create the FIXED axis-aware mean fill (the ``mean_ablate`` successor).
-
-    ``over=`` is REQUIRED and CLOSED (D17): ``"all"`` is the explicit spelling
-    of the old global scalar (and carries the batch-coupled flag when reading
-    the fire-time value); explicit int/tuple axes reduce with ``keepdim``
-    broadcast; ``"self"`` warns and maps to ``"all"``; named tokens refuse
-    ``axis_semantics_unknown`` until axis-role evidence exists (the ladder is
-    never rank-guessing). ``batch_independent`` is DERIVED, never tabled
-    (D18): ``True`` only when the fill provably never reads the traced batch
-    (an external ``ref=``), ``False`` otherwise.
-
-    DOCUMENTED-UNSTABLE spelling pending naming-session ratification.
-    """
-
-    canonical_over = _resolve_over_axes(over, None, verb="mean_fill")
-    prepared_fill: torch.Tensor | None = None
-    if ref is not None:
-        if not isinstance(ref, Reference):
-            raise InvalidArgumentError(
-                f"mean_fill ref= takes the population noun, received {type(ref).__name__}",
-                code="population_source_invalid",
-                remedy='build the population first: reference(members, origin="...")',
-                argument="ref",
-            )
-        prepared_fill = ref.mean(over if over != "self" else "all")
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime axis-aware mean-fill hook."""
-
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Fill the site from the configured mean (population or self)."""
-
-            if prepared_fill is not None:
-                fill = prepared_fill.detach().to(device=out.device, dtype=out.dtype)
-                try:
-                    expanded = fill.expand(out.shape) if fill.shape != out.shape else fill
-                except RuntimeError:
-                    raise InvalidArgumentError(
-                        f"mean_fill population mean of shape "
-                        f"{tuple(fill.shape)!r} does not broadcast to the site "
-                        f"shape {tuple(out.shape)!r}",
-                        code="sampling_geometry_mismatch",
-                        remedy="build the population at this site's geometry, or "
-                        "reduce over axes that broadcast back",
-                        argument="ref",
-                    ) from None
-                return expanded.clone()
-            if canonical_over == "all":
-                return torch.zeros_like(out) + out.mean()
-            # canonical_over is not "all"/"self" on this branch, so the
-            # resolved spelling is always an axes tuple.
-            axes = cast(
-                "tuple[int, ...]",
-                _resolve_over_axes(canonical_over, out.ndim, verb="mean_fill"),
-            )
-            return torch.zeros_like(out) + out.mean(dim=list(axes), keepdim=True)
-
-        return _hook
-
-    from .helpers import _helper_spec
-
-    # D18: derived, never tabled. An external ref provably never reads the
-    # traced batch; every self-sourced reduction reads the fire-time value
-    # (and no batch-axis proof source exists in v1), so it fails closed.
-    batch_independent = ref is not None
-    over_kwarg = "all" if canonical_over == "all" else canonical_over
-    return _helper_spec(
-        "mean_fill",
-        kwargs={
-            "over": over_kwarg,
-            "force_shape_change": force_shape_change,
-            **(
-                {
-                    "population_identity": ref.population_identity,
-                    "population_count": len(ref),
-                }
-                if ref is not None
-                else {}
-            ),
-        },
-        factory=factory,
-        portability="builtin" if ref is None else "opaque_audit",
-        batch_independent=batch_independent,
-        compatible_with_append=not force_shape_change and batch_independent,
-        metadata={
-            "stochastic": False,
-            **({} if ref is not None else {"batch_coherent": True}),
-        },
-    )
-
-
-# ----------------------------------------------------------------------
 # directional dataset mean (D12 of the roster): set_direction_mean
 # ----------------------------------------------------------------------
+def _direction_mean_coefficient64(
+    members: Sequence[torch.Tensor], axes: Sequence[int], unit64: torch.Tensor
+) -> float:
+    """Return the mean coefficient of ``members`` along ``unit64``, in float64."""
+
+    per_member = []
+    for member, axis in zip(members, axes, strict=True):
+        shape = [1] * member.ndim
+        shape[axis] = int(unit64.shape[0])
+        wide = member.detach().to("cpu", torch.float64)
+        per_member.append((wide * unit64.reshape(shape)).sum(dim=axis).mean())
+    return float(torch.stack(per_member).mean())
+
+
 def set_direction_mean(
     direction: torch.Tensor,
-    ref: Reference,
+    reference: Population,
     *,
-    feature_axis: int,
-) -> HelperSpec:
+    dim: int,
+) -> Edit:
     """Create the directional mean-setting edit.
 
     ``out - proj_v(out) + mean(coef(ref)) * v_hat``: the site's component
     along ``direction`` is replaced by the population's MEAN coefficient
     along the same direction -- a composition of the shipped project/steer
     semantics with the D3 reducer (the mean coefficient is computed eagerly
-    at construction, in float32, and enters the hook as a detached constant).
+    at construction and enters the hook as a detached constant).
     Gradients flow through the orthogonal component only (D37).
+
+    Precision follows the site: a float64 site value uses a unit direction
+    and mean coefficient computed in float64; any other floating dtype uses
+    the float32 unit and coefficient, cast to the site's dtype and device.
 
     DOCUMENTED-UNSTABLE spelling pending naming-session ratification.
 
@@ -1421,9 +1258,9 @@ def set_direction_mean(
     ----------
     direction:
         1-D direction vector ``v`` (finite, nonzero norm).
-    ref:
+    reference:
         Tensor-membered population supplying the coefficient evidence.
-    feature_axis:
+    dim:
         Explicit axis of the site value that ``direction`` lives on (the
         D24/D25 axis law: never guessed from rank).
     """
@@ -1442,12 +1279,15 @@ def set_direction_mean(
             remedy="pass a finite, nonzero direction vector",
             argument="direction",
         )
-    explicit_axis = _require_explicit_axis(feature_axis, "set_direction_mean")
+    explicit_axis = _require_explicit_axis(dim, "set_direction_mean")
     host_direction = direction.detach().to("cpu", torch.float32)
     unit = host_direction / host_direction.norm()
-    members = ref._tensor_members("set_direction_mean")
+    host_direction64 = direction.detach().to("cpu", torch.float64)
+    unit64 = host_direction64 / host_direction64.norm()
+    members = reference._tensor_members("set_direction_mean")
     extent = int(unit.shape[0])
     coefs: list[torch.Tensor] = []
+    axes: list[int] = []
     for index, member in enumerate(members):
         axis = explicit_axis % member.ndim if -member.ndim <= explicit_axis < member.ndim else None
         if axis is None or member.shape[axis] != extent:
@@ -1458,18 +1298,20 @@ def set_direction_mean(
                 code="sampling_geometry_mismatch",
                 remedy="align feature_axis= with the members' feature axis, or "
                 "rebuild the population at the direction's geometry",
-                argument="feature_axis",
+                argument="dim",
             )
         shape = [1] * member.ndim
         shape[axis] = extent
         aligned = unit.reshape(shape)
         coefs.append((member.detach().to(torch.float32) * aligned).sum(dim=axis))
+        axes.append(axis)
     mean_coef = float(torch.stack([coef.mean() for coef in coefs]).mean())
+    mean_coef64 = _direction_mean_coefficient64(members, axes, unit64)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime directional mean-setting hook."""
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Replace the direction component with the population mean."""
 
             fire_axis = _normalize_fire_axis(explicit_axis, out, "set_direction_mean")
@@ -1480,20 +1322,25 @@ def set_direction_mean(
                     f"{out.shape[fire_axis]} (shape {tuple(out.shape)!r})",
                     code="sampling_geometry_mismatch",
                     remedy="target sites whose feature axis carries the direction's extent",
-                    argument="feature_axis",
+                    argument="dim",
                 )
             shape = [1] * out.ndim
             shape[fire_axis] = extent
-            aligned = unit.to(device=out.device, dtype=out.dtype).reshape(shape)
+            # The site's precision: float64 sites get the float64 unit and
+            # coefficient; other dtypes keep the float32 forms, cast.
+            wide = out.dtype == torch.float64
+            site_unit = unit64 if wide else unit
+            site_coef = mean_coef64 if wide else mean_coef
+            aligned = site_unit.to(device=out.device, dtype=out.dtype).reshape(shape)
             projection = (out * aligned).sum(dim=fire_axis, keepdim=True) * aligned
             _record_sampling(
-                hook,
+                ctx,
                 "set_direction_mean",
                 {
                     "stochastic": False,
-                    "population_identity": ref.population_identity,
-                    "digest_kind": ref.digest_kind,
-                    "population_count": len(ref),
+                    "population_identity": reference.identity,
+                    "digest_kind": reference.digest_kind,
+                    "population_count": len(reference),
                     "base_seed": None,
                     "derived_seed": None,
                     "donor_group_id": None,
@@ -1502,14 +1349,14 @@ def set_direction_mean(
                     "realized_draw_digest": None,
                     "replacement_mode": "direction_mean",
                     "donor_grad": "orthogonal_component_only",
-                    "recomputation": bool(hook.run_ctx.get("recomputation", False)),
-                    "mean_coefficient": mean_coef,
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
+                    "mean_coefficient": site_coef,
                 },
             )
             # Gradients through the orthogonal component only (D37): the
             # projection subtraction stays graph-connected; the added mean
             # term is a detached constant.
-            return out - projection + mean_coef * aligned
+            return out - projection + site_coef * aligned
 
         return _hook
 
@@ -1519,14 +1366,14 @@ def set_direction_mean(
     return _helper_spec(
         "set_direction_mean",
         kwargs={
-            "feature_axis": explicit_axis,
+            "dim": explicit_axis,
             "direction_digest": direction_digest,
-            "population_identity": ref.population_identity,
-            "population_count": len(ref),
+            "population_identity": reference.identity,
+            "population_count": len(reference),
             "mean_coefficient": mean_coef,
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
         metadata={"stochastic": False},
     )

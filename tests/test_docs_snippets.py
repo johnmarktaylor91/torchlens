@@ -45,6 +45,7 @@ from torch import nn
 DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
     "guides": (
         "performance.md",
+        "guides/fast_paths.md",
         "for-ai-agents.md",
         # FW2 closure sweep: the 2026-08-28 pages whose fences are
         # self-contained programs (spelling-only sketches on them are tagged
@@ -53,15 +54,20 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "migration/from_hooks.md",
         "native-torch.md",
         "recipes/lrp_epsilon_litmus.md",
+        "guides/grouping.md",
+        # Backend protocol: the reference backend's tutorial (graduation G5).
+        "backends/torch.md",
     ),
     "reference_tooling": (
         "reference/debug.md",
         "reference/export.md",
+        "reference/harness_bundles.md",
     ),
     "reference_views": (
         "reference/attribution.md",
         "reference/collapse.md",
         "reference/lenses.md",
+        "reference/mechinterp.md",
         "reference/summary.md",
     ),
 }
@@ -123,6 +129,45 @@ def _doc_block_params(group: str) -> list[object]:
     return params
 
 
+#: TorchLens entry points that need an optional extra the docs demonstrate, with
+#: the module each one imports lazily. A doc fence that calls one is skipped by
+#: feature detect when the module is absent; a new extra-gated entry point in the
+#: docs must be added here, or its fence fails loudly.
+_OPTIONAL_EXTRA_CALLS: dict[str, str] = {
+    "tl.export.wandb": "wandb",
+    "tl.export.xarray": "xarray",
+}
+
+
+def _missing_extra_modules(code: str) -> list[str]:
+    """Return modules the code needs through an extra-gated TorchLens call."""
+
+    return sorted(
+        module
+        for call, module in _OPTIONAL_EXTRA_CALLS.items()
+        if call in code and importlib.util.find_spec(module) is None
+    )
+
+
+def _missing_imported_modules(tree: ast.AST) -> list[str]:
+    """Return the root modules the code imports that are not installed.
+
+    A doc example may demonstrate an OPTIONAL-dependency feature that is not
+    installed in every test env. This feature detect runs BEFORE execution, so a
+    missing extra is a visible skip with its module named, while any ImportError
+    raised during execution (a broken import path, a torchlens module that moved)
+    fails loudly instead of skipping.
+    """
+
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            roots.add(node.module.split(".")[0])
+    return sorted(root for root in roots if importlib.util.find_spec(root) is None)
+
+
 def _run_doc_block(file_name: str, block_index: int, code: str, tmp_path: Path) -> None:
     """Run one Python code fence from the new docs pages.
 
@@ -150,14 +195,11 @@ def _run_doc_block(file_name: str, block_index: int, code: str, tmp_path: Path) 
         "__name__": f"docs_snippet_{Path(file_name).stem}_{block_index}",
         "DOCS_TMPDIR": str(tmp_path),
     }
-    try:
-        exec(compile(code, synthetic_filename, "exec"), namespace)
-    except (ImportError, ModuleNotFoundError) as exc:
-        # A doc example may demonstrate an OPTIONAL-dependency feature (e.g. the xarray
-        # export) that is not installed in every test env (CI installs only core deps).
-        # The example is still correct; skip when its dependency is absent rather than
-        # fail. Users who want that feature install the extra.
-        pytest.skip(f"doc snippet requires an unavailable optional dependency: {exc}")
+    compiled = compile(code, synthetic_filename, "exec")
+    missing = _missing_imported_modules(ast.parse(code)) + _missing_extra_modules(code)
+    if missing:
+        pytest.skip(f"doc snippet imports uninstalled optional dependencies: {missing}")
+    exec(compiled, namespace)
 
 
 @pytest.mark.parametrize(
@@ -358,10 +400,12 @@ def test_canonical_page_python_blocks_execute(
             if missing_optional:
                 continue
             statement = ast.Module(body=[node], type_ignores=[])
-            try:
-                exec(compile(statement, source_name, "exec"), namespace)
-            except (ImportError, ModuleNotFoundError) as exc:
-                pytest.skip(f"{source_name} requires an unavailable optional dependency: {exc}")
+            missing = _missing_imported_modules(statement) + _missing_extra_modules(
+                ast.unparse(statement)
+            )
+            if missing:
+                pytest.skip(f"{source_name} imports uninstalled optional dependencies: {missing}")
+            exec(compile(statement, source_name, "exec"), namespace)
             executed_statements += 1
     assert executed_statements > 0, f"{page_name}: nothing executed"
 
@@ -378,10 +422,28 @@ def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
     assert not missing, f"Regenerate with scripts/render_collapse_reference.py: {missing}"
 
 
+#: Reason shared by the coming-from pages whose every fence is headed and run.
+_MIGRATION_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_migration_pages_executed.py (the TorchLens "
+    "fences always; a third-party fence where that package is installed)"
+)
+#: Reason shared by the teaching pages whose every fence is headed and run.
+_TEACHING_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_teaching_pages_executed.py, each against its "
+    "declared result"
+)
+
+#: Reason shared by the recipe pages whose every fence is headed and run.
+_RECIPE_PAGES_EXECUTED = (
+    "executed fence by fence by tests/test_recipe_pages_executed.py (a TorchLens-only "
+    "page always; a third-party page where that package is installed, and always in "
+    "the peer-recipe leg)"
+)
+
 #: r7 R81 (opus b2 MED): pages with python fences OUTSIDE the executed set,
 #: each with a reason. The executed gate covered 9 of 33 fence-bearing pages
 #: with NO drift gate, so a new page (or a new fence on an old one) shipped
-#: unexecuted and rotted silently -- the show(gradient=True)/RF-ordering rot
+#: unexecuted and rotted silently -- the show(grad=True)/RF-ordering rot
 #: class. SHRINK-ONLY: move pages into DOC_FILES as they gain execution
 #: coverage; a NEW page must either join DOC_FILES or take a reasoned row
 #: here in the same change.
@@ -416,18 +478,46 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "executed end-to-end by tests/test_unhide_surfaces.py::"
         "test_stats_doc_python_fences_execute (needs the ambient demo model)"
     ),
+    "reference/selection_completeness.md": (
+        "executed end-to-end by tests/test_selection_completeness_examples.py::"
+        "test_page_examples_run_as_written (Section 5's four fences are one script run in "
+        "order; each later fence reads the first fence's trace and helpers)"
+    ),
     "backends.md": "preview-backend snippets need tf/jax/mlx/tinygrad/paddle runtimes",
+    "backends/tf.md": (
+        "tutorial fence executed by tests/backends/test_tf_docs_page.py under the "
+        "tf_backend marker (needs the tensorflow runtime)"
+    ),
+    "backends/jax.md": (
+        "tutorial fence executed by tests/test_jax_docs_page.py under the backend_jax "
+        "marker (needs the jax runtime)"
+    ),
+    "backends/mlx.md": (
+        "tutorial fences executed by tests/test_backend_docs_lockstep.py under the "
+        "backend_mlx marker (needs the mlx runtime: macOS, or Linux with "
+        "TORCHLENS_RUN_UNSTABLE_MLX_TESTS=1)"
+    ),
+    "backends/paddle.md": (
+        "tutorial fences executed by tests/test_paddle_docs_tutorial.py and "
+        "tests/test_backend_docs_lockstep.py under the backend_paddle marker "
+        "(needs the paddle runtime)"
+    ),
+    "backends/tinygrad.md": (
+        "tutorial fences executed by tests/test_backend_docs_lockstep.py under the "
+        "backend_tinygrad marker (needs the tinygrad runtime)"
+    ),
     "backward.md": "pending execution coverage (queued: backward capture snippets)",
     "buffers.md": "pending execution coverage",
     "containers.md": "pending execution coverage",
     "facets.md": "pending execution coverage (semantic recipes; heavier model deps)",
     "intervention_api.md": "pending execution coverage",
-    "intervention_explainers.md": "pending execution coverage",
     "method_x_model_compatibility.md": "compatibility matrix stubs, not runnable programs",
     "migration/from_captum.md": "needs captum installed (weekly bridge leg env only)",
     "migration/from_fx.md": "pending execution coverage",
-    "migration/from_nnsight.md": "needs nnsight (heavyweight, deliberately dark)",
-    "migration/from_pyvene.md": "needs pyvene (not a declared extra)",
+    "migration/from_nnsight.md": (
+        "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
+        "side where nnsight is installed)"
+    ),
     "migration/from_thingsvision.md": "needs thingsvision (not a declared extra)",
     "reference/neuro.md": (
         "needs rsatoolbox (the neuro extra); every snippet's behavior is "
@@ -436,15 +526,49 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_torchextractor.md": "needs torchextractor (bridge shim demo)",
     "migration/from_transformerlens.md": "needs transformer_lens (heavyweight)",
     "migration/v2.0_api_changes.md": "contains deliberate 'Before:' v1 blocks that must NOT run",
+    "migration/from_bertviz_ecco.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_hf_kwargs.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_intermediate_layer_getter.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_model_zoos.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_surgeon_pytorch.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_timm_features_only.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_torchview.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_torchvision_feature_extraction.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_torchviz_hiddenlayer.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_transformers_interpret.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/multi_gpu_extraction.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/penzai.md": _MIGRATION_PAGES_EXECUTED,
+    "recipes/acdc_ioi.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/torchcam.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/quantus.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/sae_trainers.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/prisma_clip_sae.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/sae_crosscoder_diff.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/sae_latent_export.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/pretrained_saes.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/feature_visualisation.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/dissection.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
         "the file-round-trip blocks assume a completed real-checkpoint extraction and a "
         "user-owned learned transform; the offline mechanics (extract -> manifest -> "
         "torchlens-free reload) execute in tests/test_tvscope_export_acceptance.py"
     ),
     "neuroai/journey.md": (
-        "journey cells name real checkpoints (ResNet50 V2 weights, CORnet-S via torch.hub) "
-        "for the docs/nightly execution tier; the same mechanics execute offline against "
-        "config-built fixtures in tests/test_tvscope_*.py"
+        "journey cells name real checkpoints (ResNet50 V2 weights) for the docs/nightly "
+        "execution tier; the same mechanics execute offline against config-built fixtures "
+        "in tests/test_tvscope_*.py, and the CORnet-S showpiece (pinned checkout, direct "
+        "import) runs in tests/test_recipe_pages_executed.py"
     ),
     "neuroai/loaders.md": (
         "loader rows fetch real checkpoints (HF, timm pretrained, open_clip) by design; "
@@ -474,11 +598,6 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "coverage the L2 episode suite does not already carry"
     ),
     "reference/limitations.md": "illustrative failure-mode fragments, not runnable programs",
-    "reference/predicate_runtime.md": (
-        "the fence is a Protocol DECLARATION sketch (`...` bodies, and `Protocol`/"
-        "`RecordContext` deliberately unimported) -- there is no program to run; the "
-        "shipped protocol itself is pinned by the predicate-registry suite"
-    ),
     "reference/runnable_tlspec_contract.md": "contract fragments reference artifacts not in-repo",
     "semantic_io.md": "pending execution coverage (autoroute/facet demos)",
     "speed_optimized_defaults.md": "pending execution coverage",
@@ -534,8 +653,9 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     ),
     "reference/trackers.md": (
         "an ambient AMP training loop (build_model_and_optimizer/loader/scaler) against a "
-        "TensorBoard sink (tensorboard not in the core env); the sinks execute in "
-        "tests/test_trackers_sinks_*.py"
+        "TensorBoard sink (tensorboard not in the core env), and a Lightning Trainer "
+        "(lightning not in the core env); the sinks execute in "
+        "tests/test_trackers_sinks_*.py and SummaryCallback in tests/test_callbacks_lightning.py"
     ),
     "reference/transforms.md": (
         "an extraction to disk over an ambient model/stimuli; the transform chain "
@@ -549,6 +669,18 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "fetches a gated Llama-3.1-8B config from the Hub; the meta-substrate admission "
         "and parity gates execute offline in tests/test_weightsfree_*.py"
     ),
+    # Teaching pages and the pyvene migration pages (teaching-pass rows): every fence
+    # on them is headed, and the named test runs every TorchLens fence.
+    "intervention_explainers.md": _TEACHING_PAGES_EXECUTED,
+    "stochastic_edits.md": _TEACHING_PAGES_EXECUTED,
+    "guides/kv_cache.md": _TEACHING_PAGES_EXECUTED,
+    "sae_training_handoff.md": _TEACHING_PAGES_EXECUTED,
+    "gradient_contract.md": _TEACHING_PAGES_EXECUTED,
+    "migration/from_pyvene.md": (
+        "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
+        "comparison fence is collected and skipped)"
+    ),
+    "migration/pyvene.md": _MIGRATION_PAGES_EXECUTED,
 }
 
 
@@ -574,3 +706,66 @@ def test_every_fence_bearing_doc_page_is_executed_or_reason_exempt() -> None:
         f"stale DOC_FENCE_EXEMPT row(s): {sorted(stale & set(DOC_FENCE_EXEMPT))} "
         "-- the page lost its fences or moved; delete the row"
     )
+
+
+#: Fences heavy-class by measurement (beyond the cold ``torch.compile`` fences),
+#: keyed by page and a line unique to the fence, since block indexes shift as
+#: pages grow. Measured single-threaded and serial on the gate worker at a
+#: 2.1-2.2x slowdown factor, each charged 10.0-10.7 s (about 4.7 s at 1x) against
+#: the reference-views family's 23-24 s aggregate 5s-tier budget there, while
+#: every other fence in the family stayed under 6.2 s (under 0.7 s for all but two).
+MEASURED_HEAVY_FENCES: frozenset[tuple[str, str]] = frozenset(
+    {
+        # The component-graph example patches a circuit into every receiver of a
+        # two-layer GPT-2 in one patch_edges call (the same fence is the heavy
+        # tests/test_circ1_component_graph.py::test_reference_doc_example_runs).
+        ("reference/mechinterp.md", "# A circuit runs as one patch_edges call"),
+        # edge_scores on a one-layer GPT-2, then a causal_audit of its six
+        # largest edges with random draws.
+        ("reference/attribution.md", "largest = sorted(claim.rows()"),
+    }
+)
+
+
+def _is_measured_heavy_fence(file_name: str, code: str) -> bool:
+    """Return whether one docs fence is in ``MEASURED_HEAVY_FENCES``."""
+
+    return any(page == file_name and line in code for page, line in MEASURED_HEAVY_FENCES)
+
+
+def _classify_measured_heavy_fences(*tests: Any) -> None:
+    """Mark each family's measured-heavy fences HEAVY at collection.
+
+    The page-group families build their params when they are decorated; this
+    adds the ``heavy`` mark to the measured fences' params in place, so the
+    mark selects (``-m "not heavy"`` deselects them) and resolves the 20s tier,
+    which takes them out of their family's aggregate 5s-tier budget.
+    """
+
+    for test in tests:
+        for mark in test.pytestmark:
+            if mark.name != "parametrize":
+                continue
+            params = mark.args[1]
+            params[:] = [
+                pytest.param(*param.values, marks=(*param.marks, pytest.mark.heavy), id=param.id)
+                if _is_measured_heavy_fence(param.values[0], param.values[2])
+                else param
+                for param in params
+            ]
+
+
+_classify_measured_heavy_fences(
+    test_doc_python_blocks_run_guides,
+    test_doc_python_blocks_run_reference_tooling,
+    test_doc_python_blocks_run_reference_views,
+)
+
+
+def test_every_measured_heavy_fence_names_exactly_one_executed_fence() -> None:
+    """A measured-heavy row that stops matching would leave its fence unclassified."""
+
+    blocks = _iter_python_blocks()
+    for page, line in sorted(MEASURED_HEAVY_FENCES):
+        matches = [index for name, index, code in blocks if name == page and line in code]
+        assert len(matches) == 1, f"{page}: {line!r} matches fences {matches}, expected one"

@@ -36,6 +36,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens.errors import TraceCaptureError
 
 _X = torch.tensor([[1.0, -2.0, 0.5]])
 _FILL = 0.5
@@ -187,22 +188,19 @@ def _model_fingerprint(model: nn.Module) -> dict[str, Any]:
     }
 
 
-def _assert_fingerprints_equal(
-    before: dict[str, Any], after: dict[str, Any], *, skip: frozenset[str] = frozenset()
-) -> None:
+def _assert_fingerprints_equal(before: dict[str, Any], after: dict[str, Any]) -> None:
     """Assert two fingerprints match, naming the first differing component.
+
+    Every door, ``tl.validate`` included, seeds the global RNG streams for its own runs
+    and restores them on return, so no component is exempt.
 
     Parameters
     ----------
     before, after:
         Fingerprints from :func:`_model_fingerprint`.
-    skip:
-        Components a door documents as changed (never model state).
     """
 
     for key in before:
-        if key in skip:
-            continue
         if key == "modules":
             for name, entries in before[key].items():
                 assert after[key].get(name) == entries, (
@@ -285,13 +283,13 @@ def _door_trace_bound_method(model: _Model) -> None:
 def _door_record(model: _Model) -> None:
     """``tl.record`` with an opaque ``save=``."""
 
-    tl.record(model, _X, save=lambda ctx: True, return_output=True)
+    tl.record(model, _X, save=lambda ctx: True)
 
 
 def _door_record_intervene(model: _Model) -> None:
     """``tl.record`` with a live intervention."""
 
-    tl.record(model, _X, save=lambda ctx: True, intervene=_spec(), return_output=True)
+    tl.record(model, _X, save=lambda ctx: True, intervene=_spec())
 
 
 def _door_bind(model: _Model) -> None:
@@ -317,12 +315,10 @@ _DOORS: dict[str, Callable[[_Model], None]] = {
     "validate": _door_validate,
 }
 
-# tl.validate documents that it seeds the global RNGs for its ground-truth and
-# replay runs and does not restore them; every other component, and every
-# component of every other door, must come back unchanged.
-_DOCUMENTED_CHANGES: dict[str, frozenset[str]] = {
-    "validate": frozenset({"torch_rng", "python_rng"}),
-}
+# Doors whose failing forward runs outside a capture: ``bind`` is a capture-free
+# executor, and ``tl.validate`` runs its uncaptured ground-truth forward first, so
+# the model's own exception propagates unwrapped there.
+_UNCAPTURED_FAILURE_DOORS: frozenset[str] = frozenset({"bind", "validate"})
 
 _FAILURES: dict[str, type[BaseException] | None] = {
     "normal": None,
@@ -341,8 +337,10 @@ _FAILURES: dict[str, type[BaseException] | None] = {
 def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> None:
     """The model state fingerprint is identical before and after every call.
 
-    A failing call must also preserve the exception type, and a deepcopy taken
-    afterwards must be independent of the original.
+    A failing call must also preserve the forward's exception type (as the
+    ``__cause__`` of the door's TraceCaptureError for an ordinary exception raised
+    during a capture, or unchanged where the forward runs outside a capture), and a
+    deepcopy taken afterwards must be independent of the original.
     """
 
     model = _fresh()
@@ -354,11 +352,16 @@ def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> Non
         if exc_type is None:
             _DOORS[door](model)
         else:
-            with pytest.raises(exc_type, match="injected model failure"):
+            # An ordinary forward exception raised during a capture escapes as
+            # TraceCaptureError chained from it; interrupts are never wrapped, and
+            # a forward run outside any capture raises the model's own exception.
+            wrapped = issubclass(exc_type, Exception) and door not in _UNCAPTURED_FAILURE_DOORS
+            expected = TraceCaptureError if wrapped else exc_type
+            with pytest.raises(expected, match="injected model failure") as excinfo:
                 _DOORS[door](model)
-    _assert_fingerprints_equal(
-        before, _model_fingerprint(model), skip=_DOCUMENTED_CHANGES.get(door, frozenset())
-    )
+            if expected is TraceCaptureError:
+                assert type(excinfo.value.__cause__) is exc_type
+    _assert_fingerprints_equal(before, _model_fingerprint(model))
 
     model.gate.exc = None
     with warnings.catch_warnings():
@@ -456,6 +459,11 @@ def test_captured_model_called_inside_another_capture() -> None:
     assert torch.equal(outer_trace[outer_trace.output_layers[0]].out.detach(), expected)
 
 
+#: Where ``_MidCaptureCopier`` puts its mid-capture deepcopy: outside the model,
+#: because a default capture restores every plain attribute the forward writes.
+_SINK: list[nn.Module] = []
+
+
 class _MidCaptureCopier(_Model):
     """``_Model`` that deep-copies ``block`` and ``alt`` while it runs.
 
@@ -471,14 +479,13 @@ class _MidCaptureCopier(_Model):
 
         super().__init__()
         self.where = where
-        self.sink: list[nn.Module] = []
         if where == "hook":
             self.gate.register_forward_hook(self._snapshot_hook)
 
     def _snapshot(self) -> None:
         """Deep-copy ``block`` and ``alt`` into the sink."""
 
-        self.sink.append(copy.deepcopy(nn.Sequential(self.block, self.alt)))
+        _SINK.append(copy.deepcopy(nn.Sequential(self.block, self.alt)))
 
     def _snapshot_hook(self, module: nn.Module, args: Any, output: Any) -> None:
         """Forward hook on ``gate``: take the snapshot."""
@@ -517,12 +524,12 @@ def test_deepcopy_taken_inside_a_capture_is_its_own_model(door: str, where: str)
     model = _MidCaptureCopier(where).eval()
     before = _model_fingerprint(model)
     reference = _eager_out(model)
-    model.sink.clear()
+    _SINK.clear()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         _DOORS[door](model)  # type: ignore[arg-type]
-    assert len(model.sink) == 1, "the model should have snapshotted exactly once"
-    clone = model.sink.pop()
+    assert len(_SINK) == 1, "the model should have snapshotted exactly once"
+    clone = _SINK.pop()
     _assert_fingerprints_equal(before, _model_fingerprint(model))
     model.where = "never"  # stop snapshotting on the eager oracle runs below
 
@@ -635,8 +642,7 @@ def test_stray_session_wrapper_never_breaks_a_later_capture(door: str) -> None:
             assert "lin" in later_trace.modules, "the registered child went unrecorded"
             out = later_trace[later_trace.output_layers[0]].out.detach()
         else:
-            out, _recording = tl.record(
-                later, _X, save=lambda ctx: True, halt=_watch, return_output=True
-            )
+            _recording = tl.record(later, _X, save=lambda ctx: True, stop_after=_watch)
+            out = _recording.output
             assert "lin" in entered, "the registered child went unrecorded"
     assert torch.equal(out.detach(), expected)

@@ -1,10 +1,13 @@
 """Budgets, truncation, floor semantics, and the continuation struct.
 
-Three resources, three names, identical semantics on every transport (agent
-memo 3.8): response TOKENS protect the context window, result ROWS protect
-evidence legibility, and payload BYTES protect memory -- refused BEFORE
-materialization from manifest-declared numbers. All numerals here are
-CONFIGURATION (memo D4), ratified by the stage-D corpus render, never API law.
+Three resources, three names, identical semantics on every transport: response
+TOKENS protect the context window, result ROWS protect evidence legibility, and
+payload BYTES protect memory -- refused BEFORE materialization from
+manifest-declared numbers. Every numeral here is CONFIGURATION, set from a
+measurement and never a guaranteed API limit: served values travel in each
+result's ``limits`` block. The basis is ``tools/agent_evals/measure_budgets.py``
+over the classics corpus (``tests/classics_corpus/``, all tiers, 205 of 207
+entries, 2026-10-14); method and numbers in ``tools/agent_evals/BUDGETS.md``.
 
 Continuation is a transparent, mandatory-checked struct -- no opaque cursor,
 no server state; artifact, request, or schema drift refuses typed.
@@ -18,19 +21,28 @@ from typing import Any
 from .._errors import InvalidArgumentError
 from ._envelope import canonical_dumps, json_safe
 
-#: Served token default for orientation tools (folded overview measured ~2.2k).
+#: Served token default for the explain report (unbudgeted report measured
+#: median 361, p90 388, max 914 tokens).
 ORIENTATION_MAX_TOKENS = 4_000
+
+#: Served token default for the folded overview (unbudgeted overview measured
+#: median 3,510, p90 10,745, max 21,313 tokens; 4,000 trimmed 86 of 205).
+OVERVIEW_MAX_TOKENS = 12_000
 
 #: Served token BACKSTOP on row tools (the row cap is primary there).
 ROW_TOOL_MAX_TOKENS = 25_000
 
-#: Served row default on row tools (PRIMARY control; 46-116 tokens/row measured).
-DEFAULT_MAX_ROWS = 200
+#: Served row default on row tools (PRIMARY control; per-row cost measured
+#: median 105-120, p90 127-142, max 332 tokens, so 150 rows at p90 stay under
+#: the backstop where 200 did not on 11 of 18 entries that fill a page).
+DEFAULT_MAX_ROWS = 150
 
-#: Per-blob payload byte ceiling, checked against manifest-DECLARED bytes.
+#: Per-blob payload byte ceiling, checked against manifest-DECLARED bytes
+#: (largest declared blob measured 12.8 MB).
 MAX_BLOB_BYTES = 64 * 1024 * 1024
 
-#: Aggregate per-call payload byte ceiling.
+#: Aggregate per-call payload byte ceiling (largest whole-artifact declared
+#: bytes measured 106 MB).
 MAX_CALL_BYTES = 128 * 1024 * 1024
 
 #: Token estimator: ~chars/4, named in-band as approximate.

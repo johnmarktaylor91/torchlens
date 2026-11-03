@@ -12,7 +12,7 @@ TorchLens value displays converged on one grammar (see
   `.parents`, `.children`, `.func_config`, `.lookup_keys`).
 - `print(trace)` is bounded: honesty header first, buffer rows folded to
   one line, module hierarchy and layer roster elided past their rungs
-  with EXACT remainders (`... N more layers (see .layer_list)`).
+  with EXACT remainders (`... N more layers (see .ops)`).
 - Collection reprs (`trace.layers`, `trace.params`, `trace.modules`,
   `trace.buffers`) are one-line composition cards with `.head()` /
   `.find()` / `.to_pandas()` exits -- never member dumps.
@@ -23,6 +23,9 @@ TorchLens value displays converged on one grammar (see
   zero/sign story.
 - Resolved selections iterate in GRAPH (execution) order, not
   lexicographic site-key order.
+
+Install both: lovely-tensors for any tensor at a REPL, TorchLens for the numbers of a
+whole model's run.
 
 ## Population sd (divergence from lovely-tensors, on purpose)
 

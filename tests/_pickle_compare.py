@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from _pickle_compare_allowlist import allowed_pickle_diff_fields
 
-from torchlens.data_classes._state_adapter import state_items
+from torchlens._data_classes._state_adapter import state_items
 
 
 def _tensor_equal(a: torch.Tensor, b: torch.Tensor) -> bool:
@@ -101,7 +101,7 @@ def _diff(a: Any, b: Any, path: str, seen: set[tuple[int, int]]) -> list[str]:
     if is_dataclass(a) and not isinstance(a, type):
         names = [field.name for field in fields(a)]
         return _diff_attrs(a, b, names, path, seen)
-    if getattr(type(a), "PORTABLE_STATE_SPEC", None) is not None:
+    if getattr(type(a), "_PORTABLE_STATE_SPEC", None) is not None:
         left_state = dict(state_items(a))
         right_state = dict(state_items(b))
         left_keys = set(left_state) - _ignored_fields(a)

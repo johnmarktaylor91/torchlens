@@ -11,6 +11,8 @@ import torch
 from torch import nn
 from torch.utils.hooks import RemovableHandle
 
+from .._utils.introspection import get_vars_of_type_from_obj
+
 _PASS_INDEX_PARSE_WARNED = False
 ModuleOutputGradKey = tuple[str, int, int]
 
@@ -32,6 +34,10 @@ class _StockModuleGradCollector:
         self._hook_handles: list[RemovableHandle] = []
         self._tensor_hook_handles: list[RemovableHandle] = []
         self.identity_output_addresses: set[ModuleOutputGradKey] = set()
+        #: Every module-output leaf the stock forward enumerated in this run,
+        #: gradient or not: the comparator's proof that a stock None means
+        #: "autograd produced no gradient here", not "stock never saw it".
+        self.reached_output_keys: set[ModuleOutputGradKey] = set()
 
     def install(self, model: nn.Module) -> None:
         """Install one forward hook per named module.
@@ -92,6 +98,7 @@ def _make_post_hook(
         input_ids = {id(leaf) for leaf in _tensor_leaves(args)}
         for output_index, leaf_out in enumerate(output_leaves):
             output_key = (*key, output_index)
+            collector.reached_output_keys.add(output_key)
             if isinstance(module, nn.Identity) or id(leaf_out) in input_ids:
                 collector.identity_output_addresses.add(output_key)
                 continue
@@ -233,7 +240,13 @@ def _tensor_leaves(obj: Any) -> list[torch.Tensor]:
         for field in dataclasses.fields(obj):
             leaves.extend(_tensor_leaves(getattr(obj, field.name)))
         return leaves
-    return []
+    # Any other object: the same BFS the capture's output walk falls back to
+    # (``_walk_output_tensors_with_paths``), so a module returning a
+    # ``torch.distributions`` object or another plain object keys its tensor
+    # leaves in the same order on both sides.
+    return list(
+        get_vars_of_type_from_obj(obj, which_type=torch.Tensor, subclass_exceptions=[nn.Parameter])
+    )
 
 
 def _pass_index_from_layer_modules(layer: Any) -> int | None:
@@ -332,48 +345,53 @@ def _candidate_root_module(trace: Any) -> Any | None:
 
 def _stock_layer_grads(
     model: nn.Module,
-    input_args: Any,
-    input_kwargs: Mapping[str, Any],
+    stock_call: tuple[Any, Mapping[str, Any]],
     *,
     loss_fn: Callable[[Any], torch.Tensor],
-    random_seed: int,
+    seed: int,
     state_dict_snapshot: Mapping[str, torch.Tensor],
-) -> tuple[dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey]]:
+) -> tuple[
+    dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey], set[ModuleOutputGradKey]
+]:
     """Run a stock forward/backward pass and collect module-output grads.
 
     Parameters
     ----------
     model:
         Model to execute.
-    input_args:
-        Positional inputs.
-    input_kwargs:
-        Keyword inputs.
+    stock_call:
+        Positional inputs and keyword inputs, as one pair.
     loss_fn:
         Loss function mapping model output to a scalar tensor.
-    random_seed:
+    seed:
         Seed used for deterministic stock execution.
     state_dict_snapshot:
         State dict restored after the stock pass.
 
     Returns
     -------
-    tuple[dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey]]
-        Captured stock module-output grads and identity-output addresses.
+    tuple[dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey], set[ModuleOutputGradKey]]
+        Captured stock module-output grads, identity-output addresses, and
+        every module-output key the stock forward reached in this run.
     """
 
-    from ..utils.rng import set_random_seed
+    from .._utils.rng import set_random_seed
     from ._live_model_state import load_state_dict_restore, restore_state_dict_if_changed
 
+    input_args, input_kwargs = stock_call
     collector = _StockModuleGradCollector()
     collector.install(model)
     try:
-        set_random_seed(random_seed)
+        set_random_seed(seed)
         output = model(*input_args, **dict(input_kwargs))
         loss = loss_fn(output)
         loss.backward()
         collector.collect_grads_after_backward()
-        return dict(collector.stock_module_output_grads), set(collector.identity_output_addresses)
+        return (
+            dict(collector.stock_module_output_grads),
+            set(collector.identity_output_addresses),
+            set(collector.reached_output_keys),
+        )
     finally:
         collector.cleanup()
         restore_state_dict_if_changed(model, state_dict_snapshot, load_state_dict_restore)

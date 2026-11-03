@@ -14,9 +14,8 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
-from torchlens.intervention.errors import MultiMatchWarning  # noqa: E402
+from torchlens.errors import MetadataInvariantError  # noqa: E402
 from torchlens.validation import (  # noqa: E402
-    MetadataInvariantError,
     check_metadata_invariants,
 )
 
@@ -172,12 +171,12 @@ def test_mlx_nested_modules_preserve_object_module_attribution() -> None:
 
     trace = tl.trace(MLXNested(), _input(), backend="mlx")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert {module.address for module in trace.modules} == {"self", "encoder", "head"}
     assert set(trace.modules["self"].call_children) == {"encoder", "head"}
     assert {"encoder:1", "head:1"} <= set(trace.module_calls.keys())
-    encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=16).labels()
-    head_labels = trace.resolve_sites(tl.in_module("head"), max_fanout=16).labels()
+    encoder_labels = trace[tl.in_module("encoder")].labels
+    head_labels = trace[tl.in_module("head")].labels
     assert encoder_labels
     assert head_labels
     assert all("encoder:1" in trace.layers[label].modules for label in encoder_labels)
@@ -198,8 +197,8 @@ def test_mlx_shared_submodule_aliases_use_primary_address() -> None:
     assert shared.all_addresses == ["left", "right"]
     assert shared.num_calls == 2
     assert shared.call_labels == ["left:1", "left:2"]
-    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        left_labels = trace.resolve_sites(tl.in_module("left"), max_fanout=32).labels()
+    left_labels = trace[tl.in_module("left")].labels
+    assert len(left_labels) == 2
     assert any("left:1" in trace.layers[label].modules for label in left_labels)
     assert any("left:2" in trace.layers[label].modules for label in left_labels)
     assert {tuple(param.all_module_addresses) for param in shared.params} == {("left", "right")}
@@ -213,15 +212,29 @@ def test_mlx_list_container_and_parameterless_modules_are_discovered() -> None:
     trace = tl.trace(MLXListContainer(), _input(), backend="mlx")
 
     assert {"layers.0", "layers.1", "layers.2"} <= {module.address for module in trace.modules}
-    assert trace.resolve_sites(tl.in_module("layers.1"), max_fanout=16).labels()
+    assert trace[tl.in_module("layers.1")].labels
     assert trace.modules["layers.0"].params
     assert trace.modules["layers.2"].params
     assert check_metadata_invariants(trace) is True
 
     parameterless = tl.trace(MLXParameterless(), _input(), backend="mlx")
     assert [module.address for module in parameterless.modules] == ["self"]
-    assert parameterless.resolve_sites(tl.in_module("self"), max_fanout=16).labels()
+    assert parameterless[tl.in_module("self")].labels
     assert check_metadata_invariants(parameterless) is True
+
+
+@pytest.mark.optional
+def test_mlx_summary_rows_follow_execution_order() -> None:
+    """MLX summary rows read in execution order, never reversed (walk U06.1)."""
+
+    trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
+    report = trace.summary()
+    executed = [f"op:{op.layer_label}" for op in trace._layer_list]
+    row_ids = [row.row_id for row in report.rows if row.row_id in executed]
+    assert len(row_ids) == len(executed) >= 4
+    assert row_ids == executed
+    rendered = str(report)
+    assert rendered.index("l1 (Linear)") < rendered.index("l2 (Linear)")
 
 
 @pytest.mark.optional
@@ -230,18 +243,17 @@ def test_mlx_object_module_public_surface_matrix(tmp_path: Path) -> None:
 
     trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert trace.modules["l1"].params
     assert trace.module_calls["l1:1"].forward_kwargs == {}
     assert isinstance(trace.summary(), str)
-    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert len(trace.to_pandas()) == len(trace._layer_list)
     assert len(trace.modules.to_pandas()) == len(trace.modules)
     assert len(trace.module_calls["l1:1"].to_pandas()) == 1
     dot = trace.draw(
-        vis_outpath=str(tmp_path / "mlx_object_graph"),
-        vis_save_only=True,
-        vis_fileformat="dot",
-    )
+        path=str(tmp_path / "mlx_object_graph"),
+        file_format="dot",
+    ).dot
     assert isinstance(dot, str)
 
     bundle_path = tmp_path / "mlx_object_portable.tlspec"
@@ -249,8 +261,8 @@ def test_mlx_object_module_public_surface_matrix(tmp_path: Path) -> None:
     trace.save(bundle_path)
     loaded = tl.load(bundle_path)
     loaded_out = loaded[loaded.output_layers[0]].out
-    assert loaded.backend == "mlx"
-    assert loaded.module_identity_mode == "object_module"
+    assert loaded.provenance.backend == "mlx"
+    assert loaded.options.module_identity_mode == "object_module"
     assert isinstance(loaded_out, mx.array)
     np.testing.assert_allclose(np.asarray(loaded_out), expected)
 
@@ -278,9 +290,9 @@ def test_mlx_function_root_mode_remains_available() -> None:
         capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
     )
 
-    assert trace.module_identity_mode == "function_root"
+    assert trace.options.module_identity_mode == "function_root"
     assert [module.address for module in trace.modules] == ["self"]
-    assert trace.param_source == "none"
+    assert trace.provenance.param_source == "none"
     assert check_metadata_invariants(trace) is True
 
 
@@ -289,7 +301,7 @@ def test_mlx_object_module_corruption_invariant_fails() -> None:
     """Dropping MLX object-module attribution should fail metadata invariants."""
 
     trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
-    victim = next(layer for layer in trace.layer_list if layer.module and not layer.is_input)
+    victim = next(layer for layer in trace._layer_list if layer.module and not layer.is_input)
     victim.module = None
     victim.modules = []
     victim.module_call_stack = []

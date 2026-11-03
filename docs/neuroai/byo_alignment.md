@@ -17,7 +17,7 @@ import torchlens as tl
 
 tl.extract_dataset(
     model, images, ["avgpool"],
-    output_dir="features_run",
+    path="features_run",
     input_transform=pre,            # resolved authority: verified provenance
     stimulus_ids=image_ids,
 )

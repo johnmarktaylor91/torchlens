@@ -1,5 +1,9 @@
 # Performance guide
 
+Steering or patching over many forwards, or through generation? Read
+[Performance: choosing a fast path](guides/fast_paths.md) first: the capture-free
+`tl.when(site, action).bind(model)` runs at about the cost of a plain forward hook.
+
 TorchLens is fastest when it captures only the payloads you plan to inspect. A full
 `tl.trace(model, x)` records a complete operation graph and saves activations for the selected
 sites; `tl.record(model, x, save=...)` is the lighter path for tight loops where you only need
@@ -21,6 +25,7 @@ dygraph/eager replay and static-inventory audit costs; TensorFlow preview captur
 | A local window around a later op | `tl.trace(..., save=tl.followed_by(...), lookback=K)` | Retains bounded recent metadata, and optionally bounded recent payloads. |
 | Disk-backed selected payloads | `tl.trace(..., storage=tl.to_disk(path))` | Keeps selected payloads portable without retaining them all in RAM. |
 | Intervention during the forward pass | `tl.trace(..., intervene=tl.when(...), save=...)` | Live edits cost more than passive capture; use only when the model must execute edited values. |
+| Steering or patching over many forwards or through `generate()` | `tl.when(site, action).bind(model)` | Capture-free, about 1x a plain forward hook; see [choosing a fast path](guides/fast_paths.md). |
 | Final logits only | plain `model(x)` | TorchLens adds wrapper dispatch and metadata work; skip it when no intermediate data is needed. |
 
 ## Fast activation pull
@@ -39,7 +44,7 @@ trace = tl.trace(
     model,
     x,
     save=tl.func("relu"),
-    capture=CaptureOptions(save_code_context=False),
+    capture=CaptureOptions(save_source_context=False),
 )
 relu_site = trace.find_sites(tl.func("relu")).first()
 relu_activation = relu_site.out
@@ -74,28 +79,29 @@ assert gelu_site.out.shape == (2, 4)
 
 When a fastlog forward raises, the default remains `on_forward_error="raise"`. Opt into
 `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
-`on_forward_error="return_partial"` to return a failed partial `Recording` (`return_output=True`
-returns `(None, partial)`). Failed partials set `status="partial_error"`, `failed=True`,
-string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields. user-op
+`on_forward_error="return_partial"` to return a failed partial `Recording` (its `output` refuses
+with `output_forward_failed`). Failed partials set `status="partial_error"`, `failed=True`,
+string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials cannot be converted with `Recording.to_trace()` or used with
-`Recording.log_backward()`. `MemoryError` is swallowed like any other forward exception under
+`Recording.backward()`. `MemoryError` is swallowed like any other forward exception under
 `"return_partial"`/`"attach_partial"`, and materializing the partial allocates *more* memory
 inside an already-exhausted heap — under genuine memory pressure keep the default
-`on_forward_error="raise"`. Full `tl.trace(...)` failures expose `exc.partial_log`, recoverable
-with `tl.partial.from_failed_capture(exc)`.
+`on_forward_error="raise"`. Full `tl.trace(...)` failures raise `tl.errors.TraceCaptureError`
+with the partial capture on `exc.partial_trace`.
 
 ## Speed knobs
 
 | Knob | Faster setting | Tradeoff |
 | --- | --- | --- |
 | Payload selection | `save=tl.func(...)` or `save=tl.in_module(...)` | Unsaved activations cannot be read later. |
-| Source text | `capture=CaptureOptions(save_code_context=False)` | File/line identity remains, but source text is not loaded. |
+| Source text | `capture=CaptureOptions(save_source_context=False)` | File/line identity remains, but source text is not loaded. |
 | Window payloads | `lookback_payload_policy="metadata_only"` | `tl.followed_by(...)` can select metadata without retaining raw tensors. |
 | Retroactive payloads | `lookback_payload_policy="detached_raw"` | Enables payload recovery for recent matched ops at bounded memory cost. |
-| Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |
+| Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. The model output the forward returns stays in memory (the output op may alias it), and a later `trace.run(...)` re-captures every payload into RAM while the bundle keeps the original capture. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |
 | Gradients | `capture=CaptureOptions(save_grads=False)` (the default) unless needed | Backward-ready captures preserve more state and hooks. |
-| Forward-only autograd | `inference_only=True` | Runs forward capture under `torch.no_grad()`; incompatible with backward capture. |
+| Forward-only autograd | `inference_only=True`, or capture inside `torch.no_grad()` | Runs forward capture under `torch.no_grad()`; incompatible with backward capture. A capture entered under `torch.no_grad()` or `torch.inference_mode()` implies it unless a backward option is given. |
+| Recording gradient hooks | omit `backward_ready` / `save_grads` on `tl.record` | `tl.record` installs gradient hooks (1 to 5% of a record on CPU transformers, measured 2026-10-11) only when a backward is requested; `Recording.backward()` refuses otherwise. |
 | Forward chunking | `chunk_size=N` | Reduces forward-pass peak memory for single-batch tensor inputs; final saved activations are still accumulated in memory. |
 | Recurrence detection | `capture=CaptureOptions(recurrence_detection=False)` | Measured 39-42% of capture time off models with thousands of repeated ops (hand-rolled top-level loops, unrolled decodes). Repeated ops stay separate layers instead of rolling into one multi-pass layer, so a 6-iteration loop yields `relu_1_2 ... relu_6_7` (each `num_passes=1`) instead of one `relu_1_2` with `num_passes=6`. `is_recurrent` and `max_layer_op_count` are still reported. It is a TIME knob only: retained activation bytes are unchanged. |
 | Visualization | Call `trace.draw()` after capture, not during hot loops | Rendering is separate from activation collection. |
@@ -117,21 +123,25 @@ model = nn.ReLU()
 x = torch.randn(4)
 wrap_torch(escape_detector="shadow")
 trace = tl.trace(model, x)
-print(trace.escape_detector_event_count, trace.escape_detector_callback_ns)
+print(trace.health.num_escape_detector_events, trace.health.escape_detector_callback_ns)
 unwrap_torch()
 ```
 
 The independent aten-level completeness witness is also opt-in and can run alone or alongside the
 callable detector. **This is the only route to `capture_verified=True`.** A plain `tl.trace()` never
 arms it: every default capture reads `capture_verified=None`, which every honesty surface renders as
-"not recorded" -- not a clean bill. Escapes the wrappers themselves observe (worker-thread ops,
+"not checked" -- not a clean bill. Escapes the wrappers themselves observe (worker-thread ops,
 `torch.jit.script` regions, direct `torch.ops.aten.*` calls, `.data.copy_()`) still ceiling the
 default capture to `False`, and tensor-to-scalar escapes (`.item()`, `int(argmax)`) raise the
 `scalar_escape` advisory; but host tensor sources the wrappers cannot see -- `torch.from_numpy(...)`
 / `torch.as_tensor(np_array)` / `torch.from_dlpack(...)` round-trips, an `autograd.Function` whose
 forward runs in NumPy, and in-forward storage writes through `.numpy()` / `untyped_storage()`
-aliases -- leave NO ceiling and NO advisory on the default capture (the op is visible to a graph
-reader as an internal-source op with `parents=()`). Arm the witness (or run `tl.validate`) when that
+aliases -- leave NO ceiling on the default capture (the op is visible to a graph
+reader as an internal-source op with `parents=()`). A default capture whose recorded ops include
+`torch.from_numpy`, `torch.from_dlpack`, `torch.frombuffer`, or `torch.as_tensor` on non-tensor data
+records one `host_tensor_source` row in `trace.annotations["capture_advisories"]` (count, sources and
+the first location when code context was kept; no warning, no verdict change), so the shared artifact
+says host data entered the graph unchecked. The other host sources above record nothing. Arm the witness (or run `tl.validate`) when that
 class of escape matters:
 
 ```python
@@ -148,8 +158,8 @@ wrap_torch(
     completeness_witness=True,
 )
 trace = tl.trace(model, x)
-print(trace.completeness_witness_verified)
-print(trace.completeness_witness_unaccounted_count)
+print(trace.health.completeness_verified)
+print(trace.health.num_unaccounted_witness_events)
 unwrap_torch()
 ```
 
@@ -159,9 +169,9 @@ census result.
 
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
 it does not correlate by clock time. A captured Python call may own several ordered aten operations,
-recorded in `trace.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
-`func_call_id` emits no logged op, produce a `TorchLensCaptureGapWarning`, set
-`trace.completeness_witness_verified=False`, and append structured rows to
+recorded in `trace.health.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
+`func_call_id` emits no logged op, produce a `CaptureGapWarning`, set
+`trace._health_completeness_verified=False`, and append structured rows to
 `trace.completeness_diagnostics`. Work under `pause_logging()` is outside the census. The documented
 torch.func/functorch transform boundary runs its interior under that paused scope, and fused or opaque
 kernel interiors below the dispatcher are not observable; the dispatched boundary operator itself is
@@ -214,7 +224,7 @@ import torchlens as tl
 model = nn.Sequential(nn.Linear(1024, 1024), nn.ReLU()).eval()
 x = torch.randn(128, 1024)
 
-trace = tl.trace(model, x, chunk_size=16, save=tl.func("relu"))
+trace = tl.trace(model, x, save=tl.func("relu"), capture=tl.options.CaptureOptions(chunk_size=16))
 
 assert trace.find_sites(tl.func("relu")).first().out.shape[0] == 128
 ```
@@ -225,7 +235,7 @@ dimension 0, executes one sub-batch at a time, and returns one accumulated in-me
 
 The v1 limits are intentionally narrow: torch backend only, positional inputs only, no
 `backward_ready`, no `save_grads`, no live `hooks=`, no public `intervene=`, and no
-`storage=tl.to_disk(...)`/`streaming=`. Loaded or live chunked traces also reject
+`storage=tl.to_disk(...)`/`storage=`. Loaded or live chunked traces also reject
 `log_backward()` because they do not retain one full-batch autograd graph.
 
 Auto mode splits only when there is exactly one `ndim > 0` tensor leaf under standard Python
@@ -247,7 +257,7 @@ model = MaskedModel().eval()
 tokens = torch.randn(64, 16)
 attention_mask = torch.ones(64, 16)
 
-trace = tl.trace(model, (tokens, attention_mask), chunk_size=8, chunk_paths=["0", "1"])
+trace = tl.trace(model, (tokens, attention_mask), chunk_paths=["0", "1"], capture=tl.options.CaptureOptions(chunk_size=8))
 ```
 
 Unlisted leaves are passed unchanged to every chunk, which is useful for shared masks or bias
@@ -258,10 +268,10 @@ materializes it. Disk-backed chunk accumulation is a future item.
 For activation extraction without a `Trace`, use `tl.extract_dataset(...)` (the old
 former `tl.batched_extract` alias is removed); that path returns
 tensors or `.pt` files rather than accumulated graph metadata. `chunk_size=` covers the remaining
-"dataloader wrapper" case for stacked multi-pass trace capture. Disk mode (`output_dir=`) writes
+"dataloader wrapper" case for stacked multi-pass trace capture. Disk mode (`path=`) writes
 atomic shards plus a self-describing `manifest.json` (site identity, stimulus provenance, axis
 semantics, dtypes); an interrupted long extraction continues from its last completed shard with
-`resume=True`, and `torchlens.dataset_extraction.load_extraction(...)` reads the artifact back
+`resume=True`, and `torchlens.load(path)` reads the artifact back
 with its metadata (both spellings DOCUMENTED-UNSTABLE).
 
 ## Windowed and disk-backed capture
@@ -283,9 +293,7 @@ trace = tl.trace(
     model,
     x,
     save=predicate,
-    lookback=4,
-    lookback_payload_policy="detached_raw",
-    storage=tl.to_disk(path),
+    storage=tl.to_disk(path), capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 
 assert trace.find_sites(tl.func("conv2d")).first().out.shape == (1, 2, 3, 3)
@@ -295,9 +303,9 @@ Use disk-backed storage for selected payloads that are too large or numerous to 
 Trace repr, notebook HTML, and JSON explanation do not materialize lazy disk payloads for their
 NaN/Inf summary; those refs are reported as unexamined until you call ``op.materialize_out()``.
 This exemption applies to predicate-selected disk-only payloads. Exhaustive saving
-(``layers_to_save="all"``, the default) keeps RAM copies until postprocess, so combine a narrower
+(``save="all"``, the default) keeps RAM copies until postprocess, so combine a narrower
 ``save=`` with disk streaming to reduce peak retained memory. Note that ``save=`` itself takes a
-predicate, selector, or ``SaveOptions`` — never the string ``"all"``.
+predicate, selector, or ``CaptureOptions`` — never the string ``"all"``.
 Portable `.tlspec/` bundles store manifest data plus tensor sidecars when the backend supports
 materialized payloads; executable Python callables are not portable. Backend-aware manifest schema
 v2 adds `backend`, `backend_runtime`, nullable torch-specific fields, and `payload_policy`.
@@ -326,7 +334,121 @@ assert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0
 ```
 
 Use `intervene=` when the edited value must affect downstream execution. For post-hoc experiments
-on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `replay()`.
+on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `push()`
+(which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
+
+## Long sequences and long contexts
+
+Saved activations grow with sequence length at every op, and attention probabilities grow with
+its square: one layer's `(batch, heads, q, kv)` matrix for a 4096-token sequence with 32 heads in
+bfloat16 is 32 x 4096 x 4096 x 2 bytes, 1 GiB, so a 32-layer model's set is 32 GiB. Plan what
+to keep before the first long capture:
+
+- Name the sites with `save=` (`tl.module("model.layers.20")`, `tl.func("linear") &
+  tl.in_module("model.layers.20")`) instead of the whole-graph default.
+- `CaptureOptions(save_budget=...)` (default `"auto"`) caps saved bytes; an exceeded budget
+  raises `SaveBudgetExceededError` rather than exhausting memory, and `output_device="cpu"` keeps
+  saved activations in host memory.
+- For a logit-lens sweep over many positions, `torchlens._semantic.logit_lens_predictions`
+  projects one layer at a time and keeps only top-k summaries.
+- For many forwards or generation, a bound spec (and its `generate`) saves nothing at all; editing
+  the cached past of a long prompt is the [KV-cache recipe](guides/kv_cache.md).
+- For a dataset of long sequences, `tl.extract_dataset(..., path=...)` writes the named
+  layers to disk batch by batch.
+
+## Counting the backward that ran
+
+`tl.report.backward_status(trace)` reports the compute of the backward pass that actually
+ran, counted call by call. When a capture requested a backward (`backward_ready=True`,
+`save_grads=` or `default_grad=`), every ATen call that backward dispatches is recorded on
+its `BackwardPass.aten_ops`, with its shapes, its dtypes and the GradFn call it ran
+under. Each call is then counted with the same convention as `torch.utils.flop_counter`: one
+multiply-add counts 2 FLOPs, and only matmul and convolution calls are counted. Any other call
+is listed by name in `uncounted_ops`; it is never counted as zero and never estimated.
+Frozen weights, partial `requires_grad` and second-order passes are counted exactly as
+they ran. A `create_graph=True` gradient and the backward run through it are separate passes
+in `executed_flops_per_pass`.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 4))
+model[0].requires_grad_(False)  # frozen first layer, and x needs no gradient
+x = torch.randn(2, 16)
+
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
+trace.log_backward(trace[trace.output_layers[0]].out.sum())
+
+status = tl.report.backward_status(trace)
+# Only the last layer's weight gradient runs (2 * 2 * 32 * 4 FLOPs): nothing upstream of
+# it needs a gradient, so no input-gradient matmul is dispatched.
+assert status.executed_flops == 2 * 2 * 32 * 4
+print(status.status_line)
+print(status.uncounted_op_counts)  # the bias-gradient sums and other calls, named, not zeroed
+
+from torch.nn.attention import SDPBackend, sdpa_kernel
+
+
+class Attend(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.qkv = nn.Linear(8, 24)
+
+    def forward(self, x):
+        q, k, v = self.qkv(x).view(1, 6, 3, 2, 4).permute(2, 0, 3, 1, 4)
+        return nn.functional.scaled_dot_product_attention(q, k, v)
+
+
+def executed(model, x):
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    return tl.report.backward_status(trace).executed_flops
+
+
+attend, x = Attend(), torch.randn(1, 6, 8)
+fused = executed(attend, x)  # CPU picks its fused attention kernel
+with sdpa_kernel(SDPBackend.MATH):
+    assert executed(attend, x) == fused  # the decomposed math counts the same
+```
+
+Calls TorchLens makes inside its own GradFn posthooks (gradient logging and the backward
+edits they apply) are not recorded; the copies its tensor hooks make when saving gradients
+are recorded as zero-arithmetic calls and never change the count. The record exists only in the session that ran the backward: a
+saved and reloaded trace reports the executed backward as unknown. A capture that requests
+no backward never installs the recorder and pays nothing for it. The training-cost estimate
+`tl.report.backward_estimate(trace)` is a separate figure, always labeled hypothetical, and it
+never appears where an executed cost belongs.
+
+### What is counted, and where FlopCounterMode differs
+
+Forward, each op's `flops_forward` follows its rule, with one multiply-add counted as 2 FLOPs:
+
+- A linear or convolution weight computed inside `forward` (weight norm, spectral norm, a
+  weight passed in as an input) is read from the call's arguments, as a parameter weight is.
+- The fused recurrent kernels behind `nn.RNN`, `nn.GRU`, `nn.LSTM` and their cells count one
+  multiply-add per weight-matrix element per output row, plus their bias adds; the gate
+  nonlinearities inside the kernel are not counted. A sequence kernel's whole call is counted
+  on its sequence output and its final states read 0. `lstm_cell` returns two outputs of one
+  shape that cannot be told apart, so half the call is counted on each.
+- `torch.linalg.multi_dot` counts its chain in the order it runs, the cheapest one.
+- `einsum` equations with `...` are counted; repeated labels within one operand and
+  equations over three or more operands stay unknown.
+- `mv`, `dot`, `vdot` and `spmm` count as matrix products; a sparse `spmm` operand is counted
+  as dense, from its shape.
+
+Backward, `tl.report.backward_status(trace)` also counts two fused kernels as the math they
+replace: the CPU fused attention backward (`_scaled_dot_product_flash_attention_for_cpu_backward`:
+the four matrix products of the attention gradient over the full query x key square, which is
+what the MATH attention backend dispatches) and the oneDNN LSTM layer backward
+(`mkldnn_rnn_layer_backward`: dX, dW_ih, dH and dW_hh).
+
+The count follows `torch.utils.flop_counter.FlopCounterMode`'s convention and differs from it in
+two named ways. FlopCounterMode counts a grouped or depthwise convolution's weight gradient
+`groups` times over; TorchLens counts it once. And FlopCounterMode has no rule for `mv`,
+`addmv`, `dot`, `vdot`, the CPU fused attention kernels or the oneDNN LSTM layer kernels, so it
+reports 0 for that work; TorchLens counts it.
 
 ## When another tool is faster
 

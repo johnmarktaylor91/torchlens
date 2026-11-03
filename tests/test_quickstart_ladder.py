@@ -12,9 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.quickstart import (
-    InputSpec,
-    SynthesizedValueReadWarning,
+from torchlens._quickstart import (
     internal_read,
     is_gold,
     parse_input_size,
@@ -25,7 +23,9 @@ from torchlens.quickstart import (
     resolve_rung,
     trace_input_provenance,
 )
-from torchlens.user_funcs import render as _render
+from torchlens._user_funcs import draw as _render
+from torchlens.errors import SynthesizedValueReadWarning
+from torchlens.types import InputSpec
 
 
 def _cnn() -> nn.Module:
@@ -47,7 +47,7 @@ class TestRungLaw:
 
     @pytest.mark.smoke
     def test_mixed_rung_refuses(self) -> None:
-        """A real input plus input_size= is a typed conflict, never a guess."""
+        """A real input plus input_shape= is a typed conflict, never a guess."""
 
         with pytest.raises(Exception) as excinfo:
             resolve_rung(torch.randn(1, 3), None, (1, 3))
@@ -60,9 +60,9 @@ class TestRungLaw:
         x = torch.randn(1, 3, 8, 8)
         messages = []
         for verb in (
-            lambda: tl.trace(model, x, input_size=(1, 3, 8, 8)),
-            lambda: tl.summary(model, x, input_size=(1, 3, 8, 8)),
-            lambda: _render(model, x, input_size=(1, 3, 8, 8)),
+            lambda: tl.trace(model, x, input_shape=(1, 3, 8, 8)),
+            lambda: tl.summary(model, x, input_shape=(1, 3, 8, 8)),
+            lambda: _render(model, x, input_shape=(1, 3, 8, 8)),
         ):
             with pytest.raises(Exception) as excinfo:
                 verb()
@@ -90,6 +90,9 @@ class TestGrammar:
         with pytest.raises(Exception) as excinfo:
             parse_input_size(bad, _cnn())
         assert excinfo.value.fields["code"] == "input_size_invalid"
+        # The message names the keyword users pass; input_size= was renamed.
+        assert "input_shape=" in str(excinfo.value)
+        assert "input_size=" not in str(excinfo.value)
 
     def test_bool_dimension_is_symbolic(self) -> None:
         """bool is not a size (True == 1 must not synthesize)."""
@@ -109,6 +112,7 @@ class TestGrammar:
         with pytest.raises(Exception) as excinfo:
             parse_input_size({"bogus": (1, 3)}, OneArg())
         assert excinfo.value.fields["code"] == "input_size_unknown_binding"
+        assert "input_shape= binds 'bogus'" in str(excinfo.value)
 
     def test_sequence_form_makes_positional_slots(self) -> None:
         """A sequence of shapes is multiple positional tensors."""
@@ -161,7 +165,7 @@ class TestSynthesis:
 
         model = _cnn()
         with pytest.raises(Exception) as excinfo:
-            tl.trace(model, input_size=(1, 5, 8, 8))  # wrong channel count
+            tl.trace(model, input_shape=(1, 5, 8, 8))  # wrong channel count
         # The refusal must NOT be an inference teach: the declared rung owns
         # its failure (any capture-side error is acceptable; the inference
         # code path is not).
@@ -180,7 +184,7 @@ class TestProvenanceRecord:
         assert rehydrated is not None
         assert rehydrated.origin == "declared"
         assert rehydrated.rung == 2
-        assert not rehydrated.values_semantic
+        assert not rehydrated.has_semantic_values
         assert rehydrated.tensors[0].shape == (2, 3, 8, 8)
         assert rehydrated.recipes is not None
         assert rehydrated.caveats
@@ -193,9 +197,9 @@ class TestProvenanceRecord:
         assert is_gold(log)
 
     def test_declared_trace_carries_record(self) -> None:
-        """input_size= traces persist the disclosure on the KEEP field."""
+        """input_shape= traces persist the disclosure on the KEEP field."""
 
-        log = tl.trace(_cnn(), input_size=(1, 3, 8, 8))
+        log = tl.trace(_cnn(), input_shape=(1, 3, 8, 8))
         provenance = trace_input_provenance(log)
         assert provenance is not None
         assert provenance.origin == "declared"
@@ -208,7 +212,7 @@ class TestCapabilityGate:
     def test_require_gold_refuses_on_synthesized(self) -> None:
         """Derived-semantics claims hard-refuse with the real-input teach."""
 
-        log = tl.trace(_cnn(), input_size=(1, 3, 8, 8))
+        log = tl.trace(_cnn(), input_shape=(1, 3, 8, 8))
         with pytest.raises(Exception) as excinfo:
             require_gold(log, "decoded labels")
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"
@@ -218,7 +222,7 @@ class TestCapabilityGate:
     def test_first_raw_read_warns_once_per_trace(self) -> None:
         """Layer.out warns exactly once on a synthesized trace, never on gold."""
 
-        synthesized = tl.trace(_cnn(), input_size=(1, 3, 8, 8))
+        synthesized = tl.trace(_cnn(), input_shape=(1, 3, 8, 8))
         gold = tl.trace(_cnn(), torch.randn(1, 3, 8, 8))
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
@@ -235,7 +239,7 @@ class TestCapabilityGate:
     def test_internal_readers_pass_the_ack(self) -> None:
         """Reads inside internal_read() never trip the user warning."""
 
-        synthesized = tl.trace(_cnn(), input_size=(1, 3, 8, 8))
+        synthesized = tl.trace(_cnn(), input_shape=(1, 3, 8, 8))
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             with internal_read():
@@ -250,14 +254,14 @@ class TestTypedRefusalProvocation:
         """Synthesis/inference is torch-only; other backends need a real input."""
 
         with pytest.raises(Exception) as excinfo:
-            tl.trace(_cnn(), input_size=(1, 3, 8, 8), backend="tf")
+            tl.trace(_cnn(), input_shape=(1, 3, 8, 8), backend="tf")
         assert excinfo.value.fields["code"] == "input_ladder_backend_unsupported"
 
     @pytest.mark.smoke
     def test_render_pipeline_failure_refuses_typed(self) -> None:
         """A graphviz pipeline failure surfaces as one typed refusal."""
 
-        from torchlens.quickstart._render import _render_dot_source
+        from torchlens.viz._drawing import _render_dot_source
 
         with pytest.raises(Exception) as excinfo:
             _render_dot_source("digraph { a -> b }", "not_a_real_format")
@@ -270,7 +274,7 @@ class TestTypedRefusalProvocation:
 
         import sys as _sys
 
-        from torchlens.quickstart._render import _render_dot_source
+        from torchlens.viz._drawing import _render_dot_source
 
         monkeypatch.setitem(_sys.modules, "graphviz", None)  # import raises ImportError
         with pytest.raises(Exception) as excinfo:
@@ -282,12 +286,12 @@ class TestTypedRefusalProvocation:
     def test_open_viewer_windows_branch_uses_startfile(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path
     ) -> None:
-        """The explicit view=True door routes through os.startfile on Windows."""
+        """The explicit open_viewer=True door routes through os.startfile on Windows."""
 
         import os as _os
         import sys as _sys
 
-        from torchlens.quickstart._render import _open_viewer
+        from torchlens.viz._drawing import _open_viewer
 
         opened: list[str] = []
         monkeypatch.setattr(_sys, "platform", "win32")

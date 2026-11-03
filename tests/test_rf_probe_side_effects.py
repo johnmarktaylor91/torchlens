@@ -7,8 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.field_policy import portable_state_spec_from_policy
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.field_policy import portable_state_spec_from_policy
+from torchlens._data_classes.trace import Trace
 from torchlens.receptive_field._gradient import _probe_suppressed, gradient_for_unit
 
 
@@ -25,18 +25,17 @@ def _conv_trace() -> tuple[nn.Conv2d, object, object, object]:
     trace = tl.trace(
         model,
         inputs,
-        capture=capture,
-        save_mode="reference",
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
     )
-    target = next(op for op in trace.layer_list if op.func_name == "conv2d")
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    target = next(op for op in trace._layer_list if op.func_name == "conv2d")
+    input_op = next(op for op in trace._layer_list if op.is_input)
     return model, trace, target, input_op
 
 
 def _gradient_record_snapshot(trace: object) -> tuple[tuple[object, ...], ...]:
     """Snapshot every operation's retained gradient record sequence."""
 
-    return tuple(tuple(op.grads) for op in trace.layer_list)  # type: ignore[attr-defined]
+    return tuple(tuple(op.grads) for op in trace._layer_list)  # type: ignore[attr-defined]
 
 
 def test_probe_does_not_mutate_any_backward_or_gradient_state() -> None:
@@ -47,8 +46,8 @@ def test_probe_does_not_mutate_any_backward_or_gradient_state() -> None:
     before_records = _gradient_record_snapshot(trace)
     before_events = tuple(trace.event_stream.backward_events)
     before_disarmed = trace._tl_backward_triggers_disarmed
-    before_passes = trace.num_backward_passes
-    before_has_gradients = trace.has_gradients
+    before_passes = len(trace.autograd.backward_passes)
+    before_has_gradients = trace.autograd.has_grads
     before_active_index = (
         "_active_backward_pass_index" in trace.__dict__,
         trace.__dict__.get("_active_backward_pass_index"),
@@ -58,10 +57,10 @@ def test_probe_does_not_mutate_any_backward_or_gradient_state() -> None:
         for parameter in model.parameters()
     )
 
-    gradient_for_unit(target, (0, 0, 2, 2), input=input_op)
+    gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op)
 
-    assert trace.num_backward_passes == before_passes
-    assert trace.has_gradients is before_has_gradients
+    assert len(trace.autograd.backward_passes) == before_passes
+    assert trace.autograd.has_grads is before_has_gradients
     assert tuple(trace.event_stream.backward_events) == before_events
     assert _gradient_record_snapshot(trace) == before_records
     assert trace._tl_backward_triggers_disarmed is before_disarmed
@@ -81,23 +80,23 @@ def test_probe_does_not_mutate_the_class_level_field_policy_tables() -> None:
     """A probe leaves ``Trace``'s class-level policy tables byte-identical.
 
     The probe flag needs a portable scrub policy, but registering it from the
-    probe mutated ``Trace.PORTABLE_STATE_SPEC`` process-globally and left it
-    desynchronized from the ``FIELD_POLICY`` table it is generated from. That
+    probe mutated ``Trace._PORTABLE_STATE_SPEC`` process-globally and left it
+    desynchronized from the ``_FIELD_POLICY`` table it is generated from. That
     made ``test_record_portable_spec_is_generated_from_policy[Trace]`` fail for
     every test collected after the first receptive-field gradient probe in the
     process, so the flag is declared statically on ``Trace`` instead.
     """
 
-    before_spec = dict(Trace.PORTABLE_STATE_SPEC)
-    before_policy = dict(Trace.FIELD_POLICY)
+    before_spec = dict(Trace._PORTABLE_STATE_SPEC)
+    before_policy = dict(Trace._FIELD_POLICY)
     assert "_tl_rf_probe_active" in before_spec
 
     _, trace, target, input_op = _conv_trace()
-    gradient_for_unit(target, (0, 0, 2, 2), input=input_op)
+    gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op)
 
-    assert dict(Trace.PORTABLE_STATE_SPEC) == before_spec
-    assert dict(Trace.FIELD_POLICY) == before_policy
-    assert portable_state_spec_from_policy(Trace.FIELD_POLICY) == Trace.PORTABLE_STATE_SPEC
+    assert dict(Trace._PORTABLE_STATE_SPEC) == before_spec
+    assert dict(Trace._FIELD_POLICY) == before_policy
+    assert portable_state_spec_from_policy(Trace._FIELD_POLICY) == Trace._PORTABLE_STATE_SPEC
 
 
 def test_suppression_restores_exact_flag_state_when_probe_raises() -> None:
@@ -113,8 +112,8 @@ def test_suppression_restores_exact_flag_state_when_probe_raises() -> None:
 
     assert trace._tl_rf_probe_active == "prior-sentinel"
     assert trace._tl_backward_triggers_disarmed is True
-    assert trace.num_backward_passes == 0
-    assert not trace.has_gradients
+    assert len(trace.autograd.backward_passes) == 0
+    assert not trace.autograd.has_grads
     assert not trace.event_stream.backward_events
 
 
@@ -135,12 +134,12 @@ def test_suppression_restores_absent_flag_after_mid_probe_autograd_failure(
 
     monkeypatch.setattr(torch.autograd, "grad", failing_grad)
     with pytest.raises(RuntimeError, match="mid-probe autograd failure"):
-        gradient_for_unit(target, (0, 0, 2, 2), input=input_op)
+        gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op)
     monkeypatch.setattr(torch.autograd, "grad", original_grad)
 
     assert "_tl_rf_probe_active" not in trace.__dict__
     assert trace._tl_backward_triggers_disarmed is False
-    assert trace.num_backward_passes == 0
-    assert not trace.has_gradients
+    assert len(trace.autograd.backward_passes) == 0
+    assert not trace.autograd.has_grads
     assert not trace.event_stream.backward_events
     assert all(parameter.grad is None for parameter in model.parameters())

@@ -78,7 +78,7 @@ def _validate_spec(spec: Any) -> dict[str, Any]:
     else:
         raise InvalidArgumentError(
             f"pool= value {spec!r} has type {type(spec).__name__}; pooling is "
-            "a closed preset vocabulary, never a callable (use transform= "
+            "a closed preset vocabulary, never a callable (use output_transform= "
             "for custom reductions).",
             code="extraction_pool_invalid",
             remedy=f"pass one of {POOL_PRESETS} or a per-key mapping of them",

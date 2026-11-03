@@ -49,7 +49,7 @@ def test_to_pandas_attrs_carry_honesty(export_trace: tl.Trace) -> None:
 
 @pytest.mark.smoke
 def test_profile_and_accessor_tables_carry_honesty(export_trace: tl.Trace) -> None:
-    """TraceProfile.to_pandas and accessor to_pandas carry the facts."""
+    """ProfileReport.to_pandas and accessor to_pandas carry the facts."""
 
     profile_facts = export_trace.profile().to_pandas().attrs["torchlens_capture_honesty"]
     assert profile_facts["capture_status"] == "complete"
@@ -61,12 +61,15 @@ def test_profile_and_accessor_tables_carry_honesty(export_trace: tl.Trace) -> No
 def test_debug_dataframes_carry_honesty(export_trace: tl.Trace) -> None:
     """The debug DataFrame family attaches the shared fact block."""
 
-    from torchlens import debug
+    from torchlens import debug as debug
 
-    assert _facts_of(debug.hot_path(export_trace))["capture_status"] == "complete"
-    assert _facts_of(debug.recompute_candidates(export_trace))["capture_status"] == "complete"
-    assert _facts_of(debug.dead_neurons(export_trace))["capture_status"] == "complete"
-    compare_frame = debug.compare(export_trace, export_trace)
+    assert _facts_of(debug.hot_path(export_trace).to_pandas())["capture_status"] == "complete"
+    assert (
+        _facts_of(debug.recompute_candidates(export_trace).to_pandas())["capture_status"]
+        == "complete"
+    )
+    assert _facts_of(debug.dead_neurons(export_trace).to_pandas())["capture_status"] == "complete"
+    compare_frame = debug.compare(export_trace, export_trace).to_pandas()
     both = compare_frame.attrs[DATAFRAME_ATTRS_KEY]
     assert both["trace_a"]["capture_status"] == "complete"
     assert both["trace_b"]["capture_status"] == "complete"
@@ -91,7 +94,7 @@ def test_csv_export_preamble(export_trace: tl.Trace, tmp_path: Path) -> None:
     text = destination.read_text(encoding="utf-8")
     assert text.startswith("# torchlens capture honesty: status=complete")
     frame = pd.read_csv(destination, comment="#")
-    assert len(frame) == len(export_trace.layer_list)
+    assert len(frame) == len(export_trace._layer_list)
 
 
 @pytest.mark.smoke
@@ -115,7 +118,7 @@ def test_parquet_export_carries_schema_metadata(export_trace: tl.Trace, tmp_path
     facts = json_module.loads(metadata[b"torchlens_capture_honesty"])
     assert facts["capture_status"] == "complete"
     # read_parquet consumers are unaffected.
-    assert len(pd.read_parquet(destination)) == len(export_trace.layer_list)
+    assert len(pd.read_parquet(destination)) == len(export_trace._layer_list)
 
 
 @pytest.mark.smoke
@@ -205,6 +208,15 @@ def test_tracker_exports_return_fact_block(export_trace: tl.Trace) -> None:
         def log_metric(self, key: str, value: object) -> None:
             self.logged.append((key, value))
 
+        def log_table(self, data: object, artifact_file: str) -> None:
+            del data, artifact_file
+
+        def log_text(self, text: str, artifact_file: str) -> None:
+            del text, artifact_file
+
+        def set_tag(self, key: str, value: str) -> None:
+            del key, value
+
     client = _Client()
     mlflow_result = tl.export.mlflow(export_trace, client)
     assert mlflow_result["capture_honesty"]["capture_status"] == "complete"
@@ -215,8 +227,15 @@ def test_tracker_exports_return_fact_block(export_trace: tl.Trace) -> None:
         def __init__(self) -> None:
             self.tracked: list[tuple[object, str]] = []
 
-        def track(self, value: object, name: str) -> None:
+        def track(self, value: object, name: str, **kwargs: object) -> None:
+            del kwargs
             self.tracked.append((value, name))
+
+        def add_tag(self, value: str) -> None:
+            del value
+
+        def __setitem__(self, key: str, value: object) -> None:
+            del key, value
 
     run = _Run()
     aim_result = tl.export.aim(export_trace, run)
@@ -249,7 +268,7 @@ def test_tensorboard_export_writes_honesty_text(export_trace: tl.Trace) -> None:
 def test_poisoned_trace_export_preamble_discloses(tmp_path: Path) -> None:
     """A poisoned capture's exports carry the poison, never a clean preamble."""
 
-    from torchlens.runnable import PathFaithfulness
+    from torchlens._runnable import PathFaithfulness
 
     trace = tl.trace(nn.Sequential(nn.Linear(3, 4), nn.ReLU()), torch.randn(2, 3))
     trace._runnable.poisoned = True

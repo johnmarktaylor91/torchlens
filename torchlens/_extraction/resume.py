@@ -2,7 +2,7 @@
 
 The KNOWN-FIELDS signature builder, the manifest loader/creator, the D8
 callable-identity resume rules, the field-by-field mismatch refusals, and
-the disk-run preparation (trusted-prefix resolution, v1 migration entry,
+the disk-run preparation (trusted-prefix resolution, v1 refusal,
 completed-compatible no-op resume). The store pipeline itself lives in
 :mod:`torchlens._extraction.engine`; this module never runs a forward.
 
@@ -31,19 +31,22 @@ from .._data_substrate import (
     ArtifactWriter,
     compare_signatures,
     compute_model_identity,
-    migrate_v1_artifact,
     read_trusted_rows,
+    refuse_2x_manifest,
     repair_ledger_tail,
     stimulus_ids_digest,
 )
 from .._errors import InvalidArgumentError, _actionable_message, _ActionableErrorMixin
 from .._io import _json
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ..errors._base import ConfigurationError
 from ..transforms._pipeline import OpaqueStep
 from .callable_identity import classify_callable
-from .dtype_policy import tensor_payload_bytes
+from .harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
+from .intervened import final_harvest_block
 from .selector_plan import SelectorPlan, selector_request_record
 from .shards import shard_extension
+from .token_store import INPUT_IDS_KEY
 
 if TYPE_CHECKING:
     from ..transforms import TransformPipeline
@@ -288,7 +291,7 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
     return {
         "schema_version": MANIFEST_SCHEMA_V2,
         "native_format": NATIVE_FORMATS[shard_format],
-        "layer_plan": dict(plan.layer_plan),
+        "layer_plan": _signature_layer_plan(plan),
         "layers_kind": plan.layers_kind,
         "batch_size": plan.batch_size,
         "transform_pipeline": plan.transform_record,
@@ -298,7 +301,7 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
         "model_structure": model_structure_record(plan.model),
         "padding_side": "as_collated",
         "position_ids_source": "derived_or_refused",
-        "model_mode": "eval_no_grad",
+        "model_mode": _signature_model_mode(plan),
         "pool": plan.pool_record,
         "dtype_policy": plan.dtype_record,
         "ragged": plan.ragged,
@@ -307,6 +310,60 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
         "callable_identity": _callable_identity_signature(plan),
         "selector_plan": selector_plan_record,
     }
+
+
+def _signature_layer_plan(plan: _RunPlan) -> dict[str, str]:
+    """Return the signature's layer plan, naming the stored ids key.
+
+    A VALUE-level extension of the existing D16 ``layer_plan`` field (the
+    tvscope B5 precedent): runs without ``store_input_ids=True`` keep the
+    historical value byte-for-byte, and a run that stores ids differs in a
+    field every resuming release already compares, so no release can
+    continue such an artifact without its ids (or vice versa).
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+
+    Returns
+    -------
+    dict[str, str]
+        The layer plan, plus ``{"input_ids": "stimulus_input_ids"}`` when
+        ids are stored.
+    """
+
+    layer_plan = dict(plan.layer_plan)
+    if plan.store_input_ids:
+        layer_plan[INPUT_IDS_KEY] = "stimulus_input_ids"
+    return layer_plan
+
+
+def _signature_model_mode(plan: _RunPlan) -> Any:
+    """Return the signature's model mode, naming the intervention.
+
+    A VALUE-level extension of the existing D16 ``model_mode`` field: a
+    clean run keeps the historical ``"eval_no_grad"`` byte-for-byte, so a
+    pre-intervention artifact resumes under a clean run, while an intervened run
+    records its intervention identity there, so every resuming release
+    (including ones that predate intervened extraction) refuses to continue
+    an intervened artifact clean, or a clean one intervened.
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+
+    Returns
+    -------
+    Any
+        ``"eval_no_grad"``, or ``{"mode": "eval_no_grad", "intervention":
+        record}``.
+    """
+
+    if plan.intervention is None:
+        return "eval_no_grad"
+    return {"mode": "eval_no_grad", "intervention": plan.intervention.signature_record()}
 
 
 #: Algorithm id of the structural model record (module tree + hyperparameters).
@@ -464,6 +521,14 @@ def _base_manifest(
         "run": {},
         "totals": None,
         "ledger_digest": None,
+        # a clean run declares policy="none" explicitly, so a reader
+        # can tell "no intervention" from "written before the schema".
+        # Intervened runs write their block at the batch-zero freeze.
+        **(
+            {}
+            if isinstance(signature.get("model_mode"), Mapping)
+            else final_harvest_block(None, None, [])
+        ),
     }
 
 
@@ -487,10 +552,8 @@ def load_manifest(manifest_path: Path) -> dict[str, Any]:
     """
 
     try:
-        # read_bounded, never json.loads(read_text()): the manifest is a
-        # user-supplied artifact, so read_text() would materialize the whole
-        # file before any ceiling could apply (an over-size manifest is an
-        # allocation DoS).
+        # read_bounded, never json.loads(read_text()): the manifest is user-supplied, and
+        # an over-size one must refuse before it is materialized (allocation DoS).
         manifest = _json.read_bounded(manifest_path)
     except (OSError, ValueError) as exc:
         raise DatasetExtractionResumeError(
@@ -509,6 +572,9 @@ def load_manifest(manifest_path: Path) -> dict[str, Any]:
             remedy="delete the output directory and re-run the extraction from scratch",
             manifest_path=str(manifest_path),
         )
+    from .. import __version__
+
+    refuse_2x_manifest(manifest, container=manifest_path.parent, running_version=__version__)
     return manifest
 
 
@@ -846,33 +912,6 @@ def _rehydrate_ragged_state(
     return {"pooled_shapes": pooled_shapes, "trimmed_keys": trimmed_keys}
 
 
-def _completed_prefix(manifest: dict[str, Any], container_path: Path) -> list[dict[str, Any]]:
-    """Return the v1 ledgered shard prefix whose files are all present.
-
-    Parameters
-    ----------
-    manifest:
-        Parsed v1 manifest document.
-    container_path:
-        Extraction directory containing the shards.
-
-    Returns
-    -------
-    list[dict[str, Any]]
-        Contiguous v1 batch rows verified present on disk.
-    """
-
-    from .._data_substrate import shard_filename
-
-    prefix: list[dict[str, Any]] = []
-    for row in manifest.get("batches") or []:
-        expected_name = shard_filename(int(row["index"]))
-        if row.get("file") != expected_name or not (container_path / expected_name).exists():
-            break
-        prefix.append(row)
-    return prefix
-
-
 def _stale_shard_files(container_path: Path) -> list[Path]:
     """List a directory's shard files of either native format.
 
@@ -935,8 +974,9 @@ def _prepare_disk_run(
         On unmanifested shard directories, signature/model-identity/
         callable-identity mismatches, or replay input mismatches.
     torchlens._data_substrate.ExtractionArtifactError
-        On a broken ledger prefix or an unacknowledged in-progress v1
-        artifact.
+        On a broken ledger prefix.
+    torchlens.errors.ArtifactTooOldError
+        On a v1 artifact, which torchlens 2.x wrote.
     """
 
     container_path.mkdir(parents=True, exist_ok=True)
@@ -945,10 +985,6 @@ def _prepare_disk_run(
 
     if resume and manifest_path.exists():
         existing = load_manifest(manifest_path)
-        if existing.get("schema") == MANIFEST_SCHEMA_V1:
-            existing, _migrated_rows = migrate_v1_artifact(
-                container_path, existing, acknowledge_in_progress=plan.acknowledge_v1_prefix
-            )
         recorded_format = str((existing.get("storage") or {}).get("shard_format", "pt"))
         effective_format = plan.shard_format or recorded_format
         plan = dataclasses.replace(plan, shard_format=effective_format)
@@ -957,16 +993,6 @@ def _prepare_disk_run(
         rows = read_trusted_rows(container_path)
         totals = existing.get("totals") or {}
         is_complete = existing.get("status") == "complete" and len(rows) == totals.get("n_shards")
-        migrated_v1 = bool((existing.get("migration") or {}).get("migrated_from"))
-        if migrated_v1:
-            # A migrated prefix's semantic fields are UNRECORDED_V1 and the
-            # compare skips them; the fields the migration DID carry still
-            # compare field-by-field.
-            prep_state["resume_audit"].extend(
-                []
-                if existing.get("status") == "complete"
-                else [{"kind": "v1_in_progress_acknowledged", "semantics": "asserted_not_measured"}]
-            )
         audits = _refuse_signature_mismatch(
             existing.get("signature") or {},
             signature,
@@ -1008,6 +1034,11 @@ def _prepare_disk_run(
                 ),
                 dict(recorded_selector.get("request") or {}),
             )
+        if HARVEST_BLOCK_KEY in existing:
+            validate_harvest_block(existing[HARVEST_BLOCK_KEY])
+        recorded_intervention = (existing.get("run") or {}).get("intervention")
+        if recorded_intervention:
+            prep_state["intervention_sites"] = list(recorded_intervention["target_site_keys"])
         prep_state["ragged_state"] = _rehydrate_ragged_state(existing, prep_state["resume_audit"])
         _clean_orphan_tmp_files(container_path)
         # A torn final ledger line is crash debris: cleared before appends
@@ -1026,7 +1057,7 @@ def _prepare_disk_run(
             "but no manifest; it predates resumable extraction or lost its "
             "ledger, so completed work cannot be verified.",
             code="extraction_resume_unmanifested_dir",
-            remedy="delete the output directory (or point output_dir at a fresh one) and re-run",
+            remedy="delete the output directory (or point path at a fresh one) and re-run",
             output_dir=str(container_path),
         )
 

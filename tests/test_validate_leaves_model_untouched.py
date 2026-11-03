@@ -124,7 +124,7 @@ def _validate(model: nn.Module, scope: str) -> None:
         warnings.simplefilter("ignore")
         result = tl.validate(model, _X, scope=scope)
     if scope == "intervention":
-        assert result.invariance, "baseline forward validation failed"
+        assert result.is_invariant, "baseline forward validation failed"
     elif scope == "receptive_field":
         assert isinstance(result, list)
     else:

@@ -29,6 +29,7 @@ Every spelling DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from collections import defaultdict
@@ -37,16 +38,23 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from .._errors import InvalidArgumentError
-from ._helper_fingerprint import helper_versions
-from ._module_alias_guard import (
+from .._selection.module_alias_guard import (
     bare_module_address,
     model_module_aliases,
     refuse_module_alias_spellings,
 )
+from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
+from ._binding_calls import _alias_disclosure, _has_tensor, _is_in_place_call
+from ._helper_fingerprint import helper_versions
+from ._zero_fire import (
+    DEFAULT_ZERO_FIRE_POLICY,
+    check_zero_fire_policy,
+)
+from ._zero_fire_doors import note_non_tensor_module_output, refuse_bound_zero_fire
 from .audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
 from .errors import BindingPreflightError, BindingRuntimeError
 from .model_door import resolve_model_operand
-from .spec import InterventionSpec
+from .spec import Recipe
 
 #: Attribute names whose access raises the training-surface teaching refusal
 #: (surgery 3.3 item 7): a binding is NOT an ``nn.Module`` and never will be.
@@ -82,8 +90,6 @@ _TRAINING_SURFACE_NAMES: frozenset[str] = frozenset(
     }
 )
 
-_ZERO_FIRE_POLICIES: frozenset[str] = frozenset({"error", "disclose"})
-
 #: The engine-set execution-effect value for this lane (foldA D17).
 _BIND_EXECUTION_EFFECT = "values_replaced_after_execution"
 
@@ -105,10 +111,10 @@ class BindReport:
     spec_digest: str = ""
     rules: tuple[dict[str, Any], ...] = ()
     model_class: str = ""
-    model_training: bool = False
-    grad_enabled: bool = True
+    is_model_training: bool = False
+    is_grad_enabled: bool = True
     resolved_static_targets: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    fire_count: int = 0
+    num_fires: int = 0
     rule_fire_counts: dict[str, int] = field(default_factory=dict)
     fires: tuple[dict[str, Any], ...] = ()
     fire_records: tuple[Any, ...] = ()
@@ -133,7 +139,7 @@ class BindReport:
     duration_s: float | None = None
     trace: None = None
 
-    def as_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the report as one plain envelope-shaped dictionary."""
 
         from dataclasses import asdict
@@ -156,7 +162,7 @@ def _selector_terms(selector: Any, *, negated: bool = False) -> list[tuple[str, 
         resolve).
     """
 
-    from .selectors import BaseSelector, CompositeSelector, NotSelector
+    from .._selection.selectors import BaseSelector, CompositeSelector, NotSelector
 
     if isinstance(selector, NotSelector):
         return _selector_terms(selector.selector, negated=not negated)
@@ -174,7 +180,7 @@ def _module_anchor_addresses(rule: Any) -> list[str]:
     """Collect the non-negated module-address anchors of one rule's WHERE term."""
 
     anchors: list[str] = []
-    for kind, node, negated in _selector_terms(rule.where):
+    for kind, node, negated in _selector_terms(rule.target):
         if negated:
             continue
         if kind in {"module", "in_module"}:
@@ -186,18 +192,163 @@ def _module_anchor_addresses(rule: Any) -> list[str]:
     return anchors
 
 
-def _is_boundary_rule(rule: Any) -> bool:
-    """Whether a rule targets a module OUTPUT boundary (plain ``tl.module``)."""
+def _boundary_parts(rule: Any) -> tuple[Any, tuple[Any, ...]] | None:
+    """Split a module-boundary WHERE term into its module term and step qualifiers.
 
-    return getattr(rule.where, "selector_kind", None) == "module"
+    A boundary rule is a plain ``tl.module(address)`` or an AND of exactly one
+    such term with ``at_step(...)`` decode-step qualifiers (N-IV-12), which the
+    boundary hook checks against the armed call's decode step.
+
+    Returns
+    -------
+    tuple[Any, tuple[Any, ...]] | None
+        ``(module_selector, step_selectors)``, or ``None`` for any other shape.
+    """
+
+    from .._selection.selectors import CompositeSelector
+
+    where = rule.target
+    if getattr(where, "selector_kind", None) == "module":
+        return where, ()
+    if not isinstance(where, CompositeSelector) or where.operator != "and":
+        return None
+    modules = [child for child in where.selectors if child.selector_kind == "module"]
+    steps = tuple(child for child in where.selectors if child.selector_kind == "episode_step")
+    if len(modules) != 1 or not steps or len(modules) + len(steps) != len(where.selectors):
+        return None
+    return modules[0], steps
+
+
+def _is_boundary_rule(rule: Any) -> bool:
+    """Whether a rule targets a module OUTPUT boundary (``tl.module``, optionally step-qualified)."""
+
+    return _boundary_parts(rule) is not None
 
 
 def _rule_contains_module_boundary(rule: Any) -> bool:
     """Whether any non-negated term of the WHERE tree is a ``module`` kind."""
 
     return any(
-        kind == "module" and not negated for kind, _node, negated in _selector_terms(rule.where)
+        kind == "module" and not negated for kind, _node, negated in _selector_terms(rule.target)
     )
+
+
+#: Selector kinds that match against TorchLens label strings.
+_LABEL_TERM_KINDS: frozenset[str] = frozenset({"label", "contains", "regex"})
+
+#: Selector kinds a capture-free run can never evaluate: they read the graph
+#: around a recorded op, or a model input, and a binding records neither.
+_GRAPH_TERM_KINDS: tuple[tuple[str, str], ...] = (
+    ("followed_by", "reads the ops recorded after a candidate"),
+    ("preceded_by", "reads the ops recorded before a candidate"),
+    ("input_at", "names a recorded model input, which is not an op a binding edits"),
+)
+
+_LABEL_OP_TYPE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*?)(?:_\d+){1,2}(?:_raw)?(?::\d+)?$")
+
+_POINTER = "see 'Labels inside a binding' in docs/agent-reference/known-gotchas.md"
+
+
+def _label_term_unmatchable(kind: str, value: str) -> bool:
+    """Whether one label-string term can never match a capture-free context.
+
+    A binding's live contexts carry only the raw label minted during the
+    forward (``relu_1_2_raw``). A final, short or pass-qualified label exists
+    only after a capture: an exact ``tl.label`` of anything but a raw label
+    never matches, and a final-looking literal in any label kind raises at
+    the first op.
+    """
+
+    from .._ir.selector_eval import looks_like_finalized_label
+
+    if looks_like_finalized_label(value):
+        return True
+    return kind == "label" and not value.endswith("_raw")
+
+
+def _structural_remedy(value: str | None) -> str:
+    """Name the structural spelling for a label, concretely where the label says its op."""
+
+    match = _LABEL_OP_TYPE.match(value) if value is not None else None
+    if match is None:
+        return (
+            "select the op structurally: tl.func(<function name>) & "
+            "tl.in_module(<module address from model.named_modules()>); " + _POINTER
+        )
+    op_type = match.group(1)
+    return (
+        f"select the op structurally: tl.func({op_type!r}) matches every {op_type} call; "
+        f"to target one call, add & tl.in_module(<address>) with a module address from "
+        "model.named_modules() (on a capture, the label's layer names its containing "
+        "module); " + _POINTER
+    )
+
+
+def _post_capture_term_problem(rule: Any) -> tuple[str, str] | None:
+    """Return why a rule's WHERE tree needs a capture the binding never makes, if it does.
+
+    Every term counts, negated or not and whatever it is combined with: a
+    term the lane cannot evaluate either raises at the first op it reaches
+    or never matches, so the rule can never run as written.
+    """
+
+    for kind, node, _negated in _selector_terms(rule.target):
+        if kind in _LABEL_TERM_KINDS:
+            value = str(node.selector_value)
+            if not _label_term_unmatchable(kind, value):
+                continue
+            return (
+                f"selects with {node!r}, but TorchLens assigns layer labels when a "
+                "capture finishes, and a binding runs the model without a capture "
+                "(its ops carry only raw labels such as 'relu_1_2_raw'), so this "
+                "term can never match",
+                _structural_remedy(value),
+            )
+        graph_reason = dict(_GRAPH_TERM_KINDS).get(kind)
+        if graph_reason is not None:
+            return (
+                f"selects with {node!r}, which {graph_reason}; a binding "
+                "runs the model without recording a graph, so this term can never match",
+                _structural_remedy(None),
+            )
+    return None
+
+
+def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
+    """Return why one rule cannot run on the capture-free lane, if it cannot.
+
+    Parameters
+    ----------
+    rule:
+        Spec rule being lowered.
+
+    Returns
+    -------
+    tuple[str, str] | None
+        ``(reason, remedy)`` for a refusal, or ``None`` when the rule lowers.
+    """
+
+    term_problem = _post_capture_term_problem(rule)
+    if term_problem is not None:
+        return term_problem
+    decision = rule.decision
+    if decision is None or decision.hook is None:
+        return (
+            "carries no executable hook payload; the capture-free lane can only "
+            "run value-replacing actions",
+            "use a value-replacing action (tl.scale, tl.add_noise, tl.replace_with, "
+            "or a callable taking (out, *, ctx))",
+        )
+    from .audit import rule_signal
+
+    if rule_signal(rule.target) != "forward":
+        return (
+            "edits gradients; the capture-free lane runs forward value "
+            "replacements only, so it would edit the activation instead",
+            "capture with backward_ready=True, intervene=tl.when(tl.grad(site), edit), "
+            "and call trace.backward(loss)",
+        )
+    return None
 
 
 class _RulePlan:
@@ -218,27 +369,29 @@ class _RulePlan:
         ------
         BindingPreflightError
             ``bind_rule_unsupported`` when the rule's decision carries no
-            executable hook payload.
+            executable hook payload, or when it edits gradients: the
+            capture-free lane runs forward value replacements only, and
+            lowering a gradient edit as a forward hook would silently edit
+            the activation instead.
         """
 
         from .hooks import normalize_hook
-        from .types import HelperSpec
+        from .types import Edit
 
         decision = rule.decision
-        if decision is None or decision.hook is None:
+        problem = _rule_plan_problem(rule)
+        if problem is not None:
+            reason, remedy = problem
             raise BindingPreflightError(
-                f"rule {rule.rule_id} ({rule.action_repr}) carries no executable "
-                "hook payload; the capture-free lane can only run value-replacing "
-                "actions",
+                f"rule {rule.rule_id} ({rule.action_repr}) {reason}",
                 code="bind_rule_unsupported",
-                remedy="use a value-replacing action (tl.scale, tl.noise, "
-                "tl.replace_with, or a callable taking (out, *, hook))",
+                remedy=remedy,
             )
         self.rule = rule
-        self.helper_spec = decision.hook if isinstance(decision.hook, HelperSpec) else None
-        self.hook_callable = normalize_hook(decision.hook, direction="forward")
+        self.helper_spec = decision.hook if isinstance(decision.hook, Edit) else None
+        self.hook_callable = normalize_hook(decision.hook)
         self.display_name = (
-            self.helper_spec.helper_name
+            self.helper_spec.name
             if self.helper_spec is not None
             else getattr(decision.hook, "__qualname__", type(decision.hook).__name__)
         )
@@ -271,7 +424,7 @@ class _BindFireSite:
 class _BindSession:
     """Mutable per-call runtime state (counters, stack, fires, minter)."""
 
-    def __init__(self, binding: BoundInterventionExecutor, door: str) -> None:
+    def __init__(self, binding: BoundModel, door: str) -> None:
         """Initialize fresh capture-parity counters for one bound call."""
 
         from .site_keys import LiveSiteKeyMinter
@@ -292,10 +445,12 @@ class _BindSession:
         # Rule ids are content-derived and read live (a staged tensor can be
         # edited in place between calls), so one call keys every ledger by
         # the identity its rules had when the call started.
-        self.rule_ids: dict[int, str] = {id(rule): rule.rule_id for rule in binding.spec.rules}
+        self.rule_ids: dict[int, str] = {id(rule): rule.rule_id for rule in binding.recipe.rules}
         self.rule_fire_counts: dict[str, int] = dict.fromkeys(self.rule_ids.values(), 0)
         self.helper_tensor_versions = binding._helper_tensor_versions()
         self.start = time.monotonic()
+        # Module address -> zero-fire reason when its output was not a tensor.
+        self.non_tensor_details: dict[str, str] = {}
 
     def record_fire(
         self,
@@ -323,11 +478,11 @@ class _BindSession:
             target_label=site.target_label,
             container_path=site.container_path,
             engine="bind",
-            helper=plan.helper_spec,
+            edit=plan.helper_spec,
             site_label=site.site_key,
             timing="post",
-            direction="forward",
-            helper_name=plan.display_name,
+            signal="forward",
+            edit_name=plan.display_name,
             run_ctx=self.run_ctx,
             previous_notes=previous_notes,
             replaced=replaced,
@@ -364,7 +519,7 @@ class _BindDispatchMode:
         import torch
         from torch.overrides import TorchFunctionMode
 
-        from ..capture.arg_positions import _normalize_func_name
+        from .._capture.arg_positions import _normalize_func_name
 
         wrap_universe = _wrap_name_universe()
 
@@ -396,26 +551,6 @@ class _BindDispatchMode:
         return _Mode()
 
 
-def _is_in_place_call(func_name: str, kwargs: dict[str, Any]) -> bool:
-    """Whether one intercepted torch call mutates its input storage in place."""
-
-    if kwargs.get("inplace") is True:
-        return True
-    return func_name.endswith("_") and not func_name.endswith("__")
-
-
-def _has_tensor(value: Any, tensor_type: type) -> bool:
-    """Cheap check that an output holds at least one top-level tensor."""
-
-    if isinstance(value, tensor_type):
-        return True
-    if isinstance(value, (list, tuple)):
-        return any(isinstance(item, tensor_type) for item in value)
-    if isinstance(value, dict):
-        return any(isinstance(item, tensor_type) for item in value.values())
-    return False
-
-
 _WRAP_UNIVERSE: frozenset[str] | None = None
 
 
@@ -428,13 +563,41 @@ def _wrap_name_universe() -> frozenset[str]:
 
     global _WRAP_UNIVERSE
     if _WRAP_UNIVERSE is None:
-        from ..capture.arg_positions import _normalize_func_name
-        from ..constants import get_orig_torch_funcs
+        from .._capture.arg_positions import _normalize_func_name
+        from .._constants import get_orig_torch_funcs
 
         _WRAP_UNIVERSE = frozenset(
             _normalize_func_name(func_name) for _ns, func_name in get_orig_torch_funcs()
         )
     return _WRAP_UNIVERSE
+
+
+def _op_hook_ctx(
+    session: _BindSession,
+    plan: _RulePlan,
+    rule: Any,
+    op_identity: tuple[str, str, str],  # (raw_label, layer_type, func_name)
+    site_key: Any,
+) -> Any:
+    """Build the post-forward hook context for one matched op-level rule firing."""
+    from .hooks import make_hook_context
+
+    raw_label, layer_type, func_name = op_identity
+
+    return make_hook_context(
+        name=plan.display_name,
+        timing="post",
+        signal="forward",
+        op={
+            "label": raw_label,
+            "layer_type": layer_type,
+            "func_name": func_name,
+            "site_key": site_key,
+            "pass_number": max(session.root_passes, 1),
+        },
+        state=session.rule_scratch[session.rule_ids[id(rule)]],
+        run_context=session.run_ctx,
+    )
 
 
 def _consider_op(
@@ -451,12 +614,11 @@ def _consider_op(
     agree with what a capture of the same forward would evaluate.
     """
 
+    from .._capture.predicates import build_op_record_context
     from ..backends.torch._ops_interventions import (
         _iter_loggable_live_outputs,
         _replace_output_tensors_by_path,
     )
-    from ..capture.predicates import build_op_record_context
-    from .hooks import make_hook_context
     from .runtime import _execute_hook
 
     layer_type, func_name, out_orig = call
@@ -497,10 +659,12 @@ def _consider_op(
             sample_id=None,
             address=getattr(module_frame, "address", None) if module_frame else None,
             module_type=getattr(module_frame, "module_type", None) if module_frame else None,
-            module_pass_index=(getattr(module_frame, "pass_index", None) if module_frame else None),
+            module_pass_number=(
+                getattr(module_frame, "pass_number", None) if module_frame else None
+            ),
         )
         try:
-            rule = binding.spec.match(ctx)
+            rule = binding.recipe.match(ctx)
         except InvalidArgumentError:
             raise
         except Exception as exc:
@@ -521,20 +685,7 @@ def _consider_op(
             # rules apply at real module hooks); nothing to fire here.
             continue
         site_key = session.minter.key_for_context(ctx)
-        hook_ctx = make_hook_context(
-            name=plan.display_name,
-            timing="post",
-            direction="forward",
-            layer_log={
-                "label": raw_label,
-                "layer_type": layer_type,
-                "func_name": func_name,
-                "site_key": site_key,
-                "pass_index": max(session.root_passes, 1),
-            },
-            ctx=session.rule_scratch[session.rule_ids[id(rule)]],
-            run_ctx=session.run_ctx,
-        )
+        hook_ctx = _op_hook_ctx(session, plan, rule, (raw_label, layer_type, func_name), site_key)
         hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
         session.record_fire(
             plan,
@@ -572,7 +723,7 @@ class _ArmedRuntime:
     what it installed before re-raising.
     """
 
-    def __init__(self, binding: BoundInterventionExecutor, session: _BindSession) -> None:
+    def __init__(self, binding: BoundModel, session: _BindSession) -> None:
         """Stage the runtime pieces for one call without installing them."""
 
         self.binding = binding
@@ -580,6 +731,7 @@ class _ArmedRuntime:
         self._handles: list[Any] = []
         self._minter_cm: Any = None
         self._mode: Any = None
+        self._step_token: Any = None
 
     def __enter__(self) -> _ArmedRuntime:
         """Install the runtime atomically (teardown on partial failure)."""
@@ -588,6 +740,7 @@ class _ArmedRuntime:
 
         try:
             self._minter_token = _ACTIVE_LIVE_MINTER.set(self.session.minter)
+            self._step_token = ACTIVE_BIND_SESSION.set(self.session)
             self._install_tracker_hooks()
             self._install_boundary_hooks()
             if self.binding._op_level_plans:
@@ -639,15 +792,21 @@ class _ArmedRuntime:
             except BaseException as exc:  # noqa: BLE001 -- teardown must continue
                 first = first or exc
             self._minter_token = None  # type: ignore[assignment]
+        if getattr(self, "_step_token", None) is not None:
+            try:
+                ACTIVE_BIND_SESSION.reset(self._step_token)
+            except BaseException as exc:  # noqa: BLE001 -- teardown must continue
+                first = first or exc
+            self._step_token = None
         return first
 
     def _install_tracker_hooks(self) -> None:
         """Install the capture-parity module-stack tracker on every module."""
 
-        from ..ir.predicate import ModuleStackFrame
+        from .._ir.predicate import ModuleStackFrame
 
         session = self.session
-        root_id = id(self.binding.base_model)
+        root_id = id(self.binding.model)
 
         def _make_pre(address: str, module_type: str, module_id: int) -> Any:
             """Build the frame-pushing pre-hook for one module."""
@@ -670,7 +829,7 @@ class _ArmedRuntime:
                         address=address,
                         module_type=module_type,
                         module_id=module_id,
-                        pass_index=session.module_pass_counts[address],
+                        pass_number=session.module_pass_counts[address],
                     )
                 )
 
@@ -690,7 +849,7 @@ class _ArmedRuntime:
 
             return _post
 
-        for address, module in self.binding.base_model.named_modules():
+        for address, module in self.binding.model.named_modules():
             self._handles.append(
                 module.register_forward_pre_hook(
                     _make_pre(address, type(module).__name__, id(module))
@@ -704,7 +863,8 @@ class _ArmedRuntime:
         session = self.session
         binding = self.binding
         for plan in binding._boundary_plans:
-            target_value = str(plan.rule.where.selector_value)
+            parts = _boundary_parts(plan.rule)
+            target_value = str(parts[0].selector_value) if parts is not None else ""
             for address in plan.boundary_targets:
                 module = binding._modules_by_address[address]
                 self._handles.append(
@@ -722,11 +882,11 @@ def _make_boundary_hook(
     def _boundary(module: Any, args: Any, output: Any) -> Any:
         """Replace the module's output leaves when the pass qualifier matches."""
 
+        from .._ir.selector_eval import module_address_matches
         from ..backends.torch._ops_interventions import (
             _iter_loggable_live_outputs,
             _replace_output_tensors_by_path,
         )
-        from ..ir.selector_eval import module_address_matches
         from .hooks import make_hook_context
         from .runtime import _execute_hook
 
@@ -736,19 +896,21 @@ def _make_boundary_hook(
         # the capture lifecycle produces for containment matching.
         if not module_address_matches(f"{address}:{pass_index}", target_value):
             return None
+        if not _decode_step_admits(plan) or _output_has_no_tensor(session, address, output):
+            return None
         replacements: dict[tuple[Any, ...], Any] = {}
         for out, container_path, _spec in _iter_loggable_live_outputs(output, True):
             hook_ctx = make_hook_context(
                 name=plan.display_name,
                 timing="post",
-                direction="forward",
-                layer_log={
+                signal="forward",
+                op={
                     "label": f"{address}:{pass_index}",
                     "module_address": address,
-                    "pass_index": pass_index,
+                    "pass_number": pass_index,
                 },
-                ctx=session.rule_scratch[session.rule_ids[id(plan.rule)]],
-                run_ctx=session.run_ctx,
+                state=session.rule_scratch[session.rule_ids[id(plan.rule)]],
+                run_context=session.run_ctx,
             )
             hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
             session.record_fire(
@@ -775,17 +937,24 @@ def _make_boundary_hook(
     return _boundary
 
 
-def _alias_disclosure(aliases: dict[str, str]) -> dict[str, tuple[str, ...]]:
-    """Invert the alias map into canonical address -> alias spellings."""
+def _output_has_no_tensor(session: _BindSession, address: str, output: Any) -> bool:
+    """Whether a module-output rule has no tensor to apply to (capture door parity)."""
 
-    disclosure: dict[str, list[str]] = {}
-    for alias, canonical in aliases.items():
-        disclosure.setdefault(canonical, []).append(alias)
-    return {canonical: tuple(names) for canonical, names in disclosure.items()}
+    return note_non_tensor_module_output(session.non_tensor_details, address, output)
+
+
+def _decode_step_admits(plan: _RulePlan) -> bool:
+    """Whether a boundary rule's ``at_step`` qualifiers admit the current decode step."""
+
+    parts = _boundary_parts(plan.rule)
+    if parts is None or not parts[1]:
+        return True
+    step = active_bind_decode_step()
+    return step is not None and all(step in selector.steps for selector in parts[1])
 
 
 def _lower_rules(
-    spec: InterventionSpec,
+    spec: Recipe,
     modules_by_address: dict[str, Any],
 ) -> tuple[list[_RulePlan], list[_RulePlan], dict[int, tuple[str, ...]]]:
     """Lower every rule and resolve its static anchors before ANY forward.
@@ -899,9 +1068,7 @@ class _ArmedLazyOutput(Generator[Any, Any, Any]):
     zero-fire policy.
     """
 
-    def __init__(
-        self, binding: BoundInterventionExecutor, session: _BindSession, inner: Iterator[Any]
-    ) -> None:
+    def __init__(self, binding: BoundModel, session: _BindSession, inner: Iterator[Any]) -> None:
         """Adopt one open call: its session, its held lock, its lazy output."""
 
         self._binding = binding
@@ -985,7 +1152,7 @@ class _ArmedLazyOutput(Generator[Any, Any, Any]):
         finally:
             self._stepping.release()
         if refuse_zero_fire:
-            self._binding._refuse_zero_fire(report)
+            self._binding._refuse_zero_fire(report, self._session)
 
     def _step(self, advance: Callable[[], Any]) -> Any:
         """Run one step of the model's iterator with the runtime armed."""
@@ -999,7 +1166,7 @@ class _ArmedLazyOutput(Generator[Any, Any, Any]):
                     return advance()
             except StopIteration:
                 report = self._settle(error=None)
-                self._binding._refuse_zero_fire(report)
+                self._binding._refuse_zero_fire(report, self._session)
                 raise
             except BaseException as exc:
                 self._settle(error=exc)
@@ -1027,7 +1194,7 @@ class _ArmedLazyOutput(Generator[Any, Any, Any]):
         return self._binding._finish(self._session, error=message)
 
 
-class BoundInterventionExecutor:
+class BoundModel:
     """The bound intervention executor: one spec, one model, changing neither.
 
     Serial, non-reentrant, capture-free, and never an ``nn.Module``. The call
@@ -1035,18 +1202,19 @@ class BoundInterventionExecutor:
     ``generate()`` holds the runtime across the whole generation with
     pass-qualified rule semantics, including a lazy generation whose
     forwards run while the caller iterates; the ledger is out-of-band on
-    ``.last_report``; ``.spec``/``.base_model`` are read-only; runtime state
+    ``.last_report``; ``.recipe``/``.model`` are read-only; runtime state
     installs and removes atomically on success or exception; zero-fire rules
-    fail closed after the call by default (FOLD-A3); there is no binding
+    settle by the ``on_zero_fire`` policy after the call (default ``"warn"``:
+    a coded warning plus the recorded fact); there is no binding
     serialization. A bound executor reads the helper's tensor at each call;
     in-place changes apply to the next call (``.last_report`` records each
     helper tensor's version counter).
     """
 
-    def __init__(self, spec: InterventionSpec, model: Any, *, on_zero_fire: str) -> None:
+    def __init__(self, spec: Recipe, model: Any, *, on_zero_fire: str) -> None:
         """Preflight + lower the spec against the model (no forward runs).
 
-        Use :meth:`InterventionSpec.bind`; this constructor is the engine.
+        Use :meth:`Recipe.bind`; this constructor is the engine.
         """
 
         object.__setattr__(self, "_spec", spec)
@@ -1061,13 +1229,13 @@ class BoundInterventionExecutor:
     # read-only surface (surgery 3.3 item 4)
     # ------------------------------------------------------------------
     @property
-    def spec(self) -> InterventionSpec:
+    def recipe(self) -> Recipe:
         """The immutable spec this binding applies (read-only)."""
 
         return self._spec
 
     @property
-    def base_model(self) -> Any:
+    def model(self) -> Any:
         """The base model this binding runs (read-only; never copied)."""
 
         return self._base_model
@@ -1086,9 +1254,9 @@ class BoundInterventionExecutor:
     def __setattr__(self, name: str, value: Any) -> None:
         """Refuse rebinding the read-only surface; allow internal state."""
 
-        if name in {"spec", "base_model", "last_report", "_spec", "_base_model"}:
+        if name in {"recipe", "base_model", "last_report", "_spec", "_base_model"}:
             raise AttributeError(
-                f"BoundInterventionExecutor.{name} is read-only; build a new "
+                f"BoundModel.{name} is read-only; build a new "
                 "binding from the immutable spec instead"
             )
         object.__setattr__(self, name, value)
@@ -1099,9 +1267,9 @@ class BoundInterventionExecutor:
         status = self._last_report.status if self._last_report is not None else "never called"
         return (
             f"<bound intervention executor: {len(self._spec.rules)} rule(s) "
-            f"{self._spec.spec_digest} over {type(self._base_model).__name__}; "
+            f"{self._spec.digest} over {type(self._base_model).__name__}; "
             f"capture-free live lane (values replaced after execution); "
-            f".spec/.base_model read-only; last call: {status}>"
+            f".recipe/.model read-only; last call: {status}>"
         )
 
     # ------------------------------------------------------------------
@@ -1118,7 +1286,7 @@ class BoundInterventionExecutor:
                 "owned trainable module are different artifacts",
                 code="binding_training_surface",
                 remedy="write a small wrapper nn.Module you own around "
-                "binding.base_model, or use binding.base_model directly for "
+                "binding.model, or use binding.model directly for "
                 "training surfaces",
             )
         raise AttributeError(name)
@@ -1144,15 +1312,17 @@ class BoundInterventionExecutor:
         ------
         BindingPreflightError
             ``bind_spec_invalid`` / ``bind_spec_empty`` /
-            ``bind_model_invalid`` / ``bind_zero_fire_policy_invalid`` /
-            ``bind_static_anchor_unresolved`` / ``bind_rule_unsupported``.
+            ``bind_model_invalid`` / ``bind_static_anchor_unresolved`` /
+            ``bind_rule_unsupported``.
+        InvalidArgumentError
+            ``zero_fire_policy_invalid`` (the same refusal at every door).
         """
 
         import torch
 
         spec = self._spec
         model = self._base_model
-        if not isinstance(spec, InterventionSpec):
+        if not isinstance(spec, Recipe):
             raise BindingPreflightError(
                 f"bind() needs the immutable public InterventionSpec; received "
                 f"{type(spec).__name__}",
@@ -1161,17 +1331,11 @@ class BoundInterventionExecutor:
             )
         if not spec.rules:
             raise BindingPreflightError(
-                "bind() refuses an empty spec: zero rules means zero fires by "
-                "construction, and zero-fire rules fail closed",
+                "bind() refuses an empty spec: zero rules means zero fires by construction",
                 code="bind_spec_empty",
                 remedy="add at least one tl.when(...) clause before binding",
             )
-        if self._on_zero_fire not in _ZERO_FIRE_POLICIES:
-            raise BindingPreflightError(
-                f"on_zero_fire must be 'error' or 'disclose', got {self._on_zero_fire!r}",
-                code="bind_zero_fire_policy_invalid",
-                remedy="pass on_zero_fire='error' (fail-closed default) or 'disclose'",
-            )
+        check_zero_fire_policy(self._on_zero_fire)
         if not isinstance(model, torch.nn.Module):
             hint = ""
             if callable(model) and getattr(model, "__self__", None) is not None:
@@ -1279,7 +1443,7 @@ class BoundInterventionExecutor:
         finally:
             if not handed_off:
                 report = self._finish(session, error=error)
-        self._refuse_zero_fire(report)
+        self._refuse_zero_fire(report, session)
         return output
 
     def _finish(self, session: _BindSession, *, error: str | None) -> BindReport:
@@ -1292,28 +1456,18 @@ class BoundInterventionExecutor:
             self._lock.release()
         return report
 
-    def _refuse_zero_fire(self, report: BindReport) -> None:
-        """Apply the fail-closed zero-fire policy to one settled report.
+    def _refuse_zero_fire(self, report: BindReport, session: _BindSession | None = None) -> None:
+        """Apply the zero-fire policy to one settled report (the fact is on the report).
 
         Raises
         ------
         BindingRuntimeError
             ``bind_zero_fire`` when a rule never fired and the policy is
-            ``"error"``.
+            ``"error"``; the default ``"warn"`` emits a coded warning instead.
         """
 
-        if self._on_zero_fire == "error" and report.zero_fire_rule_ids:
-            names = ", ".join(report.zero_fire_rule_ids)
-            raise BindingRuntimeError(
-                f"rule(s) [{names}] never fired during this bound {report.door}; "
-                "zero-fire rules fail closed after the call (the model's side "
-                "effects may already have occurred; the full report is retained "
-                "on .last_report)",
-                code="bind_zero_fire",
-                remedy="fix the WHERE terms so every rule fires, or opt into "
-                "disclosure-only settlement with "
-                "spec.bind(model, on_zero_fire='disclose')",
-            )
+        details = session.non_tensor_details if session is not None else {}
+        refuse_bound_zero_fire(self._on_zero_fire, report, details)
 
     def _settle(self, session: _BindSession, *, door: str, error: str | None) -> BindReport:
         """Build the out-of-band ledger for one finished (or failed) call."""
@@ -1333,16 +1487,16 @@ class BoundInterventionExecutor:
         return BindReport(
             door=door,
             status=status,
-            spec_digest=self._spec.spec_digest,
+            spec_digest=self._spec.digest,
             rules=rules_payload(self._spec),
             model_class=type(self._base_model).__qualname__,
-            model_training=bool(getattr(self._base_model, "training", False)),
-            grad_enabled=torch.is_grad_enabled(),
+            is_model_training=bool(getattr(self._base_model, "training", False)),
+            is_grad_enabled=torch.is_grad_enabled(),
             resolved_static_targets={
                 session.rule_ids[key]: targets
                 for key, targets in self._resolved_static_targets.items()
             },
-            fire_count=fire_count,
+            num_fires=fire_count,
             rule_fire_counts=dict(session.rule_fire_counts),
             fires=tuple(session.fires),
             fire_records=tuple(session.fire_records),
@@ -1356,8 +1510,8 @@ class BoundInterventionExecutor:
 
 
 def bind_spec_to_model(
-    spec: InterventionSpec, model: Any, *, on_zero_fire: str = "error"
-) -> BoundInterventionExecutor:
+    spec: Recipe, model: Any, *, on_zero_fire: str = DEFAULT_ZERO_FIRE_POLICY
+) -> BoundModel:
     """The bind door: funnel the model operand, then construct the executor.
 
     Parameters
@@ -1370,7 +1524,8 @@ def bind_spec_to_model(
         re-bind the same base model, which is refused here explicitly --
         bindings never nest.
     on_zero_fire:
-        Zero-fire settlement policy (``"error"`` default per FOLD-A3).
+        Zero-fire settlement policy: ``"warn"`` (default), ``"error"`` or
+        ``"disclose"``; the same knob at every intervention door.
     """
 
     resolution = resolve_model_operand(model, door="bind")
@@ -1379,14 +1534,14 @@ def bind_spec_to_model(
             "bind() received a bound intervention executor; bindings never "
             "nest -- one binding pairs one spec with one plain model",
             code="bind_model_invalid",
-            remedy="bind the base model: spec.bind(binding.base_model), "
+            remedy="bind the base model: spec.bind(binding.model), "
             "merging specs first if both should apply",
         )
-    return BoundInterventionExecutor(spec, resolution.model, on_zero_fire=on_zero_fire)
+    return BoundModel(spec, resolution.model, on_zero_fire=on_zero_fire)
 
 
 __all__ = [
     "BindReport",
-    "BoundInterventionExecutor",
+    "BoundModel",
     "bind_spec_to_model",
 ]

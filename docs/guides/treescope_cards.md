@@ -1,7 +1,7 @@
 # Notebook cards and the treescope bridge
 
-*(F16, treescope memo B2-B4/B7. Every spelling on this page is
-DOCUMENTED-UNSTABLE pending the naming session.)*
+*(Every spelling on this page is DOCUMENTED-UNSTABLE: it may change before
+the 3.0 release.)*
 
 TorchLens objects carry dependency-free rich HTML cards as their primary
 notebook experience; the treescope bridge is an **opt-in upgrade** that adds
@@ -79,8 +79,8 @@ Rules the bridge keeps:
   reason is named, and a `treescope_bridge_degraded` warning fires once.
 - **Top-level display prefers our card** (`_repr_html_` short-circuits
   treescope). `tl_treescope.display(obj)` is the explicit door to the
-  interactive render; `show(method="treescope")` is the candidate method
-  spelling for the UI sprint.
+  interactive render; `show(method="treescope")` is a candidate method
+  spelling that may replace it.
 - **The duplicate box:** treescope appends any object's `_repr_html_` as a
   collapsed "Rich HTML representation" box after our handler renders. The
   cards suppress the duplicate payload with a narrow, fail-safe check (a
@@ -135,4 +135,4 @@ code, faceted array visualization conventions, truncation budgets with edge
 items, diverging-around-zero defaults, and pattern-coded exceptional values.
 Named code borrow: `infer_balanced_truncation` (including `doubling_bonus`)
 and the two-stage slice-then-convert truncation protocol, ported with license
-notice in `torchlens/notebook/_truncation.py`.
+notice in `torchlens/report/_notebook/_truncation.py`.

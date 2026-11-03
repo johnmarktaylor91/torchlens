@@ -26,14 +26,14 @@ pytest.importorskip("transformers")
 
 import torchlens as tl
 from tests.real_model.r0.families import _token_ids, build_gpt2
-from torchlens.errors._base import TorchLensWarning
-from torchlens.semantic.logit_lens import (
+from torchlens._semantic.logit_lens import (
     PROVENANCE_NATIVE,
     LogitLensError,
     logit_lens,
     logit_lens_predictions,
 )
-from torchlens.semantic.patching import PatchApplicationError
+from torchlens._semantic.patching import PatchApplicationError
+from torchlens.errors._base import TorchLensWarning
 
 # File-level: the real_model selection marker only. Cost tiers are per-test:
 # the logit-lens/attribution rows are smoke (sub-second on the cached capture);
@@ -41,7 +41,7 @@ from torchlens.semantic.patching import PatchApplicationError
 # heavy tier per the marker lint's 5 s smoke budget.
 pytestmark = pytest.mark.real_model
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
+_CAPTURE = tl.options.CaptureOptions(save_args=True)
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +65,7 @@ def gpt2_inputs() -> tuple[torch.Tensor, torch.Tensor]:
 def gpt2_log(gpt2: Any, gpt2_inputs: tuple[torch.Tensor, torch.Tensor]) -> Any:
     """One cached exhaustive capture of the clean batch."""
 
-    log = tl.trace(gpt2, gpt2_inputs[0], capture=_CAPTURE)
+    log = tl.trace(gpt2, gpt2_inputs[0], capture=_CAPTURE, save="all")
     yield log
     log.cleanup()
 
@@ -105,7 +105,7 @@ def test_logit_lens_default_route_settles_typed_or_validated(gpt2_log: Any) -> N
         assert "final_norm_kind" in str(exc)
         assert "lens=" in str(exc)  # the teaching remedy is named
     else:
-        assert result.validated
+        assert result.is_validated
         assert result.entries and result.entries[-1].logits.shape[-1] == 512
 
 
@@ -118,7 +118,7 @@ def test_logit_lens_user_lens_route_projects_real_numbers(gpt2: Any, gpt2_log: A
     """
 
     result = logit_lens(gpt2_log, lens=_user_lens(gpt2))
-    assert result.lens_source == "user" and not result.validated
+    assert result.lens_source == "user" and not result.is_validated
     assert [entry.address for entry in result.entries] == [
         "transformer.h.0",
         "transformer.h.1",
@@ -168,7 +168,7 @@ def test_activation_patch_residual_stream_never_silently_flat(
             )
         except PatchApplicationError:
             return  # typed refusal is an honest settled state
-    baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE)
+    baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE, save="all")
     try:
         baseline = _last_token_metric(baseline_log).detach()
     finally:
@@ -209,7 +209,7 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
       ``PatchApplicationError`` (the measured DIGEST mechanism).
     * ``resid_post`` homes on the recurrence-grouped residual adds; the
       hook path addresses them by bare layer label and refuses
-      ``SiteAmbiguityError`` (pass-qualified addressing, lane A04).
+      ``AmbiguousSiteError`` (pass-qualified addressing, lane A04).
 
     When the sibling lanes land their re-homing/addressing repairs, a table
     comes out instead -- then at least one cell must move (clean and
@@ -217,7 +217,7 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
     all-identical values. A silent baseline-equal table fails in every world.
     """
 
-    from torchlens.intervention.errors import SiteAmbiguityError
+    from torchlens.intervention.errors import AmbiguousSiteError
 
     clean, corrupted = gpt2_inputs
     helper = getattr(tl.facets.patching, helper_name)
@@ -228,10 +228,10 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
         except PatchApplicationError as exc:
             assert "replaced=False" in str(exc) or "never fired" in str(exc)
             return
-        except SiteAmbiguityError as exc:
+        except AmbiguousSiteError as exc:
             assert "pass-qualified" in str(exc)
             return
-    baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE)
+    baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE, save="all")
     try:
         baseline = _last_token_metric(baseline_log).detach()
     finally:

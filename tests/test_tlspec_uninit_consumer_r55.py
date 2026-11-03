@@ -26,12 +26,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._runnable_execution import (
-    _nondeterministic_value_sources,
-    _uninit_taint_reaches,
-)
+from torchlens._runnable.attestation import _nondeterministic_value_sources, _uninit_taint_reaches
 
-_CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
+_CAPTURE = {"capture": tl.options.CaptureOptions(replayable=True)}
 
 
 @contextmanager
@@ -69,7 +66,7 @@ def _build(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor) -> Path
     with _realistic_nondeterministic_fill():
         trace = tl.trace(model.eval(), x, **_CAPTURE)
     bundle = tmp_path / name
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 

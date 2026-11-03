@@ -1,11 +1,8 @@
 """Regression tests for r18c bridge/compat adapter hardening.
 
 Covers the depyf prepare_debug contract, tensor_layers explicit-site validation
-(A3-14), the extractor/ILG .model unwrap gate (A3-15), dialz
-default-method detection, the lovely non-mutating fallback (A3-17), the repeng /
-steering contrastive-row contract, the profiler blank-label guard
-(A3-01 partial), null traceEvents handling (LOW-9), the execution_trace schema
-docstring (A3-18), and the push_to_hub artifact-format tag (LOW-4 / LOW-S1).
+(A3-14), the extractor/ILG .model unwrap gate (A3-15), the lovely
+non-mutating fallback (A3-17), the profiler blank-label guard (A3-01 partial), null traceEvents handling (LOW-9), and the push_to_hub artifact-format tag (LOW-4 / LOW-S1).
 
 The adapters are exercised with stubbed optional dependencies and fake logs so
 the suite needs none of the optional extras installed.
@@ -47,7 +44,7 @@ class _FakeLog:
     """Minimal ``Trace``-shaped object exposing ``layer_list``."""
 
     def __init__(self, layers: list[Any]) -> None:
-        self.layer_list = layers
+        self._layer_list = layers
 
 
 # --------------------------------------------------------------------------- #
@@ -226,42 +223,6 @@ def test_from_ilg_keeps_plain_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# dialz: the installed default method name is read from read_representations
-# --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("default", ["pca", "pca_diff"])
-def test_dialz_default_method_follows_installed_release(
-    monkeypatch: pytest.MonkeyPatch, default: str
-) -> None:
-    """dialz 1.x defaults to ``pca`` and 0.2 to ``pca_diff``; both are honoured."""
-
-    from torchlens.bridge import dialz
-
-    def read_representations(model: Any, tokenizer: Any, inputs: Any, method: str = default):
-        raise AssertionError("never called")
-
-    fake = _module(
-        "dialz", vector=_module("dialz.vector", read_representations=read_representations)
-    )
-    assert dialz._default_method(fake) == default
-    assert dialz._default_method(_module("dialz")) == "pca"
-
-
-def test_dialz_unknown_method_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An unknown method names the accepted ones instead of guessing."""
-
-    pytest.importorskip("sklearn")
-    from torchlens.bridge import dialz
-
-    monkeypatch.setitem(sys.modules, "dialz", _module("dialz", SteeringVector=dict))
-    pos = _FakeLayer("p", out=torch.randn(3, 4))
-    neg = _FakeLayer("n", out=torch.randn(3, 4))
-    with pytest.raises(ValueError, match="mean_diff"):
-        dialz.vector(
-            _FakeLog([]), pos, neg, layer=0, read_token_index=None, model_type="m", method="x"
-        )
-
-
-# --------------------------------------------------------------------------- #
 # A3-17 compat.lovely: non-mutating fallback
 # --------------------------------------------------------------------------- #
 def test_lovely_fallback_does_not_monkeypatch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -298,155 +259,6 @@ def test_lovely_forwards_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
     lovely_mod = importlib.import_module("torchlens.compat.lovely")
     assert lovely_mod.lovely(torch.zeros(2), color=False) == "formatted"
     assert seen == {"color": False}
-
-
-# --------------------------------------------------------------------------- #
-# repeng / steering: contrastive rows are read, sliced and checked before training
-# --------------------------------------------------------------------------- #
-def test_steering_default_trainer_is_mean_aggregator_on_sliced_rows(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The default trainer is the package's mean aggregator over one token per prompt."""
-
-    from torchlens.bridge import steering_vectors
-
-    seen: dict[str, Any] = {}
-
-    def mean_aggregator() -> Any:
-        def _mean(pos: torch.Tensor, neg: torch.Tensor) -> torch.Tensor:
-            seen["shapes"] = (tuple(pos.shape), tuple(neg.shape))
-            return (pos - neg).mean(dim=0)
-
-        return _mean
-
-    monkeypatch.setitem(
-        sys.modules,
-        "steering_vectors",
-        _module("steering_vectors", mean_aggregator=mean_aggregator),
-    )
-    pos = torch.randn(4, 5, 3)
-    neg = torch.randn(4, 5, 3)
-    payload = steering_vectors.vector(
-        _FakeLog([]), _FakeLayer("p", out=pos), _FakeLayer("n", out=neg)
-    )
-    assert seen["shapes"] == ((4, 3), (4, 3))
-    assert torch.equal(payload["vector"], (pos[:, -1] - neg[:, -1]).mean(dim=0))
-
-
-def test_steering_per_prompt_read_indices(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A sequence of read indices picks one token per prompt (padded batches)."""
-
-    from torchlens.bridge import steering_vectors
-
-    monkeypatch.setitem(sys.modules, "steering_vectors", _module("steering_vectors"))
-    pos = torch.arange(24.0).reshape(2, 4, 3)
-    neg = torch.zeros(2, 4, 3)
-    payload = steering_vectors.vector(
-        _FakeLog([]),
-        _FakeLayer("p", out=pos),
-        _FakeLayer("n", out=neg),
-        read_token_index=[1, 3],
-        trainer=lambda p, n: p - n,
-    )
-    assert torch.equal(payload["vector"], torch.stack([pos[0, 1], pos[1, 3]]))
-    with pytest.raises(ValueError, match="lists 1 positions"):
-        steering_vectors.vector(
-            _FakeLog([]),
-            _FakeLayer("p", out=pos),
-            _FakeLayer("n", out=neg),
-            read_token_index=[1],
-            trainer=lambda p, n: p,
-        )
-
-
-def test_steering_mismatched_rows_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Positive and negative rows must line up one to one."""
-
-    from torchlens.bridge import steering_vectors
-
-    monkeypatch.setitem(sys.modules, "steering_vectors", _module("steering_vectors"))
-    with pytest.raises(ValueError, match="must match"):
-        steering_vectors.vector(
-            _FakeLog([]),
-            _FakeLayer("p", out=torch.zeros(3, 2, 4)),
-            _FakeLayer("n", out=torch.zeros(2, 2, 4)),
-            trainer=lambda p, n: p,
-        )
-    with pytest.raises(ValueError, match=r"\[n_prompts, n_tokens, hidden\]"):
-        steering_vectors.vector(
-            _FakeLog([]),
-            _FakeLayer("p", out=torch.zeros(3, 4)),
-            _FakeLayer("n", out=torch.zeros(3, 4)),
-            trainer=lambda p, n: p,
-        )
-
-
-def test_contrastive_rows_read_last_real_token_under_padding() -> None:
-    """With a mask, -1 is each prompt's last real token on either padding side."""
-
-    from torchlens.bridge._contrastive import _read_rows
-
-    out = torch.arange(2 * 4 * 1, dtype=torch.float32).reshape(2, 4, 1)
-    right = torch.tensor([[1, 1, 0, 0], [1, 1, 1, 1]])
-    left = torch.tensor([[0, 0, 1, 1], [1, 1, 1, 1]])
-    assert _read_rows(out, -1, right, "positive").flatten().tolist() == [1.0, 7.0]
-    assert _read_rows(out, -1, left, "positive").flatten().tolist() == [3.0, 7.0]
-    assert _read_rows(out, 0, left, "positive").flatten().tolist() == [2.0, 4.0]
-    assert _read_rows(out, -1, None, "positive").flatten().tolist() == [3.0, 7.0]
-    with pytest.raises(ValueError, match="attention_mask has shape"):
-        _read_rows(out, -1, right[:, :3], "positive")
-    with pytest.raises(ValueError, match="no unmasked token"):
-        _read_rows(out, -1, torch.zeros(2, 4, dtype=torch.long), "positive")
-
-
-def test_contrastive_rows_refuse_identical_sides() -> None:
-    """Identical positive and negative rows would train an all-zero vector."""
-
-    from torchlens.bridge._contrastive import _contrastive_rows, _ContrastiveRead
-
-    same = torch.randn(3, 4, 2)
-    with pytest.raises(ValueError, match="identical"):
-        _contrastive_rows(
-            _FakeLog([]),
-            _FakeLayer("p", out=same),
-            _FakeLayer("n", out=same.clone()),
-            _ContrastiveRead(negative_log=None, read_token_index=-1),
-        )
-
-
-def test_repeng_pca_center_matches_repeng_in_place_centering(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """repeng centres h in place for pca_center, so the sign check sees centred rows."""
-
-    pytest.importorskip("sklearn")
-    from torchlens.bridge import repeng
-
-    monkeypatch.setitem(sys.modules, "repeng", _module("repeng", ControlVector=dict))
-    torch.manual_seed(5)
-    pos = torch.randn(6, 4) + 2.0
-    neg = torch.randn(6, 4)
-    payload = repeng.control_vector(
-        _FakeLog([]),
-        _FakeLayer("p", out=pos),
-        _FakeLayer("n", out=neg),
-        layer=0,
-        read_token_index=None,
-        model_type="m",
-        method="pca_center",
-    )
-    direction = payload["control_vector"]["directions"][0]
-    assert direction.shape == (4,)
-    with pytest.raises(ValueError, match="Unknown method"):
-        repeng.control_vector(
-            _FakeLog([]),
-            _FakeLayer("p", out=pos),
-            _FakeLayer("n", out=neg),
-            layer=0,
-            read_token_index=None,
-            model_type="m",
-            method="mean_diff",
-        )
 
 
 # --------------------------------------------------------------------------- #
@@ -669,7 +481,7 @@ def test_module_call_count_prefers_the_module_record_and_never_swallows_errors()
     assert _module_num_calls(_FakeLog(layers), "a") == 2
     # A module mapping without the address falls back the same way.
     with_records = types.SimpleNamespace(
-        layer_list=layers, modules={"b": types.SimpleNamespace(num_calls=5)}
+        _layer_list=layers, modules={"b": types.SimpleNamespace(num_calls=5)}
     )
     assert _module_num_calls(with_records, "a") == 2
     assert _module_num_calls(with_records, "b") == 5
@@ -678,7 +490,7 @@ def test_module_call_count_prefers_the_module_record_and_never_swallows_errors()
         def __contains__(self, key: object) -> bool:
             raise RuntimeError("module table corrupted")
 
-    broken = types.SimpleNamespace(layer_list=layers, modules=BrokenModules())
+    broken = types.SimpleNamespace(_layer_list=layers, modules=BrokenModules())
     with pytest.raises(RuntimeError, match="module table corrupted"):
         _module_num_calls(broken, "a")
 
@@ -696,35 +508,23 @@ def test_profiler_null_events(trace: dict[str, Any]) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# A3-18 profiler docstring honesty
-# --------------------------------------------------------------------------- #
-def test_execution_trace_docstring_is_honest() -> None:
-    """The docstring no longer claims ExecutionTraceObserver compatibility."""
-
-    from torchlens.bridge import profiler
-
-    doc = profiler.execution_trace.__doc__ or ""
-    assert "ExecutionTraceObserver-compatible" not in doc
-    assert "torchlens.execution_trace.v1" in doc
-
-
-# --------------------------------------------------------------------------- #
 # LOW-4 / LOW-S1 huggingface: artifact format tag + extension-aware name
 # --------------------------------------------------------------------------- #
-def test_push_to_hub_pickle_format_tag() -> None:
-    """A picklable artifact reports the pickle format and keeps the .pkl name."""
+def test_push_to_hub_refuses_objects_without_a_tlspec_path() -> None:
+    """A plain object is refused typed; push_to_hub never falls back to pickle."""
 
-    from torchlens.bridge import huggingface
+    from torchlens._errors import ArgumentTypeError
+    from torchlens.bridge import huggingface_hub
 
-    result = huggingface.push_to_hub({"trace": "data"}, "example/repo", dry_run=True)
-    assert result["format"] == "pickle"
-    assert result["path_in_repo"] == "torchlens_artifact.pkl"
+    with pytest.raises(ArgumentTypeError) as info:
+        huggingface_hub.push_to_hub({"trace": "data"}, "example/repo", dry_run=True)
+    assert info.value.fields["code"] == "hub_push_artifact_unsupported"
 
 
 def test_push_to_hub_tarball_format_and_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A bundle fallback reports tar.gz and switches the default name extension."""
+    """A bundle upload reports tar.gz under the default ``.tar.gz`` name."""
 
-    from torchlens.bridge import huggingface
+    from torchlens.bridge import huggingface_hub
 
     class Unpicklable:
         def __reduce__(self) -> Any:
@@ -737,7 +537,7 @@ def test_push_to_hub_tarball_format_and_name(monkeypatch: pytest.MonkeyPatch) ->
 
         return _save
 
-    monkeypatch.setattr(huggingface, "_resolve_bundle_saver", fake_saver)
-    result = huggingface.push_to_hub(Unpicklable(), "example/repo", dry_run=True)
+    monkeypatch.setattr(huggingface_hub, "_resolve_bundle_saver", fake_saver)
+    result = huggingface_hub.push_to_hub(Unpicklable(), "example/repo", dry_run=True)
     assert result["format"] == "tar.gz"
     assert result["path_in_repo"] == "torchlens_artifact.tar.gz"

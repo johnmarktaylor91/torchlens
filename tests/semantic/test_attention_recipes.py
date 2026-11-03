@@ -6,9 +6,8 @@ import pytest
 import torch
 from torch import nn
 
-import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens.semantic import MissingFacetError
+from torchlens.errors import MissingFacetError
 
 pytest.importorskip("transformers")
 
@@ -148,7 +147,7 @@ def test_distilbert_attention_q_shape_and_head_view() -> None:
     log = trace_fn(
         _AttentionModel(DistilBertSdpaAttention()),
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     view = log.modules["attn"].facets
     assert view.q.shape == (2, 3, 2, 4)
@@ -168,10 +167,10 @@ def test_distilbert_eager_attention_q_shape_and_head_view() -> None:
     log = trace_fn(
         _AttentionModel(MultiHeadSelfAttention()),
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     view = log.modules["attn"].facets
-    assert view.recipe_source == "distilbert_attention"
+    assert view.function_source == "distilbert_attention"
     assert view.q.shape == (2, 3, 2, 4)
     assert view.head(1).q.shape == (2, 3, 4)
     assert torch.equal(view.head(1).q, view.q[:, :, 1, :])
@@ -179,7 +178,7 @@ def test_distilbert_eager_attention_q_shape_and_head_view() -> None:
     # the graph-keyed detection serves an honest structural absence rather
     # than a value or a misleading capture hint.
     assert "pattern" not in view.keys()
-    assert view.menu()["pattern"].status == "structurally_absent"
+    assert view.declared()["pattern"].status == "structurally_absent"
 
 
 @pytest.mark.slow
@@ -195,15 +194,15 @@ def test_distilbert_unified_attention_q_shape_and_pattern_missing() -> None:
     log = trace_fn(
         _AttentionModel(DistilBertSelfAttention()),
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     view = log.modules["attn"].facets
-    assert view.recipe_source == "distilbert_attention"
+    assert view.function_source == "distilbert_attention"
     assert view.q.shape == (2, 3, 2, 4)
     assert view.head(1).q.shape == (2, 3, 4)
     # Fused-by-default: pattern is declared in the menu but unavailable until recapture.
     assert "pattern" not in view.keys()
-    assert view.menu()["pattern"].status == "needs_capture"
+    assert view.declared()["pattern"].status == "needs_capture"
     with pytest.raises(MissingFacetError, match="attention pattern not captured"):
         view.pattern
 
@@ -215,7 +214,7 @@ def test_gpt2_fused_qkv_split_matches_manual_reference() -> None:
     log = trace_fn(
         _AttentionModel(GPT2Attention()),
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     view = log.modules["attn"].facets
     c_attn = log.modules["attn.c_attn"].out
@@ -231,7 +230,7 @@ def test_gqa_kv_head_selection_is_aliasing_read_grad_only() -> None:
     log = trace_fn(
         _AttentionModel(LlamaAttention()),
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     view = log.modules["attn"].facets
     k_head = view.head(3).k

@@ -41,26 +41,50 @@ def test_root_budget_is_frozen() -> None:
     """The root-name list is a FROZEN BUDGET (memo s5 namespace rule)."""
 
     rows = surface_rows()
-    assert len(rows) == 151, (
-        f"root surface budget moved: {len(rows)} names (frozen budget 151: "
+    assert len(rows) == 109, (
+        f"root surface budget moved: {len(rows)} names (frozen budget 109: "
         "143 at the C01 freeze, -1 private `_trace` alias retired, +6 by "
         "the A10 facade -- summary/load_extraction into __all__ plus the four "
         "pre-existing lazy namespaces bridge/callbacks/neuro/notebook -- "
         "+1 by C04: the lazy L4 submodule namespace tl.transforms (transforms "
         "memo s7 home; not in __all__) -- +2 by F29: the lazy submodule "
         "namespaces tl.agent (the agent inspection surface, FACADE, not in "
-        "__all__) and tl.utils (the docs teach tl.utils.doctor(); the row was "
+        "__all__) and tl._utils (the docs taught its doctor() before tl.report; the row was "
         "missing so the taught spelling raised on a cold import; L1, not in "
         "__all__) -- and +1 by F20: the lazy L6 submodule namespace "
-        "tl.brainpipe (brainpipe memo s3 home, the memory-planned extraction "
+        "tl.neuro (brainpipe memo s3 home, the memory-planned extraction "
         "planner; not in __all__, same class as tl.transforms) -- and -1 by "
         "the resample_ablate alias removal (scramble_elements lives in "
-        "torchlens.intervention). "
+        "torchlens.intervention) = 151. Batch-2 SEL briefly added 21 namespace "
+        "rows (172); the forks ruling names.4 replaced them with three teaching "
+        "redirects (mechinterp, semantic, tviz; redirects are not surface rows), "
+        "restoring 151 -- and +1 by names.5: tl.direction_from_pairs, the "
+        "U46.1 contrastive direction builder JMT ruled as a root name (in "
+        "__all__) = 152 -- and -2 by the rename codemod: tl.save (objects "
+        "save themselves) and tl.load_extraction (tl.load reads extraction "
+        "manifests) left the root as teaching redirects -- and -6 by the "
+        "interventions rename (do, push, push_from, run, swap_with and "
+        "direction_from_pairs leave the root) +2 (Recipe and positions move "
+        "to the root) -- and -3 by the area C/F naming pass: "
+        "ActivationLookup, bundle(), show_bundle_graph, grad_fn_label and "
+        "output_at leave the root while site and at_step join it -- and -2 by the errors rename, which moves "
+        "AmbiguousOpLookupError and ReentrantTraceError to tl.errors -- and -2 by the visuals-and-kits rename: "
+        "tl.aggregate (now tl.stats.aggregate) and the tl.brainpipe facade "
+        "(folded into tl.neuro) left the root; with every area lane merged and "
+        "the table regenerated, the root held 114 rows; round 2 then moved "
+        "the captured_run, user_funcs and visualization namespaces to private packages "
+        "(-3), and the gradient-site change took -6 +2 (the six gradient helpers "
+        "scale_grad, zero_grad, clamp_grad, clip_grad, add_grad_noise, hook_grad leave "
+        "the root while tl.grad and tl.clip_norm join it), so the root held 107 rows; "
+        "the options restructure (C2, glossary row for tl.quickstart.render) adds "
+        "tl.draw, the one-call picture (108), and walk ruling late.9 adds "
+        "tl.all_sites, the named universal selector (L4 core, beside "
+        "tl.label_matches; in __all__), so the root holds 109 rows. "
         "Root growth is a deliberate act: regenerate the table, justify the "
         "new name's layer, and update this pin in the same change."
     )
     in_all = [row for row in rows if row.in_all]
-    assert len(in_all) == len(torchlens.__all__) == 115, (
+    assert len(in_all) == len(torchlens.__all__) == 85, (
         "__all__ budget moved -- update U-PUBLIC-OPERATIONS and this pin in "
         "the same deliberate change"
     )
@@ -79,7 +103,7 @@ def test_no_new_l6_plus_root_names() -> None:
         "torchlens.export",
         "torchlens.facets",
         "torchlens.report",
-        "torchlens.visualization",
+        "torchlens._visualization",
         "torchlens.viz",
         # Pre-existing L6+/bridge namespaces the A10 facade made lazily
         # resolvable as root attributes (they were importable submodules long
@@ -87,7 +111,6 @@ def test_no_new_l6_plus_root_names() -> None:
         "torchlens.bridge",
         "torchlens.callbacks",
         "torchlens.neuro",
-        "torchlens.notebook",
     }
     live_legacy = {row.canonical_path for row in surface_rows() if row.legacy_top_level}
     new_legacy = live_legacy - grandfathered
@@ -122,4 +145,4 @@ def test_every_lazy_name_resolves_in_a_fresh_interpreter() -> None:
         check=False,
     )
     assert result.returncode == 0, f"cold resolution failures:\n{result.stdout}\n{result.stderr}"
-    assert int(result.stdout.strip()) >= 112
+    assert int(result.stdout.strip()) >= 107

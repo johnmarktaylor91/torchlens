@@ -28,11 +28,11 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._capture_state_helpers import _hash_input_tensor_value
-from ..intervention.errors import BundleRelationshipError
+from ..intervention.errors import BundleComparisonError
 from ..intervention.types import Relationship
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ._relations import MemberRelationTable
 
 # MODEL-AXIS projection of the reported ``Relationship`` vocabulary (A-GATE,
@@ -78,34 +78,42 @@ class _GateRequirement:
     same_input: bool
 
 
+#: Same-input, shared-graph claim: at.compare (``bundle.at(site).compare()``),
+#: most_changed, diff and the
+#: delta family (compare, rank_changes and the private per-node reads behind
+#: them and the diff picture), which reads
+#: per-node distances from a baseline member and so gates its (baseline,
+#: member) operand pairs with the same two predicates.
+_SHARED_GRAPH_SAME_INPUT = _GateRequirement(
+    model_floor_rank=_MODEL_AXIS_RANK[Relationship.SHARED_GRAPH_SAME_INPUT],
+    model_floor_label="shared_graph",
+    same_input=True,
+)
+
 _GATE_REQUIREMENTS: dict[str, _GateRequirement] = {
-    "node": _GateRequirement(
+    "at": _GateRequirement(
         model_floor_rank=_MODEL_AXIS_RANK[Relationship.SAME_PARAM_SHAPES],
         model_floor_label="same_param_shapes",
         same_input=False,
     ),
-    "compare_at": _GateRequirement(
-        model_floor_rank=_MODEL_AXIS_RANK[Relationship.SHARED_GRAPH_SAME_INPUT],
-        model_floor_label="shared_graph",
-        same_input=True,
-    ),
-    "most_changed": _GateRequirement(
-        model_floor_rank=_MODEL_AXIS_RANK[Relationship.SHARED_GRAPH_SAME_INPUT],
-        model_floor_label="shared_graph",
-        same_input=True,
-    ),
-    "diff": _GateRequirement(
-        model_floor_rank=_MODEL_AXIS_RANK[Relationship.SHARED_GRAPH_SAME_INPUT],
-        model_floor_label="shared_graph",
-        same_input=True,
-    ),
+    "at.compare": _SHARED_GRAPH_SAME_INPUT,
+    "most_changed": _SHARED_GRAPH_SAME_INPUT,
+    "diff": _SHARED_GRAPH_SAME_INPUT,
+    "delta_map": _SHARED_GRAPH_SAME_INPUT,
+    "norm_delta": _SHARED_GRAPH_SAME_INPUT,
+    "output_delta": _SHARED_GRAPH_SAME_INPUT,
+    "compare": _SHARED_GRAPH_SAME_INPUT,
 }
 
 #: S6 PAIR-row kinds that order members in time/causality. Members joined by
 #: a directed path of these rows are NOT comparison operands (A-GATE item 4:
 #: the refusal keys on topology, never on relationship rank). ``alternative_of``
-#: is deliberately absent — counterfactual peers stay comparable.
-_ORDERING_RELATION_KINDS: frozenset[str] = frozenset({"successor_of", "forked_from", "escalates"})
+#: is deliberately absent — counterfactual peers stay comparable. ``fed_by``
+#: (tlspec v10) orders a reader after its source: their inputs differ by design.
+#: ``selected_by`` (tlspec v10) orders a selected call after its decider.
+_ORDERING_RELATION_KINDS: frozenset[str] = frozenset(
+    {"successor_of", "forked_from", "escalates", "fed_by", "selected_by"}
+)
 
 #: Session cache for the live-derived input value digests, keyed weakly by
 #: member Trace (lifetime-safe against id reuse) with the trace's
@@ -242,7 +250,7 @@ def require_comparable(
 
     1. TOPOLOGY (comparison-grade operations only): operands joined by a
        directed path of ordering relations (``successor_of`` /
-       ``forked_from`` / ``escalates``) are not comparison operands,
+       ``forked_from`` / ``escalates`` / ``fed_by``) are not comparison operands,
        regardless of relationship rank.
     2. MODEL FLOOR: the derived relationship's model-axis rank must reach
        the operation's floor.
@@ -269,7 +277,7 @@ def require_comparable(
 
     Raises
     ------
-    BundleRelationshipError
+    BundleComparisonError
         With ``fields["code"]`` set to ``bundle_gate_ordering_topology``,
         ``bundle_gate_model_axis_unmet``,
         ``bundle_gate_input_values_differ``, or
@@ -292,7 +300,7 @@ def require_comparable(
                 relations, right_name, left_name
             )
             if path is not None:
-                raise BundleRelationshipError(
+                raise BundleComparisonError(
                     f"Bundle operation {operation!r} refuses: members "
                     f"{left_name!r} and {right_name!r} are joined by an "
                     f"ordering relation ({' -> '.join(path)}). Members "
@@ -310,14 +318,14 @@ def require_comparable(
                 )
         relationship = relationship_of(left, right)
         if _MODEL_AXIS_RANK[relationship] < requirement.model_floor_rank:
-            raise BundleRelationshipError(
+            raise BundleComparisonError(
                 f"Bundle operation {operation!r} requires model-axis "
                 f"evidence of at least {requirement.model_floor_label!r}; "
                 f"member pair {left_name}/{right_name} derives "
                 f"{relationship.value!r}. Remedy: bundle captures whose "
                 "models share the required structure (see "
-                "Bundle.relationship), or use per-member reads such as "
-                "Bundle.apply for cross-model analysis.",
+                "Bundle.comparability), or use per-member reads such as "
+                "Bundle.map for cross-model analysis.",
                 code="bundle_gate_model_axis_unmet",
                 operation=operation,
                 left_member=left_name,
@@ -330,7 +338,7 @@ def require_comparable(
             right_digest = _input_value_digest(right)
             if left_digest is not None and right_digest is not None:
                 if left_digest != right_digest:
-                    raise BundleRelationshipError(
+                    raise BundleComparisonError(
                         f"Bundle operation {operation!r} requires "
                         "value-level input identity; member pair "
                         f"{left_name}/{right_name} captured DIFFERENT "
@@ -339,7 +347,7 @@ def require_comparable(
                         "relationship is never accepted as proof of "
                         "input equality. Remedy: compare captures of "
                         "the same input, or use per-member reads such "
-                        "as Bundle.apply for cross-input analysis.",
+                        "as Bundle.map for cross-input analysis.",
                         code="bundle_gate_input_values_differ",
                         operation=operation,
                         left_member=left_name,
@@ -354,7 +362,7 @@ def require_comparable(
                     )
                     if digest is None
                 ]
-                raise BundleRelationshipError(
+                raise BundleComparisonError(
                     f"Bundle operation {operation!r} requires value-level "
                     f"input identity, and member(s) {unproven!r} retain "
                     "no input payloads to prove it (inputs not saved, or "

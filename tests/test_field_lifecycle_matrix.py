@@ -8,10 +8,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
 from torchlens._trace_state import TraceState
-from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
 from torchlens.intervention.types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     MODEL_LOG_FIELD_FORK_POLICY,
@@ -38,7 +38,7 @@ class _LifecycleModel(nn.Module):
         return torch.relu(x) + 1
 
 
-def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return a zero-valued out.
 
     Parameters
@@ -54,7 +54,7 @@ def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         Zero-valued out with the same shape as ``out``.
     """
 
-    del hook
+    del ctx
     return out * 0
 
 
@@ -70,7 +70,7 @@ def _capture_log() -> Trace:
     return tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -78,18 +78,18 @@ def test_field_lifecycle_matrix_modellog() -> None:
     """Assert every Trace ordered field has lifecycle policy coverage."""
 
     ordered_fields = set(MODEL_LOG_FIELD_ORDER)
-    assert ordered_fields <= set(Trace.PORTABLE_STATE_SPEC)
+    assert ordered_fields <= set(Trace._PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(MODEL_LOG_FIELD_FORK_POLICY)
-    assert ordered_fields <= set(Trace.DEFAULT_FILL_STATE)
+    assert ordered_fields <= set(Trace._DEFAULT_FILL_STATE)
 
 
 def test_field_lifecycle_matrix_op_log() -> None:
     """Assert every Op ordered field has lifecycle policy coverage."""
 
     ordered_fields = set(LAYER_PASS_LOG_FIELD_ORDER)
-    assert ordered_fields <= set(Op.PORTABLE_STATE_SPEC)
+    assert ordered_fields <= set(Op._PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
-    assert ordered_fields <= set(Op.DEFAULT_FILL_STATE)
+    assert ordered_fields <= set(Op._DEFAULT_FILL_STATE)
 
 
 def test_construction_done_lifecycle() -> None:
@@ -133,9 +133,7 @@ def test_run_state_transitions() -> None:
     live = tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
-        capture=tl.options.CaptureOptions(
-            intervention_ready=True, hooks={tl.func("relu"): _zero_hook}
-        ),
+        capture=tl.options.CaptureOptions(replayable=True, hooks={tl.func("relu"): _zero_hook}),
     )
     assert live.state is TraceState.LIVE_CAPTURED
 
@@ -148,6 +146,6 @@ def test_run_state_transitions() -> None:
     assert appended.state is TraceState.APPENDED
 
     dirty = _capture_log()
-    layer = next(layer for layer in dirty.layer_list if layer.func_name == "relu")
+    layer = next(layer for layer in dirty._layer_list if layer.func_name == "relu")
     layer.out = layer.out
     assert dirty.state is TraceState.DIRECT_WRITE_DIRTY

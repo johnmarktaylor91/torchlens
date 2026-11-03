@@ -2,7 +2,7 @@
 
 Split from :mod:`torchlens.options` along the episode option-family seam
 (R43 file-size ratchet); the public spelling stays
-``tl.options.EpisodeSpec`` (re-exported there). Semantics are pinned by the
+``tl.options.EpisodeOptions`` (re-exported there). Semantics are pinned by the
 ratified S2/S6/S7 contracts; the doc of record is
 ``docs/reference/episode_capture.md``.
 """
@@ -12,12 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-__all__ = ["EpisodeSpec"]
+__all__ = ["EpisodeOptions"]
 
 
 @dataclass(frozen=True)
-class EpisodeSpec:
-    """Episode declaration for ``tl.trace(..., episode=EpisodeSpec(...))``.
+class EpisodeOptions:
+    """Episode declaration for ``tl.trace(..., episode=EpisodeOptions(...))``.
 
     Declaring an episode makes ONE wrapped session capture the episode
     product (``capture_kind=episode``): the episode root's ``forward`` steps
@@ -54,7 +54,7 @@ class EpisodeSpec:
         Optional declared step count, recorded on the ledger header and
         validated against the observed call count on COMPLETE captures.
         Declarations beyond the wrapped-tier cost ceiling
-        (``torchlens.capture._episode_ledger.EPISODE_DECLARED_STEP_CEILING``,
+        (``torchlens._capture._episode_ledger.EPISODE_DECLARED_STEP_CEILING``,
         100 steps) refuse typed (``episode_step_ceiling_exceeded``) at
         declaration time unless ``acknowledge_step_cost=True`` — the cost is
         superlinear and N=100 already measured 657 s / 5.4 GB peak RSS.
@@ -107,7 +107,7 @@ class EpisodeSpec:
         Producer digest of the cheap-tier product this capture escalates
         (present iff escalation; travels with ``reason`` — E-A2). Build the
         whole escalation declaration with
-        ``torchlens.capture._episode_ledger.escalation_spec(producer, ...)``.
+        ``torchlens._capture._episode_ledger.escalation_spec(producer, ...)``.
     reason:
         Escalation reason, closed vocabulary
         ``{"step_failed", "divergence", "requested"}``.
@@ -121,7 +121,7 @@ class EpisodeSpec:
         halts capture at the next step entry -- the first observable point
         (one-step detection latency) -- with typed
         ``episode_feed_closed_violation`` and the partial product on
-        ``exc.partial_log``, and a DECLARED crossing stops before entry
+        ``exc.partial_trace``, and a DECLARED crossing stops before entry
         (``episode_declared_crossing_stop``).
     on_feed_break:
         The FORK-4 arm switch (both arms built; the ruling selects the
@@ -129,7 +129,7 @@ class EpisodeSpec:
         the one Trace with the break marked and claims refused across it.
         ``"refuse"``: the settlement write raises typed
         ``episode_feed_break_exogenous`` carrying the settled product on
-        ``exc.partial_log`` (recoverable partial evidence).
+        ``exc.partial_trace`` (recoverable partial evidence).
     crossings:
         DECLARED exogenous crossings: step indices (1-based joins into
         steps 1+) whose entries are declared to come from outside the
@@ -156,7 +156,7 @@ class EpisodeSpec:
     """
 
     stepped_module: Any = None
-    n_steps: int | None = None
+    num_steps: int | None = None
     step_axis: int = -1
     step_output_kind: Literal["tokens", "digest", "none"] = "tokens"
     step_output_from: str | None = None

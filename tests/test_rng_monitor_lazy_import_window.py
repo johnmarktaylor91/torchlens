@@ -21,8 +21,8 @@ import sys
 
 import pytest
 
-from torchlens.utils import _torch_compat
-from torchlens.utils.rng import host_nondeterminism_monitor
+from torchlens._utils import _torch_compat
+from torchlens._utils.rng import host_nondeterminism_monitor
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
@@ -45,7 +45,7 @@ log = tl.trace(
     model,
     x,
     save=tl.func("relu"),
-    capture=tl.options.CaptureOptions(intervention_ready=True),
+    capture=tl.options.CaptureOptions(replayable=True),
 )
 channels = tuple(log._runnable.host_rng_channels)
 assert channels == (), (

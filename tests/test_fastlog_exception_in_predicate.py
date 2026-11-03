@@ -7,7 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import PredicateError, RecordContext
+from torchlens.errors import PredicateError, TraceCaptureError
+from torchlens.recording import RecordContext
 
 
 def test_predicate_exception_propagates() -> None:
@@ -18,13 +19,14 @@ def test_predicate_exception_propagates() -> None:
 
         raise RuntimeError(f"stop at {ctx.label}")
 
-    with pytest.raises(RuntimeError, match="stop at"):
-        tl.fastlog.record(
+    with pytest.raises(TraceCaptureError, match="stop at") as _tce_info:
+        tl.record(
             nn.Sequential(nn.Linear(3, 3), nn.ReLU()),
             torch.ones(1, 3),
             save=keep_op,
             on_predicate_error="fail-fast",
         )
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
 
 def test_predicate_exception_accumulate_preserved() -> None:
@@ -36,7 +38,7 @@ def test_predicate_exception_accumulate_preserved() -> None:
         raise RuntimeError(f"bad predicate at {ctx.label}")
 
     with pytest.raises(PredicateError, match="fastlog predicate failed"):
-        tl.fastlog.record(
+        tl.record(
             nn.Sequential(nn.Linear(3, 3), nn.ReLU()),
             torch.ones(1, 3),
             save=keep_op,

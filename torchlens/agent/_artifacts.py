@@ -100,10 +100,11 @@ def artifact_digest(path: Path) -> tuple[str, bytes | None]:
 def _sha256_of_file(path: Path) -> str:
     """Stream-hash one file with the stdlib only.
 
-    A LOCAL copy of ``torchlens._io.manifest.sha256_of_file``: importing that
-    module executes the ``_io`` package ``__init__`` (which imports torch),
+    A LOCAL copy of ``torchlens._utils.hashing.sha256_file``: importing that
+    module executes the ``_utils`` package ``__init__`` (which imports torch),
     and this runs on the TIER-0 ``info`` path for single-file / non-directory
-    inputs (AUD-CODE 3.11e). Parity with the ``_io`` authority is pinned by
+    inputs (AUD-CODE 3.11e). Unlike the canonical helper, a directory hashes as
+    empty here. Parity with the ``_io`` authority is pinned by
     tests/test_w051_agent_artifacts.py.
 
     Parameters
@@ -236,7 +237,7 @@ def resolve_artifact_path(path_arg: str) -> Path:
         raise InvalidArgumentError(
             f"No artifact at {str(path)!r}",
             code="agent_artifact_unreadable",
-            remedy="pass the path of an artifact saved with tl.save(trace, path)",
+            remedy="pass the path of an artifact saved with trace.save(path)",
             path=str(path),
         )
     return path

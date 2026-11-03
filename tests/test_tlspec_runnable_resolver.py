@@ -21,20 +21,20 @@ from torchlens._io.runnable import (
     build_sparse_run_descriptor,
     preflight_sparse_run_descriptor,
 )
-from torchlens.errors import ReattachError
-from torchlens.intervention.types import FunctionRegistryKey
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     ReadinessStatus,
     ResolverStatus,
     RunnableErrorCode,
     SparseRunDescriptor,
 )
-from torchlens.utils._torch_compat import (
+from torchlens._utils._producer_version import _torch_minor_version
+from torchlens._utils._torch_compat import (
     _RUNNABLE_TORCH_ALIASES,
-    _torch_minor_version,
     resolve_runnable_torch_alias,
 )
+from torchlens.errors import ReattachError
+from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.options import CaptureOptions
 
 
 def _restamp_runtime_fingerprints(run: dict) -> None:
@@ -115,7 +115,7 @@ def _descriptor() -> SparseRunDescriptor:
         ResolverModel(),
         torch.ones(1, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -343,7 +343,7 @@ def test_safe_load_survives_unresolved_key_and_run_fails_once_with_full_report(
         ResolverModel(),
         torch.ones(1, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -363,7 +363,7 @@ def test_safe_load_survives_unresolved_key_and_run_fails_once_with_full_report(
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     loaded = tl.load(path)
-    assert len(loaded.layer_list) == len(source.layer_list)
+    assert len(loaded._layer_list) == len(source._layer_list)
     assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
     assert loaded._runnable.callables_by_call_id is None
     with pytest.raises(ReattachError) as captured:
@@ -381,7 +381,7 @@ def test_load_defers_unsupported_callable_schema_to_structured_readiness(
         ResolverModel(),
         torch.ones(1, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -396,7 +396,7 @@ def test_load_defers_unsupported_callable_schema_to_structured_readiness(
     with pytest.raises(ValueError, match="callable_ref_schema"):
         tl.validation.validate_tlspec(path)
     loaded = tl.load(path)
-    assert len(loaded.layer_list) == len(source.layer_list)
+    assert len(loaded._layer_list) == len(source._layer_list)
     assert RunnableErrorCode.UNSUPPORTED_REF_SCHEMA in {
         diagnostic.code for diagnostic in loaded.readiness.diagnostics
     }
@@ -548,5 +548,5 @@ def test_load_time_failure_taxonomy_and_execution_skeletons(
     assert RunnableErrorCode.CALLABLE_MOVED_OR_RENAMED in _codes(moved)
     monkeypatch.setattr(runnable_load, "_unwrap_decorated", lambda func: func)
     assert RunnableErrorCode.WRAPPER_SHADOWED in _codes(descriptor)
-    assert RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value == "runtime_signature_drift"
-    assert RunnableErrorCode.SEMANTIC_DRIFT.value == "semantic_drift"
+    assert RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value == "runtime_signature_mismatch"
+    assert RunnableErrorCode.SEMANTIC_DRIFT.value == "semantic_mismatch"

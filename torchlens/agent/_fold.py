@@ -96,7 +96,7 @@ def _fold_key(op: Any) -> tuple[Any, ...]:
     func_name = str(getattr(op, "func_name", "unknown"))
     key: tuple[Any, ...] = (stack, func_name, _op_rank(op), _boundary_role(op))
     if int(getattr(op, "num_passes", 1) or 1) > 1:
-        key = (*key, int(getattr(op, "pass_index", 1) or 1))
+        key = (*key, int(getattr(op, "pass_number", 1) or 1))
     return key
 
 
@@ -238,7 +238,7 @@ def fold_trace(log: Any) -> FoldResult:
         Deterministic fold under :data:`FOLD_KEY_VERSION`.
     """
 
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(log._layer_list or [])
     groups: dict[tuple[Any, ...], list[Any]] = {}
     order: list[tuple[Any, ...]] = []
     for op in ops:

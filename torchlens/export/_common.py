@@ -8,7 +8,45 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
+from .._errors import ArgumentTypeError
+
 __tl_layer__ = "L7"
+
+
+def _require_trace(log: Any, *, exporter: str) -> None:
+    """Refuse a non-``Trace`` input to a graph exporter, typed.
+
+    Without this gate a wrong argument reached the projection code and either
+    crashed deep inside it or wrote a plausible empty artifact.
+
+    Parameters
+    ----------
+    log:
+        Candidate capture passed to the exporter.
+    exporter:
+        Public exporter spelling used in the message (``"tl.export.netron"``).
+
+    Raises
+    ------
+    ArgumentTypeError
+        ``export_expected_trace`` when ``log`` is not a ``Trace``.
+    """
+
+    from .._data_classes.trace import Trace
+
+    if isinstance(log, Trace):
+        return
+    raise ArgumentTypeError(
+        f"{exporter} expected a Trace, got {type(log).__name__}",
+        code="export_expected_trace",
+        remedy=(
+            f"capture first and pass the Trace, e.g. {exporter}(tl.trace(model, x), path); "
+            "for a saved artifact pass tl.load(artifact_path)"
+        ),
+        argument="log",
+        received_type=type(log).__name__,
+    )
 
 
 def _iter_layers(log: Any) -> list[Any]:
@@ -25,9 +63,7 @@ def _iter_layers(log: Any) -> list[Any]:
         Layer entries.
     """
 
-    return list(
-        getattr(log, "layer_list", None) or getattr(log, "layer_dict_main_keys", {}).values()
-    )
+    return list(log._layer_list or log._layer_dict_main_keys.values())
 
 
 def _repeated_layer_labels(entries: list[Any]) -> set[str]:
@@ -140,7 +176,7 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
     width = max((int(node["x"]) for node in nodes), default=0) + 160
     height = max((int(node["y"]) for node in nodes), default=0) + 100
     return {
-        "title": getattr(log, "model_class_name", "TorchLens graph"),
+        "title": log._source_class_name if is_live_trace(log) else "TorchLens graph",
         "nodes": nodes,
         "edges": edges,
         "width": width,

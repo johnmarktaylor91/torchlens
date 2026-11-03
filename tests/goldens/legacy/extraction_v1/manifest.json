@@ -1,0 +1,50 @@
+{
+  "schema": "tl_extract_manifest_v1",
+  "torchlens_version": "2.34.1",
+  "status": "complete",
+  "signature": {
+    "layer_plan": {
+      "relu": "relu"
+    },
+    "layers_kind": "mapping",
+    "batch_size": 2,
+    "transform": null,
+    "stimuli": {
+      "kind": "tensor",
+      "shape": [
+        3,
+        3
+      ],
+      "dtype": "torch.float32"
+    }
+  },
+  "stimulus_provenance": {
+    "order": "iteration order",
+    "n_stimuli": 3,
+    "stimulus_ids": [
+      "s0",
+      "s1",
+      "s2"
+    ]
+  },
+  "storage": {
+    "shard_format": "pt"
+  },
+  "layers": {
+    "relu": {
+      "layer_label": "relu_1_1"
+    }
+  },
+  "batches": [
+    {
+      "index": 0,
+      "file": "batch_00000.pt",
+      "n_stimuli": 2
+    },
+    {
+      "index": 1,
+      "file": "batch_00001.pt",
+      "n_stimuli": 1
+    }
+  ]
+}

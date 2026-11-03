@@ -18,7 +18,7 @@ instead of guessing.
 ## Classified Only, Not Branch-Attributed
 
 These bool consumers are recognized and classified, but TorchLens does not treat them as
-branch arms in this sprint:
+branch arms yet:
 
 - `assert tensor_cond`
 - standalone `bool(x)`
@@ -51,9 +51,7 @@ not emit confident branch attribution.
 
 ## Deferred Features
 
-The sprint intentionally deferred a few follow-on items:
+Not yet supported:
 
 - dagua conditional-edge rendering
 - while-loop body attribution
-
-Reference: the private if-else attribution design plan (v7).

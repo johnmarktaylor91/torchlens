@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import RecordContext
+from torchlens.recording import RecordContext
 
 
 class S2Mlp(nn.Module):
@@ -126,12 +126,12 @@ def _projection(trace: tl.Trace) -> tuple[dict[str, Any], ...]:
     """
 
     rows: list[dict[str, Any]] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         rows.append(
             {
                 "label": op.layer_label,
                 "raw": op._label_raw,
-                "type": op.layer_type,
+                "type": op.type,
                 "func": "none" if op.func_name is None else op.func_name,
                 "parents": tuple(op.parents),
                 "shape": tuple(op.shape) if op.shape is not None else None,
@@ -244,25 +244,27 @@ def test_s2_trace_surfaces_match_exhaustive_projection(case: ModelCase) -> None:
     exhaustive = tl.trace(
         model,
         x.clone(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=7),
+        capture=tl.options.CaptureOptions(seed=7),
+        save="all",
     )
     exhaustive_projection = _projection(exhaustive)
     target_label = next(row["label"] for row in _op_rows(exhaustive_projection))
 
     predicate = tl.trace(
-        model, x.clone(), save=_save_all_ops, capture=tl.options.CaptureOptions(random_seed=7)
+        model, x.clone(), save=_save_all_ops, capture=tl.options.CaptureOptions(seed=7)
     )
     two_pass = tl.trace(
         model,
         x.clone(),
-        capture=tl.options.CaptureOptions(layers_to_save=[target_label], random_seed=7),
+        capture=tl.options.CaptureOptions(seed=7),
+        save=[target_label],
     )
     recording = tl.record(
         model,
         x.clone(),
         save=_save_all_ops,
         include_source_events=True,
-        random_seed=7,
+        capture=tl.options.CaptureOptions(seed=7),
     )
 
     assert _topology(_projection(predicate)) == _topology(exhaustive_projection)
@@ -291,13 +293,15 @@ def test_s2_intervention_trace_preserves_projection_identity() -> None:
     baseline = tl.trace(
         model,
         x.clone(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=11),
+        capture=tl.options.CaptureOptions(seed=11),
+        save="all",
     )
     intervened = tl.trace(
         model,
         x.clone(),
         intervene=tl.when(tl.func("relu"), tl.add(0.0)),
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=11),
+        capture=tl.options.CaptureOptions(seed=11),
+        save="all",
     )
 
     assert _topology(_projection(intervened)) == _topology(_projection(baseline))

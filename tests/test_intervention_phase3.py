@@ -12,7 +12,6 @@ import torch
 import torchlens as tl
 from torchlens.intervention import runtime as intervention_runtime
 from torchlens.intervention.errors import (
-    HelperMountError,
     HookSignatureError,
     HookSiteCoverageError,
     HookValueError,
@@ -21,11 +20,11 @@ from torchlens.intervention.errors import (
 from torchlens.intervention.hooks import HookContext, make_hook_context, normalize_hook_plan
 from torchlens.intervention.runtime import _execute_hook
 from torchlens.intervention.sites import sites
-from torchlens.intervention.types import HelperSpec
+from torchlens.intervention.types import Edit
 from torchlens.validation import check_metadata_invariants
 
 
-def _good_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+def _good_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
     """Return the out unchanged.
 
     Parameters
@@ -55,7 +54,7 @@ def _context() -> HookContext:
 
     return make_hook_context(
         name="test",
-        layer_log={
+        op={
             "layer_label": "relu_1_1",
             "layer_type": "relu",
             "shape": (2, 3),
@@ -83,7 +82,7 @@ def _context_with_args(*args: Any) -> HookContext:
 
     return make_hook_context(
         name="test",
-        layer_log={
+        op={
             "layer_label": "linear_1_1",
             "layer_type": "linear",
             "shape": (2, 3),
@@ -102,25 +101,25 @@ def test_phase3_helpers_import_and_return_specs() -> None:
 
     helper_specs = [
         tl.zero_ablate(),
-        tl.mean_ablate(),
+        tl.mean_ablate(dim=None),
         tl.intervention.scramble_elements(),
-        tl.steer(torch.ones(3), feature_axis=-1),
+        tl.steer(torch.ones(3), dim=-1),
         tl.scale(2.0),
-        tl.clamp(min=-1.0, max=1.0),
-        tl.noise(0.1, seed=1),
-        tl.project_onto(torch.ones(3), feature_axis=-1),
-        tl.project_off(torch.ones(3), feature_axis=-1),
-        tl.swap_with(torch.ones(2, 3)),
+        tl.clamp(low=-1.0, high=1.0),
+        tl.add_noise(0.1, seed=1),
+        tl.project_onto(torch.ones(3), dim=-1),
+        tl.project_out(torch.ones(3), dim=-1),
+        tl.intervention.helpers.swap_with(torch.ones(2, 3)),
         tl.splice_module(torch.nn.Identity()),
-        tl.bwd_hook(_good_hook),
-        tl.grad_zero(),
-        tl.grad_scale(0.5),
+        tl.clip_norm(1.0),
     ]
 
-    assert all(isinstance(spec, HelperSpec) for spec in helper_specs)
+    assert all(isinstance(spec, Edit) for spec in helper_specs)
     assert helper_specs[0].name == "zero_ablate"
-    assert helper_specs[-1].kind == "backward"
-    assert dict(helper_specs[-1].metadata)["live_rerun_only"] is True
+    # The site decides the pass: neutral edits carry no signal, activation readers say forward.
+    assert helper_specs[-1].name == "clip_norm"
+    assert helper_specs[-1].signal is None
+    assert helper_specs[-2].signal == "forward"
 
 
 @pytest.mark.smoke
@@ -134,9 +133,9 @@ def test_project_onto_uses_batch_independent_feature_axis_projection() -> None:
         ]
     )
     direction = torch.tensor([1.0, 1.0, 0.0])
-    hook = tl.project_onto(direction, feature_axis=-1)()
+    hook = tl.project_onto(direction, dim=-1)()
 
-    projected = hook(out, hook=_context())
+    projected = hook(out, ctx=_context())
 
     expected = torch.tensor(
         [
@@ -148,7 +147,7 @@ def test_project_onto_uses_batch_independent_feature_axis_projection() -> None:
 
     changed = out.clone()
     changed[1] = torch.tensor([[100.0, 102.0, 0.0], [104.0, 106.0, 108.0]])
-    changed_projected = hook(changed, hook=_context())
+    changed_projected = hook(changed, ctx=_context())
 
     assert torch.allclose(changed_projected[0], expected[0])
     assert not torch.allclose(changed_projected[1], expected[1])
@@ -159,10 +158,10 @@ def test_hook_context_uses_mapping_proxy_and_frozen_fields() -> None:
 
     context = _context()
 
-    assert isinstance(context.layer_log, MappingProxyType)
-    assert context.layer_log["layer_label"] == "relu_1_1"
+    assert isinstance(context.op, MappingProxyType)
+    assert context.op["layer_label"] == "relu_1_1"
     with pytest.raises(TypeError):
-        context.layer_log["layer_label"] = "mutated"  # type: ignore[index]
+        context.op["layer_label"] = "mutated"  # type: ignore[index]
     with pytest.raises(AttributeError):
         context.name = "mutated"  # type: ignore[misc]
 
@@ -183,11 +182,13 @@ def test_normalizer_accepts_supported_shapes_in_order() -> None:
     assert pair_entries[0].site_target == tl.label("x")
 
 
-def test_helper_direction_override_contradiction_raises() -> None:
-    """Backward-only helpers cannot be mounted as forward hooks."""
+def test_activation_only_edit_on_gradient_site_raises() -> None:
+    """An edit that reads recorded activations cannot mount on a gradient site."""
 
-    with pytest.raises(HelperMountError, match="intrinsically 'backward'"):
-        normalize_hook_plan(tl.func("relu"), tl.grad_zero(), direction="forward")
+    with pytest.raises(Exception) as excinfo:
+        normalize_hook_plan(tl.grad(tl.func("relu")), tl.splice_module(torch.nn.Identity()))
+    fields = getattr(excinfo.value, "fields", None) or {}
+    assert fields.get("code", getattr(excinfo.value, "code", None)) == "edit_signal_mismatch"
 
 
 def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
@@ -212,9 +213,7 @@ def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
 
             return torch.relu(x)
 
-    log = tl.trace(
-        _Relu(), torch.randn(1, 3), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    log = tl.trace(_Relu(), torch.randn(1, 3), capture=tl.options.CaptureOptions(replayable=True))
 
     selected = log.find_sites(sites(lambda ctx: False, ops=["relu"]).entries[0].selector)
 
@@ -238,38 +237,37 @@ def test_normalizer_rejects_missing_site_and_bad_signature() -> None:
 
 @pytest.mark.smoke
 def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
-    """Hook execution validates return values by default."""
+    """Hook execution validates return values by default; None leaves the value unchanged."""
 
     out = torch.ones(2, 3)
     context = _context()
 
-    def none_hook(out: torch.Tensor, *, hook: HookContext) -> None:
-        """Return None, which Phase 3 rejects."""
+    def none_hook(out: torch.Tensor, *, ctx: HookContext) -> None:
+        """Return None, which keeps the incoming value (fn -> Tensor | None)."""
 
         return None
 
-    def list_hook(out: torch.Tensor, *, hook: HookContext) -> list[torch.Tensor]:
+    def list_hook(out: torch.Tensor, *, ctx: HookContext) -> list[torch.Tensor]:
         """Return the wrong type."""
 
         return [out]
 
-    def shape_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def shape_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Return the wrong shape."""
 
         return torch.ones(3, 2)
 
-    def dtype_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def dtype_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Return the wrong dtype."""
 
         return out.to(torch.float64)
 
-    def device_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def device_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Return a tensor on the wrong device."""
 
         return torch.empty(out.shape, dtype=out.dtype, device="meta")
 
-    with pytest.raises(HookValueError, match="None"):
-        _execute_hook(none_hook, out, context)
+    assert torch.equal(_execute_hook(none_hook, out, context), out)
     with pytest.raises(HookValueError, match="list"):
         _execute_hook(list_hook, out, context)
     with pytest.raises(HookValueError, match="shape"):
@@ -286,12 +284,12 @@ def test_force_shape_change_allows_metadata_changes() -> None:
 
     out = torch.ones(2, 3)
 
-    def shape_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def shape_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Return a shape-changed tensor."""
 
         return torch.ones(3, 2, dtype=torch.float64)
 
-    result = _execute_hook(shape_hook, out, _context(), force_shape_change=True)
+    result = _execute_hook(shape_hook, out, _context(), allow_shape_change=True)
 
     assert result.shape == (3, 2)
     assert result.dtype == torch.float64
@@ -304,13 +302,13 @@ def test_seeded_noise_is_deterministic_and_unseeded_records_note() -> None:
     out = torch.zeros(2, 3)
     context = _context()
 
-    seeded_a = tl.noise(1.0, seed=123)()
-    seeded_b = tl.noise(1.0, seed=123)()
-    unseeded = tl.noise(1.0)()
+    seeded_a = tl.add_noise(1.0, seed=123)()
+    seeded_b = tl.add_noise(1.0, seed=123)()
+    unseeded = tl.add_noise(1.0)()
 
-    assert torch.equal(seeded_a(out, hook=context), seeded_b(out, hook=context))
-    _ = unseeded(out, hook=context)
-    assert any("noise used unseeded" in note for note in context.run_ctx["ledger_notes"])
+    assert torch.equal(seeded_a(out, ctx=context), seeded_b(out, ctx=context))
+    _ = unseeded(out, ctx=context)
+    assert any("noise used unseeded" in note for note in context.run_state["ledger_notes"])
 
 
 def test_splice_module_dtype_error_is_specific() -> None:
@@ -338,7 +336,7 @@ def test_splice_module_dtype_error_is_specific() -> None:
     hook = tl.splice_module(_DoubleModule())()
 
     with pytest.raises(SpliceModuleDtypeError):
-        hook(torch.ones(2, 3), hook=_context_with_args(torch.ones(2, 3)))
+        hook(torch.ones(2, 3), ctx=_context_with_args(torch.ones(2, 3)))
 
 
 @pytest.mark.smoke
@@ -357,7 +355,7 @@ def test_splice_module_default_replaces_with_module_on_input() -> None:
     original_input = torch.tensor([[1.0, 2.0, 3.0]])
     original_output = 2 * original_input
 
-    result = hook(original_output, hook=_context_with_args(original_input))
+    result = hook(original_output, ctx=_context_with_args(original_input))
 
     assert torch.equal(result, 100 * original_input)
     assert not torch.equal(result, 100 * original_output)
@@ -378,7 +376,7 @@ def test_splice_module_forwards_full_input_signature() -> None:
     a = torch.tensor([[5.0, 7.0]])
     b = torch.tensor([[2.0, 3.0]])
 
-    result = hook(a + b, hook=_context_with_args(a, b))
+    result = hook(a + b, ctx=_context_with_args(a, b))
 
     assert torch.equal(result, a - b)
 
@@ -423,7 +421,7 @@ def test_splice_module_input_splices_multi_input_module_end_to_end() -> None:
         _Model().eval(),
         (a, b),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.in_module("block"): tl.splice_module(_SubtractReplacement())},
         ),
     )
@@ -462,7 +460,7 @@ def test_splice_module_input_splices_module_scope_once_end_to_end() -> None:
         _Model().eval(),
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.in_module("block"): tl.splice_module(_HundredModule())},
         ),
     )
@@ -511,28 +509,27 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
         _Model(),
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.module("block"): tl.splice_module(_DoubleReplacement())},
         ),
     )
-    sigmoid = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
+    sigmoid = next(layer for layer in log._layer_list if layer.func_name == "sigmoid")
     replacement = log[sigmoid.parents[0]]
 
     assert torch.equal(replacement.out, x * 2)
     assert torch.equal(sigmoid.out, torch.sigmoid(replacement.out))
-    assert replacement.intervention_replaced is True
-    assert replacement.interventions[-1].replaced is True
-    assert replacement.interventions[-1].helper_name == "splice_module"
+    assert replacement.is_edited is True
+    assert replacement.edits[-1].replaced is True
+    assert replacement.edits[-1].edit_name == "splice_module"
     assert check_metadata_invariants(log) is True
     for module_call_label, module_call in log.module_calls.items():
         assert module_call.call_parent != module_call_label
         assert module_call_label not in module_call.call_children
     rendered = log.draw(
         collapse="none",
-        vis_outpath=str(tmp_path / "module_splice"),
-        vis_fileformat="svg",
-        vis_save_only=True,
-    )
+        path=str(tmp_path / "module_splice"),
+        file_format="svg",
+    ).dot
     assert rendered is not None
 
 
@@ -566,7 +563,7 @@ def test_splice_module_input_rejects_module_scoped_op_granularity() -> None:
             _Model().eval(),
             torch.ones(1, 3),
             capture=tl.options.CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={
                     tl.in_module("block") & tl.func("relu"): tl.splice_module(
                         _IdentityReplacement()
@@ -637,7 +634,7 @@ def test_splice_module_input_preserves_common_op_arg_orders() -> None:
         _Ops().eval(),
         (a, b),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={
                 tl.func("add"): tl.splice_module(_AddReplacement()),
                 tl.func("where"): tl.splice_module(_WhereReplacement()),

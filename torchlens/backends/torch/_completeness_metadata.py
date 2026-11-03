@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
@@ -14,39 +14,6 @@ from ._tl import (
     get_tensor_label,
 )
 from .buffer_writes import session_validated_buffer_address
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _CAPTURED_STORAGE_PTRS,
-        _HOST_ESCAPE_STATE_METADATA_OBSERVATIONS,
-        _HOST_ESCAPE_STATE_METADATA_READS,
-        _HOST_ESCAPE_STATE_SOURCE_NAMES,
-        _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE,
-        _INPUT_METADATA_PRESENCE_PROPERTY_NAMES,
-        _INPUT_METADATA_VIEW_READ,
-        _LAYOUT_ANCESTRY_CLEAN,
-        _ORIG_UNTYPED_STORAGE_DATA_PTR,
-        _ORIG_UNTYPED_STORAGE_NBYTES,
-        _ORIGIN_LABEL_PREFIX,
-        _ORIGIN_RNG,
-        _ORIGIN_UNINIT,
-        _ORIGIN_UNKNOWN,
-        _RUNNABLE_INPUT_STORAGE_SITES,
-        _STATE_METADATA_FACTS,
-        _STATE_ROUTE_DECLARED_FACT,
-        _STATE_ROUTE_READ_KIND,
-        _STORAGE_REBIND_BARRIER_LABELS,
-        INPUT_DERIVED_LAYOUT_FACT_NAME,
-        STATE_METADATA_MIRROR,
-        _classify_input_storage_alias,
-        _escape_storage_ptr,
-        _input_base_tensor,
-        _operand_leaf_origins,
-        _param_derived_addresses,
-        _raw_storage_ptr_no_observe,
-        _record_input_metadata_read_at_site,
-        internal_scalar_read,
-    )
 
 __all__ = (
     "_observe_input_derived_layout_read",
@@ -763,3 +730,44 @@ def _record_input_storage_nbytes(trace: Any, site: Any, storage: Any) -> None:
         _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(trace)
         return
     _record_input_metadata_read_at_site(trace, site, "storage_nbytes", nbytes)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_boundaries import (  # noqa: E402
+    _classify_input_storage_alias,
+    _input_base_tensor,
+    _record_input_metadata_read_at_site,
+)
+from ._completeness_escape_state import (  # noqa: E402
+    _raw_storage_ptr_no_observe,
+)
+from ._completeness_origins import (  # noqa: E402
+    _escape_storage_ptr,
+    _operand_leaf_origins,
+    _param_derived_addresses,
+    internal_scalar_read,
+)
+from .completeness_witness import (  # noqa: E402
+    _CAPTURED_STORAGE_PTRS,
+    _HOST_ESCAPE_STATE_METADATA_OBSERVATIONS,
+    _HOST_ESCAPE_STATE_METADATA_READS,
+    _HOST_ESCAPE_STATE_SOURCE_NAMES,
+    _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE,
+    _INPUT_METADATA_PRESENCE_PROPERTY_NAMES,
+    _INPUT_METADATA_VIEW_READ,
+    _LAYOUT_ANCESTRY_CLEAN,
+    _ORIG_UNTYPED_STORAGE_DATA_PTR,
+    _ORIG_UNTYPED_STORAGE_NBYTES,
+    _ORIGIN_LABEL_PREFIX,
+    _ORIGIN_RNG,
+    _ORIGIN_UNINIT,
+    _ORIGIN_UNKNOWN,
+    _RUNNABLE_INPUT_STORAGE_SITES,
+    _STATE_METADATA_FACTS,
+    _STATE_ROUTE_DECLARED_FACT,
+    _STATE_ROUTE_READ_KIND,
+    _STORAGE_REBIND_BARRIER_LABELS,
+    INPUT_DERIVED_LAYOUT_FACT_NAME,
+    STATE_METADATA_MIRROR,
+)

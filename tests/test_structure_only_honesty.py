@@ -42,17 +42,17 @@ def test_meta_and_real_tensors_of_identical_geometry_never_collide() -> None:
     real = torch.zeros(3, 4)
     with torch.device("meta"):
         meta = torch.zeros(3, 4)
-    assert tl.hash.content(real) != tl.hash.content(meta)
+    assert tl.fingerprint.content(real) != tl.fingerprint.content(meta)
     # And two meta tensors of identical geometry DO agree (the digest is a
     # real digest of the geometry, never None/absent).
     with torch.device("meta"):
         meta_twin = torch.zeros(3, 4)
-    assert tl.hash.content(meta) == tl.hash.content(meta_twin)
+    assert tl.fingerprint.content(meta) == tl.fingerprint.content(meta_twin)
 
 
 def test_structure_digests_always_computed() -> None:
     log = _structure_trace()
-    digest = tl.hash.trace(log)
+    digest = tl.fingerprint.trace(log)
     assert isinstance(digest, str) and len(digest) == 64
 
 
@@ -75,12 +75,12 @@ def test_summary_carries_the_structure_only_banner() -> None:
 def test_profile_repr_carries_the_banner() -> None:
     log = _structure_trace()
     profile = log.profile()
-    assert profile.structure_only is True
+    assert profile.is_structure_only is True
     assert "structure-only capture" in repr(profile)
     # Measured-value columns render honestly: nothing presents a hypothesis
     # figure as "measured". Boundary pseudo-rows read not_applicable (A07:
     # they own no compute by the identity partition) -- also never "measured".
-    honesty = profile.honesty()
+    honesty = profile.evidence_labels()
     # F09 (costreport D9): structure-only shape-derived cells are labeled
     # HYPOTHESIS -- the exact banner-vs-labels mismatch fix. Still never
     # "measured", never "estimated"-presented-as-fact.
@@ -96,7 +96,7 @@ def test_profile_repr_carries_the_banner() -> None:
 
 def test_explain_carries_the_hypothesis_line() -> None:
     log = _structure_trace()
-    text = tl.report.explain(log)
+    text = log.explain()
     assert "Structure-only capture" in text
     assert "HYPOTHESES" in text
 

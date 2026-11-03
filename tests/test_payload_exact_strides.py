@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.tensor_utils import safe_copy
 from torchlens.options import CaptureOptions
-from torchlens.utils.tensor_utils import safe_copy
 
 
 class _LpiLike(nn.Module):
@@ -37,7 +37,7 @@ class _LpiLike(nn.Module):
 
 
 def _conv_input_payload(trace: tl.Trace) -> torch.Tensor:
-    conv = next(op for op in trace.layer_list if op.func_name == "conv2d")
+    conv = next(op for op in trace._layer_list if op.func_name == "conv2d")
     return conv.saved_args[0]
 
 
@@ -57,9 +57,7 @@ def test_captured_conv_input_has_the_live_strides_and_validates() -> None:
     torch.manual_seed(0)
     model = _LpiLike().eval()
     tokens = torch.randn(1, 36, 16)
-    trace = tl.trace(
-        model, tokens, capture=CaptureOptions(layers_to_save="all", save_arg_values=True)
-    )
+    trace = tl.trace(model, tokens, capture=CaptureOptions(save_args=True), save="all")
     assert _conv_input_payload(trace).stride() == (16, 1, 96, 16)
     assert tl.validation.validate_forward_pass(model, tokens) is True
 

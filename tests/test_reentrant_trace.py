@@ -5,6 +5,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture_state_helpers as capture_state_helpers
 
 
 class _NestedTraceModel(nn.Module):
@@ -26,7 +27,7 @@ class _NestedTraceModel(nn.Module):
 def test_nested_trace_raises_typed_error_with_active_model_name() -> None:
     """Nested tracing should raise the public typed re-entrancy error."""
 
-    with pytest.raises(tl.ReentrantTraceError, match="NestedTraceModel") as exc_info:
+    with pytest.raises(tl.errors.ReentrantTraceError, match="NestedTraceModel") as exc_info:
         tl.trace(_NestedTraceModel(), torch.ones(1, 2))
 
     assert exc_info.value.fields["code"] == "reentrant_trace"
@@ -36,10 +37,11 @@ def test_nested_trace_raises_typed_error_with_active_model_name() -> None:
 
 
 def test_reentrant_trace_error_is_exported() -> None:
-    """The re-entrancy exception should be part of the top-level public surface."""
+    """The re-entrancy exception is public at its torchlens.errors home."""
 
-    assert tl.ReentrantTraceError.__name__ == "ReentrantTraceError"
-    assert "ReentrantTraceError" in tl.__all__
+    assert tl.errors.ReentrantTraceError.__name__ == "ReentrantTraceError"
+    assert "ReentrantTraceError" in tl.errors.__all__
+    assert "ReentrantTraceError" not in tl.__all__
 
 
 def test_reentrant_trace_error_joins_the_taxonomy_and_keeps_runtime_error() -> None:
@@ -52,9 +54,9 @@ def test_reentrant_trace_error_joins_the_taxonomy_and_keeps_runtime_error() -> N
 
     from torchlens import errors
 
-    assert issubclass(tl.ReentrantTraceError, errors.CaptureError)
-    assert issubclass(tl.ReentrantTraceError, RuntimeError)
-    assert errors.ReentrantTraceError is tl.ReentrantTraceError
+    assert issubclass(tl.errors.ReentrantTraceError, errors.CaptureError)
+    assert issubclass(tl.errors.ReentrantTraceError, RuntimeError)
+    assert errors.ReentrantTraceError is tl.errors.ReentrantTraceError
 
     with pytest.raises(RuntimeError):
         tl.trace(_NestedTraceModel(), torch.ones(1, 2))
@@ -75,9 +77,7 @@ def test_nested_trace_in_pre_admission_reserved_window_refuses(
     while the outer capture still completes cleanly.
     """
 
-    import torchlens.capture.trace as capture_trace
-
-    real_prep = capture_trace.prepare_compiled_capture
+    real_prep = capture_state_helpers.prepare_compiled_capture
     probe: dict[str, object] = {}
 
     def hostile_prep(model: nn.Module) -> object:
@@ -88,17 +88,17 @@ def test_nested_trace_in_pre_admission_reserved_window_refuses(
             try:
                 tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
                 probe["nested"] = "OUTER_OK"
-            except tl.ReentrantTraceError:
+            except tl.errors.ReentrantTraceError:
                 probe["nested"] = "refused"
         return real_prep(model)
 
-    monkeypatch.setattr(capture_trace, "prepare_compiled_capture", hostile_prep)
+    monkeypatch.setattr(capture_state_helpers, "prepare_compiled_capture", hostile_prep)
     outer = tl.trace(nn.ReLU(), torch.ones(1, 2))
     assert probe.get("nested") == "refused", f"nested capture outcome: {probe.get('nested')}"
     assert any(op.func_name == "relu" for op in outer.compute_ops)
 
     # The refused nested entry must not have poisoned admission: a fresh
     # capture afterwards works.
-    monkeypatch.setattr(capture_trace, "prepare_compiled_capture", real_prep)
+    monkeypatch.setattr(capture_state_helpers, "prepare_compiled_capture", real_prep)
     recovered = tl.trace(nn.ReLU(), torch.ones(1, 2))
     assert any(op.func_name == "relu" for op in recovered.compute_ops)

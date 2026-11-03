@@ -21,9 +21,11 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import torch
 
+from ._grad_flags import _mirror_captured_requires_grad, _snapshot_grad_flags
+
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 _R = TypeVar("_R")
 
@@ -86,50 +88,6 @@ def with_slot_grad_flags(layer: Op, arg_type: str, key: Any, parent_layer: Op, v
     )
 
 
-def _mirror_captured_requires_grad(
-    value: torch.Tensor, requires_grad: bool, leaf: bool
-) -> torch.Tensor:
-    """Give a private replay tensor the ``requires_grad`` its captured argument had.
-
-    ATen's backend choice can depend on whether an input requires grad (on
-    macOS arm64 a depthwise 3x3 conv picks ``Slow2d`` for a grad-requiring
-    weight and ``Winograd3x3Depthwise`` otherwise; the two accumulate in a
-    different order). A replay that hands the op detached copies can therefore
-    call a different kernel than the captured run did, so each replay tensor
-    requires grad exactly when the captured argument did. This makes replay
-    more faithful; it widens no comparison.
-
-    A captured non-leaf (a weight derived from a parameter, any op output) is
-    rebuilt as a non-leaf with the same values and strides, so an in-place op
-    that was legal on the captured value stays legal on the replay value. The
-    autograd graph this creates is owned by the replay arguments and output
-    alone and is released when the check that built them returns.
-
-    Parameters
-    ----------
-    value:
-        Replay tensor owned by validation (a fresh clone, never a saved payload).
-    requires_grad:
-        Whether the captured argument at this slot required grad.
-    leaf:
-        Whether the captured argument was an autograd leaf.
-
-    Returns
-    -------
-    torch.Tensor
-        ``value`` unchanged when no grad is needed (or its dtype cannot require
-        grad), else a grad-requiring leaf or non-leaf with equal values.
-    """
-
-    if not requires_grad or value.requires_grad:
-        return value
-    if not (value.is_floating_point() or value.is_complex()):
-        return value
-    with torch.enable_grad():
-        grad_leaf = value.detach().requires_grad_(True)
-        return grad_leaf if leaf else grad_leaf.clone()
-
-
 def replay_copy_for_slot(
     trace: Trace, layer: Op, arg_type: str, key: Any, value: torch.Tensor
 ) -> torch.Tensor:
@@ -173,31 +131,6 @@ def replay_copy_for_slot(
             value.detach().clone(),
             *_captured_slot_grad_flags(layer, arg_type, key, parent_layer),
         )
-
-
-def _snapshot_grad_flags(snapshot: Any) -> tuple[bool, bool]:
-    """Return the captured ``(requires_grad, is_leaf)`` of one saved argument snapshot.
-
-    Snapshots are copies taken with grad attached, so ``snapshot.requires_grad``
-    is the captured argument's flag. Snapshots are copies of copies, so their
-    autograd graph cannot tell a captured leaf from a captured user ``clone()``
-    of one; a slot without a producing op is therefore rebuilt as a non-leaf,
-    the direction in which every in-place op legal at capture stays legal.
-
-    Parameters
-    ----------
-    snapshot:
-        Saved argument value at one slot.
-
-    Returns
-    -------
-    tuple[bool, bool]
-        ``(False, False)`` for a non-tensor or a snapshot that needs no grad.
-    """
-
-    if not isinstance(snapshot, torch.Tensor) or not snapshot.requires_grad:
-        return False, False
-    return True, False
 
 
 def _captured_slot_grad_flags(
@@ -265,8 +198,8 @@ def _consumed_a_later_parent_version(layer: Op, parent_layer: Op) -> bool:
 def _deep_clone_tensors(val: Any) -> Any:
     """Recursively clone all tensors in a nested structure of lists/tuples/dicts.
 
-    Non-tensor leaves are returned as-is (shared reference).  Tensor leaves
-    are detached and cloned so that in-place ops during validation replay
+    Non-tensor leaves other than storages are returned as-is (shared
+    reference); storages are cloned.  Tensor leaves are detached and cloned so that in-place ops during validation replay
     don't corrupt the original saved data, then given the snapshot's
     ``requires_grad`` (see ``_mirror_captured_requires_grad``) so the replay
     reaches the same kernel the captured call did.
@@ -275,6 +208,10 @@ def _deep_clone_tensors(val: Any) -> Any:
     """
     if isinstance(val, torch.Tensor):
         return _mirror_captured_requires_grad(val.detach().clone(), *_snapshot_grad_flags(val))
+    elif isinstance(val, (torch.UntypedStorage, torch.TypedStorage)):
+        # ``Tensor.set_(storage, ...)`` makes the replayed output a view of the
+        # storage; a fresh copy keeps the saved snapshot out of its reach.
+        return val.clone()
     elif isinstance(val, (list, tuple)):
         cloned = [_deep_clone_tensors(v) for v in val]
         # Preserve the original container type (list vs tuple vs namedtuple).

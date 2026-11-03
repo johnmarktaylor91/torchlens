@@ -9,9 +9,7 @@ a declared re-export facade. Two invariants gate it:
 - ZERO PERSISTED-BYTE CHANGES: pickle-visible identity of every persisted
   type stays ``torchlens._io`` (bundle metadata references types by
   (module, qualname) and the guarded unpickler allowlists exactly those
-  paths). The committed genuine-release artifacts in
-  ``tests/release_goldens`` rehydrating green is the real pre-move gate;
-  this suite pins the mechanism that keeps them green.
+  paths). This suite pins the mechanism that keeps them stable.
 """
 
 from __future__ import annotations
@@ -27,13 +25,12 @@ _FACADE_SPELLINGS = (
     "TLSPEC_VERSION",
     "MIN_TLSPEC_VERSION",
     "MIN_TORCHLENS_VERSION_TEXT",
-    "TorchLensIOError",
-    "ArtifactVersionBelowFloorError",
-    "ArtifactVersionAboveRuntimeError",
+    "ArtifactError",
+    "ArtifactTooOldError",
+    "ArtifactTooNewError",
     "ArtifactRuntimeIncompatibleError",
     "UnknownPersistedFieldError",
     "PreReleaseArtifactError",
-    "ArtifactSchemaAgeWarning",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "BlobRef",
@@ -43,7 +40,6 @@ _FACADE_SPELLINGS = (
     "read_tlspec_version",
     "default_fill_state",
     "coerce_container_typed_state",
-    "rehydrate_nested",
     "validate_prerelease_state",
     "_LEGACY_THREAD_WARNING_EMITTED",
 )
@@ -51,13 +47,12 @@ _FACADE_SPELLINGS = (
 # The load-hint classes (JaxPayloadLoadHint, PayloadLoadHints) are runtime
 # options, never persisted, so they keep their real defining module.
 _PICKLE_VISIBLE_TYPES = (
-    "TorchLensIOError",
-    "ArtifactVersionBelowFloorError",
-    "ArtifactVersionAboveRuntimeError",
+    "ArtifactError",
+    "ArtifactTooOldError",
+    "ArtifactTooNewError",
     "ArtifactRuntimeIncompatibleError",
     "UnknownPersistedFieldError",
     "PreReleaseArtifactError",
-    "ArtifactSchemaAgeWarning",
     "BlobRef",
     "FieldPolicy",
 )
@@ -72,7 +67,7 @@ def test_facade_and_split_modules_serve_the_same_objects() -> None:
     assert tl_io.FieldPolicy is format_contract.FieldPolicy
     assert tl_io.BlobRef is format_contract.BlobRef
     assert tl_io.TLSPEC_VERSION == format_contract.TLSPEC_VERSION
-    assert tl_io.TorchLensIOError is format_errors.TorchLensIOError
+    assert tl_io.ArtifactError is format_errors.ArtifactError
 
 
 def test_pickle_visible_identity_stays_the_facade_path() -> None:
@@ -107,10 +102,10 @@ def test_fastlog_dispositions_are_declared() -> None:
 
     import importlib
 
-    storage_disk = importlib.import_module("torchlens.fastlog.storage_disk")
-    recover = importlib.import_module("torchlens.fastlog.recover")
-    cleanup = importlib.import_module("torchlens.fastlog.cleanup")
-    types = importlib.import_module("torchlens.fastlog.types")
+    storage_disk = importlib.import_module("torchlens.recording.storage_disk")
+    recover = importlib.import_module("torchlens.recording.recover")
+    cleanup = importlib.import_module("torchlens.recording.cleanup")
+    types = importlib.import_module("torchlens.recording.types")
     assert storage_disk.__tl_layer__ == "L2"
     assert recover.__tl_layer__ == "L3"
     assert cleanup.__tl_layer__ == "L3"

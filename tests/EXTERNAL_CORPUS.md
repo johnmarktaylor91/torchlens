@@ -23,7 +23,7 @@ python - <<'PY'
 import torch
 import torchlens as tl
 from torch_geometric.nn import DimeNet
-from torchlens.user_funcs import validate_forward_pass
+from torchlens._user_funcs import validate_forward_pass
 
 model = DimeNet(6, 3, 4, 2, 6, 3)
 z = torch.tensor([6, 1, 1, 1, 1])

@@ -20,11 +20,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture._run_setup as capture_run_setup
 from torchlens.intervention.errors import BindingPreflightError
 from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
-_READY = tl.options.CaptureOptions(intervention_ready=True)
+_READY = tl.options.CaptureOptions(replayable=True)
 
 
 class _MLP(nn.Module):
@@ -122,7 +123,7 @@ def _seeded(
     return cls().eval(), torch.randn(*shape)
 
 
-def _sae_like(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     """Multi-call injected computation."""
 
     z = torch.relu(out @ torch.eye(out.shape[-1]))
@@ -133,7 +134,7 @@ def _save_tamper_load(tmp_path, trace, tamper):
     """Save, mutate the pickled metadata in place, and load back."""
 
     path = tmp_path / "forged.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     metadata_path = path / "metadata.pkl"
     with metadata_path.open("rb") as handle:
         state = pickle.load(handle)
@@ -147,14 +148,14 @@ def _injected_rows(state):
     """Injected op rows of a pickled artifact state."""
 
     return [
-        op for op in state["layer_list"] if getattr(op, "injection_provenance", None) is not None
+        op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is not None
     ]
 
 
 def _model_rows(state):
     """Model op rows of a pickled artifact state."""
 
-    return [op for op in state["layer_list"] if getattr(op, "injection_provenance", None) is None]
+    return [op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is None]
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +168,7 @@ def test_inplace_injected_ops_attest_on_honest_capture() -> None:
 
     model, x = _seeded(_MLP)
 
-    def inplace_hook(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def inplace_hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
         y = out.clone()
         y.mul_(0.5)
         torch.relu_(y)
@@ -193,7 +194,7 @@ def test_functional_inplace_kwarg_injected_op_attests() -> None:
 
     model, x = _seeded(_MLP)
 
-    def hook(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
         y = out.clone() - 0.5
         return torch.nn.functional.relu(y, inplace=True)
 
@@ -213,7 +214,7 @@ def test_nan_output_injected_op_attests_and_value_mismatch_still_diverges() -> N
 
     model, x = _seeded(_MLP)
 
-    def nan_hook(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def nan_hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
         torch.log(out - 100.0)  # NaN wherever out < 100 (every element here)
         return out * 0.5
 
@@ -276,8 +277,8 @@ def test_reanchored_rows_refuse_at_load(tmp_path) -> None:
             row.injection_provenance["host_site_key"] = tanh.site_key
             row.injection_provenance["host_pass"] = 7
             row.injection_provenance["spec_rule_id"] = "r-forged"
-            envelope["host_label"] = f"{tanh.layer_label}:{tanh.pass_index}"
-            row.layer_label = f"{tanh.layer_label}:{tanh.pass_index}{suffix}"
+            envelope["host_label"] = f"{tanh.layer_label}:{tanh.pass_number}"
+            row.layer_label = f"{tanh.layer_label}:{tanh.pass_number}{suffix}"
 
     with pytest.raises(Exception) as excinfo:
         _save_tamper_load(tmp_path, logged, reanchor)
@@ -301,34 +302,30 @@ def test_site_key_label_disagreement_refuses_at_load(tmp_path) -> None:
     assert excinfo.value.fields["reason"] == "host_label_mismatch"
 
 
-def test_forged_host_pass_refuses_at_load(tmp_path) -> None:
-    """host_pass must be the host op's own pass index."""
+@pytest.mark.parametrize(
+    ("provenance_key", "forged_value", "reason"),
+    [
+        ("host_pass", 7, "host_pass_mismatch"),
+        ("spec_rule_id", "r-forged", "rule_unrecorded"),
+    ],
+    ids=["forged_host_pass_refuses_at_load", "unrecorded_rule_id_refuses_at_load"],
+)
+def test_forged_injection_provenance_refuses_at_load(
+    tmp_path, provenance_key: str, forged_value: object, reason: str
+) -> None:
+    """host_pass must be the host op's own pass index; spec_rule_id must be a rule
+    the artifact's intervention record ran."""
 
     logged, _spec = _logged_chain()
 
-    def bump_pass(state) -> None:
+    def forge(state) -> None:
         for row in _injected_rows(state):
-            row.injection_provenance["host_pass"] = 7
+            row.injection_provenance[provenance_key] = forged_value
 
     with pytest.raises(Exception) as excinfo:
-        _save_tamper_load(tmp_path, logged, bump_pass)
+        _save_tamper_load(tmp_path, logged, forge)
     assert excinfo.value.fields["code"] == "artifact_injection_codec_invalid"
-    assert excinfo.value.fields["reason"] == "host_pass_mismatch"
-
-
-def test_unrecorded_rule_id_refuses_at_load(tmp_path) -> None:
-    """spec_rule_id must be a rule the artifact's intervention record ran."""
-
-    logged, _spec = _logged_chain()
-
-    def forge_rule(state) -> None:
-        for row in _injected_rows(state):
-            row.injection_provenance["spec_rule_id"] = "r-forged"
-
-    with pytest.raises(Exception) as excinfo:
-        _save_tamper_load(tmp_path, logged, forge_rule)
-    assert excinfo.value.fields["code"] == "artifact_injection_codec_invalid"
-    assert excinfo.value.fields["reason"] == "rule_unrecorded"
+    assert excinfo.value.fields["reason"] == reason
 
 
 def test_honest_artifact_still_loads_and_attests(tmp_path) -> None:
@@ -336,7 +333,7 @@ def test_honest_artifact_still_loads_and_attests(tmp_path) -> None:
 
     logged, spec = _logged_chain()
     path = tmp_path / "honest.tlspec"
-    tl.save(logged, str(path))
+    logged.save(str(path))
     loaded = tl.load(str(path))
     records = injected_ops(loaded)
     assert records and {record.provenance.spec_rule_id for record in records} == {
@@ -357,7 +354,7 @@ def test_bind_site_keys_match_capture_for_submodule_ops() -> None:
     trace = tl.trace(model, x)
     capture_keys: dict[str, list[str]] = {}
     for op in trace.ops:
-        capture_keys.setdefault(op.layer_type, []).append(op.site_key)
+        capture_keys.setdefault(op.type, []).append(op.site_key)
     for func_name in ("linear", "relu"):
         bound = tl.when(tl.func(func_name), tl.scale(1.0)).bind(model, on_zero_fire="disclose")
         bound(x)
@@ -374,7 +371,7 @@ def test_bind_in_module_pass_qualifier_still_resolves_after_root_skip() -> None:
     bound = tl.when(tl.in_module("blk:2") & tl.func("relu"), tl.scale(0.0)).bind(model)
     bound(x)
     assert [fire["site_key"] for fire in bound.last_report.fires] == ["s1|blk/blk.1|relu||1"]
-    assert bound.last_report.fire_count == 1
+    assert bound.last_report.num_fires == 1
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +383,7 @@ def test_bind_identity_hook_reads_replaced_false() -> None:
     """An identity hook fired but replaced nothing."""
 
     model, x = _seeded(_MLP)
-    bound = tl.when(tl.func("relu"), lambda out, *, hook: out).bind(model)
+    bound = tl.when(tl.func("relu"), lambda out, *, ctx: out).bind(model)
     bound(x)
     (record,) = bound.last_report.fire_records
     (fire,) = bound.last_report.fires
@@ -404,7 +401,7 @@ def test_bind_module_boundary_identity_hook_reads_replaced_false() -> None:
     """Boundary fires derive replaced by identity too."""
 
     model, x = _seeded(_MLP)
-    bound = tl.when(tl.module("fc1"), lambda out, *, hook: out).bind(model)
+    bound = tl.when(tl.module("fc1"), lambda out, *, ctx: out).bind(model)
     bound(x)
     assert bound.last_report.fire_records[0].replaced is False
     assert bound.last_report.fires[0]["replaced"] is False
@@ -449,7 +446,7 @@ def test_region_edit_shape_change_refuses_typed(chain_fork) -> None:
     fork = log.fork()
     target = fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region()
     with pytest.raises(Exception) as excinfo:
-        fork.do(target, lambda out, *, hook: out[:1])
+        fork.do(target, lambda out, *, ctx: out[:1])
     assert excinfo.value.fields["code"] == "intervention_replacement_invalid"
 
 
@@ -460,7 +457,7 @@ def test_region_edit_dtype_change_refuses_typed(chain_fork) -> None:
     fork = log.fork()
     target = fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region()
     with pytest.raises(Exception) as excinfo:
-        fork.do(target, lambda out, *, hook: out.double())
+        fork.do(target, lambda out, *, ctx: out.double())
     assert excinfo.value.fields["code"] == "intervention_replacement_invalid"
 
 
@@ -527,14 +524,14 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
     records = injected_ops(logged)
     assert records
-    host = next(op for op in logged.ops if getattr(op, "intervention_replaced", False))
+    host = next(op for op in logged.ops if getattr(op, "is_edited", False))
     assert "fc1:1" in host.output_of_module_calls
     for record in records:
         assert record.host_label == host.label
         assert record.provenance.host_site_key == host.site_key
-        assert record.provenance.host_pass == host.pass_index
+        assert record.provenance.host_pass == host.pass_number
     path = tmp_path / "module_boundary.tlspec"
-    tl.save(logged, str(path))
+    logged.save(str(path))
     loaded = tl.load(str(path))
     reloaded = injected_ops(loaded)
     assert [(r.label, r.provenance.host_site_key) for r in reloaded] == [
@@ -549,10 +546,10 @@ def test_module_boundary_reused_block_anchors_each_call(tmp_path) -> None:
     model, x = _seeded(_Nested)
     logged = tl.trace(model, x, intervene=tl.when(tl.module("blk"), tl.scale(0.5)), capture=_LOGGED)
     hosts = {record.host_label for record in injected_ops(logged)}
-    replaced = {op.label for op in logged.ops if getattr(op, "intervention_replaced", False)}
+    replaced = {op.label for op in logged.ops if getattr(op, "is_edited", False)}
     assert len(hosts) == 2 and hosts == replaced
     assert all(record.provenance.host_site_key for record in injected_ops(logged))
-    tl.save(logged, str(tmp_path / "blk.tlspec"))
+    logged.save(str(tmp_path / "blk.tlspec"))
 
 
 def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:
@@ -565,7 +562,6 @@ def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:
     id lands instead of ``adhoc:<helper>``.
     """
 
-    import torchlens.user_funcs as user_funcs
     from torchlens.intervention import hooks as hooks_mod
 
     model, x = _seeded(_MLP)
@@ -581,13 +577,13 @@ def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:
             for entry in entries
         ]
 
-    monkeypatch.setattr(user_funcs, "normalize_hook_plan", stamped)
+    monkeypatch.setattr(capture_run_setup, "normalize_hook_plan", stamped)
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
     records = injected_ops(logged)
     assert records
     assert {record.provenance.spec_rule_id for record in records} == {spec.rules[0].rule_id}
     # and the door resets: a later plain capture's records never inherit the stamp
-    monkeypatch.setattr(user_funcs, "normalize_hook_plan", real)
+    monkeypatch.setattr(capture_run_setup, "normalize_hook_plan", real)
     plain = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
     relu_rule = tl.when(tl.func("relu"), _sae_like).rules[0].rule_id
     assert {record.provenance.spec_rule_id for record in injected_ops(plain)} == {relu_rule}

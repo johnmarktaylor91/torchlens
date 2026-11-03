@@ -133,6 +133,35 @@
    "false_claims": [],
    "fingerprint": "52e2e3a656ed3245abd1d8303606a66301f1c012fba8a9acf619b84bce595abf",
    "floors": {
+    "clip_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "pattern",
+     "q",
+     "result",
+     "scores",
+     "v",
+     "z"
+    ],
+    "contrastive_image_head": [
+     "final_norm_beta",
+     "final_norm_eps",
+     "final_norm_gamma",
+     "final_norm_input",
+     "final_norm_kind",
+     "image_projection_weight",
+     "logit_scale",
+     "logits_per_image",
+     "pooled_position",
+     "text_features",
+     "tower_address"
+    ],
     "embedding": [
      "indices",
      "lookup",
@@ -145,11 +174,14 @@
     ],
     "transformer_residuals": [
      "resid_mid",
-     "resid_post"
+     "resid_post",
+     "resid_pre"
     ]
    },
    "n_ops": 184,
    "recipes": {
+    "clip_attention": 4,
+    "contrastive_image_head": 1,
     "embedding": 3,
     "layer_norm": 11,
     "transformer_residuals": 4
@@ -159,6 +191,31 @@
    "false_claims": [],
    "fingerprint": "6c73693769dd9b6ea0ee856df76d1a2dbb4f433e3e7f9253bb77f7b0887a6abc",
    "floors": {
+    "clip_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
+    "contrastive_image_head": [
+     "final_norm_beta",
+     "final_norm_eps",
+     "final_norm_gamma",
+     "final_norm_input",
+     "final_norm_kind",
+     "image_projection_weight",
+     "logit_scale",
+     "logits_per_image",
+     "pooled_position",
+     "text_features",
+     "tower_address"
+    ],
     "embedding": [
      "indices",
      "lookup",
@@ -171,11 +228,14 @@
     ],
     "transformer_residuals": [
      "resid_mid",
-     "resid_post"
+     "resid_post",
+     "resid_pre"
     ]
    },
    "n_ops": 148,
    "recipes": {
+    "clip_attention": 4,
+    "contrastive_image_head": 1,
     "embedding": 3,
     "layer_norm": 11,
     "transformer_residuals": 4
@@ -698,7 +758,13 @@
  },
  "qwen2": {
   "eager": {
-   "false_claims": [],
+   "false_claims": [
+    [
+     "self",
+     "final_norm_beta",
+     "final_norm_present"
+    ]
+   ],
    "fingerprint": "1a0c3032e591977dec0e19632ffcf8b9ad7397552bab581662df99d2824486b0",
    "floors": {
     "embedding": [
@@ -706,9 +772,43 @@
      "lookup",
      "weight"
     ],
+    "gated_mlp": [
+     "down_out",
+     "gated_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "gqa_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "pattern",
+     "q",
+     "result",
+     "scores",
+     "v",
+     "z"
+    ],
     "language_model_head": [
+     "final_norm_eps",
+     "final_norm_gamma",
+     "final_norm_input",
+     "final_norm_kind",
      "logits",
+     "logits_position_map",
      "unembed_weight"
+    ],
+    "rms_norm": [
+     "gamma",
+     "input",
+     "normalized"
     ],
     "transformer_residuals": [
      "resid_mid",
@@ -725,12 +825,21 @@
    ],
    "recipes": {
     "embedding": 1,
+    "gated_mlp": 2,
+    "gqa_attention": 2,
     "language_model_head": 1,
+    "rms_norm": 5,
     "transformer_residuals": 2
    }
   },
   "sdpa": {
-   "false_claims": [],
+   "false_claims": [
+    [
+     "self",
+     "final_norm_beta",
+     "final_norm_present"
+    ]
+   ],
    "fingerprint": "71a4baf96673f85763b8016bc7db9f6aa842515d913b8bac1a49bc37118787ca",
    "floors": {
     "embedding": [
@@ -738,9 +847,39 @@
      "lookup",
      "weight"
     ],
+    "gated_mlp": [
+     "down_out",
+     "gated_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "gqa_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
     "language_model_head": [
+     "final_norm_eps",
+     "final_norm_gamma",
+     "final_norm_input",
+     "final_norm_kind",
      "logits",
+     "logits_position_map",
      "unembed_weight"
+    ],
+    "rms_norm": [
+     "gamma",
+     "input",
+     "normalized"
     ],
     "transformer_residuals": [
      "resid_mid",
@@ -757,7 +896,10 @@
    ],
    "recipes": {
     "embedding": 1,
+    "gated_mlp": 2,
+    "gqa_attention": 2,
     "language_model_head": 1,
+    "rms_norm": 5,
     "transformer_residuals": 2
    }
   }

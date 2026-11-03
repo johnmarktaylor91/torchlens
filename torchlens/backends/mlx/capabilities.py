@@ -9,12 +9,12 @@ _CAPABILITIES = _SPEC.capabilities
 
 supports_backward_capture = _CAPABILITIES.backward_capture
 supports_fastlog = _CAPABILITIES.fastlog
-supports_intervention = _CAPABILITIES.interventions
+supports_intervention = _CAPABILITIES.can_intervene
 supports_intermediate_derived_grads = _CAPABILITIES.intermediate_derived_grads
 supports_payload_materialization = _CAPABILITIES.payload_materialization
 supports_rng_replay = _CAPABILITIES.rng_replay
-supports_streaming = _CAPABILITIES.streaming
-supports_validation_replay = _CAPABILITIES.validation_replay
+supports_streaming = _CAPABILITIES.has_streaming
+supports_validation_replay = _CAPABILITIES.has_validation_replay
 input_container_structure = _CAPABILITIES.input_container_structure
 output_container_structure = _CAPABILITIES.output_container_structure
 payload_policy = _SPEC.serialization_policy.payload_policy

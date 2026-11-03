@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .core import ValidationCheckResult
 
 
@@ -38,7 +38,7 @@ def _check_edge_intervention_boundary(
       "exempted". A wrong stored output under a corroborated entry FAILS
       (skip-shaped acceptance is impossible by construction).
 
-    Node-level ``intervention_replaced`` corroboration never fires for edges:
+    Node-level ``is_edited`` corroboration never fires for edges:
     edge substitution replaces no node's output.
     """
 
@@ -62,7 +62,7 @@ def _fail_uncorroborated_edge_entries(
     stamps = getattr(target_op, "edge_replacement_stamps", None) or {}
     fire_addresses = {
         tuple(getattr(record, "edge_address", ()) or ())
-        for record in (getattr(target_op, "interventions", None) or ())
+        for record in (getattr(target_op, "edits", None) or ())
         if getattr(record, "edge_address", None) is not None
     }
     from ..intervention.edge_substitution import tensor_content_digest
@@ -75,7 +75,7 @@ def _fail_uncorroborated_edge_entries(
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_REPLAY,
+                    check_name=CHECK_REPLAY,
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     message=(
@@ -100,7 +100,7 @@ def _fail_uncorroborated_edge_entries(
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_REPLAY,
+                    check_name=CHECK_REPLAY,
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     message=(
@@ -159,7 +159,7 @@ def _splice_edge_substitution_args(
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_REPLAY,
+                    check_name=CHECK_REPLAY,
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     message=(
@@ -176,7 +176,7 @@ def _splice_edge_substitution_args(
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_REPLAY,
+                    check_name=CHECK_REPLAY,
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     message=f"edge-substitution payload at {store_key!r} is not a tensor",
@@ -203,7 +203,7 @@ def _reexecute_edge_boundary(
 ) -> ValidationCheckResult:
     """Re-execute the child from the spliced tier-(ii) values and compare outputs."""
 
-    from ..utils.tensor_utils import tensor_nanequal
+    from .._utils.tensor_utils import tensor_nanequal
     from .core import (
         ValidationCheckResult,
         _execute_func_with_restored_state,
@@ -218,7 +218,7 @@ def _reexecute_edge_boundary(
     spliced, failure = _splice_edge_substitution_args(trace, target_op, entries, input_args)
     if spliced is None:
         return failure if failure is not None else ValidationCheckResult.unverified("unknown")
-    recomputed = _execute_func_with_restored_state(target_op, spliced, [], False)
+    recomputed = _execute_func_with_restored_state(target_op, spliced, [], target_op.label, False)
     saved_output = _saved_out_payload(target_op)
     if recomputed is None or saved_output is None:
         return ValidationCheckResult.unverified("edge_boundary_replay_unavailable")
@@ -230,7 +230,7 @@ def _reexecute_edge_boundary(
         record_validation_failure(
             trace,
             ValidationFailure(
-                check=CHECK_REPLAY,
+                check_name=CHECK_REPLAY,
                 op_label=target_op.label,
                 func_name=getattr(target_op, "func_name", None),
                 message=(
@@ -277,7 +277,7 @@ def _parent_arg_evidence(
         return ValidationCheckResult.unverified("replay_recomputed_parent_unattested")
     parent_outs = _saved_out_payload(parent_layer)
     if parent_outs is None:
-        return ValidationCheckResult.unverified("missing_saved_parent_payload")
+        return ValidationCheckResult.unverified("parent_payload_missing")
     return parent_outs, capture_digest
 
 
@@ -323,7 +323,7 @@ def _capture_payload_equal(trace: Trace, candidate: Op, target_layer: Op, value:
     Unknown evidence (no payload, no digest) reads as not equal.
     """
 
-    from ..utils.tensor_utils import tensor_nanequal
+    from .._utils.tensor_utils import tensor_nanequal
     from .core import _saved_out_payload
 
     if not isinstance(value, torch.Tensor):

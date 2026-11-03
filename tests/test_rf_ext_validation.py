@@ -11,7 +11,7 @@ from support.rf_isolation import preserved_rf_registry
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.op import Op
+from torchlens._data_classes.op import Op
 from torchlens.receptive_field import _rules
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
 from torchlens.receptive_field._types import (
@@ -39,15 +39,14 @@ def _trace(model: nn.Module, inputs: object) -> object:
     return tl.trace(
         model,
         inputs,
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 
 def _op(trace: object, name: str) -> Op:
     """Return the last captured operation with a raw function name."""
 
-    matches = [item for item in trace.layer_list if item.func_name == name]
+    matches = [item for item in trace._layer_list if item.func_name == name]
     assert matches
     return matches[-1]
 
@@ -55,7 +54,7 @@ def _op(trace: object, name: str) -> Op:
 def _input_ops(trace: object) -> tuple[Op, ...]:
     """Return graph-native input operations in capture order."""
 
-    return tuple(item for item in trace.layer_list if item.is_input)
+    return tuple(item for item in trace._layer_list if item.is_input)
 
 
 class _Chain(nn.Module):
@@ -111,7 +110,7 @@ def test_tainted_geometry_is_gracefully_indeterminate(taint: str) -> None:
     result = cross_validate(trace, ops=[_op(trace, "softmax")])[0]
 
     assert result.status is ReceptiveFieldValidationStatus.INDETERMINATE
-    assert result.n_violations == 0
+    assert result.num_violations == 0
 
 
 def test_unavailable_gradient_is_indeterminate() -> None:
@@ -121,7 +120,7 @@ def test_unavailable_gradient_is_indeterminate() -> None:
     result = cross_validate(trace, ops=[_op(trace, "conv2d")])[0]
 
     assert result.status is ReceptiveFieldValidationStatus.INDETERMINATE
-    assert result.n_violations == 0
+    assert result.num_violations == 0
 
 
 def test_plural_endpoint_keys_cover_multiple_inputs_and_outputs() -> None:
@@ -174,8 +173,8 @@ def test_deliberately_undersized_rule_fails_in_both_directions() -> None:
 
     assert receptive.status is ReceptiveFieldValidationStatus.FAIL
     assert projective.status is ReceptiveFieldValidationStatus.FAIL
-    assert receptive.n_violations > 0
-    assert projective.n_violations > 0
+    assert receptive.num_violations > 0
+    assert projective.num_violations > 0
 
 
 def test_metadata_contract_is_always_registered_and_runs_without_autograd() -> None:

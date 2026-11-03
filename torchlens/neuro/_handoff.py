@@ -23,6 +23,7 @@ from typing import Any, cast
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import _actionable_message, _ActionableErrorMixin
 from ..errors._base import ConfigurationError
 
@@ -395,16 +396,15 @@ def _source_kind(source: Any) -> str:
 
     if isinstance(source, (LoadedExtraction, str, Path)):
         return "extraction"
-    if hasattr(source, "layers") and hasattr(source, "layer_logs"):
+    if hasattr(source, "layers") and is_live_trace(source):
         return "trace"
     raise NeuroHandoffError(
         f"unsupported source type {type(source).__name__}: expected a "
-        "TorchLens Trace, a LoadedExtraction, or an extraction-directory "
-        "path.",
+        "TorchLens Trace, a LoadedExtraction, or an extraction-directory path.",
         code="neuro_source_invalid",
         remedy=(
             "capture with tl.trace(...) or extract to disk with "
-            "tl.extract_dataset(..., output_dir=...) and pass the directory"
+            "tl.extract_dataset(..., path=...) and pass the directory"
         ),
         source_type=type(source).__name__,
     )
@@ -526,7 +526,7 @@ def _trace_site_payload(record: Any, key: str, requested: str, verb: str) -> Sit
         _raise_unsaved_activation(key, verb=verb)
     matrix, per_stimulus_shape = _shape_payload(cast(torch.Tensor, out))
     num_passes = int(getattr(record, "num_passes", 1))
-    pass_index = getattr(record, "pass_index", None)
+    pass_index = getattr(record, "pass_number", None)
     return SitePayload(
         key=key,
         requested=requested,
@@ -704,7 +704,7 @@ def _safe_label(record: Any) -> str | None:
         several passes.
     """
 
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(record, "label", None, multipass=None)
     return str(label) if label is not None else None
@@ -760,7 +760,7 @@ def enumerate_extraction_sites(
 
     Raises
     ------
-    torchlens.features.FeatureShapingError
+    torchlens.errors.FeatureShapingError
         For an explicitly requested key absent from the artifact.
     ValueError
         For an explicitly requested stored output that is not
@@ -810,7 +810,7 @@ def enumerate_extraction_sites(
                 key=key,
                 requested=key,
                 matrix=shaped.matrix,
-                per_stimulus_shape=tuple(shaped.record.input_shape[1:]),
+                per_stimulus_shape=tuple(shaped.shaping.input_shape[1:]),
                 source_dtype=str(shaped.matrix.dtype).removeprefix("torch."),
                 layer_label=key,
                 pass_index=None,
@@ -876,7 +876,7 @@ def base_descriptors(
     if payload.pass_index is not None:
         descriptors["pass_index"] = payload.pass_index
     if trace is not None:
-        model_name = getattr(trace, "model_class_name", None)
+        model_name = trace._source_class_name if is_live_trace(trace) else None
         if model_name:
             # The reserved multi-model slot (memo section 8): one factual
             # model identity per Dataset today, a stack key tomorrow.

@@ -19,12 +19,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Conditional, ConditionalAccessor, ConditionalArm
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
-from torchlens.data_classes.trace import Conditional, ConditionalAccessor, ConditionalArm
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import PathDivergenceError
 from torchlens.errors.runnable import SparseCorePayloadError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 
 class ParamConditionalModel(nn.Module):
@@ -55,11 +55,11 @@ def _capture(model: nn.Module, value: torch.Tensor) -> tl.Trace:
         model,
         value,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
-            layers_to_save="all",
         ),
+        save="all",
     )
 
 
@@ -74,11 +74,11 @@ def test_parameterized_conditional_saves_and_verifies(tmp_path: Path) -> None:
     path = tmp_path / "param-conditional.tlspec"
     # Previously raised AssertionError: "Sparse core tensor payload at
     # conditionals._list.0.arms.0._trace._runnable.capture_state.linear.weight".
-    tl.save(trace, path, level="runnable", include_weights=True)
+    trace.save(path, level="runnable", include_weights=True)
 
     # The save must not have mutated the live trace's conditional accessors.
-    assert trace.conditionals[0].arms[0]._trace is trace
-    assert trace.conditionals[0].arms[0].evaluation_ops
+    assert trace.graph.conditionals[0].arms[0]._trace is trace
+    assert trace.graph.conditionals[0].arms[0].evaluation_ops
 
     result = tl.load(path).run(inputs=value, seed=0)
 
@@ -94,7 +94,7 @@ def test_conditional_arm_flip_still_diverges(tmp_path: Path) -> None:
     model = ParamConditionalModel().eval()
     trace = _capture(model, value)
     path = tmp_path / "flip.tlspec"
-    tl.save(trace, path, level="runnable", include_weights=True)
+    trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
 
     captured_then = bool(model.linear(value).sum() > 0)
@@ -118,7 +118,7 @@ def test_sparse_core_tensor_tripwire_still_fires() -> None:
     # A stray tensor in an ordinary field.
     with pytest.raises(SparseCorePayloadError, match="Sparse core tensor payload") as caught:
         assert_sparse_core_has_no_tensor_payload({"field": {"nested": torch.randn(3)}})
-    assert caught.value.fields["code"] == "sparse_core_tensor_payload"
+    assert caught.value.fields["code"] == "sparse_core_payload_invalid"
     assert caught.value.fields["payload_path"] == "field.nested"
     assert isinstance(caught.value, AssertionError)
 

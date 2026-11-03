@@ -11,13 +11,9 @@ import torch
 from conftest import tensorflow_backend_modules
 
 import torchlens as tl
-from torchlens.backends import (
-    BackendMismatchError,
-    get_backend_spec,
-    resolve_backend_spec,
-)
 from torchlens.backends.default_specs import _tf_can_handle
 from torchlens.backends.tf import TFBackend, capabilities as tf_capabilities
+from torchlens.errors import BackendMismatchError
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
@@ -35,21 +31,21 @@ def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
 
     tensorflow_preimported = "tensorflow" in sys.modules
 
-    spec = get_backend_spec("tf")
+    spec = tl.backends.spec("tf")
     if not tensorflow_preimported:
         assert "tensorflow" not in sys.modules
-    assert get_backend_spec("tensorflow") is spec
+    assert tl.backends.spec("tensorflow") is spec
     assert spec.name == "tf"
     assert spec.priority == 50
     assert spec.capture_backend is None
     assert spec.coercible is False
-    assert get_backend_spec("jax").priority == 20
-    assert get_backend_spec("paddle").priority == 40
+    assert tl.backends.spec("jax").priority == 20
+    assert tl.backends.spec("paddle").priority == 40
 
     assert spec.capabilities.backward_capture == tf_capabilities.supports_backward_capture
-    assert spec.capabilities.validation_replay == tf_capabilities.supports_validation_replay
+    assert spec.capabilities.has_validation_replay == tf_capabilities.supports_validation_replay
     assert spec.capabilities.fastlog == tf_capabilities.supports_fastlog
-    assert spec.capabilities.interventions == tf_capabilities.supports_intervention
+    assert spec.capabilities.can_intervene == tf_capabilities.supports_intervention
     assert (
         spec.capabilities.intermediate_derived_grads
         == tf_capabilities.supports_intermediate_derived_grads
@@ -58,7 +54,7 @@ def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
     assert spec.capabilities.payload_materialization == (
         tf_capabilities.supports_payload_materialization
     )
-    assert spec.capabilities.streaming == tf_capabilities.supports_streaming
+    assert spec.capabilities.has_streaming == tf_capabilities.supports_streaming
     assert spec.capabilities.input_container_structure == (
         tf_capabilities.input_container_structure
     )
@@ -76,7 +72,7 @@ def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
 def test_tf_detector_and_resolution_accept_tf_module_and_tensor_leaf() -> None:
     """TensorFlow detector accepts tf.Module and callable TensorFlow tensor inputs."""
 
-    spec = get_backend_spec("tf")
+    spec = tl.backends.spec("tf")
 
     class _TFModule(tf.Module):
         """Small TensorFlow module for routing tests."""
@@ -89,9 +85,9 @@ def test_tf_detector_and_resolution_accept_tf_module_and_tensor_leaf() -> None:
     x = tf.constant([1.0])
     assert _tf_can_handle(_TFModule(), x, None)
     assert _tf_can_handle(lambda y: y, {"nested": [x]}, None)
-    assert resolve_backend_spec(None, _TFModule(), x) is spec
-    assert resolve_backend_spec("tf", _TFModule(), x) is spec
-    assert resolve_backend_spec("tensorflow", _TFModule(), x) is spec
+    assert tl.backends.resolve(None, _TFModule(), x) is spec
+    assert tl.backends.resolve("tf", _TFModule(), x) is spec
+    assert tl.backends.resolve("tensorflow", _TFModule(), x) is spec
 
 
 @pytest.mark.tf_backend
@@ -104,7 +100,7 @@ def test_tf_detector_accepts_keras_on_tensorflow() -> None:
     model = keras.Sequential([keras.layers.Dense(1)])
     x = tf.ones((1, 2))
     assert _tf_can_handle(model, x, None)
-    assert resolve_backend_spec(None, model, x).name == "tf"
+    assert tl.backends.resolve(None, model, x).name == "tf"
 
 
 @pytest.mark.tf_backend
@@ -176,8 +172,8 @@ def test_tf_capture_trace_routes_to_eager_capture() -> None:
 
     trace = tl.trace(_TFModule(), tf.constant([1.0]), backend="tf")
 
-    assert trace.backend == "tf"
-    assert trace.num_ops == 1
+    assert trace.provenance.backend == "tf"
+    assert trace._num_ops == 1
 
 
 @pytest.mark.tf_backend

@@ -2,7 +2,7 @@
 
 VERSION DISCIPLINE (persistence-schema seam): no active schema change ships
 under the CURRENT ``tlspec_version``. A new portable field therefore lands in
-its record's ``FIELD_POLICY`` declared ``FieldPolicy.DROP`` (non-persisting)
+its record's ``_FIELD_POLICY`` declared ``FieldPolicy.DROP`` (non-persisting)
 and is REGISTERED here. Portability and round-trip exit gates run under the
 TEST-ONLY activation switch, which does exactly two things while active:
 
@@ -30,10 +30,10 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from . import FieldPolicy
+from ._field_policy import FieldPolicy
+from .format_errors import PreReleaseArtifactError
 
 #: State-dict key carrying the pre-release marker on switch-on writes. Lives
 #: next to ``tlspec_version`` in the scrubbed Trace envelope and is popped and
@@ -72,7 +72,7 @@ def register_prerelease_field(
     Parameters
     ----------
     owner:
-        Record class whose ``PORTABLE_STATE_SPEC`` declares the field.
+        Record class whose ``_PORTABLE_STATE_SPEC`` declares the field.
     field_name:
         Declared field name. Its declared policy MUST be ``FieldPolicy.DROP``
         -- that is the whole discipline: the field never persists under the
@@ -88,14 +88,12 @@ def register_prerelease_field(
         or the requested persisting policy is itself ``DROP``.
     """
 
-    from . import FieldPolicy
-
-    spec = getattr(owner, "PORTABLE_STATE_SPEC", None)
+    spec = getattr(owner, "_PORTABLE_STATE_SPEC", None)
     if not isinstance(spec, dict) or field_name not in spec:
         raise ValueError(
             f"{owner.__name__}.{field_name} is not a declared portable field; "
             "pre-release fields must be declared in the owning record's "
-            "FIELD_POLICY before registration."
+            "_FIELD_POLICY before registration."
         )
     if spec[field_name] is not FieldPolicy.DROP:
         raise ValueError(
@@ -223,7 +221,7 @@ def effective_policy(owner_type: type, field_name: str, declared: FieldPolicy) -
     field_name:
         Declared field name.
     declared:
-        The field's declared policy from ``PORTABLE_STATE_SPEC``.
+        The field's declared policy from ``_PORTABLE_STATE_SPEC``.
 
     Returns
     -------
@@ -231,8 +229,6 @@ def effective_policy(owner_type: type, field_name: str, declared: FieldPolicy) -
         ``declared``, unless the switch is active and the field is
         registered, in which case the registered persisting policy.
     """
-
-    from . import FieldPolicy
 
     if declared is not FieldPolicy.DROP or not _ACTIVE:
         return declared
@@ -279,7 +275,6 @@ def validate_prerelease_state(state: dict[str, Any], *, cls_name: str) -> None:
     payload = state.pop(PRERELEASE_STATE_KEY, None)
     if payload is None:
         return
-    from . import PreReleaseArtifactError
 
     if not _ACTIVE:
         raise PreReleaseArtifactError(

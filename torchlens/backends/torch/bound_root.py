@@ -119,7 +119,7 @@ def _reject_non_module_ladder_root(model: Any) -> nn.Module:
     if isinstance(model, nn.Module):
         return model
     raise InvalidArgumentError(
-        "input_size=/inferred-input capture requires an nn.Module "
+        "input_shape=/inferred-input capture requires an nn.Module "
         f"root; received {type(model).__name__}. Declared and "
         "inferred input rungs synthesize inputs from a module's "
         "geometry, which a bound-method root does not expose",

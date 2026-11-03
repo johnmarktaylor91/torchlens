@@ -7,15 +7,13 @@ the first call to ``trace()`` and stay wrapped afterward. TorchLens 2.0 keeps
 the top-level namespace intentionally small; historical spellings live in
 their owning submodules.
 
-For AI agents: ``trace.to_agent_json()``, ``tl.report.explain(trace,
-max_tokens=N)``, ``torchlens.agent.guide()``, and the CLI
+For AI agents: ``trace.to_agent_json()``, ``trace.explain(max_tokens=N)``,
+``torchlens.agent.guide()``, and the CLI
 (``python -m torchlens --help``) are the machine-facing doors.
 """
 
 from __future__ import annotations
 
-import sys as _sys
-import types as _types
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import TYPE_CHECKING as _TYPE_CHECKING, Any as _Any
 
@@ -26,58 +24,27 @@ if _TYPE_CHECKING:
 __version__ = "2.37.0"
 
 if _TYPE_CHECKING:
-    from .data_classes.trace import Trace
-    from .intervention import Bundle
+    from ._data_classes.trace import Trace
 
 _LAZY_ATTRS = {
     # Import cold-start laziness (P4, rebaselined 2026-08-19): the former
     # eager import block (options/captured_run+ir/observers/quantities/errors
     # and their transitive chains) is fully deferred behind these rows -- the
     # marginal-import guard in tests/test_import_hygiene.py holds the line.
-    "ActivationLookup": ("torchlens.captured_run", "ActivationLookup"),
-    "AmbiguousOpLookupError": ("torchlens._errors", "AmbiguousOpLookupError"),
-    "Bytes": ("torchlens.quantities", "Bytes"),
-    "CapturedRun": ("torchlens.captured_run", "CapturedRun"),
-    "Duration": ("torchlens.quantities", "Duration"),
-    "Flops": ("torchlens.quantities", "Flops"),
-    "Macs": ("torchlens.quantities", "Macs"),
-    "Quantity": ("torchlens.quantities", "Quantity"),
-    "ReentrantTraceError": ("torchlens._state", "ReentrantTraceError"),
     # Agent surface (F29): the read-only inspection core. Deliberately NOT in
     # __all__ (frozen root budget); reachable as tl.agent per the docs.
     "agent": ("torchlens.agent", None),
-    # The docs teach tl.utils.doctor(); the row was missing so the taught
-    # spelling raised AttributeError on a cold import (agent memo 3.10).
-    "utils": ("torchlens.utils", None),
-    "captured_run": ("torchlens.captured_run", None),
     "errors": ("torchlens.errors", None),
-    "ir": ("torchlens.ir", None),
     "observers": ("torchlens.observers", None),
     "options": ("torchlens.options", None),
-    "quantities": ("torchlens.quantities", None),
-    "brainpipe": ("torchlens.brainpipe", None),
-    "register_container": ("torchlens.ir.container", "register_container"),
-    "span": ("torchlens.observers", "span"),
-    "tap": ("torchlens.observers", "tap"),
     "to_disk": ("torchlens.options", "to_disk"),
-    "AtenOp": ("torchlens.data_classes.aten_op", "AtenOp"),
-    "Bundle": ("torchlens.intervention", "Bundle"),
-    "Container": ("torchlens.data_classes.container", "Container"),
-    "JaxPayloadLoadHint": ("torchlens._io", "JaxPayloadLoadHint"),
-    "Layer": ("torchlens.data_classes.layer", "Layer"),
-    "Op": ("torchlens.data_classes.op", "Op"),
-    "PayloadLoadHints": ("torchlens._io", "PayloadLoadHints"),
-    "Recording": ("torchlens.fastlog", "Recording"),
-    "Trace": ("torchlens.data_classes.trace", "Trace"),
-    "add": ("torchlens.intervention", "add"),
-    "aggregate": ("torchlens.stats", "aggregate"),
-    "assert_unchanged": ("torchlens.hash", "assert_unchanged"),
+    "Bundle": ("torchlens.bundle", "Bundle"),
+    "Layer": ("torchlens._data_classes.layer", "Layer"),
+    "Op": ("torchlens._data_classes.op", "Op"),
+    "Recording": ("torchlens.recording.types", "Recording"),
+    "Trace": ("torchlens._data_classes.trace", "Trace"),
+    "add": ("torchlens.intervention.predicates", "add"),
     "attribution": ("torchlens.attribution", None),
-    # r7 R81 (sol b2): docs/semantic_io.md documents tl.autoroute.output.*
-    # and the agent docs list autoroute among the lazy attrs, but the row
-    # was missing -- the documented spelling resolved only after a separate
-    # `import torchlens.autoroute` (import-order side effect).
-    "autoroute": ("torchlens.autoroute", None),
     # Entry/facade repair (workstream A10; WT1 A-VI item 27, neuro memo item
     # 2): the integration and appliance namespaces were absent from this map,
     # so `tl.bridge` resolved only after an unrelated capture side effect
@@ -87,133 +54,113 @@ _LAZY_ATTRS = {
     "bridge": ("torchlens.bridge", None),
     "callbacks": ("torchlens.callbacks", None),
     "neuro": ("torchlens.neuro", None),
-    "notebook": ("torchlens.notebook", None),
-    "bwd_hook": ("torchlens.intervention", "bwd_hook"),
-    "clamp": ("torchlens.intervention", "clamp"),
+    "clamp": ("torchlens.intervention.helpers", "clamp"),
     "compat": ("torchlens.compat", None),
-    "contains": ("torchlens.intervention", "contains"),
-    "decide_recording_of_batch": ("torchlens.user_funcs", "decide_recording_of_batch"),
-    "debug": ("torchlens.debug", None),
-    "data_classes": ("torchlens.data_classes", None),
+    "label_contains": ("torchlens._selection.selectors", "label_contains"),
     # Dataset extraction (D7/V5): the implementation module is lazy so the
     # manifest/resume machinery costs nothing until first use.
     "dataset_extraction": ("torchlens.dataset_extraction", None),
     "extract_dataset": ("torchlens.dataset_extraction", "extract_dataset"),
-    # WT1 A-VI item 27: the reader half of the extraction workflow was only
-    # reachable as torchlens.dataset_extraction.load_extraction while the
-    # writer (extract_dataset) was top-level.
-    "load_extraction": ("torchlens.dataset_extraction", "load_extraction"),
     "distributed": ("torchlens.distributed", None),
-    "do": ("torchlens.intervention", "do"),
     "examples": ("torchlens.examples", None),
     "experimental": ("torchlens.experimental", None),
     "export": ("torchlens.export", None),
-    "facets": ("torchlens.semantic", "facets"),
-    "fastlog": ("torchlens.fastlog", None),
-    "facet": ("torchlens.intervention", "facet"),
-    "followed_by": ("torchlens.intervention", "followed_by"),
-    "func": ("torchlens.intervention", "func"),
-    "func_transform": ("torchlens.intervention", "func_transform"),
-    "grad_clamp": ("torchlens.intervention", "grad_clamp"),
-    "grad_clip": ("torchlens.intervention", "grad_clip"),
-    "grad_fn": ("torchlens.intervention", "grad_fn"),
-    "grad_fn_label": ("torchlens.intervention", "grad_fn_label"),
-    "grad_input": ("torchlens.intervention", "grad_input"),
-    "grad_noise": ("torchlens.intervention", "grad_noise"),
-    "grad_output": ("torchlens.intervention", "grad_output"),
-    "grad_scale": ("torchlens.intervention", "grad_scale"),
-    "grad_zero": ("torchlens.intervention", "grad_zero"),
-    "hash": ("torchlens.hash", None),
-    "head": ("torchlens.intervention", "head"),
-    "in_backward_pass": ("torchlens.intervention", "in_backward_pass"),
-    "in_module": ("torchlens.intervention", "in_module"),
-    "input_at": ("torchlens.intervention", "input_at"),
+    "facets": ("torchlens._semantic", "facets"),
+    "recording": ("torchlens.recording", None),
+    "facet": ("torchlens._selection.selectors", "facet"),
+    "followed_by": ("torchlens._selection.selectors", "followed_by"),
+    "func": ("torchlens._selection.selectors", "func"),
+    "func_transform": ("torchlens._selection.selectors", "func_transform"),
+    "grad": ("torchlens._selection.selectors", "grad"),
+    "clip_norm": ("torchlens.intervention.helpers", "clip_norm"),
+    "grad_fn": ("torchlens._selection.selectors", "grad_fn"),
+    "grad_input": ("torchlens._selection.selectors", "grad_input"),
+    "grad_output": ("torchlens._selection.selectors", "grad_output"),
+    "fingerprint": ("torchlens.fingerprint", None),
+    "head": ("torchlens._selection.selectors", "head"),
+    "in_backward_pass": ("torchlens._selection.selectors", "in_backward_pass"),
+    "in_module": ("torchlens._selection.selectors", "in_module"),
+    "model_input": ("torchlens._selection.selectors", "model_input"),
     "intervention": ("torchlens.intervention", None),
     "io": ("torchlens.io", None),
     "load": ("torchlens._io.bundle", "load"),
-    "label": ("torchlens.intervention", "label"),
-    "mean_ablate": ("torchlens.intervention", "mean_ablate"),
-    "merge_ranks": ("torchlens.merged", "merge_ranks"),
-    "merge_report": ("torchlens.merged", "merge_report"),
-    "merged": ("torchlens.merged", None),
-    "module": ("torchlens.intervention", "module"),
-    "noise": ("torchlens.intervention", "noise"),
-    "output": ("torchlens.intervention", "output"),
-    "output_at": ("torchlens.intervention", "output_at"),
-    "partial": ("torchlens.partial", None),
+    "label": ("torchlens._selection.selectors", "label"),
+    "mean_ablate": ("torchlens.intervention.helpers", "mean_ablate"),
+    "merge_ranks": ("torchlens._merged", "merge_ranks"),
+    "merge_report": ("torchlens._merged", "merge_report"),
+    "module": ("torchlens._selection.selectors", "module"),
+    "add_noise": ("torchlens.intervention.helpers", "add_noise"),
+    "model_output": ("torchlens._selection.selectors", "model_output"),
+    "debug": ("torchlens.debug", None),
     "report": ("torchlens.report", None),
     "repgeom": ("torchlens.repgeom", None),
-    "preceded_by": ("torchlens.intervention", "preceded_by"),
-    "project_off": ("torchlens.intervention", "project_off"),
-    "project_onto": ("torchlens.intervention", "project_onto"),
-    "push": ("torchlens.intervention", "push"),
-    "push_from": ("torchlens.intervention", "push_from"),
-    "record": ("torchlens.fastlog", "record"),
-    "record_kpi_in_graph": ("torchlens.user_funcs", "record_kpi_in_graph"),
+    "preceded_by": ("torchlens._selection.selectors", "preceded_by"),
+    "project_out": ("torchlens.intervention.helpers", "project_out"),
+    "project_onto": ("torchlens.intervention.helpers", "project_onto"),
+    "record": ("torchlens.recording._record_one_shot", "record"),
     "receptive_field": ("torchlens.receptive_field", None),
-    "regex": ("torchlens.intervention", "regex"),
-    "register_tensor_connection": ("torchlens.user_funcs", "register_tensor_connection"),
-    "clear_capture_cache": ("torchlens.user_funcs", "clear_capture_cache"),
-    "release_model": ("torchlens.user_funcs", "release_model"),
-    "replace_with": ("torchlens.intervention", "replace_with"),
-    "run": ("torchlens.intervention", "run"),
-    "save": ("torchlens._io.bundle", "save"),
-    "scale": ("torchlens.intervention", "scale"),
-    "show_bundle_graph": ("torchlens.user_funcs", "show_bundle_graph"),
-    "summary": ("torchlens.user_funcs", "summary"),
-    "splice_module": ("torchlens.intervention", "splice_module"),
+    "label_matches": ("torchlens._selection.selectors", "label_matches"),
+    "all_sites": ("torchlens._selection.universal", "all_sites"),
+    "clear_cache": ("torchlens._user_funcs", "clear_cache"),
+    "release_model": ("torchlens._user_funcs", "release_model"),
+    "replace_with": ("torchlens.intervention.predicates", "replace_with"),
+    "scale": ("torchlens.intervention.helpers", "scale"),
+    "summary": ("torchlens._user_funcs", "summary"),
+    "splice_module": ("torchlens.intervention.helpers", "splice_module"),
     "stats": ("torchlens.stats", None),
-    "steer": ("torchlens.intervention", "steer"),
+    "steer": ("torchlens.intervention.helpers", "steer"),
     "sweep": ("torchlens.intervention.sweep", "sweep"),
-    "swap_with": ("torchlens.intervention", "swap_with"),
-    "trace": ("torchlens.user_funcs", "trace"),
+    "trace": ("torchlens._user_funcs", "trace"),
+    "draw": ("torchlens._user_funcs", "draw"),
     # Built-in activation transforms (transforms memo s7 home; the submodule
     # spelling tl.transforms is DOCUMENTED-UNSTABLE — the collision with the
     # input-side transform= slot is a named naming-sprint item).
     "transforms": ("torchlens.transforms", None),
-    "user_funcs": ("torchlens.user_funcs", None),
     "validate": ("torchlens.validation.consolidated", "validate"),
     "validation": ("torchlens.validation", None),
-    "visualization": ("torchlens.visualization", None),
     "types": ("torchlens.types", None),
-    "accessors": ("torchlens.accessors", None),
+    "appliances": ("torchlens.appliances", None),
     "backends": ("torchlens.backends", None),
     "viz": ("torchlens.viz", None),
-    "when": ("torchlens.intervention", "when"),
-    "where": ("torchlens.intervention", "where"),
-    "without_op": ("torchlens.intervention", "without_op"),
-    "zero_ablate": ("torchlens.intervention", "zero_ablate"),
-    "Edit": ("torchlens.intervention", "Edit"),
-    "patch_from": ("torchlens.intervention", "patch_from"),
+    "site": ("torchlens._selection.selectors", "site"),
+    "at_step": ("torchlens._selection.selectors", "at_step"),
+    "when": ("torchlens.intervention.spec", "when"),
+    "where": ("torchlens._selection.selectors", "where"),
+    "without_op": ("torchlens._selection.selectors", "without_op"),
+    "zero_ablate": ("torchlens.intervention.helpers", "zero_ablate"),
+    "Edit": ("torchlens.intervention.types", "Edit"),
+    "patch_from": ("torchlens.intervention.helpers", "patch_from"),
+    "Recipe": ("torchlens.intervention.spec", "Recipe"),
+    "positions": ("torchlens.intervention._position_edits", "positions"),
     # L6 selection algebra (DOCUMENTED-UNSTABLE pending naming-session
     # ratification; provisional-name protocol).
-    "Selection": ("torchlens.selection", "Selection"),
-    "ResolvedSelection": ("torchlens.selection", "ResolvedSelection"),
-    "units": ("torchlens.selection", "units"),
-    "params": ("torchlens.selection", "params"),
-    "random_selection": ("torchlens.selection", "random_selection"),
+    "Selector": ("torchlens._selection.selection", "Selector"),
+    "Selection": ("torchlens._selection.selection", "Selection"),
+    "units": ("torchlens._selection.selection", "units"),
+    "param": ("torchlens._selection.selection", "param"),
+    "random_like": ("torchlens._selection.selection", "random_like"),
     # L6 value-based + statistical producers (DOCUMENTED-UNSTABLE pending
     # naming-session ratification; provisional-name protocol).
-    "top_k": ("torchlens.selection_values", "top_k"),
-    "top_fraction": ("torchlens.selection_values", "top_fraction"),
-    "threshold": ("torchlens.selection_values", "threshold"),
-    "sign": ("torchlens.selection_values", "sign"),
-    "dead": ("torchlens.selection_values", "dead"),
-    "saturated": ("torchlens.selection_values", "saturated"),
-    "low_variance": ("torchlens.selection_values", "low_variance"),
+    "top_k": ("torchlens._selection.values", "top_k"),
+    "top_fraction": ("torchlens._selection.values", "top_fraction"),
+    "threshold": ("torchlens._selection.values", "threshold"),
+    "sign": ("torchlens._selection.values", "sign"),
+    "dead": ("torchlens._selection.values", "dead"),
+    "saturated": ("torchlens._selection.values", "saturated"),
+    "low_variance": ("torchlens._selection.values", "low_variance"),
     # L6 graph-structural producers (DOCUMENTED-UNSTABLE pending
     # naming-session ratification; provisional-name protocol).
-    "neighborhood": ("torchlens.selection_graph", "neighborhood"),
-    "between": ("torchlens.selection_graph", "between"),
+    "neighborhood": ("torchlens._selection.graph", "neighborhood"),
+    "between": ("torchlens._selection.graph", "between"),
     # L6 comparative producers: differential + cross-pass (DOCUMENTED-UNSTABLE
     # pending naming-session ratification; provisional-name protocol).
-    "changed": ("torchlens.selection_compare", "changed"),
-    "top_changed": ("torchlens.selection_compare", "top_changed"),
-    "stable_across_passes": ("torchlens.selection_compare", "stable_across_passes"),
-    "pass_variance": ("torchlens.selection_compare", "pass_variance"),
+    "changed": ("torchlens._selection.compare", "changed"),
+    "top_changed": ("torchlens._selection.compare", "top_changed"),
+    "stable_across_passes": ("torchlens._selection.compare", "stable_across_passes"),
+    "pass_variance": ("torchlens._selection.compare", "pass_variance"),
     # L6 subspace producer (DOCUMENTED-UNSTABLE pending naming-session
     # ratification; provisional-name protocol).
-    "subspace": ("torchlens.selection_subspace", "subspace"),
+    "subspace": ("torchlens._selection.subspace", "subspace"),
 }
 
 
@@ -237,7 +184,7 @@ def _resolve_top_level(name: str) -> _Any:
 
 
 # Five-step facade tables (architecture memo 5.4; mechanism owned by
-# torchlens.utils.facade). The redirect table is the teaching compensator for
+# torchlens._utils.facade). The redirect table is the teaching compensator for
 # the 2026-08 shim-removal pass (docs/migration/v2.0_api_changes.md): every
 # removed top-level spelling raises a typed ``facade_redirect`` AttributeError
 # naming its canonical home instead of a bare "no attribute" (AUD-CODE 3.14).
@@ -253,69 +200,84 @@ def _resolve_top_level(name: str) -> _Any:
 # file for that group through its audited _ALLOWED ledger (GATE-FIX row 1);
 # docs/reference/deprecations.md teaches the same names in prose.
 _REDIRECTS: dict[str, str] = {
-    "ActivationPostfunc": "use torchlens.types.ActivationPostfunc",
+    "aggregate": "use torchlens.stats.aggregate",
     "batched_extract": "use torchlens.extract_dataset",
+    "AtenOp": "use torchlens.types.AtenOp",
+    "Container": "use torchlens.types.Container",
+    "register_container": "use torchlens.types.register_container",
+    "span": "use torchlens.observers.span",
+    "tap": "use torchlens.observers.tap",
+    "assert_unchanged": "use torchlens.fingerprint.assert_unchanged",
+    "Quantity": "use torchlens.types.Quantity",
+    "Bytes": "use torchlens.types.Bytes",
+    "Duration": "use torchlens.types.Duration",
+    "Flops": "use torchlens.types.Flops",
+    "Macs": "use torchlens.types.Macs",
+    "brainpipe": "use torchlens.neuro (plan_extraction, ExtractionPlan, PlanSite, export_npz)",
     "Buffer": "use torchlens.types.Buffer",
-    "build_render_audit": "use torchlens.experimental.dagua.build_render_audit",
+    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
-    "check_spec_compat": "use torchlens.validation.check_spec_compat",
+    "check_spec_compat": "use torchlens.intervention.check_spec_compat",
     "cleanup_tmp": "use torchlens.io.cleanup_tmp",
-    "draw_backward": "use torchlens.visualization.draw_backward",
-    "draw_combined": "use torchlens.visualization.draw_combined",
-    "draw_model_graph": "use torchlens.visualization.show_model_graph, or trace.draw()",
+    "draw_backward": "use torchlens.Trace.draw (trace.draw(graph='backward'))",
+    "draw_combined": "use torchlens.Trace.draw (trace.draw(graph='combined'))",
+    "draw_model_graph": "use torchlens.Trace.draw (trace.draw())",
     "FuncCallLocation": "use torchlens.types.FuncCallLocation",
-    "get_model_metadata": "use torchlens.io.log_model_metadata -- get_model_metadata was renamed",
+    "get_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
     "get_model_structure": "use torchlens.summary(model, x) for the module tree, or torchlens.trace(model, x).modules",
     "GradFn": "use torchlens.types.GradFn",
-    "GradFnAccessor": "use torchlens.accessors.GradFnAccessor",
+    "GradFnAccessor": "use torchlens._data_classes.grad_fn.GradFnAccessor",
     "GradFnCall": "use torchlens.types.GradFnCall",
-    "GradientPostfunc": "use torchlens.types.GradientPostfunc",
     "intervening": "use torchlens.without_op -- intervening was renamed",
-    "LayerAccessor": "use torchlens.accessors.LayerAccessor",
-    "list_logs": "use torchlens.io.list_logs",
+    "LayerAccessor": "use torchlens._data_classes._layer_accessors.LayerAccessor",
+    "list_logs": "use torchlens.io.list_traces",
     "load_intervention_spec": "use torchlens.io.load_intervention_spec",
     "log_forward_pass": "use torchlens.trace(model, x) -- log_forward_pass was the pre-2.0 capture verb",
-    "log_model_metadata": "use torchlens.io.log_model_metadata",
+    "log_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
+    "mechinterp": "import torchlens.mechinterp, then use torchlens.mechinterp.edge_scores and its siblings -- a submodule, not a root name",
     "MetadataInvariantError": "use torchlens.errors.MetadataInvariantError",
     "ModelHistory": "use torchlens.Trace -- ModelHistory was renamed ModelLog, then Trace",
     "ModelLog": "use torchlens.Trace -- ModelLog was renamed Trace",
     "Module": "use torchlens.types.Module",
-    "ModuleAccessor": "use torchlens.accessors.ModuleAccessor",
+    "ModuleAccessor": "use torchlens._data_classes.module.ModuleAccessor",
     "ModuleCall": "use torchlens.types.ModuleCall",
-    "ModuleInputSnapshot": "use torchlens.data_classes.ModuleInputSnapshot",
+    "ModuleInputSnapshot": "use torchlens.types.ModuleInputSnapshot",
     "NodeSpec": "use torchlens.experimental.dagua.NodeSpec",
     "Param": "use torchlens.types.Param",
     "peek": "use torchlens.pluck",
-    "PreHookEffect": "use torchlens.data_classes.PreHookEffect",
-    "preview_fastlog": "use torchlens.fastlog.preview",
-    "record_span": "use torchlens.span",
-    "rehydrate_nested": "use torchlens.io.rehydrate_nested",
-    "render_graph": "use torchlens.visualization.show_model_graph, or trace.draw()",
-    "render_lines_to_html": "use torchlens.experimental.dagua.render_lines_to_html",
-    "render_model_graph": "use torchlens.visualization.show_model_graph, or trace.draw()",
-    "render_trace_with_dagua": "use torchlens.experimental.dagua.render_trace_with_dagua",
-    "replay": "use torchlens.push",
-    "replay_from": "use torchlens.push_from",
-    "rerun": "use torchlens.run",
+    "PreHookEffect": "use torchlens.types.PreHookEffect",
+    "fastlog": "use torchlens.recording -- fastlog was renamed recording",
+    "preview_fastlog": "removed from the public surface; use torchlens.recording.dry_run to see which sites a predicate keeps",
+    "record_span": "use torchlens.observers.span",
+    "rehydrate_nested": "use torchlens.io.materialize_nested",
+    "render_graph": "use torchlens.Trace.draw (trace.draw())",
+    "render_lines_to_html": "removed from the public surface; use torchlens.Trace.draw (trace.draw())",
+    "render_model_graph": "use torchlens.Trace.draw (trace.draw())",
+    "render_trace_with_dagua": "use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
+    "replay": "use torchlens.Trace.do (do is the one intervention verb)",
+    "replay_from": "use torchlens.Trace.do (do is the one intervention verb)",
+    "rerun": "use torchlens.Trace.do with engine='rerun'",
     "resample_ablate": "use torchlens.intervention.scramble_elements -- resample_ablate was renamed",
     "reset_naming_counter": "use torchlens.io.reset_naming_counter",
-    "resolve_sites": "use torchlens.validation.resolve_sites",
+    "resolve_sites": "use torchlens.Trace indexing (trace[selector]) -- it returns every matching site as a torchlens.Selection",
+    "load_extraction": "use torchlens.load(path) -- it detects a saved extraction directory",
+    "save": "use torchlens.Trace.save (trace.save(path)) -- objects save themselves; torchlens.load(path) reads a saved artifact back",
     "save_intervention": "use torchlens.io.save_intervention",
-    "SaveLevel": "use torchlens.types.SaveLevel",
-    "show_model_graph": "use torchlens.visualization.show_model_graph",
+    "semantic": "use torchlens.facets for facet functions and torchlens.mechinterp for the logit lens -- the semantic package is private",
+    "show_model_graph": "use torchlens.Trace.draw (trace.draw())",
     "show_model_structure": "use torchlens.summary(model, x) for the module tree, or torchlens.trace(model, x).modules",
-    "SiteTable": "use torchlens.types.SiteTable",
+    "SiteTable": "use torchlens.Selection -- trace[selector] returns one",
     "SpecCompat": "use torchlens.types.SpecCompat",
-    "StreamingOptions": "use torchlens.options.StreamingOptions",
+    "StreamingOptions": "use torchlens.options.StorageOptions",
     "suppress_mutate_warnings": "use torchlens.io.suppress_mutate_warnings",
     "TargetManifestDiff": "use torchlens.types.TargetManifestDiff",
-    "TensorInputObservation": "use torchlens.data_classes.TensorInputObservation",
-    "TensorLog": "use torchlens.types.TensorLog",
-    "TensorSliceSpec": "use torchlens.types.TensorSliceSpec",
-    "TorchLensPostfuncError": "use torchlens.errors.TorchLensPostfuncError",
+    "TensorInputObservation": "use torchlens.types.TensorInputObservation",
+    "TorchLensPostfuncError": "use torchlens.errors.UserTransformError",
     "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
     "TraceState": "use torchlens.io.TraceState",
     "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",
+    "transformer": "import torchlens.transformer, then use torchlens.transformer.AttentionView and its siblings -- a submodule, not a root name; the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention)",
+    "tviz": "renamed; use torchlens.transformer (import torchlens.transformer) for the kit; the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention)",
     "unwrap_torch": "use torchlens.backends.torch.wrappers.unwrap_torch",
     "validate_backward_pass": "use torchlens.validation.validate_backward_pass",
     "validate_batch_of_models_and_inputs": "use torchlens.validation.validate_batch_of_models_and_inputs",
@@ -358,7 +320,7 @@ def __getattr__(name: str) -> _Any:
         Per the five-step contract above.
     """
 
-    from .utils.facade import resolve_facade_attr
+    from ._utils.facade import resolve_facade_attr
 
     return resolve_facade_attr(
         owner=__name__,
@@ -380,7 +342,7 @@ def __dir__() -> list[str]:
         single-underscore implementation aliases are not advertised.
     """
 
-    from .utils.facade import facade_dir
+    from ._utils.facade import facade_dir
 
     return facade_dir(globals(), _LAZY_ATTRS)
 
@@ -424,21 +386,33 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
 
     Raises
     ------
-    ValueError
-        If the layer cannot be resolved or has no saved out.
+    InvalidArgumentError
+        ``op_lookup_not_found`` if the layer cannot be resolved;
+        ``activation_not_saved`` if it resolved but kept no out.
     """
 
+    from ._extract_refusals import (
+        TorchLensError,
+        refuse_activation_not_saved,
+        refuse_lookup_not_found,
+    )
+    from ._trace_selector_helpers import canonical_module_site_key
+
     try:
-        layer_log = trace[layer]
+        layer_log = trace[canonical_module_site_key(trace, layer) or layer]
+    except TorchLensError:
+        # A typed refusal (ambiguity, pass qualifier, index) already names its
+        # condition; a "not found" would hide it.
+        raise
     except (KeyError, ValueError) as exc:
         suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
-        raise ValueError(_did_you_mean_message(layer, suggestions)) from exc
+        refuse_lookup_not_found(_did_you_mean_message(layer, suggestions), layer, cause=exc)
 
     import torch
 
     out = getattr(layer_log, "out", None)
     if out is None:
-        raise ValueError(f"Layer {layer!r} resolved but has no saved out.")
+        refuse_activation_not_saved(layer)
     if not isinstance(out, torch.Tensor):
         raise TypeError(f"Layer {layer!r} out is not a torch.Tensor.")
     return out
@@ -479,9 +453,15 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
         Matching no-pass layer labels in execution order.
     """
 
-    if pattern in trace.layer_dict_all_keys:
+    from ._errors import AmbiguousOpLookupError
+    from ._trace_selector_helpers import canonical_module_site_key
+
+    if pattern in trace._layer_dict_all_keys:
         return [pattern]
-    if pattern in trace.layer_logs:
+    if pattern in trace._layer_logs:
+        return [pattern]
+    if canonical_module_site_key(trace, pattern) is not None:
+        # A wrapper-relative or dot-flattened module name keys by the caller's spelling.
         return [pattern]
     lower_pattern = pattern.lower()
     matches = [
@@ -493,27 +473,33 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
         return matches
     try:
         resolved = trace[pattern]
+    except AmbiguousOpLookupError:
+        raise
     except (KeyError, ValueError):
         return []
     label = getattr(resolved, "layer_label", pattern)
     return [str(label)]
 
 
-def pluck(model: _nn.Module, x: _Any, layer: str, stop_after: _Any | None = None) -> _torch.Tensor:
+def pluck(
+    model: _nn.Module, inputs: _Any, layer: str, stop_after: _Any | None = None
+) -> _torch.Tensor:
     """Return the saved out for one layer.
 
     Parameters
     ----------
     model:
         PyTorch model to run.
-    x:
+    inputs:
         Positional input argument or argument container for ``model.forward``.
     layer:
         Layer label, module path, pass-qualified label, or unique substring.
-        Resolves strictly to one result; ambiguous lookups raise ``ValueError``.
+        Resolves strictly to one result; ambiguous lookups refuse typed.
     stop_after:
-        Experimental stop-early site. Currently validated for ``pluck`` and
-        captured via the normal safe full-forward path.
+        Stop-early site or predicate, passed to the capture as
+        ``trace(stop_after=...)``: the forward halts inclusively after the
+        site, and an unsupported spelling refuses typed. ``None`` reads the
+        ambient ``tl.experimental.stop_after`` site, if one is active.
 
     Returns
     -------
@@ -522,26 +508,80 @@ def pluck(model: _nn.Module, x: _Any, layer: str, stop_after: _Any | None = None
 
     Raises
     ------
-    ValueError
-        If ``layer`` does not resolve or did not produce a saved tensor.
+    InvalidArgumentError
+        ``op_lookup_not_found`` if ``layer`` does not resolve;
+        ``activation_not_saved`` if it produced no saved tensor.
     """
 
-    from .experimental import _active_stop_after_site
-    from .options import CaptureOptions
-
-    _ = stop_after if stop_after is not None else _active_stop_after_site()
-    trace = _resolve_top_level("trace")(
-        model,
-        x,
-        capture=CaptureOptions(layers_to_save=[layer]),
-    )
+    # an explicit site rides the door's stop_after=, where the trace
+    # validates it; without one the trace reads the ambient site itself.
+    trace = _resolve_top_level("trace")(model, inputs, save=[layer], stop_after=stop_after)
     return _out_from_log(trace, layer)
+
+
+def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
+    """Return ``output_key -> facet selector`` for the facet selectors in an extract request.
+
+    A list entry keys by the selector's spelling; a mapping entry by the user label.
+    """
+
+    from ._selection.selectors import FacetSelector
+
+    items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
+    return {
+        repr(value) if label is None else str(label): value
+        for label, value in items
+        if isinstance(value, FacetSelector)
+    }
+
+
+def _extract_with_facets(
+    model: _nn.Module,
+    x: _Any,
+    layers: _Any,
+    facet_plan: dict[str, _Any],
+    *,
+    detach_saved_activations: bool,
+) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _Any]]:
+    """Extract a request holding facet selectors: each facet's value, as ``trace[selector]`` reads it.
+
+    One facet alone captures with ``save=selector`` (its homes); a mixed or
+    several-facet request captures with every op saved. Other entries resolve
+    as in a plain extract, from the same trace.
+    """
+
+    from .options import CaptureOptions as _LazyCaptureOptions
+
+    capture = _LazyCaptureOptions(detach_saved_activations=detach_saved_activations)
+    only = next(iter(facet_plan.values())) if len(facet_plan) == len(layers) == 1 else None
+    if only is not None:
+        trace = _resolve_top_level("trace")(model, x, capture=capture, save=only)
+    else:
+        trace = _resolve_top_level("trace")(model, x, capture=capture)
+    outputs: dict[str, _torch.Tensor] = {}
+    views: dict[str, _Any] = {}
+    items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
+    for label, value in items:
+        key = (
+            str(label)
+            if label is not None
+            else (repr(value) if value in facet_plan.values() else str(value))
+        )
+        if key in facet_plan:
+            facet = trace[facet_plan[key]]
+            outputs[key], views[key] = facet.value, facet
+        else:
+            outputs[key] = _out_from_log(trace, str(value))
+            views[key] = trace[str(value)]
+    return trace, outputs, views
 
 
 def _extract_layers_with_trace(
     model: _nn.Module,
     x: _Any,
     layers: _Iterable[str] | _Mapping[str, str],
+    *,
+    detach_saved_activations: bool = True,
 ) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _Any]]:
     """Run one selective capture and resolve the requested layers.
 
@@ -553,6 +593,8 @@ def _extract_layers_with_trace(
         Positional input argument or argument container for ``model.forward``.
     layers:
         Either a list of layer lookups or a mapping of ``user_label -> layer_lookup``.
+    detach_saved_activations:
+        Whether the returned outs are detached from the autograd graph.
 
     Returns
     -------
@@ -562,33 +604,34 @@ def _extract_layers_with_trace(
 
     Raises
     ------
-    ValueError
-        If a lookup does not resolve or did not produce a saved tensor.
+    InvalidArgumentError
+        ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
 
-    from .options import CaptureOptions as _LazyCaptureOptions
+    from ._extract_refusals import CaptureOptions, refuse_lookup_not_found
+    from ._trace_selector_helpers import canonical_module_site_key
 
+    facet_plan = _extract_facet_plan(layers)
+    if facet_plan:
+        return _extract_with_facets(
+            model, x, layers, facet_plan, detach_saved_activations=detach_saved_activations
+        )
     layer_plan = _normalize_extract_layers(layers)
-    trace = _resolve_top_level("trace")(
-        model,
-        x,
-        capture=_LazyCaptureOptions(
-            layers_to_save=list(layer_plan.values()),
-        ),
-    )
+    capture = CaptureOptions(detach_saved_activations=detach_saved_activations)
+    trace = _resolve_top_level("trace")(model, x, capture=capture, save=list(layer_plan.values()))
     outputs: dict[str, _torch.Tensor] = {}
     views: dict[str, _Any] = {}
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = trace[pattern]
+            views[label] = trace[canonical_module_site_key(trace, pattern) or pattern]
         return trace, outputs, views
 
     for pattern in layer_plan.values():
         matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
             suggestions = trace.find_layers(pattern)
-            raise ValueError(_did_you_mean_message(pattern, suggestions))
+            refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
             views[match] = trace[match]
@@ -597,8 +640,10 @@ def _extract_layers_with_trace(
 
 def extract(
     model: _nn.Module,
-    x: _Any,
+    inputs: _Any,
     layers: _Iterable[str] | _Mapping[str, str],
+    *,
+    detach_saved_activations: bool = True,
 ) -> dict[str, _torch.Tensor]:
     """Return saved outs for many layers.
 
@@ -606,10 +651,15 @@ def extract(
     ----------
     model:
         PyTorch model to run.
-    x:
+    inputs:
         Positional input argument or argument container for ``model.forward``.
     layers:
         Either a list of layer lookups or a mapping of ``user_label -> layer_lookup``.
+    detach_saved_activations:
+        DOCUMENTED-UNSTABLE. Defaults to ``True``: the outs are detached
+        copies. ``False`` returns graph-connected outs (``grad_fn`` set
+        wherever the model's forward carries autograd history), so a loss
+        built from them backpropagates into the model's parameters.
 
     Returns
     -------
@@ -618,154 +668,83 @@ def extract(
         resolved layer labels to outs for list inputs.
     """
 
-    _trace, outputs, _views = _extract_layers_with_trace(model, x, layers)
+    _trace, outputs, _views = _extract_layers_with_trace(
+        model, inputs, layers, detach_saved_activations=detach_saved_activations
+    )
     return outputs
 
 
-def bundle(*args: _Any, **kwargs: _Any) -> Bundle:
-    """Construct a TorchLens Bundle.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Forwarded to :class:`torchlens.intervention.bundle.Bundle`.
-
-    Returns
-    -------
-    Bundle
-        Constructed Bundle.
-    """
-
-    return _resolve_top_level("Bundle")(*args, **kwargs)
-
-
-class _TorchLensModule(_types.ModuleType):
-    """Protect top-level callables whose names collide with submodules."""
-
-    def __setattr__(self, name: str, value: _Any) -> None:
-        """Keep the public ``bundle`` constructor after its package is imported.
-
-        Parameters
-        ----------
-        name:
-            Attribute name being assigned by Python's import machinery or a caller.
-        value:
-            Value being assigned.
-        """
-
-        if (
-            name == "bundle"
-            and isinstance(value, _types.ModuleType)
-            and value.__name__ == "torchlens.bundle"
-            and callable(self.__dict__.get(name))
-        ):
-            return
-        super().__setattr__(name, value)
-
-
-_sys.modules[__name__].__class__ = _TorchLensModule
-
-
 __all__ = [
-    "AtenOp",
     "trace",
+    "draw",
     "release_model",
-    "clear_capture_cache",
+    "clear_cache",
     "export",
-    "hash",
-    "assert_unchanged",
-    "fastlog",
+    "fingerprint",
+    "recording",
     "facets",
     "record",
     "Recording",
-    "ActivationLookup",
-    "CapturedRun",
-    "JaxPayloadLoadHint",
-    "PayloadLoadHints",
     "load",
-    "save",
-    "do",
-    "push",
-    "push_from",
-    "run",
-    "bundle",
     "pluck",
     "extract",
     "extract_dataset",
-    "load_extraction",
     "validate",
-    "decide_recording_of_batch",
-    "record_kpi_in_graph",
-    "register_tensor_connection",
-    "show_bundle_graph",
     "summary",
     "options",
     "to_disk",
-    "AmbiguousOpLookupError",
-    "ReentrantTraceError",
     "Trace",
     "Layer",
-    "Container",
     "Op",
-    "Quantity",
-    "Bytes",
-    "Duration",
-    "Flops",
-    "Macs",
     "Bundle",
     "add",
     "label",
     "func",
     "func_transform",
     "followed_by",
+    "grad",
     "grad_fn",
-    "grad_fn_label",
     "grad_input",
     "grad_output",
     "in_backward_pass",
     "without_op",
-    "regex",
+    "label_matches",
+    "all_sites",
     "module",
-    "output",
-    "output_at",
-    "input_at",
-    "register_container",
+    "model_output",
+    "model_input",
     "preceded_by",
-    "contains",
+    "label_contains",
     "facet",
     "where",
     "in_module",
     "head",
     "clamp",
+    "clip_norm",
     "mean_ablate",
     "merge_ranks",
     "merge_report",
-    "noise",
-    "project_off",
+    "add_noise",
+    "project_out",
     "project_onto",
     "replace_with",
     "scale",
     "splice_module",
-    "span",
     "steer",
     "sweep",
-    "swap_with",
     "zero_ablate",
+    "site",
+    "at_step",
     "when",
-    "bwd_hook",
-    "grad_clip",
-    "grad_noise",
-    "grad_clamp",
-    "grad_scale",
-    "grad_zero",
-    "tap",
+    "Selector",
     "Selection",
-    "ResolvedSelection",
     "units",
-    "params",
-    "random_selection",
+    "param",
+    "random_like",
     "Edit",
     "patch_from",
+    "Recipe",
+    "positions",
     "top_k",
     "top_fraction",
     "threshold",
@@ -784,7 +763,6 @@ __all__ = [
     # the streaming-statistics namespace and its dataloader aggregation door
     # were shipped, documented-unstable, and root-reachable but undeclared.
     "stats",
-    "aggregate",
 ]
 
 # ``from __future__ import annotations`` binds ``annotations`` as a reachable

@@ -21,12 +21,12 @@ import torchlens as tl
 #: (D31): none may inherit the dataclass auto-repr. F10 extends this sweep
 #: to the whole exported surface with its value-record conversion.
 _NO_AUTO_REPR_CLASSES = (
-    "torchlens.fastlog.types:Recording",
-    "torchlens.fastlog.types:ActivationRecord",
-    "torchlens.ir.predicate:RecordContext",
-    "torchlens.runnable:RunResult",
-    "torchlens.runnable:RunReport",
-    "torchlens.runnable:ReadinessReport",
+    "torchlens.recording.types:Recording",
+    "torchlens.recording.types:ActivationRecord",
+    "torchlens._ir.predicate:RecordContext",
+    "torchlens._runnable:RunResult",
+    "torchlens._runnable:RunReport",
+    "torchlens._runnable:ReadinessReport",
 )
 
 
@@ -97,7 +97,7 @@ def _rendered_strings(trace: "tl.Trace") -> list[tuple[str, str]]:
         ("modules-repr", repr(trace.modules)),
         ("params-repr", repr(trace.params)),
         ("summary", trace.summary()),
-        ("explain", tl.report.explain(trace)),
+        ("explain", trace.explain()),
     ]
     for op in trace.ops:
         rendered.append((f"op-{op.label}", str(op)))

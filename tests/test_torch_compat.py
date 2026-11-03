@@ -1,4 +1,4 @@
-"""Tests for the torch version-compatibility shim (torchlens/utils/_torch_compat.py).
+"""Tests for the torch version-compatibility shim (torchlens/_utils/_torch_compat.py).
 
 The shim lets TorchLens run on torch 2.1+ by routing the two torch-2.4-only
 autocast-query APIs (``is_autocast_enabled(device_type)`` /
@@ -21,8 +21,9 @@ from typing import cast
 import pytest
 import torch
 
-from torchlens.utils import _torch_compat as tc
-from torchlens.utils.rng import log_current_autocast_state
+from torchlens._utils import _kernel_probes, _torch_compat as tc
+from torchlens._utils._kernel_probes import _solves_identity_system
+from torchlens._utils.rng import log_current_autocast_state
 
 # The functorch transform-level API (torch._C._functorch.maybe_current_level) is a
 # torch-2.4+ addition, genuinely absent on the supported 2.1-2.3 range. Probe torch
@@ -379,6 +380,9 @@ def test_torch_capability_snapshot_contract() -> None:
         # supported range -- hardcoded True as a tripwire; a build without it
         # degrades to the open-bracket heuristic behind this named flag.
         "HAS_CURRENT_GRAPH_TASK_ID": True,
+        # The executing-node resolver matches backward FLOPs to the node that
+        # ran them; a build without it charges the innermost node marker.
+        "HAS_CURRENT_AUTOGRAD_NODE": tc.HAS_CURRENT_AUTOGRAD_NODE,
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
         "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,
@@ -386,6 +390,10 @@ def test_torch_capability_snapshot_contract() -> None:
             tc.HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
         ),
         "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE": tc.HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
+        # TorchScript call boundary: ScriptFunction.__call__ replaceable from Python
+        # (a pybind11 heap type). Without it a scripted call stays a census gap with
+        # its advisory; mirror the live value.
+        "HAS_SCRIPT_FUNCTION_CALL_HOOK": tc.HAS_SCRIPT_FUNCTION_CALL_HOOK,
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
         "HAS_DYNAMO_ORIG_CALLABLE_MARKER": tc.HAS_DYNAMO_ORIG_CALLABLE_MARKER,
         "HAS_DYNAMO_EXPLAIN": tc.HAS_DYNAMO_EXPLAIN,
@@ -418,6 +426,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # mirror the live post-snapshot capability.
         "HAS_CPU_HALF_KERNELS": tc.HAS_CPU_HALF_KERNELS,
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL": tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL,
+        # torch.sparse.spsolve on CUDA needs a cuDSS build, which official wheels
+        # lack. Build- and device-dependent, so mirror the live post-snapshot
+        # capability.
+        "HAS_SPARSE_SPSOLVE_CUDA": tc.HAS_SPARSE_SPSOLVE_CUDA,
         # Test-only structure-only-belt provenance signal: whether meta-tensor
         # scalar extraction raises torch's own guard (torch 2.1-2.2 fall
         # through to a generic NotImplementedError instead). Build-dependent,
@@ -490,6 +502,8 @@ def test_torch_capability_snapshot_contract() -> None:
         # compile counters back tl.debug.count_compiles. Build-dependent, so
         # mirror the live values.
         "HAS_SET_STANCE": tc.HAS_SET_STANCE,
+        # CUDA-graph bindings exist only on CUDA builds; mirror the live value.
+        "HAS_CUDA_GRAPHS": tc.HAS_CUDA_GRAPHS,
         "HAS_TORCH_FUNCTION_STACK_SURGERY": tc.HAS_TORCH_FUNCTION_STACK_SURGERY,
         "HAS_DYNAMO_COMPILE_COUNTERS": tc.HAS_DYNAMO_COMPILE_COUNTERS,
         # fp8 dtypes exist on every torch build we support, but the set grew across
@@ -520,6 +534,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # runtime capabilities of the interpreter, so mirror the live values.
         "HAS_CODE_POSITIONS": tc.HAS_CODE_POSITIONS,
         "HAS_CODE_QUALNAME": tc.HAS_CODE_QUALNAME,
+        # Direct ``module.forward(x)`` detection: the caller frame against torch's
+        # Module.__call__ dispatch code. Present across the supported range;
+        # without it the fast run keeps refusing hook-invisible module calls.
+        "HAS_MODULE_CALL_DISPATCH_FRAME": True,
         # Identity-shim sites (sf-fastpath): torch-internal `x is F.y` checks
         # normalized while wrappers are installed. The transformer flag and the
         # private expanded-weights machinery exist across the supported range
@@ -528,6 +546,12 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG": True,
         "HAS_ATTENTION_CAUSAL_BIAS": tc.HAS_ATTENTION_CAUSAL_BIAS,
         "HAS_EXPANDED_WEIGHTS_CONV_PICKER": True,
+        # The lazy-module materialization allowlist the identity shim resolves
+        # through the wrapper ledger exists across the supported range.
+        "HAS_LAZY_MODULE_ALLOWED_METHODS": True,
+        # Declined-protocol redispatch skips torch's disabled-handler sentinel,
+        # present across the supported range.
+        "HAS_DISABLED_TORCH_FUNCTION_IMPL": True,
         "HAS_TENSOR_SEQUENCE_SLOT_FIX": True,
         # Legacy tensor-constructor capture: CPython type-layout probe.
         "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH": True,
@@ -574,10 +598,10 @@ def test_completeness_census_check_fails_closed_on_probe_failure(
     the census-blind ``_disable_current_modes()`` regions it exists to cover.
     """
 
-    from torchlens.backends.torch import completeness_witness as cw
+    import torchlens.backends.torch._completeness_storage
 
     monkeypatch.setattr(tc, "get_current_dispatch_mode_stack", lambda: None)
-    assert cw._completeness_census_active() is False
+    assert torchlens.backends.torch._completeness_storage._completeness_census_active() is False
 
 
 def test_completeness_census_check_reads_live_stack(
@@ -585,13 +609,14 @@ def test_completeness_census_check_reads_live_stack(
 ) -> None:
     """The census check still discriminates active vs inactive census modes."""
 
+    import torchlens.backends.torch._completeness_storage
     from torchlens.backends.torch import completeness_witness as cw
 
     census_mode = cw._CompletenessDispatchMode.__new__(cw._CompletenessDispatchMode)
     monkeypatch.setattr(tc, "get_current_dispatch_mode_stack", lambda: [census_mode])
-    assert cw._completeness_census_active() is True
+    assert torchlens.backends.torch._completeness_storage._completeness_census_active() is True
     monkeypatch.setattr(tc, "get_current_dispatch_mode_stack", lambda: [])
-    assert cw._completeness_census_active() is False
+    assert torchlens.backends.torch._completeness_storage._completeness_census_active() is False
 
 
 @pytest.mark.smoke
@@ -749,7 +774,7 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
 
     L8 floor fix: a torch build whose ``torch.utils.deterministic`` submodule
     is absent (torch 2.1.x) must still show the flag in the diagnostic
-    snapshot (``tl.compat.report()`` / ``tl.utils.doctor()``), mirroring the
+    snapshot (``tl.report.doctor()`` / ``tl.report.doctor()``), mirroring the
     live capability rather than dropping the key.
     """
 
@@ -762,6 +787,7 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
     assert snapshot["HAS_REDUCE_TUPLE_DIM"] == tc.HAS_REDUCE_TUPLE_DIM
     assert snapshot["HAS_CPU_HALF_KERNELS"] == tc.HAS_CPU_HALF_KERNELS
     assert snapshot["HAS_CPU_FLOAT8_DETERMINISTIC_FILL"] == tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL
+    assert snapshot["HAS_SPARSE_SPSOLVE_CUDA"] == tc.HAS_SPARSE_SPSOLVE_CUDA
 
 
 @pytest.mark.smoke
@@ -992,6 +1018,7 @@ def test_get_gradient_edge_support_is_lazy_and_caches(monkeypatch: pytest.Monkey
         "get_reduce_tuple_dim_support",
         "get_cpu_half_kernels_support",
         "get_cpu_float8_deterministic_fill_support",
+        "get_sparse_spsolve_cuda_support",
     ],
 )
 def test_real_op_probe_getters_are_lazy_and_cache(
@@ -1013,16 +1040,19 @@ def test_real_op_probe_getters_are_lazy_and_cache(
         "get_reduce_tuple_dim_support": "_probe_reduce_tuple_dim",
         "get_cpu_half_kernels_support": "_probe_cpu_half_kernels",
         "get_cpu_float8_deterministic_fill_support": "_probe_cpu_float8_deterministic_fill",
+        "get_sparse_spsolve_cuda_support": "_probe_sparse_spsolve_cuda",
     }[getter_name]
     probed_name = {
         "get_reduce_tuple_dim_support": "_REDUCE_TUPLE_DIM_PROBED",
         "get_cpu_half_kernels_support": "_CPU_HALF_KERNELS_PROBED",
         "get_cpu_float8_deterministic_fill_support": "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED",
+        "get_sparse_spsolve_cuda_support": "_SPARSE_SPSOLVE_CUDA_PROBED",
     }[getter_name]
     flag_name = {
         "get_reduce_tuple_dim_support": "HAS_REDUCE_TUPLE_DIM",
         "get_cpu_half_kernels_support": "HAS_CPU_HALF_KERNELS",
         "get_cpu_float8_deterministic_fill_support": "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+        "get_sparse_spsolve_cuda_support": "HAS_SPARSE_SPSOLVE_CUDA",
     }[getter_name]
 
     calls = 0
@@ -1041,6 +1071,46 @@ def test_real_op_probe_getters_are_lazy_and_cache(
     second = getter()
     assert calls == 1, "the probe must not re-run once latched"
     assert first == second == getattr(tc, flag_name)
+
+
+def test_spsolve_cuda_probe_is_false_without_the_op_or_a_cuda_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing op or missing CUDA answers ``False`` before any tensor op runs."""
+
+    def _must_not_run(*_args: object, **_kwargs: object) -> torch.Tensor:
+        raise AssertionError("the probe must not solve without a CUDA device")
+
+    monkeypatch.setattr(torch.sparse, "spsolve", _must_not_run, raising=False)
+    monkeypatch.setattr(_kernel_probes, "_is_cuda_available", lambda: False)
+    assert _kernel_probes.probe_sparse_spsolve_cuda() is False
+    monkeypatch.setattr(_kernel_probes, "_is_cuda_available", lambda: True)
+    monkeypatch.delattr(torch.sparse, "spsolve")
+    assert _kernel_probes.probe_sparse_spsolve_cuda() is False
+
+
+def test_spsolve_solve_step_catches_only_the_no_cudss_refusal() -> None:
+    """Only torch's cuDSS refusal reads as absent; any other error propagates."""
+
+    def _no_cudss(*_args: object, **_kwargs: object) -> torch.Tensor:
+        raise RuntimeError(
+            "Calling linear solver with sparse tensors requires compiling "
+            "PyTorch with CUDA cuDSS and is not supported in ROCm build."
+        )
+
+    def _other_fault(*_args: object, **_kwargs: object) -> torch.Tensor:
+        raise RuntimeError("CUDA error: an illegal memory access was encountered")
+
+    assert _solves_identity_system(_no_cudss, "cpu") is False
+    assert _solves_identity_system(lambda matrix, rhs: rhs, "cpu") is True
+    with pytest.raises(RuntimeError, match="illegal memory access"):
+        _solves_identity_system(_other_fault, "cpu")
+    if hasattr(torch.sparse, "spsolve"):
+        # The real op has no CPU kernel: the dispatcher's refusal is not the
+        # cuDSS refusal, so it propagates instead of reading as absent.
+        with pytest.raises(RuntimeError) as info:
+            _solves_identity_system(torch.sparse.spsolve, "cpu")
+        assert "cuDSS" not in str(info.value)
 
 
 def test_module_existence_probe_imports_no_missing_ancestor(
@@ -1087,7 +1157,7 @@ def test_unimported_rng_extras_are_classified_whatever_was_imported_first() -> N
     RNG endpoint. On torch without the module the row must be absent.
     """
 
-    from torchlens.utils.rng import _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS, TORCH_RNG_SURFACE
+    from torchlens._utils.rng.registry import _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS, TORCH_RNG_SURFACE
 
     targets = {row.target for row in TORCH_RNG_SURFACE}
     torch_root = Path(torch.__file__).parent

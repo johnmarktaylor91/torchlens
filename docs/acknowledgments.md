@@ -14,13 +14,14 @@ hands its output to, with the exact calls, are on the
 
 ## License hygiene
 
-Two upstream license situations deserve a plain statement. **baukit** is
-unlicensed and **zennit** is LGPL: from both, TorchLens takes ideas and
+Two upstream license situations deserve a plain statement. **baukit** has
+no license file (its setup file declares MIT) and **zennit** is LGPL: from both, TorchLens takes ideas and
 vocabulary only -- no source copied, ported, generated-from, or vendored.
-Permissively licensed work is different: the one named CODE borrow (treescope,
-Apache-2.0) is ported with a license notice in the source file
-(`torchlens/notebook/_truncation.py`), and Apache-2.0 reuse carries NOTICE
-attribution. Do not over-apply the cleanroom rule to permissively licensed
+Permissively licensed work is different: the named CODE borrows are ported
+with a license notice in the source file -- treescope (Apache-2.0,
+`torchlens/report/_notebook/_truncation.py`) and TransformerLens's `FactoredMatrix`
+(MIT, `torchlens/mechinterp/_factored.py`) -- and Apache-2.0 reuse carries
+NOTICE attribution. Do not over-apply the cleanroom rule to permissively licensed
 work; do not under-apply it to unlicensed or copyleft work.
 
 ## Mechanistic interpretability tooling
@@ -31,8 +32,12 @@ work; do not under-apply it to unlicensed or copyleft work.
   logit attributions), the cached-scale LayerNorm linearization our norm facet
   is validated against bit-exactly, `get_act_name` ergonomics and the `L5H7`
   spelling, `test_prompt`, `head_detector`'s conventions, `FactoredMatrix`
-  (to be ported with credit, not reinvented), position and head addressing
-  ergonomics (`'last'` as a first-class spelling), the ablation-sweep idiom,
+  (vendored under the MIT License from TransformerLens v4.2.0, commit
+  `bd55eab6`, as `torchlens.mechinterp.FactoredMatrix`, feeding the QK/OV
+  circuits built on verified head weight views), the `TransformerBridge`
+  4.x canonical hook vocabulary our alias table translates, position and
+  head addressing ergonomics (`'last'` as a first-class spelling), the
+  ablation-sweep idiom,
   the "% of the clean/corrupt gap recovered" idiom, its demo notebooks as the
   de-facto acceptance gallery of mechinterp, and its published
   model-compatibility table as prior art for claimed-vs-tested lists.
@@ -100,6 +105,8 @@ work; do not under-apply it to unlicensed or copyleft work.
   `all_zeros`/`empty`, omitting the ordinary, the plain-view escape hatch,
   separated +Inf/-Inf, dot-verb ergonomics, and repr-is-a-hot-path cost
   discipline. Our stats line is their line with a model behind it.
+  Install both: lovely-tensors for any tensor at a REPL, TorchLens for the
+  numbers of a whole model's run.
 - **treescope / penzai** (Daniel D. Johnson, Google DeepMind, Apache-2.0) --
   repr-is-the-product as a stance; external type registries,
   collapsed/expanded balanced layouts, copy-buttons that emit code, faceted
@@ -175,7 +182,7 @@ work; do not under-apply it to unlicensed or copyleft work.
 ## Training-time diagnostics and tracking
 
 - **torcheck** (pengyan510) -- the check vocabulary and the register-once /
-  named-module / enable-disable ergonomics `torchlens.checks` systematizes.
+  named-module / enable-disable ergonomics `tl.debug.ChecksSession` systematizes.
   **torchtest** -- same niche, honored the same way.
 - **Andrej Karpathy**, "A Recipe for Training Neural Networks" -- the raw
   update-to-weight ratio and the sanity-check culture. **Lightning** -- the
@@ -188,7 +195,7 @@ work; do not under-apply it to unlicensed or copyleft work.
 - **Weights & Biases** -- attach-once `watch`,
   `wandb.Histogram(np_histogram=)`, `sync_tensorboard`, and (with **MLflow**)
   run-as-first-class-object and the run/experiment distinction behind the
-  experiment ledger; ours is local-first, file-based, and intervention-native.
+  Bundle's operation record; ours is local-first, file-based, and intervention-native.
 - **Neptune TorchWatcher** -- the activation-watch precedent and per-layer
   stat vocabulary (the hosted Neptune service shut down in March 2026). **ClearML** -- automatic TensorBoard capture and
   `Logger.report_histogram`'s precomputed-values contract. **Hugging Face

@@ -16,14 +16,22 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._capture_honesty import honesty_banner_lines
 from .._errors import InvalidArgumentError
+from .._observe._peaks import pass_peak_facts
+from ._compute_truth import unknown_op_ledger
+from ._factcore import factcore
+from ._health import health_facts, nonfinite_option_hint
+from ._stats_view import build_stats_summary
+from ._summary_columns import optimizer_state_facts
 from ._summary_config import SummaryConfig
+from ._summary_html import render_html
 from ._summary_ladder import ResolvedView, ViewRow, resolve_view
-from ._summary_render import SummaryFacts, render_summary_pair
+from ._summary_render import SummaryFacts, _banner_lines, _cell, cell_totals, render_summary_pair
+from ._summary_report import SummaryReport, build_summary_data
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
-    from ._summary_report import SummaryReport
+    from .._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)
@@ -62,11 +70,6 @@ def collect_summary_facts(
 ) -> SummaryFacts:
     """Gather every trace-side fact the renderer prints, detached."""
 
-    from .._capture_honesty import honesty_banner_lines
-    from ._compute_truth import unknown_op_ledger
-    from ._factcore import factcore
-    from ._health import health_facts
-
     core = factcore(trace)
     health = health_facts(trace)
     input_shapes, input_dtypes = _tensor_leaf_shapes(trace)
@@ -74,36 +77,31 @@ def collect_summary_facts(
     # Pass-level peaks publish ONLY through the observe gate (F24 item 4):
     # the basis is named, cpu/mps render under their real meaning, and a
     # CUDA 0 is a high-water fact -- never a raw forward-peak read here.
-    from ..observe._peaks import pass_peak_facts
-
     peak_facts = pass_peak_facts(trace, "forward")
     unexecuted_names: tuple[str, ...] = tuple(
         str(name) for name in (getattr(trace, "uncalled_modules", ()) or ())[:5]
     )
     unknown_groups = unknown_op_ledger(trace)
     unknown_names = tuple(group.func_name or "?" for group in unknown_groups)
-    param_bytes = None
-    try:
-        param_bytes = sum(int(getattr(param, "num_params", 0) or 0) * 4 for param in trace.params)
-    except Exception:  # noqa: BLE001 - fact gathering degrades to unknown, never breaks summary()
-        param_bytes = None
+    pruned = core.params.pruned
     buffer_count = None
     try:
         buffer_count = len(list(getattr(trace, "buffer_layers", ()) or ()))
     except Exception:  # noqa: BLE001 - fact gathering degrades to unknown, never breaks summary()
         buffer_count = None
     passes_max = 1
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in trace._layer_list or ():
         passes_max = max(passes_max, int(getattr(op, "num_passes", 1) or 1))
     return SummaryFacts(
-        model_class_name=getattr(trace, "model_class_name", None),
+        model_class_name=trace._source_class_name,
         input_shapes=input_shapes,
         input_dtypes=input_dtypes,
-        backend=getattr(trace, "backend", None),
+        backend=trace._provenance_backend,
         outcome_status=getattr(getattr(outcome, "status", None), "value", None),
-        capture_verified=getattr(trace, "capture_verified", None),
-        structure_only=bool(getattr(trace, "structure_only", False)),
+        capture_verified=trace._provenance_verified,
+        structure_only=bool(trace._options_structure_only),
         health_verdict=health.verdict,
+        health_hint=nonfinite_option_hint(trace, health.verdict),
         params_total=core.params.total,
         params_per_path_total=core.params.per_path_total,
         params_trainable=core.params.trainable,
@@ -112,7 +110,7 @@ def collect_summary_facts(
         params_unexecuted=core.params.unexecuted,
         unexecuted_names=unexecuted_names,
         tied_groups=core.params.tied_groups,
-        param_bytes=param_bytes,
+        param_bytes=core.params.nbytes,
         buffer_count=buffer_count,
         flops_forward_fma2=int(core.compute.partition_total),
         macs_forward=int(core.compute.macs_total),
@@ -122,14 +120,18 @@ def collect_summary_facts(
         unknown_op_names=unknown_names,
         peak_value_bytes=peak_facts.value_bytes,
         peak_meaning=peak_facts.meaning,
-        at_capture_bytes=core.memory.at_capture_bytes,
-        retained_now_bytes=core.memory.retained_now_bytes,
+        at_capture_bytes=core.memory.captured_bytes,
+        retained_now_bytes=core.memory.retained_bytes,
         compute_ops=core.counts.compute_ops,
         tracked_tensor_rows=core.counts.tracked_tensor_rows,
         passes_max=passes_max,
         execution_note=execution_note,
         input_synthesis=input_synthesis,
         honesty_lines=tuple(honesty_banner_lines(trace)),
+        params_pruned=pruned.paths if pruned is not None else (),
+        params_pruned_raw=pruned.raw if pruned is not None else 0,
+        params_masked=pruned.masked if pruned is not None else None,
+        optimizer=optimizer_state_facts(trace),
     )
 
 
@@ -138,9 +140,9 @@ def _apply_filter(
 ) -> tuple[tuple[ViewRow, ...], str | None]:
     """Presentation-only filtering with the mandatory coverage disclosure."""
 
-    if config.filter is None:
+    if config.where is None:
         return view.rows, None
-    predicate = config.filter
+    predicate = config.where
     if isinstance(predicate, str):
         pattern = re.compile(predicate)
 
@@ -158,10 +160,10 @@ def _apply_filter(
 
     else:
         raise InvalidArgumentError(
-            f"filter= accepts a regex string or a callable over rows; got "
+            f"where= accepts a regex string or a callable over rows; got "
             f"{type(predicate).__name__}.",
             code="summary_option_invalid",
-            remedy="pass a regex string, e.g. filter='conv', or a callable row -> bool",
+            remedy="pass a regex string, e.g. where='conv', or a callable row -> bool",
         )
     visible = tuple(row for row in view.rows if match(row))
     params_total = facts.params_total or 0
@@ -186,11 +188,9 @@ def build_rebuilt_summary(
 ) -> SummaryReport:
     """Build one rebuilt summary result from a finished trace."""
 
-    from ._summary_report import SummaryReport, build_summary_data
-
+    if config.view == "stats":
+        return build_stats_summary(trace, config)
     if config.flop_convention == "fma1":
-        from ._factcore import factcore
-
         for row in factcore(trace).compute.rows:
             if row.kind == "op" and row.flops_fma2 is not None and row.fma_macs is None:
                 raise InvalidArgumentError(
@@ -231,9 +231,6 @@ def build_rebuilt_summary(
 def render_result_html(payload: RebuiltPayload) -> str:
     """The HTML fragment for one rebuilt payload (shared by both doors)."""
 
-    from ._summary_html import render_html
-    from ._summary_render import _banner_lines
-
     facts = payload.facts
     header = facts.model_class_name or "model"
     if facts.input_shapes:
@@ -246,8 +243,8 @@ def render_result_html(payload: RebuiltPayload) -> str:
         header += f" | {facts.execution_note}"
     footer_lines = tuple(
         line
-        for line in payload.ascii_text.rsplit("\n", 8)[-8:]
-        if line.startswith(("Params", "Compute", "Memory", "Graph", "Capture", "More:", "*"))
+        for line in payload.ascii_text.rsplit("\n", 10)[-10:]
+        if line.startswith(("Params", "Compute", "Memory", "Graph", "Capture", "More:", "*", "^"))
     )
     return render_html(
         payload.view,
@@ -263,7 +260,7 @@ def render_result_html(payload: RebuiltPayload) -> str:
 def result_to_pandas(report: SummaryReport, scope: str = "display") -> Any:
     """Typed pandas projection (display rows or the full op grain)."""
 
-    import pandas
+    import pandas  # deferred: optional dependency pandas
 
     if scope not in ("display", "all"):
         raise InvalidArgumentError(
@@ -281,21 +278,37 @@ def result_to_pandas(report: SummaryReport, scope: str = "display") -> Any:
                 "class_name": row.class_name,
                 "address": row.address,
                 "depth": row.depth,
+                "input_shapes": row.input_shapes,
                 "output_shape": row.output_shape,
+                "output_shapes": row.output_shapes,
+                "kernel_size": row.kernel_size,
+                "groups": row.groups,
                 "passes": row.passes,
                 "params": row.params_display,
                 "params_owned": row.params_owned,
+                "params_trainable": row.params_trainable,
                 "flops": row.flops_display,
                 "flops_owned": row.flops_owned,
                 "macs_owned": row.macs_owned,
                 "trainable": row.trainable,
+                "mode": row.mode,
                 "fold_count": row.fold_count,
                 "evidence": row.evidence,
+                "attention_full_square": row.attention_full_square,
+                "pruned": row.pruned,
             }
             for row in payload.visible_rows
         ]
         frame = pandas.DataFrame.from_records(records)
-        for column in ("params", "params_owned", "flops", "flops_owned", "macs_owned"):
+        for column in (
+            "groups",
+            "params",
+            "params_owned",
+            "params_trainable",
+            "flops",
+            "flops_owned",
+            "macs_owned",
+        ):
             frame[column] = frame[column].astype("Int64")
         return frame
     records = [dict(row.__dict__) for row in report.rows]
@@ -313,18 +326,15 @@ def result_to_markdown(report: SummaryReport) -> str:
             code="summary_result_legacy",
             remedy="call summary() with the rebuilt grammar (bare call, level=, view=, ...)",
         )
-    from ._summary_render import _cell
-
     columns = payload.config.resolved_columns(payload.view.mixed_trainability)
-    params_total = payload.facts.params_total or 0
+    totals = cell_totals(payload.facts)
     lines = [
         "| " + " | ".join(column.header for column in columns) + " |",
         "| " + " | ".join("---:" if c.align == "right" else ":--" for c in columns) + " |",
     ]
     for row in payload.visible_rows:
         cells = [
-            _cell(row, column, payload.config, params_total).replace("|", "\\|")
-            for column in columns
+            _cell(row, column, payload.config, totals).replace("|", "\\|") for column in columns
         ]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
@@ -340,8 +350,8 @@ def result_details(report: SummaryReport) -> str:
         f"  backend: {capture.backend}",
         f"  model: {capture.model_class_name}",
         f"  outcome: {capture.outcome_status}",
-        f"  verified: {capture.capture_verified}",
-        f"  structure_only: {capture.structure_only}",
+        f"  verified: {capture.is_verified}",
+        f"  structure_only: {capture.is_structure_only}",
         f"  health: {capture.health_verdict}",
         f"  fingerprint: {capture.capture_fingerprint}",
         f"  advisories: {capture.advisories}",

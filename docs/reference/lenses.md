@@ -11,11 +11,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.visualization import lenses
+from torchlens._visualization import lenses
 
 trace = tl.trace(nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)), torch.randn(2, 8))
 out = Path(globals().get("DOCS_TMPDIR", "/tmp")) / "speed"
-lenses.draw_with_lens(trace, "speed", skin="paper", vis_fileformat="svg", vis_outpath=str(out))
+lenses.draw_with_lens(trace, "speed", skin="paper", file_format="svg", path=str(out))
 resolution = lenses.resolve_lens(trace, "speed")   # inspect without drawing
 ```
 
@@ -93,13 +93,15 @@ leftright + `color_by="flops"`), `debug_edge_shapes`.
   (min == max) render UNENCODED with a note, never mid-ramp.
 - **Skins are live (N4).** Semantic role colours resolve through the
   active skin's palette at the one theme seam; the Okabe-Ito set ships as
-  data with its CVD evidence attached (the default flip is a pending decision, FORK-2).
+  data with its CVD evidence attached; every shipped skin, the default `torchlens` skin
+  included, renders the legacy role colours (light green input, light red output, light and
+  dark grey weights).
   Each skin carries a 3-anchor ramp and the N17 neutral "aggregate, not
   encoded" fill for collapsed boxes under an active channel.
 
 ## The validation harness
 
-`torchlens.visualization.lenses.audit`: the evidence corpus (toy builders +
+`torchlens._visualization.lenses.audit`: the evidence corpus (toy builders +
 guarded real members + per-artifact manifests), the Stage-0 deterministic
 audit (`run_stage0` -- geometry via `dot -Tjson`, size caps, colour spread,
 disclosure presence, the label-spelling audit, CVD palette gates),

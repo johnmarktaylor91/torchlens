@@ -19,11 +19,18 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_pristine.py` | Pristine-oracle helpers (fixwave-5 R75-1): the untouched-baseline capture the replay oracle compares against |
 | `exemptions.py` | Replay/perturbation exemption registries and dynamic checks |
 | `_index_domain.py` | Index-domain slot/domain facts and in-domain index perturbations (rotation, single-entry move) for the gather/scatter/embedding/cross_entropy family |
-| `_destination_coverage.py` | Destination-overwrite coverage proofs for indexed writes (`__setitem__`, `index_put`, `scatter`): exact-once coverage and unique targets |
+| `_domain_perturbations.py` | Deterministic in-domain parent perturbations for domain-sensitive ops (saturated activations, rounding steps, zero-base powers, Bernoulli probabilities), entered from `core.py`'s parent perturbation |
+| `_destination_coverage.py` | Destination-overwrite coverage proofs for indexed writes (`__setitem__`, `index_put`, `scatter`): exact-once coverage and unique targets; the pure `out=` destination predicate (`_perturbed_parents_only_occupy_out_kwarg`) |
 | `_value_predicates.py` | Saved-value predicates (all zero / inf / NaN / finite, constant along a dim) read by the posthoc value-proof decisions |
-| `_saved_value_proofs.py` | Posthoc value proofs keyed on one op family and slot: zero dividend, and-by-zero, einsum zero operand, centred eval `batch_norm` running_var, zero exponent, size-1 `__setitem__` index dim, `scatter_reduce` with `include_self=False` and full cover, empty split chunk |
+| `_script_metadata_proof.py` | TorchScript-graph proof (nested scripted calls inlined) that a `jitscript` boundary call reads a perturbed tensor argument only through `aten::size`, `aten::dim`, `aten::numel`, `prim::dtype` or `prim::device`; recorded as exemption reason `torchscript_metadata_only_argument` with its proof; any other use, or an argument type that can hold a tensor below the recorded slot map, keeps the perturbation check |
+| `_posthoc_decision.py` | `PosthocPerturbDecision`, the structured decision every posthoc perturbation predicate returns; a leaf so the proof modules and `exemptions.py` form no import cycle |
+| `_saved_value_proofs.py` | Posthoc value proofs keyed on one op family and slot: zero dividend, and-by-zero, in-place bool or with an all-True partner, zero exponent and unit base, size-1 `__setitem__` index dim, and the additive mask of a single-key `scaled_dot_product_attention` (the operand, sdpa and norm proofs decide first) |
 | `_integer_mod_proof.py` | Saved-call proof that an integer `% +-1` is identically zero (used by the `integer_mod_unit_divisor` posthoc decision) |
 | `_replay_device.py` | Replay device alignment when an `output_device` capture keeps saved payloads off the op's device: parent payloads move to the slot's saved-argument device, recomputed outputs to the saved output's device |
+| `_perturb.py` | `_perturb_layer_outs` and its per-dtype strategies (integer, bool, complex, float, sparse through the values component), bounded by `MAX_PERTURB_ATTEMPTS`: the random wrong parent value the forward replay requires to move the output; torch-only leaf |
+| `_grad_flags.py` | Captured `requires_grad` flags of replay arguments (`_mirror_captured_requires_grad`, `_snapshot_grad_flags`): torch-only helpers shared by `_replay_grad_fidelity.py` and `_replay_storage_context.py` |
+| `_replay_storage_context.py` | Replay of `as_strided_` / `resize_` / `resize_as_` on a clone of the receiver's saved storage context (whole storage, offset, strides), with the swapped-in parent values written into the view; no effect on any other op or slot |
+| `_shift_probe.py` | `VALUE_STEP_STRATEGIES` (the value-step retry rungs, in order) and `lift_min_entry_values`: the non-uniform `lift_min_entry` perturbation retry (lifts one entry above the max), the probe uniform steps cannot give a shift-invariant child such as a saturated softmax |
 | `_completeness_backstop.py` | `completeness_backstop_counts`: dispatcher-witness census vs captured ops, including the module-forward-owned drop rule |
 | `status.py` | Replay-validation status objects |
 | `_live_model_state.py` | Live-model restore that writes only when a validation run changed the state (bit-exact compare against the snapshot), and reattaches the caller's `.grad` objects, so parameter/buffer version counters and a graph held across `tl.validate` survive |
@@ -53,7 +60,7 @@ Legacy top-level shims for `validate_forward_pass`, `validate_backward_pass`, an
    (R75-1; backward validation's stock-autograd pass does the same). If
    the wrappers cannot be removed because a capture is active, validation
    refuses rather than blessing a wrap-state-dependent ground truth.
-2. Run `trace(..., capture=CaptureOptions(layers_to_save="all", save_arg_values=True))`
+2. Run `trace(..., save="all", capture=CaptureOptions(save_args=True))`
    (the flat kwargs are deprecated aliases that warn).
 3. Check logged output matches ground truth.
 4. Walk backward from outputs, replaying each saved operation from saved parents.
@@ -72,10 +79,12 @@ keys. Invariants are part of the postprocess regression net.
 `validate_tlspec(path)` validates unified manifests against
 `schemas/tlspec_manifest_v{schema_version}.json`, selecting the schema version declared by the
 artifact.
-Only the two legacy 2.16 INTERVENTION formats (`v2.16_intervention`,
-`v2.16_intervention_with_kind`) are accepted without schema validation. Legacy 2.16
-MODEL-LOG bundles are NOT loadable: they sit below the tlspec v6 / torchlens 2.33
-rehydration floor and refuse with `ArtifactVersionBelowFloorError`.
+Only the two intervention-spec formats (`v2.16_intervention`,
+`v2.16_intervention_with_kind`; the labels keep their 2.16 spelling for current specs) are
+accepted without schema validation, after the spec's `format_version` is checked: a
+format_version-1 spec (torchlens 2.16 to 2.28) refuses with the one 2.x
+`ArtifactTooOldError`, as does the 2.16 MODEL-LOG bundle format; this release reads no
+file saved by torchlens 2.x.
 
 ## How It Connects
 
@@ -96,7 +105,7 @@ bridge extras.
   copies of grad-requiring arguments.
 - `_perturb_layer_outs()` is bounded by `MAX_PERTURB_ATTEMPTS`.
 - Validation requires saved function args for replay; check callers preserve
-  `save_arg_values=True`.
+  `save_args=True`.
 
 ## backward.py
 
@@ -135,14 +144,19 @@ inf/NaN tensors, and special-value args.
 - `MetadataInvariantError` is the public invariant failure type.
 - `check_metadata_invariants()` should fail loudly on broken graph/log structure.
   It is IMPLEMENTED in `_invariants_entry.py` (with the per-domain checks in
-  the sibling `_invariants_*.py` modules); `invariants.py` only REBINDS the
-  entry function — editing `invariants.py` to change check behavior is a no-op.
+  the sibling `_invariants_*.py` modules); `invariants.py` holds the error type,
+  the contract records and the `METADATA_INVARIANT_CONTRACTS` tuple, and imports
+  the check functions from their home modules after those definitions (the
+  split modules import the hub's classes back). Editing `invariants.py` to
+  change check behavior is a no-op; patch or edit a check in its home module.
 - Keep invariants aligned with primary conditional fields, not only legacy THEN views.
 
 ## __init__.py Schema Checks
 
 - `validate_tlspec()` only validates unified `.tlspec` manifests.
-- Only legacy 2.16 intervention formats skip schema validation; model-log bundles below tlspec v6 refuse to load.
+- Intervention specs skip schema validation (their format has no schema document); the
+  format_version-1 spec, the 2.16 model-log bundle and a unified manifest below the current
+  tlspec were saved by torchlens 2.x and refuse with `ArtifactTooOldError`.
 - Manifest schemas live at `torchlens/schemas/tlspec_manifest_v{schema_version}.json`;
   validation selects the version declared by each artifact.
 

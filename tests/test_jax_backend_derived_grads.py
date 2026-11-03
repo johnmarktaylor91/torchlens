@@ -7,7 +7,11 @@ from typing import Any, cast
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
+from torchlens._data_classes.derived_grad import (
+    IntermediateDerivedGradAccessor,
+    IntermediateDerivedGradRecord,
+)
+from torchlens._ir.refs import DtypeRef
 from torchlens.backends.jax import GradOptions
 from torchlens.backends.jax.backend import (
     _experimental_per_op_boundary_vjp_oracle,
@@ -15,11 +19,7 @@ from torchlens.backends.jax.backend import (
     _JaxIntermediateTapSpec,
 )
 from torchlens.backends.jax.jaxpr import _jax_zero_tap
-from torchlens.data_classes.derived_grad import (
-    IntermediateDerivedGradAccessor,
-    IntermediateDerivedGradRecord,
-)
-from torchlens.ir.refs import DtypeRef
+from torchlens.errors import BackendUnsupportedError
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -107,7 +107,7 @@ def _jax_capture_graph_signature(trace: Any) -> tuple[Any, ...]:
                 str(op.dtype),
                 tuple(op.annotations.get("jax_outvars", ())),
             )
-            for op in trace.layer_list
+            for op in trace._layer_list
         ),
         dict(trace.jax_outvar_key_to_capture_index),
         dict(trace.jax_capture_index_to_final_op_label),
@@ -123,7 +123,9 @@ def test_jax_derived_grads_match_value_and_grad_oracle() -> None:
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,))
+        ),
     )
 
     def value_fn(test_params: dict[str, Any], test_x: Any) -> Any:
@@ -148,12 +150,12 @@ def test_jax_derived_grads_match_value_and_grad_oracle() -> None:
         params, x
     )
 
-    assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
-    assert jnp.allclose(trace.derived_grads["params.w"].grad, expected_param_grads["w"])
-    assert jnp.allclose(trace.derived_grads["params.b"].grad, expected_param_grads["b"])
-    assert jnp.allclose(trace.derived_grads["inputs.0"].grad, expected_x_grad)
-    assert trace.params["w"].grad is trace.derived_grads["params.w"].grad
-    assert trace.params["b"].grad is trace.derived_grads["params.b"].grad
+    assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
+    assert jnp.allclose(trace.autograd.derived_grads["params.w"].grad, expected_param_grads["w"])
+    assert jnp.allclose(trace.autograd.derived_grads["params.b"].grad, expected_param_grads["b"])
+    assert jnp.allclose(trace.autograd.derived_grads["inputs.0"].grad, expected_x_grad)
+    assert trace.params["w"].grad is trace.autograd.derived_grads["params.w"].grad
+    assert trace.params["b"].grad is trace.autograd.derived_grads["params.b"].grad
     assert trace.params["w"].has_grad
 
 
@@ -166,11 +168,13 @@ def test_jax_intermediate_derived_grads_remain_deferred_with_leaf_grads() -> Non
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,))
+        ),
     )
 
-    assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
-    assert len(trace.intermediate_derived_grads) == 0
+    assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
+    assert len(trace.autograd.intermediate_derived_grads) == 0
     assert not hasattr(trace, "jax_intermediate_derived_grads")
 
 
@@ -183,24 +187,26 @@ def test_jax_intermediate_derived_grads_zero_tap_public_surface() -> None:
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=_loss,
-            input_grad_argnums=(0,),
-            intermediate_grads=True,
-            max_intermediate_grads=16,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=_loss,
+                input_grad_argnums=(0,),
+                intermediate_grads=True,
+                max_intermediate_grads=16,
+            )
         ),
     )
-    tanh_op = next(op for op in trace.layer_list if op.func_name == "tanh")
+    tanh_op = next(op for op in trace._layer_list if op.func_name == "tanh")
     expected_tanh_grad = 2.0 * tanh_op.out
 
-    assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
-    assert len(trace.intermediate_derived_grads) > 0
-    assert tanh_op.label in trace.intermediate_derived_grads
+    assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
+    assert len(trace.autograd.intermediate_derived_grads) > 0
+    assert tanh_op.label in trace.autograd.intermediate_derived_grads
     assert jnp.allclose(tanh_op.derived_grad, expected_tanh_grad)
     assert all(
         record.provenance["mechanism"] == "jax_zero_tap" and record.provenance["status"] == "exact"
-        for record in trace.intermediate_derived_grads.values()
+        for record in trace.autograd.intermediate_derived_grads.values()
     )
 
 
@@ -214,17 +220,19 @@ def test_jax_intermediate_derived_grads_do_not_mutate_capture_graph() -> None:
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(params=params, loss_fn=_loss),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(params=params, loss_fn=_loss)),
     )
     t1 = tl.trace(
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=_loss,
-            intermediate_grads=True,
-            max_intermediate_grads=16,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=_loss,
+                intermediate_grads=True,
+                max_intermediate_grads=16,
+            )
         ),
     )
 
@@ -255,11 +263,13 @@ def test_jax_intermediate_derived_grads_cap_hard_fails() -> None:
             cast(Any, _model),
             (params, x),
             backend="jax",
-            grad_options=GradOptions(
-                params=params,
-                loss_fn=_loss,
-                intermediate_grads=True,
-                max_intermediate_grads=1,
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(
+                    params=params,
+                    loss_fn=_loss,
+                    intermediate_grads=True,
+                    max_intermediate_grads=1,
+                )
             ),
         )
 
@@ -274,18 +284,20 @@ def test_jax_intermediate_derived_grads_follow_selective_save() -> None:
         (params, x),
         backend="jax",
         save=tl.func("dot_general"),
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=_loss,
-            intermediate_grads=True,
-            max_intermediate_grads=4,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=_loss,
+                intermediate_grads=True,
+                max_intermediate_grads=4,
+            )
         ),
     )
 
-    assert set(trace.intermediate_derived_grads.keys()) == {
+    assert set(trace.autograd.intermediate_derived_grads.keys()) == {
         op.label for op in trace.saved_ops if op.func_name == "dot_general"
     }
-    assert all(op.derived_grad is None for op in trace.layer_list if not op.has_saved_activation)
+    assert all(op.derived_grad is None for op in trace._layer_list if not op.has_saved_activation)
 
 
 def test_jax_intermediate_derived_grads_skip_non_float_outputs() -> None:
@@ -304,17 +316,19 @@ def test_jax_intermediate_derived_grads_skip_non_float_outputs() -> None:
         cast(Any, masked_model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=lambda output: jnp.sum(output),
-            intermediate_grads=True,
-            max_intermediate_grads=8,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=lambda output: jnp.sum(output),
+                intermediate_grads=True,
+                max_intermediate_grads=8,
+            )
         ),
     )
-    bool_ops = [op for op in trace.layer_list if str(op.dtype) == "bool"]
+    bool_ops = [op for op in trace._layer_list if str(op.dtype) == "bool"]
 
     assert bool_ops
-    assert all(op.label not in trace.intermediate_derived_grads for op in bool_ops)
+    assert all(op.label not in trace.autograd.intermediate_derived_grads for op in bool_ops)
 
 
 def test_jax_intermediate_derived_grads_degrade_to_leaf_grads(monkeypatch: Any) -> None:
@@ -338,16 +352,18 @@ def test_jax_intermediate_derived_grads_degrade_to_leaf_grads(monkeypatch: Any) 
         cast(Any, _model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(
-            params=params,
-            loss_fn=_loss,
-            intermediate_grads=True,
-            max_intermediate_grads=8,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                params=params,
+                loss_fn=_loss,
+                intermediate_grads=True,
+                max_intermediate_grads=8,
+            )
         ),
     )
 
-    assert set(trace.derived_grads.keys()) == {"params.b", "params.w"}
-    assert len(trace.intermediate_derived_grads) == 0
+    assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w"}
+    assert len(trace.autograd.intermediate_derived_grads) == 0
     assert trace.jax_intermediate_derived_grad_status["status"] == "degraded"
 
 
@@ -357,7 +373,7 @@ def test_intermediate_derived_grad_accessor_and_op_filter_unverified() -> None:
     params = _params()
     x = jnp.ones((2, 3), dtype=jnp.float32)
     trace = tl.trace(cast(Any, _model), (params, x), backend="jax")
-    op = next(op for op in trace.layer_list if op.func_name == "tanh")
+    op = next(op for op in trace._layer_list if op.func_name == "tanh")
     record = IntermediateDerivedGradRecord(
         op_label=op.label,
         layer_label=op.layer_label,
@@ -367,9 +383,11 @@ def test_intermediate_derived_grad_accessor_and_op_filter_unverified() -> None:
         provenance={"status": "unverified"},
     )
 
-    trace.intermediate_derived_grads = IntermediateDerivedGradAccessor({op.label: record})
+    from torchlens._data_classes.derived_grad import set_intermediate_derived_grads
 
-    assert len(trace.intermediate_derived_grads) == 0
+    set_intermediate_derived_grads(trace, IntermediateDerivedGradAccessor({op.label: record}))
+
+    assert len(trace.autograd.intermediate_derived_grads) == 0
     assert op.derived_grad is None
 
 
@@ -425,10 +443,10 @@ def test_jax_derived_grads_allow_scalar_output_without_loss_fn() -> None:
         cast(Any, scalar_model),
         (params, x),
         backend="jax",
-        grad_options=GradOptions(params=params),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(params=params)),
     )
 
-    assert jnp.allclose(trace.derived_grads["params.w"].grad, x)
+    assert jnp.allclose(trace.autograd.derived_grads["params.w"].grad, x)
 
 
 def test_jax_derived_grads_reject_non_scalar_output_without_loss_fn() -> None:
@@ -439,7 +457,7 @@ def test_jax_derived_grads_reject_non_scalar_output_without_loss_fn() -> None:
             cast(Any, _model),
             (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
             backend="jax",
-            grad_options=GradOptions(params=_params()),
+            capture=tl.options.CaptureOptions(grad_options=GradOptions(params=_params())),
         )
 
 
@@ -451,16 +469,16 @@ def test_jax_derived_grads_are_not_backward_capture() -> None:
         cast(Any, _model),
         (params, jnp.ones((2, 3), dtype=jnp.float32)),
         backend="jax",
-        grad_options=GradOptions(params=params, loss_fn=_loss),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(params=params, loss_fn=_loss)),
     )
 
-    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+    with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
         trace.log_backward(cast(Any, trace[trace.output_layers[0]].out))
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
-        _ = trace.backward_passes
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
+        _ = trace.autograd.backward_passes
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace[0].grads
 
 
@@ -479,7 +497,9 @@ def test_jax_derived_grads_reject_closed_over_scalar_host_state() -> None:
             cast(Any, uses_global),
             (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
             backend="jax",
-            grad_options=GradOptions(params=_params(), loss_fn=_loss),
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(params=_params(), loss_fn=_loss)
+            ),
         )
 
 
@@ -499,7 +519,9 @@ def test_jax_derived_grads_reject_aux_output_divergence() -> None:
             cast(Any, impure_model),
             (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
             backend="jax",
-            grad_options=GradOptions(params=_params(), loss_fn=_loss),
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(params=_params(), loss_fn=_loss)
+            ),
         )
 
 
@@ -541,7 +563,7 @@ def test_jax_private_boundary_vjp_oracle_is_capped_and_not_public() -> None:
     assert set(result.records.keys()) == {"hidden"}
     assert jnp.allclose(result.records["hidden"].grad, expected_grad)
     assert not hasattr(trace, "jax_intermediate_derived_grads")
-    assert len(trace.intermediate_derived_grads) == 0
+    assert len(trace.autograd.intermediate_derived_grads) == 0
 
     with pytest.raises(ValueError, match="capped"):
         _experimental_per_op_boundary_vjp_oracle(

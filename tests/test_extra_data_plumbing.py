@@ -9,14 +9,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import (
+from torchlens._constants import (
     LAYER_LOG_FIELD_ORDER,
     LAYER_PASS_LOG_FIELD_ORDER,
     MODEL_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 
@@ -41,14 +41,15 @@ def _fresh_log() -> Trace:
     return tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(layers_to_save="all", random_seed=0),
+        capture=CaptureOptions(seed=0),
+        save="all",
     )
 
 
 def _first_logs(trace: Trace) -> tuple[Op, Layer]:
     """Return one layer-pass log and its aggregate layer log."""
-    op_log = trace.layer_list[0]
-    layer_log = trace.layer_logs[op_log.layer_label]
+    op_log = trace._layer_list[0]
+    layer_log = trace._layer_logs[op_log.layer_label]
     return op_log, layer_log
 
 
@@ -57,8 +58,8 @@ def test_annotations_fields_default_to_empty_dicts() -> None:
     trace = _fresh_log()
     op_log, layer_log = _first_logs(trace)
 
-    assert trace.input_annotations == {}
-    assert isinstance(trace.input_annotations, dict)
+    assert trace.provenance.input_annotations == {}
+    assert isinstance(trace.provenance.input_annotations, dict)
     assert op_log.annotations == {}
     assert isinstance(op_log.annotations, dict)
     assert layer_log.annotations == {}
@@ -71,11 +72,11 @@ def test_annotations_fields_accept_arbitrary_python_objects() -> None:
     op_log, layer_log = _first_logs(trace)
     array = np.array([[1.0, 2.0], [3.0, 4.0]])
 
-    trace.input_annotations["stimulus"] = {"text": "hello", "tokens": [1, 2, 3]}
+    trace.provenance.input_annotations["stimulus"] = {"text": "hello", "tokens": [1, 2, 3]}
     op_log.annotations.update({"scores": [0.1, 0.2], "array": array})
     layer_log.annotations["note"] = "layer-level annotation"
 
-    assert trace.input_annotations["stimulus"]["tokens"] == [1, 2, 3]
+    assert trace.provenance.input_annotations["stimulus"]["tokens"] == [1, 2, 3]
     assert op_log.annotations["scores"] == [0.1, 0.2]
     np.testing.assert_array_equal(op_log.annotations["array"], array)
     assert layer_log.annotations["note"] == "layer-level annotation"
@@ -88,18 +89,18 @@ def test_annotations_fields_do_not_share_dict_state_between_logs() -> None:
     first_layer_pass, first_layer_log = _first_logs(first_log)
     second_layer_pass, second_layer_log = _first_logs(second_log)
 
-    first_log.input_annotations["id"] = "first"
+    first_log.provenance.input_annotations["id"] = "first"
     first_layer_pass.annotations["pass"] = "first"
     first_layer_log.annotations["layer"] = "first"
 
-    assert second_log.input_annotations == {}
+    assert second_log.provenance.input_annotations == {}
     assert second_layer_pass.annotations == {}
     assert second_layer_log.annotations == {}
 
 
 def test_annotations_fields_are_in_field_order_constants() -> None:
     """New fields should be present in each class's canonical FIELD_ORDER."""
-    assert "input_annotations" in MODEL_LOG_FIELD_ORDER
+    assert "_provenance_input_annotations" in MODEL_LOG_FIELD_ORDER
     assert "annotations" in LAYER_PASS_LOG_FIELD_ORDER
     assert "annotations" in LAYER_LOG_FIELD_ORDER
 
@@ -110,18 +111,18 @@ def test_annotations_fields_roundtrip_through_bundle_save_load(tmp_path: Path) -
     op_log, layer_log = _first_logs(trace)
     array = np.array([1, 2, 3])
 
-    trace.input_annotations["stimulus"] = {"word": "torchlens", "index": 7}
+    trace.provenance.input_annotations["stimulus"] = {"word": "torchlens", "index": 7}
     op_log.annotations["custom_metric"] = {"values": [1.0, 2.0], "label": "pass"}
     op_log.annotations["array"] = array
     layer_log.annotations["rdm"] = {"shape": [2, 2], "label": "layer"}
 
     bundle_path = tmp_path / "annotations.tl"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
-    loaded_layer_pass = loaded.layer_list[0]
-    loaded_layer_log = loaded.layer_logs[loaded_layer_pass.layer_label]
+    loaded_layer_pass = loaded._layer_list[0]
+    loaded_layer_log = loaded._layer_logs[loaded_layer_pass.layer_label]
 
-    assert loaded.input_annotations == {"stimulus": {"word": "torchlens", "index": 7}}
+    assert loaded.provenance.input_annotations == {"stimulus": {"word": "torchlens", "index": 7}}
     assert loaded_layer_pass.annotations["custom_metric"] == {
         "values": [1.0, 2.0],
         "label": "pass",

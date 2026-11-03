@@ -11,7 +11,7 @@ from support.rf_isolation import preserved_rf_registry
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.arg_positions import _normalize_func_name
+from torchlens._capture.arg_positions import _normalize_func_name
 from torchlens.receptive_field import _rules
 from torchlens.receptive_field._engine_forward import solve_projective
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
@@ -52,7 +52,7 @@ def _op(trace: object, name: str, *, last: bool = True) -> object:
 
     matches = [
         item
-        for item in trace.layer_list  # type: ignore[union-attr]
+        for item in trace._layer_list  # type: ignore[union-attr]
         if item.func_name is not None and _normalize_func_name(item.func_name) == name
     ]
     assert matches
@@ -76,7 +76,11 @@ def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
     """
 
     capture = tl.options.CaptureOptions(backward_ready=True)
-    return tl.trace(model, inputs, capture=capture, save_mode="reference")
+    return tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
 
 
 def _fill_convolutions(model: nn.Module) -> None:
@@ -538,4 +542,4 @@ def test_deliberately_wrong_window_fails_tripwire() -> None:
     result = convolution.receptive_field.check((0, 0, 2, 2))  # type: ignore[union-attr]
 
     assert result.status is ReceptiveFieldValidationStatus.FAIL
-    assert result.n_violations == 8
+    assert result.num_violations == 8

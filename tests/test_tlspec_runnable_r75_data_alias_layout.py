@@ -38,8 +38,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
+from torchlens._state import pause_logging
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
@@ -48,9 +49,7 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
 
 
@@ -174,20 +173,23 @@ class StateDataRootedBranch(nn.Module):
         return x - 1.0
 
 
-# Pre-capture NON-module tensor: no label, no ledger entry, no captured storage, and no
-# state address (a module ATTRIBUTE tensor is address-stamped and owned by the r63 state
-# nets -- its non-canonical layout read already REFUSES at save; a free global like this
-# one is the genuinely unresolvable receiver the fail-closed floor must catch).
+# A tensor the capture never sees: no label, no ledger entry, no captured storage, and
+# no state address (a module ATTRIBUTE tensor is address-stamped and owned by the r63
+# state nets -- its non-canonical layout read already REFUSES at save; a free global is
+# now a recorded ``constant`` source, so the forward copies this one with logging paused
+# to plant the genuinely unresolvable receiver the fail-closed floor must catch).
 _HIDDEN_GLOBAL = torch.randn(2, 4, 8, 8).to(memory_format=torch.channels_last)
 
 
 class HiddenGlobalLayoutBranch(nn.Module):
-    """Fail-closed floor: layout read on a PRE-CAPTURE non-module tensor."""
+    """Fail-closed floor: layout read on a tensor the capture never saw."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Branch on the unlabeled, unresolvable global tensor's layout."""
 
-        if _HIDDEN_GLOBAL.is_contiguous(memory_format=torch.channels_last):
+        with pause_logging():
+            hidden = _HIDDEN_GLOBAL.clone()
+        if hidden.is_contiguous(memory_format=torch.channels_last):
             return x + 10.0
         return x - 10.0
 
@@ -226,7 +228,7 @@ def test_r75_data_alias_spellings_ceiling_on_changed_layout(
 
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
@@ -250,7 +252,7 @@ def test_r75_data_alias_spellings_stay_verified_on_same_layout(
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r75_detach_control_still_ceiled(tmp_path: Path) -> None:
@@ -261,7 +263,7 @@ def test_r75_detach_control_still_ceiled(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_r75_layout_oblivious_model_still_never_triggers(tmp_path: Path) -> None:
@@ -272,7 +274,7 @@ def test_r75_layout_oblivious_model_still_never_triggers(tmp_path: Path) -> None
 
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r75_state_data_rooted_read_stays_residual_three(tmp_path: Path) -> None:
@@ -288,13 +290,13 @@ def test_r75_state_data_rooted_read_stays_residual_three(tmp_path: Path) -> None
 
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r75_unresolvable_receiver_fails_closed(tmp_path: Path) -> None:
     """The fail-closed floor: an unresolvable unlabeled receiver downgrades completeness.
 
-    A pre-capture NON-module tensor has no label, no ledger entry, no captured storage,
+    A tensor the capture never saw has no label, no ledger entry, no captured storage,
     and no state address: no positive rung resolves it, so the read must ceiling the
     artifact UNVERIFIABLE on EVERY run (r73 silently recorded nothing here -- a hidden
     Python-state layout read could steer the branch while the replay claimed VERIFIED).
@@ -305,7 +307,7 @@ def test_r75_unresolvable_receiver_fails_closed(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
@@ -322,7 +324,7 @@ def test_r75_direct_alias_consumption_is_replayable(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r75_storage_identity_rung_resolves_when_ledger_missing(tmp_path: Path) -> None:
@@ -370,4 +372,4 @@ def test_r75_storage_identity_rung_resolves_when_ledger_missing(tmp_path: Path) 
 
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert twin.report.poisoned
+    assert twin.report.is_poisoned

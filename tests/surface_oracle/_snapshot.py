@@ -12,17 +12,17 @@ from typing import Any
 import torch
 
 import torchlens as tl
-from torchlens import constants as tl_constants
-from torchlens.data_classes.backward_pass import BackwardPass
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
+from torchlens import _constants as tl_constants
+from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
 
 SNAPSHOT_VERSION = 1
 
@@ -52,7 +52,7 @@ _MEASURED_NAME_TOKENS = frozenset(
 #: Attributes whose values embed process-global counters (the per-process
 #: trace counter and fork counter). Digit runs are normalized so the golden
 #: does not depend on how many traces ran earlier in the process.
-_COUNTER_NORMALIZED_ATTRIBUTES = frozenset({"trace_label", "state_history"})
+_COUNTER_NORMALIZED_ATTRIBUTES = frozenset({"name", "state_history"})
 
 #: Nested mapping keys treated as measured wherever they appear (runtime
 #: object identities inside structured values such as ``state_history``).
@@ -309,14 +309,17 @@ def snapshot_trace_surface(trace: Trace) -> dict[str, Any]:
         "trace": snapshot_object(trace),
     }
     families = {
-        "ops": trace.ops,
+        # Every row, keyed by label as ``trace.ops.items()`` was before sumfam
+        # F1: the counted ``trace.ops`` view leaves out input, output and
+        # buffer rows, and the surface oracle snapshots every record.
+        "ops": {op.label: op for op in trace._layer_list},
         "layers": trace.layers,
         "modules": trace.modules,
         "module_calls": trace.module_calls,
         "params": trace.params,
         "buffers": trace.buffers,
-        "grad_fns": trace.grad_fns,
-        "backward_passes": trace.backward_passes,
+        "grad_fns": trace.autograd.grad_fns,
+        "backward_passes": trace.autograd.backward_passes,
     }
     for family_name, accessor in families.items():
         if accessor is None:

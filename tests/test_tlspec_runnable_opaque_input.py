@@ -25,12 +25,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import PathDivergenceError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.errors import PathDivergenceError
+from torchlens.options import CaptureOptions
 
 
 class _Mode(enum.Enum):
@@ -81,7 +81,7 @@ def _save_runnable(model: nn.Module, capture_inputs: list, path: Path) -> Path:
         model,
         list(capture_inputs),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -97,7 +97,7 @@ def _assert_not_blessed(report) -> None:
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.numeric_attestation is not NumericAttestationStatus.ATTESTED
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert report.poisoned
+    assert report.is_poisoned
     assert not any(
         check.name.startswith("numeric_attestation:") for check in report.contract_checks
     )
@@ -109,7 +109,7 @@ def test_enum_leaf_refuses_runnable_save_typed(tmp_path: Path) -> None:
     An ``enum.Enum`` input leaf is a SEMANTIC-typed scalar: its type/member
     identity steers host control flow (``mode is _Mode.A``), which no persisted
     value fact can carry. The runnable save now refuses typed
-    (``missing_input_container_contract`` / ``semantic_scalar_type``) instead of
+    (``input_container_contract_missing`` / ``semantic_scalar_type``) instead of
     producing an artifact that could ever replay the wrong arm; analysis saves
     stay available. Strictly stronger than the former UNVERIFIABLE ceiling.
     """
@@ -119,7 +119,7 @@ def test_enum_leaf_refuses_runnable_save_typed(tmp_path: Path) -> None:
     with pytest.raises(tl.errors.RunnablePreflightError) as excinfo:
         _save_runnable(model, [x, _Mode.A], tmp_path / "enum.tlspec")
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     assert "semantic_scalar_type" in diagnostics
 
 

@@ -87,9 +87,13 @@ EAGER_SDPA_FACET_DIFF: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
     # BertSelfOutput), so per-head result is structurally absent on both
     # implementations and only the real-op trio differs.
     "bert": {"bert_self_attention": {"sdpa_only": (), "eager_only": ("pattern", "scores", "z")}},
-    # albert/qwen2/clip/whisper: no facet-availability diff between
-    # implementations today (their attention carries no recipe, so there is
-    # nothing to differ -- the qwen2 emptiness itself is the KNOWN-GAP row).
+    # qwen2 (forks.10) rides the Llama gqa recipe; clip (U55.1) has its own
+    # clip_attention recipe on both towers. Both show the same honest
+    # read-vs-reconstruct boundary as llama and vit.
+    "qwen2": {"gqa_attention": dict(_EAGER_REAL_OPS)},
+    "clip": {"clip_attention": dict(_EAGER_REAL_OPS)},
+    # albert/whisper: no facet-availability diff between implementations
+    # today (their attention carries no recipe, so there is nothing to differ).
 }
 
 # Families whose upstream class REFUSES sdpa outright (pinned upstream
@@ -160,7 +164,18 @@ WRONG_PAYLOAD_OWNER = "A02 (semantic residual slice)"
 # every later LayerNorm reports needs_capture for it. User-visible
 # inconsistency; pinned so a fix (or a regression to all-unavailable)
 # surfaces here rather than shifting silently.
-GPT2_LN_INPUT_AVAILABLE_ADDRESSES = ("transformer.h.0.ln_1",)
+#
+# grouping rule rows 10 and 12: each residual add in a gpt2 block is its own
+# single-pass layer, so every LayerNorm's input op resolves and the
+# inconsistency is gone; the pin now holds all five LayerNorms (a regression
+# to the partial or all-unavailable state still surfaces here).
+GPT2_LN_INPUT_AVAILABLE_ADDRESSES = (
+    "transformer.h.0.ln_1",
+    "transformer.h.0.ln_2",
+    "transformer.h.1.ln_1",
+    "transformer.h.1.ln_2",
+    "transformer.ln_f",
+)
 
 # Common forward-kwarg name corpus (memo D7 class 3). The static
 # intersection check pins signature(tl.trace) INTERSECT this corpus to the
@@ -216,14 +231,9 @@ EXPECTED_TRACE_PARAM_COLLISIONS = (
     "backend",
     "capture",
     "episode",
-    "halt",
     "intervene",
-    "lookback",
-    "profile",
-    "recipes",
     "save",
     "storage",
-    "streaming",
 )
 
 
@@ -255,7 +265,7 @@ class KnownRed:
 
         resolved = getattr(builtins, self.exception_type, None)
         if resolved is None:
-            from torchlens.semantic.logit_lens import LogitLensError
+            from torchlens._semantic.logit_lens import LogitLensError
 
             resolved = {"LogitLensError": LogitLensError}[self.exception_type]
         assert isinstance(resolved, type) and issubclass(resolved, BaseException)
@@ -272,18 +282,65 @@ KNOWN_RED: tuple[KnownRed, ...] = (
     # engine no longer re-applies a boundary output node's recorded MODEL-output
     # container path to the replayed call's already-resolved output. The axes
     # test flipped to assert the edit lands correctly through the container.
-    KnownRed(
-        red_id="kwargs-only-plain-module",
-        owner="fix bundle (A04/A05 kwarg transport)",
-        exception_type="TypeError",
-        message_substring="got multiple values for argument",
-        notes="tl.trace(model, (), {name: tensor}) on a plain nn.Module passes the"
-        " kwarg twice; HF classes escape it. Loud today, but the loud/silent"
-        " asymmetry is the memo's kwarg-shadowing defect class",
-    ),
+    # kwargs-only-plain-module was fixed 2026-10-11 (walk U02.2): an empty
+    # positional tuple on a single-parameter forward is no longer wrapped into
+    # [[]], so tl.trace(model, (), {name: tensor}) reaches forward(name=...)
+    # once. The axes test asserts traced == direct output.
 )
 
 KNOWN_RED_BY_ID = {row.red_id: row for row in KNOWN_RED}
+
+
+@dataclass(frozen=True)
+class DatedGap:
+    """A dated known coverage gap: a leg no venue runs yet, never a red row.
+
+    ``KNOWN_RED`` pins defects that reproduce; a dated gap names coverage
+    that cannot execute on any current venue, with its entry date, the ruling
+    that created it and the condition that deletes it.
+    """
+
+    gap_id: str
+    dated: str
+    ruling: str
+    owner: str
+    closes_when: str
+    notes: str
+
+
+DATED_GAPS: tuple[DatedGap, ...] = (
+    DatedGap(
+        gap_id="flash-attention-2-impl",
+        dated="2026-10-12",
+        ruling="U42.1",
+        owner="the GPU real-model leg (campaign 2)",
+        closes_when=(
+            "a GPU leg captures and validates a real-model family under"
+            " attn_implementation='flash_attention_2'"
+        ),
+        notes="FA2 kernels need CUDA and the flash-attn package; every real-model"
+        " leg today is CPU, so no family runs the flash_attention_2"
+        " implementation (FamilySpec.impls stays eager/sdpa)",
+    ),
+    DatedGap(
+        gap_id="vjepa2-full-clip-forward-validation",
+        dated="2026-10-12",
+        ruling="U55.4",
+        owner="the GPU real-model leg (campaign 2)",
+        closes_when=(
+            "forward validation of r2-vjepa2-vitl-fpc64-256 at its native 64 frames"
+            " passes on a GPU venue (tests/real_model/gpu_legs/vjepa2_full_leg.py)"
+        ),
+        notes="measured on one 48 GB L40 at fp32: the 64-frame capture passes"
+        " (5937 ops, traced output bitwise equal, 55.9 GB retained on host), but"
+        " forward validation keeps saved activations on the device and the default"
+        " save budget refused it at 64, 32 and 16 frames (projected 9.5, 14.2 and"
+        " 16.5 GB lower bounds against half the free device memory); the gather"
+        " index error seen at 8 and 16 frames is a separate defect report",
+    ),
+)
+
+DATED_GAPS_BY_ID = {row.gap_id: row for row in DATED_GAPS}
 
 
 def expected_n_ops(expected: dict) -> int:

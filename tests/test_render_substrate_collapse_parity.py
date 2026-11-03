@@ -19,8 +19,8 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.visualization.collapse_optimizer import select_collapse_plan
-from torchlens.visualization.collapse_plan import (
+from torchlens._visualization.collapse_optimizer import select_collapse_plan
+from torchlens._visualization.collapse_plan import (
     RenderContext,
     collapse_plan_for_trace,
     count,
@@ -235,9 +235,8 @@ def test_near_uncollapsed_auto_plan_is_disclosed(tmp_path) -> None:
     assert result.visible_count >= 100  # nearly all 141 units visible
     with pytest.warns(TorchLensWarning, match="nearly the uncollapsed graph"):
         log.draw(
-            vis_outpath=str(tmp_path / "fan"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            path=str(tmp_path / "fan"),
+            file_format="svg",
             collapse="auto",
         )
 
@@ -246,7 +245,7 @@ def test_floor_fallback_result_is_typed_and_visible(tmp_path, monkeypatch) -> No
     # F9 unit wiring: when the DP frontier empties, the result must carry
     # planner="floor_fallback" + the K_CAP diagnosis, the draw must warn,
     # and the render caption must carry a visible notice.
-    import torchlens.visualization.collapse_optimizer as co
+    import torchlens._visualization.collapse_optimizer as co
     from torchlens.errors._base import TorchLensWarning
 
     log = tl.trace(_RootFanModel(), torch.randn(2, 4))
@@ -258,11 +257,10 @@ def test_floor_fallback_result_is_typed_and_visible(tmp_path, monkeypatch) -> No
     assert result.reason is not None and "module= focus" in result.reason
     with pytest.warns(TorchLensWarning, match="floor plan"):
         source = log.draw(
-            vis_outpath=str(tmp_path / "cliff"),
-            vis_save_only=True,
-            vis_fileformat="svg",
+            path=str(tmp_path / "cliff"),
+            file_format="svg",
             collapse="auto",
-        )
+        ).dot
     # Visible notice on the render (never only a warning).
     assert "collapse fell back to the floor plan" in source
 

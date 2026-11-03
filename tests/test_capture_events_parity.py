@@ -20,7 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import errors
 from torchlens._capture_state_helpers import _detach_nested_for_cache
-from torchlens.data_classes._state_adapter import state_items
+from torchlens._data_classes._state_adapter import state_items
 
 _GZIP_MAGIC = b"\x1f\x8b"
 _EXPECTED_ALLOWLIST = {
@@ -31,6 +31,9 @@ _EXPECTED_ALLOWLIST = {
             "capture_end_time",
             "forward_duration",
             "forward_peak_memory",
+            # forks.13: set iff a CPU forward delta read 0, so it varies exactly
+            # with forward_peak_memory between two otherwise identical captures.
+            "forward_peak_memory_reason",
             "func_calls_duration",
             "setup_duration",
             "capture_start_time",
@@ -191,7 +194,7 @@ def _first_state_difference(
         return f"{path}: type {type(left)!r} != {type(right)!r}"
     if isinstance(left, weakref.ReferenceType):
         return None
-    if getattr(type(left), "PORTABLE_STATE_SPEC", None) is not None:
+    if getattr(type(left), "_PORTABLE_STATE_SPEC", None) is not None:
         left_state = dict(state_items(left))
         right_state = dict(state_items(right))
         left_keys = set(left_state)
@@ -258,7 +261,7 @@ def _make_trace_pickleable(trace: Any) -> None:
         Mutates runtime-only fields consistently for golden/current parity.
     """
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in getattr(trace, "_layer_list", []):
         for field_name in ("out", "transformed_out", "grad", "transformed_grad"):
             value = getattr(layer, field_name, None)
             if isinstance(value, torch.Tensor):
@@ -271,7 +274,7 @@ def _make_trace_pickleable(trace: Any) -> None:
         layer._source_trace_ref = None
         layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
         layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
-    for layer_log in getattr(trace, "layer_logs", {}).values():
+    for layer_log in getattr(trace, "_layer_logs", {}).values():
         state = getattr(layer_log, "__dict__", {})
         state["func"] = None
         state["grad_fn_object_id"] = 0 if state.get("grad_fn_object_id") is not None else None
@@ -289,22 +292,22 @@ def _make_trace_pickleable(trace: Any) -> None:
                 state[field_name] = value.detach().cpu()
             elif field_name in {"grad_fn_handle"}:
                 state[field_name] = None
-    if hasattr(trace, "input_object_id"):
-        trace.input_object_id = 0
-    if hasattr(trace, "model_object_id"):
-        trace.model_object_id = 0
+    if hasattr(trace, "_provenance_input_object_id"):
+        trace._provenance_input_object_id = 0
+    if hasattr(trace, "_provenance_model_object_id"):
+        trace._provenance_model_object_id = 0
     if hasattr(trace, "_source_code_blob"):
         trace._source_code_blob = {}
-    if hasattr(trace, "forward_source_file"):
-        trace.forward_source_file = None
-    if hasattr(trace, "forward_source_line"):
-        trace.forward_source_line = None
-    if hasattr(trace, "class_source_file"):
-        trace.class_source_file = None
-    if hasattr(trace, "class_source_line"):
-        trace.class_source_line = None
+    if hasattr(trace, "_source_forward_file"):
+        trace._source_forward_file = None
+    if hasattr(trace, "_source_forward_line"):
+        trace._source_forward_line = None
+    if hasattr(trace, "_source_class_file"):
+        trace._source_class_file = None
+    if hasattr(trace, "_source_class_line"):
+        trace._source_class_line = None
     if hasattr(trace, "name"):
-        trace.trace_label = "capture_events_parity"
+        trace.name = "capture_events_parity"
     _drop_capture_scratch(trace)
 
 
@@ -431,13 +434,13 @@ def test_param_refs_release_but_pid_lookup_remains_for_backward() -> None:
 
     model = nn.Linear(3, 2)
     x = torch.randn(1, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=123))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=123))
     param_log = trace.params["weight"]
 
     assert param_log._param_ref is None
     assert param_log.value is model.weight
     assert trace._param_log_by_pid
-    assert set(trace._param_log_by_pid.values()) <= set(trace.param_logs.keys())
+    assert set(trace._param_log_by_pid.values()) <= set(trace._param_logs.keys())
 
 
 def test_released_param_grad_refetches_after_manual_backward() -> None:
@@ -445,9 +448,7 @@ def test_released_param_grad_refetches_after_manual_backward() -> None:
 
     model = nn.Linear(3, 1)
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(random_seed=123, backward_ready=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=123, backward_ready=True))
     param_log = trace.params["weight"]
 
     assert param_log._param_ref is None
@@ -464,7 +465,7 @@ def test_released_param_dead_model_raises_clear_error() -> None:
 
     model = nn.Linear(3, 1)
     model_ref = weakref.ref(model)
-    trace = tl.trace(model, torch.randn(2, 3), capture=tl.options.CaptureOptions(random_seed=123))
+    trace = tl.trace(model, torch.randn(2, 3), capture=tl.options.CaptureOptions(seed=123))
     param_log = trace.params["weight"]
 
     assert param_log._param_ref is None
@@ -472,7 +473,7 @@ def test_released_param_dead_model_raises_clear_error() -> None:
     gc.collect()
 
     assert model_ref() is None
-    with pytest.raises(errors.PostTraceParamUnavailable, match="source model"):
+    with pytest.raises(errors.ParamReleasedError, match="source model"):
         _ = param_log.value
 
 
@@ -481,8 +482,8 @@ def test_walk_detects_accumulategrad_via_type_name() -> None:
 
     model = nn.Linear(3, 1)
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=123, save_grads=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=123, save_grads=True))
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
     assert trace._grad_fn_param_refs
-    assert set(trace._grad_fn_param_refs.values()) <= set(trace.param_logs.keys())
+    assert set(trace._grad_fn_param_refs.values()) <= set(trace._param_logs.keys())

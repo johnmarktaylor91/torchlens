@@ -29,6 +29,7 @@ import datetime
 import os
 import queue
 import random
+import sys
 import tempfile
 import threading
 import time
@@ -42,8 +43,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils import _rng_channels
-from torchlens.utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
+from torchlens._utils.rng import (
+    HOST_NONDETERMINISM_REGISTRY,
+    channels as _rng_channels,
+    host_nondeterminism_monitor,
+)
 
 
 class _LinearNoBias(nn.Module):
@@ -410,11 +414,14 @@ def test_torchlens_initiated_waits_are_not_joins() -> None:
     with monitor as result:
         # Simulate a TorchLens-owned initiator by resolving the wait from a frame whose
         # globals are a registered torchlens module's globals: exercise the classifier
-        # directly with the rng module's own frame identity.
+        # directly with the rng package's own frame identity. The module object comes
+        # from ``sys.modules``: an import statement inside the window would run the
+        # ``sys.meta_path`` finders (pytest's assertion rewriter), whose frames seed the
+        # frame-reachable inventory and reach other test modules' planted holders.
         session = monitor._owner_sync_session
         condition = threading.Condition()
         fake_frame = type("F", (), {})()
-        fake_frame.f_globals = __import__("torchlens.utils.rng", fromlist=["x"]).__dict__
+        fake_frame.f_globals = sys.modules["torchlens._utils.rng"].__dict__
         fake_frame.f_code = test_torchlens_initiated_waits_are_not_joins.__code__
         fake_frame.f_back = None
         _rng_channels.classify_owner_wait(
@@ -436,7 +443,7 @@ def test_prepool_feed_in_capture_is_not_verified(
 
     x = torch.randn(2, 4)
     model = _FeedIn(lambda: warm_pool.submit(time.time).result()).eval()
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     seam = trace._runnable
     assert seam.rng_monitor_uncertain
     assert "foreign_thread_read_joined:time.time" in seam.rng_monitor_uncertain_detail
@@ -444,7 +451,7 @@ def test_prepool_feed_in_capture_is_not_verified(
         reason.startswith("owner_thread_waited:") for reason in seam.rng_monitor_uncertain_detail
     )
     bundle = tmp_path / "prepool.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "unverifiable"
 
@@ -453,6 +460,13 @@ def test_lazy_pool_captures_never_verify_across_repeats() -> None:
     """The order-dependence corollary: a module that lazily builds a module-held pool was
     ceilinged on capture 0 (worker born in-window) and VERIFIED on captures 1 and 2 (same
     worker, now 'foreign'). Every capture must now be non-verified."""
+
+    # Every pool the forward builds, not only ``model._pool``: the capture restores the
+    # forward's attribute writes, so ``_pool`` reads None again after each capture and
+    # the next capture builds a new pool. A pool left running is freed by a later
+    # garbage collection, and its worker then exits inside an unrelated test's capture
+    # window (``owner_thread_tripwire_changed`` there).
+    pools: list[ThreadPoolExecutor] = []
 
     class _LazyPool(nn.Module):
         def __init__(self) -> None:
@@ -463,19 +477,18 @@ def test_lazy_pool_captures_never_verify_across_repeats() -> None:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             if self._pool is None:
                 self._pool = ThreadPoolExecutor(max_workers=1)
+                pools.append(self._pool)
             return self.lin(x) * (1.0 + (self._pool.submit(time.time).result() % 1.0))
 
     model = _LazyPool().eval()
     x = torch.randn(2, 4)
     try:
         for index in range(3):
-            seam = tl.trace(
-                model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-            )._runnable
+            seam = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))._runnable
             assert seam.host_rng_unreplayable or seam.rng_monitor_uncertain, index
     finally:
-        if model._pool is not None:
-            model._pool.shutdown(wait=True)
+        for pool in pools:
+            pool.shutdown(wait=True)
 
 
 @pytest.mark.heavy  # measured 7.1-11.5s across CI rows (round-2 CI triage, 2026-10-01):
@@ -497,13 +510,13 @@ def test_unjoined_flusher_capture_replays_verified(tmp_path: Path) -> None:
     try:
         x = torch.randn(2, 4)
         trace = tl.trace(
-            _LinearNoBias().eval(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
+            _LinearNoBias().eval(), x, capture=tl.options.CaptureOptions(replayable=True)
         )
         seam = trace._runnable
         assert not seam.host_rng_unreplayable
         assert not seam.rng_monitor_uncertain
         bundle = tmp_path / "flusher.tlspec"
-        tl.save(trace, str(bundle), level="runnable", include_weights=True)
+        trace.save(str(bundle), level="runnable", include_weights=True)
         assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == (
             "verified"
         )

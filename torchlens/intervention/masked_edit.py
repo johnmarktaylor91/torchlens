@@ -4,8 +4,8 @@ The scatter contract lives here: a whole-site mask returns the edit's
 behavior unchanged (recipe disclosure stamped); element masks wrap the hook
 factory with the EDIT-THEN-SCATTER step on a fresh tensor (stored capture
 truth is never written through). Consumers: the ACT selection do-plan
-(``torchlens.selection.build_selection_do_plan``) and the edge/param
-substitution doors. Moved out of ``torchlens/selection.py`` under the R43
+(``torchlens._selection.do_plan.build_selection_do_plan``) and the edge/param
+substitution doors. Moved out of ``torchlens/_selection/selection.py`` under the R43
 file-size ratchet; semantics unchanged.
 """
 
@@ -18,14 +18,14 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from ..selection import SiteEntry, _apply_invalid, _Mask
-from .types import HelperSpec
+from .._selection.selection import Site, _apply_invalid, _Mask
+from .types import Edit
 
 __all__ = ["_derive_masked_edit", "_masked_factory", "_validate_edited"]
 
 
 def _row_equivariance_facts(
-    edit: HelperSpec, entry: SiteEntry, site_label: str
+    edit: Edit, entry: Site, site_label: str
 ) -> tuple[tuple[str, Any], ...]:
     """Apply the D23 mask-equivariance law to a row-coherent element-masked edit.
 
@@ -59,7 +59,7 @@ def _row_equivariance_facts(
     dense = entry._mask._dense_ro()
     if not isinstance(axis, int) or not -dense.ndim <= axis < dense.ndim:
         raise InvalidArgumentError(
-            f"row-coherent edit {edit.helper_name!r} declares batch axis "
+            f"row-coherent edit {edit.name!r} declares batch axis "
             f"{axis!r}, which is out of range for site {site_label!r}'s mask "
             f"of rank {dense.ndim} (shape {tuple(dense.shape)!r})",
             code="sampling_geometry_mismatch",
@@ -77,7 +77,7 @@ def _row_equivariance_facts(
     ).hexdigest()[:16]
     if not rows_equal:
         raise InvalidArgumentError(
-            f"row-coherent edit {edit.helper_name!r} at {site_label!r} received "
+            f"row-coherent edit {edit.name!r} at {site_label!r} received "
             "a partial mask whose selected elements DIFFER across batch rows: a "
             "whole-row exchange under a per-row mask would silently mix donor "
             "and subject values row by row. The v1 legality check is "
@@ -142,7 +142,7 @@ def _masked_factory(inner_factory: Any, mask: _Mask, site_label: str) -> Any:
 
         inner = inner_factory()
 
-        def _masked_hook(out: Any, *, hook: Any) -> Any:
+        def _masked_hook(out: Any, *, ctx: Any) -> Any:
             """Run the inner edit, then scatter only masked elements into ``out``."""
 
             if not isinstance(out, torch.Tensor):
@@ -159,7 +159,7 @@ def _masked_factory(inner_factory: Any, mask: _Mask, site_label: str) -> Any:
                     f"match the selection's recorded index space {mask.shape!r}.",
                     site=site_label,
                 )
-            edited = inner(out, hook=hook)
+            edited = inner(out, ctx=ctx)
             edited = _validate_edited(edited, out, site_label)
             dense = mask._dense_ro().to(out.device)
             # EDIT-THEN-SCATTER on a fresh tensor; stored capture truth is
@@ -171,7 +171,7 @@ def _masked_factory(inner_factory: Any, mask: _Mask, site_label: str) -> Any:
     return factory
 
 
-def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: str) -> Any:
+def _derive_masked_edit(edit: Any, entry: Site, digest: str, site_label: str) -> Any:
     """Derive the per-site edit spec/hook under the mask contract.
 
     A whole-site mask short-circuits the scatter and returns the edit's
@@ -179,20 +179,24 @@ def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: st
     masks wrap the hook factory with the engine scatter; the derived spec's
     factory is session-time (``FieldPolicy.DROP``) — the mask never enters
     a persisted KEEP field, and the recipe rides the DROP-gated
-    ``selection_recipe`` family.
+    ``selection_recipe`` family. The one exception is a builtin
+    ``subspace_edit`` (a projected builtin verb): it stores the dense mask and
+    its sha256 among its own arguments and stays portable.
     """
+
+    from ._subspace_projection import SUBSPACE_EDIT_NAME, masked_subspace_edit
 
     recipe = {
         "resolve_digest": digest,
-        "site_key": repr(entry.site_key),
+        "site_key": repr(entry.key),
         "relation": entry.provenance.relation,
-        "selected": entry.selected_count,
+        "selected": entry.num_selected,
         "source": entry.provenance.source,
     }
-    if isinstance(edit, HelperSpec):
+    if isinstance(edit, Edit):
         disclosure = (
             ("selection_digest", digest),
-            ("selection_site", repr(entry.site_key)),
+            ("selection_site", repr(entry.key)),
             ("selection_relation", entry.provenance.relation),
         )
         if entry._mask.form == "whole":
@@ -204,11 +208,18 @@ def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: st
         if edit.factory is None:
             raise _apply_invalid(
                 "not_maskable",
-                f"edit {edit.helper_name!r} has no runtime factory to mask.",
+                f"edit {edit.name!r} has no runtime factory to mask.",
                 site=site_label,
             )
         if dict(edit.metadata).get("row_coherent"):
             disclosure = disclosure + _row_equivariance_facts(edit, entry, site_label)
+        if edit.name == SUBSPACE_EDIT_NAME and edit.portability == "builtin":
+            # A projected builtin verb stores its mask, so it stays portable.
+            return dataclasses.replace(
+                masked_subspace_edit(edit, entry._mask, site_label),
+                metadata=tuple(edit.metadata) + disclosure,
+                selection_recipe=recipe,
+            )
         return dataclasses.replace(
             edit,
             factory=_masked_factory(edit.factory, entry._mask, site_label),
@@ -225,15 +236,15 @@ def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: st
         def _plain_factory() -> Any:
             """Adapt a bare hook callable to the masked-factory protocol."""
 
-            def _adapter(out: Any, *, hook: Any) -> Any:
+            def _adapter(out: Any, *, ctx: Any) -> Any:
                 """Forward to the user's hook callable unchanged."""
 
-                return edit(out, hook=hook)
+                return edit(out, ctx=ctx)
 
             return _adapter
 
         return _masked_factory(_plain_factory, entry._mask, site_label)()
     raise ValueError(
-        "do(selection, edit) requires an Edit/HelperSpec, a hook callable, or a "
+        "do(selection, edit) requires an Edit/Edit, a hook callable, or a "
         f"replacement tensor; got {type(edit).__name__}."
     )

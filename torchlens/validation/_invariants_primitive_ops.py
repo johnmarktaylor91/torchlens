@@ -5,12 +5,11 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from ..constants import PRIMITIVE_OP_FIELD_ORDER
-from ..data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
+from .._constants import PRIMITIVE_OP_FIELD_ORDER
+from .._data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
-    from .invariants import MetadataInvariantError
+    from .._data_classes.trace import Trace
 
 _CAPTURE_PHASES = frozenset({"forward", "backward", "setup"})
 _OWNER_STATUSES = frozenset({"forward_op", "backward_grad_fn_call", "orphan", "unresolved"})
@@ -35,8 +34,6 @@ def _primitive_failure(message: str) -> None:
     MetadataInvariantError
         Always.
     """
-
-    from .invariants import MetadataInvariantError
 
     raise MetadataInvariantError("primitive_op_invariants", message)
 
@@ -229,10 +226,8 @@ def _check_profile_rows(trace: Trace, profile: Any) -> list[Any]:
         _primitive_failure("event-owner evidence contains duplicate sequences")
     if set(evidence) != {row.sequence for row in rows}:
         _primitive_failure("event-owner evidence does not exactly cover primitive rows")
-    ops = list(trace.ops)
-    grad_fn_labels = {
-        str(grad_fn.label) for grad_fn in (getattr(trace, "grad_fn_logs", {}) or {}).values()
-    }
+    ops = list(trace._layer_list)
+    grad_fn_labels = {str(grad_fn.label) for grad_fn in (trace._grad_fn_logs or {}).values()}
     labels: set[str] = set()
     sequences: set[int] = set()
     partitions: dict[tuple[str, object], list[int]] = defaultdict(list)
@@ -332,12 +327,11 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         With ``primitive_op_schema_invalid`` or ``primitive_op_fk_invalid``.
     """
 
-    from .._io import TorchLensIOError
-    from .invariants import MetadataInvariantError
+    from .._io import ArtifactError
 
     profile = getattr(trace, "_primitive_op_profile", None)
     if profile is None:
@@ -360,12 +354,15 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
             if any(marker in detail for marker in fk_markers)
             else "primitive_op_schema_invalid"
         )
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Primitive-operation profile failed pre-release validation: {detail}",
             code=code,
             remedy="re-capture and re-save the trace; do not edit primitive profile metadata",
         ) from exc
 
+
+# Bottom import: the hub defines this error before it imports its split modules.
+from .invariants import MetadataInvariantError  # noqa: E402
 
 __all__ = [
     "_check_non_torch_primitive_op_inert",

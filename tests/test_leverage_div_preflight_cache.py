@@ -15,14 +15,14 @@ import torch
 from test_leverage_div_fixtures import ReusedReluNet
 
 import torchlens as tl
-from torchlens.capture.preflight import cone_preflight
+from torchlens._capture.preflight import cone_preflight
 
 
 def _armed_trace():
     torch.manual_seed(0)
     model = ReusedReluNet()
     x = torch.rand(1, 2, 3, 3)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 # ---------------------------------------------------------------------------
@@ -34,25 +34,31 @@ def test_cone_preflight_membership_equals_actual_replay_cone():
     """The exact oracle: predicted replay membership EQUALS actual."""
 
     trace = _armed_trace()
-    plan = cone_preflight(trace, trace["relu_1_2"].ops)
+    # grouping rule row 28: the reused relu instance is one Layer with 2 passes,
+    # so the origin is its first pass, addressed pass-qualified.
+    plan = cone_preflight(trace, [trace["relu_1_2:1"]])
     assert plan["replay_ready"]
     fork = trace.fork()
-    fork.do("relu_1_2", tl.zero_ablate())
+    fork.do("relu_1_2:1", tl.zero_ablate())
     assert fork.last_run["engine"] == "replay"
+
     # Replay disclosures spell single-pass ops bare; the preflight is
-    # pass-qualified throughout. Compare in bare-label space for this
-    # single-pass fixture.
-    planned_bare = tuple(label.rsplit(":", 1)[0] for label in plan["planned_replay_labels"])
-    assert planned_bare == tuple(fork.last_run["cone"])
+    # pass-qualified throughout. Compare in pass-qualified space.
+    def _qualified(label: str) -> str:
+        return label if ":" in label else f"{label}:1"
+
+    planned = tuple(_qualified(label) for label in plan["planned_replay_labels"])
+    assert planned == tuple(_qualified(label) for label in fork.last_run["cone"])
 
 
 def test_cone_preflight_discloses_engine_assumptions():
     trace = _armed_trace()
-    plan = cone_preflight(trace, trace["relu_2_4"].ops)
+    # grouping rule row 28: the second relu call is pass 2 of relu_1_2.
+    plan = cone_preflight(trace, [trace["relu_1_2:2"]])
     assert plan["cone_size"] < plan["total_ops"]
     assert plan["live_lane_ops"] == plan["total_ops"]  # live always runs the full forward
     notes = " ".join(plan["notes"])
-    assert "intervention_ready" in notes
+    assert "replayable" in notes
     assert "never numeric change" in notes
 
 
@@ -72,7 +78,10 @@ def test_cone_preflight_unarmed_capture_reports_not_replay_ready():
 def test_cache_key_ledgers_never_go_stale():
     """Every curated/neutral ledger name is a REAL CaptureOptions field."""
 
-    from torchlens.user_funcs import CAPTURE_CACHE_KEY_CURATED, CAPTURE_CACHE_KEY_NEUTRAL
+    from torchlens._capture.prepare.cache import (
+        CAPTURE_CACHE_KEY_CURATED,
+        CAPTURE_CACHE_KEY_NEUTRAL,
+    )
 
     option_names = {field.name for field in dataclass_fields(tl.options.CaptureOptions)}
     trace_kwarg_ledger_names = {
@@ -95,7 +104,7 @@ def test_cache_key_ledgers_never_go_stale():
 def test_every_capture_option_is_keyed_or_reviewed():
     """The generated-universe property: no option can silently skip the key."""
 
-    from torchlens.user_funcs import (
+    from torchlens._capture.prepare.cache import (
         CAPTURE_CACHE_KEY_CURATED,
         CAPTURE_CACHE_KEY_NEUTRAL,
         _sweep_option_fields_into_cache_config,
@@ -121,14 +130,18 @@ def test_every_capture_option_is_keyed_or_reviewed():
 
 
 def test_swept_option_change_misses_the_cache_key():
-    """Two configs differing in ONE swept semantic option produce different keys."""
+    """Two configs differing in ONE swept semantic option produce different keys.
 
-    from torchlens._capture_state_helpers import _capture_cache_key
-    from torchlens.user_funcs import (
+    ``on_nonfinite`` is hand-curated into the key, so the swept field here is
+    ``measure_python_peak_memory``.
+    """
+
+    from torchlens._capture.prepare.cache import (
         CAPTURE_CACHE_KEY_CURATED,
         CAPTURE_CACHE_KEY_NEUTRAL,
         _sweep_option_fields_into_cache_config,
     )
+    from torchlens._capture_state_helpers import _capture_cache_key
 
     model = torch.nn.Linear(2, 2)
     x = torch.zeros(1, 2)
@@ -145,5 +158,5 @@ def test_swept_option_change_misses_the_cache_key():
         return _capture_cache_key(model, (x,), {}, config)
 
     baseline = key_for(tl.options.CaptureOptions())
-    changed = key_for(tl.options.CaptureOptions(track_nonfinite=True))
+    changed = key_for(tl.options.CaptureOptions(measure_python_peak_memory=True))
     assert baseline != changed

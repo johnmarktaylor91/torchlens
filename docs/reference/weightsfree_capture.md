@@ -7,8 +7,8 @@ TorchLens admits meta-device models under the structure-only contract
 (decision point D8, granted 2026-08-26): an 855-byte config file plus a
 laptop yields the complete op graph, module nesting, shape/dtype hypotheses,
 parameter geometry, and a resolvable intervention-site table for a
-Llama-3.1-8B-class model — in seconds, on CPU, with **no tensor values
-anywhere**.
+Llama-3.1-8B-class model — in about 15 seconds for 8B-class transformers,
+on CPU, with **no tensor values anywhere**.
 
 Wording discipline: this is **zero tensor-payload storage and no real
 forward** — never "zero cost". Construction, Python records, CPU time, and
@@ -33,7 +33,7 @@ t = tl.trace(model, input_kwargs={"input_ids": ids},
              capture=CaptureOptions(structure_only=True))
 
 # Face 2 — the zero-payload-storage summary rung (quickstart ladder rung 4):
-tl.summary(model, input_size=(1, 8))   # auto-selects the same contract; the
+tl.summary(model, input_shape=(1, 8))   # auto-selects the same contract; the
                                        # auto-set is recorded in provenance
 
 # Face 3 — drawing (same capture, existing render stack, banner mandatory):
@@ -94,15 +94,26 @@ exactly, 225 linear records (7 per decoder layer x 32 + head).
 3. Literal `from_pretrained(..., device_map="meta")` — advertised only after
    its offline integration row passes (verification queue).
 
-Passing a tokenizer's `attention_mask` refuses typed at the third-party
-value branch (the mask, not the architecture, is what refuses); the
-input-IDs-only spelling works. The text bridge does not synthesize
-mask-omitted inputs (FORK F1, branch A).
+Raw text works structure-only:
+`tl.trace(meta_lm, "hello world", capture=tl.options.CaptureOptions(structure_only=True))`
+(or `tl.bridge.transformers.trace_text(..., tokenizer=tok, capture=...)`) tokenizes,
+keeps the ids' shape on meta, and passes a meta ALL-ONES attention mask.
+Padded prompts (a mask that is not all ones) refuse typed
+`structure_only_text_mask_not_all_ones`. Whether the mask path is value-free
+depends on the attention backend, and TorchLens never switches it for you:
+under `attn_implementation="eager"` or the TorchLens backend
+(`tl.bridge.transformers.register_attention(model)`) the capture traces and discharges
+CORROBORATED against the real text-route run (measured on distilgpt2,
+Qwen2.5-0.5B and pythia-160m, digests equal); under the default `sdpa`
+backend transformers reads the mask's values to decide whether to skip it,
+so the capture refuses typed `value_dependent_branch_unsupported` with that
+remedy. The meta input-IDs-only spelling (`input_kwargs={"input_ids": ...}`)
+works on every backend and discharges against a real ids-only run.
 
 ## The evidence envelope
 
 Every structure-only capture carries ONE immutable envelope
-(`Trace.structure_evidence`, persisted, load-validated fail-closed):
+(`Trace.graph.structure_evidence`, persisted, load-validated fail-closed):
 capture mode, substrate, `values_available: false`, outcome, factory-device
 policy, ambient-mode provenance, wrap generation, input plan, and the claim
 table. Every surface — repr, summary, slices, draw captions, exports, agent

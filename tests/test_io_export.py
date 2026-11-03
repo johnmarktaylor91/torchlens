@@ -25,7 +25,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
     "trace": [
         "layer_label",
         "layer_type",
-        "pass_index",
+        "pass_number",
         "func_name",
         "is_input",
         "is_output",
@@ -43,7 +43,6 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
         "class_name",
         "call_depth",
         "num_params",
-        "num_layers",
         "num_calls",
     ],
     "module_log": [
@@ -55,8 +54,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
     "module_pass": [
         "address",
         "call_index",
-        "call_label",
-        "num_ops",
+        "label",
         "forward_args_summary",
         "forward_kwargs_summary",
     ],

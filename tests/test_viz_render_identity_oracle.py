@@ -342,12 +342,11 @@ def _cases() -> tuple[OracleCase, ...]:
     """
 
     return (
-        OracleCase("none_short_circuit", OracleCNN, (1, 1, 8, 8), {"vis_mode": "none"}),
         OracleCase(
             "cnn_rolled_profiling",
             OracleCNN,
             (1, 1, 8, 8),
-            {"vis_mode": "rolled", "node_mode": "profiling"},
+            {"rolled": True, "node_style": "profiling"},
         ),
         OracleCase(
             "cnn_modes_themes_overlays",
@@ -357,15 +356,15 @@ def _cases() -> tuple[OracleCase, ...]:
                 # Domain styles moved to torchlens.experimental.node_styles
                 # (builtin node_mode keeps only 'default'/'profiling').
                 "node_spec_fn": _vision_style_spec,
-                "vis_theme": "dark",
+                "theme": "dark",
                 "node_overlay": "bytes",
                 "show_legend": True,
                 "node_label_fields": ["shape", "memory"],
                 "direction": "leftright",
                 "order_siblings": False,
-                "vis_edge_overrides": {"color": "#123456"},
-                "vis_grad_edge_overrides": {"color": "#654321"},
-                "vis_module_overrides": {"color": "#abcdef"},
+                "edge_overrides": {"color": "#123456"},
+                "grad_edge_overrides": {"color": "#654321"},
+                "module_overrides": {"color": "#abcdef"},
             },
         ),
         OracleCase(
@@ -374,11 +373,11 @@ def _cases() -> tuple[OracleCase, ...]:
             (1, 4),
             {
                 "module": "encoder",
-                "vis_call_depth": 1,
-                "show_containers": "cluster",
+                "depth": 1,
+                "show_containers": "labels",
                 "container_max_inline": 1,
                 "show_input_transform_summary": True,
-                "vis_theme": "paper",
+                "theme": "paper",
                 "code_panel": True,
             },
         ),
@@ -386,14 +385,14 @@ def _cases() -> tuple[OracleCase, ...]:
             "batchnorm_train_buffers",
             OracleBatchNorm,
             (2, 1, 6, 6),
-            {"show_buffer_layers": "always"},
+            {"show_buffers": "always"},
             train=True,
         ),
         OracleCase(
             "batchnorm_eval_buffers",
             OracleBatchNorm,
             (2, 1, 6, 6),
-            {"show_buffer_layers": "meaningful"},
+            {"show_buffers": "meaningful"},
         ),
         OracleCase(
             "repeat_fold_none_callback",
@@ -428,7 +427,7 @@ def _cases() -> tuple[OracleCase, ...]:
                 "collapse_fn": _collapse_small_modules,
                 "node_spec_fn": _node_spec,
                 "collapsed_node_spec_fn": _collapsed_spec,
-                "node_mode": "default",
+                "node_style": "default",
             },
             callback_kind="both",
         ),
@@ -437,9 +436,9 @@ def _cases() -> tuple[OracleCase, ...]:
             OracleBranch,
             (1, 4),
             {
-                "vis_node_placement": "rank",
+                "layout": "rank",
                 "direction": "topdown",
-                "vis_show_cone": False,
+                "show_cone": False,
                 "node_spec_fn": _attention_style_spec,
                 "show_containers": "labels",
             },
@@ -450,7 +449,7 @@ def _cases() -> tuple[OracleCase, ...]:
             (1, 4),
             {
                 "module": "encoder",
-                "vis_mode": "rolled",
+                "rolled": True,
                 "collapse_fn": _collapse_encoder_modules,
             },
         ),
@@ -458,14 +457,14 @@ def _cases() -> tuple[OracleCase, ...]:
             "intervention_node_mark",
             OracleCNN,
             (1, 1, 8, 8),
-            {"vis_intervention_mode": "node_mark", "vis_show_cone": True},
+            {"intervention_mode": "node_mark", "show_cone": True},
             intervene=True,
         ),
         OracleCase(
             "intervention_as_node",
             OracleCNN,
             (1, 1, 8, 8),
-            {"vis_intervention_mode": "as_node", "vis_show_cone": False},
+            {"intervention_mode": "as_node", "show_cone": False},
             intervene=True,
         ),
         OracleCase(
@@ -838,15 +837,14 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
         # Timing is intentionally not part of a byte-identity rendering oracle.
         # Normalize the captured measurement before any timing-aware node mode or
         # overlay can format it, while retaining deterministic render behavior.
-        for layer in trace.layer_list:
+        for layer in trace._layer_list:
             layer.func_duration = 0.0
         kwargs = dict(case.draw_kwargs)
         kwargs.update(
             {
-                "vis_outpath": str(tmp_path / case.name),
-                "vis_save_only": True,
-                "vis_fileformat": "svg",
-                "vis_renderer": "graphviz",
+                "path": str(tmp_path / case.name),
+                "file_format": "svg",
+                "renderer": "graphviz",
             }
         )
         node_calls: Counter[int] | None = None
@@ -861,10 +859,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
             )
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=DeprecationWarning, message="node_style=.*")
-            source = trace.draw(**kwargs)
-        if source is None:
-            assert case.name == "none_short_circuit"
-            return {"tags": list(case.tags), "dot": None, "structural": None, "callbacks": {}}
+            source = trace.draw(**kwargs).dot
         assert isinstance(source, str)
         source = _normalize_version_dependent_fn(source)
         if node_calls is not None:
@@ -914,12 +909,12 @@ def _capture_backward_combined(tmp_path: Path) -> dict[str, Any]:
         loss = trace[trace.output_layers[0]].out.sum()
         trace.log_backward(loss)
         _stabilize_backward_identifiers(trace)
-        backward = trace.draw_backward(
-            vis_outpath=str(tmp_path / "backward"), vis_save_only=True, vis_fileformat="svg"
-        )
-        combined = trace.draw_combined(
-            vis_outpath=str(tmp_path / "combined"), vis_save_only=True, vis_fileformat="svg"
-        )
+        backward = trace.draw(
+            graph="backward", rolled=True, path=str(tmp_path / "backward"), file_format="svg"
+        ).dot
+        combined = trace.draw(
+            graph="combined", path=str(tmp_path / "combined"), file_format="svg"
+        ).dot
         return {
             name: {"dot": dot, "structural": _structural_digest(dot)}
             for name, dot in {
@@ -944,14 +939,14 @@ def _stabilize_backward_identifiers(trace: tl.Trace) -> None:
         Trace containing one captured backward pass.
     """
 
-    grad_fns = list(trace.grad_fns)
+    grad_fns = list(trace.autograd.grad_fns)
     identifiers = {item.grad_fn_object_id: index for index, item in enumerate(grad_fns)}
     for item in grad_fns:
         old_identifier = item.grad_fn_object_id
         item.grad_fn_object_id = identifiers[old_identifier]
         item.next_grad_fn_ids = [identifiers[next_id] for next_id in item.next_grad_fn_ids]
-    trace.grad_fn_logs = {item.grad_fn_object_id: item for item in grad_fns}
-    trace.grad_fn_order = [identifiers[item] for item in trace.grad_fn_order]
+    trace._grad_fn_logs = {item.grad_fn_object_id: item for item in grad_fns}
+    trace._autograd_grad_fn_order = [identifiers[item] for item in trace.autograd.grad_fn_order]
 
 
 def _record(tmp_path: Path) -> dict[str, Any]:

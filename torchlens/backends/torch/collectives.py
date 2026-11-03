@@ -42,7 +42,7 @@ from typing import Any, Protocol
 
 import torch
 
-from ..._transport import to_cpu_contiguous
+from ..._transport import digest_byte_view
 from ...errors._base import CompatibilityError
 
 __all__ = [
@@ -285,13 +285,10 @@ def _digest_tensor(tensor: torch.Tensor) -> str:
     """Byte-exact SHA-256 of a tensor's values (dtype-agnostic)."""
 
     # detach-ok: read-only digest snapshot; no retained gradient payload crosses this boundary.
-    flat = to_cpu_contiguous(tensor).reshape(-1)
-    if flat.numel() == 0:
-        return hashlib.sha256(b"").hexdigest()
     # Buffer-protocol digest (r7 R35-3): identical bytes to the old
     # ``tobytes`` spelling (this digest PERSISTS in collective annotations,
     # so byte identity is load-bearing) without the whole-payload copy.
-    return hashlib.sha256(flat.view(torch.uint8).numpy().data).hexdigest()
+    return hashlib.sha256(digest_byte_view(tensor)).hexdigest()
 
 
 def _role_entry(role: str, index: int, tensor: torch.Tensor) -> dict[str, Any]:
@@ -346,7 +343,7 @@ def _c10d_group_seq(group: Any) -> tuple[int | None, str | None]:
     shape): a private-API rename used to silently and permanently disable
     this redundant correlation cross-check -- the only in-band detector in
     the base-misalignment neighborhood -- with zero visibility in
-    ``doctor()`` / ``compat.report()``.
+    ``tl.report.doctor()``.
 
     Returns
     -------
@@ -356,12 +353,12 @@ def _c10d_group_seq(group: Any) -> tuple[int | None, str | None]:
         indistinguishable downstream from honest capability absence, so the
         only in-band base-misalignment cross-check vanished with zero
         visibility. It now demotes the capability through the standard
-        degradation channel (visible in ``doctor()`` / ``compat.report()``)
+        degradation channel (visible in ``tl.report.doctor()``)
         and returns the ``"c10d_group_seq_read_failed"`` disclosure token for
         the boundary record where the witness vanished.
     """
 
-    from torchlens.utils._torch_compat import (
+    from torchlens._utils._torch_compat import (
         mark_torch_capability_missing,
         probe_c10d_capabilities,
     )
@@ -523,14 +520,11 @@ def _emit_boundary_op(
     """
 
     from ... import _state
-    from ...data_classes.internal_types import FuncExecutionContext
-    from ...utils.tensor_utils import safe_copy
+    from ..._data_classes.internal_types import FuncExecutionContext
+    from ..._utils.tensor_utils import safe_copy
+    from ._ops_capture_records import _record_label_version_snapshot
+    from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
     from ._tl import get_tensor_label, set_tensor_label
-    from .ops import (
-        _record_label_version_snapshot,
-        apply_live_hooks_to_outputs,
-        log_function_output_tensors,
-    )
     from .wrappers import (
         _propagate_mutation_label_to_storage_aliases,
         _register_inplace_live_grad_hook,
@@ -731,8 +725,8 @@ def _make_collective_wrap(site: CollectiveSite, original: Callable[..., Any]) ->
             with _BoundaryScope():
                 return original(*args, **kwargs)
 
-        trace = _state._active_trace
-        if getattr(trace, "capture_mode", None) == "predicate":
+        trace: Any = _state._active_trace  # non-None: ``capturing`` checked it
+        if trace._options_mode == "predicate":
             raise CompatibilityError(
                 "Fastlog cannot represent collective boundary journals; refusing before "
                 "the collective executes instead of returning a Recording that omits it.",
@@ -744,9 +738,9 @@ def _make_collective_wrap(site: CollectiveSite, original: Callable[..., Any]) ->
         async_op = bool(bound.get("async_op", False)) or site.attr in ("isend", "irecv")
         witness_policy = str(getattr(trace, "distributed_witness", "none") or "none")
 
-        from ...utils.rng import log_current_autocast_state, log_current_rng_states
+        from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 
-        save_rng = getattr(trace, "save_rng_states", False)
+        save_rng = trace._options_save_rng
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
         autocast_state = log_current_autocast_state()
         contribution_digests: list[str] | None = None

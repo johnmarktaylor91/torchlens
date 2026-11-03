@@ -38,7 +38,7 @@ def test_activations_emit_under_step_callable_on_the_scheduled_steps() -> None:
         signals=("activations", "gradients"),
         select=("0", "2"),
         optimizer=opt,
-        example_input=torch.randn(4, 8),
+        inputs=torch.randn(4, 8),
         step=lambda: current["step"],
         every=2,
     )
@@ -75,7 +75,7 @@ def test_step_callable_activations_match_the_explicit_scope_spelling() -> None:
             signals=("activations",),
             select=("0",),
             optimizer=opt,
-            example_input=torch.randn(4, 8),
+            inputs=torch.randn(4, 8),
             every=1,
             **kwargs,
         )

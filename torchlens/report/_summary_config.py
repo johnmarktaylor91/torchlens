@@ -2,7 +2,7 @@
 
 Orthogonal axes, one column registry, nothing silent: granularity
 (level/depth/fold_repeats/buffers) x presentation (view/columns) x
-selection (filter) x numbers (flop_convention/units) x output (style).
+selection (where) x numbers (flop_convention/units) x output (style).
 The legacy spellings are REMOVED (clean break, no aliases): each one
 refuses typed and names its successor (``REMOVED_SUMMARY_OPTIONS`` /
 ``REMOVED_SUMMARY_LEVELS``); contradictions raise typed
@@ -19,13 +19,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from ._stats_view import resolve_stats_columns
 from ._summary_ladder import DEFAULT_ROW_BUDGET
 
 #: New-grammar level vocabulary (row grain; memo 3.10).
 LEVELS: tuple[str, ...] = ("auto", "module", "op")
 
 #: View presets implemented natively by the rebuilt renderer.
-NATIVE_VIEWS: tuple[str, ...] = ("overview", "compute")
+NATIVE_VIEWS: tuple[str, ...] = ("overview", "compute", "stats")
 
 #: Removed legacy ``level=`` preset names -> what replaces each one. They
 #: refuse typed (``summary_level_invalid``) naming the replacement; there is
@@ -40,7 +41,7 @@ REMOVED_SUMMARY_LEVELS: dict[str, str] = {
         "the summary footer carries the memory totals"
     ),
     "control_flow": (
-        "trace.conditional_records and the conditional_* columns of trace.to_pandas() "
+        "trace.graph.conditional_records and the conditional_* columns of trace.to_pandas() "
         "(multi-pass layers: num_passes)"
     ),
     "waterfall": (
@@ -54,6 +55,7 @@ REMOVED_SUMMARY_LEVELS: dict[str, str] = {
 #: typed (``summary_option_invalid``) naming the replacement; there is no
 #: alias and no historical renderer behind them.
 REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
+    "filter": "where= (regex string or callable row -> bool; presentation-only)",
     "preset": "view= ('overview' | 'compute') for the column bundle, level= for row grain",
     "fields": "columns= (bundle name, exact ordered list, or +name/-name deltas)",
     "show_ops": "level='op' (one row per executed op pass)",
@@ -64,7 +66,7 @@ REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
     "print_to": "report.print(file=...) on the returned report, or print_to(str(report))",
     "count_fma_as_two": "flop_convention='fma2' (was True) or flop_convention='fma1' (was False)",
     "show_input_preprocessing_details": (
-        "trace.provenance() and trace.input_preprocessor (verified, source, identifier)"
+        "trace.input_preprocessor (verified, source, identifier); the capture-provenance text block is trace.provenance._summary() until its public spelling is decided"
     ),
 }
 
@@ -97,12 +99,20 @@ class ColumnSpec:
 #: formatter routing (by semantic_type), alignment, and export dtype.
 COLUMN_REGISTRY: dict[str, ColumnSpec] = {
     "name": ColumnSpec("name", "name (type)", "text", "left", "always", "object"),
+    "input": ColumnSpec("input", "input", "shape", "left", "always", "object"),
     "output": ColumnSpec("output", "output", "shape", "left", "always", "object"),
+    "kernel_size": ColumnSpec("kernel_size", "kernel", "shape", "left", "always", "object"),
+    "groups": ColumnSpec("groups", "groups", "count", "right", "always", "Int64"),
     "params": ColumnSpec("params", "params", "count", "right", "always", "Int64"),
     "params_pct": ColumnSpec("params_pct", "(%)", "percent", "right", "always", "float64"),
+    "params_trainable": ColumnSpec(
+        "params_trainable", "trainable", "count", "right", "always", "Int64"
+    ),
     "flops": ColumnSpec("flops", "fwd flops", "flops", "right", "always", "Int64"),
+    "flops_pct": ColumnSpec("flops_pct", "(%)", "percent", "right", "always", "float64"),
     "macs": ColumnSpec("macs", "macs", "macs", "right", "always", "Int64"),
     "train": ColumnSpec("train", "train", "tristate", "left", "mixed_only", "object"),
+    "mode": ColumnSpec("mode", "mode", "text", "left", "always", "object"),
     "passes": ColumnSpec("passes", "passes", "count", "right", "always", "Int64"),
     "evidence": ColumnSpec("evidence", "evidence", "text", "left", "always", "object"),
 }
@@ -122,13 +132,14 @@ class SummaryConfig:
     view: str = "overview"
     depth: Any = "auto"
     columns: tuple[str, ...] | None = None
-    filter: Any = None
+    where: Any = None
     buffers: str = "summary"
     fold_repeats: Any = "auto"
     max_rows: int = DEFAULT_ROW_BUDGET
     flop_convention: str = "fma2"
     units: str = "human"
     style: str = "auto"
+    max_scan_elements: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def resolved_columns(self, mixed_trainability: bool) -> tuple[ColumnSpec, ...]:
@@ -175,6 +186,22 @@ def _refuse_choice(
     raise InvalidArgumentError(problem, code=code, remedy=remedy)
 
 
+def _insert_in_registry_order(names: list[str], name: str) -> None:
+    """Insert ``name`` after the last present column that precedes it in the registry.
+
+    ``+input`` lands before ``output`` and ``+flops_pct`` beside ``flops``;
+    a column with no registry predecessor present goes first.
+    """
+
+    order = list(COLUMN_REGISTRY)
+    rank = order.index(name)
+    position = 0
+    for index, present in enumerate(names):
+        if present in COLUMN_REGISTRY and order.index(present) < rank:
+            position = index + 1
+    names.insert(position, name)
+
+
 def _apply_column_deltas(columns: Any, names: list[str]) -> tuple[str, ...]:
     """Apply ``+name``/``-name`` delta items to the view bundle's columns."""
 
@@ -183,7 +210,7 @@ def _apply_column_deltas(columns: Any, names: list[str]) -> tuple[str, ...]:
         if name not in COLUMN_REGISTRY:
             _refuse_choice("columns", name, tuple(COLUMN_REGISTRY))
         if item[0] == "+" and name not in names:
-            names.append(name)
+            _insert_in_registry_order(names, name)
         if item[0] == "-" and name in names:
             names.remove(name)
     return tuple(names)
@@ -194,6 +221,8 @@ def _resolve_columns(columns: Any, view: str) -> tuple[str, ...] | None:
 
     if columns is None:
         return None
+    if view == "stats":
+        return resolve_stats_columns(columns)
     if isinstance(columns, str):
         if columns in VIEW_BUNDLES:
             return VIEW_BUNDLES[columns]
@@ -273,13 +302,14 @@ GRAMMAR_OPTIONS: tuple[str, ...] = (
     "view",
     "depth",
     "columns",
-    "filter",
+    "where",
     "buffers",
     "fold_repeats",
     "max_rows",
     "flop_convention",
     "units",
     "style",
+    "max_scan_elements",
 )
 
 
@@ -329,7 +359,8 @@ def resolve_config(**kwargs: Any) -> SummaryConfig:
     fold_repeats = _resolve_fold_repeats(kwargs.pop("fold_repeats", "auto"))
     max_rows = _resolve_max_rows(kwargs.pop("max_rows", DEFAULT_ROW_BUDGET))
     columns = _resolve_columns(kwargs.pop("columns", None), view)
-    filter_ = kwargs.pop("filter", None)
+    where = kwargs.pop("where", None)
+    max_scan_elements = _resolve_max_scan_elements(kwargs.pop("max_scan_elements", None), view)
     if kwargs:
         _refuse_unknown_options(sorted(kwargs))
     if level == "op" and depth not in ("auto", "all", None):
@@ -344,11 +375,29 @@ def resolve_config(**kwargs: Any) -> SummaryConfig:
         view=view,
         depth=depth,
         columns=columns,
-        filter=filter_,
+        where=where,
         buffers=buffers,
         fold_repeats=fold_repeats,
         max_rows=max_rows,
         flop_convention=closed["flop_convention"],
         units=closed["units"],
         style=closed["style"],
+        max_scan_elements=max_scan_elements,
     )
+
+
+def _resolve_max_scan_elements(value: Any, view: str) -> int | None:
+    """Validate max_scan_elements=: the stats view's element budget, else refused."""
+
+    if value is None:
+        return None
+    if view != "stats":
+        raise InvalidArgumentError(
+            "max_scan_elements= is the payload-scan budget of view='stats'; "
+            f"view={view!r} scans no payloads, so the request is never accepted-and-ignored.",
+            code="summary_option_invalid",
+            remedy="pass view='stats' with max_scan_elements=, or drop max_scan_elements=",
+        )
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        _refuse_choice("max_scan_elements", value, ("<non-negative int>", "None"))
+    return value

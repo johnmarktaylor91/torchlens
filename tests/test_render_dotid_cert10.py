@@ -1,7 +1,7 @@
 """Regression tests for embedded-quote/backslash escaping in the rank-engine DOT emitter.
 
 ``_dot_id()``/``_dot_quote()`` in
-``torchlens/visualization/_rank_layout_internal/layout.py`` wrap raw values in
+``torchlens/_visualization/_rank_layout_internal/layout.py`` wrap raw values in
 ``"..."`` for DOT text but, before this fix, never escaped an embedded
 literal ``"`` (or ``\\``) character. A module/``ModuleDict`` key containing a
 literal double-quote produces DOT text like ``"a"b"`` -- an unterminated
@@ -25,7 +25,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._rank_layout_internal import layout as rank_layout
+from torchlens._visualization._rank_layout_internal import layout as rank_layout
 
 pytest.importorskip("graphviz")
 
@@ -125,19 +125,18 @@ def test_rank_engine_renders_moduledict_double_quote_key(tmp_path: Path) -> None
     ``_dot_id``/``_dot_quote`` spliced an unescaped ``"`` into DOT text,
     producing an unterminated string that made ``neato`` fail with a real
     ``RuntimeError`` (subprocess syntax error), reachable whenever
-    ``vis_node_placement="rank"`` is used (or "auto" promotes to rank for a
+    ``layout="rank"`` is used (or "auto" promotes to rank for a
     large enough graph).
     """
     trace = tl.trace(_ModuleDictQuoteKeyModel(), torch.randn(2, 3))
     outpath = tmp_path / "moduledict_double_quote_rank"
     try:
         dot = trace.draw(
-            vis_outpath=str(outpath),
-            vis_save_only=True,
-            vis_fileformat="svg",
-            vis_node_placement="rank",
+            path=str(outpath),
+            file_format="svg",
+            layout="rank",
             order_siblings=False,
-        )
+        ).dot
     finally:
         trace.cleanup()
 

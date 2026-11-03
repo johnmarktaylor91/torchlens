@@ -34,8 +34,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
-from torchlens.visualization import _render_leaf
+from torchlens._data_classes.layer import Layer
+from torchlens._visualization import _render_leaf
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
@@ -78,7 +78,7 @@ def _rolled_layer_count(trace: tl.Trace) -> int:
 
     return sum(
         1
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if isinstance(layer, Layer) and layer.num_passes > 1
     )
 
@@ -115,7 +115,7 @@ def _historical_rolling_suffix(trace: tl.Trace, address: str) -> str:
     """The pre-wave-19 per-address scan, verbatim, as the oracle."""
 
     candidate_groups: tuple[tuple[int, ...], ...] = ()
-    for layer_log in trace.layer_logs.values():
+    for layer_log in trace._layer_logs.values():
         if not isinstance(layer_log, Layer) or layer_log.num_passes <= 1:
             continue
         layer_addresses = {
@@ -166,11 +166,11 @@ def _counted_draw(
     monkeypatch.setattr(_render_leaf, "_collapsed_module_rolling_suffix_map", counting_map)
     monkeypatch.setattr(_render_leaf, "_same_layer_reachability", counting_reach)
     for module_name in ("_render_dot", "_render_nodes", "render_ir"):
-        module = __import__(f"torchlens.visualization.{module_name}", fromlist=[module_name])
+        module = __import__(f"torchlens._visualization.{module_name}", fromlist=[module_name])
         if hasattr(module, "_collapsed_module_rolling_suffix"):
             monkeypatch.setattr(module, "_collapsed_module_rolling_suffix", counting_suffix)
 
-    trace.draw(vis_save_only=True, vis_outpath=str(outpath), **draw_kwargs)
+    trace.draw(path=str(outpath), **draw_kwargs)
     return counts
 
 
@@ -196,7 +196,7 @@ def test_unrolled_collapsed_nodes_share_one_rolled_layer_sweep(
         monkeypatch,
         trace,
         tmp_path / "graph",
-        vis_mode="unrolled",
+        rolled=False,
         collapse=collapse,
     )
 
@@ -223,7 +223,7 @@ def test_rolled_view_also_shares_one_rolled_layer_sweep(
         monkeypatch,
         trace,
         tmp_path / "graph",
-        vis_mode="rolled",
+        rolled=True,
         collapse=collapse,
     )
 
@@ -290,7 +290,7 @@ def test_union_find_components_match_historical_reachability(steps: int) -> None
     trace = tl.trace(CellLoop(steps=steps), torch.rand(2, 8))
     rolled_layers = [
         layer
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if isinstance(layer, Layer) and layer.num_passes > 1
     ]
     assert rolled_layers
@@ -307,7 +307,7 @@ def test_union_find_partition_is_children_order_invariant() -> None:
     layer = max(
         (
             candidate
-            for candidate in trace.layer_logs.values()
+            for candidate in trace._layer_logs.values()
             if isinstance(candidate, Layer) and candidate.num_passes > 1
         ),
         key=lambda candidate: candidate.num_passes,

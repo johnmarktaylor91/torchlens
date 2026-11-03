@@ -11,13 +11,9 @@ bundle.
 from __future__ import annotations
 
 import io
-import os
 import pickle
 import platform
-import sys
 import threading
-import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,16 +23,19 @@ from safetensors.torch import save_file
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._state import pause_logging
-from . import TLSPEC_VERSION, TorchLensIOError
+from .._utils.hashing import sha256_file
+from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
 from ._canonical_pickle import dump_canonical_metadata
-from ._durability import fsync_dir, fsync_tree
-from .manifest import Manifest, TensorEntry, sha256_of_file
+from ._durability import _restrict_mode, fsync_dir, fsync_tree
+from .manifest import Manifest, TensorEntry, _runtime_python_version
+from .paths import _make_tmp_bundle_path, reject_symlink_path
 from .scrub import BlobSpec
 from .streaming_async import (
     DEFAULT_MAX_PENDING_BYTES,
     AsyncWriteEngine,
     AsyncWriteFailedError,
     PendingWrite,
+    _PreparedPayload,
 )
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .tlspec import _TlSpecWriter
@@ -44,51 +43,6 @@ from .tlspec import _TlSpecWriter
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
-
-
-@dataclass(frozen=True)
-class _PreparedPayload:
-    """One serialization-ready payload plus its origin-tensor manifest facts.
-
-    Parameters
-    ----------
-    payload:
-        Contiguous tensor to serialize (CPU-resident when prepared for the
-        async worker).
-    device_at_save:
-        Device string of the ORIGINAL tensor at submission time.
-    requires_grad:
-        ``requires_grad`` of the original tensor at submission time.
-    """
-
-    payload: torch.Tensor
-    device_at_save: str
-    requires_grad: bool
-
-
-def _restrict_mode(path: Path, mode: int) -> None:
-    """Best-effort tighten a streamed bundle path's permissions (POSIX only).
-
-    Twin of ``_io/bundle.py::_restrict_mode``: ``mkdir``/``open`` honor the
-    ambient umask, so under umask 002 the streaming bundle dir and its metadata
-    sidecars were left group-writable while the core bundle writer tightens
-    them. Best-effort: a filesystem that ignores mode bits is not a save
-    failure.
-
-    Parameters
-    ----------
-    path:
-        Bundle directory or file to tighten.
-    mode:
-        Target permission bits (``0o700`` for directories, ``0o600`` for files).
-    """
-
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(mode)
-    except OSError:
-        pass
 
 
 def next_blob_id(blob_index: int) -> str:
@@ -140,30 +94,29 @@ class BundleStreamWriter:
             Streaming bundles are always strict. Passing ``False`` is rejected.
         include_custom_attributes:
             Whether harvested module attributes are persisted in the streamed
-            bundle (the tl.save opt-out, mirrored for streaming -- R62).
+            bundle (the Trace.save opt-out, mirrored for streaming -- R62).
         include_buffer_values:
             Whether captured pre-forward buffer values are persisted in the
-            streamed bundle (the tl.save opt-out, mirrored for streaming --
+            streamed bundle (the Trace.save opt-out, mirrored for streaming --
             R62 buffer extension).
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the target path is invalid or the temp directory cannot be created.
         """
 
         if not strict:
-            raise TorchLensIOError("Streaming out save is always strict.")
+            raise ArtifactError("Streaming out save is always strict.")
 
         self.include_custom_attributes = include_custom_attributes
         self.include_buffer_values = include_buffer_values
         self.final_path = Path(path)
-        if self.final_path.is_symlink():
-            raise TorchLensIOError(f"Refusing symlinked save target: {self.final_path}.")
+        reject_symlink_path(self.final_path, context="save target")
         if self.final_path.exists():
-            raise TorchLensIOError(f"Bundle path already exists: {self.final_path}")
+            refuse_bundle_exists(self.final_path)
 
-        self.tmp_path = self.final_path.parent / f"{self.final_path.name}.tmp.{uuid.uuid4().hex}"
+        self.tmp_path = _make_tmp_bundle_path(self.final_path)
         self.blobs_path = self.tmp_path / "blobs"
         self._blob_counter = 0
         self._closed = False
@@ -192,7 +145,7 @@ class BundleStreamWriter:
             self.tmp_path.parent.mkdir(parents=True, exist_ok=True)
             self.tmp_path.mkdir()
             self.blobs_path.mkdir()
-            # Permission parity with tl.save (B8-10): mkdir honors the ambient
+            # Permission parity with Trace.save (B8-10): mkdir honors the ambient
             # umask, so under umask 002 the streaming bundle dir and its blobs/
             # dir were left group-writable/readable while the core bundle
             # writer tightens them to 0700. The rename at finalize preserves
@@ -201,7 +154,7 @@ class BundleStreamWriter:
             _restrict_mode(self.tmp_path, 0o700)
             _restrict_mode(self.blobs_path, 0o700)
         except OSError as exc:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Failed to create streaming temp bundle at {self.tmp_path}."
             ) from exc
 
@@ -224,17 +177,17 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the writer is closed, already armed, or already wrote blobs.
         """
 
         self._ensure_writable()
         if self._async_engine is not None:
-            raise TorchLensIOError("Async streaming writes are already armed.")
+            raise ArtifactError("Async streaming writes are already armed.")
         with self._entries_lock:
             already_submitted = bool(self._known_blob_ids)
         if already_submitted:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 "Cannot arm async streaming writes after blobs were already submitted."
             )
         self._async_engine = AsyncWriteEngine(
@@ -255,17 +208,8 @@ class BundleStreamWriter:
         self._blob_counter += 1
         return next_blob_id(self._blob_counter)
 
-    def issued_blob_count(self) -> int:
-        """Return how many blob ids this writer has issued so far.
-
-        Save-time scrubbing numbers its own blobs from this count so a scrub id
-        can never equal an id the stream already wrote.
-
-        Returns
-        -------
-        int
-            Number of ids issued by :meth:`next_blob_id`.
-        """
+    def _issued_blob_count(self) -> int:
+        """Return how many ids :meth:`next_blob_id` issued; save-time scrub ids start past it."""
 
         return self._blob_counter
 
@@ -297,7 +241,7 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the tensor is unsupported or writing fails.
         """
 
@@ -308,7 +252,7 @@ class BundleStreamWriter:
         except OSError as exc:
             reason = f"Failed to write streaming blob_id={blob_id} for {label}: {exc}"
             self.abort(reason)
-            raise TorchLensIOError(reason) from exc
+            raise ArtifactError(reason) from exc
         except BaseException as exc:
             # Safety-net catch-all mirroring bundle.py's ``save()`` handler
             # (round-8 F3): a hand-enumerated except clause can always miss
@@ -324,7 +268,7 @@ class BundleStreamWriter:
             reason = f"Failed to write streaming blob_id={blob_id} for {label}: {exc}"
             self.abort(reason)
             if isinstance(exc, Exception):
-                raise TorchLensIOError(reason) from exc
+                raise ArtifactError(reason) from exc
             raise
 
         self._record_entry(entry)
@@ -346,7 +290,7 @@ class BundleStreamWriter:
         the serialize + write + sha256 work runs on the single worker thread,
         FIFO, under the pending-bytes budget. Without the engine this is
         exactly ``write_blob``. A failed queued write latches and re-raises
-        as ``TorchLensIOError`` at the next writer interaction; ``finalize``
+        as ``ArtifactError`` at the next writer interaction; ``finalize``
         drains every pending write before the bundle can publish.
 
         Parameters
@@ -362,7 +306,7 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the tensor is unsupported, snapshotting fails, or an earlier
             queued write failed.
         """
@@ -382,7 +326,7 @@ class BundleStreamWriter:
             reason = f"Failed to snapshot streaming blob_id={blob_id} for {label}: {exc}"
             self.abort(reason)
             if isinstance(exc, Exception):
-                raise TorchLensIOError(reason) from exc
+                raise ArtifactError(reason) from exc
             raise
 
         def _job() -> None:
@@ -407,7 +351,7 @@ class BundleStreamWriter:
         except AsyncWriteFailedError as exc:
             reason = str(exc)
             self.abort(reason)
-            raise TorchLensIOError(reason) from (exc.__cause__ or exc)
+            raise ArtifactError(reason) from (exc.__cause__ or exc)
 
     def finalize(
         self,
@@ -444,11 +388,11 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If finalization fails.
         """
 
-        from ..capture.outcome import outcome_for
+        from .._capture.outcome import outcome_for
 
         self.stage_for_settlement(scrubbed_state, blob_specs, unsupported, trace=trace)
         settled = outcome_for(trace)
@@ -481,7 +425,7 @@ class BundleStreamWriter:
         trace:
             Source ``Trace`` being streamed to disk. Used to write the same
             unified ``.tlspec`` manifest fields (``kind``, ``model_signature``,
-            ``sites``, ``body_index``, ...) that ``Trace.save()``/``tl.save()``
+            ``sites``, ``body_index``, ...) that ``trace.save()``
             write, so streaming bundles are detected as ``"v2.0_unified"`` and
             go through the same ``validate_tlspec()`` schema validation.
 
@@ -492,7 +436,7 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If staging fails; the temp bundle is marked PARTIAL.
         """
 
@@ -506,23 +450,14 @@ class BundleStreamWriter:
                     # remaining spec with an already-written id is a collision: the
                     # scrubbed ref would silently resolve to ANOTHER op's payload.
                     existing = self._entries_by_blob_id[blob_id]
-                    raise TorchLensIOError(
+                    raise ArtifactError(
                         f"Streaming bundle blob id {blob_id} for {label!r} collides with "
                         f"the blob already streamed for {existing.label!r}."
                     )
                 self.write_blob(blob_id, tensor, kind=kind, label=label)
 
-            legacy_manifest = self._build_manifest(
-                scrubbed_state=scrubbed_state, unsupported=unsupported, trace=trace
-            )
-            _TlSpecWriter.write_trace_manifest(
-                path=self.tmp_path / "manifest.json",
-                trace=trace,
-                legacy_manifest=legacy_manifest,
-                save_level="portable",
-            )
-            _restrict_mode(self.tmp_path / "manifest.json", 0o600)
-        except TorchLensIOError:
+            self._write_manifest(scrubbed_state, unsupported, trace)
+        except ArtifactError:
             raise
         except (OSError, TypeError, ValueError, pickle.PickleError) as exc:
             # See torchlens/_io/bundle.py's ``save()`` handler: ``TypeError``
@@ -531,7 +466,7 @@ class BundleStreamWriter:
             # ``PickleError`` subclass) for many live-resource objects.
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
-            raise TorchLensIOError(reason) from exc
+            raise ArtifactError(reason) from exc
         except BaseException as exc:
             # Safety-net catch-all closing the same bug class as
             # bundle.py's ``save()`` (round-8 F3): a hand-enumerated except
@@ -546,7 +481,7 @@ class BundleStreamWriter:
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
             if isinstance(exc, Exception):
-                raise TorchLensIOError(reason) from exc
+                raise ArtifactError(reason) from exc
             raise
         self._staged_scrubbed_state = scrubbed_state
         return self.final_path
@@ -586,17 +521,17 @@ class BundleStreamWriter:
             with (self.tmp_path / "metadata.pkl").open("wb") as handle:
                 handle.write(metadata_bytes)
             _restrict_mode(self.tmp_path / "metadata.pkl", 0o600)
-        except TorchLensIOError:
+        except ArtifactError:
             raise
         except (OSError, TypeError, ValueError, pickle.PickleError) as exc:
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
-            raise TorchLensIOError(reason) from exc
+            raise ArtifactError(reason) from exc
         except BaseException as exc:
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
             if isinstance(exc, Exception):
-                raise TorchLensIOError(reason) from exc
+                raise ArtifactError(reason) from exc
             raise
 
     def publish_staged(self, outcome_payload: dict[str, Any] | None) -> Path:
@@ -607,7 +542,7 @@ class BundleStreamWriter:
         outcome_payload:
             String-only settled-outcome payload (``CaptureOutcome.to_payload``)
             injected into the persisted state as ``_capture_outcome`` -- the
-            SAME key and codec ordinary ``tl.save()`` bundles persist, so
+            SAME key and codec ordinary ``trace.save()`` bundles persist, so
             loads adopt it through the identical parse + coherence matrix.
             ``None`` persists no attestation (loads derive structurally).
 
@@ -618,23 +553,23 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If nothing is staged or the publish fails; failures mark the temp
             bundle PARTIAL.
         """
 
         scrubbed_state = self._staged_scrubbed_state
         if scrubbed_state is None:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 "Streaming publish requires a staged bundle; call stage_for_settlement() first."
             )
         if self._finalized:
-            raise TorchLensIOError(f"Streaming bundle already published: {self.final_path}")
+            raise ArtifactError(f"Streaming bundle already published: {self.final_path}")
         if self._closed:
             # An abort between staging and settlement already marked the temp
             # bundle PARTIAL; publishing it would rename failure debris into a
             # final-named artifact.
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Streaming bundle at {self.tmp_path} was aborted; refusing to publish it."
             )
         try:
@@ -646,13 +581,13 @@ class BundleStreamWriter:
         # the staged directories so a power/OS crash after the rename below
         # cannot publish a final-named bundle holding zero-length/partial files
         # with no PARTIAL sentinel (cleanup_tmp would never sweep it). Mirrors
-        # the tl.save writer (_io/bundle.py:568-586).
+        # the Trace.save writer (_io/bundle.py:568-586).
         try:
             fsync_tree(self.tmp_path)
         except OSError as exc:
             reason = f"Failed to flush streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
-            raise TorchLensIOError(reason) from exc
+            raise ArtifactError(reason) from exc
 
         # Re-check target absence at finalize, not just at __init__ (R59 TOCTOU):
         # a streaming writer never overwrites, but a concurrent writer could have
@@ -664,13 +599,13 @@ class BundleStreamWriter:
         if self.final_path.exists():
             reason = f"Bundle path already exists: {self.final_path}"
             self.abort(reason)
-            raise TorchLensIOError(reason)
+            refuse_bundle_exists(self.final_path)
         try:
             self.tmp_path.rename(self.final_path)
         except OSError as exc:
             reason = f"Failed to atomically rename {self.tmp_path} to {self.final_path}."
             self.abort(reason)
-            raise TorchLensIOError(reason) from exc
+            raise ArtifactError(reason) from exc
         # Make the rename itself durable before declaring the save complete.
         fsync_dir(self.final_path.parent)
 
@@ -756,14 +691,14 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the blob id is unknown.
         """
 
         self._drain_async()
         with self._entries_lock:
             if blob_id not in self._entries_by_blob_id:
-                raise TorchLensIOError(f"Streaming bundle is missing blob_id={blob_id}.")
+                raise ArtifactError(f"Streaming bundle is missing blob_id={blob_id}.")
             return self._entries_by_blob_id[blob_id]
 
     def _write_tensor_blob(
@@ -837,7 +772,7 @@ class BundleStreamWriter:
             device_at_save=prepared.device_at_save,
             layout=str(payload.layout).replace("torch.", ""),
             bytes=int(payload.numel() * payload.element_size()),
-            sha256=sha256_of_file(blob_path),
+            sha256=sha256_file(blob_path),
             requires_grad=prepared.requires_grad,
         )
 
@@ -903,7 +838,7 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the writer is closed, the payload is not a supported tensor,
             or the blob id was already submitted.
         """
@@ -916,7 +851,7 @@ class BundleStreamWriter:
                 f"instances, but blob_id={blob_id} ({label}) received {type(tensor).__name__}."
             )
             self.abort(reason)
-            raise TorchLensIOError(reason)
+            raise ArtifactError(reason)
 
         decision = is_supported_for_save(tensor, strict=True)
         if not isinstance(decision, Ok):
@@ -929,7 +864,7 @@ class BundleStreamWriter:
                 f"(blob_id={blob_id}, kind={kind}): {reason_text}"
             )
             self.abort(reason)
-            raise TorchLensIOError(reason)
+            raise ArtifactError(reason)
         with self._entries_lock:
             duplicate = blob_id in self._known_blob_ids
             if not duplicate:
@@ -937,7 +872,7 @@ class BundleStreamWriter:
         if duplicate:
             reason = f"Duplicate streaming blob_id={blob_id} for {label}."
             self.abort(reason)
-            raise TorchLensIOError(reason)
+            raise ArtifactError(reason)
 
     def _record_entry(self, entry: TensorEntry) -> None:
         """Append one completed manifest entry (worker- or caller-thread)."""
@@ -952,7 +887,7 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If any queued write failed. The bundle is marked PARTIAL first.
         """
 
@@ -964,7 +899,7 @@ class BundleStreamWriter:
         except AsyncWriteFailedError as exc:
             reason = str(exc)
             self.abort(reason)
-            raise TorchLensIOError(reason) from (exc.__cause__ or exc)
+            raise ArtifactError(reason) from (exc.__cause__ or exc)
 
     def _settle_async_engine(self) -> None:
         """FINALIZATION barrier: land every capture-time write, retire the engine.
@@ -977,7 +912,7 @@ class BundleStreamWriter:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If any queued write failed. The bundle is marked PARTIAL first.
         """
 
@@ -987,27 +922,25 @@ class BundleStreamWriter:
             engine.shutdown(discard=False)
             self._async_engine = None
 
-    def _build_manifest(
+    def _write_manifest(
         self,
-        *,
         scrubbed_state: dict[str, Any],
         unsupported: list[dict[str, str]],
         trace: Any,
-    ) -> Manifest:
-        """Build the final manifest for the streamed bundle."""
+    ) -> None:
+        """Build the final manifest for the streamed bundle and write it as ``manifest.json``."""
 
         tensor_entries = list(self._tensor_entries)
         n_out_blobs = sum(1 for entry in tensor_entries if entry.kind == "out")
         n_grad_blobs = sum(1 for entry in tensor_entries if entry.kind == "grad")
         n_auxiliary_blobs = len(tensor_entries) - n_out_blobs - n_grad_blobs
-        layer_list = scrubbed_state.get("layer_list", [])
+        layer_list = scrubbed_state.get("_layer_list", [])
         n_layers = len(layer_list) if isinstance(layer_list, list) else 0
-        # Disclose the harvested module-attribute channel (R62): the documented
-        # invariant is that EVERY save writes a custom_attributes_disclosure
-        # entry, and the streaming path now honors the same opt-out and emits
-        # the same embedding warning as tl.save (the reopened hf_token class:
-        # a canary token used to ship in the streamed bundle with zero
-        # warnings and no way to withhold it).
+        # Disclose the harvested module-attribute channel (R62): the documented invariant is
+        # that EVERY save writes a custom_attributes_disclosure entry, and the streaming path
+        # honors the same opt-out and emits the same embedding warning as Trace.save (the
+        # reopened hf_token class: a canary token used to ship in the streamed bundle with
+        # zero warnings and no way to withhold it).
         from .bundle import (
             _buffer_values_disclosure,
             _custom_attributes_disclosure,
@@ -1020,13 +953,11 @@ class BundleStreamWriter:
         buffer_disclosure = _buffer_values_disclosure(trace, included=self.include_buffer_values)
         _warn_buffer_value_embedding(buffer_disclosure)
 
-        return Manifest(
+        legacy_manifest = Manifest(
             tlspec_version=TLSPEC_VERSION,
             torchlens_version=TORCHLENS_VERSION,
             torch_version=torch.__version__,
-            python_version=(
-                f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-            ),
+            python_version=_runtime_python_version(),
             platform=f"{platform.system().lower()}-{platform.machine().lower()}",
             created_at=datetime.now(timezone.utc)
             .replace(microsecond=0)
@@ -1042,12 +973,19 @@ class BundleStreamWriter:
             custom_attributes_disclosure=disclosure,
             buffer_values_disclosure=buffer_disclosure,
         )
+        _TlSpecWriter.write_trace_manifest(
+            path=self.tmp_path / "manifest.json",
+            trace=trace,
+            legacy_manifest=legacy_manifest,
+            save_level="portable",
+        )
+        _restrict_mode(self.tmp_path / "manifest.json", 0o600)
 
     def _ensure_writable(self) -> None:
         """Raise if the writer has already been closed."""
 
         if self._closed:
-            raise TorchLensIOError("Streaming bundle writer is already closed.")
+            raise ArtifactError("Streaming bundle writer is already closed.")
 
     def _mark_partial(self, reason: str) -> None:
         """Best-effort write the partial sentinel and human-readable reason."""

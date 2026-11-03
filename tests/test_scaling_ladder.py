@@ -15,6 +15,7 @@ import warnings
 
 import pytest
 import torch
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torch import nn
 
 import torchlens as tl
@@ -55,7 +56,7 @@ class _ParallelStreams(nn.Module):
 def test_op_count_disclosure_fires_once_at_threshold(monkeypatch) -> None:
     """Crossing the op-record threshold warns exactly once, capture continues."""
 
-    from torchlens.ir import capture_events as ce
+    from torchlens._ir import capture_events as ce
 
     monkeypatch.setattr(ce, "OP_COUNT_DISCLOSURE_THRESHOLD", 10)
     with warnings.catch_warnings(record=True) as caught:
@@ -65,7 +66,7 @@ def test_op_count_disclosure_fires_once_at_threshold(monkeypatch) -> None:
         w for w in caught if "recorded 10 ops" in str(w.message) and w.category is TorchLensWarning
     ]
     assert len(disclosures) == 1
-    assert len(log.layer_list) > 10
+    assert len(log._layer_list) > 10
 
 
 def test_all_four_ancestor_closures_compact_to_bitsets() -> None:
@@ -89,23 +90,30 @@ def test_all_four_ancestor_closures_compact_to_bitsets() -> None:
 def test_dense_mask_batch_declines_above_node_ceiling(monkeypatch) -> None:
     """Above the node ceiling the whole-graph mask DP is skipped (R60-3)."""
 
-    from torchlens.postprocess import loop_grouping_adapter as lga
+    from torchlens._postprocess import loop_grouping_adapter as lga
 
     monkeypatch.setattr(lga, "_DENSE_BATCH_MAX_NODES", 1)
     log = tl.trace(_Chain(steps=20), torch.randn(2))
-    assert len(log.layer_list) > 1  # capture + grouping completed
+    assert len(log._layer_list) > 1  # capture + grouping completed
 
 
+@pytest.mark.usefixtures("legacy_structural_grouper")
 def test_cohort_pair_probe_ceiling_discloses(monkeypatch) -> None:
-    """An exhausted pair triangle warns and leaves the ops ungrouped (R60-4)."""
+    """An exhausted pair triangle warns and leaves the ops ungrouped (R60-4).
 
-    from torchlens.postprocess import loop_grouping_adapter as lga
+    The pair triangle belongs to the structural grouper (``grouper_v1``), which
+    still serves every capture without call-site evidence; torch captures
+    group by call site and never reach it, so the gate drives it through the
+    legacy fixture.
+    """
+
+    from torchlens._postprocess import loop_grouping_adapter as lga
 
     monkeypatch.setattr(lga, "_PF_COHORT_PAIR_PROBE_CEILING", 1)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         log = tl.trace(_ParallelStreams(streams=12), torch.randn(3))
-    assert len(log.layer_list) > 12
+    assert len(log._layer_list) > 12
     ceiling_warnings = [w for w in caught if "pair-probe ceiling" in str(w.message)]
     # The ceiling only fires when a same-signature cohort survives to the
     # triangle; the parallel-stream shape does that by construction.
@@ -115,13 +123,13 @@ def test_cohort_pair_probe_ceiling_discloses(monkeypatch) -> None:
 def test_fixpoint_work_budget_degrades_to_singletons(monkeypatch) -> None:
     """Budget exhaustion dissolves candidate classes, never over-groups (R60-5)."""
 
-    from torchlens.postprocess import loop_grouping_adapter as lga
+    from torchlens._postprocess import loop_grouping_adapter as lga
 
     monkeypatch.setattr(lga, "_PF_FIXPOINT_WORK_BUDGET", 0)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         log = tl.trace(_Chain(steps=20), torch.randn(2))
-    assert len(log.layer_list) > 1
+    assert len(log._layer_list) > 1
     budget_warnings = [w for w in caught if "refinement" in str(w.message)]
     if budget_warnings:  # fires only when the fixpoint had multi-member classes
         assert "ungrouped" in str(budget_warnings[0].message)
@@ -130,7 +138,7 @@ def test_fixpoint_work_budget_degrades_to_singletons(monkeypatch) -> None:
 def test_collapse_order_declines_cheaply_above_ceiling(monkeypatch) -> None:
     """Over-ceiling collapse metadata returns [] without full analysis (R60-8)."""
 
-    from torchlens.visualization import auto_collapse, collapse_optimizer
+    from torchlens._visualization import auto_collapse, collapse_optimizer
 
     log = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4)), torch.randn(1, 4))
     # F11 (collapse memo D5(i)): the analysis-free decline arm is the
@@ -153,7 +161,7 @@ def test_collapse_order_declines_cheaply_above_ceiling(monkeypatch) -> None:
 def test_fold_repeats_true_respects_collapse_ceiling(monkeypatch) -> None:
     """draw(fold_repeats=True) declines folding above the ceiling (R60-9)."""
 
-    from torchlens.visualization import auto_collapse, collapse_optimizer
+    from torchlens._visualization import auto_collapse, collapse_optimizer
 
     log = tl.trace(
         nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4), nn.ReLU()),

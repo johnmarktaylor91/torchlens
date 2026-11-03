@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import inspect
 import weakref
 from collections.abc import Iterator
 from typing import Any
@@ -14,12 +15,7 @@ from .._errors import InvalidArgumentError
 
 # ``source_model`` stays importable from this module (audit notebook 16 calls
 # ``bridge.captum.source_model``).
-from ._utils import (  # noqa: F401
-    first_input_tensor,
-    module_for_site,
-    resolve_one_site,
-    source_model,
-)
+from ._utils import module_for_site, resolve_one_site, source_model  # noqa: F401
 
 #: ``module_for_site`` refusals that mean "no live module owns exactly this
 #: call"; each is served by splicing a hookable probe at the op instead.
@@ -99,9 +95,9 @@ class _SiteProbe(nn.Module):
 
 
 def attribute(
-    log: Any,
+    trace: Any,
     method: Any,
-    target: Any,
+    target: Any | None = None,
     *,
     inputs: Any | None = None,
     **kwargs: Any,
@@ -117,17 +113,21 @@ def attribute(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` from the model being attributed.
     method:
         Captum attribution object exposing ``attribute``.
     target:
-        Captum target forwarded to ``method.attribute``.
+        Captum target, forwarded as ``target=`` only when given: the
+        activation and neuron classes (``LayerActivation``, ``NeuronGradient``,
+        ...) take no ``target`` and reject one.
     inputs:
-        Optional explicit Captum input. When omitted, the first logged input
-        tensor is used.
+        Optional explicit Captum input (a tensor or a tuple of tensors). When
+        omitted, every logged forward input is forwarded: the single tensor,
+        or the tuple of positional tensors in ``forward`` order.
     **kwargs:
-        Additional keyword arguments forwarded to Captum.
+        Additional keyword arguments forwarded to Captum (``baselines``,
+        ``neuron_selector``, ``additional_forward_args``, ...).
 
     Returns
     -------
@@ -141,6 +141,9 @@ def attribute(
     TypeError
         If ``method`` does not expose ``attribute``.
     InvalidArgumentError
+        ``bridge_captum_inputs_unresolved`` when ``inputs`` is omitted and the
+        logged inputs cannot be replayed positionally (a keyword-only or
+        nested input, a missing positional tensor, or no saved input);
         ``bridge_captum_multi_probe_unsupported`` when ``method.layer`` lists
         more than one site probe (one spliced site per call).
     """
@@ -150,15 +153,88 @@ def attribute(
     if not hasattr(method, "attribute"):
         raise TypeError("Captum bridge expected a method object with an attribute(...) method.")
 
-    captum_inputs = first_input_tensor(log) if inputs is None else inputs
+    captum_inputs = _logged_inputs(trace) if inputs is None else inputs
+    if target is not None:
+        kwargs["target"] = target
     probe = _single_probe(method)
     if probe is None:
-        return method.attribute(captum_inputs, target=target, **kwargs)
+        return method.attribute(captum_inputs, **kwargs)
     with _forward_through_probe(method, probe):
-        return method.attribute(captum_inputs, target=target, **kwargs)
+        return method.attribute(captum_inputs, **kwargs)
 
 
-def layer(log: Any, site: Any, *, pass_index: int | None = None) -> nn.Module:
+def _logged_inputs(log: Any) -> Any:
+    """Return every logged forward input in the shape Captum's ``inputs`` takes.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace`` with saved input tensors.
+
+    Returns
+    -------
+    Any
+        The input tensor for a one-input forward, else the tuple of input
+        tensors in ``forward``'s positional order.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``bridge_captum_inputs_unresolved`` when an input was passed by
+        keyword only, sits inside a container, was not saved, or a positional
+        parameter between two logged inputs has no tensor.
+    """
+
+    tensors, problem = _positional_inputs(log)
+    if problem is not None:
+        raise InvalidArgumentError(
+            f"Captum bridge cannot forward the logged inputs: {problem}.",
+            code="bridge_captum_inputs_unresolved",
+            remedy=(
+                "pass inputs= explicitly (a tensor or a tuple of the positional "
+                "tensors) and the rest through additional_forward_args="
+            ),
+        )
+    return tensors[0] if len(tensors) == 1 else tensors
+
+
+def _positional_inputs(log: Any) -> tuple[tuple[torch.Tensor, ...], str | None]:
+    """Collect the logged inputs in ``forward`` order, or say why they cannot be."""
+
+    by_name: dict[str, torch.Tensor] = {}
+    for layer in log._layer_list:
+        if not getattr(layer, "is_input", False):
+            continue
+        role = str(getattr(layer, "io_role", "") or "")
+        parts = role.split(".")
+        out = getattr(layer, "out", None)
+        if len(parts) != 2 or parts[0] != "input" or not isinstance(out, torch.Tensor):
+            return (), f"input {role or layer.layer_label!r} is nested or unsaved"
+        by_name[parts[1]] = out
+    if not by_name:
+        return (), "the trace holds no saved input tensor"
+    positional = _positional_names(source_model(log))
+    order = [name for name in positional if name in by_name]
+    if set(order) != set(by_name) or order != positional[: len(order)]:
+        return (), (
+            f"logged inputs {sorted(by_name)} are not the leading positional "
+            f"parameters {positional}"
+        )
+    return tuple(by_name[name] for name in order), None
+
+
+def _positional_names(model: nn.Module) -> list[str]:
+    """Return ``model.forward``'s positional parameter names in order."""
+
+    kinds = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    try:
+        parameters = inspect.signature(model.forward).parameters.values()
+    except (TypeError, ValueError):
+        return []
+    return [param.name for param in parameters if param.kind in kinds]
+
+
+def layer(trace: Any, site: Any, *, pass_index: int | None = None) -> nn.Module:
     """Resolve a TorchLens site to the module Captum's layer methods hook.
 
     A module address returns that live module; an op label whose tensor a
@@ -171,7 +247,7 @@ def layer(log: Any, site: Any, *, pass_index: int | None = None) -> nn.Module:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` with a live source model reference.
     site:
         Module address, module pass label, op label, layer selector, or
@@ -198,25 +274,28 @@ def layer(log: Any, site: Any, *, pass_index: int | None = None) -> nn.Module:
     """
 
     _require_captum()
-    site = _apply_pass_index(log, site, pass_index)
+    site = _apply_pass_index(trace, site, pass_index)
     try:
-        return module_for_site(log, site, bridge="Captum")
+        return module_for_site(trace, site, bridge="Captum")
     except InvalidArgumentError as exc:
         if exc.fields.get("code") not in _PROBE_FALLBACK_CODES:
             raise
-    resolved = resolve_one_site(log, site)
+    resolved = resolve_one_site(trace, site)
     site_key = str(resolved.site_key)
     return _SiteProbe(
-        source_model(log), site_key, str(resolved.label), _site_ordinal(log, resolved, site_key)
+        source_model(trace),
+        site_key,
+        str(resolved.label),
+        _site_ordinal(trace, resolved, site_key),
     )
 
 
-def _site_ordinal(log: Any, resolved: Any, site_key: str) -> int:
+def _site_ordinal(trace: Any, resolved: Any, site_key: str) -> int:
     """Return the 1-based execution-order rank of ``resolved`` among ops at ``site_key``.
 
     Parameters
     ----------
-    log:
+    trace:
         Trace the op was resolved in.
     resolved:
         Resolved op (or single-pass layer) record.
@@ -233,7 +312,7 @@ def _site_ordinal(log: Any, resolved: Any, site_key: str) -> int:
     if not isinstance(target, int):
         return 1
     earlier = 0
-    for record in getattr(log, "layer_list", ()) or ():
+    for record in getattr(trace, "_layer_list", ()) or ():
         for op in getattr(record, "ops", None) or (record,):
             index = getattr(op, "raw_index", None)
             if (
@@ -245,12 +324,12 @@ def _site_ordinal(log: Any, resolved: Any, site_key: str) -> int:
     return earlier + 1
 
 
-def _apply_pass_index(log: Any, site: Any, pass_index: int | None) -> Any:
+def _apply_pass_index(trace: Any, site: Any, pass_index: int | None) -> Any:
     """Fold ``pass_index`` into a pass-qualified module address.
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` with a live source model reference.
     site:
         Site as passed to :func:`layer`.
@@ -276,7 +355,7 @@ def _apply_pass_index(log: Any, site: Any, pass_index: int | None) -> Any:
             code="bridge_pass_index_invalid",
             remedy="pass the 1-based call index of the module, such as pass_index=2",
         )
-    modules = dict(source_model(log).named_modules())
+    modules = dict(source_model(trace).named_modules())
     if not isinstance(site, str) or site not in modules:
         raise InvalidArgumentError(
             f"Captum layer pass_index={pass_index} needs a plain module address as the "
@@ -351,7 +430,7 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
 
     import torchlens as tl
 
-    from ..intervention.selectors import site as site_selector
+    from .._selection.selectors import site as site_selector
 
     model = probe.model()
     seen = {"count": 0}

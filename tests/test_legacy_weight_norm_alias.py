@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.user_funcs import _validate_forward_pass_torch
+from torchlens._user_funcs import _validate_forward_pass_torch
 
 
 def _legacy_weight_norm(module: nn.Module) -> nn.Module:
@@ -70,7 +70,7 @@ def test_trace_records_weight_norm_without_rescue(model_cls: type[nn.Module], ex
     trace = tl.trace(model_cls(), torch.randn(1, 4, 8))
     func_names = [layer.func_name for layer in trace.layers]
     assert func_names.count("_weight_norm") == expected_ops
-    assert trace.capture_verified is not False, trace.capture_verification_reason
+    assert trace.provenance.verified is not False, trace.provenance.verification_reason
 
 
 def test_weight_norm_module_alias_is_wrapped_while_installed():
@@ -89,9 +89,14 @@ def test_validation_passes_with_weight_norm_captured(model_cls: type[nn.Module])
     """Validation passes because the op is captured, for any nesting."""
 
     torch.manual_seed(0)
-    passed = _validate_forward_pass_torch(
-        model_cls(), [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
-    )
+    # copy.deepcopy refuses the non-leaf weight legacy weight_norm leaves, so
+    # validation discloses the live-model fallback it takes instead.
+    with pytest.warns(
+        RuntimeWarning, match="could not deepcopy the model|model could not be copied"
+    ):
+        passed = _validate_forward_pass_torch(
+            model_cls(), [torch.randn(1, 4, 8)], {}, seed=0, validate_metadata=True
+        )
     assert passed, tl.validation.last_validation_failure()
 
 
@@ -116,7 +121,7 @@ def test_unwrap_restores_the_weight_norm_module_alias():
 def test_shadowed_namespace_resolution_is_narrow():
     """Only a non-module walk result with an imported same-named submodule is redirected."""
 
-    from torchlens.utils._torch_compat import get_optional_torch_namespace
+    from torchlens._utils._torch_compat import get_optional_torch_namespace
 
     # The shadowed case: the package attribute is the function, the roster means the module.
     assert callable(torch.nn.utils.weight_norm)

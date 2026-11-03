@@ -22,15 +22,27 @@ optional dependency.
   call.
 
 ## Adapter files and main entry points
-- `captum.py`: `attribute()`, `layer(log, site, *, pass_index=None)` (extra:
-  `torchlens[captum]`). `layer()` tries `_utils.module_for_site` first; on its
-  three refusals it returns a `_SiteProbe` (identity module remembering the
-  op's `site_key`, label and execution-order ordinal among ops sharing that
-  key). `attribute()` with a probe in `method.layer` swaps the method's
-  `forward_func` for the bound-intervention door
-  (`tl.when(site(key), splice).bind(model)`), which calls the probe on the
-  ordinal-th firing, so a Captum hook on the probe sees exactly that tensor.
-  `pass_index` folds into `"address:N"` (module addresses only).
+- `captum.py`: `attribute(trace, method, target=None, *, inputs=None, **kwargs)`,
+  `layer(trace, site, *, pass_index=None)` (extra: `torchlens[captum]`).
+  `target=` is forwarded only when given (LayerActivation and most Neuron*
+  classes reject it); without `inputs=` every logged input is forwarded (the
+  tensor, or the positional tuple in `forward` order); a keyword-only, nested
+  or unsaved input refuses `bridge_captum_inputs_unresolved`. `layer()` tries
+  `_utils.module_for_site` first; on its three refusals it returns a
+  `_SiteProbe` (identity module remembering the op's `site_key`, label and
+  execution-order ordinal among ops sharing that key). `attribute()` with a
+  probe in `method.layer` swaps the method's `forward_func` (and nested
+  Captum objects sharing it) for a forward that runs `tl.trace(model, ...,
+  save=nothing, intervene=tl.when(site(key), splice))` with a root forward
+  hook keeping the model's own output; `splice` calls the probe on the
+  ordinal-th firing and hands a clone downstream (in-place consumers such as
+  the block's `ReLU(inplace=True)` would overwrite the tensor Captum's hook
+  saved), so a Captum hook on the probe sees exactly that tensor. The capture
+  lane is the only door that minted the key: `spec.bind` names a `+=` site
+  `add` where capture names it `iadd`, and `tl.record` tracks no module
+  stack. A forward that fires the site fewer times than the ordinal refuses
+  `bridge_captum_site_not_reached`; `pass_index` folds into `"address:N"`
+  (module addresses only).
 - `shap.py`: `explain(log, *, background, inputs=None, ...)` (default
   `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
   `background` is REQUIRED keyword-only: the old default made the explained
@@ -38,7 +50,62 @@ optional dependency.
   `background=None` refuses typed (`bridge_shap_background_missing`) before
   shap is called.
   `inputs` defaults to the first saved input tensor.
-- `sae_lens.py`: `encode()`, `decode()` (extra: `torchlens[sae]`).
+- `sae_lens.py`: `encode(log, site, sae)` (the site's latents) and
+  `reconstruct(log, site, sae)` (`sae.decode(sae.encode(out))`; a callable
+  SAE is called on the out) (extra: `torchlens[sae]`). The old `decode(log,
+  site, sae)` passed the site activation to `sae.decode` as if it were
+  latents and is removed.
+- `pyreft.py`: `read(directory, *, repo=None, revision=None)` returns `LoreftArtifact`
+  (`rotation` R `[d, k]`, `weight` W `[k, d]`, `bias` b `[k]` as saved; `layer`,
+  `component`, `unit`, `units_per_example`; `provenance` with file sha256s, source
+  dtypes, float64 param sha256s). No extra and no peer import: files are read with
+  `torch.load(weights_only=True)`; the weight file is `intkey_<key>.bin` under the dotted
+  or underscored key. Apply with `fork.do(artifact.subspace(site, positions=mask),
+  artifact.edit)` (`tl.subspace` over `R.T` plus `tl.intervention.set_affine_coordinates`); the
+  float32 R is orthonormalised by the subspace step, not here. `site` is a label or the
+  site from a trace (`trace[label]`); a site's shape is checked in `_checked_site` (the
+  edit acts on the trailing axis, so it must be `d` wide). Refusals
+  `pyreft_artifact_invalid`, `pyreft_artifact_unsupported`, `pyreft_positions_invalid`,
+  `pyreft_site_invalid`. Tests: `tests/test_bridge_pyreft.py` (stand-in artifact),
+  `tests/test_rot4_pyreft_site.py` (the site check); the pinned-pyreft oracle leg runs
+  outside the test suite, and its bar from 2026-10-15 on is the same-host comparison with
+  pyreft's own LoReFT (exactly equal before the edited position, within 2e-5 at and after).
+- `sae.py`: `splice(model_or_log, inputs, *, site, sae, latents_edit=None,
+  tokens=None, exclude_bos=False, keep_latents=True)` returns `SpliceResult`
+  (duck-typed SAE, no extra). Metrics are float64 and follow SAELens evals and
+  Gemma Scope: `fraction_variance_explained_pooled` (per-dimension centring)
+  and `_by_dim` beside the global-mean `fraction_variance_explained`; zero
+  denominators give `nan`, `zero_variance=True` and a reason in
+  `unavailable_metrics`, never 0.0. `latents`/`edited_latents` are kept by
+  default (once-per-session `sae_splice_latents_large` past 256 MiB). With
+  `tokens=` the first output shaped `tokens.shape + (vocab,)` is the logits:
+  `ce_loss_clean`/`_spliced`/`_zero_ablated`, `ce_loss_recovered`,
+  `kl_divergence`; without it they are `None` with a reason. Metric math lives
+  in `_sae_metrics.py`. Recipes: `docs/recipes/pretrained_saes.md`; an SAE latent
+  as a feature-visualisation objective, `docs/recipes/feature_visualisation.md`.
+  `log_latents=True` (live-model door only) captures the model again with the SAE
+  run inside it (`_sae_latents.logged_splice_trace`: a forward hook on the module
+  `module_for_site` names, and the reconstruction module a temporary child of the
+  root so the SAE's parameters are known sources); `latents_site` labels the
+  latents node; spliced outputs equal the off path's exactly.
+- `_sae_latents.py` (exported by `sae.py`): `register(name, sae, *, site)` and
+  `unregister(name)` fill `torchlens._semantic._families._FACET_FAMILIES`; every
+  `FacetView` consults it live, so `tl.facet(name).latent(k)` (selector name
+  `"name[k]"`) and `facets["name[k]"]` work on traces captured before the
+  registration. The facet is a `"codec"` transform primitive (capability class
+  `codec`): reads are `encode(home)[..., k]`, writes are
+  `home + decode(z') - decode(z)` (the error term stays), the write mask is the
+  whole home. A string site must be one op of a single-pass layer (hooks target
+  the raw layer label, which fires on every pass); a selector site keeps one home
+  per matched layer. `SiteTarget(..., sae=)` is the attribution seam.
+- `_sae_export.py` (exported by `sae.py`): `write_sae_dashboard(latents, tokens, *,
+  latent_ids=None, k=20, path)` and `write_delphi(latents, tokens, *, site, model_name,
+  n_splits=5, directory)` write the files SAEDashboard 0.8.0 (`SaeVisData.load_json`)
+  and eai-delphi 0.1.3 (`LatentDataset`) read, from dense latents or a dataset
+  `UnitTopK`; neither package is imported (json and safetensors only). The layouts copy
+  the consumers' own writers (cited in the docstrings); ranking is `tl.stats.TopK`'s.
+  The real loaders run in `tests/test_bridge_real_sae_export.py` (peer-leg pins).
+  Recipe: `docs/recipes/sae_latent_export.md`.
 - `lit/`: `model(net, tokenizer, *, task=, sites=, ...)` wraps a LIVE model as
   a real `lit_nlp.api.model.Model` (classification + causal LM); `dataset()`,
   `layout()` (extra: `torchlens[lit]`; import-inert, call-time gate; site
@@ -51,9 +118,25 @@ optional dependency.
   `autoroute/_builtin_input.py` and imported eagerly by `user_funcs.py`, so it
   must import cleanly without `transformers` installed (gating stays inside
   the functions).
-- `huggingface.py`: `push_to_hub()` for artifacts and `load_from_hub()` (download,
-  member-checked tar extraction, then `_io.bundle.load`; extra: `torchlens[hf]`).
 - `profiler.py`: `execution_trace()`, `join()` correlate a Kineto/Chrome trace
+- `hf_attention.py` (re-exported from `hf.py`): `register_attention(model=None)`
+  registers the `"torchlens"` attention function AND its matching mask function
+  (`torchlens_mask`, transformers' boolean `sdpa_mask` with the causal skip
+  off) under one key; `record_attention(model, check_sdpa=False)` records
+  per-head probabilities per attention module in an `AttentionRecording`. The
+  active recording is a never-rebound `ContextVar`. transformers imports stay
+  inside functions (hf.py is imported eagerly). Tests:
+  `tests/test_hf_attention_backend.py` (independent float64 reference, SDPA
+  parity, mask-trap tripwire) and `tests/test_hf_attention_backend_deploy.py`
+  (device_map, disk offload, bitsandbytes on CPU).
+- `huggingface.py`: `push_to_hub()` for artifacts (extra: `torchlens[hf]`).
+- `huggingface.py`: `push_to_hub()` uploads a `Trace`/`Bundle` as a gzipped
+  tar of its portable `.tlspec` bundle (never a pickle; anything else refuses
+  `hub_push_artifact_unsupported`); `from_hub()` downloads it, checks every tar
+  member (`hub_artifact_unsafe`) and loads eagerly through `tl.load`'s
+  default-deny loader. Tests use an `api=` fake exposing `upload_file` /
+  `hf_hub_download` (extra: `torchlens[hf]`).
+- `profiler.py`: `join()` correlates a Kineto/Chrome trace
   with captured layers; stdlib-only, no import gate. `join()` (schema
   `torchlens.profiler_join.v2`) assigns each complete event to at most one
   layer: a `record_function` range whose name EQUALS a layer label, else the
@@ -69,7 +152,9 @@ optional dependency.
 - `gradcam.py`: `cam()`, `layer()` (extra: `torchlens[gradcam]`). `cam()`
   splits `**kwargs` by name: keywords the CAM constructor declares
   (`reshape_transform`, ...) go to the constructor, the rest (`aug_smooth`,
-  `eigen_smooth`) to the CAM call. `layer()` is `_utils.module_for_site`.
+  `eigen_smooth`) to the CAM call; `call_kwargs=` is the explicit spelling
+  for call options (a key given both ways refuses
+  `bridge_gradcam_call_option_conflict`). `layer()` is `_utils.module_for_site`.
 - `brain_score.py`: `per_layer()` takes a CALLABLE offline benchmark (no
   import gate; raises `TypeError` on non-callables). `get_activations_fn()`
   builds the `get_activations(images, layer_names) -> OrderedDict[str,
@@ -87,8 +172,9 @@ optional dependency.
   over SAVED `.tlspec` artifacts + environment: `torchlens_doctor`,
   `torchlens_api_map`, `torchlens_overview`, `torchlens_dump`,
   `torchlens_explain`, `torchlens_query_sites`, `torchlens_payload_stats`,
-  `torchlens_compare`, `torchlens_schema`, and the F03 ledger family
-  (`torchlens_ledger_overview`/`_entry`/`_evidence`). The removed
+  `torchlens_compare`, `torchlens_schema`. The F03 ledger family
+  (`torchlens_ledger_overview`/`_entry`/`_evidence`) was removed with the
+  experiment ledger on 1 Nov 2026 (`docs/reference/deprecations.md`). The removed
   `torchlens_load_overview`/`torchlens_agent_dump` spellings were renamed to
   `torchlens_overview`/`torchlens_dump` (F29 remove-and-rename, no aliases).
   The pure layer (`TOOL_SPECS`/`call_tool`) has NO mcp
@@ -96,66 +182,52 @@ optional dependency.
   `MCPServer` high-level API (schemas derived from handler signatures — keep
   handler params in sync with `TOOL_SPECS`). No tool executes user code or
   mutates state; live capture stays a Python-process concern.
-- `nnsight.py`: `from_trace()` normalizes a cached nnsight-style trace into a
-  stable payload schema; offline, no import gate.
 - `inseq.py`: `attribute()` (extra: `torchlens[inseq]`).
 - `depyf.py`: `dump()` (extra: `torchlens[depyf]`).
 - Contrastive steering family (`steering_vectors.py`, `repeng.py`, `dialz.py`):
-  each trains the package's own vector from saved activations, never by
-  re-running the model. Shared signature: `(log, positive_site,
-  negative_site=None, *, negative_log=None, read_token_index=-1,
-  attention_mask=None, negative_attention_mask=None, ...)`; the negative
-  prompts usually live in a second trace (`negative_log=`, the site then
-  defaults to `positive_site`; a layer-object site is re-resolved there by its
-  `layer_label`), and one token per prompt is read before training (`-1` =
-  last; a sequence = one index per prompt; `None` = unsliced `[n, hidden]`
-  outs). Padding: each side's mask is the explicit one or the trace's saved
-  `attention_mask` input; with a mask, indices count within each prompt's
-  unpadded tokens (steering-vectors' `adjust_read_indices_for_padding`), so
-  `-1` is the last real token as repeng and dialz read it. Identical positive
-  and negative rows (an all-zero vector) are refused. Private shared helpers
-  live in `_contrastive.py`. On HF decoders
-  trace with `config.use_cache = False`, or `"model.layers.<i>"` is ambiguous
-  (hidden state plus KV-cache outputs).
-  - `steering_vectors.py`: `vector(..., trainer=None, layer=None,
-    layer_type="decoder_block")` (extra `torchlens[steering]`); the default
-    trainer is `steering_vectors.mean_aggregator()`; `layer=` adds a real
-    `SteeringVector` under `steering_vector`. Bit-identical to
-    `train_steering_vector(..., read_token_index=-1, batch_size=1)`; padded
-    batches match the package's batched run when the mask is known. Pinned
-    to the tested line, `steering-vectors~=0.12`.
-  - `repeng.py`: `control_vector(..., layer, method="pca_diff",
-    model_type=None)` (extra `torchlens[repeng]`) replicates
-    `repeng.extract.read_representations` (PCA, sign rule, in-place centring
-    for `pca_center`) and returns a real `repeng.ControlVector`.
-  - `dialz.py`: `vector(..., layer, method=None, model_type=None)` (extra
-    `torchlens[dialz]`, dialz 0.2 through 1.x) does the same against
-    `dialz.vector.read_representations` and returns a real
-    `dialz.SteeringVector`; `method=None` follows the installed release's
-    default (`pca` in 1.x, `pca_diff` in 0.2). The old `analyze()` is removed.
-  - repeng/dialz layer `i` matches `hidden_states[i + 1]`, which is the
-    output of `model.layers.<i>` except at the last layer, where Hugging Face
-    returns the final-norm output (site `"model.norm"`).
-- `nnsight.py`: `from_trace()` normalizes a cached nnsight-style trace (a
-  mapping, `to_dict()` returning a mapping, or an object with `nodes`) into
-  a stable payload schema; anything else, including a live nnsight 0.7
-  tracer, raises `TypeError` naming the supported shapes (never an empty
-  payload). Offline, no import gate.
+  the direction math lives in `torchlens/intervention/_directions.py`
+  (`torchlens.intervention.fit_direction` returning a `Direction`).
+  - `steering_vectors.py`: `from_direction(direction, *, layer=None,
+    layer_type="decoder_block")` (extra `torchlens[steering]`) returns a real
+    `SteeringVector` holding `direction.vector`; `Direction.to_steering_vectors()`
+    calls it. Pinned to the tested line, `steering-vectors~=0.12`.
+  - `repeng.py`: `from_direction(direction, *, layer=None, model_type=None)`
+    (extra `torchlens[repeng]`) returns a real `repeng.ControlVector` (float32
+    values; `model_type` defaults to the one the direction recorded, else
+    refuses `direction_model_type_unknown`); `Direction.to_repeng()` calls it.
+  - `dialz.py`: `from_direction(direction, *, layer=None, model_type=None)`
+    (extra `torchlens[dialz]`, pinned to the tested line `dialz>=1.1,<2`)
+    returns a real `dialz.SteeringVector`, with the same float32 values and
+    `model_type` rule as repeng; `Direction.to_dialz()` calls it.
+  - The converters recompute nothing and key the vector by
+    `Direction.library_layer(layer)` (the site label's trailing index). The
+    real-package tests prove that applying the converted object with the same
+    multiplier reproduces the native steer's logits. dialz's and repeng's
+    layer modules build a padding mask from the layer's `position_ids`, which
+    current transformers passes as `[1, seq]`, so those tests run one prompt
+    per forward. dialz's `SteeringModel` loads its checkpoint in float16; the
+    real test casts the wrapped model to float32 before tracing.
+  - On HF decoders trace with `config.use_cache = False`, or
+    `"model.layers.<i>"` is ambiguous (hidden state plus KV-cache outputs).
 - `inseq.py`: `attribute(model_or_id, inputs, *, method="integrated_gradients",
   generated_texts=None, attribution_model=None, **kwargs)`; names follow
   inseq 0.7 (`load_model(model, attribution_method)`,
   `AttributionModel.attribute(input_texts, generated_texts=...)`); inseq
   swallows unknown keywords with only a warning, so a wrong spelling is
-  silently ignored -- verify keywords against inseq's signatures (extra:
-  `torchlens[inseq]`).
+  silently ignored -- verify keywords against inseq's signatures. `method`
+  may be the TorchLens spelling (`input_x_grad` maps to `input_x_gradient`);
+  an unknown name refuses `bridge_inseq_method_unknown`. With
+  `generated_texts=` the bridge compares `result.info["generated_texts"]`
+  with the request and refuses `bridge_inseq_forced_decoding_ignored` on a
+  difference (extra: `torchlens[inseq]`).
 - `depyf.py`: `dump(model, x, path, **prepare_debug_kwargs) -> list[Path]`
   runs `with depyf.prepare_debug(path): torch.compile(model)(*x)` and
   returns the files written; `path` is required; a cached compile that
   dumps nothing raises `RuntimeError` naming `torch.compiler.reset()`
   (extra: `torchlens[depyf]`).
-- `dialz.py`: `analyze()` (extra: `torchlens[dialz]`).
-- `repeng.py`: `control_vector()` (extra: `torchlens[repeng]`).
-- `steering_vectors.py`: `vector()` (extra: `torchlens[steering]`).
+- `dialz.py`: `from_direction()` (extra: `torchlens[dialz]`).
+- `repeng.py`: `from_direction()` (extra: `torchlens[repeng]`).
+- `steering_vectors.py`: `from_direction()` (extra: `torchlens[steering]`).
 
 ## Optional-dependency gating pattern
 - Never import an optional dependency at module top level. The pattern is a
@@ -163,9 +235,9 @@ optional dependency.
   naming the exact extra, e.g.
   "Captum bridge requires the `captum` extra: install torchlens[captum].".
 - Tests gate on the dependency with `pytest.importorskip()`; offline adapters
-  (`brain_score`, `nnsight`, `profiler`) run without extras. Fake-module
-  tests pass while the real package fails (depyf, inseq and nnsight all
-  did), so each bridge also keeps a real-package file
+  (`brain_score`, `profiler`) run without extras. Fake-module
+  tests pass while the real package fails (depyf and inseq
+  both did), so each bridge also keeps a real-package file
   `tests/test_bridge_real_<bridge>.py` that compares against the package
   used directly.
 
@@ -174,8 +246,8 @@ optional dependency.
   `__init__.py`; a name missing from `_BRIDGE_MODULES` raises
   `AttributeError` on access.
 - Bridges that execute the model (`captum`, `shap`, `gradcam`, ...) need the
-  source model alive (repeng/dialz read only its `config.model_type`, and
-  only when `model_type=` is not given); `tl.release_model()`
+  source model alive (the steering converters read no model:
+  `fit_direction` records its `config.model_type`); `tl.release_model()`
   or a dropped reference makes `source_model()` raise.
 - Site arguments must carry saved tensor outs; `out_at()` raises `ValueError`
   otherwise. Keep error messages actionable (name the site and the extra).

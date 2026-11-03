@@ -67,7 +67,7 @@ These three claims look similar and must never be conflated:
 
 Also: collapsed boxes carry an honest contents remainder in the
 `N ops + M buffers` form (`format_collapsed_module_contents` in
-`visualization/_render_common.py`; the old `N layers total` label is
+`_visualization/_render_common.py`; the old `N layers total` label is
 test-FORBIDDEN — `tests/test_buffer_visibility.py` and
 `tests/test_auto_collapse_metrics.py` assert it never renders); ops with
 hidden buffer dependencies get a double border (`peripheries=2`).
@@ -95,7 +95,7 @@ it is in this pack:
 ### Critic passes
 
 - **Completeness critic:** independently enumerate every draw() kwarg x value
-  and every node/edge kind emitted by `torchlens/visualization/_render_nodes.py` and `_render_edges.py`;
+  and every node/edge kind emitted by `torchlens/_visualization/_render_nodes.py` and `_render_edges.py`;
   diff against `AXES` + `NA_AXES`. Anything unrepresented is a defect.
 - **Fresh-eyes clarity critic:** scroll the PDF as someone who has never seen
   TorchLens. Every page must be self-explanatory from its caption alone; flag
@@ -111,13 +111,13 @@ it is in this pack:
 - **Feature preconditions** (a panel silently showing nothing usually means a
   missing trace flag, not a broken renderer):
   - intervention site/cone/hook styling marks PLANNED interventions:
-    `tl.trace(..., capture=CaptureOptions(intervention_ready=True))` then
+    `tl.trace(..., capture=CaptureOptions(replayable=True))` then
     `trace.set(...)`. Live
     `intervene=` fire records do not style nodes.
   - raw-input thumbnails need `tl.trace(model, raw,
-    capture=CaptureOptions(transform=fn))` (raw input
+    capture=CaptureOptions(input_transform=fn))` (raw input
     is only stored when a transform produced the model-ready tensor).
-  - container labels/collapsed need `intervention_ready=True`;
+  - container labels/collapsed need `replayable=True`;
     `show_containers='nodes'` needs `capture_container_structure=True`;
     'cluster' currently always falls back to labels; 'collapsed' only merges
     homogeneous containers larger than `container_max_inline`.

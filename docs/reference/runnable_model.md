@@ -5,7 +5,7 @@ artifacts. It explains the ownership boundary and the invariants a maintainer ne
 order to change the subsystem safely. The exhaustive, frozen contract remains
 [`runnable_tlspec_contract.md`](runnable_tlspec_contract.md). If this model and the
 exhaustive contract disagree, the exhaustive contract and the behavior-free types in
-`torchlens.runnable` are authoritative; the disagreement is a release-blocking defect.
+`torchlens._runnable` are authoritative; the disagreement is a release-blocking defect.
 
 ## Scope
 
@@ -14,9 +14,9 @@ object or tensor-valued intermediates in its sparse core. It can be loaded for a
 when readiness succeeds, replayed through the transactional `Trace.run()` API.
 
 Runnable saving requires replay-template metadata from the original capture. Opt in with
-`capture=tl.options.CaptureOptions(intervention_ready=True)` (or the equivalent flat
-`intervention_ready=True` argument) before calling
-`tl.save(trace, path, level="runnable", ...)`. A normal capture remains valid for analysis
+`capture=tl.options.CaptureOptions(replayable=True)` (or the equivalent flat
+`replayable=True` argument) before calling
+`trace.save(path, level="runnable", ...)`. A normal capture remains valid for analysis
 saves, but runnable preflight rejects it with `RunnablePreflightError` and the structured
 `MISSING_CALLABLE_REF` finding; saving cannot reconstruct the missing call templates later.
 
@@ -24,7 +24,7 @@ The subsystem has four ownership regions:
 
 | Owner | Responsibility |
 |---|---|
-| `torchlens.runnable` | Frozen public schemas, enums, reports, and error vocabulary |
+| `torchlens._runnable` | Frozen schemas, enums, reports, and error vocabulary (private; the `.tlspec` format is the contract) |
 | Runnable internals | Descriptor semantics, validation, resolution, state preparation, execution, and attestation |
 | `torchlens._io` | Manifest and blob transport, syntax-level encoding/decoding, integrity, and filesystem transactions |
 | `Trace` | User-facing properties and provider selection through one private runnable-state seam |
@@ -40,7 +40,7 @@ The narrow coordinator vocabulary is:
 - `execute`: run the selected provider transactionally and settle one result.
 
 `bundle.py` orchestrates transport through this boundary. It must not import or invoke private
-witness-builder helpers directly. `torchlens.runnable` remains behavior-free and must not import
+witness-builder helpers directly. `torchlens._runnable` remains behavior-free and must not import
 I/O, capture, state preparation, or execution modules.
 
 No optional package extra is warranted. Sparse runnable execution requires no dependency beyond
@@ -111,7 +111,7 @@ Numeric attestation is downstream of path settlement:
 - `not_present`: no selected-activation payload exists.
 
 Attestation never upgrades path faithfulness. `attested` implies `verified` and an unpoisoned
-result. A `diverged` result is returned only under the explicit `return_diverged` policy and is
+result. A `diverged` result is returned only under the explicit `on_divergence="return"` policy and is
 monotonically poisoned. Incomplete witness coverage can settle only as `unverifiable`, never as
 `verified`. The result and readiness shapes are frozen in
 [contract section 8](runnable_tlspec_contract.md#8-readiness-and-result-shapes), and settlement
@@ -141,7 +141,7 @@ anchors, XOR rule, and validation order are in
 context, RNG, input binding, sparse calls, output reconstruction, honesty checks, and optional
 numeric attestation settle inside one transaction.
 
-The default divergence policy raises and rolls back. `return_diverged` is the sole opt-in that
+The default divergence policy raises and rolls back. `on_divergence="return"` is the sole opt-in that
 returns a poisoned diagnostic Trace. Both providers use one settlement authority so they cannot
 silently evolve different poison, exception, or report rules. Internal sparse calls run with
 TorchLens logging paused.
@@ -182,17 +182,19 @@ subsystem (new run modes, run-time state interventions, segment or backward repl
 products). Everything else inside the runnable machinery is internal and may change
 without notice.
 
-**Binding rule.** `torchlens/_runnable_execution.py` is a namespace-aggregator facade over
-its slice modules; slice modules have no importers besides the aggregator. Every extension
-point below is named on ONE of `torchlens/runnable.py`, `torchlens/_runnable_seam.py`,
-`torchlens/_runnable_execution.py`, or `torchlens/_runnable_state.py` (the coordinator
-verbs additionally have their transport-side homes in `torchlens/_io/runnable.py` and
-`torchlens/_io/runnable_load.py`, reached through the coordinator boundary). Consumers
-never import a slice module directly; moving a name off its contract module is a contract
-change.
+**Binding rule.** `torchlens/_runnable/execution.py` is the hub of the runnable
+machinery: it defines the shared state and binds the names of its split modules
+(`_runnable/transaction.py`, `_runnable/providers.py`, `_runnable_until.py` and their
+siblings) at the bottom of the module, so every extension point stays reachable from
+the hub. Every extension point below is named on ONE of `torchlens/_runnable/__init__.py`,
+`torchlens/_runnable/seam.py`, `torchlens/_runnable/execution.py`, or
+`torchlens/_runnable/state.py` (the coordinator verbs additionally have their
+transport-side homes in `torchlens/_io/runnable.py` and `torchlens/_io/runnable_load.py`,
+reached through the coordinator boundary). Consumers bind to the contract modules, not to
+a split module; moving a name off its contract module is a contract change.
 
 **E1 -- Descriptor.** `SparseRunDescriptor` plus the closed enums and dataclasses in
-`torchlens.runnable`, mirrored 1:1 by the exhaustive contract document. The registries a
+`torchlens._runnable`, mirrored 1:1 by the exhaustive contract document. The registries a
 consumer extends by adding a row are `WITNESS_FAMILY_REGISTRY` (the only dispatch
 authority for witness producer/parser/mutation handling), `WITNESS_GAP_REGISTRY`, and
 `CANONICAL_INITIALIZER_BY_ROLE`. New descriptor content is a versioned contract amendment
@@ -200,7 +202,7 @@ plus a registered persisted-field family (pre-release fields ship DROP-gated); n
 adds a descriptor field directly.
 
 **E2 -- Provider.** `RunProvider` is a closed enum. The four-verb coordinator boundary is
-`RunnableCoordinator` (`torchlens/_runnable_seam.py`): produce
+`RunnableCoordinator` (`torchlens/_runnable/seam.py`): produce
 (`build_sparse_run_descriptor`), decode (`parse_sparse_run_descriptor`), prepare
 (`attach_sparse_run_readiness` plus preflight), execute (`run_loaded_sparse_trace` /
 `run_live_trace`). Provider dispatch is the one hardcoded ladder inside `Trace.run`; a new
@@ -228,7 +230,8 @@ run.
 **E5 -- Fast run.** `run_fast_loaded_trace` / `run_fast_live_trace`: verify-once then
 guarded loop. The guard and detection-stage namespace (`fast_verify_once`,
 `fast_state_static_guard`, `fast_seed_guard`, `fast_execution_context_guard`,
-`fast_live_function_plan`, `fast_live_module_plan`) is contract surface. Fast mode
+`fast_live_function_plan`, `fast_live_module_plan`, `fast_until_site_unsaved`, `fast_until_prefix`)
+is contract surface. Fast mode
 composes with new run keywords only by explicit matrix entry; silence means typed
 refusal, never undefined behavior.
 
@@ -261,4 +264,4 @@ keyword-only-with-default revision in the same change as its documentation.
    `_finalize_provider_run`; no verdict derivation from the persisted completeness
    summary; no local alias-engine reimplementation; no bare state-path clones outside
    the byte-guard core; no direct legacy runnable Trace-attribute readers;
-   `torchlens.runnable` import purity.
+   `torchlens._runnable` import purity.

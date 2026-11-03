@@ -40,7 +40,7 @@ overrides.get_testing_overrides = fault_testing
 try:
     # The roster builds at import time, so the guard fires on the import
     # itself when the contradiction is present.
-    from torchlens import constants
+    from torchlens import _constants as constants
 
     constants._get_torch_overridable_functions()
 except RuntimeError as error:

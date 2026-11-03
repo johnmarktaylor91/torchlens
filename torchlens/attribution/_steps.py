@@ -435,8 +435,8 @@ def _scalarize_stacked_output(
 ) -> Tensor:
     """Scalarize a stacked forward's output as the SUM of per-row targets.
 
-    Int targets scalarize the stacked output directly (``output[..., t].sum()``
-    already sums over the stacked axis). Callable targets receive logical
+    Int and site targets scalarize the stacked output directly
+    (``output[..., t].sum()`` already sums over the stacked axis). Callable targets receive logical
     per-example outputs, so the stacked tree is split first and the per-row
     scalars are summed; gradients per stacked row are unchanged because the
     rows are independent terms of the sum.
@@ -458,7 +458,9 @@ def _scalarize_stacked_output(
         One scalar whose gradient carries every stacked row's target gradient.
     """
 
-    if isinstance(target, int) or n_rows == 1:
+    # Int and site targets sum over the batch axis already, so the stacked
+    # output scalarizes directly; only callables see per-row outputs.
+    if not callable(target) or n_rows == 1:
         return scalarize(output, target)
     per_row_outputs = _split_stacked_output(output, n_rows)
     scalars = [scalarize(row_output, target) for row_output in per_row_outputs]

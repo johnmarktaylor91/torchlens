@@ -13,16 +13,18 @@ import warnings
 from typing import Any
 
 import pytest
+import torch
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses._nonfinite import (
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses._nonfinite import (
+    _MOTIFS,
     NONFINITE_STATES,
     derive_nonfinite_channel,
     nonfinite_spec_fn,
 )
-from torchlens.visualization.lenses.audit import CORPUS
-from torchlens.visualization.node_spec import NodeSpec
+from torchlens._visualization.lenses.audit import CORPUS
+from torchlens._visualization.node_spec import NodeSpec
 
 
 def _member(name: str) -> Any:
@@ -153,13 +155,11 @@ def test_debug_render_carries_motifs_end_to_end(nonfinite_log: Any, tmp_path: An
     resolution = lenses.resolve_lens(nonfinite_log, "debug")
     graph = nonfinite_log.draw(
         **resolution.draw_kwargs,
-        vis_outpath=str(tmp_path / "nf"),
-        vis_fileformat="svg",
-        vis_save_only=True,
-        return_graph=True,
-    )
-    assert "wedged" in graph.source
-    assert "nonfinite status" in graph.source
+        path=str(tmp_path / "nf"),
+        file_format="svg",
+    ).dot
+    assert "wedged" in graph
+    assert "nonfinite status" in graph
 
 
 def test_non_float_outputs_read_finite(nonfinite_log: Any) -> None:
@@ -167,3 +167,63 @@ def test_non_float_outputs_read_finite(nonfinite_log: Any) -> None:
 
     channel = derive_nonfinite_channel(nonfinite_log)
     assert channel.checked > 0
+
+
+class _ExpTwice(torch.nn.Module):
+    """One exp submodule called twice: pass 1 finite, pass 2 overflows to +Inf."""
+
+    def __init__(self) -> None:
+        """Build the shared exp submodule."""
+
+        super().__init__()
+        self.act = _Exp()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """exp(0) = 1, then exp(1000) = +Inf."""
+
+        return self.act(self.act(x) * 1000.0)
+
+
+class _Exp(torch.nn.Module):
+    """A scaled exp; the shared scale groups both calls into two-pass layers."""
+
+    def __init__(self) -> None:
+        """Build the shared unit scale."""
+
+        super().__init__()
+        self.scale = torch.nn.Parameter(torch.ones(2))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Elementwise exp of the scaled input."""
+
+        return torch.exp(x * self.scale)
+
+
+@pytest.mark.heavy
+def test_unrolled_passes_carry_their_own_motif(tmp_path: Any) -> None:
+    """Each unrolled pass node shows its OWN state, never a sibling pass's.
+
+    The node-spec slot hands unrolled nodes their aggregate Layer, whose bare
+    label keys the last pass's state; the finite first pass must stay clean.
+    """
+
+    log = tl.trace(_ExpTwice(), torch.zeros(1, 2))
+    exp_ops = [op for op in log.ops if op.layer_label.startswith("exp")]
+    assert len(exp_ops) == 2
+    assert exp_ops[0].layer_label == exp_ops[1].layer_label  # one two-pass layer
+    resolution = lenses.resolve_lens(log, "debug")
+    source = log.draw(
+        **{**resolution.draw_kwargs, "rolled": False},
+        path=str(tmp_path / "nf_passes"),
+        file_format="svg",
+    ).dot
+    inf_border = _MOTIFS["pos_inf"][1]
+    statements = {}
+    for op in exp_ops:
+        name = op.label.replace(":", "pass")
+        start = source.index(f"\t{name} [")
+        statements[op.label] = source[start : source.index("]\n", start)]
+    first, second = (statements[op.label] for op in exp_ops)
+    assert inf_border not in first
+    assert inf_border in second
+    log.cleanup()

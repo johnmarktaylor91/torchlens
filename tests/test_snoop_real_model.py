@@ -16,7 +16,8 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.options import EchoOptions
+from torchlens.errors import TraceCaptureError
+from torchlens.options import NarrationOptions
 
 transformers = pytest.importorskip("transformers")
 
@@ -41,7 +42,7 @@ def test_gpt2_full_narration_line_count_and_label_resolution() -> None:
         model,
         input_ids,
         save=lambda ctx: ctx.kind == "op",
-        echo=EchoOptions(select=True, sink=sink),
+        narrate=NarrationOptions(sites=True, sink=sink),
     )
     lines = [line for line in sink.getvalue().split("\n") if line]
     op_lines = [line for line in lines if line.lstrip().startswith("#")]
@@ -67,7 +68,7 @@ def test_gpt2_scoped_narration_stays_inside_the_block() -> None:
     tl.record(
         model,
         input_ids,
-        echo=EchoOptions(select=tl.in_module("transformer.h.1"), sink=sink),
+        narrate=NarrationOptions(sites=tl.in_module("transformer.h.1"), sink=sink),
     )
     lines = [line for line in sink.getvalue().split("\n") if line]
     body = [line for line in lines if not line.startswith("-- echo:")]
@@ -94,7 +95,7 @@ def test_gpt2_position_overflow_crash_narrates_post_hoc() -> None:
         warnings.simplefilter("ignore")
         with pytest.raises(Exception) as excinfo:
             tl.trace(model, too_long)
-    partial = getattr(excinfo.value, "partial_log", None)
+    partial = getattr(excinfo.value, "partial_trace", None)
     assert partial is not None
     rendered = partial.narrate(20)
     assert "!! forward failed" in rendered
@@ -119,12 +120,12 @@ def test_resnet18_scoped_echo_leaves_logits_unchanged() -> None:
     with torch.no_grad():
         raw_logits = model(x)
     sink = io.StringIO()
-    output, recording = tl.record(
+    recording = tl.record(
         model,
         x,
-        echo=EchoOptions(select=tl.in_module("layer3"), sink=sink),
-        return_output=True,
+        narrate=NarrationOptions(sites=tl.in_module("layer3"), sink=sink),
     )
+    output = recording.output
     assert torch.equal(raw_logits, output)
     assert recording.records == []
     lines = [line for line in sink.getvalue().split("\n") if line]
@@ -162,19 +163,20 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
     torch.manual_seed(0)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(TraceCaptureError) as excinfo:
             tl.record(
                 BadHead(),
                 torch.randn(1, 3, 224, 224),
                 save=tl.func("linear"),
-                echo=EchoOptions(select=True, sink=sink),
+                narrate=NarrationOptions(sites=True, sink=sink),
                 on_forward_error="attach_partial",
             )
+        assert isinstance(excinfo.value.__cause__, RuntimeError)
     transcript = sink.getvalue()
     assert "!! forward failed: RuntimeError" in transcript
     assert "attempted call=" in transcript
     partial = getattr(excinfo.value, "partial_recording", None)
-    assert partial is not None and partial.failed
+    assert partial is not None and partial.is_failed
     tail_labels = [
         line.split()[1]
         for line in transcript.split("\n")
@@ -228,7 +230,7 @@ def test_distilgpt2_real_checkpoint_scoped_narration() -> None:
     tl.record(
         model,
         inputs["input_ids"],
-        echo=EchoOptions(select=tl.in_module("transformer.h.3"), sink=sink),
+        narrate=NarrationOptions(sites=tl.in_module("transformer.h.3"), sink=sink),
     )
     lines = [line for line in sink.getvalue().split("\n") if line]
     op_lines = [line for line in lines if line.lstrip().startswith("#")]
@@ -238,6 +240,7 @@ def test_distilgpt2_real_checkpoint_scoped_narration() -> None:
 
 @pytest.mark.rare
 @pytest.mark.real_model
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA metadata zero-sync gate")
 def test_cuda_metadata_echo_is_zero_sync() -> None:
     """Memo test 4: metadata echo under set_sync_debug_mode('error')."""
@@ -247,7 +250,7 @@ def test_cuda_metadata_echo_is_zero_sync() -> None:
     sink = io.StringIO()
     torch.cuda.set_sync_debug_mode("error")
     try:
-        tl.record(model, x, echo=EchoOptions(select=True, sink=sink, stats="off"))
+        tl.record(model, x, narrate=NarrationOptions(sites=True, sink=sink, stats="off"))
     finally:
         torch.cuda.set_sync_debug_mode("default")
     assert "relu" in sink.getvalue()

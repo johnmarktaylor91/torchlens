@@ -8,7 +8,7 @@ Covers the round-18 A1 findings in the introspect/hash group:
   produced deterministic pre-hash collisions.
 * M7/F8 -- ``compute_graph_shape_hash`` / ``compute_raw_event_shape_hash``
   sorted parent indices, making the shape hash blind to operand/edge order
-  (feeds public ``torchlens.hash.trace()`` and the re-trace reproducibility
+  (feeds public ``torchlens.fingerprint.trace()`` and the re-trace reproducibility
   tripwire). Fixed consistent with the operand-order-sensitive refresh graph
   signature (commit 74898ada).
 * M8 -- ``"grad" in name`` substring filter suppressed unrelated attributes such
@@ -26,8 +26,8 @@ from typing import Any
 import torch
 from torch import nn
 
-import torchlens.utils.hashing as hashing
-import torchlens.utils.introspection as introspection
+import torchlens._utils.hashing as hashing
+import torchlens._utils.introspection as introspection
 from torchlens import _state
 
 # ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ def _graph(parents_of_c: list[str]) -> SimpleNamespace:
     """Two input layers feeding a noncommutative op with the given parent order."""
 
     return SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             _mk_layer("a", [], func="input"),
             _mk_layer("b", [], func="input"),
             _mk_layer("c", parents_of_c),
@@ -286,9 +286,9 @@ def _shape_hash_sorted(trace: SimpleNamespace) -> str:
     import hashlib
     import json
 
-    order_by_label = {layer.layer_label: i for i, layer in enumerate(trace.layer_list)}
+    order_by_label = {layer.layer_label: i for i, layer in enumerate(trace._layer_list)}
     records = []
-    for index, layer in enumerate(trace.layer_list):
+    for index, layer in enumerate(trace._layer_list):
         parent_indices = sorted(order_by_label[p] for p in layer.parents if p in order_by_label)
         records.append(
             {

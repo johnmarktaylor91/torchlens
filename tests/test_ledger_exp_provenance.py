@@ -28,9 +28,7 @@ class _Tiny(nn.Module):
 
 def _ready() -> tl.Trace:
     torch.manual_seed(5)
-    return tl.trace(
-        _Tiny(), torch.randn(2, 3), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    return tl.trace(_Tiny(), torch.randn(2, 3), capture=tl.options.CaptureOptions(replayable=True))
 
 
 def test_why_exact_on_event_lineage_fork_chain() -> None:
@@ -91,7 +89,7 @@ def test_why_container_basis_on_sweep_bundle() -> None:
     torch.manual_seed(0)
     model = _Tiny()
     x = torch.randn(2, 3)
-    bundle = tl.sweep(model, x, at="relu", values=[0.25, 0.75], include_baseline=True)
+    bundle = tl.sweep(model, x, site="relu", values=[0.25, 0.75], include_baseline=True)
     report = bundle.why("sweep_1")
     assert report.lineage_status == "exact"
     assert report.lineage_basis == "container_operation"
@@ -119,7 +117,7 @@ def test_why_opaque_payload_fidelity_names_fact_not_content() -> None:
     base = _ready().fork()
     child = base.fork()
 
-    def user_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def user_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         return out * 3.0
 
     child.do("relu_1_2", user_hook)
@@ -161,7 +159,7 @@ def test_provenance_rows_one_per_member() -> None:
     torch.manual_seed(0)
     model = _Tiny()
     x = torch.randn(2, 3)
-    bundle = tl.sweep(model, x, at="relu", values=[0.0], include_baseline=True)
+    bundle = tl.sweep(model, x, site="relu", values=[0.0], include_baseline=True)
     rows = bundle.provenance()
     by_member = {row["member"]: row for row in rows}
     assert by_member["baseline"]["lineage_status"] == "baseline"

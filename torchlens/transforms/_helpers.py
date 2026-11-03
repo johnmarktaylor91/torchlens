@@ -37,20 +37,20 @@ __all__ = ["ProbeReport", "SrpSizing", "srp_dims_for", "srp_fidelity_probe"]
 class SrpSizing:
     """An explicit sized width with its formula, version, and assumptions.
 
-    Converts to ``int`` (feeds ``srp(n_components=...)`` directly); the
+    Converts to ``int`` (feeds ``srp(num_components=...)`` directly); the
     record fields make an ``"auto"`` spelling lower to an explicit recorded
     k instead of an unexplained number.
 
     Attributes
     ----------
-    n_components:
-        The sized output width.
+    num_components:
+        Number of output components: the sized projection width.
     formula:
         Formula id (``"dense_jl_l2_heuristic"``).
     version:
         Formula version.
-    n_samples:
-        Row count the bound was sized for.
+    num_samples:
+        Number of samples (rows) the bound was sized for.
     eps:
         Requested maximum pairwise-L2 distortion.
     note:
@@ -58,22 +58,22 @@ class SrpSizing:
         correlation-distance RDMs.
     """
 
-    n_components: int
+    num_components: int
     formula: str
     version: int
-    n_samples: int
+    num_samples: int
     eps: float
     note: str
 
     def __int__(self) -> int:
         """Return the sized width."""
 
-        return self.n_components
+        return self.num_components
 
     def __index__(self) -> int:
         """Index conversion so the sizing feeds ``srp()`` directly."""
 
-        return self.n_components
+        return self.num_components
 
     def to_record(self) -> dict[str, Any]:
         """Return the JSON-portable sizing record.
@@ -85,16 +85,16 @@ class SrpSizing:
         """
 
         return {
-            "n_components": self.n_components,
+            "n_components": self.num_components,
             "formula": self.formula,
             "version": self.version,
-            "n_samples": self.n_samples,
+            "n_samples": self.num_samples,
             "eps": self.eps,
             "note": self.note,
         }
 
 
-def srp_dims_for(n_samples: int, eps: float = 0.1) -> SrpSizing:
+def srp_dims_for(num_samples: int, eps: float = 0.1) -> SrpSizing:
     """Size an SRP width with the dense-JL L2 heuristic (honestly labeled).
 
     ``k = ceil(4 ln(n) / (eps^2/2 - eps^3/3))`` — the classical dense-JL
@@ -106,7 +106,7 @@ def srp_dims_for(n_samples: int, eps: float = 0.1) -> SrpSizing:
 
     Parameters
     ----------
-    n_samples:
+    num_samples:
         Number of rows the projection must preserve pairwise (``>= 2``).
     eps:
         Maximum pairwise-L2 distortion target, in ``(0, 1)``.
@@ -117,13 +117,13 @@ def srp_dims_for(n_samples: int, eps: float = 0.1) -> SrpSizing:
         The sized width with formula/version/assumptions recorded.
     """
 
-    if isinstance(n_samples, bool) or not isinstance(n_samples, int) or n_samples < 2:
+    if isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples < 2:
         raise TransformContractError(
-            f"srp_dims_for(n_samples={n_samples!r}) needs an int >= 2 (the bound "
+            f"srp_dims_for(n_samples={num_samples!r}) needs an int >= 2 (the bound "
             "is about preserving pairwise distances).",
             code="transform_params_invalid",
             remedy="pass the row count of the dataset being projected",
-            n_samples=n_samples,
+            num_samples=num_samples,
         )
     if isinstance(eps, bool) or not isinstance(eps, (int, float)) or not (0.0 < eps < 1.0):
         raise TransformContractError(
@@ -134,12 +134,12 @@ def srp_dims_for(n_samples: int, eps: float = 0.1) -> SrpSizing:
         )
     eps = float(eps)
     denominator = eps**2 / 2.0 - eps**3 / 3.0
-    k = math.ceil(4.0 * math.log(n_samples) / denominator)
+    k = math.ceil(4.0 * math.log(num_samples) / denominator)
     return SrpSizing(
-        n_components=k,
+        num_components=k,
         formula="dense_jl_l2_heuristic",
         version=1,
-        n_samples=n_samples,
+        num_samples=num_samples,
         eps=eps,
         note=(
             "dense-JL Euclidean heuristic (sklearn johnson_lindenstrauss_min_dim "
@@ -287,7 +287,7 @@ class ProbeReport:
     corpus: str
     distance_claim: str
 
-    def to_record(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the JSON-portable probe record (scope travels with numbers).
 
         Returns
@@ -308,10 +308,10 @@ class ProbeReport:
             "distance_claim": self.distance_claim,
         }
 
-    def canonical_json(self) -> str:
+    def to_json(self) -> str:
         """Return the canonical JSON of :meth:`to_record`."""
 
-        return canonical_json(self.to_record())
+        return canonical_json(self.to_dict())
 
     def __str__(self) -> str:
         """Small aligned table with the scope line attached."""
@@ -333,7 +333,7 @@ class ProbeReport:
 
 def srp_fidelity_probe(
     features: torch.Tensor,
-    n_components: Sequence[int],
+    candidate_num_components: Sequence[int],
     seed: int = 0,
     construction: str = "very_sparse_fixed",
 ) -> ProbeReport:
@@ -344,8 +344,9 @@ def srp_fidelity_probe(
     features:
         Pilot activations, ``(n, ...)`` with the stimulus axis leading
         (flattened per row); ``n >= 4`` so the RDMs have enough pairs.
-    n_components:
-        Candidate output widths to probe.
+    candidate_num_components:
+        Candidate numbers of output components (projection widths k) to probe;
+        the report has one row per entry.
     seed:
         Base seed for the probe projections.
     construction:
@@ -370,10 +371,10 @@ def srp_fidelity_probe(
             code="transform_params_invalid",
             remedy="cast the pilot batch to a float dtype",
         )
-    widths = list(n_components)
+    widths = list(candidate_num_components)
     if not widths:
         raise TransformContractError(
-            "srp_fidelity_probe needs at least one candidate n_components.",
+            "srp_fidelity_probe needs at least one entry in candidate_num_components.",
             code="transform_params_invalid",
             remedy="pass candidate widths, e.g. (256, 1024, 4096)",
         )

@@ -30,7 +30,9 @@ pytestmark = pytest.mark.real_model
 
 # Files licensed to call pretrained-artifact loaders, and only with a
 # registry-pinned revision= (the acquisition rule, memo 4.3).
-LOADER_ALLOWLIST = ("r1/conftest.py",)
+# The GPU-venue leg loads its one registry row itself (no pytest fixture runs
+# on that venue); it reads model id, revision and weight digest from the row.
+LOADER_ALLOWLIST = ("r1/conftest.py", "gpu_legs/vjepa2_full_leg.py")
 CONSTRUCTOR_CALLS = frozenset(
     {"from_pretrained", "hf_hub_download", "snapshot_download", "load_state_dict_from_url"}
 )

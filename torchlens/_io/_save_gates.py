@@ -4,7 +4,8 @@ Three entry-time guards that run before (or instead of) the per-trace save
 pipeline: the two PERMANENT erasure-prevention invariants (edge-substitution
 carriers and the shard-local disclosure, both keyed on the ACTIVE SCHEMA so a
 regression re-fires them), and the Bundle container-door delegation that
-routes ``tl.save(bundle, ...)`` through ``Bundle.save`` (foldB D8/D9). Split
+routes ``bundle.save(path, ...)`` through ``Bundle.save`` (foldB D8/D9); plus
+the blob-loop refusal of a tensor a strict (portable) save cannot write. Split
 out of ``torchlens/_io/bundle.py`` to respect its size ceiling (R43
 split-never-raise); ``bundle.py`` re-exports these names, so the monkeypatch
 surface ``torchlens._io.bundle._refuse_*`` is unchanged.
@@ -13,9 +14,11 @@ surface ``torchlens._io.bundle._refuse_*`` is unchanged.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .format_errors import ArtifactError
 
 
 def _refuse_edge_intervened_save(trace: Any) -> None:
@@ -31,18 +34,24 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
     silently presenting post-edit values with zero edge provenance.
     """
 
+    from .._data_classes.trace import Trace
+
+    if not isinstance(trace, Trace):
+        # A Recording or other non-Trace save subject holds no Ops, so it
+        # cannot carry edge substitutions; its own refusal fires later.
+        return
     carriers = [
         op.label
-        for op in getattr(trace, "layer_list", ()) or ()
+        for op in (trace._layer_list if is_live_trace(trace) else ()) or ()
         if getattr(op, "edge_substitutions", None)
     ]
     if not carriers:
         return
-    from ..data_classes.op import Op as _Op
+    from .._data_classes.op import Op as _Op
     from . import FieldPolicy
     from .prerelease import prerelease_fields_active
 
-    policy_entry = _Op.FIELD_POLICY.get("edge_substitutions")
+    policy_entry = _Op._FIELD_POLICY.get("edge_substitutions")
     portable_policy = getattr(policy_entry, "portable_policy", policy_entry)
     if portable_policy is not None and portable_policy is not FieldPolicy.DROP:
         return
@@ -76,13 +85,15 @@ def _refuse_shard_local_erasure(trace: Any) -> None:
     never a narrowing, no D-ruling owed.
     """
 
-    if getattr(trace, "distributed_scope", None) != "rank_local_shard":
+    if (
+        trace._provenance_distributed_scope if is_live_trace(trace) else None
+    ) != "rank_local_shard":
         return
-    from ..data_classes.trace import Trace as _Trace
+    from .._data_classes.trace import Trace as _Trace
     from . import FieldPolicy
     from .prerelease import prerelease_fields_active
 
-    policy_entry = _Trace.FIELD_POLICY.get("distributed_scope")
+    policy_entry = _Trace._FIELD_POLICY.get("_provenance_distributed_scope")
     portable_policy = getattr(policy_entry, "portable_policy", policy_entry)
     if portable_policy is not None and portable_policy is not FieldPolicy.DROP:
         return
@@ -100,7 +111,7 @@ def _refuse_shard_local_erasure(trace: Any) -> None:
     )
 
 
-# tl.save() defaults for the per-trace payload options the Bundle container
+# trace.save() defaults for the per-trace payload options the Bundle container
 # door does not offer (its surface is exactly path/level/overwrite). An
 # EXPLICIT non-default value on a bundle save refuses typed below instead of
 # being silently dropped.
@@ -126,7 +137,7 @@ def _save_bundle_via_container_door(
     overwrite: bool,
     trace_only_options: dict[str, bool | None],
 ) -> None:
-    """Route ``tl.save(bundle, ...)`` through the one container door.
+    """Route ``bundle.save(path, ...)`` through the one container door.
 
     Both public save doors resolve to ``Bundle.save`` (the container door),
     so they agree on every settled bundle by construction: the N1 capture-
@@ -137,7 +148,7 @@ def _save_bundle_via_container_door(
     Parameters
     ----------
     bundle:
-        The ``torchlens.bundle.Bundle`` instance passed to ``tl.save``.
+        The ``torchlens.bundle.Bundle`` instance passed to ``Trace.save``.
     path:
         Destination ``.tlspec`` directory path.
     level:
@@ -145,7 +156,7 @@ def _save_bundle_via_container_door(
     overwrite:
         Whether an existing destination may be replaced.
     trace_only_options:
-        The received values of every per-trace-only ``tl.save`` option,
+        The received values of every per-trace-only ``Trace.save`` option,
         keyed by parameter name.
 
     Raises
@@ -162,15 +173,43 @@ def _save_bundle_via_container_door(
     )
     if unsupported:
         raise InvalidArgumentError(
-            "tl.save(bundle, ...) routes through the Bundle container door, "
+            "bundle.save(path, ...) routes through the Bundle container door, "
             "which supports only 'level' and 'overwrite'; it cannot honor "
             f"per-trace save options: {', '.join(unsupported)}.",
             code="bundle_save_option_unsupported",
             remedy=(
                 "Drop the per-trace options (or call bundle.save(path, "
                 "level=..., overwrite=...)); for per-member payload control, "
-                "save one member with tl.save(bundle[name], path, ...)."
+                "save one member with bundle[name].save(path, ...)."
             ),
             options=tuple(unsupported),
         )
     bundle.save(path, level=level, overwrite=overwrite)
+
+
+def _refuse_unsupported_tensor(error_text: str, blob_spec: Any, reason: str) -> NoReturn:
+    """Refuse a torch tensor the strict (portable) save cannot write.
+
+    Parameters
+    ----------
+    error_text:
+        Refusal text naming the blob's label, kind and the codec's reason.
+    blob_spec:
+        The refused blob (its ``label`` and ``kind`` ride on the error).
+    reason:
+        The payload codec's refusal reason.
+
+    Raises
+    ------
+    ArtifactError
+        With ``fields["code"] == "artifact_tensor_unsupported"``.
+    """
+
+    raise ArtifactError(
+        error_text,
+        code="artifact_tensor_unsupported",
+        remedy="save at level='audit', or make the tensor dense and strided",
+        label=blob_spec.label,
+        kind=blob_spec.kind,
+        reason=reason,
+    )

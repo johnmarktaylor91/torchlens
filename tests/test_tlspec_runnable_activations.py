@@ -14,14 +14,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
-from torchlens.errors import NumericAttestationError
-from torchlens.options import CaptureOptions, SaveOptions
-from torchlens.runnable import (
-    DivergencePolicy,
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     StateSource,
 )
+from torchlens.errors import ReplayValueMismatchError
+from torchlens.options import CaptureOptions
 
 
 class ActivationPayloadModel(nn.Module):
@@ -171,7 +170,7 @@ def _capture(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -201,7 +200,7 @@ def _physical_outs(trace: tl.Trace) -> tuple[torch.Tensor | None, ...]:
     """Snapshot physical Op outs without triggering unsaved-payload errors."""
 
     values: list[torch.Tensor | None] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         value = op._slot("out")
         values.append(value.detach().clone() if isinstance(value, torch.Tensor) else None)
     return tuple(values)
@@ -244,7 +243,7 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
     manifest = _manifest(path)
     activation_layer = manifest["run"]["payload_layers"]["activations"]
     members = activation_layer["members"]
-    selected_labels = {str(op.label) for op in trace.layer_list if bool(op.has_saved_activation)}
+    selected_labels = {str(op.label) for op in trace._layer_list if bool(op.has_saved_activation)}
     assert activation_layer["present"] is True
     assert activation_layer["schema"] == "selected_activation_v2"
     assert {member["op_label"] for member in members} == selected_labels
@@ -257,7 +256,7 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
     assert {entry["blob_id"] for entry in entries} == {member["blob_id"] for member in members}
     assert_sparse_core_has_no_tensor_payload(manifest["run"])
     assert_sparse_core_has_no_tensor_payload(_metadata(path))
-    assert all(op.func is None for op in _metadata(path)["layer_list"])
+    assert all(op.func is None for op in _metadata(path)["_layer_list"])
     tl.validation.validate_tlspec(path)
 
 
@@ -281,7 +280,6 @@ def test_include_activations_default_is_absent_and_requires_runnable_level(
         trace.save(tmp_path / "portable.tlspec", include_activations=True)
 
 
-@pytest.mark.smoke
 def test_archived_activations_are_inspectable_but_never_execution_inputs(
     tmp_path: Path,
 ) -> None:
@@ -399,7 +397,7 @@ def test_seeded_rng_operations_skip_original_input_numeric_attestation(
 
     result = tl.load(path).run(
         inputs=inputs.clone(),
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
@@ -452,7 +450,7 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
     declared ``byte_digest`` (covered by
     ``tests/test_io_runnable_payload_integrity.py::test_archived_activation_digest_is_verified_against_the_loaded_tensor``),
     so a manifest-level digest edit no longer survives to ``.run()``. This test keeps the
-    RUN-time half of the tripwire -- the ``NumericAttestationError`` fields, the source
+    RUN-time half of the tripwire -- the ``ReplayValueMismatchError`` fields, the source
     Trace rollback, and the not-poisoned guarantee -- by planting the same corrupt declared
     digest on the already-loaded descriptor, which is exactly the state the loader used to
     hand ``.run()``.
@@ -468,7 +466,7 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
         include_activations=True,
     )
     loaded = tl.load(path)
-    descriptor = loaded.runnable_descriptor
+    descriptor = loaded._sparse_run_descriptor
     assert descriptor is not None
     layer = descriptor.payload_layers.activations
     first_member = layer.members[0]
@@ -482,17 +480,17 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
     )
     before = _physical_outs(loaded)
 
-    with pytest.raises(NumericAttestationError) as caught:
+    with pytest.raises(ReplayValueMismatchError) as caught:
         loaded.run(inputs=inputs)
 
     mismatch = caught.value.fields["first_mismatch"]
     details = dict(mismatch.details)
-    assert caught.value.fields["code"] == "numeric_attestation_failed"
+    assert caught.value.fields["code"] == "replay_value_mismatch"
     assert (
         caught.value.fields["numeric_attestation"]
         is NumericAttestationStatus.NUMERIC_ATTESTATION_FAILED
     )
-    assert mismatch.code.value == "numeric_attestation_failed"
+    assert mismatch.code.value == "replay_value_mismatch"
     assert details["slot_id"] == first_member.slot_id
     assert details["expected_digest"] == "0" * 64
     assert details["archived_digest"] != details["expected_digest"]
@@ -540,11 +538,11 @@ def test_transformed_outputs_are_archived_without_overclaiming_attestation(
     trace = tl.trace(
         model,
         torch.ones(2, 3),
-        save=SaveOptions(activation_transform=lambda value: value.mean()),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
+            activation_transform=lambda value: value.mean(),
         ),
     )
     path = tmp_path / "transformed.tlspec"

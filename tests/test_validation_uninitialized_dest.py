@@ -32,10 +32,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens.user_funcs import (
-    _run_model_and_save_specified_outs,
-    _validate_forward_pass_torch,
-)
+from torchlens._capture.run_entry import _run_model_and_save_specified_outs
+from torchlens._user_funcs import _validate_forward_pass_torch
 from torchlens.validation.core import validate_saved_outs
 from torchlens.validation.diagnostics import (
     CHECK_PERTURBATION,
@@ -227,15 +225,15 @@ def test_real_replay_mismatch_on_empty_like_dest_still_fails() -> None:
         mark_layer_depths=False,
         detach_saved_activations=False,
         save_grads=False,
-        save_arg_values=True,
-        random_seed=0,
-        save_rng_states=True,
+        save_args=True,
+        seed=0,
+        save_rng=True,
     )
     try:
         # Corrupt a __setitem__ op's replay so the recomputed value diverges.
         patched = False
-        for layer in trace.layer_list:
-            op = layer.ops[1] if hasattr(layer.ops, "_list") else layer
+        for layer in trace._layer_list:
+            op = layer.ops[1] if hasattr(getattr(layer, "ops", None), "_list") else layer
             if getattr(op, "func_name", None) == "__setitem__":
                 original = op.func
 
@@ -255,12 +253,12 @@ def test_real_replay_mismatch_on_empty_like_dest_still_fails() -> None:
         # check -- the tripwire concern is unchanged.
         with pytest.warns(UserWarning, match="treating as failed validation"):
             result = validate_saved_outs(trace, [gt], validate_metadata=False)
-        # ValidationReplayStatus API (da60a76e): tripwire still fires on a real
+        # ValidationStatus API (da60a76e): tripwire still fires on a real
         # value mismatch.
         assert result.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None
-        assert failure.check == CHECK_REPLAY
+        assert failure.check_name == CHECK_REPLAY
     finally:
         trace.cleanup()
 
@@ -304,15 +302,15 @@ def test_chained_index_copy_dropped_dest_dependency_still_fails() -> None:
         mark_layer_depths=False,
         detach_saved_activations=False,
         save_grads=False,
-        save_arg_values=True,
-        random_seed=0,
-        save_rng_states=True,
+        save_args=True,
+        seed=0,
+        save_rng=True,
     )
     try:
         # Locate the SECOND index_copy_ (destination parent is the first write).
         second = None
-        for layer in trace.layer_list:
-            op = layer.ops[1] if hasattr(layer.ops, "_list") else layer
+        for layer in trace._layer_list:
+            op = layer.ops[1] if hasattr(getattr(layer, "ops", None), "_list") else layer
             if op.func_name in ("index_copy_", "indexcopy_") and str(
                 op.parent_arg_positions["args"].get(0, "")
             ).startswith("indexcopy"):
@@ -337,7 +335,7 @@ def test_chained_index_copy_dropped_dest_dependency_still_fails() -> None:
         assert result.state == "failed", "dropped chained-dest dependency must FAIL validation"
         failure = get_validation_failure(trace)
         assert failure is not None
-        assert failure.check == CHECK_PERTURBATION
+        assert failure.check_name == CHECK_PERTURBATION
         assert "indexcopy" in (failure.op_label or "")
     finally:
         trace.cleanup()

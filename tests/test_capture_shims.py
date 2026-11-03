@@ -14,14 +14,14 @@ import pytest
 
 
 def test_kernel_shim_module_is_gone() -> None:
-    """``torchlens.capture.kernel`` no longer exists as an import path."""
+    """``torchlens._capture.kernel`` no longer exists as an import path."""
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("torchlens.capture.kernel")
+        importlib.import_module("torchlens._capture.kernel")
 
 
 def test_trace_projector_shim_is_gone() -> None:
-    """``TraceProjector`` no longer resolves on ``torchlens.capture.projectors``."""
-    from torchlens.capture import projectors
+    """``TraceProjector`` no longer resolves on ``torchlens._capture.projectors``."""
+    from torchlens._capture import projectors
 
     with pytest.raises(AttributeError):
         projectors.TraceProjector  # noqa: B018
@@ -29,22 +29,22 @@ def test_trace_projector_shim_is_gone() -> None:
 
 
 def test_ir_event_shims_are_gone() -> None:
-    """``ModuleEvent``/``BufferEvent`` no longer resolve on ``torchlens.ir``.
+    """``ModuleEvent``/``BufferEvent`` no longer resolve on ``torchlens._ir``.
 
     The live replacements (ModuleEnterEvent/ModuleExitEvent for module
     containment, BufferWriteEvent for buffer capture) must stay importable.
     """
-    import torchlens.ir as tl_ir
+    import torchlens._ir as tl_ir
 
     for name in ("ModuleEvent", "BufferEvent"):
         with pytest.raises(AttributeError):
             getattr(tl_ir, name)
         assert name not in tl_ir.__all__
-    from torchlens.ir.events import (  # noqa: F401
+    from torchlens._ir.events import (  # noqa: F401
         BufferWriteEvent,
         ModuleEnterEvent,
         ModuleExitEvent,
     )
 
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("torchlens.ir._deprecated")
+        importlib.import_module("torchlens._ir._deprecated")

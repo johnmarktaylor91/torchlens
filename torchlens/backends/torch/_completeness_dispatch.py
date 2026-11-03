@@ -4,45 +4,19 @@ from __future__ import annotations
 
 import threading
 import weakref
-from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ...utils._torch_compat import tensor_version_or_none
+from ..._utils._torch_compat import tensor_version_or_none
+from ._state_bytes import _whole_storage_uint8
 from .buffer_writes import peek_buffer_write_tracker
 from .escape_detection import (
     ExpectedOriginalToken,
 )
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _HOST_ESCAPE_MUTABLE_WRITEBACK,
-        _HOST_ESCAPE_RAW_POINTER,
-        _ORIG_TENSORBASE_UNTYPED_STORAGE,
-        _ORIG_UNTYPED_STORAGE_DATA_PTR,
-        _PLAIN_PARAM_CLS,
-        _PLAIN_TENSOR_CLS,
-        _PURE_VIEW_DISPATCH_OPERATORS,
-        _RUNNABLE_LEDGER_FACTS,
-        HOST_ESCAPE_OPERATORS,
-        MUTABLE_ALIAS_ESCAPE_FUNCS,
-        STATE_METADATA_MIRROR,
-        STORAGE_BRIDGE_ESCAPE_FUNCS,
-        _dispatch_callsite,
-        _DispatchEvent,
-        _internal_read_active,
-        _is_expected_opaque_dispatch,
-        _nonowner_escape_observe,
-        _observe_state_metadata_read,
-        _operator_base_name,
-        _record_escape_source_tensor,
-        _register_storage_origin,
-        _WitnessState,
-        internal_scalar_read,
-    )
 
 __all__ = (
     "record_uncaptured_owner_callsite",
@@ -357,20 +331,10 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
         _RUNNABLE_LEDGER_FACTS.setdefault(state.trace, []).extend(facts)
 
 
-def _whole_storage_uint8(source: torch.Tensor) -> torch.Tensor:
-    """Return a ``uint8`` tensor viewing ``source``'s ENTIRE untyped storage (all bytes).
-
-    A zero-copy alias (``source.numpy()`` / ``source.untyped_storage()`` / a raw ``data_ptr``)
-    shares the WHOLE storage, not just ``source``'s element extent: ``np.as_strided`` and a
-    storage ``__setitem__`` can write bytes OUTSIDE ``source``'s view window (r15-H2). Comparing
-    the whole aliased storage -- not ``source.detach().clone()`` (its own extent only) -- makes ANY
-    host write anywhere in the shared storage detectable at forward end.
-    """
-
-    untyped = source.untyped_storage()
-    view = torch.empty(0, dtype=torch.uint8, device=source.device)
-    view.set_(untyped, 0, (untyped.nbytes(),), (1,))
-    return view
+# ``_whole_storage_uint8`` (a uint8 view over a tensor's ENTIRE untyped storage, so a
+# host write anywhere in a shared storage is detectable; sparse tensors read their
+# component bytes) is shared with ``buffer_writes``: the witness compares against the
+# tracker's snapshots, so both sides must read the same bytes.
 
 
 def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> None:
@@ -393,27 +357,6 @@ def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> No
         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
         return
     state.writeback_watch.append((source, version, before))
-
-
-def _iter_dispatch_tensors(
-    args: tuple[Any, ...], kwargs: dict[str, Any] | None
-) -> Iterator[torch.Tensor]:
-    """Yield every ``torch.Tensor`` operand of a dispatch, flattening list/tuple containers.
-
-    Aten operands are tensors, scalars, or (for ``cat`` / ``stack`` / ``_foreach_*``) lists/tuples
-    of tensors; this walks those one-deep-or-more without importing a pytree so the per-consumption
-    watch can see every tensor an op reads.
-    """
-
-    stack: list[Any] = list(args)
-    if kwargs:
-        stack.extend(kwargs.values())
-    while stack:
-        item = stack.pop()
-        if isinstance(item, torch.Tensor):
-            yield item
-        elif isinstance(item, (list, tuple)):
-            stack.extend(item)
 
 
 def _sample_writeback_at_consumption(
@@ -816,3 +759,43 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
         return original(self, *args, **kwargs)
 
     return wrapper
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_boundaries import (  # noqa: E402
+    _is_expected_opaque_dispatch,
+)
+from ._completeness_cross_thread import (  # noqa: E402
+    _internal_read_active,
+    _nonowner_escape_observe,
+)
+from ._completeness_dispatch_names import (  # noqa: E402
+    _dispatch_callsite,
+    _iter_dispatch_tensors,
+    _operator_base_name,
+    _record_escape_source_tensor,
+)
+from ._completeness_metadata import (  # noqa: E402
+    _observe_state_metadata_read,
+    _register_storage_origin,
+)
+from ._completeness_origins import (  # noqa: E402
+    internal_scalar_read,
+)
+from .completeness_witness import (  # noqa: E402
+    _HOST_ESCAPE_MUTABLE_WRITEBACK,
+    _HOST_ESCAPE_RAW_POINTER,
+    _ORIG_TENSORBASE_UNTYPED_STORAGE,
+    _ORIG_UNTYPED_STORAGE_DATA_PTR,
+    _PLAIN_PARAM_CLS,
+    _PLAIN_TENSOR_CLS,
+    _PURE_VIEW_DISPATCH_OPERATORS,
+    _RUNNABLE_LEDGER_FACTS,
+    HOST_ESCAPE_OPERATORS,
+    MUTABLE_ALIAS_ESCAPE_FUNCS,
+    STATE_METADATA_MIRROR,
+    STORAGE_BRIDGE_ESCAPE_FUNCS,
+    _DispatchEvent,
+    _WitnessState,
+)

@@ -16,12 +16,13 @@ from typing import Any
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 from torch.overrides import TorchFunctionMode
 
 import torchlens as tl
+from torchlens._utils._torch_compat import autocast_is_enabled
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import autocast_is_enabled
 
 
 class _IntrospectingAutocastModel(nn.Module):
@@ -58,7 +59,7 @@ def test_autocast_stays_a_class_inside_the_admitted_forward() -> None:
     )
     try:
         assert trace.outcome.status.value == "complete"
-        assert model.seen == {
+        assert stashed(trace, "seen") == {
             "isclass": True,
             "isinstance": True,
             "issubclass_amp": True,
@@ -71,7 +72,7 @@ def test_autocast_stays_a_class_inside_the_admitted_forward() -> None:
 
 @pytest.mark.smoke
 def test_shim_class_delegates_non_null_calls_to_the_shipped_class() -> None:
-    from torchlens.capture._weightsfree_admission import _null_on_meta_autocast_class
+    from torchlens._capture._weightsfree_admission import _null_on_meta_autocast_class
 
     shim = _null_on_meta_autocast_class(torch.autocast)
     assert issubclass(shim, torch.autocast)
@@ -99,8 +100,8 @@ class _Other(_Passthrough):
 def test_device_context_absorption_restores_the_exact_interleaving() -> None:
     from torch.overrides import _get_current_function_mode_stack as stack
 
-    from torchlens.capture._weightsfree_admission import _absorbed_ambient_device_context
-    from torchlens.utils._torch_compat import get_torch_function_stack_surgery
+    from torchlens._capture._weightsfree_admission import _absorbed_ambient_device_context
+    from torchlens._utils._torch_compat import get_torch_function_stack_surgery
 
     if get_torch_function_stack_surgery() is None:
         pytest.skip("mode-stack surgery unavailable; absorption refuses typed instead")

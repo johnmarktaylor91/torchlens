@@ -24,22 +24,23 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.visualization._rank_layout_internal.layout as layout_mod
-from torchlens.visualization._edge_multiplicity import _MULTIPLICITY_LABEL_FONT_SIZE
-from torchlens.visualization._render_common import _EDGE_LABEL_FONT_SIZE
-from torchlens.visualization._typography import (
+import torchlens._visualization._rank_layout_internal.layout as layout_mod
+from torchlens import _visualization
+from torchlens._visualization._edge_multiplicity import _MULTIPLICITY_LABEL_FONT_SIZE
+from torchlens._visualization._render_common import _EDGE_LABEL_FONT_SIZE
+from torchlens._visualization._typography import (
     DEFAULT_TYPOGRAPHY,
     TypographyRecord,
     format_pt,
 )
-from torchlens.visualization.themes import (
+from torchlens._visualization.themes import (
     THEME_PRESETS,
     theme_edge_attrs,
     theme_graph_attrs,
     theme_node_attrs,
 )
 
-_VIZ_PACKAGE = Path(tl.visualization.__file__).parent
+_VIZ_PACKAGE = Path(_visualization.__file__).parent
 
 
 def test_every_preset_pins_fontname_on_all_scopes() -> None:
@@ -155,10 +156,9 @@ def test_rank_path_emits_theme_family(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setattr(layout_mod, "_run_neato_with_fallbacks", _fake_neato)
     trace = tl.trace(_Tiny(), torch.randn(1, 4))
     trace.draw(
-        vis_node_placement="rank",
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "rank_typography"),
+        layout="rank",
+        file_format="svg",
+        path=str(tmp_path / "rank_typography"),
         show_containers=False,
     )
     source = captured["source"]

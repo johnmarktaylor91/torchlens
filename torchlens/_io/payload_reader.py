@@ -41,7 +41,7 @@ def read_op_payload(op: Any, *, map_location: Any = "cpu") -> Any:
     torchlens.errors.PayloadUnavailableError
         ``payload_unavailable`` when the op retains neither a resident
         payload nor a lazy blob ref.
-    torchlens._io.TorchLensIOError
+    torchlens._io.ArtifactError
         When the referenced blob is missing, corrupt, or checksum-drifted.
     """
 

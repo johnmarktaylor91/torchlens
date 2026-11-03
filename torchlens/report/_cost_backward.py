@@ -14,9 +14,17 @@ states:
   in every grad state through :func:`backward_estimate` (the named door),
   always labeled hypothetical.
 - ``backward_observed``: ``log_backward`` recorded backward passes --
-  timing is measured where fire timings exist; analytic executed-backward
-  compute stays a ROADMAP item (D15) and reads UNKNOWN here, never an
-  unlabeled estimate.
+  timing is measured where fire timings exist, and the executed backward
+  compute is COUNTED over the ATen calls that backward dispatched (each
+  pass's ``BackwardPass.aten_ops``), exact for the matmul and
+  convolution families at fma2 (FlopCounterMode's convention); every
+  recorded op outside those families is named in ``uncounted_op_counts``, never
+  zeroed or estimated. Each pass's count is attributed to the GradFn calls
+  and forward ops that did the work, with a named unattributed bucket
+  (``BackwardStatus.flops_attributions``); a loaded trace reads the count saved
+  with the pass. A pass with neither a dispatch record nor a saved count (an
+  implicit pass, an artifact saved before the count was kept) or a pass that
+  raised before finishing leaves the executed answer UNKNOWN.
 
 D15/D23 plumbing (derived live-only; F09 holds no adjudicated persisted
 fields): ``grad_enabled_at_capture``, per-op ``needs_param_grad`` /
@@ -34,8 +42,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._capture.flops import DISPATCH_COUNTING_CONVENTION
+from ._backward_attribution import node_resolver_missing, pass_failed
+
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Closed state vocabulary (D14).
 BACKWARD_STATES: tuple[str, ...] = (
@@ -61,7 +72,7 @@ def grad_enabled_at_capture(trace: Any) -> bool:
     never a new field.
     """
 
-    return any(_has_grad_fn(op) for op in getattr(trace, "layer_list", ()) or ())
+    return any(_has_grad_fn(op) for op in trace._layer_list or ())
 
 
 def _has_grad_fn(op: Any) -> bool:
@@ -108,23 +119,40 @@ def recompute_observation(trace: Any) -> str:
     """The D23 checkpoint-recompute observation: never guessed.
 
     ``"observed"`` when the L9 checkpoint witness recorded checkpoint
-    context during capture; ``"none_observed"`` when the witness exists
-    and recorded nothing; ``"unknown"`` when no witness is available --
-    and the MFU/HFU classification of duplicate passes stays ``unknown``
-    in that case (a recurrent second pass is model arithmetic; a
-    checkpoint recompute is not; the capture can only tell them apart
-    when it observed checkpoint context).
+    context during capture (a minted checkpoint invocation, or a reentrant
+    checkpoint node in the walked graph); ``"none_observed"`` when the
+    witness exists and recorded nothing; ``"unknown"`` when no witness is
+    available or its evidence is incomplete -- and the MFU/HFU
+    classification of duplicate passes stays ``unknown`` in that case (a
+    recurrent second pass is model arithmetic; a checkpoint recompute is
+    not; the capture can only tell them apart when it observed checkpoint
+    context).
     """
 
     witness = getattr(trace, "checkpoint_invocation_witness", None)
-    if witness is None:
+    if not isinstance(witness, dict):
         return "unknown"
-    count = getattr(witness, "invocation_count", None)
-    if count is None and isinstance(witness, dict):
-        count = witness.get("invocation_count")
-    if count is None:
-        return "unknown"
-    return "observed" if int(count) > 0 else "none_observed"
+    verdict = witness.get("verdict")
+    if verdict == "checkpoint_invocations_observed":
+        return "observed"
+    if verdict == "no_checkpoint_invocation_observed":
+        return "none_observed"
+    if _REENTRANT_CHECKPOINT_FLAG in (witness.get("degrade_flags") or ()):
+        return "observed"
+    return "unknown"
+
+
+#: The witness degrade flag set when the walked graph holds a reentrant
+#: checkpoint node: checkpointing certainly ran, though its tokens were not
+#: minted.
+_REENTRANT_CHECKPOINT_FLAG = "reentrant_node_discovered"
+
+
+#: The executed-backward counting convention (matches FlopCounterMode's).
+EXECUTED_BACKWARD_CONVENTION = DISPATCH_COUNTING_CONVENTION
+
+#: Uncounted op names shown on the status line before it points at the field.
+_STATUS_LINE_NAME_LIMIT = 5
 
 
 @dataclass(frozen=True)
@@ -132,20 +160,38 @@ class BackwardStatus:
     """The always-visible backward STATUS facts (D14).
 
     ``executed_flops`` is the ACTUAL executed backward compute: ``0``
-    (exact) in the ``grad_disabled`` state, ``None`` (unknown) otherwise
-    -- the analytic executed-backward pass is roadmap (D15) and its
-    absence never becomes an unlabeled estimate. ``measured_seconds`` is
-    per-fire backward timing when the live trace recorded it.
+    (exact) in the ``grad_disabled`` state; ``None`` (unknown) in the
+    ``grad_enabled_unobserved`` state; in the ``backward_observed`` state the
+    count over the ATen calls the observed backward dispatched, exact for
+    the matmul and convolution families (``convention``), or
+    ``None`` when a pass has no dispatch record on this object.
+    ``executed_flops_per_pass`` pairs each observed pass index with its
+    count (``None`` where unrecorded); ``uncounted_op_counts`` names every recorded
+    op kind outside the counted families with its call count -- never
+    zeroed, never estimated. ``measured_seconds`` is per-fire backward
+    timing when the live trace recorded it. ``flops_attributions`` holds one
+    ``BackwardFlopsAttribution`` per counted pass (rows by GradFn call and
+    forward op); ``unattributed_flops`` is the counted work that ran under no
+    recorded node, so the rows plus it equal ``executed_flops`` exactly;
+    ``recompute_flops`` is the part that replayed forward kernels under
+    activation checkpointing (``None`` when the evidence cannot tell). The
+    three are empty or ``None`` outside the ``backward_observed`` state.
     """
 
     state: str
     executed_flops: int | None
     executed_evidence: str
     reason: str
-    n_backward_passes: int
-    n_grad_fn_records: int
+    num_backward_passes: int
+    num_grad_fn_records: int
     measured_seconds: float | None
     recompute: str
+    convention: str = EXECUTED_BACKWARD_CONVENTION
+    executed_flops_per_pass: tuple[tuple[int, int | None], ...] = ()
+    uncounted_op_counts: tuple[tuple[str, int], ...] = ()
+    flops_attributions: tuple[Any, ...] = ()
+    unattributed_flops: int | None = None
+    recompute_flops: int | None = None
 
     @property
     def status_line(self) -> str:
@@ -168,19 +214,167 @@ class BackwardStatus:
             if self.measured_seconds is not None
             else "per-fire timing unavailable on this object"
         )
-        return (
-            f"backward: {self.n_backward_passes} backward pass(es) observed "
-            f"({self.n_grad_fn_records} grad_fn records; {timing}); executed backward "
-            "compute: UNKNOWN until the analytic executed-backward pass lands (roadmap) "
-            "-- observing the graph does not make a formula a measurement."
+        head = (
+            f"backward: {self.num_backward_passes} backward pass(es) observed "
+            f"({self.num_grad_fn_records} grad_fn records; {timing}); "
         )
+        if self.executed_flops is None:
+            return head + f"executed backward compute: UNKNOWN ({self.reason})."
+        return (
+            head
+            + f"executed backward compute: {self.executed_flops} FLOPs counted from the "
+            + "backward ops that ran (fma2; matmul and convolution families exact)"
+            + self._attribution_clause()
+            + self._uncounted_clause()
+            + "."
+        )
+
+    def _attribution_clause(self) -> str:
+        """Name the unattributed and recompute shares when they are nonzero."""
+
+        parts = []
+        if self.unattributed_flops:
+            parts.append(f"{self.unattributed_flops} unattributed (ran under no recorded node)")
+        if self.recompute_flops:
+            parts.append(f"{self.recompute_flops} recomputed forward under checkpointing")
+        elif self.recompute_flops is None and self.recompute == "observed":
+            parts.append("recompute share unknown")
+        return "; of which " + ", ".join(parts) if parts else ""
+
+    def _uncounted_clause(self) -> str:
+        """Name the recorded op kinds outside the counted families (bounded)."""
+
+        if not self.uncounted_op_counts:
+            return ""
+        names = [name for name, _count in self.uncounted_op_counts]
+        shown = ", ".join(names[:_STATUS_LINE_NAME_LIMIT])
+        more = len(names) - _STATUS_LINE_NAME_LIMIT
+        tail = f" (+{more} more; read .uncounted_op_counts)" if more > 0 else ""
+        return f"; {len(names)} op kind(s) outside those families not counted: {shown}{tail}"
+
+
+@dataclass(frozen=True)
+class _ExecutedCount:
+    """The observed-state count folded over every pass's attribution."""
+
+    total: int | None
+    reason: str
+    per_pass: tuple[tuple[int, int | None], ...]
+    uncounted: tuple[tuple[str, int], ...]
+    attributions: tuple[Any, ...]
+    unattributed: int | None
+    recompute: int | None
+
+
+def _executed_backward_count(trace: Any) -> _ExecutedCount:
+    """Count the observed backward pass by pass from its attribution.
+
+    ``total`` is ``None`` when a pass has no record or a counted-family call
+    could not be read. Each pass's count is its attributed rows plus its
+    unattributed bucket, so the total and the rows agree exactly.
+    """
+
+    per_pass: list[tuple[int, int | None]] = []
+    uncounted: dict[str, int] = {}
+    attributions: list[Any] = []
+    missing: list[int] = []
+    failed: list[int] = []
+    unresolved: list[int] = []
+    unreadable: list[int] = []
+    other_trace = 0
+    for pass_index, record in sorted((trace._backward_pass_logs or {}).items()):
+        attribution = getattr(record, "flops_attribution", None)
+        if attribution is None:
+            missing.append(pass_index)
+            per_pass.append((pass_index, None))
+            continue
+        attributions.append(attribution)
+        per_pass.append((pass_index, attribution.executed_flops))
+        if pass_failed(record):
+            failed.append(pass_index)
+        elif attribution.source == "census" and node_resolver_missing():
+            unresolved.append(pass_index)
+        elif attribution.executed_flops is None:
+            unreadable.append(pass_index)
+        for name, count in attribution.uncounted_ops:
+            uncounted[name] = uncounted.get(name, 0) + count
+        other_trace += attribution.other_trace_ops or 0
+    named = tuple(uncounted.items())
+    unattributed = _sum_known(item.unattributed_flops for item in attributions)
+    recompute = _sum_known(item.recompute_flops for item in attributions)
+    unknown = _unknown_count_reason(missing, failed, unresolved, unreadable)
+    if unknown is not None:
+        return _ExecutedCount(
+            None, unknown, tuple(per_pass), named, tuple(attributions), None, None
+        )
+    total = sum(count for _index, count in per_pass if count is not None)
+    reason = (
+        "counted from the ATen calls the observed backward dispatched, by GradFn call; "
+        f"{len(named)} op kind(s) outside the counted families are named, not zeroed"
+    )
+    if other_trace:
+        reason += (
+            f"; {other_trace} call(s) that ran on another trace's nodes in a shared "
+            "backward belong to that trace"
+        )
+    return _ExecutedCount(
+        total, reason, tuple(per_pass), named, tuple(attributions), unattributed, recompute
+    )
+
+
+def _unknown_count_reason(
+    missing: list[int], failed: list[int], unresolved: list[int], unreadable: list[int]
+) -> str | None:
+    """Why the executed backward has no count, first cause first, or ``None``."""
+
+    def listed(indices: list[int]) -> str:
+        """The pass indices as a comma-separated list."""
+        return ", ".join(str(index) for index in indices)
+
+    if missing:
+        return (
+            f"backward pass(es) {listed(missing)} carry no dispatch record on this object "
+            "(an implicit pass opened by tensor hooks, or a trace saved before the "
+            "count was kept)"
+        )
+    if failed:
+        return (
+            f"backward pass(es) {listed(failed)} raised before finishing: the executed "
+            "backward was not run to completion, so it has no count (the calls dispatched "
+            "before the raise stay on dispatched_ops)"
+        )
+    if unresolved:
+        return (
+            f"this torch build has no executing-node resolver (HAS_CURRENT_AUTOGRAD_NODE "
+            f"is False), so the calls of backward pass(es) {listed(unresolved)} cannot be "
+            "charged to the nodes that ran them and have no count"
+        )
+    if unreadable:
+        return f"counted-family call(s) with unreadable shapes in backward pass(es) {listed(unreadable)}"
+    return None
+
+
+def _sum_known(values: Any) -> int | None:
+    """Sum of ints, ``None`` when any value is unknown."""
+
+    total = 0
+    for value in values:
+        if value is None:
+            return None
+        total += int(value)
+    return total
 
 
 def backward_status(trace: Trace) -> BackwardStatus:
     """Derive the three-state backward status for one finished trace."""
 
-    grad_fn_logs = getattr(trace, "grad_fn_logs", {}) or {}
-    backward_passes = getattr(trace, "backward_pass_logs", {}) or {}
+    grad_fn_logs = trace._grad_fn_logs or {}
+    backward_passes = trace._backward_pass_logs or {}
+    per_pass: tuple[tuple[int, int | None], ...] = ()
+    uncounted: tuple[tuple[str, int], ...] = ()
+    attributions: tuple[Any, ...] = ()
+    unattributed: int | None = None
+    recompute_flops: int | None = None
     if not grad_enabled_at_capture(trace):
         state = "grad_disabled"
         executed: int | None = 0
@@ -193,21 +387,21 @@ def backward_status(trace: Trace) -> BackwardStatus:
         reason = "grad enabled at capture; no backward pass observed"
     else:
         state = "backward_observed"
-        executed = None
-        evidence = "unknown"
-        reason = "backward observed; analytic executed-backward compute is roadmap (D15)"
+        counted = _executed_backward_count(trace)
+        executed, reason = counted.total, counted.reason
+        per_pass, uncounted = counted.per_pass, counted.uncounted
+        attributions = counted.attributions
+        unattributed, recompute_flops = counted.unattributed, counted.recompute
+        evidence = "unknown" if executed is None else "formula_exact"
     measured: float | None = None
     if backward_passes:
         try:
-            timings = trace.grad_fn_fire_timings
+            timings = trace.autograd.grad_fn_fire_timings
         except Exception:  # noqa: BLE001 -- loaded/cleaned traces refuse typed; status degrades
             timings = None
         if timings:
-            values = [
-                float(end) - float(start)
-                for start, end in timings.values()
-                if start is not None and end is not None
-            ]
+            # Each value is one fire's span (a Duration), or None for an untimed fire.
+            values = [float(span) for span in timings.values() if span is not None]
             if values:
                 measured = sum(values)
     return BackwardStatus(
@@ -215,10 +409,15 @@ def backward_status(trace: Trace) -> BackwardStatus:
         executed_flops=executed,
         executed_evidence=evidence,
         reason=reason,
-        n_backward_passes=len(backward_passes),
-        n_grad_fn_records=len(grad_fn_logs),
+        num_backward_passes=len(backward_passes),
+        num_grad_fn_records=len(grad_fn_logs),
         measured_seconds=measured,
         recompute=recompute_observation(trace),
+        executed_flops_per_pass=per_pass,
+        uncounted_op_counts=uncounted,
+        flops_attributions=attributions,
+        unattributed_flops=unattributed,
+        recompute_flops=recompute_flops,
     )
 
 
@@ -236,11 +435,11 @@ class BackwardEstimate:
     label: str
     hypothetical_flops: int
     multiplier_table: dict[str, float]
-    n_ops_multiplied: int
-    n_ops_frozen_weights: int
+    num_multiplied_ops: int
+    num_frozen_weight_ops: int
     excluded_ops: tuple[str, ...]
-    freeze_pattern_from_captured_requires_grad: bool
-    grad_disabled_at_capture: bool
+    is_freeze_pattern_captured: bool
+    is_grad_disabled_at_capture: bool
 
     def __repr__(self) -> str:
         """Bounded identity card (F10/D31): the label leads, exclusions count.
@@ -251,8 +450,8 @@ class BackwardEstimate:
 
         return (
             f"BackwardEstimate({self.label}: {self.hypothetical_flops} FLOPs = "
-            f"{self.multiplier_table['mac_family']}x over {self.n_ops_multiplied} MAC ops, "
-            f"{self.n_ops_frozen_weights} frozen-weight, "
+            f"{self.multiplier_table['mac_family']}x over {self.num_multiplied_ops} MAC ops, "
+            f"{self.num_frozen_weight_ops} frozen-weight, "
             f"{len(self.excluded_ops)} excluded; read .disclosure)"
         )
 
@@ -264,12 +463,12 @@ class BackwardEstimate:
             "HYPOTHETICAL training-backward estimate (never an executed cost):",
             (
                 f"{self.multiplier_table['mac_family']}x applied to "
-                f"{self.n_ops_multiplied} MAC-family ops"
+                f"{self.num_multiplied_ops} MAC-family ops"
             ),
         ]
-        if self.n_ops_frozen_weights:
+        if self.num_frozen_weight_ops:
             lines.append(
-                f"{self.n_ops_frozen_weights} of them have fully frozen weights where the "
+                f"{self.num_frozen_weight_ops} of them have fully frozen weights where the "
                 "true multiplier is nearer 1.0x (dW is never computed)"
             )
         if self.excluded_ops:
@@ -277,7 +476,7 @@ class BackwardEstimate:
                 f"{len(self.excluded_ops)} non-MAC op(s) excluded from the estimate "
                 "(no validated multiplier; a 1.0 default is not an estimate)"
             )
-        if self.grad_disabled_at_capture:
+        if self.is_grad_disabled_at_capture:
             lines.append(
                 "grad was globally disabled at capture: the freeze pattern was read from "
                 "requires_grad as captured and may not reflect training intent"
@@ -299,7 +498,7 @@ def backward_estimate(trace: Trace) -> BackwardEstimate:
     multiplied = 0
     frozen = 0
     excluded: list[str] = []
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in trace._layer_list or ():
         if classify_row(op) != "known":
             continue
         record = getattr(op, "compute_record", None)
@@ -317,9 +516,9 @@ def backward_estimate(trace: Trace) -> BackwardEstimate:
         label="hypothetical",
         hypothetical_flops=int(total),
         multiplier_table=dict(BACKWARD_MULTIPLIER_TABLE),
-        n_ops_multiplied=multiplied,
-        n_ops_frozen_weights=frozen,
+        num_multiplied_ops=multiplied,
+        num_frozen_weight_ops=frozen,
         excluded_ops=tuple(excluded),
-        freeze_pattern_from_captured_requires_grad=True,
-        grad_disabled_at_capture=not grad_enabled_at_capture(trace),
+        is_freeze_pattern_captured=True,
+        is_grad_disabled_at_capture=not grad_enabled_at_capture(trace),
     )

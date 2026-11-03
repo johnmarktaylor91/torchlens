@@ -105,9 +105,9 @@ def test_receptive_field_table_has_one_row_per_entity_output_and_input(level: st
     frame = trace.receptive_fields(level=level).to_pandas()  # type: ignore[union-attr]
 
     if level == "op":
-        expected = len(trace.layer_list)  # type: ignore[union-attr]
+        expected = len(trace._layer_list)  # type: ignore[union-attr]
     elif level == "layer":
-        expected = sum(len(layer.op_labels) for layer in trace.layer_logs.values())  # type: ignore[union-attr]
+        expected = sum(len(layer.op_labels) for layer in trace._layer_logs.values())  # type: ignore[union-attr]
     elif level == "call":
         expected = sum(len(call.output_ops) for call in trace.module_calls.values())  # type: ignore[union-attr]
     else:
@@ -159,13 +159,13 @@ def test_receptive_field_table_filters_by_input_op_handle_only() -> None:
     """Accept the graph-native input handle and reject ambiguous string spellings."""
 
     trace = _trace_residual()
-    input_op = next(op for op in trace.layer_list if op.is_input)  # type: ignore[union-attr]
-    filtered = trace.receptive_fields(input=input_op).to_pandas()  # type: ignore[union-attr]
+    input_op = next(op for op in trace._layer_list if op.is_input)  # type: ignore[union-attr]
+    filtered = trace.receptive_fields(input_op=input_op).to_pandas()  # type: ignore[union-attr]
 
     assert not filtered.empty
     assert set(filtered["input_op"]) == {input_op.label}
     with pytest.raises(TypeError, match="Op handle"):
-        trace.receptive_fields(input=input_op.layer_label)  # type: ignore[union-attr]
+        trace.receptive_fields(input_op=input_op.layer_label)  # type: ignore[union-attr]
 
 
 def test_receptive_field_profile_to_pandas_returns_a_copy() -> None:

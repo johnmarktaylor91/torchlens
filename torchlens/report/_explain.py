@@ -17,31 +17,38 @@ from .._capture_honesty import (
     poison_facts,
     refuse_presenter_subject,
 )
+from .._data_classes._trace_missing_attrs import is_live_trace
+from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 Audience = Literal["researcher", "practitioner", "auto"]
-ExplainFormat = Literal["text", "json"]
+
+
+class ExplainReport(str):
+    """The plain-language report ``trace.explain()`` returns (DOCUMENTED-UNSTABLE).
+
+    A ``str``: print it, search it or slice it like the prose it is. The
+    machine-readable projection of the same facts is ``trace.to_agent_json()``.
+    """
+
+    __slots__ = ()
 
 
 def explain(
-    log: Any,
+    trace: Any,
     audience: Audience = "auto",
-    format: ExplainFormat = "text",
     *,
     max_tokens: int | None = None,
-) -> str | dict[str, Any]:
-    """Explain a TorchLens log in plain language.
+) -> ExplainReport:
+    """Explain a TorchLens log in plain language (the body of ``trace.explain()``).
 
     Parameters
     ----------
-    log:
+    trace:
         Completed ``Trace``-like object.
     audience:
         Report style. ``"researcher"`` includes graph-pattern detail,
         ``"practitioner"`` emphasizes operational status, and ``"auto"``
         selects a balanced report.
-    format:
-        ``"text"`` for the existing prose report or ``"json"`` for a
-        structured dictionary.
     max_tokens:
         Optional token budget for the text report (DOCUMENTED-UNSTABLE
         spelling, naming ratification pending). Whole sections are dropped in
@@ -49,77 +56,55 @@ def explain(
         token) fits, and every drop is disclosed in a trailing ``Truncation``
         section. The ``Capture status`` honesty section is never dropped: a
         budget below that floor returns the floor plus a disclosure rather
-        than a misleading fragment. Not supported with ``format="json"``
-        (that schema is fixed-shape and already minimal).
+        than a misleading fragment.
 
     Returns
     -------
-    str | dict[str, Any]
-        Multi-section prose, or the stable flat schema documented below.
+    ExplainReport
+        Multi-section prose (a ``str``).
 
     Raises
     ------
     ValueError
-        If ``audience``, ``format``, or ``max_tokens`` is not supported.
+        If ``audience`` or ``max_tokens`` is not supported.
 
     Notes
     -----
-    The JSON schema is identified by ``schema="torchlens.explain.v1"`` and
-    contains these stable snake-case keys: ``schema``, ``audience``,
-    ``capture_status``, ``capture_verified``, ``capture_verification_reason``,
-    ``rescue_rerun``, ``model_class``, ``layer_count``, ``operation_count``,
-    ``saved_tensor_count``, ``total_tensor_count``, ``has_backward_pass``,
-    ``exception_type``, ``exception_message``, ``last_completed_op_label``,
-    ``last_completed_op_shape``, ``last_completed_op_dtype``,
-    ``last_completed_op_device``, ``failing_boundary``, and
-    ``first_nonfinite``. Evidence unavailable from the supplied log is reported
-    as ``"unknown"`` rather than inferred. ``capture_status`` is the log's
-    settled ``CaptureOutcome`` status value (``"partial"`` for a failed
-    partial capture), never assumed complete; ``capture_verified`` is the
-    tri-state stored fact (``None`` = not recorded; the default capture does not arm
-    the completeness witness).
+    This report is prose only. The machine-readable projection of the same
+    facts is ``trace.to_agent_json()`` (the one machine core); the former
+    ``format="json"`` form of this report is removed.
     """
 
-    refuse_presenter_subject(log, "tl.report.explain")
+    refuse_presenter_subject(trace, "trace.explain")
     if audience not in {"researcher", "practitioner", "auto"}:
         raise ValueError("audience must be 'researcher', 'practitioner', or 'auto'.")
-    if format not in {"text", "json"}:
-        raise ValueError("format must be 'text' or 'json'.")
-    if max_tokens is not None:
-        if format == "json":
-            raise ValueError(
-                "max_tokens applies to format='text' only: the "
-                "torchlens.explain.v1 JSON schema is fixed-shape and already "
-                "minimal. Drop max_tokens, or use format='text'."
-            )
-        if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1:
-            raise ValueError(
-                "max_tokens must be a positive integer token budget for the "
-                "text report; omit it for the full report."
-            )
+    if max_tokens is not None and (
+        isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or max_tokens < 1
+    ):
+        raise ValueError(
+            "max_tokens must be a positive integer token budget for the "
+            "text report; omit it for the full report."
+        )
 
-    if _is_partial_trace(log):
-        diagnosis = _partial_diagnosis(log)
-        if format == "json":
-            return _partial_json(log, audience, diagnosis)
-        return _budgeted_report(_partial_sections(diagnosis), max_tokens, drop_order=())
-
-    if format == "json":
-        return _full_json(log, audience)
+    if _is_partial_trace(trace):
+        diagnosis = _partial_diagnosis(trace)
+        return ExplainReport(
+            _budgeted_report(_partial_sections(diagnosis), max_tokens, drop_order=())
+        )
 
     sections = [
-        ("Capture status", _capture_status_lines(log)),
-        ("Model summary", _model_summary_lines(log)),
-        ("Capture summary", _capture_summary_lines(log)),
-        ("Backward summary", _backward_summary_lines(log)),
-        ("Anomalies", _anomaly_lines(log)),
-        ("Interventions", _intervention_lines(log)),
-        ("Notable patterns", _pattern_lines(log, audience=audience)),
+        ("Capture status", _capture_status_lines(trace)),
+        ("Model summary", _model_summary_lines(trace)),
+        ("Capture summary", _capture_summary_lines(trace)),
+        ("Backward summary", _backward_summary_lines(trace)),
+        ("Anomalies", _anomaly_lines(trace)),
+        ("Interventions", _intervention_lines(trace)),
+        ("Notable patterns", _pattern_lines(trace, audience=audience)),
     ]
-    logged_value_lines = _logged_value_lines(log)
+    logged_value_lines = _logged_value_lines(trace)
     if logged_value_lines:
         sections.append(("Logged values", logged_value_lines))
-    return _budgeted_report(sections, max_tokens, drop_order=_SECTION_DROP_ORDER)
+    return ExplainReport(_budgeted_report(sections, max_tokens, drop_order=_SECTION_DROP_ORDER))
 
 
 #: Low-value-first order in which ``max_tokens`` drops report sections.
@@ -148,7 +133,6 @@ def _estimate_tokens(text: str) -> int:
     int
         Conservative whole-token estimate (always at least 1).
     """
-
     return max(1, (len(text) + 3) // 4)
 
 
@@ -293,7 +277,7 @@ def _is_partial_trace(log: Any) -> bool:
         Whether the object is a failed partial capture wrapper.
     """
 
-    from ..partial import PartialTrace
+    from .._partial import PartialTrace
 
     return isinstance(log, PartialTrace)
 
@@ -405,7 +389,7 @@ def _capture_verification(log: Any) -> dict[str, Any]:
     dict[str, Any]
         ``capture_status`` (the settled ``CaptureOutcome`` status value, or
         ``"unknown"`` when the log carries none), tri-state
-        ``capture_verified`` (``None`` = not recorded, witness not armed),
+        ``capture_verified`` (``None`` = not checked, witness not armed),
         ``capture_verification_reason``, and ``rescue_rerun``.
     """
 
@@ -484,7 +468,7 @@ def _capture_status_lines(log: Any) -> list[str]:
     facts = _capture_verification(log)
     lines = [f"- Capture outcome: {facts['capture_status']}."]
     # L7a G3 render honesty (memo sec 3.4).
-    if bool(getattr(log, "structure_only", False)):
+    if bool(log._options_structure_only if is_live_trace(log) else False):
         lines.append(
             "- Structure-only capture: shapes/dtypes are HYPOTHESES, not "
             "measurements; discharge against a real capture to corroborate."
@@ -504,7 +488,7 @@ def _capture_status_lines(log: Any) -> list[str]:
         # wrappers cannot see (from_numpy/as_tensor/from_dlpack round-trips,
         # numpy-backed autograd.Functions, storage writes) leave no ceiling here.
         lines.append(
-            "- Capture verification: not recorded (the completeness witness is not "
+            "- Capture verification: not checked (the completeness witness is not "
             "armed on the default capture; wrap_torch(completeness_witness=True) or "
             "tl.validate arm it). Absence of a ceiling is not a clean bill."
         )
@@ -539,163 +523,6 @@ def _capture_status_lines(log: Any) -> list[str]:
             f"{advisory.get('first_location') or 'unknown location'})."
         )
     return lines
-
-
-def _base_json(log: Any, audience: Audience) -> dict[str, Any]:
-    """Return fields common to complete and partial JSON reports.
-
-    Parameters
-    ----------
-    log:
-        Capture object.
-    audience:
-        Requested audience label.
-
-    Returns
-    -------
-    dict[str, Any]
-        Common stable-schema fields.
-    """
-
-    # ONE machine core (sumfam D17/item 14): the count fields below read
-    # the same FactCore sections agent_json reads, so the two projections
-    # cannot drift apart; the parity gate pins every overlapping field.
-    try:
-        from ._factcore import factcore
-
-        core = factcore(log)
-        layer_count = core.counts.layers
-        operation_count = core.counts.tracked_tensor_rows
-        saved_count = core.memory.at_capture_saved_ops
-    except Exception:  # noqa: BLE001 -- partial/foreign logs keep the raw fallback
-        core = None
-        layer_count = _safe_len(getattr(log, "layer_list", None))
-        operation_count = int(getattr(log, "num_ops", 0) or 0)
-        saved_count = int(getattr(log, "num_saved_ops", 0) or 0)
-    return {
-        "schema": "torchlens.explain.v1",
-        "audience": audience,
-        **_capture_verification(log),
-        "model_class": getattr(log, "model_class_name", type(log).__name__),
-        "layer_count": layer_count,
-        "operation_count": operation_count,
-        "saved_tensor_count": saved_count,
-        "total_tensor_count": int(getattr(log, "num_tensors", 0) or 0),
-        "has_backward_pass": bool(getattr(log, "has_backward_pass", False)),
-        "exception_type": "unknown",
-        "exception_message": "unknown",
-        "last_completed_op_label": "unknown",
-        "last_completed_op_shape": "unknown",
-        "last_completed_op_dtype": "unknown",
-        "last_completed_op_device": "unknown",
-        "failing_boundary": "unknown",
-        "first_nonfinite": _first_nonfinite_summary(log),
-    }
-
-
-def _full_json(log: Any, audience: Audience) -> dict[str, Any]:
-    """Build the stable JSON schema for a completed trace.
-
-    Parameters
-    ----------
-    log:
-        Completed trace.
-    audience:
-        Requested audience label.
-
-    Returns
-    -------
-    dict[str, Any]
-        Stable full-trace report dictionary.
-    """
-
-    return _base_json(log, audience)
-
-
-def _partial_json(
-    log: Any,
-    audience: Audience,
-    diagnosis: dict[str, Any],
-) -> dict[str, Any]:
-    """Build the stable JSON schema for a partial trace.
-
-    Parameters
-    ----------
-    log:
-        Partial capture wrapper.
-    audience:
-        Requested audience label.
-    diagnosis:
-        Evidence fields from :func:`_partial_diagnosis`.
-
-    Returns
-    -------
-    dict[str, Any]
-        Stable failed-capture report dictionary.
-    """
-
-    result = _base_json(log, audience)
-    result.update(diagnosis)
-    result.update(
-        {
-            "capture_status": "partial",
-            "model_class": getattr(log.trace, "model_class_name", type(log.trace).__name__),
-            "layer_count": len(log.raw_layers),
-            "operation_count": len(log.raw_layers),
-            "saved_tensor_count": sum(
-                bool(getattr(op, "has_saved_activation", False)) for op in log.raw_layers
-            ),
-            "total_tensor_count": len(log.raw_layers),
-        }
-    )
-    return result
-
-
-def _first_nonfinite_summary(log: Any) -> str:
-    """Return a saved-output non-finite summary without speculation.
-
-    Parameters
-    ----------
-    log:
-        Completed trace-like object.
-
-    Returns
-    -------
-    str
-        First recorded non-finite detail, or a scoped clean statement.
-    """
-
-    from ._health import health_facts
-
-    # D4/D14 (F09): explain never scans -- this summary serves the basis in
-    # hand (capture record, prior scan memo, persisted artifact record) and
-    # says NOT-CHECKED otherwise, with the spelling that would scan.
-    facts = health_facts(log, allow_scan=False)
-    if facts.verdict == "found":
-        labels = facts.nonfinite_labels or facts.alias_nonfinite_labels
-        return _first_nonfinite_detail(log, str(labels[0]).rsplit(":", 1)[0])
-    if facts.verdict == "checked_and_clean":
-        return (
-            f"No non-finite values found ({facts.checked} output(s) examined; basis: "
-            f"{facts.source_basis or facts.basis})."
-        )
-    if (facts.source_basis or facts.basis) not in ("unscanned", "underivable"):
-        # A basis exists but coverage has gaps: disclose exactly what the
-        # scan could not or did not examine (disk-backed payloads,
-        # unsaved outputs) instead of a bare NOT-CHECKED. The shared
-        # gap-note wording (one source, never drifting) is safe here: a
-        # basis is in hand, so no new scan runs.
-        from ..data_classes._nonfinite import coverage_gap_note
-
-        return (
-            "No non-finite values found in the examined outputs"
-            f"{coverage_gap_note(log, kind='saved')} -- NOT-CHECKED overall "
-            f"(basis: {facts.source_basis or facts.basis})."
-        )
-    return (
-        "Non-finite health NOT-CHECKED on this object; scan retained payloads with "
-        "tl.report.health_facts(trace) or trace.nonfinite_ops."
-    )
 
 
 def _first_nonfinite_detail(log: Any, saved_label: str) -> str:
@@ -749,7 +576,7 @@ def _model_summary_lines(log: Any) -> list[str]:
 
     from ._factcore import factcore
 
-    model_class_name = getattr(log, "model_class_name", type(log).__name__)
+    model_class_name = log._source_class_name if is_live_trace(log) else type(log).__name__
     # Single-source law (sumfam D1/item 11): headline facts come from
     # FactCore, never raw trace attributes. A husked/foreign log that cannot
     # serve the substrate degrades to the legacy zero-shape (explain is the
@@ -783,6 +610,9 @@ def _model_summary_lines(log: Any) -> list[str]:
             f" LOWER BOUND: {core.compute.coverage.unknown} op(s) carry no cost rule "
             "(see trace.unknown_flop_ops)."
         )
+    if attention_ops := counted_attention_ops(core.compute):
+        note = attention_full_square_line(attention_ops)
+        flops_line += f" {note[:1].upper()}{note[1:]}."
     lines.append(flops_line)
     lines.append(f"- Modules represented: {_format_count(core.counts.modules)}.")
     return lines
@@ -812,12 +642,12 @@ def _capture_summary_lines(log: Any) -> list[str]:
         core = factcore(log)
     except Exception:  # noqa: BLE001 -- cleaned/foreign logs keep the degraded report
         return [
-            f"- Layers logged: {_safe_len(getattr(log, 'layer_list', None))}.",
-            f"- Operations logged: {int(getattr(log, 'num_ops', 0) or 0)}.",
+            f"- Layers logged: {_safe_len(log._layer_list if is_live_trace(log) else None)}.",
+            f"- Operations logged: {int((log._num_ops if is_live_trace(log) else 0) or 0)}.",
         ]
     pass_counts = [
         int(value)
-        for value in (getattr(log, "layer_num_calls", {}) or {}).values()
+        for value in ((log._layer_num_calls if is_live_trace(log) else None) or {}).values()
         if isinstance(value, int)
     ]
     max_ops = max(pass_counts, default=1)
@@ -829,7 +659,7 @@ def _capture_summary_lines(log: Any) -> list[str]:
             f"{_format_count(core.counts.alias_rows)} boundary/buffer rows)."
         ),
         (
-            f"- Tensors saved at capture: {_format_count(core.memory.at_capture_saved_ops)} "
+            f"- Tensors saved at capture: {_format_count(core.memory.captured_saved_ops)} "
             f"of {_format_count(core.counts.tracked_tensor_rows)}."
         ),
         f"- Maximum observed ops for one layer: {_format_count(max_ops)}.",
@@ -850,13 +680,13 @@ def _backward_summary_lines(log: Any) -> list[str]:
         Bullet lines for the backward section.
     """
 
-    if not bool(getattr(log, "has_backward_pass", False)):
+    if not bool(log._autograd_has_backward_pass if is_live_trace(log) else False):
         return ["- No backward passes are recorded on this log."]
-    pass_count = int(getattr(log, "num_backward_passes", 0) or 0)
-    grad_fn_count = int(getattr(log, "num_grad_fns", 0) or 0)
-    grad_fn_call_count = int(getattr(log, "num_grad_fn_calls", 0) or 0)
+    pass_count = int((log._num_backward_passes if is_live_trace(log) else 0) or 0)
+    grad_fn_count = len(getattr(getattr(log, "autograd", None), "grad_fns", None) or ())
+    grad_fn_call_count = len(getattr(getattr(log, "autograd", None), "grad_fn_calls", None) or ())
     saved_grad_count = _safe_len(getattr(log, "saved_grad_ops", None))
-    total_backward_memory = getattr(log, "total_backward_memory", None)
+    total_backward_memory = log._cost_total_backward_memory if is_live_trace(log) else None
     memory_line = (
         f"- Unique backward payload memory: {total_backward_memory}."
         if total_backward_memory is not None
@@ -917,7 +747,7 @@ def _anomaly_lines(log: Any) -> list[str]:
     if verdict == "checked_and_clean":
         return [
             (
-                f"- CHECKED-AND-CLEAN: {facts.checked} op output(s) examined, none "
+                f"- CHECKED-AND-CLEAN: {facts.num_checked_ops} op output(s) examined, none "
                 f"non-finite (basis: {basis})."
             ),
             "- Not audited: judgments (severity, follow-ups) come from tl.audit(trace).",
@@ -926,25 +756,36 @@ def _anomaly_lines(log: Any) -> list[str]:
         # A basis exists but coverage has gaps (disk-backed, inference-mode,
         # uncheckable dtypes, unsaved outputs): disclose the exact gaps
         # through the shared wording -- safe, no new scan runs.
-        from ..data_classes._nonfinite import coverage_gap_note
+        from .._data_classes._nonfinite import coverage_gap_note
 
         return [
             (
                 "- NOT-CHECKED overall: no non-finite values in the examined outputs"
                 f"{coverage_gap_note(log, kind='saved')} (basis: {basis})."
             ),
+            *_track_nonfinite_hint_lines(log),
             "- Not audited: judgments (severity, follow-ups) come from tl.audit(trace).",
         ]
     return [
         (
             f"- NOT-CHECKED: non-finite health has not been established on this object "
-            f"({facts.unexamined} saved output(s) unexamined; basis: {basis})."
+            f"({facts.num_unexamined_ops} saved output(s) unexamined; basis: {basis})."
         ),
         (
             "- To scan retained payloads (payload_scan cost): "
-            "tl.report.health_facts(trace) or trace.nonfinite_ops."
+            "trace.health_facts or trace.nonfinite_ops."
         ),
+        *_track_nonfinite_hint_lines(log),
     ]
+
+
+def _track_nonfinite_hint_lines(log: Any) -> list[str]:
+    """The partial-coverage hint line, while track_nonfinite is off."""
+
+    from ._health import nonfinite_option_hint
+
+    hint = nonfinite_option_hint(log, "not_checked")
+    return [f"- To check every op as it runs: {hint}."] if hint else []
 
 
 def _intervention_lines(log: Any) -> list[str]:
@@ -1064,7 +905,7 @@ def _shared_parameter_line(log: Any) -> str:
     """
 
     shared = 0
-    for param_log in getattr(log, "param_logs", []) or []:
+    for param_log in (log._param_logs if is_live_trace(log) else None) or []:
         used_by_ops = set(getattr(param_log, "used_by_ops", ()) or ())
         try:
             num_calls = int(getattr(param_log, "num_calls", 0) or 0)
@@ -1094,7 +935,7 @@ def _recurrent_loop_line(log: Any) -> str:
         Recurrent-loop summary.
     """
 
-    max_loops = int(getattr(log, "max_layer_op_count", 1) or 1)
+    max_loops = int(getattr(getattr(log, "graph", None), "max_ops_per_layer", 1) or 1)
     if max_loops > 1:
         return f"- Recurrent loops: at least one layer was observed across {max_loops} ops."
     return "- Recurrent loops: no repeated layer ops were detected."
@@ -1114,8 +955,8 @@ def _dynamic_control_flow_line(log: Any) -> str:
         Dynamic-control-flow summary.
     """
 
-    event_count = _safe_len(getattr(log, "conditional_records", None))
-    has_branching = bool(getattr(log, "has_conditional_branching", False))
+    event_count = _safe_len(log._graph_conditional_records if is_live_trace(log) else None)
+    has_branching = bool(getattr(getattr(log, "graph", None), "has_conditional_branching", False))
     if event_count or has_branching:
         return (
             f"- Dynamic control flow: {_format_count(event_count)} conditional event(s) recorded."
@@ -1139,7 +980,7 @@ def _operation_mix_line(log: Any) -> str:
 
     names = [
         str(getattr(layer, "func_name", "unknown"))
-        for layer in getattr(log, "layer_list", []) or []
+        for layer in (log._layer_list if is_live_trace(log) else None) or []
         if str(getattr(layer, "func_name", "none")) != "none"
     ]
     if not names:
@@ -1162,10 +1003,10 @@ def _operational_status_line(log: Any) -> str:
         Operational status summary.
     """
 
-    cache_hit = bool(getattr(log, "capture_cache_hit", False))
+    cache_hit = bool(log._provenance_cache_hit if is_live_trace(log) else False)
     streamed = sum(
         1
-        for layer in getattr(log, "layer_list", []) or []
+        for layer in (log._layer_list if is_live_trace(log) else None) or []
         if getattr(layer, "out_ref", None) is not None
         or getattr(layer, "grad_ref", None) is not None
     )

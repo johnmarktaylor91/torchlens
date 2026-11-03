@@ -48,11 +48,11 @@ def test_flops_report_matches_hand_macs() -> None:
     figure is exactly 2x MACs + non-MAC FLOPs (convention arithmetic)."""
 
     import torchlens as tl
-    from torchlens.report import flops_report
+    from torchlens.report import flops
 
     trace = tl.trace(_mlp(), torch.randn(2, 4))
     try:
-        report = flops_report(trace)
+        report = flops(trace)
         text = str(report)
         assert f"true MACs: {MLP_TRUE_MACS_BATCH2}" in text, (
             f"flops_report true-MAC figure disagrees with the hand closed form"

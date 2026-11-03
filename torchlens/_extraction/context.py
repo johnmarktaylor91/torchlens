@@ -212,7 +212,7 @@ def validate_row_counts(context: BatchContext, processed: Mapping[str, torch.Ten
         The batch's context (its ``row_count`` is the truth).
     processed:
         Stored per-key payloads: tensors, or objects exposing
-        ``row_count``.
+        ``num_rows``.
 
     Raises
     ------
@@ -223,7 +223,7 @@ def validate_row_counts(context: BatchContext, processed: Mapping[str, torch.Ten
 
     offenders: dict[str, int] = {}
     for key, payload in processed.items():
-        observed = getattr(payload, "row_count", None)
+        observed = getattr(payload, "num_rows", None)
         if observed is None and isinstance(payload, torch.Tensor):
             observed = int(payload.shape[0]) if payload.ndim >= 1 else 0
         if observed is None:

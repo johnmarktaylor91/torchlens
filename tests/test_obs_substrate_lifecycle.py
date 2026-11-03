@@ -19,8 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.observability import HistoryCollector, WatchSettings, region, session
-from torchlens.observability._session import active_session
+from torchlens._observability import HistoryCollector, WatchSettings, region, session
+from torchlens._observability._session import active_session
 
 
 def _model() -> nn.Sequential:
@@ -158,7 +158,7 @@ class TestCaptureComposition:
 
     @pytest.mark.smoke
     def test_region_rides_the_shipped_record_span_surface(self) -> None:
-        """Regions during a capture land on trace.observer_spans through the
+        """Regions during a capture land on trace.provenance.observer_spans through the
         SHIPPED observers.span surface -- one span vocabulary (label
         unification consumed), never a parallel stack."""
 
@@ -172,7 +172,7 @@ class TestCaptureComposition:
                     return self.linear(x)
 
         trace = tl.trace(RegionModel(), torch.randn(2, 6))
-        block_spans = [s for s in trace.observer_spans if s["name"] == "block"]
+        block_spans = [s for s in trace.provenance.observer_spans if s["name"] == "block"]
         assert len(block_spans) == 1
         span_record = block_spans[0]
         assert span_record["region"]["metadata"] == {"tag": "a"}

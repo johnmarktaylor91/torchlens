@@ -13,9 +13,10 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw
 
-from ..utils._multipass_access import get_multipass_attr
-from ..utils.display import ensure_trace_visualizer_dir
-from ..viz.node_plots import render_heatmap, render_image_scatter, render_lineplot
+from .._utils._multipass_access import get_multipass_attr
+from .._utils.display import ensure_trace_visualizer_dir
+from ..viz import node_plots
+from ..viz.node_plots import image_scatter, lineplot
 from ._geometry import (
     _SCATTER_CANVAS_SIZE,
     EffectiveDimensionalityInfo,
@@ -41,7 +42,7 @@ def mds_scatter_node_spec(
 
     The returned callback reads ``layer:<layer_label>`` or ``op:<op.label>``
     coordinate tensors from ``trace._annotation_blobs`` and composes a fresh
-    PIL PNG every time a graph is drawn. When ``trace.raw_input`` is a PIL image
+    PIL PNG every time a graph is drawn. When ``trace.input`` is a PIL image
     batch with the same leading count as the coordinates, thumbnails are pasted
     at the normalized MDS positions. Otherwise, the callback renders an explicit
     point-cloud fallback image.
@@ -99,13 +100,13 @@ def mds_scatter_node_spec(
         if key is None or coords is None:
             return None
 
-        images = _matching_pil_image_batch(getattr(trace, "raw_input", None), coords.shape[0])
+        images = _matching_pil_image_batch(getattr(trace, "input", None), coords.shape[0])
         shown_count = min(max_thumbnails, coords.shape[0])
         more_count = max(0, coords.shape[0] - shown_count)
         fallback_reason = (
             None if images is not None else "points fallback: raw PIL image batch unavailable"
         )
-        scatter = render_image_scatter(
+        scatter = image_scatter(
             coords,
             images=images,
             max_items=max_thumbnails,
@@ -159,7 +160,7 @@ def rdm_node_spec(  # noqa: PLR0913 -- draw-time producer: six all-defaulted pre
     canvas_size:
         Width and height of the rendered heatmap image in pixels.
     cmap:
-        Colormap passed to :func:`torchlens.viz.render_heatmap`.
+        Colormap passed to :func:`torchlens.viz.heatmap`.
     show_axis_thumbnails:
         Whether to use matching raw PIL image stimuli as symmetric axis
         thumbnails when available.
@@ -224,9 +225,9 @@ def rdm_node_spec(  # noqa: PLR0913 -- draw-time producer: six all-defaulted pre
             shown_matrix = rank_transform_rdm(matrix, output=display)  # type: ignore[arg-type]
         images = None
         if show_axis_thumbnails:
-            images = _matching_pil_image_batch(getattr(trace, "raw_input", None), matrix.shape[0])
+            images = _matching_pil_image_batch(getattr(trace, "input", None), matrix.shape[0])
         labels = None if images is not None else [f"s{index}" for index in range(matrix.shape[0])]
-        heatmap = render_heatmap(
+        heatmap = node_plots.heatmap(
             shown_matrix,
             width=canvas_size,
             height=canvas_size,
@@ -441,7 +442,7 @@ def _render_scree_image(
         variance = np.pad(variance, (0, n_components - variance.shape[0]))
         cumulative = np.pad(cumulative, (0, n_components - cumulative.shape[0]))
     threshold = np.full(n_components, variance_threshold, dtype=np.float64)
-    plot = render_lineplot(
+    plot = lineplot(
         np.vstack([variance, cumulative, threshold]),
         x_values=x_values,
         labels=("variance", "cumulative", "threshold"),

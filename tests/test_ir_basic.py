@@ -7,27 +7,16 @@ import subprocess
 import sys
 from dataclasses import FrozenInstanceError, fields, is_dataclass
 from typing import get_type_hints
-from unittest.mock import patch
 
 import pytest
 
-from torchlens.ir import (
+from torchlens._ir import (
     ArgTemplateRef,
-    BackendSemantics,
     BlobRef,
-    CaptureEvents,
-    CapturePolicy,
-    ConditionalEvent,
-    ContainerSpec,
     DeferredRef,
     DeviceRef,
     DtypeRef,
-    FireResult,
     FunctionCallRef,
-    FunctionEventInput,
-    InterventionState,
-    InterventionTemplateRef,
-    ModuleCaptureWorkspace,
     ModuleEnterEvent,
     ModuleExitEvent,
     ModuleFrame,
@@ -36,13 +25,18 @@ from torchlens.ir import (
     OutputRef,
     ParamRef,
     ParentEdge,
-    PreHookProvenanceEvent,
     RawGraphWorkspace,
-    RecordContext,
-    ReservedLabel,
     TensorRef,
     WrapperRuntimeWorkspace,
 )
+from torchlens._ir.capture_events import CaptureEvents
+from torchlens._ir.events import InterventionState, PreHookProvenanceEvent
+from torchlens._ir.intervention import FireResult, FunctionEventInput, InterventionTemplateRef
+from torchlens._ir.predicate import RecordContext
+from torchlens._ir.refs import ReservedLabel
+from torchlens._ir.semantics import BackendSemantics, CapturePolicy
+from torchlens._ir.workspaces import ModuleCaptureWorkspace
+from torchlens.types import ContainerSpec
 
 
 def _assert_frozen_and_slotted(instance: object) -> None:
@@ -133,7 +127,7 @@ def _build_ir_instances() -> dict[str, object]:
     parent_edge = ParentEdge(
         parent_label_raw="input_1_0_raw",
         arg_position=0,
-        edge_use="arg",
+        _edge_use="arg",
     )
     param_ref = ParamRef(
         barcode="param-0",
@@ -282,15 +276,9 @@ def _build_ir_instances() -> dict[str, object]:
         is_scalar_bool=False,
         bool_value=None,
         intervention_fired=True,
-        intervention_replaced=False,
+        is_edited=False,
         fire_results=(fire_result,),
         intervention_template_ref=intervention_template_ref,
-    )
-    conditional_event = ConditionalEvent(
-        conditional_id=1,
-        record={"label": "bool_1_1_raw"},
-        arm_entry_edges=(("entry", "then"),),
-        edge_call_indices=(("entry", "then", 1, "bool_1_1_raw", 1),),
     )
     reserved_label = ReservedLabel(
         label="linear_1_1_raw",
@@ -318,7 +306,7 @@ def _build_ir_instances() -> dict[str, object]:
         kind="op",
         label="linear_1_1",
         raw_label="linear_1_1_raw",
-        pass_index=1,
+        pass_number=1,
         event_index=1,
         step_index=1,
         layer_type="linear",
@@ -327,7 +315,7 @@ def _build_ir_instances() -> dict[str, object]:
         func_name="linear",
         address="layer",
         module_type="Linear",
-        module_pass_index=1,
+        module_pass_number=1,
         module_stack=(module_frame,),
         recent_events=(),
         recent_ops=(),
@@ -384,7 +372,6 @@ def _build_ir_instances() -> dict[str, object]:
         "fire_result": fire_result,
         "intervention_template_ref": intervention_template_ref,
         "op_event": op_event,
-        "conditional_event": conditional_event,
         "reserved_label": reserved_label,
         "function_event_input": function_event_input,
         "record_context": record_context,
@@ -418,7 +405,6 @@ def test_imports_every_public_ir_type() -> None:
         "fire_result",
         "intervention_template_ref",
         "op_event",
-        "conditional_event",
         "reserved_label",
         "function_event_input",
         "record_context",
@@ -447,7 +433,6 @@ def test_frozen_dataclasses_are_frozen_and_slotted() -> None:
         "fire_result",
         "intervention_template_ref",
         "op_event",
-        "conditional_event",
         "reserved_label",
         "function_event_input",
         "record_context",
@@ -460,10 +445,10 @@ def test_frozen_dataclasses_are_frozen_and_slotted() -> None:
 def test_container_spec_is_rich_leaf_type() -> None:
     """Assert IR output metadata uses the leaf recursive ContainerSpec."""
 
-    from torchlens.ir.container import ContainerSpec as LeafContainerSpec
+    from torchlens._ir.container import ContainerSpec as LeafContainerSpec
 
     instances = _build_ir_instances()
-    events_module = importlib.import_module("torchlens.ir.events")
+    events_module = importlib.import_module("torchlens._ir.events")
     hints = get_type_hints(
         OutputRef,
         globalns={**vars(events_module), "TensorRef": TensorRef},
@@ -481,7 +466,7 @@ def test_container_leaf_import_order_has_no_cycle() -> None:
             sys.executable,
             "-c",
             (
-                "import torchlens.ir.container; "
+                "import torchlens._ir.container; "
                 "import torchlens.intervention.types; "
                 "print('IMPORT_OK')"
             ),
@@ -538,10 +523,11 @@ def test_capture_events_mutation_and_label_reservation() -> None:
     assert events.raw_layer_type_counter == {"linear": 2, "relu": 1}
 
 
-def test_ir_imports_without_torch_module() -> None:
+def test_ir_imports_without_torch_module(monkeypatch: pytest.MonkeyPatch) -> None:
     """Assert importing IR succeeds when torch is absent from sys.modules."""
-    with patch.dict(sys.modules, {"torch": None}):
-        module = importlib.import_module("torchlens.ir")
+    with monkeypatch.context() as patched:
+        patched.setitem(sys.modules, "torch", None)
+        module = importlib.import_module("torchlens._ir")
 
     assert module.TensorRef is TensorRef
 
@@ -550,8 +536,8 @@ def test_capture_events_concat_follows_declared_merge_law() -> None:
     """journal.concat enforces the declared per-lane merge policies."""
     from dataclasses import fields as dataclass_fields
 
-    from torchlens.ir.capture_events import LANE_MERGE_POLICIES, CaptureEvents
-    from torchlens.ir.events import ModulePrepEvent, PreHookProvenanceEvent
+    from torchlens._ir.capture_events import LANE_MERGE_POLICIES, CaptureEvents
+    from torchlens._ir.events import ModulePrepEvent, PreHookProvenanceEvent
 
     # The merge law is total: every journal lane on CaptureEvents has a
     # policy. Lanes are derived structurally (the list-typed journal buffers,
@@ -679,8 +665,8 @@ def _merge_pre_hook_event(address: str) -> PreHookProvenanceEvent:
 def test_concat_merges_intervention_events_lane() -> None:
     """A populated intervention-edit lane merges under append_restamp."""
 
-    from torchlens.ir.capture_events import CaptureEvents
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.capture_events import CaptureEvents
+    from torchlens._ir.events import InterventionAppliedEvent
 
     source = CaptureEvents()
     source.append_intervention(
@@ -703,7 +689,7 @@ def test_lane_appenders_cover_every_merging_policy() -> None:
     runtime (see ``test_concat_fails_closed_on_declared_unwired_lane``).
     """
 
-    from torchlens.ir.capture_events import _LANE_APPENDERS, LANE_MERGE_POLICIES, CaptureEvents
+    from torchlens._ir.capture_events import _LANE_APPENDERS, LANE_MERGE_POLICIES, CaptureEvents
 
     merging_lanes = {lane for lane, policy in LANE_MERGE_POLICIES.items() if policy != "run_local"}
     assert merging_lanes <= set(_LANE_APPENDERS)
@@ -714,8 +700,8 @@ def test_lane_appenders_cover_every_merging_policy() -> None:
 def test_concat_fails_closed_on_declared_unwired_lane(monkeypatch: pytest.MonkeyPatch) -> None:
     """concat refuses (never silently skips) a merging lane with no appender."""
 
-    from torchlens.ir import capture_events as capture_events_module
-    from torchlens.ir.capture_events import CaptureEvents
+    from torchlens._ir import capture_events as capture_events_module
+    from torchlens._ir.capture_events import CaptureEvents
 
     monkeypatch.setitem(
         capture_events_module.LANE_MERGE_POLICIES, "backward_events", "append_restamp"
@@ -728,8 +714,8 @@ def test_concat_fails_closed_on_declared_unwired_lane(monkeypatch: pytest.Monkey
 def test_concat_preserves_source_chronology_across_lanes() -> None:
     """Merged events keep the source stream's cross-lane chronological order."""
 
-    from torchlens.ir.capture_events import CaptureEvents
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.capture_events import CaptureEvents
+    from torchlens._ir.events import InterventionAppliedEvent
 
     source = CaptureEvents()
     source.append_module_prep(_merge_prep_event("a"))
@@ -768,7 +754,7 @@ def test_concat_preserves_source_chronology_across_lanes() -> None:
 def test_concat_clones_events_and_never_mutates_the_source_stream() -> None:
     """Merging restamps clones; the sealed source stream's seqs stay intact."""
 
-    from torchlens.ir.capture_events import CaptureEvents
+    from torchlens._ir.capture_events import CaptureEvents
 
     source = CaptureEvents()
     source.append_module_prep(_merge_prep_event("a"))
@@ -801,8 +787,8 @@ def test_concat_rejects_invalid_source_sequencing() -> None:
     reject the source typed and fail-closed, BEFORE any event moves.
     """
 
-    from torchlens.ir.capture_events import CaptureEvents, SourceSequencingError
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.capture_events import CaptureEvents, SourceSequencingError
+    from torchlens._ir.events import InterventionAppliedEvent
 
     def _duplicate_cross_lane_source() -> CaptureEvents:
         source = CaptureEvents()

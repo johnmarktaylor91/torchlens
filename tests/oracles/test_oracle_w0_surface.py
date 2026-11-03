@@ -37,6 +37,7 @@ from ._surface import (
     MODULE_ASSIGNED,
     UNDECLARED,
     UNLICENSED,
+    classify_class_member,
     surface_counts,
     walk_class_surface,
     walk_class_surface_classified,
@@ -163,7 +164,11 @@ def test_class_member_license_channels_are_alive() -> None:
         for cls_name, member, lic in walk_class_surface_classified(torchlens)
     }
     assert rows[("Recording", "to_trace")] == CLASS_BODY
-    assert rows[("Trace", "FIELD_FORK_POLICY")] == MODULE_ASSIGNED
+    # No public Trace member is module-assigned since the field-policy tables went
+    # private, so the module-assigned branch is pinned on the private table directly.
+    assert (
+        classify_class_member(torchlens.Trace, "_FIELD_FORK_POLICY", "torchlens") == MODULE_ASSIGNED
+    )
     assert rows[("Op", "gpu_kernels")] == INSTALLED_BY_PACKAGE
     assert rows[("Layer", "flops_forward")] == INSTALLED_BY_PACKAGE
     assert rows[("Flops", "bit_length")] == INHERITED_EXTERNAL
@@ -172,7 +177,7 @@ def test_class_member_license_channels_are_alive() -> None:
 def test_class_walk_is_import_state_independent() -> None:
     """The class walk normalizes import state (train-bounce regression pin).
 
-    ``torchlens.kernel_telemetry`` installs ``gpu_kernels`` on ``Op``/
+    ``torchlens._kernel_telemetry`` installs ``gpu_kernels`` on ``Op``/
     ``AtenOp`` at import time; without normalization the walk counted
     differently depending on which tests imported it first (green alone,
     red in a smoke session). The walk must always see the opt-in members,

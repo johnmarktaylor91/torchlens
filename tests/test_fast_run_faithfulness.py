@@ -19,8 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 
 class HostScalarEscapeModel(nn.Module):
@@ -54,7 +54,7 @@ def _runnable_artifact(model: nn.Module, inputs: torch.Tensor, path: Path) -> Pa
             model,
             inputs,
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
             ),
@@ -72,7 +72,7 @@ def test_fast_run_host_scalar_escape_changed_input_never_verified(tmp_path: Path
 
     ordinary = tl.load(path).run(inputs=changed)
     assert ordinary.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert ordinary.report.poisoned
+    assert ordinary.report.is_poisoned
 
     loaded = tl.load(path)
     first = loaded.run(inputs=original, fast=True)
@@ -80,7 +80,7 @@ def test_fast_run_host_scalar_escape_changed_input_never_verified(tmp_path: Path
 
     fast = loaded.run(inputs=changed, fast=True)
     assert fast.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert fast.report.poisoned
+    assert fast.report.is_poisoned
     # The wrong replayed value must never be blessed: the report matches the
     # ordinary provider's verdict on the identical artifact and input.
     assert fast.report.path_faithfulness is ordinary.report.path_faithfulness
@@ -116,7 +116,7 @@ def test_fast_run_layout_twin_never_verified(tmp_path: Path) -> None:
             LayoutPredicateModel(),
             original,
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
             ),
@@ -133,7 +133,7 @@ def test_fast_run_layout_twin_never_verified(tmp_path: Path) -> None:
 
     fast = loaded.run(inputs=twin, fast=True)
     assert fast.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert fast.report.poisoned
+    assert fast.report.is_poisoned
 
 
 def test_fast_sparse_run_consumes_alias_unresolved_flag() -> None:
@@ -183,7 +183,7 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
 
     model = BufferGainModel().eval()
     captured = tl.trace(model, torch.ones(2, 3), save=lambda op: True)
-    saved_before = {op.label for op in captured.layer_list if op.has_saved_activation}
+    saved_before = {op.label for op in captured._layer_list if op.has_saved_activation}
     assert "buffer_1:1" in saved_before
     del model.second
 
@@ -191,14 +191,14 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
         captured.run(inputs=torch.ones(2, 3), fast=True)
     assert excinfo.value.fields["detection_stage"] == "fast_live_module_plan"
 
-    saved_after = {op.label for op in captured.layer_list if op.has_saved_activation}
+    saved_after = {op.label for op in captured._layer_list if op.has_saved_activation}
     assert saved_after == saved_before
-    assert captured.layer_dict_all_keys["buffer_1:1"].out is not None
+    assert captured._layer_dict_all_keys["buffer_1:1"].out is not None
 
 
 @pytest.mark.smoke
-def test_fast_live_divergence_poisons_half_refreshed_trace() -> None:
-    """A diverged fast-live run marks the mixed-activation user Trace poisoned."""
+def test_fast_live_divergence_poisons_the_result_trace_not_the_source() -> None:
+    """A diverged fast-live run poisons the half-refreshed result Trace; the source stays clean."""
 
     class BranchingFunctionModel(nn.Module):
         """Choose between two same-shape activation functions from tensor data."""
@@ -217,13 +217,17 @@ def test_fast_live_divergence_poisons_half_refreshed_trace() -> None:
 
     from torchlens.errors import PathDivergenceError
 
+    first = captured.run(inputs=2 * torch.ones(2), fast=True)
+    assert first.trace is not captured
+
     with pytest.raises(PathDivergenceError):
         captured.run(inputs=-torch.ones(2), fast=True)
 
-    # Boundary/site payloads were overwritten in place up to the divergence
-    # point, so the user-owned Trace must carry the monotonic poison mark and
-    # refuse downstream faithful consumers.
-    assert captured._runnable.path_faithfulness is PathFaithfulness.DIVERGED
+    # Boundary/site payloads were overwritten on the session's result Trace up
+    # to the divergence point, so the result the user already holds carries the
+    # monotonic poison mark; the source Trace was never written.
+    assert first.trace._runnable.path_faithfulness is PathFaithfulness.DIVERGED
+    assert captured._runnable.path_faithfulness is not PathFaithfulness.DIVERGED
 
 
 def test_fast_live_inherited_divergence_never_unregisters_user_trace() -> None:
@@ -261,7 +265,7 @@ def test_fast_live_inherited_divergence_never_unregisters_user_trace() -> None:
 def test_remove_fast_live_hooks_survives_raising_remove() -> None:
     """One raising handle.remove() must not strand the remaining hooks."""
 
-    from torchlens._fast_run import _remove_fast_live_hooks
+    from torchlens._fast_live_hooks import _remove_fast_live_hooks
 
     removed: list[int] = []
 
@@ -345,7 +349,9 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
     guard failure was indistinguishable from inputs-match.
     """
 
-    import torchlens._runnable_execution as execution
+    import torchlens._fast_run as fast_run_module
+    import torchlens._runnable.input_sites as input_sites
+    import torchlens._runnable.transaction as transaction
     from torchlens.errors import RunCapabilityUnavailableError
 
     model = _PlainLinear().eval()
@@ -355,7 +361,9 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
     def _boom(*args, **kwargs):
         raise RuntimeError("injected classifier failure")
 
-    monkeypatch.setattr(execution, "_live_runtime_input_leaves", _boom)
+    # The home module and every module that bound the walker by import.
+    for module in (transaction, input_sites, fast_run_module):
+        monkeypatch.setattr(module, "_live_runtime_input_leaves", _boom)
     with pytest.raises(RunCapabilityUnavailableError):
         captured.run(inputs=torch.ones(2, 3), fast=True)
 
@@ -414,12 +422,12 @@ def _saved_all_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> P
             model,
             inputs,
             capture=CaptureOptions(
-                intervention_ready=True,
-                layers_to_save="all",
+                replayable=True,
                 cache=False,
             ),
+            save="all",
         )
-    tl.save(captured, path, level="runnable", include_weights=True)
+    captured.save(path, level="runnable", include_weights=True)
     return path
 
 
@@ -543,13 +551,13 @@ def test_fast_sparse_runs_post_execution_contract_checks(tmp_path: Path) -> None
             model,
             box_a(t=tensor),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
             ),
         )
     path = tmp_path / "m.tlspec"
-    tl.save(captured, path, level="runnable", include_weights=True)
+    captured.save(path, level="runnable", include_weights=True)
 
     ordinary = tl.load(path)
     with pytest.raises(PathDivergenceError):
@@ -583,7 +591,7 @@ def test_every_witness_family_consumer_reachable_from_fast_provider() -> None:
     import inspect
 
     import torchlens._fast_run as fast_run_module
-    from torchlens.runnable import WITNESS_FAMILY_REGISTRY
+    from torchlens._runnable import WITNESS_FAMILY_REGISTRY
 
     # Scoped scan: the sparse session class body plus its constructor path
     # (build/prepare seams live at module level but are called from build()).
@@ -661,7 +669,7 @@ def test_fast_bind_outputs_refuses_op_label_slot_arity_mismatch() -> None:
     from types import SimpleNamespace
 
     from torchlens._fast_run import _FastSparseSession
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
 
     slots_by_id = {
         "s1": SimpleNamespace(

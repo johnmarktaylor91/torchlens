@@ -279,7 +279,7 @@ def test_mha_attention_outputs_are_selectable() -> None:
         "attn_output",
         "attn_output_weights",
     ]
-    sites = trace.find_sites(tl.module("mha") & tl.output("attn_output_weights"))
+    sites = trace.find_sites(tl.module("mha") & tl.model_output("attn_output_weights"))
     assert [site.layer_label for site in sites] == [outputs[1].layer_label]
 
 
@@ -300,9 +300,9 @@ def test_output_selectors_match_index_and_role() -> None:
 
     trace = _lstm_trace()
     h_n = trace.ops[trace.modules["lstm"].ops[0].output_ops[1]]
-    assert [site.layer_label for site in trace.find_sites(tl.module("lstm") & tl.output(1))] == [
-        h_n.layer_label
-    ]
+    assert [
+        site.layer_label for site in trace.find_sites(tl.module("lstm") & tl.model_output(1))
+    ] == [h_n.layer_label]
     assert [site.layer_label for site in trace.find_sites(tl.func("lstm", output="h_n"))] == [
         h_n.layer_label
     ]
@@ -441,7 +441,7 @@ def test_traced_container_specs_preserve_literal_return_leaves() -> None:
     tuple_trace = tl.trace(
         TupleLiteralModel(),
         torch.tensor([-1.0, 2.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     tuple_outputs = [tuple_trace.ops[label] for label in tuple_trace.output_layers]
     tuple_spec = next(
@@ -456,7 +456,7 @@ def test_traced_container_specs_preserve_literal_return_leaves() -> None:
     dict_trace = tl.trace(
         DictLiteralModel(),
         torch.tensor([-1.0, 2.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     dict_outputs = [dict_trace.ops[label] for label in dict_trace.output_layers]
     dict_spec = next(
@@ -588,10 +588,8 @@ def test_opaque_in_list_module_output_structure_matches_output_paths() -> None:
     container depth, and the invariant holds legitimately.
     """
 
-    from torchlens.validation.invariants import (
-        _container_tensor_leaf_paths,
-        check_metadata_invariants,
-    )
+    from torchlens.validation._invariants_modules_params import _container_tensor_leaf_paths
+    from torchlens.validation.invariants import check_metadata_invariants
 
     trace = tl.trace(_OpaqueInListModel(), torch.tensor([-1.0, 2.0]))
 

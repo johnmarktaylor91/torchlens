@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.streaming import REASON_SENTINEL
-from torchlens.fastlog import storage_disk
+from torchlens.recording import storage_disk
 
 _SENTINEL = "SECRET-VALUE-b7ab55b1"
 
@@ -53,7 +53,7 @@ def test_finalize_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
             _TinyModel(),
             torch.randn(1, 4),
             save=tl.func("relu"),
-            streaming=tl.options.StreamingOptions(bundle_path=bundle),
+            storage=tl.options.StorageOptions(path=bundle),
         )
 
     reasons = _reason_files(tmp_path)
@@ -67,7 +67,7 @@ def test_finalize_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
 def test_index_append_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
     bundle = tmp_path / "bundle"
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     real_append = storage_disk.DiskStorageBackend._append_index_line
 
@@ -81,12 +81,12 @@ def test_index_append_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
             self.index_path = original_index_path
 
     monkeypatch.setattr(storage_disk.DiskStorageBackend, "_append_index_line", leaky_open_append)
-    with pytest.raises((TorchLensIOError, OSError)):
+    with pytest.raises((ArtifactError, OSError)):
         tl.record(
             _TinyModel(),
             torch.randn(1, 4),
             save=tl.func("relu"),
-            streaming=tl.options.StreamingOptions(bundle_path=bundle),
+            storage=tl.options.StorageOptions(path=bundle),
         )
 
     reasons = _reason_files(tmp_path)

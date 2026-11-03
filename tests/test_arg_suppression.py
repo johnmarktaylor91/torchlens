@@ -22,13 +22,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._arg_suppression import (
+from torchlens._visualization._arg_suppression import (
     SUPPRESSION_CANDIDATE_TABLE,
     compute_suppressed_arg_keys,
     suppressed_arg_keys_for_record,
 )
-from torchlens.visualization._label_format import format_module_kwargs
-from torchlens.visualization._render_nodes import compute_default_node_lines
+from torchlens._visualization._label_format import format_module_kwargs
+from torchlens._visualization._render_nodes import compute_default_node_lines
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -97,11 +97,10 @@ def varying_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 # ---------------------------------------------------------------------------
@@ -200,8 +199,8 @@ def test_multi_parent_input_side_stays_visible() -> None:
         shape = (3, 8)
 
     class StubTrace:
-        backend = "torch"
-        layer_logs: dict[str, Any] = {}
+        _provenance_backend = "torch"
+        _layer_logs: dict[str, Any] = {}
 
     keys = suppressed_arg_keys_for_record(StubTrace(), Stub(), {})
     assert keys == frozenset({"out_features"})
@@ -209,8 +208,8 @@ def test_multi_parent_input_side_stays_visible() -> None:
 
 def test_non_torch_backend_never_candidates() -> None:
     class StubTrace:
-        backend = "tf"
-        layer_list = ()
+        _provenance_backend = "tf"
+        _layer_list = ()
 
     class StubUniverse:
         units = ()
@@ -226,8 +225,8 @@ def test_unrecognized_layer_type_not_candidate() -> None:
         shape = (3, 4)
 
     class StubTrace:
-        backend = "torch"
-        layer_logs: dict[str, Any] = {}
+        _provenance_backend = "torch"
+        _layer_logs: dict[str, Any] = {}
 
     assert suppressed_arg_keys_for_record(StubTrace(), Stub(), {}) == frozenset()
 
@@ -241,7 +240,7 @@ def test_varying_recurrence_unrolled_suppresses(varying_log: tl.Trace, tmp_path:
     """Per-pass nodes have their own captured shapes: the equality check
     licenses suppression pass by pass."""
 
-    dot = _draw(varying_log, tmp_path, vis_mode="unrolled")
+    dot = _draw(varying_log, tmp_path, rolled=False)
     assert "out_features" not in dot
 
 
@@ -252,7 +251,7 @@ def test_varying_recurrence_rolled_keeps_args_visible(
     the license cannot be checked, so the arg stays VISIBLE. An honest,
     DELIBERATE cross-mode difference — do not 'fix' it."""
 
-    dot = _draw(varying_log, tmp_path, vis_mode="rolled")
+    dot = _draw(varying_log, tmp_path, rolled=True)
     assert "out_features=4" in dot
 
 

@@ -21,7 +21,7 @@ from typing import Any
 
 import torch
 
-from ..semantic._hops import VALUE_GRAMMAR, HopRefusal, walk_upstream
+from .._semantic._hops import VALUE_GRAMMAR, HopRefusal, walk_upstream
 from ._errors import refuse
 from ._records import ComponentRow, ComponentStack, Coordinate, StackGrading
 from ._walk import SpineNode, SpineWalk, walk_spine
@@ -76,7 +76,7 @@ def _deepest_value_ancestor(trace: Any, op: Any) -> tuple[Any, str]:
     def _grammar_stop(candidate: Any) -> bool:
         """Anchor at the first op the grammar does not propose across."""
 
-        from ..semantic import _hops
+        from .._semantic import _hops
 
         return _hops._propose(candidate, VALUE_GRAMMAR) is None
 
@@ -139,7 +139,7 @@ def _require_payloads(trace: Any, labels: list[str], *, analysis: str) -> dict[s
             code="mi_payload_missing",
             message=f"{analysis} needs {len(missing)} unsaved op payload(s): "
             f"{sorted(str(row['op_label']) for row in missing)}.",
-            remedy="recapture with tl.mechinterp.retention_plan(trace, analyses=...).predicate "
+            remedy="recapture with torchlens.mechinterp.retention_plan(trace, analyses=...).predicate "
             "as save= (or layers_to_save='all'); never a partial table",
             missing_sites=missing,
             analysis=analysis,
@@ -224,7 +224,7 @@ def residual_accumulation(
                     label=_innermost_module(op) or label,
                     op_label=label,
                     site_key=getattr(op, "site_key", None),
-                    pass_index=getattr(op, "pass_index", None),
+                    pass_index=getattr(op, "pass_number", None),
                     kind="residual",
                     module_address=_innermost_module(op),
                     provenance="captured",
@@ -240,7 +240,7 @@ def residual_accumulation(
             label=str(getattr(target_op, "label", "target")),
             op_label=str(getattr(target_op, "label", "")),
             site_key=getattr(target_op, "site_key", None),
-            pass_index=getattr(target_op, "pass_index", None),
+            pass_index=getattr(target_op, "pass_number", None),
             kind="residual",
         ),
         target_value=_positions_view(target_value, positions) if target_value is not None else None,
@@ -272,7 +272,7 @@ def _writer_row(
             label=label,
             op_label=str(getattr(writer_op, "label", writer_label)),
             site_key=getattr(writer_op, "site_key", None),
-            pass_index=getattr(writer_op, "pass_index", None),
+            pass_index=getattr(writer_op, "pass_number", None),
             kind=_writer_kind(trace, ancestor),
             module_address=_innermost_module(ancestor),
             provenance=f"captured/{verification}",
@@ -407,7 +407,7 @@ def residual_decomposition(
             label=str(getattr(target_op, "label", "target")),
             op_label=str(getattr(target_op, "label", "")),
             site_key=getattr(target_op, "site_key", None),
-            pass_index=getattr(target_op, "pass_index", None),
+            pass_index=getattr(target_op, "pass_number", None),
             kind="residual",
         ),
         target_value=_positions_view(target_value, positions) if target_value is not None else None,

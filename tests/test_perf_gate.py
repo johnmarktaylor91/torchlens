@@ -24,15 +24,15 @@ from benchmarks.perf_suite import (
     _assert_baseline_status_writable,
     _validate_baseline_status_args,
 )
-from torchlens.backends.torch.model_prep import _traverse_model_modules
-from torchlens.data_classes._trace_accessors import (
+from torchlens._data_classes._trace_accessors import (
     TraceModuleCallAccessor,
     _invalidate_trace_module_call_accessor_cache,
 )
-from torchlens.data_classes.trace import Trace
-from torchlens.postprocess import ast_branches
-from torchlens.postprocess.loop_grouping_adapter import FrontierNodes, _pop_frontier_node
-from torchlens.utils.tensor_utils import get_memory_amount
+from torchlens._data_classes.trace import Trace
+from torchlens._postprocess import ast_branches
+from torchlens._postprocess.loop_grouping_adapter import FrontierNodes, _pop_frontier_node
+from torchlens._utils.tensor_utils import get_memory_amount
+from torchlens.backends.torch.model_prep import _traverse_model_modules
 
 
 def _row(
@@ -284,7 +284,7 @@ def _fresh_module_calls(trace: Trace) -> TraceModuleCallAccessor:
     calls: OrderedDict[str, Any] = OrderedDict()
     for module in trace._module_logs:
         for call in module.calls.values():
-            calls[call.call_label] = call
+            calls[call.label] = call
     return TraceModuleCallAccessor(calls)
 
 
@@ -316,9 +316,9 @@ def test_module_calls_accessor_is_cached_with_profiled_rebuild_reduction(
     expected = _fresh_module_calls(trace)
     _invalidate_trace_module_call_accessor_cache(trace)
 
-    from torchlens.data_classes import _trace_stats
+    from torchlens._data_classes import _trace_views
 
-    original_accessor = _trace_stats.TraceModuleCallAccessor
+    original_accessor = _trace_views.TraceModuleCallAccessor
     rebuild_count = 0
 
     def counting_accessor(calls: OrderedDict[str, Any]) -> TraceModuleCallAccessor:
@@ -328,7 +328,7 @@ def test_module_calls_accessor_is_cached_with_profiled_rebuild_reduction(
         rebuild_count += 1
         return original_accessor(calls)
 
-    monkeypatch.setattr(_trace_stats, "TraceModuleCallAccessor", counting_accessor)
+    monkeypatch.setattr(_trace_views, "TraceModuleCallAccessor", counting_accessor)
     cached = trace.module_calls
     for _ in range(128):
         assert trace.module_calls is cached
@@ -350,7 +350,7 @@ def test_module_calls_cache_invalidates_on_supported_call_mutation() -> None:
     cached = trace.module_calls
     module = trace.modules["shared"]
     replacement = copy.copy(module.calls[0])
-    replacement.call_label = "shared:replacement"
+    replacement.label = "shared:replacement"
 
     module.calls[1] = replacement
 
@@ -605,7 +605,7 @@ def test_emit_tensor_grad_event_populates_profile_buckets() -> None:
 
     model = nn.Linear(3, 2)
     x = torch.randn(1, 3, requires_grad=True)
-    trace = tl.trace(model, x, profile=True, capture=tl.options.CaptureOptions(backward_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
 
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 

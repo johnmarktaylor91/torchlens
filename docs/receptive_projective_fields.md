@@ -22,7 +22,7 @@ x = torch.randn(1, 3, 224, 224, requires_grad=True)
 # save_mode="reference": the default detaching save mode frees the autograd
 # history the empirical probes consume.
 trace = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference"
+    model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
 )
 
 op = trace["layer4.1.conv2"]
@@ -33,20 +33,20 @@ print(rf.size, rf.jump, rf.center0)
 box = rf.at((3, 3))
 
 # Gradient-bearing actions use a complete target-element index, including batch.
-# .gradient() and .check() FREE the armed autograd graph by default, so pass
+# .probe_grad() and .check() FREE the armed autograd graph by default, so pass
 # retain_graph=True to every gradient-bearing action except the last.
 unit = rf.center_unit(batch_index=0)
-empirical = rf.gradient(unit, retain_graph=True)
+empirical = rf.probe_grad(unit, retain_graph=True)
 checked = rf.check(unit, retain_graph=True)
-overlay = rf.show(unit, gradient=True)
+overlay = rf.show(unit, grad=True)
 overlay.save("resnet18_rf.png")
 ```
 
-`ReceptiveFieldView.at()` is the cheap geometric query. `.gradient()` probes exactly one output
+`ReceptiveFieldView.at()` is the cheap geometric query. `.probe_grad()` probes exactly one output
 element and returns its empirical support mask. `.check()` is the zero-tolerance containment
-tripwire, and `.show()` renders an input overlay; with `gradient=True`, it also overlays the
+tripwire, and `.show()` renders an input overlay; with `grad=True`, it also overlays the
 empirical heatmap. Gradient operations require a backward-ready trace and are deliberately
-explicit because they consume autograd work. Both `.gradient()` and `.check()` FREE the armed
+explicit because they consume autograd work. Both `.probe_grad()` and `.check()` FREE the armed
 autograd graph by default; pass `retain_graph=True` to either when a later gradient-bearing
 action must run on the same armed capture.
 
@@ -70,7 +70,7 @@ Never read a numeric box without its `status`.
 | `EXACT` | Exact integer hull of potential support for the captured execution. |
 | `WHOLE_INPUT` | The whole far endpoint is the exact structural envelope. In a projective query, the display means the whole output/target even though the stable enum name remains `WHOLE_INPUT`. |
 | `UPPER_BOUND` | Sound envelope, not an exact claim. |
-| `DATA_DEPENDENT` | Routing depends on data; use `.gradient()`. |
+| `DATA_DEPENDENT` | Routing depends on data; use `.probe_grad()`. |
 | `UNKNOWN` | The operation is recognized, but captured facts or axis roles are insufficient. |
 | `UNSUPPORTED` | A contributing operation has no registered geometric rule. |
 
@@ -123,19 +123,50 @@ print(incoming_table.to_pandas()[["name", "status", "size", "jump"]])
 layer, multi-call module, or multi-output module call is intentionally ambiguous rather than
 silently selecting a representative; use the trace table to enumerate boundary outputs.
 
+## From one unit to a set of units
+
+`.at()` answers for one unit. `.of(units, within=)` answers for many at once: it takes the same
+units `tl.units(site, indices)` takes, either a bool mask over the view owner's full output or
+coordinate tuples over its full shape (batch and channel included), and returns a trace-bound
+`tl.Selection` with one region per site named in `within=`.
+
+```python
+# Where does a 2x2 patch of conv1 reach in layer2 and layer3?
+patch = torch.zeros(1, 64, 112, 112, dtype=torch.bool)  # conv1's output shape
+patch[0, :, 50:52, 60:62] = True
+reach = trace["conv1"].projective_field.of(patch, within=["layer2", "layer3"])
+
+# Which conv1 units can affect these layer3 units?
+sources = trace["layer3"].receptive_field.of([(0, 0, 3, 3), (0, 0, 3, 4)], within="conv1")
+
+# The answer is a Selection: combine it, cut the graph to it, or intervene on it.
+other = trace["conv1"].projective_field.of([(0, 0, 80, 80)], within=["layer2", "layer3"])
+shared = reach & other
+sub = trace.subgraph(reach)
+```
+
+`within=` takes one region or a list: an op or layer label, a module address (its output op), an
+`Op`, `Layer`, `Module` or `ModuleCall`, or a selector. It defaults to the model outputs for the
+projective direction and the model inputs for the receptive direction. Each region's
+`provenance.relation`, `provenance.basis` and `provenance.field_status` state what kind of answer
+it is. `method="geometric"` (the default) unions the per-unit boxes and refuses a site with no
+per-unit geometry (`influence_geometry_unavailable`); `method="gradient"` measures the set with
+autograd probes on a backward-ready trace and refuses above `probe_budget=` probes
+(`influence_probe_budget`).
+
 ## Namespace reference
 
 `tl.receptive_field` is lazy and deliberately outside `tl.__all__`. Its result vocabulary is
 `GridLayout`, `ReceptiveField`, `ReceptiveFieldAxis`, `ReceptiveFieldBox`,
-`ReceptiveFieldBoxAxis`, `GradientReceptiveField`, `ReceptiveFieldProfile`,
+`ReceptiveFieldBoxAxis`, `GradReceptiveField`, `ReceptiveFieldProfile`,
 `ReceptiveFieldValidation`, `ReceptiveFieldValidationStatus`, `ReceptiveFieldViolation`,
 `ReceptiveFieldStatus`, `ReceptiveFieldAlignment`, and `ReceptiveFieldDirection`. The query
 view type is `ReceptiveFieldView`.
 
 For extension, use `register_rf_rule()` and `rules()`; `ReceptiveFieldRule` and
 `ReceptiveFieldRuleContext` are the corresponding rule types, and `rules()` is a read-only
-snapshot. `node_spec()` creates a `Trace.draw(node_spec_fn=...)` callback. `verify()` and
-`self_check()` run the model-facing diagnostics: each returns a `ReceptiveFieldVerification` that
+snapshot. `node_spec()` creates a `Trace.draw(node_spec_fn=...)` callback. `verify()` runs
+the model-facing diagnostics: it returns a `ReceptiveFieldVerification` that
 pairs geometric containment checks with sampled `EmpiricalAdjointCheck` comparisons (the
 receptive/projective empirical derivatives at a shared unit). Its `.verdict` property is the
 tri-state summary: `FAIL` reports a real violation, `INDETERMINATE` means the empirical half never
@@ -158,8 +189,7 @@ backward-ready graph, and reference-saved payloads; anything less is reported as
 trace = tl.trace(
     model,
     x.requires_grad_(True),
-    capture=tl.options.CaptureOptions(backward_ready=True),
-    save_mode="reference",
+    capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
 )
 
 # Exhaustive/sampled trace sweep over center units (and optionally corners).
@@ -193,20 +223,19 @@ unit = op.receptive_field.center_unit(batch_index=0)
 # Highlight the ancestor cone in the graph drawing.
 trace.draw(
     node_spec_fn=tl.receptive_field.node_spec(op, unit=unit),
-    vis_save_only=True,
-    vis_fileformat="svg",
+    file_format="svg",
 )
 
 # Save the source image overlay and the empirical gradient heatmap together.
-op.receptive_field.show(unit, gradient=True).save("rf_overlay.png")
+op.receptive_field.show(unit, grad=True).save("rf_overlay.png")
 ```
 
-Use a complete index for `.gradient()`, `.check()`, and `.show()`; `.at()` alone takes the
+Use a complete index for `.probe_grad()`, `.check()`, and `.show()`; `.at()` alone takes the
 shorter coordinate tuple over windowed axes. This separation prevents a guessed batch coordinate
 from becoming an apparently precise answer.
 
 ## References
 
 - Araujo, Norris, and Sim, [*Computing Receptive Fields of Convolutional Neural Networks*](https://distill.pub/2019/computing-receptive-fields/), Distill, 2019.
-- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/hash/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
+- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/file/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
 - Lehky and Sejnowski, [*Network model of shape-from-shading: neural function arises from both receptive and projective fields*](https://www.nature.com/articles/333452a0), Nature, 1988.

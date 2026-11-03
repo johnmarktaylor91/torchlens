@@ -4,7 +4,7 @@ Split out of ``model_prep.py`` under the R43 file-size ratchet. The
 module-arg stash and the ``ModuleEnterEvent`` used to pin every module
 call's live input tensors for the whole forward -- a dominant capture-floor
 holder (brainpipe memo section 3.3). Tensor leaves are replaced at module
-entry with :class:`~torchlens.ir.workspaces.ReleasedTensorStub` surrogates
+entry with :class:`~torchlens._ir.workspaces.ReleasedTensorStub` surrogates
 carrying exactly what the torch trace path's consumers read (shape/dtype
 facts for ``format_call_arg`` summaries and quantized-FLOPs estimation;
 GC-11 nulls ``ModuleCall.forward_args`` before the trace is returned).
@@ -16,7 +16,7 @@ from typing import Any, cast
 
 import torch
 
-from ...ir.workspaces import ReleasedTensorStub
+from ..._ir.workspaces import ReleasedTensorStub
 from ._tl import get_tensor_label
 
 _MODULE_ARG_STUB_MAX_DEPTH = 5
@@ -80,7 +80,7 @@ def first_stub_shape(value: Any, search_depth: int = 5) -> tuple[int, ...] | Non
         First stub shape, or ``None`` when no stub is present.
     """
 
-    from ...utils.introspection import get_vars_of_type_from_obj
+    from ..._utils.introspection import get_vars_of_type_from_obj
 
     stubs = get_vars_of_type_from_obj(value, ReleasedTensorStub, search_depth=search_depth)
     if stubs:

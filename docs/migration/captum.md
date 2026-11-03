@@ -9,6 +9,18 @@
 | Integrated gradients | `tl.attribution.integrated_gradients(model, x, target=...)`; `tl.attribution.layer_integrated_gradients` for a layer | Shipped; see `docs/reference/attribution.md` for baselines and convergence reporting. |
 | Saliency / gradient attribution | `tl.attribution.saliency`, `input_x_grad`, `smoothgrad`, `noise_tunnel`, `gradient_shap`, `guided_backprop`, `deconvolution`, `grad_cam` | Shipped; DeepLift, LIME and Kernel SHAP are not shipped, use Captum for them. |
 | Neuron conductance | `tl.attribution.layer_conductance` (layer level) | Layer conductance only; neuron-level conductance stays in Captum. |
-| Compare attribution metrics across runs | `Bundle.joint_metric` or an explicit metric loop | Equivalent container-level computation. |
+| Compare attribution metrics across runs | A metric called on the `tl.Bundle`, or `bundle.map(fn)` per member | Equivalent container-level computation. |
 | Persist attribution setup | `.tlspec/` for intervention recipe, separate code for metric | Partial; metrics are not fully serialized. |
 | Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, reconstruction_ready=True)` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |
+
+## SHAP
+
+SHAP is a composition partner, not something TorchLens replaces. For deep networks, the
+native path is `tl.attribution.gradient_shap(model, inputs, target=..., baselines=...)`:
+pass `seed=` and the run is reproducible: the result records the seed and digests of its
+baseline and sample draws, and `target=` can be a class index or any function from the
+model's output to a scalar.
+For SHAP's own explainers, `torchlens.bridge.shap.explain(trace, background=...)` is a
+thin handoff (the `shap` extra): it passes the traced model and inputs to
+`shap.DeepExplainer` (or the `explainer_class` you name) and returns SHAP's values with
+the explainer.

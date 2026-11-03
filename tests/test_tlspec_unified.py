@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import warnings
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,10 +14,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TLSPEC_VERSION, ArtifactSchemaAgeWarning, TorchLensIOError
+from torchlens._io import TLSPEC_VERSION, ArtifactError
 from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.backends import BackendPayloadUnsupportedError
-from torchlens.intervention.types import FireRecord, HelperSpec, InterventionSpec
+from torchlens.errors import BackendPayloadUnsupportedError
+from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import _SUPPORTED_JSON_SCHEMA_KEYWORDS, validate_tlspec
 
@@ -116,12 +115,12 @@ class UnifiedPlainAttributeBufferModel(nn.Module):
         return x * self.scale
 
 
-def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
+def _captured_log(*, replayable: bool = False) -> tl.Trace:
     """Create a deterministic captured model log.
 
     Parameters
     ----------
-    intervention_ready:
+    replayable:
         Whether to include intervention replay metadata.
 
     Returns
@@ -135,10 +134,10 @@ def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
         UnifiedTinyModel().eval(),
         torch.randn(2, 3),
         capture=CaptureOptions(
-            intervention_ready=intervention_ready,
-            layers_to_save="all",
-            random_seed=0,
+            replayable=replayable,
+            seed=0,
         ),
+        save="all",
     )
 
 
@@ -399,7 +398,7 @@ def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="intended_use"):
         validate_tlspec(path)
-    with pytest.raises(TorchLensIOError, match="intended_use"):
+    with pytest.raises(ArtifactError, match="intended_use"):
         tl.load(path)
 
 
@@ -421,7 +420,7 @@ def test_unified_load_rejects_desynchronized_body_index(
         manifest["body_index"][0]["filename"] = "blobs/ghost.safetensors"
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="body_index"):
+    with pytest.raises(ArtifactError, match="body_index"):
         tl.load(path)
 
 
@@ -446,21 +445,21 @@ def test_validate_tlspec_rejects_unparseable_manifest(tmp_path: Path) -> None:
 
 
 def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
-    """A checked-in v2.16 model-log fixture refuses at the 2.33 floor.
+    """A checked-in v2.16 model-log fixture refuses at the tlspec-6 floor.
 
     Both validation and loading refuse the same real pre-floor artifact with
     the typed floor error; legacy 2.16 intervention specs remain accepted.
     """
 
-    from torchlens.errors import ArtifactVersionBelowFloorError
+    from torchlens.errors import ArtifactTooOldError
 
     fixture_path = (
         Path(__file__).parent / "fixtures" / "tlspec_v2_16" / "F2_modellog_tiny_cnn.tlspec"
     )
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.33"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         validate_tlspec(fixture_path)
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.33"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         tl.load(fixture_path)
 
 
@@ -480,8 +479,8 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
     assert manifest["kind"] == "trace"
     assert manifest["tlspec_version"] == TLSPEC_VERSION
     assert manifest["save_level"] == level
-    assert [layer.layer_label for layer in loaded.layer_list] == [
-        layer.layer_label for layer in log.layer_list
+    assert [layer.layer_label for layer in loaded._layer_list] == [
+        layer.layer_label for layer in log._layer_list
     ]
 
 
@@ -489,7 +488,7 @@ def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
     """Current manifests must not apply the v4 backend-address repair."""
 
     trace = tl.trace(UnifiedPlainAttributeBufferModel(), torch.ones(2, 3))
-    plain_buffer_op = next(op for op in trace.ops if op.is_buffer and op.address == "scale")
+    plain_buffer_op = next(op for op in trace._layer_list if op.is_buffer and op.address == "scale")
     assert plain_buffer_op.backend_address is None
     assert trace[plain_buffer_op.layer_label].backend_address is None
 
@@ -508,7 +507,8 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     trace = tl.trace(
         nn.Linear(3, 3),
         torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+        save="all",
     )
     source_op = next(
         op for op in trace.ops if isinstance(op.out, torch.Tensor) and op.out.requires_grad
@@ -529,7 +529,7 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     assert lazy_out.requires_grad is True
 
 
-def test_fresh_unified_save_reports_current_version_with_no_schema_age_warning(
+def test_fresh_unified_save_reports_current_version(
     tmp_path: Path,
 ) -> None:
     """A same-runtime save/load round trip must not report a false "older" version.
@@ -541,8 +541,7 @@ def test_fresh_unified_save_reports_current_version_with_no_schema_age_warning(
     merge in ``_TlSpecWriter.write_trace_manifest`` let the stale constant win,
     so every freshly-saved bundle reported ``tlspec_version=1`` on disk and
     every same-runtime load raised a false "Bundle tlspec_version=1 is older
-    than the runtime ``tlspec_version``" advisory (an ``ArtifactSchemaAgeWarning``
-    today; a ``DeprecationWarning`` when the regression was first caught).
+    than the runtime ``tlspec_version``" refusal.
     """
 
     log = _captured_log()
@@ -552,9 +551,7 @@ def test_fresh_unified_save_reports_current_version_with_no_schema_age_warning(
     manifest = _read_manifest(path)
     assert manifest["tlspec_version"] == TLSPEC_VERSION
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", ArtifactSchemaAgeWarning)
-        loaded = tl.load(path)
+    loaded = tl.load(path)
     assert isinstance(loaded, tl.Trace)
 
 
@@ -569,14 +566,14 @@ def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Pa
     manifest["tlspec_version"] = TLSPEC_VERSION + 1
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match=str(TLSPEC_VERSION + 1)):
+    with pytest.raises(ArtifactError, match=str(TLSPEC_VERSION + 1)):
         tl.load(path)
 
 
 def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
     """Validation enforces the same portable-version ceiling as loading."""
 
-    from torchlens._io import ArtifactVersionAboveRuntimeError
+    from torchlens._io import ArtifactTooNewError
 
     path = tmp_path / "newer_validation_version.tlspec"
     _captured_log().save(path)
@@ -590,7 +587,7 @@ def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
         f"up to {TLSPEC_VERSION}."
     )
 
-    with pytest.raises(ArtifactVersionAboveRuntimeError, match=re.escape(expected)) as excinfo:
+    with pytest.raises(ArtifactTooNewError, match=re.escape(expected)) as excinfo:
         validate_tlspec(path)
     assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
 
@@ -602,7 +599,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
         UnifiedTinyModel().eval(),
         torch.randn(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("relu"): tl.zero_ablate()},
         ),
     )
@@ -613,13 +610,11 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
 
     assert isinstance(loaded, tl.Trace)
     records = [
-        record
-        for layer in loaded.layer_list
-        for record in getattr(layer, "interventions", []) or []
+        record for layer in loaded._layer_list for record in getattr(layer, "edits", []) or []
     ]
     assert records
     assert all(isinstance(record, FireRecord) for record in records)
-    assert records[0].direction == "forward"
+    assert records[0].signal == "forward"
 
 
 def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_path: Path) -> None:
@@ -631,7 +626,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         x,
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_clamp(0, 0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
@@ -640,15 +635,15 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
 
     assert isinstance(loaded, tl.Trace)
     refs = [
-        call.intervention_fire_ref
-        for grad_fn in loaded.grad_fn_logs.values()
+        call.fire_record
+        for grad_fn in loaded._grad_fn_logs.values()
         for call in grad_fn.calls._list
-        if call.intervention_fire_ref is not None
+        if call.fire_record is not None
     ]
     assert refs
     assert isinstance(refs[0], FireRecord)
-    assert refs[0].direction == "backward"
-    assert isinstance(refs[0].helper, HelperSpec)
+    assert refs[0].signal == "backward"
+    assert isinstance(refs[0].edit, Edit)
 
 
 def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
@@ -659,10 +654,10 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
         UnifiedSavedOrphanModel(),
         x,
         save=tl.func("randn"),
-        capture=CaptureOptions(random_seed=1),
+        capture=CaptureOptions(seed=1),
     )
     path = tmp_path / "orphan_records.tlspec"
-    expected_payload = log.orphan_records[0]["payload_ref"].detach().clone()
+    expected_payload = log._orphan_records[0]["payload_ref"].detach().clone()
 
     log.save(path, level="portable")
     validate_tlspec(path)
@@ -670,10 +665,10 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.orphan_records
-    assert loaded.orphan_records[0]["raw_label"].startswith("randn")
-    assert isinstance(loaded.orphan_records[0]["payload_ref"], torch.Tensor)
-    assert torch.equal(loaded.orphan_records[0]["payload_ref"], expected_payload)
+    assert loaded._orphan_records
+    assert loaded._orphan_records[0]["raw_label"].startswith("randn")
+    assert isinstance(loaded._orphan_records[0]["payload_ref"], torch.Tensor)
+    assert torch.equal(loaded._orphan_records[0]["payload_ref"], expected_payload)
     assert any(entry["intended_use"] == "orphan_payload" for entry in manifest["body_index"])
 
 
@@ -684,7 +679,7 @@ def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) 
     torch.manual_seed(2101)
     model = torchvision_models.resnet18(weights=None).eval()
     x = torch.randn(1, 3, 64, 64)
-    log = tl.trace(model, x, capture=CaptureOptions(random_seed=2101))
+    log = tl.trace(model, x, capture=CaptureOptions(seed=2101))
     path = tmp_path / "resnet18_full_default.tlspec"
 
     log.save(path, level="portable")
@@ -693,8 +688,10 @@ def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) 
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.num_ops == log.num_ops
-    assert [layer.label for layer in loaded.layer_list] == [layer.label for layer in log.layer_list]
+    assert loaded._num_ops == log._num_ops
+    assert [layer.label for layer in loaded._layer_list] == [
+        layer.label for layer in log._layer_list
+    ]
     assert any(entry["intended_use"] == "buffer_initial_value" for entry in manifest["body_index"])
 
 
@@ -703,7 +700,7 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
     """Bundle.save writes unified manifests that load as Bundle objects."""
 
     log = _captured_log()
-    bundle = tl.bundle({"baseline": log}, baseline="baseline")
+    bundle = tl.Bundle({"baseline": log}, baseline="baseline")
     path = tmp_path / f"bundle_{level}.tlspec"
 
     bundle.save(path, level=level)
@@ -722,7 +719,7 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
 def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Intervention saves now emit the full unified manifest field set."""
 
-    log = _captured_log(intervention_ready=True)
+    log = _captured_log(replayable=True)
     log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / f"intervention_{level}.tlspec"
 
@@ -781,11 +778,11 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.has_backward_pass is True
-    assert loaded.backward_passes.for_pass(1).pass_index == 1
+    assert loaded.autograd.has_backward_pass is True
+    assert loaded.autograd.backward_passes.for_pass(1).pass_number == 1
     assert manifest["backward_summary"]["has_backward_pass"] is True
-    assert manifest["backward_summary"]["num_backward_passes"] == log.num_backward_passes
-    assert manifest["backward_summary"]["num_grad_fns"] == log.num_grad_fns
+    assert manifest["backward_summary"]["num_backward_passes"] == len(log.autograd.backward_passes)
+    assert manifest["backward_summary"]["num_grad_fns"] == len(log.autograd.grad_fns)
     assert manifest["backward_summary"]["gradient_blob_count"] >= 1
     assert "grad" in manifest["backward_summary"]["gradient_blob_kinds"]
     assert any(entry["intended_use"] == "grad" for entry in manifest["body_index"])
@@ -919,9 +916,9 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.backend == "mlx"
+    assert loaded.provenance.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
-    saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
     assert saved_ops
     assert all(isinstance(op.out, mx.array) for op in saved_ops)
     assert loaded.validation_replay_status.state == "unavailable"
@@ -946,10 +943,10 @@ def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path
 
     validate_tlspec(path)
     loaded = tl.load(path)
-    saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.backend == "mlx"
+    assert loaded.provenance.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "audit_only"
     assert saved_ops
     assert all(op.out is None and op.out_ref is None for op in saved_ops)
@@ -985,7 +982,7 @@ def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> No
     trace = tl.trace(MlxTinyModel(), mx.ones((1, 3)))
     path = tmp_path / "mlx_public_materialized.tlspec"
 
-    tl.save(trace, path, level="portable")
+    trace.save(path, level="portable")
     validate_tlspec(path)
     manifest = _read_manifest(path)
 
@@ -1048,7 +1045,7 @@ def test_schema_v2_materialized_missing_tensors_entry_codec_fails_closed(tmp_pat
     del manifest["tensors"][0]["codec"]
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="codec"):
+    with pytest.raises(ArtifactError, match="codec"):
         tl.load(path)
 
 
@@ -1056,7 +1053,7 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unexpected codec-registry failures surface as ``TorchLensIOError``."""
+    """Unexpected codec-registry failures surface as ``ArtifactError``."""
 
     import torchlens._io.bundle as bundle_module
 
@@ -1069,7 +1066,7 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
 
     monkeypatch.setattr(bundle_module, "get_payload_codec", _exploding_codec_lookup)
 
-    with pytest.raises(TorchLensIOError, match="Failed to resolve the payload codec"):
+    with pytest.raises(ArtifactError, match="Failed to resolve the payload codec"):
         tl.load(path)
 
 
@@ -1145,22 +1142,20 @@ def test_intervene_trace_round_trips_transient_dedup_state(
     )
     path = tmp_path / f"{helper_name}.tlspec"
 
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
-    replaced_ops = [op for op in loaded.layer_list if op.intervention_replaced]
+    replaced_ops = [op for op in loaded._layer_list if op.is_edited]
 
     assert replaced_ops
-    assert any(
-        record.helper_name == helper_name for op in replaced_ops for record in op.interventions
-    )
+    assert any(record.edit_name == helper_name for op in replaced_ops for record in op.edits)
 
 
 def test_unknown_backend_runtime_version_serializes_as_null() -> None:
     """Unknown backend runtime versions remain JSON null instead of the string ``None``."""
 
     source = SimpleNamespace(
-        backend_runtime_version=None,
-        backend_runtime_config={},
+        _provenance_backend_version=None,
+        _provenance_backend_config={},
         backend_runtime_device_summary={},
     )
 

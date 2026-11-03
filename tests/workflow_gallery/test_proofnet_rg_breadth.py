@@ -33,7 +33,7 @@ def test_rg06_attribution_patching_finite_with_zero_negative_control(
     table with restored params/grads/mode, and the clean-vs-clean negative
     control attributes (approximately) nothing."""
 
-    import torchlens.semantic.patching as patching
+    import torchlens._semantic.patching as patching
 
     loaded = rg_loader("r1-gpt2")
     model, tokenizer = loaded["model"], loaded["tokenizer"]
@@ -60,7 +60,7 @@ def test_rg06_attribution_patching_finite_with_zero_negative_control(
             code = getattr(exc, "fields", {}).get("code") if hasattr(exc, "fields") else None
             typed = type(exc).__name__ in {
                 "SiteResolutionError",
-                "SiteAmbiguityError",
+                "AmbiguousSiteError",
                 "PatchApplicationError",
                 "MissingFacetError",
             } or bool(code)
@@ -95,7 +95,9 @@ def test_rg09_pass_qualified_patch_on_real_cross_layer_sharing(rg_loader: Any) -
     loaded = rg_loader("r1-albert-base-v2")
     model, tokenizer = loaded["model"], loaded["tokenizer"]
     encoded = dict(tokenizer(prompt("encoder-sentence-1")["text"], return_tensors="pt"))
-    trace = tl.trace(model, (), encoded, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(
+        model, (), input_kwargs=encoded, capture=tl.options.CaptureOptions(replayable=True)
+    )
     try:
         multi_pass = [label for label in trace.layer_labels if len(trace[label].ops) >= 12]
         assert multi_pass, "albert capture shows no 12-pass shared-layer sites"
@@ -141,7 +143,7 @@ def test_rg14_clip_processor_kwargs_and_similarity_match_direct(rg_loader: Any) 
     inputs = dict(processor(text=captions, images=image, return_tensors="pt", padding=True))
     with torch.no_grad():
         direct = model(**inputs)
-    trace = tl.trace(model, (), dict(inputs))
+    trace = tl.trace(model, (), input_kwargs=dict(inputs))
     try:
         assert trace.outcome.status.name == "COMPLETE"
         matches = [
@@ -220,7 +222,7 @@ def test_rg17_t5_encoder_decoder_capture_matches_direct(rg_loader: Any) -> None:
     encoded["decoder_input_ids"] = torch.tensor([[model.config.decoder_start_token_id]])
     with torch.no_grad():
         direct = model(**encoded)
-    trace = tl.trace(model, (), dict(encoded))
+    trace = tl.trace(model, (), input_kwargs=dict(encoded))
     try:
         assert trace.outcome.status.name == "COMPLETE"
         matches = [

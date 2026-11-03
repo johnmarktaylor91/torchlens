@@ -7,7 +7,7 @@ geometries explicitly so no reader ever guesses which one it is looking at
 (design-merge-ranks-c v5, 1.7 amendment 2). This module is the one extraction
 point:
 
-* the ``dtensor`` / ``tensor_parallel`` findings and ``tl.compat.report``
+* the ``dtensor`` / ``tensor_parallel`` findings and ``tl.report.doctor``
   rows attach per-site dual geometry, so a refused TP/FSDP2 model is refused
   with its parameters precisely IDENTIFIED (logical shape, placements, shard
   offset) instead of silently mis-counted;
@@ -83,7 +83,7 @@ def dtensor_dual_geometry(value: Any) -> dict[str, Any] | None:
     # (HAS_DTENSOR_SHARD_GEOMETRY), so "the private API moved" flips a named
     # flag visible in doctor/compat instead of collapsing into the same silent
     # None as a legitimately off-mesh rank.
-    from ..utils._torch_compat import get_dtensor_shard_geometry_fn
+    from .._utils._torch_compat import get_dtensor_shard_geometry_fn
 
     compute_local_shape_and_global_offset = get_dtensor_shard_geometry_fn()
     if compute_local_shape_and_global_offset is not None:

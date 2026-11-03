@@ -27,6 +27,20 @@ from torchlens.validation import last_validation_failure
 from torchlens.validation._source_provenance import source_provenance_gaps
 
 _GLOBAL_TABLE = torch.randn(4)
+
+
+def _unseen(t: torch.Tensor) -> torch.Tensor:
+    """Copy ``t`` with logging paused: a tensor the capture never sees.
+
+    A pre-forward closure or global tensor is recorded as a ``constant`` source
+    op, so a genuine provenance gap is planted with a tensor first built
+    mid-forward while logging is paused.
+    """
+
+    with _state.pause_logging():
+        return t.clone()
+
+
 _HAS_CUSTOM_OP = hasattr(torch.library, "custom_op")
 
 
@@ -155,14 +169,14 @@ def test_cpp_extension_torch_library_op_is_recorded_and_validates(tmp_path: Path
 
 class _GlobalIntoRawAten(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.ops.aten.mul.Tensor(x, _GLOBAL_TABLE) + 1.0
+        return torch.ops.aten.mul.Tensor(x, _unseen(_GLOBAL_TABLE)) + 1.0
 
 
 class _ClosureIntoCustomOp(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         table = torch.randn(4)
-        self.forward = lambda x: torch.ops.aten.add.Tensor(x, table) * 2.0  # type: ignore[method-assign]
+        self.forward = lambda x: torch.ops.aten.add.Tensor(x, _unseen(table)) * 2.0  # type: ignore[method-assign]
 
 
 @pytest.mark.parametrize(
@@ -174,7 +188,7 @@ def test_source_less_argument_to_a_recorded_op_still_fails(build: type[nn.Module
     assert not _validate(build(), torch.randn(3, 4))
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == "source_provenance", failure
+    assert failure.check_name == "source_provenance", failure
     assert failure.extra["reasons"] == ["unattributed_tensor_args"], failure
 
 
@@ -334,7 +348,7 @@ def test_receiver_write_no_logged_op_recorded_fails_validation() -> None:
     assert not _validate(model, torch.randn(3, 4))
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == "source_provenance", failure
+    assert failure.check_name == "source_provenance", failure
     assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
@@ -357,7 +371,7 @@ def test_unrecordable_mutating_operator_fails_validation(op_name: str) -> None:
     failure = last_validation_failure()
     assert failure is not None
     if op_name == "write_into":  # the foreach packet fails bfs_completeness first
-        assert failure.check == "source_provenance", failure
+        assert failure.check_name == "source_provenance", failure
         assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
@@ -377,7 +391,7 @@ def test_unreadable_schema_none_return_fails_closed(monkeypatch: pytest.MonkeyPa
     assert not _validate(model, torch.randn(3, 4))
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == "source_provenance", failure
+    assert failure.check_name == "source_provenance", failure
     assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
@@ -461,7 +475,7 @@ def test_write_no_return_aliases_fails_validation(op_name: str) -> None:
     assert not _validate(model, torch.randn(3, 4))
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == "source_provenance", failure
+    assert failure.check_name == "source_provenance", failure
     assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 

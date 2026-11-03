@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -35,10 +36,8 @@ class _Tiny(nn.Module):
 def _pair() -> tl.Bundle:
     torch.manual_seed(11)
     x = torch.randn(2, 3)
-    baseline = tl.trace(_Tiny(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    changed = tl.trace(
-        _Tiny(offset=0.5), x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    baseline = tl.trace(_Tiny(), x, capture=tl.options.CaptureOptions(replayable=True))
+    changed = tl.trace(_Tiny(offset=0.5), x, capture=tl.options.CaptureOptions(replayable=True))
     return tl.Bundle({"baseline": baseline, "changed": changed}, baseline="baseline")
 
 
@@ -46,7 +45,7 @@ def _rich_bundle() -> tl.Bundle:
     bundle = _pair()
     bundle.relate({"kind": "alternative_of", "from": "changed", "to": "baseline", "params": {}})
     child = bundle.fork()
-    operation = child.operations[0]
+    operation = child.history[0]
     child._effect_tables[operation.operation_id] = MemberEffectTable(
         operation_id=operation.operation_id,
         rows=(
@@ -75,14 +74,14 @@ def test_lineage_round_trips_through_tlspec(tmp_path: Path) -> None:
     child.save(str(path))
     loaded = tl.load(str(path))
 
-    assert loaded.bundle_id == child.bundle_id
+    assert loaded.id == child.id
     assert loaded._forked_from_bundle_id == child._forked_from_bundle_id
-    assert loaded.member_construction == child.member_construction
-    assert [row.to_payload() for row in loaded.operations] == [
-        row.to_payload() for row in child.operations
+    assert loaded._member_construction == child._member_construction
+    assert [row.to_payload() for row in loaded.history] == [
+        row.to_payload() for row in child.history
     ]
-    table = loaded._effect_tables[child.operations[0].operation_id]
-    assert table == child._effect_tables[child.operations[0].operation_id]
+    table = loaded._effect_tables[child.history[0].operation_id]
+    assert table == child._effect_tables[child.history[0].operation_id]
     # Released candidates stay table rows on the loaded artifact (D3c).
     assert table.rows[1].status == "released"
     assert table.rows[1].member_name is None
@@ -106,12 +105,12 @@ def test_pre_f03_artifact_loads_with_loaded_anchors(tmp_path: Path) -> None:
 
     loaded = tl.load(str(path))
     # A fresh identity is minted; anchors disclose no construction evidence.
-    assert loaded.bundle_id
-    assert loaded.member_construction == {
+    assert loaded.id
+    assert loaded._member_construction == {
         "baseline": {"origin": "loaded"},
         "changed": {"origin": "loaded"},
     }
-    assert loaded.operations == ()
+    assert loaded.history == ()
 
 
 def _tamper(path: Path, mutate) -> None:
@@ -121,29 +120,28 @@ def _tamper(path: Path, mutate) -> None:
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
 
 
-def test_tampered_operation_chain_refuses_typed(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("bundle_name", "field_path", "forged_value"),
+    [
+        ("f03_tampered_ops", ("operations", 0, "kind"), "vary"),
+        ("f03_tampered_anchor", ("member_construction", "changed", "origin"), "teleported"),
+    ],
+    ids=["tampered_operation_chain_refuses_typed", "tampered_anchor_origin_refuses_typed"],
+)
+def test_tampered_lineage_refuses_typed(
+    tmp_path: Path, bundle_name: str, field_path: tuple[str | int, ...], forged_value: str
+) -> None:
     child = _rich_bundle()
-    path = tmp_path / "f03_tampered_ops"
+    path = tmp_path / bundle_name
     child.save(str(path))
 
-    def _flip_kind(metadata: dict) -> None:
-        metadata["operations"][0]["kind"] = "vary"
+    def _forge(metadata: dict) -> None:
+        target: Any = metadata
+        for key in field_path[:-1]:
+            target = target[key]
+        target[field_path[-1]] = forged_value
 
-    _tamper(path, _flip_kind)
-    with pytest.raises(BundleRelationError) as excinfo:
-        tl.load(str(path))
-    assert excinfo.value.fields["code"] == "bundle_lineage_invalid"
-
-
-def test_tampered_anchor_origin_refuses_typed(tmp_path: Path) -> None:
-    child = _rich_bundle()
-    path = tmp_path / "f03_tampered_anchor"
-    child.save(str(path))
-
-    def _bad_origin(metadata: dict) -> None:
-        metadata["member_construction"]["changed"]["origin"] = "teleported"
-
-    _tamper(path, _bad_origin)
+    _tamper(path, _forge)
     with pytest.raises(BundleRelationError) as excinfo:
         tl.load(str(path))
     assert excinfo.value.fields["code"] == "bundle_lineage_invalid"

@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
+from torchlens._data_classes.layer import Layer
 
 
 def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
@@ -18,11 +18,10 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _boundary_node_count(dot_source: str, kind: str) -> int:
@@ -40,7 +39,7 @@ def _layer_labels(log: tl.Trace, layer_type: str) -> list[str]:
 
     return [
         layer_log.layer_label
-        for layer_log in log.layer_logs.values()
+        for layer_log in log._layer_logs.values()
         if layer_log.layer_type == layer_type
     ]
 
@@ -242,10 +241,9 @@ def test_modulelog_show_graph_method(tmp_path: Path) -> None:
     module_log = log.modules["block1"]
     direct = _render_dot(log, tmp_path / "direct", module=module_log)
     method = module_log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "method" / "graph"),
-    )
+        file_format="svg",
+        path=str(tmp_path / "method" / "graph"),
+    ).dot
 
     assert method == direct
 
@@ -259,3 +257,80 @@ def test_module_focus_branching_boundaries(tmp_path: Path) -> None:
     assert _boundary_node_count(dot, "input") == 2
     assert "ext: linear_1_1" in dot
     assert "ext: linear_2_2" in dot
+
+
+class _ListBlock(nn.Module):
+    """Block with a nested MLP, held inside a never-called ``nn.ModuleList``."""
+
+    def __init__(self) -> None:
+        """Initialize modules."""
+
+        super().__init__()
+        self.norm = nn.LayerNorm(4)
+        self.mlp = nn.Sequential(nn.Linear(4, 4), nn.Tanh())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the forward pass."""
+
+        return x + self.mlp(self.norm(x))
+
+
+class _ModuleListModel(nn.Module):
+    """GPT-style stack: ``blocks`` is a ModuleList that is iterated, never called."""
+
+    def __init__(self) -> None:
+        """Initialize modules."""
+
+        super().__init__()
+        self.stem = nn.Linear(4, 4)
+        self.blocks = nn.ModuleList([_ListBlock() for _ in range(3)])
+        self.heads = nn.ModuleDict({"out": nn.Linear(4, 2)})
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the forward pass."""
+
+        x = self.stem(x)
+        for block in self.blocks:
+            x = block(x)
+        return self.heads["out"](x)
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["blocks.1", "blocks.1.mlp", "blocks.1.mlp.0", "heads.out"],
+)
+@pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
+def test_module_focus_under_uncalled_container(tmp_path: Path, address: str, vis_mode: str) -> None:
+    """A module inside an uncalled ModuleList/ModuleDict focuses without a KeyError."""
+
+    log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
+    assert "blocks" not in log.modules
+    assert "heads" not in log.modules
+    dot = _render_dot(log, tmp_path, module=address, rolled=vis_mode == "rolled")
+
+    assert f"@{address}" in dot
+    assert _boundary_node_count(dot, "input") >= 1
+    assert _boundary_node_count(dot, "output") >= 1
+
+
+def test_module_focus_under_uncalled_container_by_module_object(tmp_path: Path) -> None:
+    """Passing the Module object for a ModuleList child renders like the address."""
+
+    log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
+    dot = _render_dot(log, tmp_path, module=log.modules["blocks.1"])
+
+    assert "@blocks.1" in dot
+    assert "@blocks.0" not in dot
+
+
+def test_boundary_module_path_follows_the_call_stack() -> None:
+    """Boundary placement uses the focused op's called modules, never address prefixes."""
+
+    from torchlens._visualization._render_flow import _boundary_module_path
+
+    log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
+    target = log.modules["blocks.1.mlp"]
+    stack = ("blocks.1:1", "blocks.1.mlp:1", "blocks.1.mlp.0:1")
+
+    assert _boundary_module_path(target, "unrolled", stack) == ["blocks.1:1", "blocks.1.mlp:1"]
+    assert _boundary_module_path(target, "rolled", stack) == ["blocks.1", "blocks.1.mlp"]

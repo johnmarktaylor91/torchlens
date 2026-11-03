@@ -47,7 +47,7 @@ def test_mlflowclient_with_run_id_matches_direct(trace: Any, client: Any) -> Non
     bridged = client.get_run(bridge_run).data.metrics
     direct = client.get_run(direct_run).data.metrics
     assert bridged == direct
-    assert bridged["torchlens.num_layers"] == len(trace.layer_list)
+    assert bridged["torchlens.num_layers"] == len(trace._layer_list)
     print(f"\nbridge={bridged} direct={direct}")
 
 

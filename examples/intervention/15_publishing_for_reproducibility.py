@@ -45,19 +45,19 @@ def main() -> None:
     torch.manual_seed(15)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     log.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         path = Path(tmpdir) / "zero_relu.tlspec"
         log.save_intervention(path, level="portable")
         spec = tl.io.load_intervention_spec(path)
-        fresh = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-        compat = tl.validation.check_spec_compat(spec, fresh)
+        fresh = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+        compat = tl.intervention.check_spec_compat(spec, fresh)
 
     assert spec.metadata["save_level"] == "portable"
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 if __name__ == "__main__":

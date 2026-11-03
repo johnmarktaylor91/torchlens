@@ -1,7 +1,7 @@
 """M1 keystone lockstep tests: one declared schema, byte-proven views.
 
 The FIELD_ORDER literals in ``constants.py`` remain the hand-written declared
-schema; ``FIELD_POLICY`` tables and the generated ``StorageBinding`` tables
+schema; ``_FIELD_POLICY`` tables and the generated ``StorageBinding`` tables
 must agree with them exactly, in both directions, for all 11 record classes
 (docs/reference/trace_core_design.md section 3.4).
 """
@@ -14,23 +14,23 @@ from pathlib import Path
 
 import pytest
 
-from torchlens import constants as tl_constants
-from torchlens.data_classes._schema_bindings import STORAGE_BINDINGS
-from torchlens.data_classes.aten_op import AtenOp
-from torchlens.data_classes.backward_pass import BackwardPass
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.field_policy import (
+from torchlens import _constants as tl_constants
+from torchlens._data_classes._schema_bindings import STORAGE_BINDINGS
+from torchlens._data_classes.aten_op import AtenOp
+from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.field_policy import (
     StorageKind,
     field_order_from_policy,
 )
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,17 +62,17 @@ def test_field_order_view_equals_literal(schema_key: str) -> None:
     """Generated FIELD_ORDER view == the hand-written literal, exactly."""
 
     cls, literal = _SCHEMA[schema_key]
-    assert field_order_from_policy(cls.FIELD_POLICY) == list(literal)
+    assert field_order_from_policy(cls._FIELD_POLICY) == list(literal)
 
 
 @pytest.mark.parametrize("schema_key", sorted(_SCHEMA))
 def test_every_declared_field_has_exactly_one_binding(schema_key: str) -> None:
-    """Binding keys == FIELD_POLICY keys: no orphans, no gaps, all 11 classes."""
+    """Binding keys == _FIELD_POLICY keys: no orphans, no gaps, all 11 classes."""
 
     cls, _ = _SCHEMA[schema_key]
     bindings = STORAGE_BINDINGS[schema_key]
-    assert set(bindings) == set(cls.FIELD_POLICY)
-    for name, policy in cls.FIELD_POLICY.items():
+    assert set(bindings) == set(cls._FIELD_POLICY)
+    for name, policy in cls._FIELD_POLICY.items():
         assert policy.storage is bindings[name], name
 
 
@@ -83,7 +83,7 @@ def test_binding_axes_are_coherent(schema_key: str) -> None:
     from torchlens._io import FieldPolicy
 
     cls, _ = _SCHEMA[schema_key]
-    for name, policy in cls.FIELD_POLICY.items():
+    for name, policy in cls._FIELD_POLICY.items():
         binding = policy.storage
         if binding.kind is StorageKind.COMPUTED:
             resolved = next(

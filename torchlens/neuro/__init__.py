@@ -3,12 +3,12 @@
 torchlens owns everything that touches the network; rsatoolbox and
 Brain-Score own everything that touches the brain or the hypothesis. This
 namespace hands representations across that seam with provenance that
-cannot lie, and teaches where everything else lives. The map, in five
+cannot lie, and teaches where everything else lives. The map, in six
 sections:
 
 1. EXTRACT (upstream, needs no extra): capture with ``tl.trace(model, x,
    save=...)`` or write a disk artifact with ``tl.extract_dataset(...,
-   output_dir=...)`` and read it back with ``tl.load_extraction``. The
+   path=...)`` and read it back with ``tl.load``. The
    manifest records stimulus ids, ordering, dtypes, and preprocessing
    provenance -- everything downstream descriptors are built from.
 2. GEOMETRY (needs no extra): RDMs and friends live in their canonical
@@ -26,8 +26,10 @@ sections:
    measure.
 4. SCORE (requires the ``brainscore`` extra = brainscore-vision, Python
    >= 3.11): ``neuro.activations_extractor(model, preprocessing, ...)``
-   builds a real Brain-Score ``ActivationsExtractorHelper`` over TorchLens
-   capture, and ``neuro.get_activations_fn(model, ...)`` is the underlying
+   builds a ``PytorchWrapper``-shaped Brain-Score activations model over
+   TorchLens capture (its ``_extractor`` is a real
+   ``ActivationsExtractorHelper``; it goes into a plugin's
+   ``ModelCommitment``), and ``neuro.get_activations_fn(model, ...)`` is the underlying
    per-batch callable. Both are exposed here because the live end-to-end
    gate PASSED (2026-08-29): a real resnet18 checkpoint through a real
    ``ActivationsExtractorHelper`` and ``StimulusSet`` against a live
@@ -35,11 +37,22 @@ sections:
    presentation order, layer coordinates, logits, dotted module paths, a
    functional-op mapping, a short final batch, and CPU behavior matching
    direct torchlens extraction, plus default sites on a PARTIALLY saved
-   trace. CUDA is not claimed (no covered runner). The offline
+   trace. A plugin wrapping it in ``ModelCommitment`` was scored end to
+   end on MajajHong2015public.IT-pls and Geirhos2021colour-top1
+   (2026-10-14, brainscore-vision 2.4.1, Python 3.11, CPU). CUDA is not
+   claimed (no covered runner). The offline
    ``per_layer`` recipe deliberately gets no neuro name (a generic
    score-a-callable loop must not borrow a benchmark's authority).
-5. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
-   bootstrap/permutation/model fitting, encoding models, CCA/SVCCA/PWCCA,
+5. COMPARE (needs no extra): ``neuro.compare(source, target,
+   analyses=("rsa", "ridge", "cka"))`` reads each site's activations once
+   and scores every site against one target with RSA, a cross-validated
+   ridge score and linear CKA, all descriptive (optional stimulus-bootstrap
+   intervals with ``num_resamples=``); ``.disagreement()`` reports where the
+   analyses rank sites differently.
+6. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
+   inferential bootstrap/permutation/model fitting (descriptive intervals
+   are tl.repgeom.compare_rdms_interval / cka_interval), encoding-model
+   inference, CCA/SVCCA/PWCCA,
    non-metric MDS, model zoos, and brain data itself are deliberately NOT
    here. Each attempted name raises a teaching refusal naming the owning
    neighbour, the missing ingredient, and the torchlens spelling that
@@ -55,7 +68,7 @@ import-time dependency check would run that foreign code with no trust
 opt-in.
 
 Attribute access resolves through the shared five-step facade order (neuro
-memo D15; ``torchlens.utils.facade``). Dependency checks are PER-NAME,
+memo D15; ``torchlens._utils.facade``). Dependency checks are PER-NAME,
 probed with ``importlib.util.find_spec`` so answering never executes
 foreign code, and every typed refusal subclasses ``AttributeError`` so
 ``hasattr``/IPython canary probes degrade instead of erroring. The facade
@@ -69,7 +82,7 @@ from __future__ import annotations
 
 from importlib.util import find_spec as _find_spec
 
-from ..utils.facade import DependencyGate as _DependencyGate
+from .._utils.facade import DependencyGate as _DependencyGate
 
 _INSTALL_NEURO = 'pip install "torchlens[neuro]"'
 _INSTALL_BRAINSCORE = 'pip install "torchlens[brainscore]" (Python >= 3.11)'
@@ -80,15 +93,26 @@ _INSTALL_BRAINSCORE = 'pip install "torchlens[brainscore]" (Python >= 3.11)'
 #: not a real public name of this environment, and ``hasattr`` already
 #: answers ``False`` for it. Access to an unadvertised gated name still
 #: teaches the exact install command (facade step 4 re-probes per access).
-__all__ = (["datasets", "rdms"] if _find_spec("rsatoolbox") is not None else []) + (
-    ["activations_extractor", "get_activations_fn"]
-    if _find_spec("brainscore_vision") is not None
-    else []
+__all__ = (
+    ["ExtractionPlan", "PlanSite", "compare", "export_npz", "plan_extraction"]
+    + (["datasets", "rdms"] if _find_spec("rsatoolbox") is not None else [])
+    + (
+        ["activations_extractor", "get_activations_fn"]
+        if _find_spec("brainscore_vision") is not None
+        else []
+    )
 )
 __all__.sort()
 
 #: Real active names (facade step 4), each behind its own dependency gate.
 _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
+    # Ungated: numpy-only, so it needs no extra.
+    "compare": ("torchlens.neuro._compare", "compare"),
+    # The extraction planner and the npz handoff (needs no extra).
+    "ExtractionPlan": ("torchlens.neuro._brainpipe", "ExtractionPlan"),
+    "PlanSite": ("torchlens.neuro._brainpipe", "PlanSite"),
+    "export_npz": ("torchlens.neuro._brainpipe", "export_npz"),
+    "plan_extraction": ("torchlens.neuro._brainpipe", "plan_extraction"),
     "datasets": ("torchlens.neuro._datasets", "datasets"),
     "rdms": ("torchlens.neuro._rdms", "rdms"),
     "activations_extractor": ("torchlens.bridge.brain_score", "activations_extractor"),
@@ -118,11 +142,13 @@ _REDIRECTS: dict[str, str] = {
     "effective_dimensionality": ("use tl.repgeom.effective_dimensionality (needs no extra)"),
     "procrustes_align": "use tl.repgeom.procrustes_align (needs no extra)",
     "extract_dataset": "use tl.extract_dataset (needs no extra)",
-    "load_extraction": "use tl.load_extraction (needs no extra)",
+    "load_extraction": "use tl.load (needs no extra)",
     "brain_score": (
         "the verified adapters are neuro.activations_extractor and "
         "neuro.get_activations_fn (live-gate verified against "
-        "brainscore-vision 2.3.22, Python 3.12, CPU); the underlying module "
+        "brainscore-vision 2.3.22, Python 3.12, CPU, and scored end to end "
+        "through a ModelCommitment plugin on brainscore-vision 2.4.1, "
+        "Python 3.11, CPU); the underlying module "
         "is tl.bridge.brain_score, and the offline per_layer recipe "
         "deliberately keeps its bridge-only spelling"
     ),
@@ -142,7 +168,9 @@ _REFUSALS: dict[str, str] = {
     "bootstrap": (
         "bootstrap inference over stimuli/subjects belongs to "
         "rsatoolbox.inference; torchlens hands it descriptor-complete RDMs "
-        "via neuro.rdms()"
+        "via neuro.rdms(). For a DESCRIPTIVE stimulus-bootstrap interval on "
+        "torchlens's own scores, use tl.repgeom.compare_rdms_interval or "
+        "tl.repgeom.cka_interval (needs no extra)"
     ),
     "permutation_test": (
         "permutation-based hypothesis inference belongs to "
@@ -155,7 +183,7 @@ _REFUSALS: dict[str, str] = {
         "tools own it. CAUTION: rsatoolbox's mahalanobis with no noise "
         "argument SILENTLY returns scaled euclidean (measured, 0.1.5 and "
         "0.3.2). The legitimate model-side recipe: a genuinely stochastic "
-        "model under tl.noise / trace.do has real repeats "
+        "model under tl.add_noise / trace.do has real repeats "
         "(Khaligh-Razavi 2014's noise-matching step)"
     ),
     "mahalanobis": (
@@ -163,7 +191,7 @@ _REFUSALS: dict[str, str] = {
         "distance/noise tools own it. CAUTION: rsatoolbox's mahalanobis "
         "with no noise argument SILENTLY returns scaled euclidean "
         "(measured, 0.1.5 and 0.3.2). For a stochastic model under "
-        "tl.noise / trace.do, real repeats exist and the recipe applies"
+        "tl.add_noise / trace.do, real repeats exist and the recipe applies"
     ),
     "searchlight": (
         "searchlight needs brain-volume neighborhoods (rsatoolbox plus "
@@ -171,11 +199,6 @@ _REFUSALS: dict[str, str] = {
         "network-side analogue, and neuro.datasets() preserves factual "
         "unit coordinates in channel descriptors for a possible model-side "
         "searchlight later"
-    ),
-    "compare": (
-        "RDM comparison beyond pearson/spearman (whitened cosine, tau, "
-        "rho-a, ...) is rsatoolbox.rdm.compare's mature vocabulary; feed it "
-        "RDMs from neuro.rdms()"
     ),
     "kendall": (
         "kendall's tau carries the tau-a vs tau-b tie trap (tau-b "
@@ -188,14 +211,18 @@ _REFUSALS: dict[str, str] = {
         "descriptor-complete RDMs via neuro.rdms()"
     ),
     "encoding_model": (
-        "encoding models / ridge regression to brain responses belong to "
-        "Brain-Score and himalaya; tl.extract_dataset writes the "
-        "stimuli-x-features matrices they consume"
+        "encoding-model fitting, voxel maps, variance partitioning and "
+        "stacked fits belong to Brain-Score, himalaya and Net2Brain; "
+        "tl.extract_dataset writes the stimuli-x-features matrices they "
+        "consume. For a DESCRIPTIVE cross-validated ridge score per site, "
+        "use neuro.compare(source, target, analyses=('ridge',))"
     ),
     "ridge": (
-        "ridge regression to brain responses belongs to himalaya (and "
-        "Brain-Score's pipelines); tl.extract_dataset writes the "
-        "stimuli-x-features matrices it consumes"
+        "ridge fitting with alpha inference, voxel maps and variance "
+        "partitioning belongs to himalaya (and Brain-Score's pipelines); "
+        "tl.extract_dataset writes the stimuli-x-features matrices it "
+        "consumes. For a DESCRIPTIVE cross-validated ridge score per site, "
+        "use neuro.compare(source, target, analyses=('ridge',))"
     ),
     "cca": (
         "CCA/SVCCA/PWCCA and shape metrics live in netrep and documented "
@@ -205,12 +232,12 @@ _REFUSALS: dict[str, str] = {
     ),
     "svcca": (
         "SVCCA is a different statistic, not a CKA kernel; netrep and "
-        "documented recipes own it. tl.extract_dataset / tl.features "
+        "documented recipes own it. tl.extract_dataset / torchlens.features "
         "produce the matched [n_obs x n_features] pairs it consumes"
     ),
     "pwcca": (
         "PWCCA lives in netrep and documented recipes; tl.extract_dataset "
-        "/ tl.features produce the matched [n_obs x n_features] pairs it "
+        "/ torchlens.features produce the matched [n_obs x n_features] pairs it "
         "consumes"
     ),
     "nonmetric_mds": (
@@ -221,7 +248,7 @@ _REFUSALS: dict[str, str] = {
     "model_zoo": (
         "matched preprocessing, model zoos, and gLocal weights belong to "
         "thingsvision; torchlens captures whatever model YOU construct, "
-        "with tl.preprocessing.resolve() verifying the preprocessing "
+        "with torchlens.preprocessing.resolve() verifying the preprocessing "
         "authority your loader ships"
     ),
     "brain_data": (
@@ -270,7 +297,7 @@ def __getattr__(name: str) -> object:
         for gated names whose dependency is absent.
     """
 
-    from ..utils.facade import resolve_facade_attr
+    from .._utils.facade import resolve_facade_attr
 
     return resolve_facade_attr(
         owner=__name__,
@@ -294,7 +321,7 @@ def __dir__() -> list[str]:
         implementation imports are not advertised.
     """
 
-    from ..utils.facade import facade_dir
+    from .._utils.facade import facade_dir
 
     return facade_dir(globals(), __all__)
 

@@ -105,12 +105,12 @@ def test_explain_and_diff_gates_are_live(clean: Path, nonfinite: Path) -> None:
 def test_incomplete_gate_trips_on_a_halted_capture(tmp_path: Path) -> None:
     """A HALTED capture is not complete: --fail-on incomplete exits 1."""
 
-    log = tl.trace(RepeatedBlockNet().eval(), deterministic_input(), halt=tl.func("relu"))
-    assert log.outcome.status.value == "halted"
+    log = tl.trace(RepeatedBlockNet().eval(), deterministic_input(), stop_after=tl.func("relu"))
+    assert log.outcome.status.value == "stopped"
     path = tmp_path / "halted.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     envelope = call_tool("torchlens_overview", {"path": str(path)})
-    assert envelope["data"]["capture"]["capture_status"] == "halted"
+    assert envelope["data"]["capture"]["capture_status"] == "stopped"
     assert cli.main(["overview", str(path), "--json", "--fail-on", "incomplete"]) == cli.EXIT_GATE
     assert cli.main(["explain", str(path), "--json", "--fail-on", "incomplete"]) == cli.EXIT_GATE
     assert cli.main(["overview", str(path), "--json", "--fail-on", "unverified"]) == cli.EXIT_OK
@@ -138,11 +138,11 @@ def test_tier0_info_on_a_non_directory_path_stays_torch_free(tmp_path: Path) -> 
 def test_local_sha256_matches_the_io_authority(clean: Path) -> None:
     """The tier-0 streaming hash cannot drift from the _io authority."""
 
-    from torchlens._io.manifest import sha256_of_file
+    from torchlens._utils.hashing import sha256_file
     from torchlens.agent._artifacts import _sha256_of_file
 
     target = clean / "metadata.pkl"
-    assert _sha256_of_file(target) == sha256_of_file(target)
+    assert _sha256_of_file(target) == sha256_file(target)
 
 
 @pytest.mark.smoke

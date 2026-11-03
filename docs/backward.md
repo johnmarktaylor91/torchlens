@@ -27,7 +27,7 @@ relu_trace.log_backward(relu_trace[relu_trace.output_layers[0]].out.sum())
 
 `save_grads=True` saves all observed op gradients. `False` or `None` observes backward structure
 without retaining gradient tensors. Predicate expressions use the same forward selector language,
-plus backward selectors such as `tl.grad_fn(...)`, `tl.grad_fn_label(...)`,
+plus backward selectors such as `tl.grad_fn(...)` (by class name, or `label=` for a label substring),
 `tl.without_op()` (the former `tl.intervening()` alias is removed), `tl.grad_input()`, `tl.grad_output()`, and `tl.in_backward_pass(k)`.
 
 `storage=tl.to_disk(path)` streams retained gradient payloads into a `.tlspec` bundle. The
@@ -42,6 +42,14 @@ Plain `loss.backward()`, `torch.autograd.backward`, `torch.autograd.grad`,
 belongs to a live TorchLens trace. If an engine path bypasses those wrappers, tensor hooks open an
 implicit pass. Consecutive bypassed backwards may merge because hook events alone do not reveal a
 hard engine boundary; use TorchLens triggers for exact pass boundaries.
+
+A `Recording` captures gradients only when the `tl.record` call asked for a backward with
+`backward_ready=True`, `save_grads=` or `default_grad=`; without one it installs no gradient hooks
+and `Recording.backward()` refuses with `recording_backward_not_requested`. A capture entered
+under `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
+`inference_only=True`, and its `log_backward()` refuses naming that cause. A forward that turns
+grad back on itself (`with torch.enable_grad():`) keeps its autograd graph, so such a capture is
+not inference-only and `log_backward()` stays available.
 
 ## Backprop To The Stimulus
 
@@ -69,8 +77,8 @@ parameter.
 
 ## Records
 
-`trace.backward_passes` is indexed positionally with Python's 0-based rules, and supports named
-1-based lookup with `trace.backward_passes.for_pass(k)`. `trace.last_backward_pass` returns the
+`trace.autograd.backward_passes` is indexed positionally with Python's 0-based rules, and supports named
+1-based lookup with `trace.autograd.backward_passes.for_pass(k)`. `trace.autograd.last_backward_pass` returns the
 latest projected pass.
 
 `BackwardPass.backward_call_context` stores the Python source location where
@@ -85,7 +93,7 @@ has local dense call labels like `addmm_back_1_4:2`. Positional access remains 0
 colon suffixes and pass numbers are 1-based:
 
 ```python
-grad_fn = trace.grad_fns["addmm_back_1_4"]
+grad_fn = trace.autograd.grad_fns["addmm_back_1_4"]
 first_call = grad_fn.calls[0]
 second_pass_call = grad_fn.calls.for_pass(2)
 ```
@@ -118,9 +126,14 @@ created. When attribution cannot be resolved deterministically, `order` is `None
 
 ## Intervention And Replay
 
-Backward interventions use `intervene=tl.when(<backward selector>, <grad helper>)` on `tl.trace`.
-Helpers include `tl.grad_zero`, `tl.grad_scale`, `tl.grad_clip`, `tl.grad_noise`, `tl.grad_clamp`,
-and custom hooks.
+Gradient interventions address a gradient as a site: `tl.grad("relu_3")` is the gradient of
+relu_3's output, bare `"relu_3"` is its activation, and `tl.grad("relu_3") | "relu_3"` is both. Use
+`intervene=tl.when(tl.grad(<site>), <edit>)` on `tl.trace`, where the edit is an ordinary one
+(`tl.scale`, `tl.zero_ablate`, `tl.clamp`, `tl.add_noise`, `tl.clip_norm`) or a callable
+`fn(grad, *, ctx)`. The capture arms the edit and `trace.backward(loss)` applies it. On an existing
+trace, `trace.do(tl.grad(<site>), <edit>, model=model, inputs=x)` reruns the forward with the edit armed
+(audit status `"armed"` until a backward settles it); pass `loss=lambda t: ...` to arm and run the
+backward in one call. Replay cannot edit gradients (`replay_gradient_edit_unsupported`).
 
 Differentiable replay creates a new trace:
 
@@ -130,7 +143,10 @@ patched.log_backward(patched[patched.output_layers[0]].out.sum())
 ```
 
 Saved frontier tensors enter replay as fresh leaves, so gradients flow within the replayed
-computation and do not leak into the source run's buffers.
+computation and do not leak into the source run's buffers. Parameters upstream of the replay
+frontier therefore get no gradient: to train them through an edit, run the edit on a live forward
+(`tl.when(site, edit).bind(model)(x)`), and `tl.intervention.keep_grad(edit)` warns
+`keep_grad_replay_frontier` once per session when it fires under differentiable replay.
 
 Backward-only replay from a saved trace is intentionally deferred. A saved TorchLens backward
 projection does not contain PyTorch's live autograd graph or saved-tensor closures; reconstructing
@@ -167,13 +183,67 @@ carry that attribute forward, the replacement is skipped instead of installed, s
 for that enter and torch's own hook-stack accounting is never desynced). Any flag withdraws the
 affirmative "no checkpoint invocation observed" verdict. The private `_checkpoint_hook` class
 resolves through the compat chokepoint behind the named `HAS_CHECKPOINT_HOOK_CLASS` capability
-flag (visible in `tl.utils.doctor()` / `tl.compat.report()`); a torch without it degrades
+flag (visible in `tl.report.doctor()`); a torch without it degrades
 fail-closed — the classifier mints NO tokens, never a false one. The sibling
 `HAS_CHECKPOINT_INTERNAL_HOOK_CLASS` flag (same visibility) tracks whether this torch runtime's
 checkpoint hooks carry that private identity state at all; its absence (torch 2.13 and earlier)
 means the token wrapper's hook-object replacement is unconditionally safe. The typed
 checkpoint-ambiguity refusal is a pending contract amendment and lands with the identity-read
 accessors once the amendment is ratified.
+
+## Executed Backward FLOPs By Node And Forward Op
+
+A captured backward records every ATen call it dispatches (`BackwardPass.aten_ops`), and
+`tl.report.backward_status(trace)` counts them exactly for the matmul and convolution families
+(fma2, FlopCounterMode's convention). `BackwardPass.flops_attribution` charges each counted call
+to the GradFn call it ran under and to the forward op that node differentiates
+(DOCUMENTED-UNSTABLE): one `BackwardFlopsRow` per GradFn call (`grad_fn_label`, `call_index`,
+`op_label`, `flops`, `recompute_flops`). Calls that ran under no recorded node (the engine's seed
+gradient, nodes no capture walked) go to the `unattributed` bucket, which names every call
+(`unattributed_ops`); the rows plus `unattributed_flops` equal the pass's `executed_flops`
+exactly. `backward_status(trace).flops_attributions` holds one attribution per counted pass. When one
+backward reaches the nodes of two captures, each capture's view keeps the nodes whose forward op
+it recorded and leaves the others to their capture (`other_trace_ops`); a pass that raised before
+finishing has no count.
+
+Under activation checkpointing the backward replays forward kernels. The engine runs backward
+kernels with grad mode off unless the pass builds a graph, while checkpoint replays run with
+grad mode on (`DispatchedOp.grad_enabled`), so on a trace whose checkpoint witness saw
+checkpointing a counted call made with grad mode on is labeled recompute on the row it ran
+under. The label splits that row's count and never moves a FLOP between rows. A `create_graph`
+pass that checkpoints, or a trace without checkpoint evidence, reads the recompute share as
+`None` (unknown), never a guess. Matching a call to the node that ran it needs torch's
+executing-node resolver; on a build without it (`HAS_CURRENT_AUTOGRAD_NODE` is `False` in
+`tl.report.doctor()`) no call is charged to a node and the executed count
+reads unknown with that reason.
+
+`tl.report.cost_tree(trace)` carries the same counts per module call: `self_forward_mac_flops`
+(the forward's multiply-accumulate work, 2 x true MACs), `self_backward_flops` and
+`self_forward_backward_flops`, with `subtree_*` twins. The total adds the backward to the forward's MAC
+work, one convention, never to the elementwise-inclusive `self_flops`. Backward work on a node
+with no forward op and the unattributed calls get their own rows, so the backward column sums to
+the executed count. Without a counted backward the columns are `None` and the tree's
+`backward_state` says whether the backward was not run or is unknown, never 0.
+
+<!-- flops2-attribution-example -->
+```python
+import torch
+import torchlens as tl
+from torchlens.report import backward_status, cost_tree
+
+model = torch.nn.Sequential(torch.nn.Linear(4, 6), torch.nn.ReLU(), torch.nn.Linear(6, 3))
+trace = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(backward_ready=True))
+trace.log_backward(trace[trace.output_layers[0]].out.sum())
+
+status = backward_status(trace)
+(attribution,) = status.flops_attributions
+attributed = sum(row.flops for row in attribution.rows)
+assert attributed + attribution.unattributed_flops == status.executed_flops
+by_op = attribution.flops_by_op()  # forward op label -> backward FLOPs
+tree = cost_tree(trace)
+assert sum(row.self_backward_flops for row in tree.rows) == status.executed_flops
+trace.cleanup()
+```
 
 ## Validation
 
@@ -182,16 +252,28 @@ separate stock run with minimal tensor hooks, flow consistency for non-intervene
 structural invariants. Invariants include dense pass indices, local-dense call ordinals, one
 record per retained autograd object, resolved order chains, label grammar, and containment flags.
 
+The module-output check never compares the root module call, because its output gradient is the
+loss gradient itself. A model whose forward calls no child module therefore has no module-output
+gradient to compare. Validation then returns `False` with a `TorchLensWarning` (code
+`backward_validation_no_module_output_evidence`) saying so: the check
+has no detection power, so the result is unverifiable rather than passed.
+`validate_layer_grads=False` checks parameter gradients alone.
+
 ## Dataframes And Serialization
 
 `trace.to_pandas()` never reads loud gradient properties. Ambiguous op gradients appear as
 `None` in the `grad` column with `num_saved_grads` set. Backward tables are available through
-`trace.grad_fns.to_pandas()`, `trace.grad_fn_calls.to_pandas()`, and
-`trace.backward_passes.to_pandas()`.
+`trace.autograd.grad_fns.to_pandas()`, `trace.autograd.grad_fn_calls.to_pandas()`, and
+`trace.autograd.backward_passes.to_pandas()`.
 
 Unified `.tlspec` manifests include `backward_summary`, gradient blob kinds in `body_index`, and
 the public policy for old bundles: legacy class remaps are accepted at load, while removed
 backward gradient configuration fields are dropped during state normalization.
+
+The per-call census (`BackwardPass.aten_ops`) is session-time. Saving writes each pass's
+counted executed backward and its attribution in a private persisted record on the
+`BackwardPass`, so a loaded trace reads the same `backward_status` count, rows and
+unattributed bucket.
 
 ## Limitations And Costs
 
@@ -205,35 +287,35 @@ detach it from engine interception and tensor-hook emission.
 
 MLX currently declares backward capture unsupported and raises tiered backend errors. Torch-only
 features such as autograd node records and live backward intervention remain out of reach unless
-another backend exposes hookable backward graphs. JAX exposes `trace.derived_grads`, populated by
+another backend exposes hookable backward graphs. JAX exposes `trace.autograd.derived_grads`, populated by
 `tl.backends.jax.GradOptions` through a second pure `jax.value_and_grad` run over
 `fn(params, *inputs)`, and can optionally expose exact saved-op records through
-`trace.intermediate_derived_grads` plus read-only `op.derived_grad` with
+`trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad` with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The JAX intermediate producer
 runs as a separate zero-tap AD replay and only exposes oracle-confirmed `status == "exact"`
-records. MLX exposes `trace.derived_grads`, populated by
+records. MLX exposes `trace.autograd.derived_grads`, populated by
 `tl.backends.mlx.GradOptions` through a second pure `mx.value_and_grad` run that rebinds
 `mlx.nn.Module` params with `model.update(params)` and refuses records unless the AD-rerun raw
 output matches the captured output. MLX can optionally expose exact saved-op records through
-`trace.intermediate_derived_grads` plus read-only `op.derived_grad` with
+`trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad` with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The MLX intermediate producer
 uses custom-VJP identity taps in that auxiliary AD replay, attaches by unambiguous grouped
 signatures, skips duplicates, and only exposes oracle-confirmed `status == "exact"` records.
-tinygrad exposes `trace.derived_grads`, populated by `tl.backends.tinygrad.GradOptions` through a
+tinygrad exposes `trace.autograd.derived_grads`, populated by `tl.backends.tinygrad.GradOptions` through a
 bracketed `DEV=PYTHON` leaf-gradient run, and can optionally expose exact unambiguous per-op
-records through `trace.intermediate_derived_grads` plus read-only `op.derived_grad`. These are not
-Paddle exposes `trace.derived_grads`, populated by `tl.backends.paddle.GradOptions` through a
+records through `trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad`. These are not
+Paddle exposes `trace.autograd.derived_grads`, populated by `tl.backends.paddle.GradOptions` through a
 second guarded Paddle AD pass over module params and selected inputs, and can optionally expose
-exact saved-op records through `trace.intermediate_derived_grads` plus read-only
+exact saved-op records through `trace.autograd.intermediate_derived_grads` plus read-only
 `op.derived_grad`. Paddle traces keep `has_backward_pass=False`; this is not true backward
 capture. TensorFlow currently defers true backward capture and T1/intermediate derived gradients;
 TF traces are forward eager-capture records only. `trace.log_backward(...)`,
-`trace.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise on JAX, MLX, tinygrad,
+`trace.autograd.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise on JAX, MLX, tinygrad,
 Paddle, and TensorFlow traces.
 
 Real per-fire timing is measured on every hooked node (universal path): a lightweight timing
 prehook and the hook entry stamp pair one `time.perf_counter()` span per fire, served LIVE by
-`trace.grad_fn_fire_timings` (DOCUMENTED-UNSTABLE spelling; keys match `trace.grad_fn_calls`,
+`trace.autograd.grad_fn_fire_timings` (DOCUMENTED-UNSTABLE spelling; keys match `trace.autograd.grad_fn_calls`,
 untimed fires read `None`, and loaded traces refuse typed with
 `grad_fn_fire_timing_unavailable` because the runtime event stream never persists). The
 persisted `GradFnCall` timing fields keep their shipped single wall-stamp values until the
@@ -251,5 +333,5 @@ The `BackwardPassEnd` sidecar event discloses which close path fired (`engine_dr
 `sync_point`, DOCUMENTED-UNSTABLE values, runtime-only in wave 2; the projected `BackwardPass`
 field was deliberately deferred at the tlspec v8 bump and waits for a future one). The engine's final-callback handle resolves through the
 compat chokepoint behind the named `HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK` capability flag
-(visible in `tl.utils.doctor()` / `tl.compat.report()`); without it every implicit close takes
+(visible in `tl.report.doctor()`); without it every implicit close takes
 the sync-point backstop.

@@ -70,7 +70,7 @@ def _grouped_ops(trace: Any, func_name: str) -> list[Any]:
         Multi-pass ops with that function name.
     """
 
-    return [op for op in trace.layer_list if op.func_name == func_name and op.num_passes > 1]
+    return [op for op in trace._layer_list if op.func_name == func_name and op.num_passes > 1]
 
 
 def test_tf_repeated_dense_groups_into_passes() -> None:
@@ -80,13 +80,13 @@ def test_tf_repeated_dense_groups_into_passes() -> None:
     matmul_ops = _grouped_ops(trace, "MatMul")
     relu_ops = _grouped_ops(trace, "Relu")
 
-    assert trace.recurrence_detection is True
-    assert [op.pass_index for op in matmul_ops] == [1, 2, 3]
-    assert [op.pass_index for op in relu_ops] == [1, 2, 3]
+    assert trace.options.recurrence_detection is True
+    assert [op.pass_number for op in matmul_ops] == [1, 2, 3]
+    assert [op.pass_number for op in relu_ops] == [1, 2, 3]
     assert {op.layer_label for op in matmul_ops} == {matmul_ops[0].layer_label}
     assert {op.num_passes for op in (*matmul_ops, *relu_ops)} == {3}
     assert list(relu_ops[0].recurrent_ops) == [op.label for op in relu_ops]
-    assert trace.layer_num_calls[relu_ops[0].layer_label] == 3
+    assert trace._layer_num_calls[relu_ops[0].layer_label] == 3
     # validate_trace() itself returns the bare pass/fail bool when fully
     # verified (torch-parity convention: see
     # test_mlx_backend_validation/test_paddle_backend_validation), or the
@@ -98,8 +98,8 @@ def test_tf_repeated_dense_groups_into_passes() -> None:
     result = TFBackend().validate_trace(trace)
     status = trace.validation_replay_status
     assert result is True or status.state == "unverified"
-    assert status.failed_node_count == 0
-    assert status.replayed_node_count >= 1
+    assert status.num_failed_ops == 0
+    assert status.num_replayed_ops >= 1
 
 
 def test_tf_grouping_matches_ungrouped_validation_verdict() -> None:
@@ -130,10 +130,10 @@ def test_tf_grouping_matches_ungrouped_validation_verdict() -> None:
     assert ungrouped_result is True or ungrouped.validation_replay_status.state == "unverified"
     grouped_status = grouped.validation_replay_status
     ungrouped_status = ungrouped.validation_replay_status
-    assert grouped_status.failed_node_count == ungrouped_status.failed_node_count == 0
-    assert grouped_status.replayed_node_count == ungrouped_status.replayed_node_count
-    assert ungrouped.recurrence_detection is False
-    assert all(op.num_passes == 1 for op in ungrouped.layer_list)
+    assert grouped_status.num_failed_ops == ungrouped_status.num_failed_ops == 0
+    assert grouped_status.num_replayed_ops == ungrouped_status.num_replayed_ops
+    assert ungrouped.options.recurrence_detection is False
+    assert all(op.num_passes == 1 for op in ungrouped._layer_list)
 
 
 def test_tf_distinct_module_sites_do_not_group() -> None:
@@ -143,7 +143,7 @@ def test_tf_distinct_module_sites_do_not_group() -> None:
     inputs = tf.ones((2, 4))
     model(inputs)
     trace = tl.trace(model, inputs, backend="tf")
-    matmul_ops = [op for op in trace.layer_list if op.func_name == "MatMul"]
+    matmul_ops = [op for op in trace._layer_list if op.func_name == "MatMul"]
 
     assert len(matmul_ops) == 2
     assert all(op.num_passes == 1 for op in matmul_ops)
@@ -180,8 +180,8 @@ def test_tf_static_funcgraph_path_stays_ungrouped() -> None:
     compiled(inputs)
     trace = tl.trace(compiled, inputs, backend="tf")
 
-    assert trace.recurrence_detection is False
-    assert all(op.num_passes == 1 for op in trace.layer_list)
+    assert trace.options.recurrence_detection is False
+    assert all(op.num_passes == 1 for op in trace._layer_list)
 
 
 def test_tf_tamper_swapped_sidecar_labels_fail_validation() -> None:
@@ -207,7 +207,7 @@ def test_tf_tamper_swapped_sidecar_labels_fail_validation() -> None:
     trace._tf_op_captures = tuple(captures)
 
     status = TFBackend().validate_trace(trace)
-    assert status is False or status.failed_node_count > 0
+    assert status is False or status.num_failed_ops > 0
 
 
 def test_tf_tamper_dangling_sidecar_label_fails_validation() -> None:
@@ -222,7 +222,7 @@ def test_tf_tamper_dangling_sidecar_label_fails_validation() -> None:
     trace._tf_op_captures = tuple(captures)
 
     status = TFBackend().validate_trace(trace)
-    assert status is False or status.failed_node_count > 0
+    assert status is False or status.num_failed_ops > 0
 
 
 def test_tf_intermediate_derived_grads_survive_grouping() -> None:
@@ -237,22 +237,26 @@ def test_tf_intermediate_derived_grads_survive_grouping() -> None:
         loss_fn=lambda output: tf.reduce_sum(output),
         intermediate_grads=True,
     )
-    grouped = tl.trace(model, inputs, backend="tf", grad_options=grad_options)
+    grouped = tl.trace(
+        model, inputs, backend="tf", capture=tl.options.CaptureOptions(grad_options=grad_options)
+    )
     ungrouped = tl.trace(
         model,
         inputs,
         backend="tf",
-        grad_options=grad_options,
-        capture=tl.options.CaptureOptions(recurrence_detection=False),
+        capture=tl.options.CaptureOptions(recurrence_detection=False, grad_options=grad_options),
     )
 
-    # Accessors iterate VALUES, not keys (see data_classes/_accessor_base.py),
+    # Accessors iterate VALUES, not keys (see _data_classes/_accessor_base.py),
     # so iterate through .keys() to get label strings to look up.
-    grouped_raw = {grouped[label]._label_raw for label in grouped.intermediate_derived_grads.keys()}
+    grouped_raw = {
+        grouped[label]._label_raw for label in grouped.autograd.intermediate_derived_grads.keys()
+    }
     ungrouped_raw = {
-        ungrouped[label]._label_raw for label in ungrouped.intermediate_derived_grads.keys()
+        ungrouped[label]._label_raw
+        for label in ungrouped.autograd.intermediate_derived_grads.keys()
     }
     assert ungrouped_raw, "reference ungrouped trace produced no records"
     assert grouped_raw == ungrouped_raw
     grouped_relu = _grouped_ops(grouped, "Relu")
-    assert grouped_relu[0].label in grouped.intermediate_derived_grads
+    assert grouped_relu[0].label in grouped.autograd.intermediate_derived_grads

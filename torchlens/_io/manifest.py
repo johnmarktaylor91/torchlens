@@ -15,7 +15,6 @@ import os
 import sys
 import warnings
 from dataclasses import asdict, dataclass
-from hashlib import sha256
 from pathlib import Path
 from typing import Any, TypeGuard
 
@@ -27,13 +26,11 @@ from ..errors._base import TorchLensWarning
 from . import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
+    ArtifactError,
     ArtifactRuntimeIncompatibleError,
-    ArtifactSchemaAgeWarning,
-    TorchLensIOError,
     _json,
     above_ceiling_error,
     below_floor_error,
-    compat_ledger,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -62,10 +59,11 @@ def _is_plain_nonnegative_int(value: Any) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
-_SCHEMA_REMEDY = "re-save the artifact with tl.save(); do not hand-edit manifest.json"
+_TORCH_BACKEND_NAME = "torch"
+_SCHEMA_REMEDY = "re-save the artifact with trace.save(); do not hand-edit manifest.json"
 
 
-def _schema_refuse(detail: str, **fields: Any) -> TorchLensIOError:
+def _schema_refuse(detail: str, **fields: Any) -> ArtifactError:
     """Typed refusal for a manifest that parses as JSON but violates the schema.
 
     One constructor for the whole malformed-manifest family (R65-1): every
@@ -74,7 +72,7 @@ def _schema_refuse(detail: str, **fields: Any) -> TorchLensIOError:
     adds the artifact path to refusals that bubble out of ``from_dict``.
     """
 
-    return TorchLensIOError(
+    return ArtifactError(
         f"{detail} Remedy: {_SCHEMA_REMEDY}.",
         code="manifest_schema_invalid",
         remedy=_SCHEMA_REMEDY,
@@ -164,7 +162,7 @@ class TensorEntry:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the entry is missing required fields or uses invalid types.
         """
 
@@ -362,7 +360,7 @@ class Provenance:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the nested schema is malformed or unsupported.
         """
 
@@ -423,7 +421,7 @@ def _optional_str(data: dict[str, Any], field_name: str) -> str | None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the optional value is present but not a non-empty string.
     """
 
@@ -457,9 +455,9 @@ class Manifest:
         UTC timestamp string for bundle creation.
     bundle_format:
         Bundle container format: ``"directory"`` for standard portable
-        bundles written by ``Trace.save()``/``tl.save()``, or
+        bundles written by ``trace.save()``, or
         ``"fastlog-directory"`` for fastlog ring-buffer disk storage
-        (see ``torchlens/fastlog/storage_disk.py``).
+        (see ``torchlens/recording/storage_disk.py``).
     n_layers:
         Total number of ``Op`` entries in the saved log.
     n_out_blobs:
@@ -517,12 +515,12 @@ class Manifest:
 
         Raises
         ------
-        ArtifactVersionBelowFloorError
-            If the manifest predates the ``tlspec_version >= 6`` rehydration
-            floor. Checked before the remaining required fields so a
+        ArtifactTooOldError
+            If the manifest predates the current ``tlspec_version`` (torchlens
+            2.x saved it). Checked before the remaining required fields so a
             genuinely old manifest (which also lacks newer required fields)
             refuses with the floor named instead of a missing-field error.
-        TorchLensIOError
+        ArtifactError
             If required fields are missing or have invalid types.
         """
 
@@ -534,13 +532,11 @@ class Manifest:
             # present-but-non-int value stays a required-field type error below.
             raise below_floor_error(
                 observed="no tlspec_version (predates portable I/O versioning)",
-                subject="Bundle manifest",
                 code="artifact_version_below_floor",
             )
         if isinstance(raw_version, int) and raw_version < MIN_TLSPEC_VERSION:
             raise below_floor_error(
                 observed=f"tlspec_version={raw_version}",
-                subject="Bundle manifest",
                 code="artifact_version_below_floor",
             )
         if isinstance(raw_version, int) and raw_version > TLSPEC_VERSION:
@@ -550,7 +546,6 @@ class Manifest:
             # instead of the above-ceiling refusal that names the remedy.
             raise above_ceiling_error(
                 observed=raw_version,
-                subject="Bundle manifest",
                 code="artifact_version_above_runtime",
             )
 
@@ -629,7 +624,7 @@ class Manifest:
                 )
             if not isinstance(raw_disclosure.get("included"), bool):
                 raise _schema_refuse(
-                    "Manifest custom_attributes_disclosure.included must be a boolean."
+                    "Manifest custom_attributes_disclosure.is_included must be a boolean."
                 )
             raw_count = raw_disclosure.get("module_count")
             if not isinstance(raw_count, int) or raw_count < 0:
@@ -651,7 +646,7 @@ class Manifest:
                 )
             if not isinstance(raw_buffer_disclosure.get("included"), bool):
                 raise _schema_refuse(
-                    "Manifest buffer_values_disclosure.included must be a boolean."
+                    "Manifest buffer_values_disclosure.is_included must be a boolean."
                 )
             raw_buffer_count = raw_buffer_disclosure.get("buffer_count")
             if not isinstance(raw_buffer_count, int) or raw_buffer_count < 0:
@@ -702,7 +697,7 @@ class Manifest:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the file cannot be read or does not decode into a valid manifest.
         """
 
@@ -714,33 +709,33 @@ class Manifest:
             # Stable codes on the tl.load front door (R65): a missing, unreadable,
             # and malformed/over-limit manifest are distinct causes a caller (or
             # operator log reader) must be able to tell apart.
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Manifest not found at {manifest_path}. Remedy: pass the bundle "
-                "directory produced by tl.save() (it must contain manifest.json).",
+                "directory produced by trace.save() (it must contain manifest.json).",
                 code="manifest_missing",
             ) from exc
         except OSError as exc:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Failed to read manifest at {manifest_path}: {type(exc).__name__}: {exc}. "
                 "Remedy: check file permissions and that the bundle is fully copied.",
                 code="manifest_unreadable",
             ) from exc
         except json.JSONDecodeError as exc:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Manifest at {manifest_path} does not parse as JSON within the "
                 f"supported bounds: {exc}. Remedy: the artifact is corrupt or "
-                "hand-edited; re-save it with tl.save().",
+                "hand-edited; re-save it with trace.save().",
                 code="manifest_unreadable",
             ) from exc
         if not isinstance(raw_data, dict):
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Manifest root at {manifest_path} must be a JSON object. Remedy: "
-                "the artifact is corrupt or hand-edited; re-save it with tl.save().",
+                "the artifact is corrupt or hand-edited; re-save it with trace.save().",
                 code="manifest_not_json_object",
             )
         try:
             return cls.from_dict(raw_data)
-        except TorchLensIOError as exc:
+        except ArtifactError as exc:
             # Schema refusals from from_dict know the field, never the file;
             # the read seam is where the artifact path is known (R65-1).
             if exc.file_path is None:
@@ -757,7 +752,7 @@ class Manifest:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the file cannot be written.
         """
 
@@ -776,7 +771,7 @@ class Manifest:
                 # not leave a zero-length/partial manifest behind it.
                 os.fsync(handle.fileno())
         except (OSError, ValueError) as exc:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Failed to write manifest at {manifest_path}: {type(exc).__name__}: "
                 f"{exc}. Remedy: check disk space and directory permissions, then "
                 "re-save.",
@@ -808,7 +803,7 @@ class Manifest:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the declared counts disagree with the tensor entries.
         """
 
@@ -821,27 +816,6 @@ class Manifest:
             raise _schema_refuse("Manifest n_grad_blobs does not match tensor entries.")
         if self.n_auxiliary_blobs != n_auxiliary_blobs:
             raise _schema_refuse("Manifest n_auxiliary_blobs does not match tensor entries.")
-
-
-def sha256_of_file(path: str | Path) -> str:
-    """Compute the SHA-256 digest of one file's bytes.
-
-    Parameters
-    ----------
-    path:
-        File path to hash.
-
-    Returns
-    -------
-    str
-        Lowercase hexadecimal digest.
-    """
-
-    digest = sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _is_sha256(value: Any) -> bool:
@@ -909,7 +883,7 @@ def _optional_sha256(data: dict[str, Any], field_name: str) -> str | None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the present value is neither a SHA-256 digest nor a sanctioned
         ``unavailable:<ExceptionName>`` sentinel.
     """
@@ -923,33 +897,22 @@ def _optional_sha256(data: dict[str, Any], field_name: str) -> str | None:
     return value
 
 
-def enforce_version_policy(manifest: Manifest, *, bundle_path: Path | None = None) -> None:
+def enforce_version_policy(manifest: Manifest) -> None:
     """Apply the bundle version and integrity compatibility policy for a loaded manifest.
 
     Parameters
     ----------
     manifest:
         Parsed manifest to validate against the current runtime.
-    bundle_path:
-        Artifact directory, when the caller has it in scope. Enables the
-        migration-witness door for producer pair-consistency: a migrated
-        artifact keeps its original writer identity and proves its
-        (writer, stamp) lineage through ``tl_migration_provenance.json``.
 
     Raises
     ------
-    ArtifactVersionBelowFloorError
-        If the bundle predates the ``tlspec_version >= 6`` rehydration floor
-        (first written by released torchlens 2.31.0).
-    TorchLensIOError
+    ArtifactTooOldError
+        If the bundle's ``tlspec_version`` is older than the current format, which
+        means torchlens 2.x saved it.
+    ArtifactError
         If the bundle targets a newer I/O format or an incompatible torch
         major version.
-
-    Warns
-    -----
-    ArtifactSchemaAgeWarning
-        If the bundle is between the rehydration floor and the current
-        ``tlspec_version`` and therefore loads at its own recorded schema.
     """
 
     if manifest.tlspec_version > TLSPEC_VERSION:
@@ -958,26 +921,12 @@ def enforce_version_policy(manifest: Manifest, *, bundle_path: Path | None = Non
             subject="Bundle",
             code="artifact_version_above_runtime",
         )
-    if manifest.tlspec_version < MIN_TLSPEC_VERSION:
+    if manifest.tlspec_version < TLSPEC_VERSION:
+        # Every format older than the current one was written by torchlens 2.x, and this
+        # release carries no reader for it.
         raise below_floor_error(
             observed=f"tlspec_version={manifest.tlspec_version}",
-            subject="Bundle",
             code="artifact_version_below_floor",
-        )
-    if manifest.tlspec_version < TLSPEC_VERSION:
-        # Honest between-floor-and-current advisory (r6 L7): the artifact loads
-        # at its recorded schema; fields introduced by later schema versions are
-        # absent, never default-filled (``Manifest.from_dict`` fails closed on
-        # required fields). Categorized ``ArtifactSchemaAgeWarning`` (a visible
-        # ``UserWarning`` subclass), never ``DeprecationWarning``: this advisory
-        # deprecates no API, and the default warning filters hide
-        # ``DeprecationWarning`` from end users (grind r3, R15-F1).
-        warnings.warn(
-            f"Bundle tlspec_version={manifest.tlspec_version} is older than "
-            f"runtime tlspec_version={TLSPEC_VERSION}; loading at the recorded "
-            "schema. Re-save the artifact with this release to upgrade it.",
-            ArtifactSchemaAgeWarning,
-            stacklevel=2,
         )
 
     runtime_torch = _parse_version(torch.__version__, label="runtime torch")
@@ -1017,7 +966,7 @@ def enforce_version_policy(manifest: Manifest, *, bundle_path: Path | None = Non
         warn_on_failure=False,
     )
     if manifest_torchlens is None:
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Bundle torchlens_version="
             f"{manifest.torchlens_version!r} could not be parsed under PEP 440; "
             "refusing a current-schema artifact with unverifiable producer "
@@ -1025,32 +974,6 @@ def enforce_version_policy(manifest: Manifest, *, bundle_path: Path | None = Non
             code="bundle_producer_unverifiable",
             remedy="re-save the artifact with a released torchlens",
         )
-    # Producer PAIR-CONSISTENCY against the governed compatibility ledger
-    # (ecosystem MEMO 3.1, gate G5). This replaced the hand-typed
-    # ``< "2.33"`` inequality that orphaned lawful released v2.31.0/v2.32.4
-    # artifacts: the first tlspec-6 writer was v2.31.0 (measured on genuine
-    # wheels), so a (writer, stamp) pair refuses only when NO governed ledger
-    # window says that writer emitted that stamp. A migrated artifact keeps
-    # its original writer identity and proves its lineage through the
-    # migration witness sidecar instead; an invalid witness refuses typed.
-    if manifest_torchlens is not None and not compat_ledger.pair_is_governed(
-        manifest.torchlens_version, manifest.tlspec_version
-    ):
-        witness = (
-            compat_ledger.read_migration_witness(bundle_path) if bundle_path is not None else None
-        )
-        if witness is None or not compat_ledger.migrated_pair_is_governed(
-            manifest.torchlens_version,
-            manifest.tlspec_version,
-            witness,
-            bundle_path=bundle_path,
-        ):
-            raise compat_ledger.ungoverned_pair_error(
-                manifest.torchlens_version,
-                manifest.tlspec_version,
-                subject="Bundle",
-                code="artifact_producer_pair_ungoverned",
-            )
     if runtime_torchlens is not None and manifest_torchlens is not None:
         if manifest_torchlens > runtime_torchlens:
             warnings.warn(
@@ -1151,7 +1074,7 @@ def _validate_unsupported_tensors(raw_value: Any) -> list[dict[str, str]]:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the value is not a list of string-only mappings.
     """
 
@@ -1172,3 +1095,18 @@ def _validate_unsupported_tensors(raw_value: Any) -> list[dict[str, str]]:
             validated_entry[key] = value
         validated.append(validated_entry)
     return validated
+
+
+def _manifest_uses_audit_only_payloads(manifest: Manifest | dict[str, Any]) -> bool:
+    """Return whether the manifest declares metadata-only payload loading."""
+
+    if isinstance(manifest, Manifest):
+        backend_name = getattr(manifest, "_tl_logical_backend", "torch")
+        materializes = getattr(manifest, "_tl_payload_materialization_supported", True)
+        return backend_name != _TORCH_BACKEND_NAME and not bool(materializes)
+    if manifest.get("backend", _TORCH_BACKEND_NAME) == _TORCH_BACKEND_NAME:
+        return False
+    payload_policy = manifest.get("payload_policy", {})
+    if not isinstance(payload_policy, dict):
+        return False
+    return not bool(payload_policy.get("materialization_supported", False))

@@ -2,7 +2,7 @@
 
 Lane W051-REPLAY lowered ``Op``/``Layer`` records at HOOK-PLAN normalization,
 so ``do(record, helper)`` worked, but the ``set()`` door (``do(record,
-tensor)``), ``resolve_sites(record)`` and the mutator-site validation still
+tensor)``), ``find_sites(record)`` and the mutator-site validation still
 refused a record ("Unsupported site query"), and ``_target_spec_from_site``
 would have lowered an ``Op`` to its BARE ``layer_label`` -- the LAST pass of
 a multi-pass layer. Records now lower to their PASS-QUALIFIED ``Op.label``
@@ -16,9 +16,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._ir.selector_eval import normalize_selector_like
+from torchlens._selection.selectors import CompositeSelector, LabelSelector
 from torchlens.intervention.errors import MultiMatchWarning
-from torchlens.intervention.selectors import CompositeSelector, LabelSelector
-from torchlens.ir.selector_eval import normalize_selector_like
 
 _N_PASSES = 3
 
@@ -32,7 +32,10 @@ class _Loop(nn.Module):
         hidden = x
         for step in range(_N_PASSES):
             hidden = torch.relu(self.cell(hidden)) + float(step)
-        return hidden
+        # A single-pass layer for the single-pass record rows: the loop's
+        # ``+ float(step)`` is now one 3-pass Layer (grouping rule row 49:
+        # a varying scalar in a loop is one layer), so it no longer serves.
+        return hidden * 1.0
 
 
 @pytest.fixture(scope="module")
@@ -40,7 +43,7 @@ def loop():
     torch.manual_seed(0)
     model = _Loop().eval()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         yield model, x, trace
     finally:
@@ -72,7 +75,7 @@ def test_set_door_op_record_edits_exactly_its_pass(loop) -> None:
 
     model, x, trace = loop
     fork = trace.fork()
-    fork.do(trace["relu_1_2:2"].ops[0], torch.zeros(2, 4))
+    fork.do(trace["relu_1_2:2"], torch.zeros(2, 4))
     _assert_matches(fork, _truth(model, x, {2}))
     assert torch.equal(fork["relu_1_2:1"].out, trace["relu_1_2:1"].out)
     assert torch.allclose(fork["relu_1_2:3"].out, _truth(model, x, {2})["relu_1_2:3"], atol=1e-6)
@@ -92,7 +95,7 @@ def test_set_door_stored_target_is_pass_qualified(loop) -> None:
 
     _model, _x, trace = loop
     fork = trace.fork()
-    fork.do(trace["relu_1_2:2"].ops[0], torch.zeros(2, 4))
+    fork.do(trace["relu_1_2:2"], torch.zeros(2, 4))
     spec = fork._ensure_intervention_spec()
     targets = [
         (s.site_target.selector_kind, s.site_target.selector_value) for s in spec.target_value_specs
@@ -103,20 +106,20 @@ def test_set_door_stored_target_is_pass_qualified(loop) -> None:
 
 def test_target_spec_from_op_record_is_its_own_pass(loop) -> None:
     _model, _x, trace = loop
-    op_spec = trace._target_spec_from_site(trace["relu_1_2:2"].ops[0], strict=False)
+    op_spec = trace._target_spec_from_site(trace["relu_1_2:2"], strict=False)
     assert (op_spec.selector_kind, op_spec.selector_value) == ("label", "relu_1_2:2")
     layer_spec = trace._target_spec_from_site(trace["relu_1_2"], strict=False)
     assert layer_spec.selector_kind == "or"
-    single = trace._target_spec_from_site(trace["add_1_3"], strict=False)
-    assert (single.selector_kind, single.selector_value) == ("label", "add_1_3:1")
+    single = trace._target_spec_from_site(trace["mul_1_4"], strict=False)
+    assert (single.selector_kind, single.selector_value) == ("label", "mul_1_4:1")
     passthrough = trace._target_spec_from_site("relu_1_2:1", strict=True)
     assert (passthrough.selector_kind, passthrough.selector_value) == ("label", "relu_1_2:1")
     assert passthrough.strict is True
 
 
-def test_resolve_sites_accepts_records_pass_qualified(loop) -> None:
+def test_find_sites_accepts_records_pass_qualified(loop) -> None:
     _model, _x, trace = loop
-    resolved = trace.resolve_sites(trace["relu_1_2:2"].ops[0])
+    resolved = trace.find_sites(trace["relu_1_2:2"])
     labels = {getattr(site, "label", None) or str(site) for site in resolved}
     assert any("relu_1_2:2" in label for label in labels), labels
     assert not any("relu_1_2:1" in label or "relu_1_2:3" in label for label in labels), labels
@@ -124,7 +127,7 @@ def test_resolve_sites_accepts_records_pass_qualified(loop) -> None:
 
 def test_normalize_selector_like_lowers_records_in_both_lifecycles(loop) -> None:
     _model, _x, trace = loop
-    op = trace["relu_1_2:2"].ops[0]
+    op = trace["relu_1_2:2"]
     for lifecycle in ("live", "site"):
         lowered = normalize_selector_like(op, lifecycle=lifecycle)
         assert isinstance(lowered, LabelSelector) and lowered.selector_value == "relu_1_2:2"

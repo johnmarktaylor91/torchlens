@@ -39,10 +39,10 @@ def test_gated_mlp_recipe_populates_all_facets_with_real_values() -> None:
     torch.manual_seed(13)
     model = _GatedModel(LlamaMLP())
     x = torch.randn(2, 3, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
 
     view = log.modules["mlp"].facets
-    assert view.recipe_source == "gated_mlp"
+    assert view.function_source == "gated_mlp"
     assert view.up_out.shape == (2, 3, 16)
     assert view.gated_out.shape == (2, 3, 16)
     assert view.intermediate.shape == (2, 3, 16)
@@ -78,7 +78,7 @@ def test_gated_mlp_recipe_degrades_when_projection_children_missing() -> None:
     log = tl.trace(
         _GatedModel(_Partial()),
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     view = log.modules["mlp"].facets
 

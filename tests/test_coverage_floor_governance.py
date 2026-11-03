@@ -88,17 +88,20 @@ def test_nightly_coverage_job_exists_and_instruments_the_smoke_tier() -> None:
         "the nightly coverage job no longer instruments torchlens under branch "
         "coverage — the floor would be measuring nothing"
     )
-    # The instrumented leg must not deselect budget tests by name: the
-    # carve-out lives in the budget machinery itself (a renamed test id once
-    # turned the deselect into a silent no-op while claiming the exemption).
+    # The instrumented leg must not deselect budget tests by name: duration
+    # budgets are a repository check over tests/tiers/durations.csv, and a
+    # coverage-instrumented measurement is judged at the slowdown factor (a
+    # renamed test id once turned a deselect into a silent no-op while
+    # claiming the exemption).
     assert "--deselect" not in command, (
-        "the coverage job deselects tests by name again — the instrumentation "
-        "carve-out belongs in tests/conftest.py (cov_source check), where a "
+        "the coverage job deselects tests by name again — instrumented runs are "
+        "allowed for in scripts/tier_durations.py (MAX_SLOWDOWN_FACTOR), where a "
         "rename cannot silently void it"
     )
-    conftest_text = (_PROJECT_ROOT / "tests" / "conftest.py").read_text(encoding="utf-8")
-    assert 'getattr(item.config.option, "cov_source", None)' in conftest_text, (
-        "tests/conftest.py lost the instrumented-session budget carve-out that "
+    from scripts.tier_durations import MAX_SLOWDOWN_FACTOR, budget_factor
+
+    assert budget_factor({"instrumented": True, "workers": 1}) == MAX_SLOWDOWN_FACTOR, (
+        "scripts/tier_durations.py lost the instrumented-measurement allowance that "
         "replaced the coverage job's brittle --deselect"
     )
 
@@ -156,17 +159,17 @@ def test_floor_lock_is_red_capable() -> None:
 #: Shrink-forbidden per-package floor baselines (r7 R72). The script is the
 #: single runtime authority; this mirror refuses a silent floor cut there.
 PACKAGE_FLOOR_BASELINES: dict[str, float] = {
-    "torchlens/capture": 74.0,
-    "torchlens/postprocess": 80.0,
+    "torchlens/_capture": 74.0,
+    "torchlens/_postprocess": 80.0,
     "torchlens/validation": 54.0,
     "torchlens/backends": 48.0,
-    "torchlens/data_classes": 65.0,
+    "torchlens/_data_classes": 65.0,
     "torchlens/_io": 63.0,
     "torchlens/intervention": 59.0,
-    "torchlens/utils": 59.0,
-    "torchlens/merged": 80.0,
+    "torchlens/_utils": 59.0,
+    "torchlens/_merged": 80.0,
     "torchlens/_trace_core": 80.0,
-    "torchlens/visualization": 57.0,
+    "torchlens/_visualization": 57.0,
 }
 
 
@@ -217,13 +220,37 @@ def test_per_package_floors_are_enforced_and_never_lowered() -> None:
     )
 
 
+def test_every_package_floor_key_names_an_existing_package() -> None:
+    """A floor keyed by a moved package's old path measures nothing.
+
+    Round-1 package moves (``postprocess`` to ``_postprocess`` and three more)
+    left the floors keyed by the old paths: the script then finds no measured
+    file for the key, so the floor no longer guards the package it names.
+    Every key in the script and in the baseline mirror must be a real package
+    directory holding Python source.
+    """
+
+    script = _load_floor_script()
+    keys = sorted(set(script.PACKAGE_FLOORS) | set(PACKAGE_FLOOR_BASELINES))
+    missing = [
+        key
+        for key in keys
+        if not (_PROJECT_ROOT / key).is_dir() or not any((_PROJECT_ROOT / key).rglob("*.py"))
+    ]
+    assert not missing, (
+        f"per-package coverage floor key(s) name no package directory: {missing}. "
+        "Re-key them to the package's current path with the SAME floor value "
+        "(script and the PACKAGE_FLOOR_BASELINES mirror together); never drop or lower one."
+    )
+
+
 def test_package_percentage_aggregation_is_red_capable() -> None:
     """The aggregation flags a hollowed package (unit red-capability)."""
 
     script = _load_floor_script()
     payload = {
         "files": {
-            "torchlens/capture/trace.py": {
+            "torchlens/_capture/trace.py": {
                 "summary": {
                     "covered_lines": 10,
                     "num_statements": 100,
@@ -234,8 +261,8 @@ def test_package_percentage_aggregation_is_red_capable() -> None:
         }
     }
     measured = script.package_percentages(payload)
-    assert measured["torchlens/capture"] == 10.0
-    assert measured["torchlens/capture"] < script.PACKAGE_FLOORS["torchlens/capture"]
+    assert measured["torchlens/_capture"] == 10.0
+    assert measured["torchlens/_capture"] < script.PACKAGE_FLOORS["torchlens/_capture"]
 
 
 #: No-growth ceiling on `# pragma: no cover` sites in torchlens/ (r7 R72-F2:
@@ -253,7 +280,7 @@ def test_package_percentage_aggregation_is_red_capable() -> None:
 #: surviving wave-0 addition is the _encoding.py import-time two-row
 #: classification guard, unreachable while the completeness pin holds.
 #: 51 -> 57 (2026-08-28 F27): six uncoverable-on-CPU-CI seams -- the two
-#: native_profile CUDA legs (device activities + synchronize), the wrappers/
+#: kernel_profile CUDA legs (device activities + synchronize), the wrappers/
 #: backward observability-import failure belts (the substrate always imports
 #: in CI; the belt exists for torn installs), and the no-loadavg platform
 #: branch in the overhead harness, plus the compute-truth join lookup's

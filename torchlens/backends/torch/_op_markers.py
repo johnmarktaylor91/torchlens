@@ -17,6 +17,50 @@ from typing import Any
 
 import torch
 
+from ... import _state
+from ..._utils.rng import monitor_state
+
+
+def _nvtx_host_available() -> bool:
+    """Return whether this host can emit NVTX ranges (a CUDA device is visible)."""
+
+    return bool(torch.cuda.is_available())
+
+
+def refuse_unavailable_nvtx(emit_nvtx: bool) -> None:
+    """Refuse ``emit_nvtx=True`` on a host without CUDA, as torch does.
+
+    ``torch.autograd.profiler.emit_nvtx()`` refuses on such a host; before this
+    check every TorchLens range push was silently swallowed, so the option
+    looked accepted while emitting nothing.
+
+    Parameters
+    ----------
+    emit_nvtx:
+        The resolved capture option.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``emit_nvtx_unavailable`` when ``emit_nvtx`` is set and CUDA is unavailable.
+    """
+
+    if not emit_nvtx or _nvtx_host_available():
+        return
+    from ..._errors import InvalidArgumentError
+
+    raise InvalidArgumentError(
+        "emit_nvtx=True needs a CUDA device with an NVIDIA driver, and torch reports "
+        "none on this host, so no NVTX range could be emitted "
+        "(torch.autograd.profiler.emit_nvtx refuses here too)",
+        code="emit_nvtx_unavailable",
+        remedy=(
+            "drop emit_nvtx=True on this host, or run the capture where "
+            "torch.cuda.is_available() is True"
+        ),
+        argument="emit_nvtx",
+    )
+
 
 def _nvtx_range_push(name: str) -> bool:
     """Push an NVTX range if CUDA NVTX support is available.
@@ -61,8 +105,8 @@ def _op_marker_labels(func_name: str, func_call_id: int) -> tuple[str, str]:
 
     W0.2 (TN-D11/D13/D14): names carry identity -- twenty ``conv2d`` calls
     are twenty distinguishable ranges -- and TorchLens's OWN bookkeeping
-    calls (an explicit :func:`internal_scalar_read` marker is live, e.g. the
-    per-output ``register_hook`` install) are separated under
+    calls (an explicit :func:`internal_scalar_read` marker is live, e.g. a
+    scalar-bool value read) are separated under
     ``torchlens::internal::`` so half the ranges on a real capture stop
     masquerading as model work. The classification is allowlist-BY-
     CONSTRUCTION (the same marker discipline as the completeness witness),
@@ -100,7 +144,7 @@ def _no_active_session() -> Any:
     return None
 
 
-#: Cached ``torchlens.observability._session.active_session`` (resolved on
+#: Cached ``torchlens._observability._session.active_session`` (resolved on
 #: first wrapped call so the hot path pays one global read, not an import).
 _active_session_fn: Callable[[], Any] | None = None
 
@@ -109,15 +153,16 @@ def resolve_active_session_fn() -> Callable[[], Any]:
     """Return the observability session reader, importing it on first use.
 
     The import is lazy so ``torchlens.backends.torch`` does not load the
-    observability substrate at import time. The host-nondeterminism monitor
-    calls this before it arms: left to the first wrapped op, the import runs
-    inside the monitor window, and the import machinery's ``sys.meta_path``
-    finder frames become roots of its frame-reachable inventory.
+    observability substrate at import time. :func:`_warm_session_reader`,
+    registered with the host-nondeterminism monitor, calls this before a
+    window arms: left to the first wrapped op, the import runs inside the
+    monitor window, and the import machinery's ``sys.meta_path`` finder
+    frames become roots of its frame-reachable inventory.
 
     Returns
     -------
     Callable[[], Any]
-        ``active_session`` from ``torchlens.observability._session``, or a
+        ``active_session`` from ``torchlens._observability._session``, or a
         reader that always returns ``None`` on a torn install.
     """
 
@@ -125,13 +170,29 @@ def resolve_active_session_fn() -> Callable[[], Any]:
     session_fn: Callable[[], Any] | None = _active_session_fn
     if session_fn is None:
         try:
-            from ...observability._session import active_session
+            from ..._observability._session import (  # deferred: cycle _observability (layering follow-up)
+                active_session,
+            )
         except ImportError:  # pragma: no cover - torn install without the substrate
             session_fn = _no_active_session
         else:
             session_fn = active_session
         _active_session_fn = session_fn
     return session_fn
+
+
+def _warm_session_reader() -> None:
+    """Resolve (import) the session reader before a monitor window arms.
+
+    Registered at import below, so the window never imports the observability
+    substrate itself; logging is paused so the resolve never records an op.
+    """
+
+    with _state.pause_logging():
+        resolve_active_session_fn()()
+
+
+monitor_state.register_warmup(_warm_session_reader)
 
 
 def _push_op_markers(trace: Any, func_name: str, func_call_id: int) -> tuple[bool, Any]:
@@ -142,7 +203,7 @@ def _push_op_markers(trace: Any, func_name: str, func_call_id: int) -> tuple[boo
     - NVTX (``emit_nvtx=True``): Nsight-visual range with an
       identity-carrying name.
     - ``torch.profiler.record_function`` (an active
-      ``torchlens.observability.session``): the FLIP-1 op-altitude join
+      ``torchlens._observability.session``): the FLIP-1 op-altitude join
       marker whose name is the exact ``func_call_id`` key.
 
     Parameters
@@ -162,7 +223,7 @@ def _push_op_markers(trace: Any, func_name: str, func_call_id: int) -> tuple[boo
     """
 
     session = resolve_active_session_fn()()
-    wants_nvtx = bool(getattr(trace, "emit_nvtx", False))
+    wants_nvtx = bool(trace._options_emit_nvtx)
     if session is None and not wants_nvtx:
         return (False, None)
     visual, join = _op_marker_labels(func_name, func_call_id)

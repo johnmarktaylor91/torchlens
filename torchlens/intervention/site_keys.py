@@ -36,7 +36,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
-from ..postprocess._site_key import SiteKeyMinter
+from .._postprocess._site_key import SiteKeyMinter
 
 _ACTIVE_LIVE_MINTER: ContextVar[LiveSiteKeyMinter | None] = ContextVar(
     "tl_active_live_site_key_minter", default=None
@@ -70,7 +70,7 @@ class LiveSiteKeyMinter:
         if event_index in self._by_event:
             return self._by_event[event_index]
         frames = tuple(getattr(ctx, "module_stack", ()) or ())
-        entries = tuple((frame.address, frame.pass_index) for frame in frames)
+        entries = tuple((frame.address, frame.pass_number) for frame in frames)
         key = self._minter.mint(
             entries,
             str(getattr(ctx, "layer_type", None) or getattr(ctx, "type", "")),
@@ -107,14 +107,14 @@ def predicate_needs_live_site_keys(*predicates: Any) -> bool:
     ``selector_contains_kind`` machinery.
     """
 
-    from ..ir.selector_eval import selector_contains_kind
+    from .._ir.selector_eval import selector_contains_kind
 
     for predicate in predicates:
         if predicate is None:
             continue
         rules = getattr(predicate, "rules", None)
         candidates = (
-            [rule.where for rule in rules]
+            [rule.target for rule in rules]
             if rules is not None and not callable(rules)
             else [predicate]
         )
@@ -144,7 +144,7 @@ def mint_keys_in_execution_order(trace: Any) -> dict[str, str]:
         op = trace.ops[label]
         keys[label] = minter.mint(
             getattr(op, "modules", None) or (),
-            op.layer_type,
+            op.type,
             getattr(op, "multi_output_index", None),
         )
     return keys

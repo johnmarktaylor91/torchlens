@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._user_funcs import validate_forward_pass
 from torchlens.errors import TorchLensWarning
-from torchlens.user_funcs import validate_forward_pass
 from torchlens.validation import invariants as _invariants
 from torchlens.validation.diagnostics import CHECK_METADATA_INVARIANT, last_validation_failure
 from torchlens.validation.invariants import MetadataInvariantError
@@ -47,7 +47,7 @@ def test_validate_forward_returns_false_on_metadata_invariant_failure(monkeypatc
     assert verdict is False
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == CHECK_METADATA_INVARIANT
+    assert failure.check_name == CHECK_METADATA_INVARIANT
     assert "forced by the L9 regression test" in failure.message
 
 

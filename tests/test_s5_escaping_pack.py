@@ -20,14 +20,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
-from torchlens.visualization._render_edges import (
+from torchlens._data_classes.layer import Layer
+from torchlens._visualization._render_edges import (
     _html_combined_recurrence_label,
     _html_container_edge_label,
     _html_edge_label,
 )
-from torchlens.visualization._render_utils import html_escape
-from torchlens.visualization.node_spec import NodeSpec, render_lines_to_html
+from torchlens._visualization._render_utils import html_escape
+from torchlens._visualization.node_spec import NodeSpec, render_lines_to_html
 
 # --------------------------------------------------------------------------
 # E1 corpus. TRANSFORMABLE members carry at least one of &/</> and therefore
@@ -74,11 +74,10 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _assert_member_escaped(dot: str, injected: str) -> None:
@@ -191,7 +190,7 @@ def test_e1_corpus_via_func_config_values(tmp_path: Path) -> None:
         f"s5_e1_key_{i}": _sentineled(i, member)
         for i, member in enumerate(TRANSFORMABLE_CORPUS + ESCAPE_INVARIANT_CORPUS)
     }
-    target = next(layer for layer in log.layer_list if layer.layer_type == "linear")
+    target = next(layer for layer in log._layer_list if layer.type == "linear")
     target.func_config = {**(target.func_config or {}), **injected}
 
     dot = _render_dot(log, tmp_path)
@@ -222,7 +221,7 @@ def test_e2_escaper_equivalence() -> None:
 # E3: extra_attrs discipline — the power valve stays a power valve.
 # --------------------------------------------------------------------------
 
-_VIZ_ROOT = Path(__file__).parent.parent / "torchlens" / "visualization"
+_VIZ_ROOT = Path(__file__).parent.parent / "torchlens" / "_visualization"
 
 #: Internal write sites allowed to place a ``label`` key through extra_attrs.
 #: Today: NONE. Intervention-hook helpers emit literal constants through
@@ -248,7 +247,7 @@ def test_e3_no_internal_extra_attrs_label_writes() -> None:
 def test_e3_extra_attrs_last_wins_and_unescaped() -> None:
     """Power-valve semantics: merged last (beats NodeSpec fields), unescaped."""
 
-    from torchlens.visualization._render_leaf import _node_spec_to_graphviz_args
+    from torchlens._visualization._render_leaf import _node_spec_to_graphviz_args
 
     spec = NodeSpec(
         lines=["title"],

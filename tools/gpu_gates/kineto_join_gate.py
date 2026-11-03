@@ -71,13 +71,13 @@ def run_cell(cell: str) -> dict[str, Any]:
     """Run one gate cell and return its JSON-able artifact."""
 
     import torchlens as tl
-    from torchlens import observability as obs
+    from torchlens import _observability as obs
 
     phase, model_name = cell.split("-", 1)
     model, inputs = _build_gpt2() if model_name == "gpt2" else _build_resnet50()
     if phase == "forward":
         model.eval()
-        result = obs.native_profile(model, inputs)
+        result = obs.kernel_profile(model, inputs)
         trace = result.trace
         join = result.join
         backward_facts: dict[str, Any] = {}
@@ -89,8 +89,7 @@ def run_cell(cell: str) -> dict[str, Any]:
             trace = tl.trace(
                 model,
                 inputs,
-                capture=tl.options.CaptureOptions(backward_ready=True),
-                save_mode="reference",
+                capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
             )
             output = trace.output_ops[0].out
             loss = (output.logits if hasattr(output, "logits") else output).float().sum()

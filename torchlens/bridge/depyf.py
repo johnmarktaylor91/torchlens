@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .._errors import CaptureContextError
+from .._errors import CaptureNotActiveError
 
 
-def dump(model: Any, x: Any, path: str | Path, **kwargs: Any) -> list[Path]:
+def dump(model: Any, inputs: Any, path: str | Path, **kwargs: Any) -> list[Path]:
     """Compile ``model`` under depyf and return the source files depyf dumped.
 
     Runs ``with depyf.prepare_debug(path): torch.compile(model)(*args)`` so
@@ -16,13 +16,13 @@ def dump(model: Any, x: Any, path: str | Path, **kwargs: Any) -> list[Path]:
     the generated kernels for this example input into ``path``. This is a
     companion bridge, not TorchLens native ``torch.compile`` support:
     TorchLens still reports ``torch.compile`` capture as SCOPE in
-    ``tl.compat.report``.
+    ``tl.report.doctor``.
 
     Parameters
     ----------
     model:
         Eager ``nn.Module`` (or callable) to compile and run once.
-    x:
+    inputs:
         Example input. A tuple is unpacked as positional arguments; any other
         value is passed as the single argument.
     path:
@@ -57,7 +57,7 @@ def dump(model: Any, x: Any, path: str | Path, **kwargs: Any) -> list[Path]:
 
     prepare_debug = getattr(depyf_module, "prepare_debug", None)
     if not callable(prepare_debug):
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "Installed depyf does not expose prepare_debug(dump_src_dir)",
             code="bridge_depyf_prepare_debug_missing",
             remedy='install depyf>=0.18 (pip install "torchlens[depyf]")',
@@ -65,13 +65,13 @@ def dump(model: Any, x: Any, path: str | Path, **kwargs: Any) -> list[Path]:
     output_dir = Path(path)
     output_dir.mkdir(parents=True, exist_ok=True)
     before = _file_stamps(output_dir)
-    args = x if isinstance(x, tuple) else (x,)
+    args = inputs if isinstance(inputs, tuple) else (inputs,)
     with prepare_debug(str(output_dir), **kwargs):
         torch.compile(model)(*args)
     after = _file_stamps(output_dir)
     written = sorted(file for file, stamp in after.items() if before.get(file) != stamp)
     if not written:
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             f"depyf dumped no files into {output_dir}: torch.compile reused a cached "
             "compile of this model, so nothing was recompiled",
             code="bridge_depyf_nothing_dumped",

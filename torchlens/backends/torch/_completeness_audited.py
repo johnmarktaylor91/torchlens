@@ -1,10 +1,10 @@
 """Audited expected-opaque boundaries of the aten-dispatch completeness witness.
 
 The reviewable table of wrapper scopes whose aten dispatches are opaque by design
-(metadata and export conversions that TorchLens never records as ops, the scalar
-extraction family, the in-forward ``torch.autograd.grad`` engine pass, and the
-foreign-kernel ``autograd.Function`` boundary), its hard budget, and the derived
-wrapper-wide set. ``completeness_witness`` re-exports every name; split out along the
+(metadata reads and host exports that TorchLens never records as ops, the scalar
+extraction family, the in-forward ``torch.autograd.grad`` engine pass, the
+foreign-kernel ``autograd.Function`` boundary, the TorchScript call boundary and the
+in-place materialization of a lazy module's pending slots), its hard budget, and the derived wrapper-wide set. ``completeness_witness`` re-exports every name; split out along the
 table seam for the file-size ratchet, logic unchanged. A new row needs a regression
 test and a reason.
 """
@@ -15,24 +15,25 @@ from ._completeness_types import AuditedCompletenessBoundary
 
 __all__ = (
     "AUDITED_COMPLETENESS_BOUNDARIES",
+    "LAZY_MODULE_MATERIALIZE_WRAPPER",
     "MAX_AUDITED_COMPLETENESS_BOUNDARIES",
     "_EXPECTED_OPAQUE_WRAPPERS",
 )
 
-MAX_AUDITED_COMPLETENESS_BOUNDARIES = 11
+MAX_AUDITED_COMPLETENESS_BOUNDARIES = 12
 """Hard budget preventing expected-opaque wrapper scopes from growing unchecked."""
 
+LAZY_MODULE_MATERIALIZE_WRAPPER = "lazy_module:materialize"
+"""Census token of the wrapper edge that passes a pending lazy slot's own calls through.
+
+Torch's lazy pre-hook materializes an ``UninitializedParameter`` or ``UninitializedBuffer``
+in place before the module body runs (``UninitializedTensorMixin.materialize``): it reads
+the slot's ``.data`` for the device and the dtype, then assigns fresh storage through the
+``.data`` setter. Those calls have the pending slot as their receiver; the wrapper runs them
+under this token. Defined once so a rename is one line.
+"""
+
 AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
-    AuditedCompletenessBoundary(
-        wrapper_name="torch_func:numpy:not_logged",
-        operator=None,
-        reason="existing metadata/export conversion boundary; TorchLens never records it as an op",
-    ),
-    AuditedCompletenessBoundary(
-        wrapper_name="torch_func:__array__:not_logged",
-        operator=None,
-        reason="existing NumPy protocol conversion boundary; TorchLens never records it as an op",
-    ),
     AuditedCompletenessBoundary(
         wrapper_name="torch_func:size:not_logged",
         operator=None,
@@ -85,6 +86,35 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
             "an autograd.Function whose forward left torch (numpy / dlpack round trip) is "
             "recorded as one autogradfunction boundary op that replays through apply; every "
             "dispatch inside it belongs to that op"
+        ),
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="foreign_data:export",
+        operator=None,
+        reason=(
+            "a tensor leaving torch in plain forward code (numpy / __array__ / dlpack export "
+            "outside any autograd.Function) is journaled as a departure of the foreign data "
+            "round trip; the dispatches inside the export itself (the NumPy protocol "
+            "conversion, toDLPack's strides fix) belong to it and are never recorded as ops"
+        ),
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="jit_script:boundary",
+        operator=None,
+        reason=(
+            "a torch.jit.ScriptFunction called from an eager forward runs in the TorchScript "
+            "interpreter; the call is recorded as one jitscript boundary op that replays by "
+            "calling the scripted function again, and every dispatch inside it belongs to that op"
+        ),
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name=LAZY_MODULE_MATERIALIZE_WRAPPER,
+        operator=None,
+        reason=(
+            "torch materializes a lazy parameter or buffer in place before the module body "
+            "runs; the pending slot's .data reads and setter are constructor plumbing, not "
+            "model dataflow (a pending slot holds no value), and the materialized slot then "
+            "registers as a parameter or buffer when a wrapped call first consumes it"
         ),
     ),
 )

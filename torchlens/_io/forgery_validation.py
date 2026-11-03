@@ -3,7 +3,7 @@
 The fields in this module are ordinary Python objects after restricted
 unpickling, but their values remain hostile artifact input.  Validation here
 therefore uses closed vocabularies and independently persisted structural
-anchors before a rehydrated :class:`~torchlens.data_classes.trace.Trace` is
+anchors before a rehydrated :class:`~torchlens._data_classes.trace.Trace` is
 exposed to callers.
 """
 
@@ -15,15 +15,11 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 
-from . import TorchLensIOError
-from ._forgery_identity_facts import (
-    _validate_episode_step_stamps,
-    _validate_root_entry_point,
-    _validate_tl_authored_root,
-)
+from . import ArtifactError
+from ._forgery_identity_facts import _validate_identity_facts
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 _HEX_DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _SELECTION_RELATIONS = frozenset({"exact", "upper_bound", "lower_bound", "unknown"})
@@ -48,7 +44,7 @@ _KERNEL_ATTRIBUTION_STATUSES = frozenset({"ambiguous", "attributed", "unattribut
 # tlspec v9 (C07): closed vocabularies for the EVENT audit row family (the
 # intervention_event_v2 transaction envelope promoted to a first-class
 # intervention_audit row kind; ledger memo D1a / build item 1).
-_EVENT_STATUSES = frozenset({"fired", "no_fire", "error"})
+_EVENT_STATUSES = frozenset({"fired", "no_fire", "error", "armed"})
 _EVENT_LANES = frozenset({"replay", "rerun", "capture", "live_hook", "set_only", "bind"})
 _EVENT_REQUIRED_FIELDS = frozenset(
     {
@@ -98,7 +94,7 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If a persisted field violates its closed schema or structural anchor.
     """
 
@@ -106,6 +102,7 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
     from ._load_validators import (
         _validate_annotation_families,
         _validate_edge_carriers,
+        _validate_executed_flops_records,
         _validate_graph_structure,
     )
 
@@ -122,11 +119,10 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
     _validate_sidecar_namespace(trace)
     _validate_capture_advisories(trace)
     _validate_injection_provenance(trace)
-    _validate_episode_step_stamps(trace)
-    _validate_tl_authored_root(trace)
-    _validate_root_entry_point(trace)
+    _validate_identity_facts(trace)
     _validate_source_snapshots(trace)
     _validate_structure_evidence(trace)
+    _validate_executed_flops_records(trace)
 
 
 def _refuse(
@@ -154,11 +150,11 @@ def _refuse(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
-    raise TorchLensIOError(
+    raise ArtifactError(
         f"{field} is invalid in the loaded artifact: {message}. Remedy: {remedy}.",
         code=code,
         field=field,
@@ -232,7 +228,7 @@ def _trace_ops(trace: Trace) -> tuple[Any, ...]:
         Retained ops in the order used by the site-key minter.
     """
 
-    return tuple(getattr(trace, "layer_list", ()) or ())
+    return tuple(trace._layer_list or ())
 
 
 def _validate_site_keys(trace: Trace) -> None:
@@ -244,8 +240,8 @@ def _validate_site_keys(trace: Trace) -> None:
         Loaded trace carrying zero or more ``site_key_v1`` values.
     """
 
+    from .._data_classes._site_key import SiteKeyMinter, parse_site_key
     from ..backends.registry import JAX_BACKEND_NAME
-    from ..data_classes._site_key import SiteKeyMinter, parse_site_key
 
     ops = _trace_ops(trace)
     keys = tuple(getattr(op, "site_key", None) for op in ops)
@@ -287,7 +283,7 @@ def _validate_site_keys(trace: Trace) -> None:
             )
 
     minter = SiteKeyMinter()
-    backend = str(getattr(trace, "backend", "torch") or "torch")
+    backend = str(trace._provenance_backend or "torch")
     for op, key in zip(ops, keys, strict=True):
         if backend == JAX_BACKEND_NAME:
             from ..backends.jax._site_dialect import _jax_site_components
@@ -328,7 +324,7 @@ def _validate_site_keys(trace: Trace) -> None:
 
 
 def _validate_distributed_scope(trace: Trace) -> None:
-    """Validate the closed ``Trace.distributed_scope`` vocabulary.
+    """Validate the closed ``Trace.provenance.distributed_scope`` vocabulary.
 
     Parameters
     ----------
@@ -336,12 +332,12 @@ def _validate_distributed_scope(trace: Trace) -> None:
         Loaded trace carrying the shard-local disclosure marker.
     """
 
-    value = getattr(trace, "distributed_scope", None)
+    value = trace._provenance_distributed_scope
     if value not in (None, "rank_local_shard"):
         _refuse(
             f"expected None or 'rank_local_shard', got {value!r}",
             code="artifact_distributed_scope_invalid",
-            field="Trace.distributed_scope",
+            field="Trace.provenance.distributed_scope",
             reason="vocabulary",
             remedy="re-save the source trace; do not invent distributed-scope markers",
         )
@@ -379,7 +375,7 @@ def _checkpoint_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -595,7 +591,7 @@ def _audit_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -624,20 +620,20 @@ def _selection_recipes(trace: Trace) -> tuple[tuple[str, Mapping[str, Any]], ...
 
     recipes: list[tuple[str, Mapping[str, Any]]] = []
     for op in _trace_ops(trace):
-        for record in getattr(op, "interventions", ()) or ():
-            helper = getattr(record, "helper", None)
+        for record in getattr(op, "edits", ()) or ():
+            helper = getattr(record, "edit", None)
             recipe = getattr(helper, "selection_recipe", None) if helper is not None else None
             if recipe is None:
                 continue
             if not isinstance(recipe, Mapping):
                 _audit_invalid(
-                    f"HelperSpec.selection_recipe must be a mapping, got {type(recipe).__name__}",
+                    f"Edit.selection_recipe must be a mapping, got {type(recipe).__name__}",
                     "recipe_type",
                 )
-            helper_name = getattr(helper, "helper_name", None)
+            helper_name = getattr(helper, "name", None)
             if not isinstance(helper_name, str):
                 _audit_invalid(
-                    "HelperSpec.selection_recipe has no string helper_name anchor",
+                    "Edit.selection_recipe has no string helper_name anchor",
                     "recipe_helper_name",
                 )
             recipes.append((helper_name, recipe))
@@ -673,7 +669,7 @@ def _validate_intervention_audit(trace: Trace) -> None:
         recipes_by_anchor.setdefault((helper_name, kind, target), set()).add(digest)
     if not recipe_digests <= audit_digests:
         _audit_invalid(
-            "HelperSpec.selection_recipe contains resolve digests absent from "
+            "Edit.selection_recipe contains resolve digests absent from "
             f"Trace.intervention_audit: {sorted(recipe_digests - audit_digests)!r}",
             "recipe_relation",
         )
@@ -682,7 +678,7 @@ def _validate_intervention_audit(trace: Trace) -> None:
             anchored_digests = recipes_by_anchor.get((edit, kind, target))
             if anchored_digests is not None and digest not in anchored_digests:
                 _audit_invalid(
-                    f"audit digest {digest!r} disagrees with the HelperSpec.selection_recipe "
+                    f"audit digest {digest!r} disagrees with the Edit.selection_recipe "
                     f"rows anchored to edit={edit!r}, {kind} target={target!r}",
                     "digest_relation",
                 )
@@ -1281,14 +1277,14 @@ def _structure_only_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
     _refuse(
         message,
         code="artifact_structure_only_incoherent",
-        field="Trace.structure_only",
+        field="Trace.options.structure_only",
         reason=reason,
         remedy=(
             "re-capture and re-save with one current TorchLens version; do "
@@ -1322,7 +1318,7 @@ def _validate_structure_only_coherence(trace: Trace) -> None:
         Loaded trace carrying the optional structure-only marker.
     """
 
-    marker = trace.__dict__.get("structure_only")
+    marker = trace.__dict__.get("_options_structure_only")
     if marker in (None, False):
         return
     if marker is not True:
@@ -1330,7 +1326,7 @@ def _validate_structure_only_coherence(trace: Trace) -> None:
             f"expected a bool marker, got {marker!r}",
             "type",
         )
-    if trace.__dict__.get("capture_verified") is True:
+    if trace.__dict__.get("_provenance_verified") is True:
         _structure_only_invalid(
             "capture_verified=True on a structure-only capture (verification requires values)",
             "verification_claim",
@@ -1357,7 +1353,7 @@ def _kernel_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1550,7 +1546,7 @@ def _sidecar_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1625,7 +1621,7 @@ def _advisories_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1706,7 +1702,7 @@ def _injection_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
@@ -1794,14 +1790,14 @@ def _snapshot_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
     _refuse(
         message,
         code="artifact_source_snapshots_invalid",
-        field="Trace.source_snapshots",
+        field="Trace.source.snapshots",
         reason=reason,
         remedy="re-capture and re-save; do not hand-edit the source-snapshot table",
     )
@@ -1816,7 +1812,7 @@ def _validate_source_snapshots(trace: Trace) -> None:
     until the F30 writer lands; present rows validate fail-closed.
     """
 
-    rows = trace.__dict__.get("source_snapshots")
+    rows = trace.__dict__.get("_source_snapshots")
     if rows is None or rows == []:
         return
     if not _is_sequence(rows):
@@ -1881,14 +1877,14 @@ def _evidence_invalid(message: str, reason: str) -> NoReturn:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         Always.
     """
 
     _refuse(
         message,
         code="artifact_structure_evidence_invalid",
-        field="Trace.structure_evidence",
+        field="Trace.graph.structure_evidence",
         reason=reason,
         remedy=(
             "re-capture structure-only and re-save with one current "
@@ -1909,10 +1905,10 @@ def _validate_structure_evidence(trace: Trace) -> None:
     values contradicts the mode it exists to disclose.
     """
 
-    envelope = trace.__dict__.get("structure_evidence")
+    envelope = trace.__dict__.get("_graph_structure_evidence")
     if envelope is None:
         return
-    if not trace.__dict__.get("structure_only", False):
+    if not trace.__dict__.get("_options_structure_only", False):
         _evidence_invalid(
             "an evidence envelope is present on a capture whose "
             "structure_only marker is False; the envelope exists to disclose "

@@ -23,7 +23,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch.completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
-from torchlens.distributed import _lifecycle as lifecycle, has_vetted_snapshot
+from torchlens.distributed import _lifecycle as lifecycle, is_vetted_build
 
 pytestmark = pytest.mark.skipif(
     not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),
@@ -31,9 +31,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 

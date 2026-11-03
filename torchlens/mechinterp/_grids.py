@@ -1,6 +1,6 @@
 """The generic patching-grid driver + thin presets (mikit section 7).
 
-Rides the live-hook rerun route (the shipped ``torchlens.semantic.patching``
+Rides the live-hook rerun route (the shipped ``torchlens._semantic.patching``
 primitives, receipts included): every cell earns a positive fire ledger --
 a hook that did not fire is an EXCEPTION, never a number -- plus donor
 difference accounting, transactional model/RNG/hook cleanup, and metric
@@ -23,22 +23,21 @@ from typing import Any
 
 import torch
 
-from ..errors._base import TorchLensWarning
-from ..intervention.selectors import facet as facet_selector
-from ..semantic.patching import (
+from .._selection.selectors import facet as facet_selector
+from .._semantic._state_guard import _CounterfactualStateGuard, _teardown
+from .._semantic.patching import (
     _baseline_traces,
-    _CounterfactualStateGuard,
     _facet_tensor,
     _metric_scalar,
     _modules_with_facet,
     _run_patch,
-    _teardown,
     _warn_if_campaign_all_identical,
 )
+from ..errors._base import TorchLensWarning
 from ._errors import refuse
 from ._records import _pandas_frame
 
-__all__ = ["PatchGrid", "grid", "patch_heads_grid", "patch_residual_grid"]
+__all__ = ["PatchGrid", "patch_grid", "patch_heads_grid", "patch_residual_grid"]
 
 #: Head-axis index per facet layout (captured layouts, per the recipe docs).
 _HEAD_AXIS = {"z": 1, "pattern": 1, "scores": 1, "result": 2, "q": 2, "k": 2, "v": 2}
@@ -54,6 +53,12 @@ class PatchGrid:
     ``coordinates`` maps each axis to its labels (module addresses carry
     site-key-bearing provenance through the trace itself). ``receipts``
     records fires, identical-value fires, baselines, and the disclosed cost.
+
+    ``values`` holds the metric of each PATCHED run, not an effect. The
+    unpatched baselines are in ``receipts["clean_metric"]`` and
+    ``receipts["corrupted_metric"]``; a cell's effect is its value minus
+    ``corrupted_metric`` (the run every cell patches into), which is what
+    :func:`torchlens.transformer.receipt_from_patch_grid` plots.
     """
 
     axes: tuple[str, ...]
@@ -84,7 +89,7 @@ def _estimate_cost(n_cells: int, baseline_seconds: float) -> str:
     return f"patching grid: {n_cells} cells x ~{baseline_seconds:.2f}s/rerun ~= {total:.0f}s total"
 
 
-def grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
+def patch_grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
     model: Any,
     clean_input: Any,
     corrupted_input: Any,
@@ -126,6 +131,13 @@ def grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
         known HF replay crash (FIX-A) lands.
     trace_kwargs:
         Extra kwargs forwarded to ``tl.trace``.
+
+    Returns
+    -------
+    PatchGrid
+        ``values`` are the patched-run metrics; the receipts carry the fire
+        ledger, the cost disclosure and the unpatched baselines
+        ``clean_metric`` and ``corrupted_metric``.
     """
 
     _validate_grid_request(engine, axes, sites)
@@ -143,12 +155,13 @@ def grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
             guard=guard,
         )
         baseline_seconds = (time.perf_counter() - started) / 2.0
+        baselines = _baseline_metrics(clean_log, corrupted_log, metric)
         modules = _modules_with_facet(clean_log, sites)
         if not modules:
             refuse(
                 code="mi_payload_missing",
                 message=f"No module exposes facet {sites!r} on the clean baseline.",
-                remedy="check tl.facets.facet_coverage(trace) for the vocabulary",
+                remedy="check tl.facets.coverage(trace) for the vocabulary",
                 analysis="patching.grid",
                 missing_sites=[],
             )
@@ -240,10 +253,25 @@ def grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
                 "n_cells": n_cells,
                 "baseline_seconds_per_rerun": baseline_seconds,
                 "metric_provenance": getattr(metric, "__name__", repr(metric)),
+                **baselines,
             },
         )
     finally:
         _teardown(guard, clean_log, corrupted_log)
+
+
+def _baseline_metrics(clean_log: Any, corrupted_log: Any, metric: Any) -> dict[str, float]:
+    """Return the metric on both unpatched baselines, rounded like a cell.
+
+    Each value goes through the same float32 conversion as a grid cell, so a
+    cell that reproduces the corrupted run exactly has an effect of exactly 0.
+    """
+
+    like = torch.empty((), dtype=torch.float32)
+    return {
+        "clean_metric": float(_metric_scalar(metric(clean_log), like=like)),
+        "corrupted_metric": float(_metric_scalar(metric(corrupted_log), like=like)),
+    }
 
 
 def _disclose_cost_and_enforce_budget(
@@ -323,10 +351,10 @@ def _cell_hook(
 ) -> Any:
     """Build the per-cell replacement hook (clean into corrupted)."""
 
-    def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Replace the cell's slice of ``out`` with the clean activation."""
 
-        del hook
+        del ctx
         patched = out.clone(memory_format=torch.preserve_format)
         target = patched
         source = clean_value
@@ -350,7 +378,7 @@ def patch_residual_grid(
 ) -> PatchGrid:
     """Preset: the classic [layer, position] residual-stream grid."""
 
-    return grid(
+    return patch_grid(
         model,
         clean_input,
         corrupted_input,
@@ -366,7 +394,7 @@ def patch_heads_grid(
 ) -> PatchGrid:
     """Preset: the [layer, head] z-patching grid."""
 
-    return grid(
+    return patch_grid(
         model,
         clean_input,
         corrupted_input,

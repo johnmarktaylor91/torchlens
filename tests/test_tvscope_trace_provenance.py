@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.preprocessing as pp
-from torchlens.data_classes.trace import ResolvedPreprocessing
+import torchlens._data_classes._preprocessing_provenance as provenance
+from torchlens._data_classes.trace import ResolvedPreprocessing
 
 
 class _Tiny(nn.Module):
@@ -39,14 +39,14 @@ def test_transform_capture_stamps_user_transform_record() -> None:
         _Tiny().eval(),
         [1.0] * 8,
         capture=tl.options.CaptureOptions(
-            transform=lambda x: torch.tensor([x], dtype=torch.float32)
+            input_transform=lambda x: torch.tensor([x], dtype=torch.float32)
         ),
     )
-    record = log.input_preprocessor
+    record = log.provenance.input_preprocessor
     assert record is not None
     assert record.source == "user_transform"
     assert record.verified is False
-    assert record.status == pp.STATUS_UNKNOWN
+    assert record.status == provenance.STATUS_UNKNOWN
     assert "0x" not in record.identifier or "0x<scrubbed>" in record.identifier
 
 
@@ -54,7 +54,7 @@ def test_plain_tensor_capture_keeps_none() -> None:
     """No transform applied -> no provenance invented (the field stays None)."""
 
     log = tl.trace(_Tiny().eval(), torch.randn(2, 8))
-    assert log.input_preprocessor is None
+    assert log.provenance.input_preprocessor is None
 
 
 def test_record_survives_save_load_with_stable_status(tmp_path) -> None:
@@ -63,9 +63,9 @@ def test_record_survives_save_load_with_stable_status(tmp_path) -> None:
     log = tl.trace(
         _Tiny().eval(),
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
-    log.input_preprocessor = ResolvedPreprocessing(
+    log._provenance_input_preprocessor = ResolvedPreprocessing(
         source="torchvision_weights",
         identifier="ResNet50_Weights.IMAGENET1K_V2",
         verified=True,
@@ -73,15 +73,15 @@ def test_record_survives_save_load_with_stable_status(tmp_path) -> None:
         description="torchvision preset: resize=232 crop=224",
     )
     path = tmp_path / "trace.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     loaded = tl.load(str(path))
-    record = loaded.input_preprocessor
+    record = loaded.provenance.input_preprocessor
     assert record is not None
     assert record.source == "torchvision_weights"
     assert record.verified is True
     assert record.config["mean"] == [0.485, 0.456, 0.406]
     assert record.description == "torchvision preset: resize=232 crop=224"
-    assert record.status == pp.STATUS_AUTHORITATIVE
+    assert record.status == provenance.STATUS_AUTHORITATIVE
 
 
 def test_unverified_fallback_status_survives_save_load(tmp_path) -> None:
@@ -90,9 +90,9 @@ def test_unverified_fallback_status_survives_save_load(tmp_path) -> None:
     log = tl.trace(
         _Tiny().eval(),
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
-    log.input_preprocessor = ResolvedPreprocessing(
+    log._provenance_input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",
         identifier="ImageNet-default-resize256-crop224",
         verified=False,
@@ -100,6 +100,6 @@ def test_unverified_fallback_status_survives_save_load(tmp_path) -> None:
         description="fallback",
     )
     path = tmp_path / "trace_fallback.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.input_preprocessor.status == pp.STATUS_UNVERIFIED_FALLBACK
+    assert loaded.provenance.input_preprocessor.status == provenance.STATUS_UNVERIFIED_FALLBACK

@@ -15,16 +15,18 @@ from collections.abc import Hashable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from ..utils._multipass_access import is_multipass_layer
+from .._utils._multipass_access import is_multipass_layer
+from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
 
 ProfileLevel = Literal["op", "module", "call"]
 ProfileSort = Literal["time", "flops", "activation_memory", "param_count"]
+ProfileGroupBy = Literal["source_line"]
 
 #: Column additivity metadata (costreport D5): stamped on every export so
 #: no consumer sums an inclusive column. At op level the self and subtree
@@ -73,7 +75,7 @@ def _weakest_evidence(labels: list[str]) -> str:
 
 
 @dataclass(frozen=True)
-class TraceProfile:
+class ProfileReport:
     """A printable, tabular resource profile assembled from one trace.
 
     Parameters
@@ -101,16 +103,21 @@ class TraceProfile:
     # contract requires a rescued/ceilinged capture to stay visible in profile
     # output, so these are stamped from the source trace at build time.
     capture_status: str = "unknown"
-    capture_verified: bool | None = None
+    is_capture_verified: bool | None = None
     capture_verification_reason: str | None = None
-    rescue_rerun: bool = False
-    structure_only: bool = False
+    has_rescue_rerun: bool = False
+    is_structure_only: bool = False
     # F09 (costreport D4/D6): the whole-capture KNOWN forward partition
     # total -- the invariant percent denominator -- plus the unknown EVENT
     # count disclosed beside it (never a FLOP percentage).
     partition_total: int | None = None
     unknown_events: int = 0
+    # Counted attention ops: the footer carries the full-square note.
+    attention_full_square_ops: int = 0
     column_additivity: dict[str, bool] = field(default_factory=dict)
+    # the op-row grouping key (``"source_line"``), or ``None`` for
+    # one row per op. DOCUMENTED-UNSTABLE spelling.
+    group_by: str | None = None
 
     def to_pandas(self, *, include_totals: bool = False, evidence: bool = False) -> pd.DataFrame:
         """Return a copy of the underlying profile dataframe.
@@ -155,10 +162,10 @@ class TraceProfile:
         frame.attrs["torchlens_capture_honesty"] = {
             "schema": "torchlens.capture_honesty.v1",
             "capture_status": self.capture_status,
-            "capture_verified": self.capture_verified,
+            "capture_verified": self.is_capture_verified,
             "capture_verification_reason": self.capture_verification_reason,
-            "rescue_rerun": self.rescue_rerun,
-            "structure_only": self.structure_only,
+            "rescue_rerun": self.has_rescue_rerun,
+            "structure_only": self.is_structure_only,
         }
         frame.attrs["column_additivity"] = dict(self.column_additivity)
         frame.attrs["partition_total"] = self.partition_total
@@ -183,7 +190,7 @@ class TraceProfile:
             time_values = [
                 value
                 for value, kind in zip(self.frame["time"], self.frame["kind"], strict=True)
-                if value == value and value is not None and kind == "op"
+                if value == value and value is not None and kind in ("op", "source_line")
             ]
             row["time"] = sum(time_values) if time_values else None
         return row
@@ -217,6 +224,8 @@ class TraceProfile:
             footer_parts.append(
                 f"unknown-cost ops: {self.unknown_events} (event count; see unknown_flop_ops)"
             )
+        if self.attention_full_square_ops:
+            footer_parts.append(attention_full_square_line(self.attention_full_square_ops))
         footer = "\n".join(footer_parts)
         parts = [part for part in (banner, table, footer) if part]
         return "\n".join(parts)
@@ -234,20 +243,20 @@ class TraceProfile:
         notes = []
         # L7a G3 render honesty: hypothesis shapes must never present as
         # measurements (memo sec 3.4).
-        if self.structure_only:
+        if self.is_structure_only:
             notes.append("structure-only capture -- shapes/dtypes are HYPOTHESES, not measurements")
         if self.capture_status not in ("complete", "unknown"):
             notes.append(f"capture outcome: {self.capture_status}")
-        if self.capture_verified is False:
+        if self.is_capture_verified is False:
             reason = self.capture_verification_reason or "unrecorded reason"
             notes.append(f"capture UNVERIFIED ({reason})")
-        if self.rescue_rerun:
+        if self.has_rescue_rerun:
             notes.append("rescue re-run result (mode_rescue_rerun)")
         if not notes:
             return ""
         return "! " + "; ".join(notes) + " -- rows below may undercount what ran"
 
-    def honesty(self, *, as_summary: bool = False) -> pd.DataFrame | str:
+    def evidence_labels(self, *, as_summary: bool = False) -> pd.DataFrame | str:
         """Return per-cell evidence labels for resource quantities (D2/D9).
 
         A projection of cell facts, never a null check: FLOP labels come
@@ -581,7 +590,7 @@ def _build_call_tree(trace: Trace) -> str:
     calls = sorted(trace.module_calls.values(), key=lambda call: int(call.ordinal_index))
     if not calls:
         return ""
-    calls_by_label = {str(call.call_label): call for call in calls}
+    calls_by_label = {str(call.label): call for call in calls}
     children: dict[str, list[Any]] = {label: [] for label in calls_by_label}
     roots: list[Any] = []
     for call in calls:
@@ -599,7 +608,7 @@ def _build_call_tree(trace: Trace) -> str:
     def visit(call: Any, prefix: str, is_last: bool, is_root: bool) -> None:
         """Append one call and its recorded descendants."""
 
-        label = str(call.call_label)
+        label = str(call.label)
         # ASCII rails: returned report strings are ASCII-canonical (lovely
         # bug 10 / summary-memo string contract).
         connector = "" if is_root else ("`-- " if is_last else "|-- ")
@@ -615,7 +624,7 @@ def _build_call_tree(trace: Trace) -> str:
     for root_index, root in enumerate(roots):
         visit(root, "", root_index == len(roots) - 1, True)
     for call in calls:
-        if str(call.call_label) not in visited:
+        if str(call.label) not in visited:
             visit(call, "", True, True)
     return "\n".join(lines)
 
@@ -629,7 +638,7 @@ def _op_level_rows(trace: Trace) -> list[dict[str, Any]]:
     """
 
     rows: list[dict[str, Any]] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         is_boundary = bool(getattr(op, "is_input", False)) or bool(getattr(op, "is_output", False))
         row = _row(
             str(getattr(op, "label", None) or getattr(op, "layer_label", "")),
@@ -701,7 +710,7 @@ def _flops_values_by_label(aggregation: Any) -> dict[str, int | None]:
 def _innermost_call_by_label(trace: Trace) -> dict[str, str | None]:
     """Map each op label to its innermost recorded module call (or None)."""
 
-    ops = list(trace.layer_list)
+    ops = list(trace._layer_list)
     bare_counts: dict[str, int] = {}
     for op in ops:
         layer_label = str(getattr(op, "layer_label", ""))
@@ -778,7 +787,9 @@ def _rollup_row(
     return row, row_evidence
 
 
-def _validate_profile_args(level: str, sort_by: str, top_k: int | None) -> None:
+def _validate_profile_args(
+    level: str, sort_by: str, top_k: int | None, group_by: str | None = None
+) -> None:
     """Refuse invalid view arguments with the historical messages."""
 
     if level not in {"op", "module", "call"}:
@@ -787,6 +798,15 @@ def _validate_profile_args(level: str, sort_by: str, top_k: int | None) -> None:
         raise ValueError("sort_by must be 'time', 'flops', 'activation_memory', or 'param_count'.")
     if top_k is not None and (not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 0):
         raise ValueError("top_k must be a non-negative integer or None.")
+    if group_by is not None:
+        from ._profile_source_line import PROFILE_GROUP_BY_KEYS
+
+        if group_by not in PROFILE_GROUP_BY_KEYS:
+            raise ValueError("group_by must be 'source_line' or None.")
+        if level != "op":
+            raise ValueError(
+                f"group_by={group_by!r} groups op rows; use level='op' (got level={level!r})."
+            )
 
 
 def _assemble_level_rows(
@@ -807,7 +827,7 @@ def _assemble_level_rows(
     row_evidence: list[str | None] = []
     if level == "op":
         rows.extend(_op_level_rows(trace))
-        for row, op in zip(rows, trace.layer_list, strict=True):
+        for row, op in zip(rows, trace._layer_list, strict=True):
             row["role"] = "OWNER" if row["kind"] == "op" else None
             row["flops_pct"] = (
                 100.0 * row["flops"] / partition_total
@@ -824,9 +844,9 @@ def _assemble_level_rows(
         for call in trace.module_calls.values():
             ops = _ops_for_labels(trace, list(getattr(call, "ops", ())))
             row, one_evidence = _rollup_row(
-                (str(getattr(call, "call_label", "")), "call", getattr(call, "num_params", None)),
+                (str(getattr(call, "label", "")), "call", getattr(call, "num_params", None)),
                 ops,
-                {str(call.call_label)},
+                {str(call.label)},
                 context,
             )
             rows.append(row)
@@ -844,7 +864,7 @@ def _assemble_level_rows(
                     getattr(module, "num_params", None),
                 ),
                 ops,
-                {str(call.call_label) for call in module.calls.values()},
+                {str(call.label) for call in module.calls.values()},
                 context,
             )
             rows.append(row)
@@ -852,14 +872,15 @@ def _assemble_level_rows(
     return rows, row_evidence
 
 
-def build_profile(
+def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascending, top_k, group_by) ARE Trace.profile's public surface
     trace: Trace,
     *,
     level: ProfileLevel = "op",
     sort_by: ProfileSort = "time",
     ascending: bool = False,
-    top_k: int | None = None,
-) -> TraceProfile:
+    k: int | None = None,
+    group_by: ProfileGroupBy | None = None,
+) -> ProfileReport:
     """Build a unified op, module, or invocation resource profile.
 
     Parameters
@@ -873,15 +894,22 @@ def build_profile(
         Column used for sorting. ``"time"`` sorts descending by default.
     ascending:
         Whether to reverse the default descending order.
-    top_k:
+    k:
         Number of sorted bottleneck rows to retain. ``None`` retains all rows.
         Percent denominators are UNAFFECTED (D6: a view never changes the
         partition total).
+    group_by:
+        ``"source_line"`` folds the op rows into one row per user source
+        line (the op's recorded call site), summing its activation bytes,
+        FLOPs and time; boundary rows fold into one row, so every additive
+        column still sums to the ungrouped op view. Only valid with
+        ``level="op"``. ``None`` (default) keeps one row per op.
+        DOCUMENTED-UNSTABLE spelling.
 
     Returns
     -------
-    TraceProfile
-        Printable profile object exposing :meth:`TraceProfile.to_pandas`.
+    ProfileReport
+        Printable profile object exposing :meth:`ProfileReport.to_pandas`.
 
     Notes
     -----
@@ -893,7 +921,7 @@ def build_profile(
     column additivity stamped on every export (D5).
     """
 
-    _validate_profile_args(level, sort_by, top_k)
+    _validate_profile_args(level, sort_by, k, group_by)
 
     from ._compute_truth import compute_aggregation
 
@@ -903,7 +931,7 @@ def build_profile(
     flops_evidence = _flops_evidence_by_label(aggregation)
     flops_by_label = _flops_values_by_label(aggregation)
     owners = _innermost_call_by_label(trace)
-    structure_only = bool(getattr(trace, "structure_only", False))
+    structure_only = bool(trace._options_structure_only)
 
     rows, row_evidence = _assemble_level_rows(
         trace,
@@ -915,6 +943,12 @@ def build_profile(
             "owners": owners,
         },
     )
+    if group_by == "source_line":
+        from ._profile_source_line import group_rows_by_source_line
+
+        rows, row_evidence = group_rows_by_source_line(
+            rows, list(trace._layer_list), row_evidence, _weakest_evidence
+        )
 
     columns = [
         "name",
@@ -937,8 +971,8 @@ def build_profile(
         row["_profile_row_index"] = index
     frame["_profile_row_index"] = list(range(len(frame)))
     frame = frame.sort_values(sort_by, ascending=ascending, na_position="last", kind="stable")
-    if top_k is not None:
-        frame = frame.head(top_k)
+    if k is not None:
+        frame = frame.head(k)
     sorted_row_indices = frame["_profile_row_index"].tolist()
     frame = frame.drop(columns=["_profile_row_index"])
     frame = frame.reset_index(drop=True)
@@ -955,14 +989,14 @@ def build_profile(
         honesty_rows,
         columns=["name", "time", "flops", "activation_memory", "param_count"],
     )
-    if top_k is not None:
-        frame.attrs["top_k"] = top_k
+    if k is not None:
+        frame.attrs["top_k"] = k
     outcome = getattr(trace, "outcome", None)
     status_value = getattr(getattr(outcome, "status", None), "value", None)
     capture_status = str(status_value) if status_value is not None else "unknown"
-    capture_verified = getattr(trace, "capture_verified", None)
-    capture_verification_reason = getattr(trace, "capture_verification_reason", None)
-    rescue_rerun = bool(getattr(trace, "rescue_rerun", None) or False)
+    capture_verified = trace._provenance_verified
+    capture_verification_reason = trace._provenance_verification_reason
+    rescue_rerun = bool(trace.__dict__.get("_rescue_rerun") or False)
     verification = {
         "capture_status": capture_status,
         "capture_verified": capture_verified,
@@ -981,17 +1015,19 @@ def build_profile(
         # Inclusive rollups: the ``flops`` column is the subtree family
         # there and must never be summed (D5).
         additivity["flops"] = False
-    return TraceProfile(
+    return ProfileReport(
         frame=frame,
         level=level,
         _honesty_frame=honesty_frame,
         _tree_text=_build_call_tree(trace),
         capture_status=capture_status,
-        capture_verified=capture_verified,
+        is_capture_verified=capture_verified,
         capture_verification_reason=capture_verification_reason,
-        rescue_rerun=rescue_rerun,
-        structure_only=structure_only,
+        has_rescue_rerun=rescue_rerun,
+        is_structure_only=structure_only,
         partition_total=partition_total,
         unknown_events=aggregation.coverage.unknown,
+        attention_full_square_ops=counted_attention_ops(aggregation),
         column_additivity=additivity,
+        group_by=group_by,
     )

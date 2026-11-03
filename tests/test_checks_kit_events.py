@@ -17,9 +17,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-import torchlens.checks as tc
-from torchlens.observability import EventStream, ObserverEvent
-from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
+import torchlens.debug._checks as tc
+from torchlens._observability import EventStream, ObserverEvent
+from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
 
 if HAS_AMP_GRADSCALER:
     from torch.amp import GradScaler

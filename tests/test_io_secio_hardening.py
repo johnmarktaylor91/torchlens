@@ -14,7 +14,7 @@ pre-fix behavior:
   ``visualizers/`` directory, so a hostile bundle cannot disclose an arbitrary
   local ``.png`` through ``.draw()``.
 * R27-3 -- a recursion blow-up during rehydration surfaces as a typed
-  ``TorchLensIOError``, not a raw ``RecursionError`` escaping ``tl.load``.
+  ``ArtifactError``, not a raw ``RecursionError`` escaping ``tl.load``.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import bundle as bundle_mod
 from torchlens._io.bundle import _mark_partial, _reanchor_visualizer_paths, cleanup_tmp
-from torchlens.errors import TorchLensIOError
+from torchlens.errors import ArtifactError
 
 
 def _tiny() -> nn.Module:
@@ -41,10 +41,10 @@ def _save(tmp_path: Path, name: str = "b.tlspec") -> Path:
     trace = tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     spec = tmp_path / name
-    tl.save(trace, str(spec))
+    trace.save(str(spec))
     return spec
 
 
@@ -133,11 +133,11 @@ def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch
     trace = tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     spec = tmp_path / "fail.tlspec"
-    with pytest.raises(TorchLensIOError):
-        tl.save(trace, str(spec))
+    with pytest.raises(ArtifactError):
+        trace.save(str(spec))
     reasons = list(tmp_path.glob("fail.tlspec.tmp.*/" + bundle_mod.REASON_SENTINEL))
     assert reasons, "no PARTIAL reason sentinel was written"
     for reason_file in reasons:
@@ -156,7 +156,7 @@ def test_metadata_pkl_byte_ceiling_refuses_oversize(tmp_path: Path, monkeypatch)
 
     spec = _save(tmp_path)
     monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_BYTES", 16)
-    with pytest.raises(TorchLensIOError, match="ceiling"):
+    with pytest.raises(ArtifactError, match="ceiling"):
         tl.load(str(spec))
 
 
@@ -177,9 +177,9 @@ def test_visualizer_path_outside_bundle_is_dropped(tmp_path: Path) -> None:
     spec = _save(tmp_path)
     trace = tl.load(str(spec))
     # Simulate a tampered field pointing at an out-of-bundle file.
-    trace.layer_list[0].visualizer_path = str(victim_png)
+    trace._layer_list[0].visualizer_path = str(victim_png)
     _reanchor_visualizer_paths(trace, spec)
-    assert trace.layer_list[0].visualizer_path is None
+    assert trace._layer_list[0].visualizer_path is None
 
 
 def test_visualizer_path_inside_bundle_is_reanchored(tmp_path: Path) -> None:
@@ -190,9 +190,9 @@ def test_visualizer_path_inside_bundle_is_reanchored(tmp_path: Path) -> None:
     thumb = spec / "visualizers" / "00000_layer.png"
     thumb.write_bytes(b"\x89PNG\r\n\x1a\n")
     trace = tl.load(str(spec))
-    trace.layer_list[0].visualizer_path = "/somewhere/else/00000_layer.png"
+    trace._layer_list[0].visualizer_path = "/somewhere/else/00000_layer.png"
     _reanchor_visualizer_paths(trace, spec)
-    kept = trace.layer_list[0].visualizer_path
+    kept = trace._layer_list[0].visualizer_path
     assert kept is not None
     assert Path(kept).resolve() == thumb.resolve()
 
@@ -233,11 +233,13 @@ def test_persisted_equivalence_class_keys_are_canonically_ordered(tmp_path: Path
         trace = tl.trace(
             _NestedParamModel().eval(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )
         spec = tmp_path / f"nested_{index}.tlspec"
-        tl.save(trace, str(spec))
-        groups = pickle.loads((spec / "metadata.pkl").read_bytes()).get("op_equivalence_classes")
+        trace.save(str(spec))
+        groups = pickle.loads((spec / "metadata.pkl").read_bytes()).get(
+            "_graph_op_equivalence_classes"
+        )
         for key in groups or {}:
             tokens = param_token.findall(key)
             if len(tokens) >= 2:
@@ -275,15 +277,17 @@ def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> 
     trace = tl.trace(
         _NestedMultiOutputParamModel().eval(),
         torch.randn(2, 3, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
-    live_groups = dict(trace.op_equivalence_classes)
+    live_groups = dict(trace.graph.op_equivalence_classes)
     live_outindex_keys = {key for key in live_groups if "_outindex" in key}
     assert len(live_outindex_keys) >= 2, "expected multi-output param groups in-memory"
 
     spec = tmp_path / "lstm_outindex.tlspec"
-    tl.save(trace, str(spec))
-    persisted = pickle.loads((spec / "metadata.pkl").read_bytes()).get("op_equivalence_classes")
+    trace.save(str(spec))
+    persisted = pickle.loads((spec / "metadata.pkl").read_bytes()).get(
+        "_graph_op_equivalence_classes"
+    )
     assert persisted is not None
 
     persisted_outindex_keys = {key for key in persisted if "_outindex" in key}
@@ -328,14 +332,14 @@ def test_git_commit_hash_is_dropped_when_source_excluded(tmp_path: Path) -> None
     trace = tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     excluded = tmp_path / "no_source.tlspec"
-    tl.save(trace, str(excluded), include_source=False)
+    trace.save(str(excluded), include_source=False)
     assert _manifest_git_hash(excluded) is None
 
     included = tmp_path / "with_source.tlspec"
-    tl.save(trace, str(included), include_source=True)
+    trace.save(str(included), include_source=True)
     # R21-2: when source is kept the field reflects TORCHLENS's own commit (or None
     # for a released wheel), never the working directory's unrelated repository.
     from torchlens._io.bundle import _git_commit_hash, _torchlens_package_dir
@@ -355,16 +359,16 @@ def test_git_commit_hash_is_independent_of_working_directory(tmp_path: Path, mon
     trace = tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     first = tmp_path / "a.tlspec"
-    tl.save(trace, str(first), include_source=True)
+    trace.save(str(first), include_source=True)
 
     other_cwd = tmp_path / "elsewhere"
     other_cwd.mkdir()
     monkeypatch.chdir(other_cwd)
     second = tmp_path / "b.tlspec"
-    tl.save(trace, str(second), include_source=True)
+    trace.save(str(second), include_source=True)
     assert _manifest_git_hash(first) == _manifest_git_hash(second)
 
 
@@ -433,5 +437,5 @@ def test_rehydrate_recursion_surfaces_typed(tmp_path: Path, monkeypatch) -> None
         raise RecursionError("maximum recursion depth exceeded")
 
     monkeypatch.setattr(bundle_mod, "rehydrate_trace", _blow_up)
-    with pytest.raises(TorchLensIOError, match="recursion"):
+    with pytest.raises(ArtifactError, match="recursion"):
         tl.load(str(spec))

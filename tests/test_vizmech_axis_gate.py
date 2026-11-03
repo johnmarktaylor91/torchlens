@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._geometry_audit import (
+from torchlens._visualization._geometry_audit import (
     audit_layout,
     compute_usability_envelope,
     graphviz_version,
@@ -123,20 +123,21 @@ def test_axis_combo_renders_clean(
     """One pairwise-cover row: render, audit through the rendering engine."""
 
     dot = nested_trace.draw(
-        vis_save_only=True,
-        vis_fileformat=str(combo["fmt"]),
-        vis_outpath=str(tmp_path / "axis"),
-        vis_theme=str(combo["theme"]),
+        file_format=str(combo["fmt"]),
+        path=str(tmp_path / "axis"),
+        theme=str(combo["theme"]),
         direction=combo["direction"],  # type: ignore[arg-type]
-        vis_call_depth=int(combo["depth"]),  # type: ignore[arg-type]
-        vis_node_placement=str(combo["engine"]) if combo["engine"] == "rank" else "dot",
+        depth=int(combo["depth"]),  # type: ignore[arg-type]
+        layout=str(combo["engine"]) if combo["engine"] == "rank" else "dot",
         show_legend=True,
-    )
+    ).dot
     engine = "rank" if combo["engine"] == "rank" else "dot"
     parsed = parse_layout_json(run_layout_json(dot, engine), engine=engine, dot_source=dot)
     result = audit_layout(parsed)
     assert result.hard_violation_count == 0, f"{_context(combo)}\n{result.describe('axis combo')}"
-    result.require_minimums(node=3, legend_text=3)
+    # The key rides in the header label: its words are graph-caption text
+    # (three header lines plus at least three key entries).
+    result.require_minimums(node=3, graph_caption=6)
     envelope = compute_usability_envelope(parsed)
     assert envelope.arrowhead_fused_pairs == 0, _context(combo)
     # Engine discriminator (D8): pinned positions exactly on the rank path.
@@ -171,11 +172,10 @@ def test_rank_entry_cluster_width_vs_member_extent(tmp_path: Path) -> None:
 
     trace = tl.trace(_Nested(), torch.randn(1, 4))
     dot = trace.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "rank_width"),
-        vis_node_placement="rank",
-    )
+        file_format="svg",
+        path=str(tmp_path / "rank_width"),
+        layout="rank",
+    ).dot
     parsed = parse_layout_json(run_layout_json(dot, "rank"), engine="rank", dot_source=dot)
     envelope = compute_usability_envelope(parsed)
     assert envelope.cluster_width_ratios, "rank entry lost its clusters"

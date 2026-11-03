@@ -14,15 +14,15 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens._io.scrub import _RAW_IMAGE_SENTINEL, _RAW_INPUT_IMAGE_BYTES_LIMIT
-from torchlens.data_classes._state_adapter import state_items
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes._state_adapter import state_items
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
+from torchlens._io._small_raw import _RAW_IMAGE_SENTINEL, _RAW_INPUT_IMAGE_BYTES_LIMIT
 
 
 class _TinyIOModel(nn.Module):
@@ -97,12 +97,12 @@ def _build_live_log() -> Trace:
         model,
         x,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all",
-            save_arg_values=True,
-            save_rng_states=True,
-            save_code_context=True,
-            random_seed=0,
+            save_args=True,
+            save_rng=True,
+            save_source_context=True,
+            seed=0,
         ),
+        save="all",
     )
 
 
@@ -160,11 +160,11 @@ def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: 
     trace = trace_fn(
         _TinyIOModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        save=tl.options.SaveOptions(activation_transform=transform),
+        capture=tl.options.CaptureOptions(activation_transform=transform),
+        save="all",
     )
     spec = tmp_path / "partial.tlspec"
-    tl.save(trace, str(spec))
+    trace.save(str(spec))
     for artifact in spec.rglob("*"):
         if artifact.is_file():
             assert secret.encode() not in artifact.read_bytes(), (
@@ -186,7 +186,7 @@ def test_transform_repr_redacts_heap_addresses() -> None:
 
     import functools
 
-    from torchlens.data_classes.trace import _scrubbed_transform_repr
+    from torchlens._data_classes.trace import _scrubbed_transform_repr
 
     class _CallableWithDefaultRepr:
         def __call__(self, t: torch.Tensor) -> torch.Tensor:
@@ -211,15 +211,15 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
     live_log = _build_live_log()
     instances = {
         Trace: live_log,
-        Op: next(layer for layer in live_log.layer_list if type(layer) is Op),
-        Layer: next(iter(live_log.layer_logs.values())),
+        Op: next(layer for layer in live_log._layer_list if type(layer) is Op),
+        Layer: next(iter(live_log._layer_logs.values())),
         Module: next(iter(live_log.modules)),
         ModuleCall: next(iter(live_log.modules._pass_dict.values())),
-        Param: next(iter(live_log.param_logs)),
+        Param: next(iter(live_log._param_logs)),
         Buffer: next(iter(live_log.buffers)),
         FuncCallLocation: next(
             frame
-            for layer in live_log.layer_list
+            for layer in live_log._layer_list
             for frame in layer.code_context
             if layer.code_context
         ),
@@ -228,7 +228,7 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
     missing_by_class = {}
     for cls, instance in instances.items():
         missing = sorted(
-            {field_name for field_name, _ in state_items(instance)} - set(cls.PORTABLE_STATE_SPEC)
+            {field_name for field_name, _ in state_items(instance)} - set(cls._PORTABLE_STATE_SPEC)
         )
         if missing:
             missing_by_class[cls.__name__] = missing
@@ -241,11 +241,11 @@ def _all_record_instances(live_log: Trace) -> list[Any]:
 
     return [
         live_log,
-        *live_log.layer_list,
-        *live_log.layer_logs.values(),
+        *live_log._layer_list,
+        *live_log._layer_logs.values(),
         *live_log.modules,
         *live_log.modules._pass_dict.values(),
-        *live_log.param_logs,
+        *live_log._param_logs,
         *live_log.buffers,
     ]
 
@@ -275,8 +275,8 @@ def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
     """A read-only public accessor sweep must leave the trace saveable.
 
     Fail-before: ``ModuleCall.facets`` / ``Module.facets`` cached a FacetView
-    in ``__dict__["_facets_cache"]`` with no PORTABLE_STATE_SPEC row, so one
-    documented read made every later ``tl.save`` refuse with an error naming
+    in ``__dict__["_facets_cache"]`` with no _PORTABLE_STATE_SPEC row, so one
+    documented read made every later ``Trace.save`` refuse with an error naming
     an internal cache the user never touched. The sibling completeness test
     above checks live state straight after capture, which is exactly why the
     lazily-populated caches slipped past it: they appear only after a read.
@@ -289,7 +289,7 @@ def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
 
     undeclared_by_class: dict[str, list[str]] = {}
     for record in records:
-        spec = getattr(type(record), "PORTABLE_STATE_SPEC", None)
+        spec = getattr(type(record), "_PORTABLE_STATE_SPEC", None)
         if spec is None:
             continue
         undeclared = sorted(
@@ -308,7 +308,7 @@ def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
         f"declare each field (usually FieldPolicy.DROP): {undeclared_by_class}"
     )
 
-    tl.save(live_log, str(tmp_path / "after_sweep.tlspec"))
+    live_log.save(str(tmp_path / "after_sweep.tlspec"))
 
 
 def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
@@ -317,12 +317,12 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
     log = trace_fn(
         _TinyIOModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
-    _ = log.edges
+    _ = log.graph.edges
     for record in _all_record_instances(log):
         _sweep_public_accessors(record)
-    tl.save(log, str(tmp_path / "after_armed_sweep.tlspec"))
+    log.save(str(tmp_path / "after_armed_sweep.tlspec"))
 
 
 # --- Public METHOD sweep (v2 of the accessor tripwire) ----------------------
@@ -343,18 +343,19 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
 #: reason must name why the call is unsafe or out of scope for a read-only
 #: pre-save sweep; "we forgot" is not representable in this table.
 _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
+    "animate": "pass-animation renderer: needs a multi-pass site and writes a movie file "
+    "(options.3 ruling); its reads are draw's, swept above",
     "annotate": "user annotation writer (mutates trace annotations by contract)",
-    "with_annotations": "user annotation writer (mutating fluent spelling)",
-    "add_node_overlay": "mutates the overlay table consumed by draw",
+    "using": "appliance door: returns what a registered factory builds; it writes nothing "
+    "on the trace (each appliance's own reads are its owner's to sweep)",
     "attach_hooks": "mutates the live model's hook registry",
     "clear_hooks": "mutates the live model's hook registry",
-    "detach_hooks": "mutates the live model's hook registry",
+    "clear_edits": "mutates the live model's hook registry",
     "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
     "log_backward": "autograd execution; writes gradient state",
-    "recording_backward": "autograd execution; writes gradient state",
+    "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
-    "release_param_refs": "destructive; nulls live parameter refs",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
     "remove": "removal scrub (mutates the graph)",
@@ -362,7 +363,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "push_from": "replay/push engine; execution, not presentation",
     "save_new_outs": "fast re-capture engine; execution, not presentation",
     "replace_state_from": "state mutator (cross-trace state transplant)",
-    "append_state_from": "state mutator (cross-trace state transplant)",
     "run": "sparse/live execution engine",
     "preview_fastlog": "fastlog execution",
     "fork": "constructs a new trace; the sweep audits reads on the original",
@@ -371,7 +371,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "save_intervention": "save boundary (intervention spec artifact)",
     "validate_forward_pass": "full replay validation; execution-tier compute",
     "discharge_against": "requires a second real capture as input",
-    "render_dagua_graph": "optional external dagua renderer dependency",
     "to_dagua_graph": "optional external dagua renderer dependency",
 }
 
@@ -379,7 +378,6 @@ _OP_METHOD_EXCLUSIONS: dict[str, str] = {
     "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
-    "log_tensor_grad": "capture-internal gradient writer",
     "save_activation": "capture-internal payload writer",
 }
 
@@ -389,9 +387,7 @@ _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
     "set": "intervention editor (mutates fork state)",
 }
 
-_PARAM_METHOD_EXCLUSIONS: dict[str, str] = {
-    "release_param_ref": "destructive; nulls the live param ref",
-}
+_PARAM_METHOD_EXCLUSIONS: dict[str, str] = {}
 
 _MODULE_METHOD_EXCLUSIONS: dict[str, str] = {}
 _MODULE_CALL_METHOD_EXCLUSIONS: dict[str, str] = {}
@@ -405,14 +401,13 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     out.mkdir(exist_ok=True)
     return {
         "summary": lambda t: t.summary(),
-        "provenance": lambda t: t.provenance(),
         "profile": lambda t: t.profile(),
         "to_pandas": lambda t: t.to_pandas(),
         # Plain draw AND an encoding-channel draw: the channel path is the
         # one that populated `_last_encoding_state` (fail-before case).
         "draw": lambda t: (
-            t.draw(vis_outpath=str(out / "graph")),
-            t.draw(vis_outpath=str(out / "graph_encoded"), color_by="time"),
+            t.draw(path=str(out / "graph")),
+            t.draw(path=str(out / "graph_encoded"), color_by="time"),
         ),
         "collapse_plan": lambda t: t.collapse_plan(),
         "collapse_schedule": lambda t: t.collapse_schedule(),
@@ -433,39 +428,33 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "output_table": lambda t: t.output_table(),
         "reconstruct_output": lambda t: t.reconstruct_output(),
         "reconstruct_container": lambda t: t.reconstruct_container(),
-        "visualization_field_audit": lambda t: t.visualization_field_audit(),
         "attention_blocks": lambda t: list(t.attention_blocks()),
         "modules_with_facet": lambda t: list(t.modules_with_facet("query")),
         "activations_by_pass": lambda t: t.activations_by_pass(1),
         "activations_by_address": lambda t: t.activations_by_address("linear"),
-        "activation_by_raw_label": lambda t: t.activation_by_raw_label(t.layer_list[0].raw_label),
+        "activation_by_raw_label": lambda t: t.activation_by_raw_label(t._layer_list[0].raw_label),
         # Post-tour sprint additions. All five are pure reads, so they are SWEPT
         # rather than excluded: "analysis populated a cache with no persistence
         # policy" is precisely the draw()-then-save() poison this sweep exists to
         # catch, and a presenter that builds a sub-DAG view is a prime candidate.
         "bill_of_materials": lambda t: t.bill_of_materials(),
-        "sites_table": lambda t: t.sites_table(),
-        # C02: a pure read over retained payloads (typed row states, no
-        # persistence side effects) -- swept for the same reason as
-        # sites_table/bill_of_materials.
-        "stats_table": lambda t: t.stats_table(),
+        "sites": lambda t: t.sites(),
         # F09 (sumfam D24): the capability card is a metadata-only read of
         # the SurfaceRegistry filtered by this object -- swept like the
         # other pure report reads.
-        "capability_card": lambda t: t.capability_card(),
+        "capabilities": lambda t: t.capabilities(),
         "to_agent_json": lambda t: t.to_agent_json(),
+        # The plain-language explanation is a pure read over the same facts
+        # as to_agent_json, so it is swept like the other report reads.
+        "explain": lambda t: t.explain(),
         "between": lambda t: t.between(t.input_ops[0].label, t.output_ops[0].label),
         "subgraph": lambda t: t.subgraph(tl.func("relu")),
         "find_sites": lambda t: t.find_sites("relu"),
-        "resolve_sites": lambda t: t.resolve_sites("relu"),
         # F33 (weightsfree D14): the audit-only plan checker is a pure read
-        # over resolve_sites + recorded geometry; executable=False always.
+        # over selector resolution + recorded geometry; executable=False always.
         "check_plan": lambda t: t.check_plan(["relu"]),
         "stack": lambda t: t.stack(tl.func("relu")),
-        "show": lambda t: t.show(method="graph", vis_outpath=str(out / "shown")),
-        "draw_backward": lambda t: t.draw_backward(vis_outpath=str(out / "bwd")),
-        "draw_combined": lambda t: t.draw_combined(vis_outpath=str(out / "cmb")),
-        "animate_ops": lambda t: t.animate_ops(t.layer_list[0].layer_label),
+        "show": lambda t: t.show(kind="graph", path=str(out / "shown")),
     }
 
 
@@ -473,7 +462,6 @@ def _op_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     """Return caller-per-method for every swept public ``Op`` method."""
 
     return {
-        "copy": lambda o: o.copy(),
         "get_children": lambda o: o.get_children(),
         "get_parents": lambda o: o.get_parents(),
         "grad_for": lambda o: o.grad_for(bwd=0),
@@ -501,7 +489,7 @@ def _module_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     out = tmp_path / "method_sweep"
     out.mkdir(exist_ok=True)
     return {
-        "draw": lambda m: m.draw(vis_outpath=str(out / f"module_{id(m)}")),
+        "draw": lambda m: m.draw(path=str(out / f"module_{id(m)}")),
         "show_call_tree": lambda m: m.show_call_tree(file=sink),
         "to_pandas": lambda m: m.to_pandas(),
         "walk_descendants": lambda m: list(m.walk_descendants()),
@@ -541,13 +529,13 @@ _METHOD_SWEEP_PLAN: list[tuple[type, Any, dict[str, str], Any]] = [
         Op,
         _op_method_sweep,
         _OP_METHOD_EXCLUSIONS,
-        lambda log: [layer for layer in log.layer_list if type(layer) is Op],
+        lambda log: [layer for layer in log._layer_list if type(layer) is Op],
     ),
     (
         Layer,
         _layer_method_sweep,
         _LAYER_METHOD_EXCLUSIONS,
-        lambda log: list(log.layer_logs.values()),
+        lambda log: list(log._layer_logs.values()),
     ),
     (Module, _module_method_sweep, _MODULE_METHOD_EXCLUSIONS, lambda log: list(log.modules)),
     (
@@ -556,7 +544,7 @@ _METHOD_SWEEP_PLAN: list[tuple[type, Any, dict[str, str], Any]] = [
         _MODULE_CALL_METHOD_EXCLUSIONS,
         lambda log: list(log.modules._pass_dict.values()),
     ),
-    (Param, _param_method_sweep, _PARAM_METHOD_EXCLUSIONS, lambda log: list(log.param_logs)),
+    (Param, _param_method_sweep, _PARAM_METHOD_EXCLUSIONS, lambda log: list(log._param_logs)),
     (Buffer, _buffer_method_sweep, _BUFFER_METHOD_EXCLUSIONS, lambda log: list(log.buffers)),
 ]
 
@@ -681,7 +669,7 @@ def test_public_method_reads_never_poison_save(tmp_path: Path) -> None:
 
     undeclared_by_class: dict[str, list[str]] = {}
     for record in _all_record_instances(live_log):
-        spec = getattr(type(record), "PORTABLE_STATE_SPEC", None)
+        spec = getattr(type(record), "_PORTABLE_STATE_SPEC", None)
         if spec is None:
             continue
         undeclared = sorted(
@@ -701,24 +689,24 @@ def test_public_method_reads_never_poison_save(tmp_path: Path) -> None:
         f"declare each field (usually FieldPolicy.DROP): {undeclared_by_class}"
     )
 
-    tl.save(live_log, str(tmp_path / "after_method_sweep.tlspec"))
+    live_log.save(str(tmp_path / "after_method_sweep.tlspec"))
     pickle.dumps(live_log)
 
 
 def test_draw_then_save_and_pickle_regression(tmp_path: Path) -> None:
-    """Focused fail-before pin: draw() must not poison tl.save or pickle.
+    """Focused fail-before pin: draw() must not poison Trace.save or pickle.
 
     ``draw()`` stored the encoding diagnostic on ``_last_encoding_state``
     (ledgered as "scrub-declared runtime-only" but enrolled nowhere the scrub
-    consults), so one draw made every later ``tl.save`` refuse. The callable
+    consults), so one draw made every later ``Trace.save`` refuse. The callable
     variant pins the pickle side: a ``color_by=`` lambda rode the diagnostic
     into ``__dict__``, so ``pickle.dumps`` crashed on the raw user callable
-    while ``tl.save`` succeeded on the same trace (the R10-7 class).
+    while ``Trace.save`` succeeded on the same trace (the R10-7 class).
     """
 
     log = trace_fn(_TinyIOModel(), torch.randn(2, 4))
-    log.draw(vis_outpath=str(tmp_path / "graph"), color_by=lambda node: 1.0)
-    tl.save(log, str(tmp_path / "after_draw.tlspec"))
+    log.draw(path=str(tmp_path / "graph"), color_by=lambda node: 1.0)
+    log.save(str(tmp_path / "after_draw.tlspec"))
     pickle.dumps(log)
 
 
@@ -733,19 +721,19 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     name the user never touched.
     """
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._data_classes._trace_components import TRACE_EXTERNAL_WRITE_EXEMPTIONS
+    from torchlens._io import ArtifactError
     from torchlens._io.scrub import _is_runtime_only_trace_field
-    from torchlens.data_classes._trace_components import TRACE_EXTERNAL_WRITE_EXEMPTIONS
 
     field_name = next(
         name
         for name in TRACE_EXTERNAL_WRITE_EXEMPTIONS
-        if name not in Trace.PORTABLE_STATE_SPEC and not _is_runtime_only_trace_field(name)
+        if name not in Trace._PORTABLE_STATE_SPEC and not _is_runtime_only_trace_field(name)
     )
     log = trace_fn(_TinyIOModel(), torch.randn(2, 4))
     setattr(log, field_name, "still-live-at-save-time")
-    with pytest.raises(TorchLensIOError) as excinfo:
-        tl.save(log, str(tmp_path / "refused.tlspec"))
+    with pytest.raises(ArtifactError) as excinfo:
+        log.save(str(tmp_path / "refused.tlspec"))
     message = str(excinfo.value)
     assert field_name in message
     assert "TRACE_EXTERNAL_WRITE_EXEMPTIONS" in message
@@ -779,11 +767,11 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
         _NestedStr(),
         [torch.randn(3), {"mode": "fast"}],
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             save_raw_input=raw_policy,
-            save_raw_output=raw_policy,
+            save_transformed_output=raw_policy,
         ),
     )
     path = tmp_path / f"sparse_raw_{raw_policy}.tlspec"
@@ -792,11 +780,11 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
         trace.save(path, level="runnable")
     with (path / "metadata.pkl").open("rb") as handle:
         metadata = pickle.load(handle)
-    assert metadata["raw_input"] is None
-    assert metadata["raw_output"] is None
+    assert metadata["input"] is None
+    assert metadata["transformed_output"] is None
     loaded = tl.load(path)
-    assert loaded.raw_input is None
-    assert loaded.raw_output is None
+    assert loaded.input is None
+    assert loaded.transformed_output is None
 
 
 def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
@@ -809,13 +797,14 @@ def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     trace = trace_fn(
         _NestedStr(),
         [torch.randn(3), {"mode": "fast"}],
-        capture=tl.options.CaptureOptions(layers_to_save="none", save_raw_input="small"),
+        capture=tl.options.CaptureOptions(save_raw_input="small"),
+        save="none",
     )
     path = tmp_path / "analysis_raw.tlspec"
     trace.save(path)
     with (path / "metadata.pkl").open("rb") as handle:
         metadata = pickle.load(handle)
-    raw = metadata["raw_input"]
+    raw = metadata["input"]
     assert isinstance(raw, list) and len(raw) == 2
     assert torch.is_tensor(raw[0])
     assert raw[1] == {"mode": "fast"}
@@ -830,7 +819,7 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     trace = trace_fn(
         _TinyImageInputModel(),
         image,
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     path = tmp_path / "pil_raw_input.tlspec"
 
@@ -839,20 +828,20 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
         metadata = pickle.load(handle)
     loaded = tl.load(path)
 
-    raw_image_record = metadata["raw_input"]
+    raw_image_record = metadata["input"]
     assert raw_image_record[_RAW_IMAGE_SENTINEL] is True
     assert isinstance(raw_image_record["data"], bytes)
     assert len(raw_image_record["data"]) <= _RAW_INPUT_IMAGE_BYTES_LIMIT
-    assert loaded.raw_input is not None
-    assert loaded.raw_input.size[0] <= 256
-    assert loaded.raw_input.size[1] <= 256
+    assert loaded.input is not None
+    assert loaded.input.size[0] <= 256
+    assert loaded.input.size[1] <= 256
 
 
 @pytest.mark.smoke
 def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     """N5: a defaultdict ``op_equivalence_classes`` must not crash the scrub.
 
-    ``Trace.op_equivalence_classes`` starts life as ``defaultdict(set)``
+    ``Trace.graph.op_equivalence_classes`` starts life as ``defaultdict(set)``
     (``data_classes/trace.py``); the torch backend's postprocessing always
     reassigns it to a plain ``dict`` before save (``cleanup.py``,
     ``labeling.py``), but the neutral/preview backends (tf, jax, tinygrad,
@@ -872,11 +861,11 @@ def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     groups = collections.defaultdict(set)
     groups["conv2d_param_000002_param_000001"] = {"conv2d_1_1"}
     groups["relu"] = {"relu_2_1"}
-    state: dict[str, Any] = {"op_equivalence_classes": groups}
+    state: dict[str, Any] = {"_graph_op_equivalence_classes": groups}
 
     _scrub_nondeterministic_identities(state)
 
-    rebuilt = state["op_equivalence_classes"]
+    rebuilt = state["_graph_op_equivalence_classes"]
     assert isinstance(rebuilt, collections.defaultdict)
     assert rebuilt.default_factory is set
     # No matching param barcode was registered (no params/ops/layers were

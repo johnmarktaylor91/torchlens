@@ -13,16 +13,14 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.observability import (
-    HistoryView,
+from torchlens._observability import (
     StepTruth,
-    WatchLifecycleError,
-    WatchPlanError,
-    render_contact_sheet,
-    render_fan,
 )
-from torchlens.observability._op_tier import OpTierCollector, split_heads
-from torchlens.observability._quantiles import WatchRenderError
+from torchlens._observability._op_tier import OpTierCollector, split_heads
+from torchlens._observability._quantiles import WatchRenderError
+from torchlens.errors import WatchLifecycleError, WatchPlanError
+from torchlens.trackers import HistoryView
+from torchlens.viz import contact_sheet, quantile_fan
 
 
 def _model() -> torch.nn.Module:
@@ -91,11 +89,11 @@ class TestOpTierObservations:
         assert len(series) == 3
         for point in series:
             spine = point.observation.spine
-            assert spine is not None and spine.count_total > 0
+            assert spine is not None and spine.numel > 0
             assert point.observation.sketch is not None
         # The renderers accept op-tier views unchanged (grain-agnostic).
-        assert render_fan(view, linear_sites[0]).startswith("<svg")
-        assert "of" in render_contact_sheet(view)
+        assert quantile_fan(view, linear_sites[0]).startswith("<svg")
+        assert "of" in contact_sheet(view)
 
     def test_training_graph_survives_wrapped_step(self) -> None:
         model = _model()
@@ -125,7 +123,7 @@ class TestOpTierObservations:
         site_id = next(iter(view.sites))
         spine = view.series(site_id)[0].observation.spine
         assert spine is not None
-        assert spine.count_total == 4 * 8  # relu output numel, exactly
+        assert spine.numel == 4 * 8  # relu output numel, exactly
 
 
 class TestFacetTier:
@@ -159,7 +157,7 @@ class TestFacetTier:
             series = view.series(facet_id)
             assert len(series) == 2, "facet identity stable across steps"
             spine = series[0].observation.spine
-            assert spine is not None and spine.count_total == 2 * 4  # one head slice
+            assert spine is not None and spine.numel == 2 * 4  # one head slice
 
     @pytest.mark.smoke
     def test_missplit_head_axis_refuses(self) -> None:

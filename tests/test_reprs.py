@@ -64,7 +64,7 @@ def test_layer_log_show_custom_methods_return_output(method: str) -> None:
 
     x = torch.randn(1, 3, 4, 4) if method == "rgb" else torch.randn(3, 4, 4)
     log = _log_for_input(x)
-    output = log.layers[0].show(method=method)
+    output = log.layers[0].show(kind=method)
     assert output is not None
 
 
@@ -72,7 +72,7 @@ def test_op_log_show_returns_output() -> None:
     """Op.show delegates to the tensor display helper."""
 
     log = _log_for_input(torch.randn(8))
-    output = log.layer_list[0].show(method="hist")
+    output = log._layer_list[0].show(kind="hist")
     assert output is not None
 
 
@@ -202,14 +202,14 @@ def test_op_repr_degrades_under_predicate_save() -> None:
     R01 (b1-opus r5): ``_tensor_contents_str_helper`` read ``self.out``
     unguarded, and ``Op.__getattribute__`` refuses that payload read with
     ``PayloadUnavailableError`` once a predicate save was used, so
-    ``repr(trace.layer_list)`` raised on 6 of 7 ops.
+    ``repr(trace._layer_list)`` raised on 6 of 7 ops.
     """
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4), save=tl.func("relu"))
-    text = repr(trace.layer_list)
+    text = repr(trace._layer_list)
     assert text
-    unsaved = next(op for op in trace.layer_list if not op.has_saved_activation)
-    unsaved_text = f"{unsaved.ops[0]}"
+    unsaved = next(op for op in trace._layer_list if not op.has_saved_activation)
+    unsaved_text = f"{unsaved}"
     assert "not saved" in unsaved_text
     saved = trace["relu_1_2"]
     assert "not saved" not in f"{saved.ops[0]}"

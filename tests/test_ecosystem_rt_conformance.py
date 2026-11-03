@@ -17,15 +17,14 @@ from typing import Any
 import pytest
 import torch
 
-from torchlens.conformance import (
+from tests.conformance import (
     CLAIM_MIN_PRETRAINED_FAMILIES,
-    FAKE_PLANTS,
     ConformanceReport,
     RosterModel,
     claim_string,
     run_conformance,
 )
-from torchlens.conformance._adapters import resolve_adapter
+from tests.conformance._adapters import FAKE_PLANTS, resolve_adapter
 from torchlens.errors import ConfigurationError
 
 
@@ -44,7 +43,10 @@ def _tiny_roster(realism: str = "config_built", families: int = 1) -> tuple[Rost
     evidence = "pinned-rev-deadbeef" if realism == "pretrained" else ""
     return tuple(
         RosterModel(
-            family=f"tiny{index}", realism=realism, build=_build_tiny, checkpoint_evidence=evidence
+            family=f"tiny{index}",
+            realism=realism,
+            builder=_build_tiny,
+            checkpoint_evidence=evidence,
         )
         for index in range(families)
     )
@@ -61,16 +63,22 @@ def _rows(report: ConformanceReport, case_id: str) -> list[Any]:
 # ---------------------------------------------------------------------------
 
 
+def _failed_ids(report: ConformanceReport) -> set[str]:
+    """Case ids of the failed rows."""
+
+    return {row.case_id for row in report.results if row.outcome == "failed"}
+
+
 def test_torch_reference_passes_the_full_ladder(tmp_path: Path) -> None:
     """The reference backend passes C0-C2 on the hermetic roster."""
 
     report = run_conformance(
         "torch", tiers=("C0", "C1", "C2"), roster=_tiny_roster(), workdir=tmp_path
     )
-    assert report.funnel["failed"] == 0
+    assert _failed_ids(report) == set()
     assert report.funnel["skipped"] == 0
     assert report.earned_tier == "C2"
-    assert report.claim_eligible is False  # toys earn nothing
+    assert report.is_claim_eligible is False  # toys earn nothing
     with pytest.raises(ConfigurationError) as excinfo:
         claim_string(report)
     assert excinfo.value.fields["code"] == "conformance_claim_unearned"
@@ -82,9 +90,9 @@ def test_wellbehaved_fake_passes_before_plants_are_trusted(tmp_path: Path) -> No
     report = run_conformance(
         "fake", tiers=("C0", "C1", "C2"), roster=_tiny_roster(), workdir=tmp_path
     )
-    assert report.funnel["failed"] == 0
+    assert _failed_ids(report) == set()
     assert report.earned_tier == "C2"
-    assert report.claim_eligible is False  # the fake provider never claims
+    assert report.is_claim_eligible is False  # the fake provider never claims
     with pytest.raises(ConfigurationError):
         claim_string(report)
 
@@ -104,13 +112,16 @@ _PLANT_INTENDED_CELL = {
 
 
 def test_plant_table_covers_the_closed_set() -> None:
-    """The intended-cell table and FAKE_PLANTS are the same closed set."""
+    """This table plus the protocol-era table (``_protocol_cases``) is the closed set."""
 
-    assert set(_PLANT_INTENDED_CELL) == set(FAKE_PLANTS)
+    from tests.conformance._protocol_cases import PLANT_INTENDED_CELL
+
+    assert set(_PLANT_INTENDED_CELL).isdisjoint(PLANT_INTENDED_CELL)
+    assert set(_PLANT_INTENDED_CELL) | set(PLANT_INTENDED_CELL) == set(FAKE_PLANTS)
 
 
 @pytest.mark.smoke_cells("test_every_plant_turns_its_intended_cell_red[capability_undispatched]")
-@pytest.mark.parametrize("plant", FAKE_PLANTS)
+@pytest.mark.parametrize("plant", sorted(_PLANT_INTENDED_CELL))
 def test_every_plant_turns_its_intended_cell_red(plant: str, tmp_path: Path) -> None:
     """Each planted defect fails the exact cell it targets, nothing vacuous."""
 
@@ -150,12 +161,12 @@ def test_non_cumulative_tier_requests_refuse(tiers: tuple[str, ...]) -> None:
 
 
 def test_unknown_backend_refuses_typed() -> None:
-    """v1 resolves exactly 'torch' and 'fake'; anything else refuses."""
+    """Names outside torch, fake and the preview backends refuse typed."""
 
     with pytest.raises(ConfigurationError) as excinfo:
         run_conformance("mystery-provider")
     assert excinfo.value.fields["code"] == "conformance_backend_unknown"
-    assert "torchlens.ecosystem.plugins" in str(excinfo.value)
+    assert "torchlens._ecosystem.plugins" in str(excinfo.value)
 
 
 def test_executed_floor_zero_green_never_reads_green() -> None:
@@ -180,7 +191,7 @@ def test_c0_claim_never_says_conformant() -> None:
 
     report = run_conformance("torch", tiers=("C0",))
     assert report.earned_tier == "C0"
-    assert report.claim_eligible is True
+    assert report.is_claim_eligible is True
     claim = claim_string(report)
     assert claim == "TorchLens provider API compatible, C0"
     assert "conformant" not in claim
@@ -196,11 +207,11 @@ def test_pretrained_family_floor_gates_c1_claims(tmp_path: Path) -> None:
 
     assert CLAIM_MIN_PRETRAINED_FAMILIES == 2
     one = run_conformance("torch", tiers=("C0", "C1"), roster=_tiny_roster("pretrained", 1))
-    assert one.earned_tier == "C1" and one.claim_eligible is False
+    assert one.earned_tier == "C1" and one.is_claim_eligible is False
     with pytest.raises(ConfigurationError):
         claim_string(one)
     two = run_conformance("torch", tiers=("C0", "C1"), roster=_tiny_roster("pretrained", 2))
-    assert two.claim_eligible is True
+    assert two.is_claim_eligible is True
     claim = claim_string(two)
     assert claim == "TorchLens-conformant capture, C1 (scope: tiny0,tiny1)"
 
@@ -225,18 +236,18 @@ def test_c2_claim_spelling(tmp_path: Path) -> None:
 def test_attestation_digest_recomputes_over_canonical_bytes() -> None:
     """The SHA-256 attests the digest-free canonical form, third-party checkable."""
 
-    from torchlens.conformance import _canonical_report_json
+    from tests.conformance import _canonical_report_json
 
     report = run_conformance("fake", tiers=("C0",))
     recomputed = hashlib.sha256(
         _canonical_report_json(report, include_attestation=False).encode("utf-8")
     ).hexdigest()
     assert report.attestation_sha256 == recomputed
-    payload = json.loads(report.to_canonical_json())
+    payload = json.loads(report.to_json())
     assert payload["attestation_sha256"] == recomputed
     assert payload["environment"]["torchlens_version"]
     # Canonical bytes are cwd-independent.
-    assert str(Path.cwd()) not in report.to_canonical_json()
+    assert str(Path.cwd()) not in report.to_json()
 
 
 def test_report_funnel_discloses_every_requested_case() -> None:

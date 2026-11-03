@@ -57,7 +57,7 @@ def dataset(source: Any, site: str | None = None) -> Any:
         an explicitly requested site is not stimulus-indexed (the core
         eligibility gate; a buffer overwrite must never masquerade as a
         stimulus response).
-    torchlens.features.FeatureShapingError
+    torchlens.errors.FeatureShapingError
         When the site holds no payload or row/id cardinality disagrees.
     """
 

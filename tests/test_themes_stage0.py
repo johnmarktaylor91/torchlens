@@ -18,8 +18,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses import audit
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses import audit
 
 DOT_AVAILABLE = shutil.which("dot") is not None
 
@@ -44,11 +44,9 @@ def speed_render(tmp_path_factory: Any) -> Any:
     resolution = lenses.resolve_lens(log, "speed")
     graph = log.draw(
         **resolution.draw_kwargs,
-        vis_outpath=str(out_dir / "speed"),
-        vis_fileformat="svg",
-        vis_save_only=True,
-        return_graph=True,
-    )
+        path=str(out_dir / "speed"),
+        file_format="svg",
+    ).dot
     yield log, resolution, graph, str(out_dir / "speed.svg")
     log.cleanup()
 
@@ -59,10 +57,10 @@ def test_stage0_runs_green_on_a_clean_artifact(speed_render: Any) -> None:
     measured from the artifact itself -- the R0 discipline)."""
 
     log, resolution, graph, svg_path = speed_render
-    headlabel_baseline = len(re.findall(r"\bheadlabel=", graph.source))
-    xlabel_baseline = len(re.findall(r"\bxlabel=", graph.source))
+    headlabel_baseline = len(re.findall(r"\bheadlabel=", graph))
+    xlabel_baseline = len(re.findall(r"\bxlabel=", graph))
     report = audit.run_stage0(
-        graph.source,
+        graph,
         resolution=resolution,
         svg_path=svg_path,
         manifest=audit.build_run_manifest(
@@ -106,7 +104,7 @@ def test_disclosure_checks_catch_a_stripped_caption(speed_render: Any) -> None:
     """Removing the coverage line from the DOT fails the audit."""
 
     log, resolution, graph, svg_path = speed_render
-    stripped = graph.source.replace("coverage: encoded", "")
+    stripped = graph.replace("coverage: encoded", "")
     report = audit.run_stage0(
         stripped, resolution=resolution, checks=audit.Stage0Checks(geometry=False)
     )
@@ -120,13 +118,11 @@ def test_fill_spread_gates_apply_only_with_a_channel(speed_render: Any) -> None:
     bare = lenses.resolve_lens(log, "blueprint")
     bare_graph = log.draw(
         **bare.draw_kwargs,
-        vis_outpath=svg_path.replace(".svg", "-bare"),
-        vis_fileformat="svg",
-        vis_save_only=True,
-        return_graph=True,
-    )
+        path=svg_path.replace(".svg", "-bare"),
+        file_format="svg",
+    ).dot
     report = audit.run_stage0(
-        bare_graph.source, resolution=bare, checks=audit.Stage0Checks(geometry=False)
+        bare_graph, resolution=bare, checks=audit.Stage0Checks(geometry=False)
     )
     assert "distinct_fills" not in {finding.check for finding in report.findings}
 
@@ -142,12 +138,10 @@ def test_compaction_non_identity_is_checkable(speed_render: Any) -> None:
     if collapsed.budget is not None and collapsed.budget.draw_kwargs.get("collapse") != "none":
         collapsed_graph = log.draw(
             **collapsed.draw_kwargs,
-            vis_outpath=svg_path.replace(".svg", "-ov"),
-            vis_fileformat="svg",
-            vis_save_only=True,
-            return_graph=True,
-        )
-        assert collapsed_graph.source != graph.source
+            path=svg_path.replace(".svg", "-ov"),
+            file_format="svg",
+        ).dot
+        assert collapsed_graph != graph
 
 
 @pytest.mark.heavy
@@ -177,14 +171,12 @@ def test_geometry_baseline_over_the_toy_corpus(tmp_path: Any) -> None:
                     continue  # typed subject refusals are legitimate on some toys
                 graph = log.draw(
                     **resolution.draw_kwargs,
-                    vis_outpath=str(tmp_path / f"{member.name}-{lens_name}"),
-                    vis_fileformat="svg",
-                    vis_save_only=True,
-                    return_graph=True,
-                )
-                headlabels = len(re.findall(r"\bheadlabel=", graph.source))
-                xlabels = len(re.findall(r"\bxlabel=", graph.source))
-                geometry = audit.stage0.geometry_findings(graph.source)
+                    path=str(tmp_path / f"{member.name}-{lens_name}"),
+                    file_format="svg",
+                ).dot
+                headlabels = len(re.findall(r"\bheadlabel=", graph))
+                xlabels = len(re.findall(r"\bxlabel=", graph))
+                geometry = audit.stage0.geometry_findings(graph)
                 baseline[f"{member.name}:{lens_name}"] = {
                     "headlabels": headlabels,
                     "xlabels": xlabels,

@@ -13,10 +13,10 @@ from typing import Any
 
 import torch
 
-from ..semantic._norm_reconstruction import NormReconstruction, reconstruct_norm
-from ..semantic.facets import AbsenceReason
-from ..semantic.recipes._helpers import child_module, config_value
-from ..semantic.recipes.lm_head import (
+from .._semantic._norm_reconstruction import NormReconstruction, reconstruct_norm
+from .._semantic.facets import AbsenceReason
+from .._semantic.recipes._helpers import child_module, config_value
+from .._semantic.recipes.lm_head import (
     _final_norm_walk,
     _has_lm_head,
     _head_child_name,

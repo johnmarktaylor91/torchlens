@@ -17,14 +17,15 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._record_type import record_type
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     RunnableErrorCode,
     TensorSlotRole,
 )
+from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.options import CaptureOptions
 
 
 class _Chain(nn.Module):
@@ -54,7 +55,7 @@ class _EvalBnChain(nn.Module):
 
 
 def _type_label(log, layer_type):
-    return next(layer.layer_label for layer in log.layer_list if layer.layer_type == layer_type)
+    return next(layer.layer_label for layer in log._layer_list if layer.type == layer_type)
 
 
 def _live_until_relu(model_cls=_Chain):
@@ -73,10 +74,10 @@ def _loaded_runnable(tmp_path, model=None):
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True),
     )
     path = tmp_path / "until.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     return tl.load(str(path)), x
 
 
@@ -89,7 +90,7 @@ def test_live_truncated_fork_output_proof_fails_closed():
     first assertion.
     """
 
-    from torchlens._runnable_execution import _fresh_bare_tensor_root
+    from torchlens._runnable.call_outputs import _fresh_bare_tensor_root
 
     _model, log, result = _live_until_relu()
     assert log._runnable.output_losslessness is not None  # the source stamp IS positive
@@ -102,7 +103,7 @@ def test_live_truncation_does_not_assert_replay_arg_completeness():
 
     model = _Chain()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
     result = log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
     assert result.trace._replay_arg_version_data_complete is False
 
@@ -125,14 +126,14 @@ def test_live_truncated_output_is_none_and_disclosed():
 def test_live_truncation_leaves_source_outcome_complete():
     """The internal HALTED settle is invisible on both source and result."""
 
-    from torchlens.capture.outcome import CaptureStatus
+    from torchlens._capture.outcome import CaptureStatus
 
     model, log, result = _live_until_relu()
     assert log.outcome.status is CaptureStatus.COMPLETE
     # The result fork's outcome is exactly what a FULL run's fork derives
     # (forked from the COMPLETE source) -- the internal HALTED settle never
     # reaches it.
-    assert result.trace.outcome.status is not CaptureStatus.HALTED
+    assert result.trace.outcome.status is not CaptureStatus.STOPPED
     full = log.run(inputs=torch.randn(2, 4))
     assert result.trace.outcome.status is full.trace.outcome.status
 
@@ -159,20 +160,20 @@ def test_live_truncation_leaves_no_halted_trace_registered():
     """
 
     from torchlens import io as tlio
-    from torchlens.capture.outcome import CaptureStatus
+    from torchlens._capture.outcome import CaptureStatus
 
-    prior = tlio.list_logs()
+    prior = tlio.list_traces()
     _model, _log, result = _live_until_relu()
-    fresh = [entry for entry in tlio.list_logs() if not any(entry is p for p in prior)]
+    fresh = [entry for entry in tlio.list_traces() if not any(entry is p for p in prior)]
     halted_fresh = [
         entry
         for entry in fresh
         if getattr(entry, "outcome", None) is not None
-        and entry.outcome.status is CaptureStatus.HALTED
+        and entry.outcome.status is CaptureStatus.STOPPED
     ]
     assert not halted_fresh, (
         "the truncated live run left a HALTED trace enumerable through "
-        "tl.io.list_logs(); the internal halt settle must stay invisible"
+        "tl.io.list_traces(); the internal halt settle must stay invisible"
     )
     assert any(entry is result.trace for entry in fresh)
 
@@ -214,7 +215,7 @@ def test_seeded_prefix_bug_still_fails_under_until(tmp_path: Path) -> None:
     from torchlens.errors import PathDivergenceError
 
     loaded, x = _loaded_runnable(tmp_path)
-    descriptor = loaded.runnable_descriptor
+    descriptor = loaded._sparse_run_descriptor
     assert descriptor is not None
     # Plant the contradiction INSIDE the guard machinery: retain the real
     # runtime input but forge the descriptor's recorded model-input shape.
@@ -299,8 +300,8 @@ def test_until_x_eval_bn_prefix_tamper_refuses_typed():
     model.eval()
     log = tl.trace(model, torch.randn(2, 4))
     for label in log.internal_sink_ops:
-        layer = log.layer_dict_all_keys[label]
-        if layer.layer_type == "buffer":
+        layer = log._layer_dict_all_keys[label]
+        if record_type(layer) == "buffer":
             layer._internal_set("buffer_value_changed", None)
     with pytest.raises(BufferSinkRoutingError):
         log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
@@ -312,14 +313,14 @@ def test_truncated_result_refuses_all_saves(tmp_path):
     _model, _log, result = _live_until_relu()
     for level in ("analysis", "runnable"):
         with pytest.raises(Exception) as exc_info:  # noqa: PT011 - poison-gate class
-            tl.save(result.trace, str(tmp_path / f"t_{level}.tlspec"), level=level)
+            result.trace.save(str(tmp_path / f"t_{level}.tlspec"), level=level)
         assert "poison" in str(exc_info.value).lower() or "truncat" in str(exc_info.value).lower()
 
 
 def test_truncated_result_refuses_rerun():
     """3.3.2: re-running a truncated result refuses typed at the run door."""
 
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
 
     _model, _log, result = _live_until_relu()
     with pytest.raises(RunCapabilityUnavailableError) as exc_info:
@@ -345,10 +346,10 @@ def test_until_requires_full_inputs(tmp_path):
     log = tl.trace(
         model,
         [x, y],
-        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True),
     )
     path = tmp_path / "two.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     # until= the relu: y's consumer (the add) is skipped, but the full recorded
     # input tree remains REQUIRED -- a partial-inputs surface would let omission
@@ -360,13 +361,25 @@ def test_until_requires_full_inputs(tmp_path):
     assert result.report.truncated is True
 
 
-def test_until_fast_refuses_typed():
-    """Composition matrix: until= x fast=True refuses typed."""
+def test_until_fast_matrix_live_runs_loaded_refuses(tmp_path: Path):
+    """Composition matrix (U26.3): until= x fast=True stops a live run; a loaded one refuses.
+
+    The live fast tier cuts its native forward after the saved site; a loaded
+    artifact's fast tier compiles the full recorded path and still refuses typed.
+    """
 
     model = _Chain()
     log = tl.trace(model, torch.randn(2, 4))
+    relu_label = _type_label(log, "relu")
+    result = log.run(inputs=torch.randn(2, 4), fast=True, until=relu_label)
+    assert result.report.truncated is True
+    assert result.report.stopped_at == relu_label
+    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert result.output is None
+
+    loaded, _x = _loaded_runnable(tmp_path)
     with pytest.raises(ValueError) as exc_info:
-        log.run(inputs=torch.randn(2, 4), fast=True, until=_type_label(log, "relu"))
+        loaded.run(inputs=torch.randn(2, 4), fast=True, until=_type_label(loaded, "relu"))
     assert exc_info.value.fields["code"] == "run_fast_until_unsupported"
 
 

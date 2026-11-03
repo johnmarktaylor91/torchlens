@@ -8,52 +8,40 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ..._state import pause_logging
-from ...capture.predicates import (
+from ..._capture.predicates import (
     _evaluate_keep_op,
 )
-from ...capture.projections import (
+from ..._capture.projections import (
     commit_op,
 )
-from ...capture.session import capture_session_for
-from ...capture.stop import stop_directive_for_trace
-from ...data_classes._nonfinite import record_op_nonfinite
-from ...data_classes.op import (
+from ..._capture.session import capture_session_for
+from ..._capture.stop import stop_directive_for_trace
+from ..._data_classes._nonfinite import record_op_nonfinite
+from ..._data_classes.op import (
     _recursive_safe_copy,
 )
-from ...fastlog.types import (
-    CaptureSpec,
-    RecordContext,
-)
-from ...intervention.selectors import (
-    BaseSelector,
-)
-from ...ir.events import (
+from ..._ir.events import (
     FunctionCallRef,
     ModuleFrame,
 )
-from ...ir.predicate import RetroactiveCaptureDecision
-from ...utils.display import _timed_phase
-from ...utils.tensor_utils import (
+from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._selection.selectors import (
+    BaseSelector,
+)
+from ..._state import pause_logging
+from ..._utils.display import _timed_phase
+from ..._utils.tensor_utils import (
     fp8_widen_for_numeric_ops,
     safe_copy,
 )
+from ...recording.types import (
+    CaptureSpec,
+    RecordContext,
+)
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        ExhaustiveOpDraft,
-        _admit_saved_args_budget,
-        _append_trace_predicate_context,
-        _apply_retroactive_decision,
-        _build_trace_predicate_context,
-        _commit_saved_args_budget,
-        _retain_lookback_candidate,
-        _save_activation_fields,
-        _save_predicate_activation_fields,
-    )
 
 __all__ = (
     "_trace_predicate_context_key",
@@ -92,7 +80,7 @@ def _cache_trace_predicate_context(
     contexts[
         _trace_predicate_context_key(
             ctx.raw_label or ctx.label,
-            ctx.pass_index,
+            ctx.pass_number,
             container_path,
         )
     ] = ctx
@@ -109,7 +97,7 @@ def _pop_trace_predicate_context(
         return None
     key = _trace_predicate_context_key(
         str(fields_dict["_label_raw"]),
-        int(fields_dict.get("pass_index", 0)),
+        int(fields_dict.get("pass_number", 0)),
         tuple(fields_dict.get("container_path", ())),
     )
     return contexts.pop(key, None)
@@ -167,7 +155,7 @@ def _evaluate_trace_save_predicate(
     decisions[
         (
             raw_label,
-            int(fields_dict.get("pass_index", 0)),
+            int(fields_dict.get("pass_number", 0)),
             tuple(fields_dict.get("container_path", ())),
         )
     ] = spec
@@ -236,7 +224,7 @@ def _make_layer_log_entry(
     fire_results = tuple(fields_dict.pop("fire_results", ()))
 
     keep_by_predicate = True
-    module_filter = getattr(self, "module_filter", None)
+    module_filter = getattr(self, "_module_filter", None)
     if module_filter is not None:
         keep_by_predicate = bool(module_filter(_module_filter_namespace(fields_dict)))
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
@@ -252,6 +240,7 @@ def _make_layer_log_entry(
             raw_index,
             t,
             retain_activation=not (keep_by_predicate and save_this_activation),
+            raw_label=fields_dict.get("_label_raw"),
         )
     _note_module_filter_suppression(self, keep_by_predicate, save_this_activation)
     if keep_by_predicate and save_this_activation:
@@ -275,7 +264,7 @@ def _make_layer_log_entry(
                     predicate_ctx,
                     activation_transform,
                 )
-    if predicate_spec is not None and self.save_arg_values and not fields_dict["has_saved_args"]:
+    if predicate_spec is not None and self._options_save_args and not fields_dict["has_saved_args"]:
         # Admit BEFORE the clones allocate (r8 R34, sol 2).
         arg_reservations = _admit_saved_args_budget(self, fields_dict, t_args, t_kwargs)
         fields_dict["has_saved_args"] = True
@@ -400,10 +389,10 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
     Raises
     ------
     CaptureError
-        If ``self.raise_on_nan`` is enabled and ``tensor`` contains NaN or Inf.
+        If ``self._options_on_nonfinite`` is enabled and ``tensor`` contains NaN or Inf.
     """
 
-    if not getattr(self, "raise_on_nan", False):
+    if not self._options_on_nonfinite:
         return
     try:
         with pause_logging():
@@ -504,3 +493,22 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
         dtype=dtype,
         parents=parents,
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_activations import (  # noqa: E402
+    _save_activation_fields,
+)
+from ._ops_retention import (  # noqa: E402
+    _admit_saved_args_budget,
+    _append_trace_predicate_context,
+    _apply_retroactive_decision,
+    _build_trace_predicate_context,
+    _commit_saved_args_budget,
+    _retain_lookback_candidate,
+    _save_predicate_activation_fields,
+)
+from .ops import (  # noqa: E402
+    ExhaustiveOpDraft,
+)

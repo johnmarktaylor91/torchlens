@@ -64,6 +64,9 @@ _FLOAT_DTYPES = {torch.float16, torch.bfloat16, torch.float32, torch.float64}
 _WIDEN_DTYPES = {torch.float16, torch.bfloat16}
 _INT_DTYPES = {torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8}
 
+#: Reason token every stats line prints for a quantized tensor.
+QUANTIZED_STATS_REASON = "quantized: stats not computed"
+
 
 @dataclass(frozen=True)
 class MomentAccumulator:
@@ -558,6 +561,10 @@ def run_kernel(tensor: torch.Tensor, *, identity: str | None = None) -> KernelRe
         return _empty_result(0)
     if tensor.layout != torch.strided:
         return _empty_result(tensor.numel(), reason=f"unsupported layout {tensor.layout}")
+    if tensor.is_quantized:
+        # Quantized payloads carry integer storage plus scale/zero-point; the
+        # line says so instead of a generic dtype refusal.
+        return _empty_result(tensor.numel(), reason=QUANTIZED_STATS_REASON)
     work = tensor.detach()
     seed = identity_seed(identity, tuple(work.shape), str(work.dtype))
     try:

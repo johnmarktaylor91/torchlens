@@ -82,7 +82,7 @@ def benchmark_model(name: str, repeats: int) -> dict[str, float]:
     """Measure the four phases + the plain forward for one model."""
 
     import torchlens as tl
-    from torchlens import postprocess as pp_module
+    from torchlens import _postprocess as pp_module
 
     model, example = _model_catalog()[name]()
     with torch.no_grad():

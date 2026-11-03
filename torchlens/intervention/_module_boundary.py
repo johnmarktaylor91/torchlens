@@ -23,9 +23,9 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._ir.intervention import FireResult
 from .._state import pause_logging
 from ..backends.torch._tl import clear_tensor_label, get_tensor_label
-from ..ir.intervention import FireResult
 from .hooks import make_live_site_proxy
 
 
@@ -71,8 +71,8 @@ def _resolve_boundary_predicate(trace: Any) -> tuple[Any, Any] | None:
     predicate_selector = getattr(predicate_intervene, "selector", None)
     if predicate_selector is None:
         return None
-    from ..ir.selector_eval import selector_contains_kind
-    from .selectors import BaseSelector
+    from .._ir.selector_eval import selector_contains_kind
+    from .._selection.selectors import BaseSelector
 
     if not isinstance(predicate_selector, BaseSelector):
         return None
@@ -109,7 +109,7 @@ def _produced_inside_call(out: torch.Tensor, trace: Any, module_call: tuple[str,
     label = get_tensor_label(out)
     if label is None:
         return False
-    from ..ir.live_index import LiveIndexWindowError
+    from .._ir.live_index import LiveIndexWindowError
 
     try:
         event = trace.capture_events.live_index.require_event(label)
@@ -161,8 +161,8 @@ def _fire_boundary_predicate_hooks(
     tuple means the predicate declined this site.
     """
 
-    from ..backends.torch.ops import _record_predicate_intervention_spec
-    from ..capture.predicates import _evaluate_intervene_op
+    from .._capture.predicates import _evaluate_intervene_op
+    from ..backends.torch._ops_interventions import _record_predicate_intervention_spec
     from .hooks import normalize_hook_plan
     from .runtime import (
         _apply_live_hooks,
@@ -182,7 +182,6 @@ def _fire_boundary_predicate_hooks(
     hook_entries = normalize_hook_plan(
         decision.hook,
         default_site_target=predicate_selector,
-        direction=decision.direction,
     )
     # F01 log_injections: anchor this boundary firing's injected ops to the
     # PERSISTED rule id (the public spec threads it through the decision),

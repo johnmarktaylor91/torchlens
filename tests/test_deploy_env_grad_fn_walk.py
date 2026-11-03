@@ -15,7 +15,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens.debug import GradFnWalkError, sketch_grad_fn, walk_grad_fn
+from torchlens.debug import sketch_grad_fn, walk_grad_fn
+from torchlens.errors import GradFnWalkError
 
 
 def test_walk_names_leaves_and_orients_edges_forward() -> None:
@@ -64,7 +65,7 @@ def test_walk_double_backprop_gradient_graph() -> None:
     y = (w @ w).sum()
     (gradient,) = torch.autograd.grad(y, w, create_graph=True)
     sketch = walk_grad_fn(gradient.sum())
-    assert sketch.n_nodes > 3
+    assert sketch.num_nodes > 3
     assert any(node.kind == "leaf" for node in sketch.nodes)
 
 

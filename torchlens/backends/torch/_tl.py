@@ -12,7 +12,7 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state
-from ...utils._torch_compat import get_async_collective_tensor_type
+from ._internal_read import internal_scalar_read
 
 __all__ = [
     "TorchLensMeta",
@@ -162,6 +162,43 @@ class TensorMeta(TorchLensMeta):
     # immediately (``set_same_object_mutation`` / ``pop_same_object_mutation``).
     same_object_mutation: bool | None = None
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> TensorMeta:
+        """Copy this metadata for a deep-copied tensor, minus the source's identity.
+
+        ``Tensor.__deepcopy__`` finishes with ``new.__dict__ =
+        deepcopy(self.__dict__, memo)``, so a tensor copied inside a captured
+        forward would inherit its source's current-session anchor; and because
+        the storage was deep-copied through the same ``memo``, even the
+        ``label_storage`` pin would map onto the copy's own storage. The copy
+        would then read as the source itself: the deepcopy call would look like
+        it returned its input, log no op, and wire every consumer to the source
+        node. The anchor, the pin and the alias/handoff flags describe one
+        object, so the copy starts without them; the inert raw history
+        (``label_raw``, ``address``, ``buffer_source``) is kept, which the
+        session gate already ignores during a capture and which reads as before
+        afterwards.
+
+        Parameters
+        ----------
+        memo:
+            ``copy.deepcopy`` memo table.
+
+        Returns
+        -------
+        TensorMeta
+            Metadata for the copy.
+        """
+
+        copied = dataclass_replace(
+            self,
+            label_session=None,
+            label_storage=None,
+            data_alias=False,
+            same_object_mutation=None,
+        )
+        memo[id(self)] = copied
+        return copied
+
 
 @dataclass
 class ParamMeta(TorchLensMeta):
@@ -179,6 +216,10 @@ class ModuleMeta(TorchLensMeta):
 
     address: str | None = None
     module_type: str | None = None
+    # Set (and kept) once a capture enters the module by a direct
+    # ``module.forward(x)`` call, which no torch hook observes; the fast live
+    # run routes exactly these modules around its hooks (``_fast_run``).
+    direct_forward_called: bool = False
 
 
 @dataclass
@@ -320,10 +361,7 @@ def mark_detached_saved_activation(
     # These `requires_grad`/`grad_fn` reads are TorchLens-internal bookkeeping run for
     # every saved activation (including registered-buffer sources). Mark them as internal
     # scalar reads so the r65 host-escape witness does not record them as host declared-state
-    # facts. Import locally: completeness_witness imports from this module, so a top-level
-    # import here would create a cycle.
-    from .completeness_witness import internal_scalar_read
-
+    # facts.
     with internal_scalar_read():
         source_was_connected = bool(source.requires_grad and source.grad_fn is not None)
         retained_is_disconnected = not retained.requires_grad and retained.grad_fn is None
@@ -1004,34 +1042,6 @@ def _ensure_tensor_meta(t: Any) -> TensorMeta:
     return meta
 
 
-def _async_collective_elem(t: Any) -> Any | None:
-    """Return an AsyncCollectiveTensor's inner ``.elem``, else ``None``.
-
-    Parameters
-    ----------
-    t : Any
-        Candidate tensor-like object.
-
-    Returns
-    -------
-    Any | None
-        The plain inner tensor when ``t`` is a funcol ACT wrapper; ``None``
-        for every other value or on builds without functional collectives.
-
-    Notes
-    -----
-    The ACT class resolves through the compat chokepoint
-    (``get_async_collective_tensor_type``), which stays ``sys.modules``-
-    deferred: this runs on the per-tensor label hot path and never pays the
-    ``torch.distributed`` import on plain captures.
-    """
-
-    act_cls = get_async_collective_tensor_type()
-    if act_cls is not None and isinstance(t, act_cls):
-        return t.elem
-    return None
-
-
 def set_tensor_label(t: Any, label: str) -> None:
     """Set the raw capture label on a tensor.
 
@@ -1080,14 +1090,11 @@ def set_tensor_label(t: Any, label: str) -> None:
     # the same storage, so re-insertion is idempotent) so in-place ops can
     # resolve overlapping live labeled aliases of their target. The
     # ``data_ptr()`` read is TorchLens bookkeeping on an already-pinned
-    # storage handle: it MUST run under ``internal_scalar_read`` (lazy import;
-    # ``completeness_witness`` imports from this module) plus
+    # storage handle: it MUST run under ``internal_scalar_read`` plus
     # ``pause_logging``, or the runnable host-escape patches record it as a
     # user raw-pointer escape and fail-close EVERY runnable capture to
     # UNVERIFIABLE (r15-H1 ``_HOST_ESCAPE_RAW_POINTER``).
     if meta.label_storage is not None:
-        from .completeness_witness import internal_scalar_read
-
         try:
             with _state.pause_logging(), internal_scalar_read():
                 storage_ptr = storage_alias_index_key(meta.label_storage)
@@ -1131,14 +1138,15 @@ def get_tensor_label(t: Any) -> str | None:
     """
     meta = get_tensor_meta(t)
     if meta is None or meta.label_raw is None:
-        # AsyncCollectiveTensor is a transparent async view of its inner
-        # ``.elem`` (merge-ranks C2 recording): the funcol boundary labels the
-        # inner tensor through the ordinary relabel dance, while user code
-        # holds the ACT wrapper. Delegating the read here -- the ONE label
-        # chokepoint -- lets every consumer parent on the boundary without
-        # stamping the wrapper (whose storage pin would not validate). The
-        # ``.elem`` read is a wrapper attribute access and never triggers the
-        # ACT's wait.
+        # AsyncCollectiveTensor is a transparent async view of its inner ``.elem``
+        # (merge-ranks C2 recording): the funcol boundary labels the inner tensor
+        # through the ordinary relabel dance, while user code holds the ACT wrapper.
+        # Delegating the read here -- the ONE label chokepoint -- lets every consumer
+        # parent on the boundary without stamping the wrapper (whose storage pin would
+        # not validate). The ``.elem`` read is a wrapper attribute access and never
+        # triggers the ACT's wait.
+        from ._tl_collective import _async_collective_elem
+
         inner = _async_collective_elem(t)
         if inner is not None:
             return get_tensor_label(inner)

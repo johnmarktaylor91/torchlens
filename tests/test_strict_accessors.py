@@ -6,13 +6,13 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
 from torchlens._errors import AmbiguousOpLookupError
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
 
 
 class StrictAccessorModel(torch.nn.Module):
@@ -72,7 +72,8 @@ def _strict_trace() -> tl.Trace:
     return tl.trace(
         StrictAccessorModel(),
         torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save="all",
     )
 
 
@@ -172,8 +173,6 @@ def _legacy_param_state(address: str) -> dict[str, object]:
         "device": None,
         "used_by_ops": [],
         "used_by_layers": [],
-        "num_uses_by_ops": 0,
-        "num_uses_by_layers": 0,
         "num_calls": 0,
     }
 
@@ -188,12 +187,13 @@ def test_legacy_param_restore_refuses_below_floor() -> None:
     states by the strict-binder suites.
     """
 
-    from torchlens._io import ArtifactVersionBelowFloorError
+    from torchlens._io import ArtifactTooOldError
 
     first = Param.__new__(Param)
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="tlspec_version=6"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x") as excinfo:
         first.__setstate__(_legacy_param_state("left.weight"))
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
 
 
 def test_ambiguous_op_lookup_error_remains_value_error_compatible() -> None:
@@ -225,7 +225,7 @@ def test_grad_fns_accessor_returns_grad_fn_for_pass_label() -> None:
 
     trace = _strict_trace()
     trace[trace.output_layers[0]].out.sum().backward()
-    grad_fn = trace.grad_fns[0]
+    grad_fn = trace.autograd.grad_fns[0]
 
-    assert isinstance(trace.grad_fns[f"{grad_fn.label}:1"], GradFn)
-    assert trace.grad_fns[f"{grad_fn.label}:1"] is grad_fn
+    assert isinstance(trace.autograd.grad_fns[f"{grad_fn.label}:1"], GradFn)
+    assert trace.autograd.grad_fns[f"{grad_fn.label}:1"] is grad_fn

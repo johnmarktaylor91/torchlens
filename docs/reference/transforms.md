@@ -19,8 +19,8 @@ from torchlens import transforms as T
 paths = tl.extract_dataset(
     model, stimuli,
     layers=["layer3", "layer4", "avgpool"],
-    output_dir="run/",
-    transform={
+    path="run/",
+    output_transform={
         "layer3": T.chain(T.flatten(), T.srp(1024, seed=0)),
         "layer4": T.srp(4096, seed=0),
         T.DEFAULT: T.chain(T.flatten(), T.unit_norm(), T.cast("bfloat16")),
@@ -49,7 +49,7 @@ features with the shipped `very_sparse_fixed` construction (v1).
    fixture: 0.43-0.48 at k=256, 0.69-0.73 at k=1024, 0.87 at k=4096.
 3. **The reason is your RDM's dynamic range, not k alone.** The measured
    spread BETWEEN corpora at the same site and k is larger than the spread
-   across k — run `T.srp_fidelity_probe(pilot_batch, n_components=(...))`
+   across k — run `T.srp_fidelity_probe(pilot_batch, candidate_num_components=(...))`
    on one batch of your own stimuli before committing a harvest. The
    probe's report carries its scope fields, so pasted numbers stay honest.
 4. **Pool before you project; normalize AFTER you project.** Pool-first

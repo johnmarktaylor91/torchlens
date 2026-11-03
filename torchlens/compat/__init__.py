@@ -1,4 +1,4 @@
-"""Compatibility adapters and runtime support reports for TorchLens 2.x."""
+"""Compatibility adapters for TorchLens 2.x."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import importlib
 from types import ModuleType
 from typing import Any
 
-from ._report import CompatReport, CompatRow, report
 from .torchextractor import Extractor
 
 _COMPAT_MODULES = {"lovely", "torchshow"}
@@ -291,8 +290,6 @@ def from_sentence_transformers(model: Any, *, prompt: str | None = None) -> dict
 
 
 __all__ = [
-    "CompatReport",
-    "CompatRow",
     "Extractor",
     "from_fx",
     "from_huggingface",
@@ -301,7 +298,6 @@ __all__ = [
     "from_timm",
     "from_torchextractor",
     "lovely",
-    "report",
     "torchshow",
     "torchextractor",
 ]

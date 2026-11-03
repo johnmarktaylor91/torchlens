@@ -14,11 +14,11 @@ def test_train_mode_grad_flows_through_saved_tensor() -> None:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 1))
     x = torch.randn(2, 4, requires_grad=True)
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         model,
         x,
         save=lambda ctx: ctx.func_name == "linear",
-        backward_ready=True,
+        capture=tl.options.CaptureOptions(backward_ready=True),
     )
     saved = next(record.ram_payload for record in recording if record.ram_payload is not None)
 

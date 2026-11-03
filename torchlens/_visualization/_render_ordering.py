@@ -1,0 +1,714 @@
+"""Sibling-ordering resolution and verification for the forward DOT pipeline.
+
+Extracted verbatim from ``_render_dot.py`` (renderer-thinning pass): these
+helpers decide whether sibling ordering is in scope for a render, verify the
+injected rank chains against a plain-layout baseline, and rewrite the DOT
+source with the surviving chains. They consume :class:`RenderIR`-level
+ordering constraints and never touch Trace state.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import tempfile
+import warnings
+from collections import defaultdict
+from contextvars import ContextVar
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, cast
+
+from .._utils.display import user_stacklevel
+from ..errors._base import TorchLensWarning
+from . import _render_utils
+from ._render_common import (
+    _SIBLING_ORDER_WARNING_EMITTED,
+    SIBLING_ORDER_EPSILON,
+    SIBLING_ORDER_NODE_CAP,
+    SIBLING_ORDER_STRETCH_CAP,
+    CapturedForwardEdge,
+    CollapseFn,
+    PlainLayout,
+    SiblingOrderChain,
+    SiblingOrderDecision,
+    strict_collapse_checks_enabled,
+)
+from ._render_flow import (
+    _assert_sibling_backstops,
+    _filter_sibling_chains_to_rendered_nodes,
+    _flow_span,
+    _inject_sibling_rank_groups,
+)
+
+if TYPE_CHECKING:
+    from typing import Any
+
+    from .._data_classes.module import Module
+    from .._literals import VisInterventionModeLiteral
+    from .render_ir import RenderIROrderingConstraint
+
+
+@dataclass
+class SpeculativeRender:
+    """Final-format output produced inside the verifier's ordered layouts.
+
+    The sibling-order verifier lays out the ordered DOT with ``dot -Tplain``
+    and the final render then laid out the SAME source again. With a
+    speculative render the ordered layouts also write the requested format in
+    the same Graphviz process, and the final render reuses the artifact of
+    the source it settles on instead of a fresh layout: one Graphviz layout
+    fewer per default draw. ``last_source`` / ``last_path`` / ``last_stderr``
+    describe the most recent ordered layout.
+
+    Parameters
+    ----------
+    fileformat:
+        Format the final render needs.
+    scratch_dir:
+        Directory for the speculative artifacts (the caller removes it).
+    cwd:
+        Working directory for Graphviz (the visualizer image root), matching
+        the final render's.
+    """
+
+    fileformat: str
+    scratch_dir: str
+    cwd: str | None = None
+    last_source: str | None = None
+    last_path: str | None = None
+    last_stderr: str = ""
+    layouts: int = 0
+
+    def reusable_for(self, source: str) -> str | None:
+        """Return the speculative artifact path when it was laid out from ``source``."""
+
+        if self.last_source == source and self.last_path and os.path.exists(self.last_path):
+            return self.last_path
+        return None
+
+
+#: The speculative render active for the ORDERED layout in progress;
+#: the baseline layout runs without one. A context variable keeps the
+#: ``_layout_dot_plain(source, rankdir, captured_edges)`` seam unchanged.
+_SPECULATIVE_RENDER: ContextVar[SpeculativeRender | None] = ContextVar(
+    "torchlens_speculative_render", default=None
+)
+
+
+#: DOT names of opt-in container clusters (``_container_clusters_for_graphviz``):
+#: ``cluster_container_<root>_<kind>``. Module clusters end in ``_pass<N>`` instead.
+_CONTAINER_CLUSTER_NAME = re.compile(
+    r"cluster_container_(?:final_output_0|call_\d+|path_\w*)_"
+    r"(?:tuple|list|dict|namedtuple|dataclass|hf_model_output|registered|literal|opaque|container)"
+)
+
+
+def _should_order_siblings(
+    *,
+    order_siblings: bool,
+    engine: str,
+    vis_mode: str,
+    num_nodes: int,
+    module: Module | str | None,
+    vis_intervention_mode: VisInterventionModeLiteral,
+    collapse_fn: CollapseFn | None,
+    vis_call_depth: int,
+) -> bool:
+    """Return whether sibling ordering is in scope for this render."""
+
+    return (
+        order_siblings
+        and engine == "dot"
+        and vis_mode == "unrolled"
+        and num_nodes <= SIBLING_ORDER_NODE_CAP
+        and module is None
+        and vis_intervention_mode == "node_mark"
+        and vis_call_depth >= 1000
+    )
+
+
+def _queue_sibling_rank_group(
+    module_edge_dict: dict[str, Any],
+    top_level_rank_groups: list[SiblingOrderChain],
+    chain: SiblingOrderChain,
+) -> None:
+    """Queue a sibling rank group in the cluster dictionary."""
+
+    if chain.lca_key == -1:
+        top_level_rank_groups.append(chain)
+    else:
+        module_edge_dict[cast(str, chain.lca_key)]["rank_groups"].append(chain)
+
+
+def _verify_and_apply_sibling_ordering(
+    source: str,
+    chains: tuple[SiblingOrderChain | RenderIROrderingConstraint, ...],
+    captured_edges: list[CapturedForwardEdge],
+    rankdir: str,
+    speculative: SpeculativeRender | None = None,
+) -> tuple[str, SiblingOrderDecision]:
+    """Verify sibling rank chains and return final DOT source.
+
+    ``speculative`` makes every ORDERED layout also write the final
+    format, so the caller can reuse the artifact of the source returned here.
+    """
+
+    baseline_source = _strip_sibling_rank_groups(source)
+    baseline = _layout_dot_plain(baseline_source, rankdir, captured_edges)
+    candidates = cast(tuple[SiblingOrderChain, ...], chains)
+    node_clusters = _dot_node_clusters(baseline_source)
+    chains = _fit_sibling_chains_to_clusters(
+        _filter_sibling_chains_to_rendered_nodes(candidates, baseline.nodes), node_clusters
+    )
+    if chains != candidates:
+        # ``source`` still holds dropped or moved groups; rebuild from the baseline.
+        source = _inject_sibling_rank_groups(baseline_source, chains)
+    if not chains or not _sibling_groups_fit(source, node_clusters):
+        return baseline_source, _sibling_order_decision((), (), {})
+    injected = _layout_ordered_dot_plain(source, rankdir, captured_edges, baseline, speculative)
+    _assert_sibling_backstops(baseline, injected, chains, captured_edges)
+
+    ratios = {
+        _sibling_chain_key(chain): _sibling_chain_stretch_ratio(
+            chain, captured_edges, baseline, injected
+        )
+        for chain in chains
+    }
+    survivors = chains
+    current_source, current_layout = source, injected
+    # One stretch filter on the injected layout, then up to two retries.
+    for _ in range(3):
+        bad_chains = tuple(
+            chain
+            for chain in survivors
+            if _sibling_chain_stretch_ratio(chain, captured_edges, baseline, current_layout)
+            > SIBLING_ORDER_STRETCH_CAP
+        )
+        if not bad_chains:
+            break
+        survivors = tuple(chain for chain in survivors if chain not in bad_chains)
+        current_source = _inject_sibling_rank_groups(baseline_source, survivors)
+        if not _sibling_groups_fit(current_source, node_clusters):
+            return baseline_source, _sibling_order_decision(chains, (), ratios)
+        current_layout = _layout_ordered_dot_plain(
+            current_source, rankdir, captured_edges, baseline, speculative
+        )
+    return current_source, _sibling_order_decision(chains, survivors, ratios)
+
+
+# r-b7 R42-9: one shared TORCHLENS_COLLAPSE_STRICT parser (_render_common).
+_strict_sibling_order_checks_enabled = strict_collapse_checks_enabled
+
+
+def _warn_sibling_order_fallback_once(exc: BaseException) -> None:
+    """Warn once when sibling-order verification is skipped in production.
+
+    Parameters
+    ----------
+    exc:
+        Verification failure that triggered the fallback.
+    """
+
+    global _SIBLING_ORDER_WARNING_EMITTED
+    if _SIBLING_ORDER_WARNING_EMITTED:
+        return
+    _SIBLING_ORDER_WARNING_EMITTED = True
+    warnings.warn(
+        TorchLensWarning(
+            "Sibling-order verification failed; rendering the plain layout without the "
+            f"optional sibling-order post-pass. ({type(exc).__name__}: {exc}) "
+            "Remedy: pass order_siblings=False to skip the pass, or report the Graphviz "
+            "version and model if the plain layout looks wrong",
+            code="sibling_order_fallback",
+        ),
+        stacklevel=user_stacklevel(),
+    )
+
+
+# Line shapes of the DOT that python-graphviz emits: one statement per line.
+_DOT_GRAPH_OPEN = re.compile(r"^\s*(?:strict\s+)?(?:di)?graph\b[^\[]*\{\s*$")
+_DOT_SUBGRAPH_OPEN = re.compile(r'^\s*subgraph\s+("(?:[^"\\]|\\.)*"|[^\s{]+)\s*\{\s*$')
+_DOT_ANONYMOUS_OPEN = re.compile(r"^\s*(?:subgraph\s*)?\{\s*$")
+_DOT_CLOSE = re.compile(r"^\s*\}\s*$")
+_DOT_ID = re.compile(r'"(?:[^"\\]|\\.)*"|[^\s\[\];{}=]+')
+_DOT_KEYWORDS = frozenset({"graph", "node", "edge"})
+
+
+def _layout_ordered_dot_plain(
+    source: str,
+    rankdir: str,
+    captured_edges: list[CapturedForwardEdge],
+    baseline: PlainLayout,
+    speculative: SpeculativeRender | None = None,
+) -> PlainLayout:
+    """Lay out an ordered DOT source, raising when dot returns no layout for it.
+
+    An empty layout has no edge spans, so the stretch check would pass it as
+    harmless; raising routes it to the plain-layout fallback instead.
+    """
+
+    token = _SPECULATIVE_RENDER.set(speculative)
+    try:
+        layout = _layout_dot_plain(source, rankdir, captured_edges)
+    finally:
+        _SPECULATIVE_RENDER.reset(token)
+    if baseline.nodes and not layout.nodes:
+        raise subprocess.SubprocessError("dot -Tplain produced no layout for the ordered graph")
+    return layout
+
+
+def _fit_sibling_chains_to_clusters(
+    chains: tuple[SiblingOrderChain, ...],
+    node_clusters: dict[str, tuple[str, ...] | None] | None,
+) -> tuple[SiblingOrderChain, ...]:
+    """Place each sibling chain's rank group in a cluster that holds all its targets.
+
+    dot does not support a top-level ``rank=same`` set over nodes that live in
+    a cluster: dot 2.43 may pull the node out of its cluster ("already in a
+    rankset, deleted from cluster") and dot 16 fails with "trouble in
+    init_rank" or crashes. A set emitted inside a cluster may span that
+    cluster's nested clusters. So a chain keeps its group when the group's
+    cluster (``lca_key``) encloses every target, moves into the deepest
+    cluster shared by all targets otherwise, and is dropped when its targets
+    share no cluster yet some are clustered. Unparseable DOT, unknown targets
+    and nodes named from two unrelated clusters drop chains (invariant 11).
+
+    Parameters
+    ----------
+    chains:
+        Candidate sibling chains.
+    node_clusters:
+        :func:`_dot_node_clusters` of the baseline DOT, ``None`` when unreadable.
+
+    Returns
+    -------
+    tuple[SiblingOrderChain, ...]
+        Chains safe to emit, in input order, some with a moved ``lca_key``.
+    """
+
+    if node_clusters is None:
+        return ()
+    placed = (_place_sibling_chain(chain, node_clusters) for chain in chains)
+    return tuple(chain for chain in placed if chain is not None)
+
+
+def _place_sibling_chain(
+    chain: SiblingOrderChain,
+    node_clusters: dict[str, tuple[str, ...] | None],
+) -> SiblingOrderChain | None:
+    """Return ``chain`` placed in a cluster holding every target, or ``None``."""
+
+    paths = [node_clusters.get(target) for target in chain.targets]
+    if any(path is None for path in paths):
+        return None
+    member_paths = cast(list[tuple[str, ...]], paths)
+    shared = _shared_cluster_prefix(member_paths)
+    if not shared:
+        return chain if chain.lca_key == -1 and not any(member_paths) else None
+    if _CONTAINER_CLUSTER_NAME.fullmatch(shared[-1]) and (
+        chain.lca_key == -1 or _cluster_name(cast(str, chain.lca_key)) != shared[-1]
+    ):
+        # A rank set processed before a nested cluster takes its members out of
+        # that cluster (dot 2.43 node_induce), which emptied the container box.
+        # Inside the container cluster the set orders the same nodes and the box stays.
+        return replace(chain, lca_key=shared[-1].removeprefix("cluster_"))
+    if chain.lca_key != -1 and _cluster_name(cast(str, chain.lca_key)) in shared:
+        return chain
+    module_key = shared[-1].removeprefix("cluster_")
+    if ":" in module_key or _cluster_name(module_key) != shared[-1]:
+        return None
+    # ``_inject_sibling_rank_groups`` maps this key back to the same cluster name.
+    return replace(chain, lca_key=module_key)
+
+
+def _shared_cluster_prefix(paths: list[tuple[str, ...]]) -> tuple[str, ...]:
+    """Return the outermost-first cluster names common to every path."""
+
+    shared = paths[0]
+    for path in paths[1:]:
+        length = 0
+        while length < min(len(shared), len(path)) and shared[length] == path[length]:
+            length += 1
+        shared = shared[:length]
+    return shared
+
+
+def _cluster_name(module_key: str) -> str:
+    """Return the DOT cluster name TorchLens emits for a rendered module key."""
+
+    return f"cluster_{module_key.replace(':', '_pass')}"
+
+
+def _dot_node_clusters(source: str) -> dict[str, tuple[str, ...] | None] | None:
+    """Map each DOT node to the nested cluster names that contain it, outermost first.
+
+    A node belongs to every subgraph that names it, so its clusters are the
+    deepest cluster path among its references. Top-level nodes map to ``()``;
+    nodes named from two unrelated clusters map to ``None``. Returns ``None``
+    when the DOT is outside the one-statement-per-line shape this parser reads.
+    """
+
+    paths = _dot_node_cluster_paths(source)
+    if paths is None:
+        return None
+    node_clusters: dict[str, tuple[str, ...] | None] = {}
+    for name, node_paths in paths.items():
+        deepest = max(node_paths, key=len)
+        nested = all(path == deepest[: len(path)] for path in node_paths)
+        node_clusters[name] = deepest if nested else None
+    return node_clusters
+
+
+def _sibling_groups_fit(
+    source: str, node_clusters: dict[str, tuple[str, ...] | None] | None
+) -> bool:
+    """Return whether every sibling-order group in ``source`` sits in a cluster holding its nodes.
+
+    Checks the DOT actually about to be laid out, so a group that string
+    insertion placed elsewhere than :func:`_place_sibling_chain` intended
+    disables the pass instead of reaching dot.
+    """
+
+    statements = _dot_scoped_statements(source)
+    if statements is None or node_clusters is None:
+        return False
+    group_path: tuple[str, ...] | None = None
+    for cluster_path, line in statements:
+        if "tl:sibling-order:start" in line:
+            group_path = cluster_path
+        elif "tl:sibling-order:end" in line:
+            group_path = None
+        elif group_path is not None and not all(
+            _group_holds_node(group_path, node_clusters.get(name))
+            for name in _dot_statement_node_refs(line)
+        ):
+            return False
+    return True
+
+
+def _group_holds_node(group_path: tuple[str, ...], clusters: tuple[str, ...] | None) -> bool:
+    """Return whether a group at ``group_path`` may hold a node in ``clusters``."""
+
+    if clusters is None or clusters[: len(group_path)] != group_path:
+        return False
+    return bool(group_path) or not clusters
+
+
+def _dot_node_cluster_paths(source: str) -> dict[str, set[tuple[str, ...]]] | None:
+    """Return the cluster paths at which each node is referenced in ``source``."""
+
+    statements = _dot_scoped_statements(source)
+    if statements is None:
+        return None
+    paths: dict[str, set[tuple[str, ...]]] = defaultdict(set)
+    for cluster_path, line in statements:
+        for node_name in _dot_statement_node_refs(line):
+            paths[node_name].add(cluster_path)
+    return dict(paths)
+
+
+def _dot_scoped_statements(source: str) -> list[tuple[tuple[str, ...], str]] | None:
+    """Return each statement line of ``source`` with its enclosing cluster names.
+
+    Returns ``None`` when the braces do not balance or a quoted string or HTML
+    label spans lines.
+    """
+
+    stack: list[str | None] = []
+    statements: list[tuple[tuple[str, ...], str]] = []
+    for line in source.splitlines():
+        if not _dot_line_is_complete(line):
+            return None
+        opened = _dot_opened_scope(line)
+        if opened is not None:
+            stack.append(opened[0])
+        elif _DOT_CLOSE.match(line):
+            if not stack:
+                return None
+            stack.pop()
+        elif stack:
+            statements.append((tuple(name for name in stack if name is not None), line))
+    return None if stack else statements
+
+
+def _dot_opened_scope(line: str) -> tuple[str | None] | None:
+    """Return ``(cluster name,)`` when ``line`` opens a scope (``(None,)`` if not a cluster)."""
+
+    subgraph_match = _DOT_SUBGRAPH_OPEN.match(line)
+    if subgraph_match is not None:
+        name = _unquote_dot_id(subgraph_match.group(1))
+        return (name if name.startswith("cluster") else None,)
+    if _DOT_GRAPH_OPEN.match(line) or _DOT_ANONYMOUS_OPEN.match(line):
+        return (None,)
+    return None
+
+
+#: The only characters ``_dot_line_is_complete`` acts on: the scan
+#: jumps between them instead of stepping through every character of the
+#: long HTML-label lines, the top Python self-time row of a default draw.
+_DOT_LINE_SPECIAL = re.compile(r'["\\<>]')
+
+
+def _dot_line_is_complete(line: str) -> bool:
+    """Return whether ``line`` closes every quoted string and HTML label it opens.
+
+    A multi-line label could hide ``{`` or ``}`` lines from the brace tracking,
+    so such DOT is refused rather than misread. Inside an HTML label ``"`` is
+    plain text; outside, the ``>`` of an ``->`` edge operator opens nothing.
+
+    Only ``"``, backslash, ``<`` and ``>`` change the scan state, so the loop
+    visits those positions alone.
+    """
+
+    in_quote = False
+    html_depth = 0
+    escape_at = -2
+    for match in _DOT_LINE_SPECIAL.finditer(line):
+        index = match.start()
+        char = line[index]
+        if in_quote:
+            in_quote, escape_at = _quoted_scan_step(char, index, escape_at)
+        elif html_depth:
+            html_depth += _HTML_DEPTH_STEP.get(char, 0)
+        elif char == '"':
+            in_quote, escape_at = True, -2
+        elif char == "<":
+            html_depth = 1
+        elif char == ">" and line[index - 1 : index] != "-":
+            return False
+    return not in_quote and html_depth == 0
+
+
+#: HTML-label depth change per state character.
+_HTML_DEPTH_STEP = {"<": 1, ">": -1}
+
+
+def _quoted_scan_step(char: str, index: int, escape_at: int) -> tuple[bool, int]:
+    """Advance the in-quote scan by one state character.
+
+    Parameters
+    ----------
+    char:
+        State character at ``index`` (``"``, backslash, ``<`` or ``>``).
+    index:
+        Its position in the line.
+    escape_at:
+        Position of the last escaping backslash (``-2`` for none).
+
+    Returns
+    -------
+    tuple[bool, int]
+        Whether the scan is still inside the quoted string, and the new
+        escaping-backslash position. A backslash escapes only the character
+        directly after it.
+    """
+
+    escaped = escape_at == index - 1
+    if char == "\\":
+        return True, (-2 if escaped else index)
+    if char == '"' and not escaped:
+        return False, -2
+    return True, -2
+
+
+def _dot_statement_node_refs(line: str) -> tuple[str, ...]:
+    """Return the node names a node or edge statement line references."""
+
+    text = line.strip()
+    first = _DOT_ID.match(text)
+    if first is None or text.startswith("//"):
+        return ()
+    rest = text[first.end() :].lstrip()
+    if rest.startswith("=") or (first.group(0) in _DOT_KEYWORDS and rest.startswith("[")):
+        return ()
+    if not rest.startswith("->"):
+        return (_unquote_dot_id(first.group(0)),) if not rest or rest.startswith("[") else ()
+    second = _DOT_ID.match(rest[2:].lstrip())
+    if second is None:
+        return ()
+    return _unquote_dot_id(first.group(0)), _unquote_dot_id(second.group(0))
+
+
+def _unquote_dot_id(token: str) -> str:
+    """Return a DOT identifier without its quotes and escapes."""
+
+    if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
+        return token[1:-1].replace('\\"', '"')
+    return token
+
+
+def _sibling_chain_key(chain: SiblingOrderChain) -> tuple[str, tuple[str, ...]]:
+    """Return a stable key for decision reporting."""
+
+    return chain.source_name, chain.targets
+
+
+def _sibling_order_decision(
+    chains: tuple[SiblingOrderChain, ...],
+    survivors: tuple[SiblingOrderChain, ...],
+    ratios: dict[tuple[str, tuple[str, ...]], float],
+) -> SiblingOrderDecision:
+    """Build a sibling-order decision record."""
+
+    return SiblingOrderDecision(
+        candidate_count=len(chains),
+        survivor_count=len(survivors),
+        ratios=ratios,
+        surviving_keys=tuple(_sibling_chain_key(chain) for chain in survivors),
+    )
+
+
+def _layout_dot_plain(
+    source: str,
+    rankdir: str,
+    captured_edges: list[CapturedForwardEdge],
+) -> PlainLayout:
+    """Run ``dot -Tplain`` and parse coordinates and real-edge spans.
+
+    Inside an ordered layout with an active :class:`SpeculativeRender`
+    (``_SPECULATIVE_RENDER``), the same Graphviz process also writes the final
+    format from this one layout (``-Tplain -o<plain> -T<fmt> -o<artifact>``).
+    """
+
+    speculative = _SPECULATIVE_RENDER.get()
+    real_edges = {(edge.tail_name, edge.head_name) for edge in captured_edges}
+    with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as source_file:
+        source_file.write(source)
+        source_path = source_file.name
+    try:
+        if speculative is None:
+            proc = _render_utils.run_bounded_subprocess(
+                ["dot", "-Tplain", source_path],
+                text=True,
+                timeout=120,
+            )
+            plain_text = proc.stdout
+        else:
+            plain_text = _layout_with_speculative_output(source, source_path, speculative)
+    finally:
+        os.remove(source_path)
+
+    nodes: dict[str, tuple[float, float]] = {}
+    pending_edges: list[tuple[str, str]] = []
+    for line in plain_text.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == "node" and len(parts) >= 4:
+            nodes[parts[1]] = (float(parts[2]), float(parts[3]))
+        elif parts[0] == "edge" and len(parts) >= 4:
+            edge_key = (parts[1], parts[2])
+            if edge_key in real_edges:
+                pending_edges.append(edge_key)
+
+    edge_spans: dict[tuple[str, str], float] = {}
+    for edge_key in pending_edges:
+        if edge_key[0] in nodes and edge_key[1] in nodes:
+            edge_spans[edge_key] = _flow_span(nodes[edge_key[0]], nodes[edge_key[1]], rankdir)
+    return PlainLayout(nodes=nodes, edge_spans=edge_spans)
+
+
+def _layout_with_speculative_output(
+    source: str, source_path: str, speculative: SpeculativeRender
+) -> str:
+    """Lay out once, writing ``-Tplain`` and the final format; return the plain text.
+
+    Parameters
+    ----------
+    source:
+        DOT text being laid out (recorded as the artifact's source).
+    source_path:
+        File holding ``source``.
+    speculative:
+        Speculative-render state updated with this layout's artifact.
+
+    Returns
+    -------
+    str
+        The ``-Tplain`` layout text.
+    """
+
+    speculative.layouts += 1
+    stem = os.path.join(speculative.scratch_dir, f"ordered{speculative.layouts}")
+    plain_path = f"{stem}.plain"
+    artifact_path = f"{stem}.{speculative.fileformat}"
+    speculative.last_source = None
+    proc = _render_utils.run_bounded_subprocess(
+        [
+            "dot",
+            "-Tplain",
+            f"-o{plain_path}",
+            f"-T{speculative.fileformat}",
+            f"-o{artifact_path}",
+            os.path.abspath(source_path),
+        ],
+        text=True,
+        timeout=120,
+        cwd=speculative.cwd,
+    )
+    with open(plain_path, encoding="utf-8") as plain_file:
+        plain_text = plain_file.read()
+    speculative.last_source = source
+    speculative.last_path = artifact_path
+    speculative.last_stderr = proc.stderr or ""
+    return plain_text
+
+
+def _sibling_chain_stretch_ratio(
+    chain: SiblingOrderChain,
+    captured_edges: list[CapturedForwardEdge],
+    baseline: PlainLayout,
+    candidate: PlainLayout,
+) -> float:
+    """Return the local incident-edge stretch ratio for ``chain``."""
+
+    local_nodes = {chain.source_name, *chain.targets}
+    ratios: list[float] = []
+    for edge in captured_edges:
+        edge_key = (edge.tail_name, edge.head_name)
+        if edge.tail_name not in local_nodes and edge.head_name not in local_nodes:
+            continue
+        if edge_key not in baseline.edge_spans or edge_key not in candidate.edge_spans:
+            continue
+        ratios.append(
+            candidate.edge_spans[edge_key]
+            / max(SIBLING_ORDER_EPSILON, baseline.edge_spans[edge_key])
+        )
+    return max(ratios, default=1.0)
+
+
+def _strip_sibling_rank_groups(source: str) -> str:
+    """Remove TorchLens sibling-order rank-group blocks from DOT source."""
+
+    lines = source.splitlines()
+    stripped: list[str] = []
+    skipping = False
+    for line in lines:
+        if "tl:sibling-order:start" in line:
+            skipping = True
+            continue
+        if "tl:sibling-order:end" in line:
+            skipping = False
+            continue
+        if not skipping:
+            stripped.append(line)
+    return "\n".join(stripped) + "\n"
+
+
+__all__ = [
+    "SpeculativeRender",
+    "_dot_node_clusters",
+    "_fit_sibling_chains_to_clusters",
+    "_sibling_groups_fit",
+    "_layout_dot_plain",
+    "_queue_sibling_rank_group",
+    "_should_order_siblings",
+    "_sibling_chain_key",
+    "_sibling_chain_stretch_ratio",
+    "_sibling_order_decision",
+    "_strict_sibling_order_checks_enabled",
+    "_strip_sibling_rank_groups",
+    "_verify_and_apply_sibling_ordering",
+    "_warn_sibling_order_fallback_once",
+]

@@ -2,9 +2,9 @@
 
 Internal surface:
 
-* :class:`SuperOp` -- per-node view returned by ``Bundle.node(...)``.
+* :class:`SuperOp` -- per-site view returned by ``Bundle.at(site)``.
 * :class:`SuperLayer` -- per-layer-label view returned by ``Bundle.layers[...]``.
-* :class:`TraceAccessor` -- dict-like accessor for ``Bundle.traces``.
+* :class:`TraceAccessor` -- dict-like accessor over member traces.
 * :class:`SuperModule`, :class:`SuperBuffer`, :class:`SuperParam`,
   :class:`SuperGradFn`, :class:`SuperModuleCall`, and
   :class:`SuperGradFnCall` -- aligned views for the remaining Trace log

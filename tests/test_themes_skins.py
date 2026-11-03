@@ -1,8 +1,8 @@
 """F12 pins: live skin palettes (N4), ramps, the N17 neutral fill, and the
 CVD accessibility gates.
 
-FORK-2 discipline: the machinery is LIVE but every shipped skin keeps
-pixel-identical palettes (the render-identity golden pins them); the
+Every shipped skin, the default included, renders the legacy role colours
+(JMT's 29 Oct ruling: the default look is main's released look); the
 Okabe-Ito set ships as data with its accessibility evidence attached, and
 the legacy set's deuteranopia failure is pinned here as the fork's
 evidence.
@@ -17,10 +17,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses.audit import palette_distinguishability
-from torchlens.visualization.node_spec import NodeSpec
-from torchlens.visualization.themes import (
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses.audit import palette_distinguishability
+from torchlens._visualization.node_spec import NodeSpec
+from torchlens._visualization.themes import (
     LEGACY_SEMANTIC_PALETTE,
     OKABE_ITO_SEMANTIC_PALETTE,
     THEME_PRESETS,
@@ -52,7 +52,7 @@ def test_semantic_palette_default_is_the_shared_read_only_legacy_proxy() -> None
     import dataclasses
     from types import MappingProxyType
 
-    from torchlens.visualization.themes import VisualizationTheme
+    from torchlens._visualization.themes import VisualizationTheme
 
     theme = VisualizationTheme(
         name="probe",
@@ -94,22 +94,34 @@ def test_neutral_fill_collides_with_no_semantic_meaning() -> None:
 
 
 def test_default_skin_palette_is_pixel_identical() -> None:
-    """FORK-2 pending: the default skin translates every constant to itself."""
+    """The default skin translates every legacy constant to itself: no blue weights."""
 
     theme = resolve_theme("torchlens")
-    for constant in ("#98FB98", "#ff9999", "#D9D9D9", "#F7D460"):
+    assert theme.semantic_palette is LEGACY_SEMANTIC_PALETTE
+    for constant in ("#98FB98", "#ff9999", "#D9D9D9", "#B0B0B0", "#E6E6E6", "#F7D460", "#E69F00"):
         spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor=constant), theme)
         assert spec.fillcolor == constant
 
 
+def test_light_skins_keep_their_historical_palettes() -> None:
+    """The default, paper, colorblind and high_contrast skins all keep history."""
+
+    for name in ("torchlens", "paper", "colorblind", "high_contrast"):
+        theme = resolve_theme(name)
+        spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#98FB98"), theme)
+        assert spec.fillcolor == "#98FB98", name
+
+
 def test_dark_skin_param_remap_is_byte_identical_to_history() -> None:
-    """The historical dark param remap now rides the palette, unchanged."""
+    """The dark param remap rides the palette; frozen weights are the lighter gray."""
 
     dark = resolve_theme("dark")
     flat = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#D9D9D9"), dark)
     assert flat.fillcolor == "#374151"
+    frozen = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#B0B0B0"), dark)
+    assert frozen.fillcolor == "#6B7280"
     gradient = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#D9D9D9:#B0B0B0"), dark)
-    assert gradient.fillcolor == "#374151:#4B5563"
+    assert gradient.fillcolor == "#374151:#6B7280"
     passthrough = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#98FB98"), dark)
     assert passthrough.fillcolor == "#98FB98"
 
@@ -182,14 +194,12 @@ def test_neutral_collapsed_fill_under_active_channel(tmp_path: Any) -> None:
         # else in the same picture.
         graph = log.draw(
             **resolution.draw_kwargs,
-            vis_outpath=str(tmp_path / "neutral"),
-            vis_fileformat="svg",
-            vis_save_only=True,
-            return_graph=True,
-        )
+            path=str(tmp_path / "neutral"),
+            file_format="svg",
+        ).dot
         node_lines = [
             line
-            for line in graph.source.splitlines()
+            for line in graph.splitlines()
             if "tl_legend_" not in line and "tl_encoding_legend_" not in line
         ]
         assert not any('fillcolor="#D9D9D9"' in line for line in node_lines)
@@ -204,6 +214,6 @@ def test_skins_compose_with_lenses(skin: str, tmp_path: Any) -> None:
     log = tl.trace(nn.Linear(4, 4), torch.randn(1, 4))
     try:
         resolution = lenses.resolve_lens(log, "overview", skin=skin)
-        assert resolution.draw_kwargs["vis_theme"] == skin
+        assert resolution.draw_kwargs["theme"] == skin
     finally:
         log.cleanup()

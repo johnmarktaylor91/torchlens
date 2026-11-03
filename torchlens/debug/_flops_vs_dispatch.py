@@ -27,11 +27,12 @@ from typing import Any
 
 import torch
 
+from .._debug_report import Report
 from ..errors import CaptureError
 
 
 @dataclass(frozen=True)
-class FlopsCrossCheck:
+class FlopsCrossCheck(Report):
     """Side-by-side dispatch-formula evidence (never an oracle).
 
     ``native_total`` and ``torchlens_total`` are both fma=2 analytic
@@ -50,6 +51,38 @@ class FlopsCrossCheck:
     witness: dict[str, Any] = field(default_factory=dict)
     provenance: dict[str, Any] = field(default_factory=dict)
     coverage_notes: tuple[str, ...] = ()
+
+    def __repr__(self) -> str:
+        """One bounded line: the two totals, the delta and the verdict."""
+
+        return (
+            f"FlopsCrossCheck(native_total={self.native_total}, "
+            f"torchlens_total={self.torchlens_total}, delta={self.delta}, "
+            f"status={self._report_status()})"
+        )
+
+    def _report_subject(self) -> str:
+        """What this report examined (the card's subject)."""
+
+        return f"torch {self.torch_version}, {self.convention}"
+
+    def _report_status(self) -> str:
+        """The verdict token on the card's lead line."""
+
+        if self.delta is None:
+            return "incomparable"
+        return "agree" if self.delta == 0 else "disagree"
+
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
+        findings = [
+            f"torchlens_total={self.torchlens_total}, native_total={self.native_total}, "
+            f"delta={self.delta}"
+        ]
+        findings.extend(f"unknown op: {label}" for label in self.torchlens_unknown_ops)
+        findings.extend(self.coverage_notes)
+        return findings
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-able report."""
@@ -110,8 +143,8 @@ def flops_vs_dispatch(
         which changes the EXECUTED PROGRAM: formula validation only, never
         a timing comparison). ``None`` means default selection.
     **trace_kwargs:
-        Extra ``tl.trace`` kwargs for the TorchLens side (``save=`` defaults
-        to the metadata tier).
+        Extra ``tl.trace`` kwargs for the TorchLens side. ``save=`` defaults
+        to ``"all"`` so the output comparison witness has its captured tensor.
 
     Returns
     -------
@@ -129,14 +162,14 @@ def flops_vs_dispatch(
 
     from torch.utils.flop_counter import FlopCounterMode
 
-    from .. import user_funcs
+    from .. import _user_funcs as user_funcs
     from ..report._compute_truth import compute_aggregation
 
     rng_state = torch.get_rng_state()
     training_flags = {name: module.training for name, module in model.named_modules()}
 
-    trace_kwargs.setdefault("save", None)
-    trace = user_funcs.trace(model, input_args, input_kwargs, **trace_kwargs)
+    trace_kwargs.setdefault("save", "all")
+    trace = user_funcs.trace(model, input_args, input_kwargs=input_kwargs, **trace_kwargs)
     try:
         aggregation = compute_aggregation(trace)
         torchlens_total = int(aggregation.partition_total)

@@ -15,8 +15,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from torchlens.ir.events import OpEvent
-from torchlens.ir.op_record import OpRecord
+from torchlens._ir.events import OpEvent
+from torchlens._ir.op_record import OpRecord
+from torchlens._record_type import record_type
 
 
 def op_event_from_record(record: Any, *, grad_fn_handle: Any = None) -> OpEvent:
@@ -44,7 +45,7 @@ def op_event_from_record(record: Any, *, grad_fn_handle: Any = None) -> OpEvent:
         kind=record.kind,
         label_raw=record.label_raw,
         layer_label_raw=record.layer_label_raw,
-        layer_type=record.layer_type,
+        layer_type=record_type(record),
         raw_index=record.raw_index,
         type_index=record.type_index,
         step_index=record.step_index,
@@ -86,7 +87,7 @@ def op_event_from_record(record: Any, *, grad_fn_handle: Any = None) -> OpEvent:
         is_scalar_bool=record.is_scalar_bool,
         bool_value=record.bool_value,
         intervention_fired=record.intervention_fired,
-        intervention_replaced=record.intervention_replaced,
+        is_edited=record.is_edited,
         fire_results=tuple(record.fire_results),
         intervention_template_ref=None,
         record_context=record.record_context,

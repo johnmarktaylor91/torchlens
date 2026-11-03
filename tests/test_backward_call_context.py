@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.func_call_location import FuncCallLocation
 
 
 class _ContextModel(nn.Module):
@@ -50,9 +50,7 @@ def _trace_and_loss() -> tuple[tl.Trace, torch.Tensor]:
     torch.manual_seed(0)
     model = _ContextModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     return trace, trace[trace.output_layers[0]].out
 
 
@@ -63,7 +61,7 @@ def test_backward_call_context_points_to_user_log_backward_call() -> None:
     try:
         expected_line = inspect.currentframe().f_lineno + 1
         trace.log_backward(loss)
-        backward_pass = trace.last_backward_pass
+        backward_pass = trace.autograd.last_backward_pass
 
         assert backward_pass is not None
         location = backward_pass.backward_call_context
@@ -84,10 +82,10 @@ def test_backward_call_context_survives_tlspec_round_trip(tmp_path: Path) -> Non
     try:
         expected_line = inspect.currentframe().f_lineno + 1
         trace.log_backward(loss)
-        tl.save(trace, bundle_path, overwrite=True)
+        trace.save(bundle_path, overwrite=True)
         loaded = tl.load(bundle_path)
 
-        backward_pass = loaded.last_backward_pass
+        backward_pass = loaded.autograd.last_backward_pass
         assert backward_pass is not None
         location = backward_pass.backward_call_context
         assert isinstance(location, FuncCallLocation)

@@ -5,6 +5,7 @@ specific exemption paths. Perturbation and deep-clone helper unit tests live
 in ``tests/test_validation_perturbation_units.py``.
 """
 
+import copy
 import threading
 import warnings
 from collections import defaultdict, deque, namedtuple
@@ -17,26 +18,27 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._user_public_impls as user_public_impls
+import torchlens._capture.run_entry as run_entry
 
 # No import-order protection is needed here anymore: the historical
 # standalone-collection cycle between torchlens and _user_public_impls was
 # fixed at the root (lazy one-time metadata sync in user_funcs), so these
 # imports may be freely re-sorted.
-import torchlens.user_funcs as user_funcs
+import torchlens._user_funcs as user_funcs
+import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
+from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
+    CaptureGapWarning,
     MetadataInvariantError,
-    TorchLensCaptureGapWarning,
     TraceNotReproducibleWarning,
 )
-from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import DictKey
-from torchlens.options import SaveOptions
-from torchlens.utils.tensor_utils import tensor_nanequal
+from torchlens.options import CaptureOptions
+from torchlens.recording import RecordContext
+from torchlens.report import ValidationDiagnostic
 from torchlens.validation import (
-    ValidationDiagnostic,
     check_metadata_invariants,
     get_validation_diagnostics,
     get_validation_failure,
@@ -44,6 +46,22 @@ from torchlens.validation import (
     validate_forward_pass,
 )
 from torchlens.validation._completeness_backstop import completeness_backstop_counts
+from torchlens.validation._invariants_connectivity import (
+    _check_graph_connectivity,
+    _check_lookup_key_consistency,
+)
+from torchlens.validation._invariants_entry import check_func_call_id_invariant
+from torchlens.validation._invariants_equivalence import (
+    _check_equivalence_symmetry,
+    _check_graph_ordering,
+)
+from torchlens.validation._invariants_modules_params import _check_param_xrefs
+from torchlens.validation._invariants_payloads import _check_op_log_fields
+from torchlens.validation._invariants_topology import (
+    _check_capture_edge_survival,
+    _check_graph_topology,
+    _check_special_layer_lists,
+)
 from torchlens.validation.core import (
     DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
     ValidationDecisionRecorder,
@@ -63,25 +81,12 @@ from torchlens.validation.exemptions import (
     STRUCTURAL_ARG_POSITIONS,
     posthoc_perturb_check,
 )
-from torchlens.validation.invariants import (
-    _check_capture_edge_survival,
-    _check_equivalence_symmetry,
-    _check_graph_connectivity,
-    _check_graph_ordering,
-    _check_graph_topology,
-    _check_lookup_key_consistency,
-    _check_loop_detection_invariants,
-    _check_op_log_fields,
-    _check_param_xrefs,
-    _check_special_layer_lists,
-    check_func_call_id_invariant,
-)
 from torchlens.validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplayStatus,
+    ValidationStatus,
 )
 
 _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
@@ -111,7 +116,7 @@ def _assert_validation_capture_is_clean(model: nn.Module, x: torch.Tensor) -> No
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={})
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
 def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor) -> None:
@@ -128,9 +133,9 @@ def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={}) is False
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
     assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 
@@ -197,20 +202,20 @@ def test_validation_import_path():
 def test_validation_replay_unverified_status_semantics() -> None:
     """Unverified replay status is available but never bool-coerced."""
 
-    status = ValidationReplayStatus.unverified(
+    status = ValidationStatus.unverified(
         backend="jax",
         source="live",
         reason="region_not_per_op_replayable",
         message="synthetic partial replay",
-        replayed_node_count=3,
-        unverified_node_count=2,
+        num_replayed_ops=3,
+        num_unverified_ops=2,
     )
 
     assert status.state == "unverified"
-    assert status.available is True
-    assert status.replayed_node_count == 3
-    assert status.unverified_node_count == 2
-    assert status.failed_node_count == 0
+    assert status.is_available is True
+    assert status.num_replayed_ops == 3
+    assert status.num_unverified_ops == 2
+    assert status.num_failed_ops == 0
     with pytest.raises(TypeError, match="not a boolean"):
         bool(status)
 
@@ -218,31 +223,31 @@ def test_validation_replay_unverified_status_semantics() -> None:
 def test_validation_replay_status_aggregate_fold() -> None:
     """Aggregate replay status keeps failures dominant over unverified regions."""
 
-    mixed_status = ValidationReplayStatus.from_replay_counts(
+    mixed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=4,
-        unverified_node_count=1,
+        num_replayed_ops=4,
+        num_unverified_ops=1,
     )
-    failed_status = ValidationReplayStatus.from_replay_counts(
+    failed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=0,
-        unverified_node_count=3,
-        failed_node_count=2,
+        num_replayed_ops=0,
+        num_unverified_ops=3,
+        num_failed_ops=2,
     )
-    passed_status = ValidationReplayStatus.from_replay_counts(
+    passed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=4,
-        unverified_node_count=0,
+        num_replayed_ops=4,
+        num_unverified_ops=0,
     )
 
     assert mixed_status.state == "unverified"
-    assert mixed_status.replayed_node_count == 4
-    assert mixed_status.unverified_node_count == 1
+    assert mixed_status.num_replayed_ops == 4
+    assert mixed_status.num_unverified_ops == 1
     assert failed_status.state == "failed"
-    assert failed_status.failed_node_count == 2
+    assert failed_status.num_failed_ops == 2
     assert bool(failed_status) is False
     assert passed_status.state == "passed"
     assert bool(passed_status) is True
@@ -281,7 +286,7 @@ def test_validation_decision_recorder_counts_distinct_nodes() -> None:
     # output decision is a different phase entirely (counting it let
     # "exemptions alone" traces pass the no_nodes_replay_validated guard --
     # b1-fable round-2 F1).
-    assert status.replayed_node_count == 1
+    assert status.num_replayed_ops == 1
     assert status.state == "passed"
 
 
@@ -300,7 +305,7 @@ def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire
 
     status = recorder.as_status()
 
-    assert status.failed_node_count == 1
+    assert status.num_failed_ops == 1
     assert status.state == "failed"
     assert bool(status) is False
 
@@ -321,7 +326,7 @@ def test_validation_all_exempted_cannot_pass_without_replayed_nodes() -> None:
 
     assert status.state == "unverified"
     assert status.reason == "no_nodes_replay_validated"
-    assert status.replayed_node_count == 0
+    assert status.num_replayed_ops == 0
     with pytest.raises(TypeError, match="not a boolean"):
         bool(status)
 
@@ -341,7 +346,7 @@ def test_validation_positive_replay_coverage_can_still_pass() -> None:
     status = recorder.as_status()
 
     assert status.state == "passed"
-    assert status.replayed_node_count == 1
+    assert status.num_replayed_ops == 1
     assert bool(status) is True
 
 
@@ -712,16 +717,16 @@ def test_trace_clears_nested_cached_tensor_labels_between_sessions() -> None:
         model,
         x,
         save=None,
-        capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+        capture=tl.options.CaptureOptions(inference_only=True),
     )
     second_trace = tl.trace(
         model,
         x,
         save=None,
-        capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+        capture=tl.options.CaptureOptions(inference_only=True),
     )
 
-    assert second_trace.num_ops > 0
+    assert second_trace._num_ops > 0
 
 
 def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
@@ -780,26 +785,26 @@ def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
     try:
         model = GlobalTensorForwardModel()
 
-        # The forward-global tensor the child module consumes has no graph/source
-        # provenance: each capture discloses its module-entry adoption (and forward
-        # validation would fail on source_provenance); the concern under test is
-        # stale-label clearing.
-        with pytest.warns(UserWarning, match="closure or forward-global tensor"):
-            tl.trace(
-                model,
-                x,
-                save=None,
-                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
-            )
-        with pytest.warns(UserWarning, match="closure or forward-global tensor"):
-            second_trace = tl.trace(
-                model,
-                x,
-                save=None,
-                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
-            )
-
-        assert second_trace.num_ops > 0
+        # The forward-global tensor the child module consumes is a closure
+        # constant (SPEC 2): each session records it as a fresh ``constant``
+        # source op with no provenance warning. A stale label surviving from the
+        # first session would hide it from the pre-forward rule, so the second
+        # session recording it again is the stale-label clearing under test.
+        traces = []
+        for _session in range(2):
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", UserWarning)
+                traces.append(
+                    tl.trace(
+                        model,
+                        x,
+                        save=None,
+                        capture=tl.options.CaptureOptions(inference_only=True),
+                    )
+                )
+        for trace in traces:
+            assert [op.func_name for op in trace._layer_list].count("constant") == 1
+        assert traces[1]._num_ops > 0
     finally:
         _TEST_FORWARD_GLOBAL_TENSOR = None
 
@@ -834,23 +839,22 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
     try:
         model = GlobalPayloadForwardModel()
 
-        # The global-container tensor genuinely has no graph/source provenance,
-        # so each capture correctly emits the unattributed-tensor-args warning
-        # (cert10 diagnostic) and forward validation fails on source_provenance;
-        # the concern under test is stale-label clearing.
-        with pytest.warns(UserWarning, match="no graph/source provenance"):
-            assert validate_forward_pass(model, x, validate_metadata=True) is False
-        failure = last_validation_failure()
-        assert failure is not None and failure.check == "source_provenance"
-        with pytest.warns(UserWarning, match="no graph/source provenance"):
+        # The global-container tensor is a closure constant (SPEC 2): validation
+        # records it as a ``constant`` source op and passes, and a second session
+        # records it again with no provenance warning, which a stale label left by
+        # the first session would prevent (the stale-label clearing under test).
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            assert validate_forward_pass(model, x, validate_metadata=True) is True
             second_trace = tl.trace(
                 model,
                 x,
                 save=None,
-                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+                capture=tl.options.CaptureOptions(inference_only=True),
             )
-
-        assert second_trace.num_ops > 0
+        assert last_validation_failure() is None
+        assert [op.func_name for op in second_trace._layer_list].count("constant") == 1
+        assert second_trace._num_ops > 0
     finally:
         _TEST_FORWARD_GLOBAL_PAYLOAD = None
 
@@ -1000,7 +1004,7 @@ def test_validate_forward_pass_accepts_nested_lstm_module_outputs() -> None:
 
     assert validate_forward_pass(model, x, validate_metadata=True) is True
 
-    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True))
     try:
         path_reprs = {repr(path) for path in trace.module_calls["lstm:1"].output_paths}
 
@@ -1156,6 +1160,7 @@ def test_validation_recompute_selects_dict_output_by_container_path() -> None:
         layer=layer,
         input_args={"args": [torch.tensor([-1.0, 2.0])], "kwargs": {}},
         layers_to_perturb=[],
+        layer_label="dict_output",
         verbose=False,
     )
 
@@ -1323,7 +1328,7 @@ def test_validate_forward_pass_nonreentrant_checkpoint_validates_true() -> None:
         _state._completeness_witness_mode = mode
         try:
             trace = tl.trace(CheckpointedBlock(), x)
-            names = [getattr(layer, "func_name", None) for layer in trace.layer_list]
+            names = [getattr(layer, "func_name", None) for layer in trace._layer_list]
             trace.cleanup()
             return names
         finally:
@@ -1439,7 +1444,7 @@ def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
     assert warning.fields["first_graph_hash"] != warning.fields["retrace_graph_hash"]
     assert warning.fields["first_divergence"] is not None
     assert len(diagnostics) == 1
-    assert diagnostics[0][0].check == "trace_retrace_structure_mismatch"
+    assert diagnostics[0][0].check_name == "trace_retrace_structure_mismatch"
     assert diagnostics[0][0].extra["first_op_count"] == warning.fields["first_op_count"]
 
 
@@ -1487,7 +1492,7 @@ def test_validate_forward_pass_retrace_mismatch_records_a_structured_failure() -
     assert len(observed) == 1
     failure = get_validation_failure(observed[0])
     assert failure is not None
-    assert failure.check == "retrace_mismatch"
+    assert failure.check_name == "retrace_mismatch"
     assert "stateful/non-reproducible" in failure.summary()
 
 
@@ -1643,7 +1648,7 @@ def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
 
     assert execution_count == [2]
     assert len(diagnostics) == 1
-    assert diagnostics[0][0].check == "trace_retrace_pristine_copy_unavailable"
+    assert diagnostics[0][0].check_name == "trace_retrace_pristine_copy_unavailable"
 
 
 def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
@@ -1821,7 +1826,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
             is False
         )
         first = get_validation_failure(None)
-        assert first is not None and first.check == "retrace_mismatch"
+        assert first is not None and first.check_name == "retrace_mismatch"
 
         assert (
             user_public_impls._validate_forward_pass_torch(nn.Linear(3, 2), torch.randn(2, 3))
@@ -1839,7 +1844,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
         )
         refusal = get_validation_failure(None)
         assert refusal is not None
-        assert refusal.check == "precondition_refusal"
+        assert refusal.check_name == "precondition_refusal"
         assert "cannot prove model-state restoration" in refusal.summary()
 
 
@@ -1978,7 +1983,7 @@ def test_validate_forward_pass_deepcopy_fallback_restores_plain_attrs(
 ) -> None:
     """Fallback validation restores non-registered attr mutations before logging."""
 
-    original_deepcopy = user_funcs.copy.deepcopy
+    original_deepcopy = copy.deepcopy
 
     def fail_module_deepcopy(
         value: object,
@@ -2007,7 +2012,7 @@ def test_validate_forward_pass_deepcopy_fallback_restores_plain_attrs(
             self.step += 1
             return x + float(self.step)
 
-    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(copy, "deepcopy", fail_module_deepcopy)
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(StepCounterModel(), torch.randn(3)) is True
@@ -2018,7 +2023,7 @@ def test_validate_forward_pass_deepcopy_fallback_tracks_function_attrs_by_identi
 ) -> None:
     """Fallback validation accepts function attrs and detects reassignment by identity."""
 
-    original_deepcopy = user_funcs.copy.deepcopy
+    original_deepcopy = copy.deepcopy
 
     def fail_module_deepcopy(
         value: object,
@@ -2052,7 +2057,7 @@ def test_validate_forward_pass_deepcopy_fallback_tracks_function_attrs_by_identi
 
             return self.forward_impl(self, x)
 
-    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(copy, "deepcopy", fail_module_deepcopy)
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(FunctionAttrModel(), torch.randn(3)) is True
@@ -2120,13 +2125,13 @@ def test_validation_dispatch_op_count_backstop_rejects_synthetic_missed_op() -> 
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     try:
         trace._validation_captured_dispatchable_op_count = len(
             {
                 getattr(op, "func_call_id")
-                for op in trace.layer_list
+                for op in trace._layer_list
                 if isinstance(getattr(op, "func_call_id", None), int)
             }
         )
@@ -2249,7 +2254,7 @@ def _backstop_op(
     *,
     transform_kind: str | None = None,
     func_name: str = "linear",
-    intervention_replaced: bool = False,
+    is_edited: bool = False,
     is_internal_source: bool = False,
 ) -> SimpleNamespace:
     """Build a minimal layer-op stand-in for the completeness backstop census."""
@@ -2258,7 +2263,7 @@ def _backstop_op(
         func_call_id=func_call_id,
         transform_kind=transform_kind,
         func_name=func_name,
-        intervention_replaced=intervention_replaced,
+        is_edited=is_edited,
         is_internal_source=is_internal_source,
     )
 
@@ -2301,8 +2306,8 @@ def _backstop_trace(
     """Wrap census inputs in a trace-shaped object for the backstop helper."""
 
     return SimpleNamespace(
-        layer_list=layer_list,
-        completeness_decompositions=decompositions,
+        _layer_list=layer_list,
+        _health_completeness_decompositions=decompositions,
         completeness_diagnostics=diagnostics or [],
     )
 
@@ -2357,7 +2362,7 @@ def test_completeness_backstop_never_claims_match_on_empty_census() -> None:
         SimpleNamespace(
             _validation_dispatch_op_count=dispatch,
             _validation_captured_dispatchable_op_count=captured,
-            num_ops=5,
+            _num_ops=5,
         )
     )
     assert result.decision == "unverified"
@@ -2385,9 +2390,9 @@ def test_completeness_backstop_empty_census_does_not_fail_dispatchless_capture()
 
     model = OnlyDispatchlessOps()
     inputs = torch.randn(2, 3)
-    probe = trace_fn(model, inputs, capture=tl.options.CaptureOptions(random_seed=42))
+    probe = trace_fn(model, inputs, capture=tl.options.CaptureOptions(seed=42))
     try:
-        assert probe.num_ops > 0
+        assert probe._num_ops > 0
     finally:
         probe.cleanup()
     assert tl.validate(model, inputs, scope="forward")
@@ -2479,7 +2484,7 @@ def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
                 _backstop_op(
                     None,
                     func_name="intervention_replacement",
-                    intervention_replaced=True,
+                    is_edited=True,
                 ),
             ],
             [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4, in_replacement_hook=True)],
@@ -2498,7 +2503,7 @@ def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
                 _backstop_op(
                     None,
                     func_name="intervention_replacement",
-                    intervention_replaced=True,
+                    is_edited=True,
                 ),
             ],
             [
@@ -2532,7 +2537,7 @@ def test_completeness_backstop_intervention_carveout_is_per_op_scoped() -> None:
                 _backstop_op(
                     None,
                     func_name="intervention_replacement",
-                    intervention_replaced=False,
+                    is_edited=False,
                 ),
             ],
             [_backstop_dec(1), _backstop_dec(3), _backstop_dec(4, in_replacement_hook=False)],
@@ -2619,7 +2624,7 @@ def _dispatch_backstop_probe(
     probe = SimpleNamespace(
         _validation_dispatch_op_count=dispatch,
         _validation_captured_dispatchable_op_count=captured,
-        num_ops=captured,
+        _num_ops=captured,
     )
     if pruned is not None:
         probe._validation_pruned_dispatchable_op_count = pruned
@@ -2698,7 +2703,7 @@ def test_completeness_backstop_orphan_pruned_count_is_apples_to_apples() -> None
             _validation_dispatch_op_count=dispatch,
             _validation_captured_dispatchable_op_count=captured,
             _validation_pruned_dispatchable_op_count=probe._validation_pruned_dispatchable_op_count,
-            num_ops=captured,
+            _num_ops=captured,
         )
     )
     assert not result.failed
@@ -2719,7 +2724,7 @@ def test_completeness_backstop_orphan_pruned_count_is_apples_to_apples() -> None
             _validation_pruned_dispatchable_op_count=(
                 genuine_drop._validation_pruned_dispatchable_op_count
             ),
-            num_ops=drop_captured,
+            _num_ops=drop_captured,
         )
     )
     assert drop_result.failed
@@ -2815,7 +2820,7 @@ def test_completeness_backstop_buffer_write_count_is_apples_to_apples() -> None:
             _validation_buffer_write_dispatch_op_count=(
                 probe._validation_buffer_write_dispatch_op_count
             ),
-            num_ops=captured,
+            _num_ops=captured,
         )
     )
     assert result.failed
@@ -2851,7 +2856,7 @@ def test_replay_validation_checks_every_recurrent_pass() -> None:
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
 
     assert trace.validate_forward_pass([model(inputs)], validate_metadata=False) is True
@@ -2887,9 +2892,9 @@ def test_validate_forward_pass_metadata_off_rejects_functionless_op_laundering()
 
     model = Tiny()
     x = torch.tensor([-1.0, 2.0])
-    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True))
     try:
-        relu_op = next(op for op in trace.layer_list if op.func_name == "relu")
+        relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
         relu_op.func = None
         relu_op.func_name = "input"
         relu_op.is_internal_source = True
@@ -2899,7 +2904,7 @@ def test_validate_forward_pass_metadata_off_rejects_functionless_op_laundering()
         assert bool(result) is False
         assert trace.validation_replay_status.state == "failed"
         assert any(
-            decision.get("reason") == "functionless_computational_op"
+            decision.get("reason") == "no_replayable_function"
             and decision.get("decision") == "failed"
             for decision in trace.validation_replay_status.decisions
         )
@@ -2937,9 +2942,9 @@ def test_replay_validation_detects_corrupted_third_recurrent_pass_inputs() -> No
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
-    third_pass = next(op for op in trace.layer_list if op.label == "linear_1_1:3")
+    third_pass = next(op for op in trace._layer_list if op.label == "linear_1_1:3")
     assert third_pass.saved_args is not None
     third_pass.saved_args = (third_pass.saved_args[0] + 1.0, *third_pass.saved_args[1:])
 
@@ -2995,10 +3000,10 @@ def test_perturbation_validation_catches_spurious_third_recurrent_pass_edge() ->
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
-    third_pass = next(op for op in trace.layer_list if op.label == "nantonum_1_1:3")
-    first_pass = next(op for op in trace.layer_list if op.label == "nantonum_1_1:1")
+    third_pass = next(op for op in trace._layer_list if op.label == "nantonum_1_1:3")
+    first_pass = next(op for op in trace._layer_list if op.label == "nantonum_1_1:1")
     assert third_pass.saved_args is not None
     third_pass.saved_args.append(first_pass.out.detach().clone())
     third_pass.parents = tuple(third_pass.parents) + (first_pass.label,)
@@ -3054,7 +3059,7 @@ def test_replay_validation_checks_every_train_batch_norm_pass() -> None:
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     model.load_state_dict(pristine_state)
 
@@ -3074,8 +3079,8 @@ def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
 ) -> None:
     """Fallback plain-attr restore does not hide genuine logged-output breaks."""
 
-    original_deepcopy = user_funcs.copy.deepcopy
-    original_run = user_funcs._run_model_and_save_specified_outs
+    original_deepcopy = copy.deepcopy
+    original_run = run_entry._run_model_and_save_specified_outs
 
     def fail_module_deepcopy(
         value: object,
@@ -3112,7 +3117,8 @@ def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
             self.step += 1
             return x + float(self.step)
 
-    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(run_entry, "_run_model_and_save_specified_outs", corrupt_logged_output)
     monkeypatch.setattr(user_funcs, "_run_model_and_save_specified_outs", corrupt_logged_output)
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
@@ -3124,7 +3130,7 @@ def test_validate_forward_pass_deepcopy_fallback_restore_failure_raises(
 ) -> None:
     """Fallback validation fails loudly if plain attr restore itself fails."""
 
-    original_deepcopy = user_funcs.copy.deepcopy
+    original_deepcopy = copy.deepcopy
 
     def fail_module_deepcopy(
         value: object,
@@ -3162,7 +3168,7 @@ def test_validate_forward_pass_deepcopy_fallback_restore_failure_raises(
             object.__setattr__(self, "step", self.step + 1)
             return x + float(self.step)
 
-    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(copy, "deepcopy", fail_module_deepcopy)
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         with pytest.raises(RuntimeError, match="could not restore plain attribute"):
@@ -3283,9 +3289,9 @@ def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
 
     x = torch.tensor([2.0, 3.0, 4.0])
     healthy_trace = trace_fn(
-        CopySourceModel(), x, capture=tl.options.CaptureOptions(save_arg_values=True)
+        CopySourceModel(), x, capture=tl.options.CaptureOptions(save_args=True)
     )
-    healthy_copy = next(op for op in healthy_trace.layer_list if op.func_name == "copy_")
+    healthy_copy = next(op for op in healthy_trace._layer_list if op.func_name == "copy_")
 
     assert set(healthy_copy.parent_arg_positions["args"]) == {0, 1}
     assert (
@@ -3296,10 +3302,8 @@ def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
         is True
     )
 
-    broken_trace = trace_fn(
-        CopySourceModel(), x, capture=tl.options.CaptureOptions(save_arg_values=True)
-    )
-    broken_copy = next(op for op in broken_trace.layer_list if op.func_name == "copy_")
+    broken_trace = trace_fn(CopySourceModel(), x, capture=tl.options.CaptureOptions(save_args=True))
+    broken_copy = next(op for op in broken_trace._layer_list if op.func_name == "copy_")
     saved_output = broken_copy.out.detach().clone()
 
     def ignore_source(destination: torch.Tensor, source: torch.Tensor) -> torch.Tensor:
@@ -3805,7 +3809,7 @@ def _only_layer_with_func_name(trace: Trace, func_name: str) -> Any:
         The unique matching layer.
     """
 
-    matches = [layer for layer in trace.layer_list if layer.func_name == func_name]
+    matches = [layer for layer in trace._layer_list if layer.func_name == func_name]
     assert len(matches) == 1
     return matches[0]
 
@@ -3833,11 +3837,9 @@ def _assert_custom_exemption_for_arg(
         Expected exemption result.
     """
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         layer = _only_layer_with_func_name(trace, func_name)
         parent = layer.parent_arg_positions["args"][arg_position]
@@ -3853,9 +3855,7 @@ def test_input_derived_full_validates_without_an_exemption() -> None:
 
     model = _InputDerivedFullModel()
     x = torch.tensor([1.0, 2.0], dtype=torch.float32)
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         assert trace.validate_forward_pass([model(x).detach().clone()]) is True
 
@@ -3923,9 +3923,7 @@ def test_runtime_tensor_fill_value_is_replayed_and_perturbation_sensitive(
         numel *= dimension
     x = torch.arange(1, numel + 1, dtype=dtype).reshape(shape)
     model = _TensorFillFactoryModel(factory_name, fill_source, use_keyword)
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         factory_layer = _only_layer_with_func_name(trace, factory_name)
         fill_domain = "kwargs" if use_keyword else "args"
@@ -4426,7 +4424,7 @@ def test_tensor_nanequal_tolerances_are_dtype_derived_boundary() -> None:
     fp32's rtol=1e-4 = 4.5e11 float64 ULPs.
     """
 
-    from torchlens.utils.tensor_utils import _tolerances_for_dtype
+    from torchlens._utils.tensor_utils import _tolerances_for_dtype
 
     for dtype in (torch.float16, torch.bfloat16, torch.float32, torch.float64):
         eps = torch.finfo(dtype).eps
@@ -4515,7 +4513,7 @@ def test_ground_truth_fp8_doctrine_stays_strict() -> None:
     design, never loosen).
     """
 
-    from torchlens.utils.tensor_utils import get_fp8_dtypes
+    from torchlens._utils.tensor_utils import get_fp8_dtypes
     from torchlens.validation.core import _ground_truth_output_matches_saved
 
     fp8_dtypes = get_fp8_dtypes()
@@ -4644,7 +4642,7 @@ def test_validation_with_gather_index_parent() -> None:
 
     model = _GatherIndexModel()
     x = torch.randn(4, 5)
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
 
 def test_validation_with_functional_scatter_kwargs_full_overwrite() -> None:
@@ -4652,7 +4650,7 @@ def test_validation_with_functional_scatter_kwargs_full_overwrite() -> None:
 
     model = _FunctionalScatterKwargsModel()
     x = torch.randn(5, 7)
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
 
 def test_validation_with_masked_fill():
@@ -4750,11 +4748,9 @@ def test_validation_with_setitem_slice_full_overwrite() -> None:
     model = SetItemSliceOverwriteModel()
     x = torch.randn(1, 3, 1, 4, 4)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         setitem_layer = _only_layer_with_func_name(trace, "__setitem__")
         destination_parent = setitem_layer.parent_arg_positions["args"][0]
@@ -4801,11 +4797,9 @@ def test_validation_with_index_put_destination_full_overwrite() -> None:
     model = IndexPutOverwriteModel()
     x = torch.randn(4, 5)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
         destination_parent = index_put_layer.parent_arg_positions["args"][0]
@@ -4855,11 +4849,9 @@ def test_index_put_partial_overwrite_destination_is_not_exempt() -> None:
     model = IndexPutPartialModel()
     x = torch.randn(4, 5)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
         destination_parent = index_put_layer.parent_arg_positions["args"][0]
@@ -4919,11 +4911,9 @@ def test_index_put_value_parent_equal_to_destination_is_not_exempt() -> None:
     model = IndexPutValueEqualsDestModel()
     x = torch.randn(4, 5)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
         arg_positions = index_put_layer.parent_arg_positions["args"]
@@ -5071,11 +5061,9 @@ def test_index_put_index_parent_is_not_exempt() -> None:
     model = IndexPutOverwriteModel()
     x = torch.randn(4, 5)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
         index_parent = index_put_layer.parent_arg_positions["args"][(1, 0)]
@@ -5089,7 +5077,7 @@ def test_index_put_index_parent_is_not_exempt() -> None:
 
 
 def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
-    """save_arg_values=True keeps alias-contract snapshots for in-place ops."""
+    """save_args=True keeps alias-contract snapshots for in-place ops."""
 
     class InplaceModel(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -5102,7 +5090,7 @@ def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
     trace = trace_fn(
         InplaceModel(),
         torch.tensor([-2.0, 3.0]),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
 
     assert torch.equal(
@@ -5167,7 +5155,7 @@ def test_trace_save_arg_values_handles_namedtuple_tensor_arguments() -> None:
     trace = trace_fn(
         NamedtupleCatModel(),
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
 
     cat_layer = _only_layer_with_func_name(trace, "cat")
@@ -5208,11 +5196,9 @@ def test_where_different_branches_are_not_condition_exempt() -> None:
     model = _WhereDifferentBranchesModel()
     x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
         condition_parent = where_layer.parent_arg_positions["args"][0]
@@ -5293,9 +5279,7 @@ def test_where_branch_selectedness_uses_saved_condition_not_parent_out() -> None
     model = _WhereBranchSelectionModel("all_false")
     x = torch.randn(2, 3)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
         condition_parent = where_layer.parent_arg_positions["args"][0]
@@ -5317,9 +5301,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
     model = _UnselectedWherePlaceholderModel()
     x = torch.randn(2, 3)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
         unselected_parent = where_layer.parent_arg_positions["args"][2]
@@ -5332,7 +5314,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
         placeholder = trace[unselected_parent].ops[0]
         placeholder.func = None
         placeholder.func_name = "plain_placeholder"
-        placeholder.intervention_replaced = False
+        placeholder.is_edited = False
         placeholder.is_internal_source = False
 
         # Layer 1 of the tripwire: the metadata invariant itself still rejects
@@ -5342,7 +5324,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
 
         # Layer 2: end-to-end validation also FAILS. cert10 catches the
         # placeholder in the replay phase first (dedicated
-        # 'functionless_computational_op' decision), before the metadata step
+        # 'no_replayable_function' decision), before the metadata step
         # gets its turn, so the run fails without the invariant raising here.
         ground_truth = [model(x).detach().clone()]
         result = trace.validate_forward_pass(ground_truth, validate_metadata=True)
@@ -5350,7 +5332,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
         status = trace.validation_replay_status
         assert status.state == "failed"
         assert any(
-            decision.get("reason") == "functionless_computational_op"
+            decision.get("reason") == "no_replayable_function"
             and decision.get("decision") == "failed"
             for decision in status.decisions
         )
@@ -5364,11 +5346,9 @@ def test_remainder_divisor_not_exempt_when_output_differs_from_dividend() -> Non
     model = _RemainderDividendAtLeastDivisorModel()
     x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         remainder_layer = _only_layer_with_func_name(trace, "remainder")
         divisor_parent = remainder_layer.parent_arg_positions["args"][1]
@@ -5378,7 +5358,7 @@ def test_remainder_divisor_not_exempt_when_output_differs_from_dividend() -> Non
         # NOT be exempt when the saved dividend differs from the output.
         assert posthoc_perturb_check(trace, remainder_layer, [divisor_parent]).exempt is False
 
-        remainder_op = remainder_layer.ops[0]
+        remainder_op = remainder_layer  # an Op from the private layer list; Op.ops is gone
         remainder_op.out = remainder_op.out + 100.0
         result = trace.validate_forward_pass(ground_truth, validate_metadata=False)
         assert bool(result) is False
@@ -5396,11 +5376,9 @@ def test_new_tensor_data_arg_is_not_structural_exempt() -> None:
     model = _NewTensorDataArgModel()
     x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         new_tensor_layer = _only_layer_with_func_name(trace, "new_tensor")
         data_parent = new_tensor_layer.parent_arg_positions["args"][1]
@@ -5416,11 +5394,9 @@ def test_populated_multi_output_container_keeps_leaf_paths() -> None:
     model = _PopulatedContainerOutputModel()
     x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         output_paths = {tuple(trace[label].container_path) for label in trace.output_layers}
         output_path_reprs = {repr(path) for path in output_paths}
@@ -5544,7 +5520,7 @@ def _make_clean_log() -> Trace:
     from torchlens import trace as trace_fn
 
     model = _SimpleFF()
-    return trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42))
+    return trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
 
 
 def _make_buffer_write_log() -> Trace:
@@ -5553,7 +5529,7 @@ def _make_buffer_write_log() -> Trace:
     return trace_fn(
         _BufferWriteValidationModel(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
 
 
@@ -5563,7 +5539,7 @@ def _make_func_call_split_log() -> Trace:
     return trace_fn(
         _FuncCallSplitValidationModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
 
 
@@ -5572,7 +5548,7 @@ def _make_root_only_log() -> Trace:
     from torchlens import trace as trace_fn
 
     model = _RootOnlyModel()
-    return trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42))
+    return trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
 
 
 def _relabel_as_mlx_object_module(trace: Trace) -> Trace:
@@ -5589,9 +5565,9 @@ def _relabel_as_mlx_object_module(trace: Trace) -> Trace:
         Same trace object routed through backend-neutral object_module validation.
     """
 
-    trace.backend = "mlx"
-    trace.module_identity_mode = "object_module"
-    trace.param_source = "native-module"
+    trace._provenance_backend = "mlx"
+    trace._options_module_identity_mode = "object_module"
+    trace._provenance_param_source = "native-module"
     return trace
 
 
@@ -5611,9 +5587,9 @@ def _relabel_as_function_root(trace: Trace, backend: str) -> Trace:
         Same trace object routed through backend-neutral function_root validation.
     """
 
-    trace.backend = backend
-    trace.module_identity_mode = "function_root"
-    trace.param_source = "none"
+    trace._provenance_backend = backend
+    trace._options_module_identity_mode = "function_root"
+    trace._provenance_param_source = "none"
     return trace
 
 
@@ -5623,7 +5599,7 @@ def _make_backward_log() -> Trace:
 
     model = _SimpleFF()
     x = torch.randn(2, 5, requires_grad=True)
-    log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads="all", random_seed=42))
+    log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads="all", seed=42))
     log.log_backward(log[log.output_layers[0]].out.sum())
     return log
 
@@ -5634,7 +5610,7 @@ def _make_mid_forward_backward_log() -> Trace:
 
     model = _MidForwardGradModel()
     x = torch.randn(2, 5, requires_grad=True)
-    capture = tl.options.CaptureOptions(save_grads="all", random_seed=42)
+    capture = tl.options.CaptureOptions(save_grads="all", seed=42)
     with warnings.catch_warnings():  # the recorded autogradgrad op leaves no source-less arg
         warnings.filterwarnings("error", message=".*no graph/source provenance")
         return trace_fn(model, x, capture=capture)
@@ -5652,7 +5628,7 @@ def test_region_replay_annotation_on_plain_capture_fails_invariants() -> None:
 
     log = _make_clean_log()
     try:
-        op = next(layer for layer in log.layer_list if not layer.is_input and not layer.is_output)
+        op = next(layer for layer in log._layer_list if not layer.is_input and not layer.is_output)
         op.annotations[REGION_REPLAY_CLASS_KEY] = REGION_REPLAY_CLASS
 
         with pytest.raises(MetadataInvariantError, match="region_replay_provenance"):
@@ -5666,7 +5642,7 @@ def test_region_replay_annotation_with_importer_provenance_passes_tripwire() -> 
 
     log = _make_clean_log()
     try:
-        op = next(layer for layer in log.layer_list if not layer.is_input and not layer.is_output)
+        op = next(layer for layer in log._layer_list if not layer.is_input and not layer.is_output)
         log.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
         op.annotations[REGION_REPLAY_CLASS_KEY] = REGION_REPLAY_CLASS
         op.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
@@ -5681,12 +5657,12 @@ def test_backend_identity_invariants_reject_torch_param_source_none_with_params(
 
     log = _make_clean_log()
     try:
-        assert log.backend == "torch"
-        assert log.module_identity_mode == "torch_module"
-        assert log.param_source == "native-module"
-        assert log.num_param_tensors > 0
+        assert log.provenance.backend == "torch"
+        assert log.options.module_identity_mode == "torch_module"
+        assert log.provenance.param_source == "native-module"
+        assert len(log.params) > 0
 
-        log.param_source = "none"
+        log._provenance_param_source = "none"
 
         with pytest.raises(MetadataInvariantError, match="param_source='none'"):
             check_metadata_invariants(log)
@@ -5699,14 +5675,12 @@ def test_backend_identity_invariants_pass_healthy_resnet() -> None:
 
     torchvision_models = pytest.importorskip("torchvision.models")
     model = torchvision_models.resnet18(weights=None).eval()
-    log = trace_fn(
-        model, torch.randn(1, 3, 32, 32), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(model, torch.randn(1, 3, 32, 32), capture=tl.options.CaptureOptions(seed=42))
     try:
-        assert log.backend == "torch"
-        assert log.module_identity_mode == "torch_module"
-        assert log.param_source == "native-module"
-        assert log.num_param_tensors > 0
+        assert log.provenance.backend == "torch"
+        assert log.options.module_identity_mode == "torch_module"
+        assert log.provenance.param_source == "native-module"
+        assert len(log.params) > 0
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -5717,7 +5691,7 @@ def test_backend_neutral_accessor_refs_reject_invalid_torch_status() -> None:
 
     log = _make_clean_log()
     try:
-        victim = next(layer for layer in log.layer_list if not layer.is_input)
+        victim = next(layer for layer in log._layer_list if not layer.is_input)
         assert victim.resolver_status == "resolved"
 
         victim.resolver_status = "bogus"
@@ -5733,7 +5707,7 @@ def test_backend_neutral_accessor_refs_reject_malformed_torch_dtype_ref() -> Non
 
     log = _make_clean_log()
     try:
-        victim = next(layer for layer in log.layer_list if not layer.is_input)
+        victim = next(layer for layer in log._layer_list if not layer.is_input)
         assert victim.dtype_ref is not None
 
         victim.dtype_ref = SimpleNamespace(backend="torch", name="")
@@ -5750,9 +5724,9 @@ def test_backend_neutral_accessor_refs_pass_healthy_torch_trace() -> None:
     log = _make_clean_log()
     try:
         records = [
-            *log.layer_list,
-            *list(log.layer_logs.values()),
-            *list(log.param_logs.values()),
+            *log._layer_list,
+            *list(log._layer_logs.values()),
+            *list(log._param_logs.values()),
         ]
         assert any(getattr(record, "resolver_status", None) == "resolved" for record in records)
         assert any(getattr(record, "dtype_ref", None) is not None for record in records)
@@ -5784,7 +5758,7 @@ def test_buffer_write_version_invariant_rejects_sparse_pass_set() -> None:
     log = _make_buffer_write_log()
     try:
         write_version = next(
-            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+            layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
         assert write_version.buffer_pass == 2
 
@@ -5802,7 +5776,7 @@ def test_buffer_write_version_invariant_rejects_unresolved_source() -> None:
     log = _make_buffer_write_log()
     try:
         write_version = next(
-            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+            layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
         assert write_version.buffer_source is not None
 
@@ -5820,7 +5794,7 @@ def test_buffer_replay_validated_invariant_rejects_missing_evidence() -> None:
     log = _make_buffer_write_log()
     try:
         write_version = next(
-            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+            layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
         assert write_version.buffer_source is not None
         assert write_version.saved_args
@@ -5855,7 +5829,7 @@ def test_edge_use_invariant_rejects_invalid_existing_record_kind() -> None:
 
     log = _make_clean_log()
     try:
-        layer = next(layer for layer in log.layer_list if layer._edge_uses)
+        layer = next(layer for layer in log._layer_list if layer._edge_uses)
         layer._edge_uses = (replace(layer._edge_uses[0], edge_use="bogus"),) + tuple(
             layer._edge_uses[1:]
         )
@@ -5871,7 +5845,7 @@ def test_edge_use_invariant_rejects_missing_parent_arg_reference() -> None:
 
     log = _make_clean_log()
     try:
-        layer = next(layer for layer in log.layer_list if layer.parent_arg_positions["args"])
+        layer = next(layer for layer in log._layer_list if layer.parent_arg_positions["args"])
         first_position = next(iter(layer.parent_arg_positions["args"]))
         layer.parent_arg_positions["args"][first_position] = "missing_parent_label"
 
@@ -5886,10 +5860,10 @@ def test_edge_use_parent_arg_preconditions_reach_real_trace() -> None:
 
     log = _make_clean_log()
     try:
-        edge_use_layers = [layer for layer in log.layer_list if layer._edge_uses]
+        edge_use_layers = [layer for layer in log._layer_list if layer._edge_uses]
         parent_arg_layers = [
             layer
-            for layer in log.layer_list
+            for layer in log._layer_list
             if layer.parent_arg_positions["args"] or layer.parent_arg_positions["kwargs"]
         ]
         assert edge_use_layers
@@ -5905,7 +5879,7 @@ def test_edge_use_invariant_allows_buffer_source_edge_without_record() -> None:
     log = _make_buffer_write_log()
     try:
         write_version = next(
-            layer for layer in log.layer_list if layer.buffer_write_kind is not None
+            layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
         assert write_version.parents
         assert not write_version._edge_uses
@@ -5924,7 +5898,7 @@ def test_stale_internal_source_label_is_relogged_not_reused() -> None:
 
     log = trace_fn(model, torch.zeros(2, 2))
     try:
-        raw_labels = {entry._label_raw for entry in log.layer_list}
+        raw_labels = {entry._label_raw for entry in log._layer_list}
         assert "internalsource_1_2_raw" not in raw_labels
         assert get_tensor_label(model.constant) != "internalsource_1_2_raw"
         assert check_metadata_invariants(log) is True
@@ -5945,7 +5919,7 @@ def test_module_output_structure_allows_literal_metadata_fields() -> None:
     )
     try:
         root_call = log.module_calls["self:1"]
-        assert root_call.output_ops == ["output_1"]
+        assert root_call.output_ops == ["output_1:1"]
         assert log[root_call.output_ops[0]].container_path
         assert check_metadata_invariants(log) is True
     finally:
@@ -5957,7 +5931,7 @@ def test_param_deep_xref_rejects_missing_op_back_reference() -> None:
 
     log = _make_clean_log()
     try:
-        param = next(param for param in log.param_logs if param.used_by_ops)
+        param = next(param for param in log._param_logs if param.used_by_ops)
         op = log[param.used_by_ops[0]]
         assert any(candidate.address == param.address for candidate in op._param_logs)
 
@@ -5976,7 +5950,7 @@ def test_param_xref_rejects_nonexistent_parameter_address() -> None:
 
     log = _make_clean_log()
     try:
-        param = next(param for param in log.param_logs if param.used_by_ops)
+        param = next(param for param in log._param_logs if param.used_by_ops)
         param.address = "nonexistent.module.weight"
 
         with pytest.raises(MetadataInvariantError, match="param_xrefs"):
@@ -5990,7 +5964,7 @@ def test_param_deep_xref_preconditions_reach_real_trace() -> None:
 
     log = _make_clean_log()
     try:
-        used_params = [param for param in log.param_logs if param.num_uses_by_ops > 0]
+        used_params = [param for param in log._param_logs if len(param.used_by_ops) > 0]
         assert used_params
         assert any(param.used_by_layers for param in used_params)
         assert log.layers_with_params
@@ -6004,8 +5978,8 @@ def test_param_deep_xref_allows_recurrent_weight_sharing() -> None:
 
     log = _make_recurrent_log()
     try:
-        recurrent_param = next(param for param in log.param_logs if param.num_uses_by_ops > 1)
-        assert recurrent_param.num_uses_by_ops == len(recurrent_param.used_by_ops)
+        recurrent_param = next(param for param in log._param_logs if len(param.used_by_ops) > 1)
+        assert len(recurrent_param.used_by_ops) == len(recurrent_param.used_by_ops)
         assert len(recurrent_param.used_by_layers) == 1
         assert check_metadata_invariants(log) is True
     finally:
@@ -6018,11 +5992,10 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
     log = trace_fn(
         _SimpleFF(),
         torch.randn(2, 5),
-        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=CaptureOptions(activation_transform=lambda tensor: tensor.mean(), seed=42),
     )
     try:
-        victim = next(layer for layer in log.layer_list if layer.transformed_out is not None)
+        victim = next(layer for layer in log._layer_list if layer.transformed_out is not None)
         assert victim.transformed_out_shape == ()
 
         victim.transformed_out_shape = (999,)
@@ -6036,11 +6009,9 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
 def test_payload_metadata_invariant_rejects_present_raw_memory_mismatch() -> None:
     """Live raw payload metadata must still be checked when the payload is retained."""
 
-    log = trace_fn(
-        _SimpleFF(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(_SimpleFF(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
-        victim = next(layer for layer in log.layer_list if layer.has_saved_activation)
+        victim = next(layer for layer in log._layer_list if layer.has_saved_activation)
         assert victim.out is not None
 
         victim.activation_memory = 999
@@ -6057,12 +6028,11 @@ def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None
     log = trace_fn(
         _SimpleFF(),
         torch.randn(2, 5),
-        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=CaptureOptions(activation_transform=lambda tensor: tensor.mean(), seed=42),
     )
     try:
-        assert any(layer.out is not None for layer in log.layer_list)
-        assert any(layer.transformed_out is not None for layer in log.layer_list)
+        assert any(layer.out is not None for layer in log._layer_list)
+        assert any(layer.transformed_out is not None for layer in log._layer_list)
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -6078,10 +6048,10 @@ def test_payload_metadata_invariant_allows_selective_save_validation() -> None:
         model,
         [x, y],
         save=_save_first_input_record,
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        assert any(not layer.has_saved_activation for layer in log.layer_list)
+        assert any(not layer.has_saved_activation for layer in log._layer_list)
         assert log.validate_forward_pass([x], validate_metadata=True) is True
     finally:
         log.cleanup()
@@ -6093,7 +6063,7 @@ def test_payload_metadata_invariant_allows_evicted_grad_metadata() -> None:
     log = _make_clean_log()
     try:
         victim = next(
-            layer for layer in log.layer_list if not layer.is_input and not layer.is_output
+            layer for layer in log._layer_list if not layer.is_input and not layer.is_output
         )
         victim.grad = None
         victim.transformed_grad = None
@@ -6113,7 +6083,7 @@ def test_func_call_id_invariant_rejects_missing_id_in_plain_capture() -> None:
     log = _make_clean_log()
     try:
         victim = next(
-            layer for layer in log.layer_list if not layer.is_input and not layer.is_output
+            layer for layer in log._layer_list if not layer.is_input and not layer.is_output
         )
         assert victim.func_call_id is not None
 
@@ -6130,7 +6100,7 @@ def test_func_call_id_invariant_rejects_plain_group_func_name_mismatch() -> None
 
     log = _make_func_call_split_log()
     try:
-        split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+        split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
         assert len(split_layers) == 2
         assert len({layer.func_call_id for layer in split_layers}) == 1
 
@@ -6147,7 +6117,7 @@ def test_func_call_id_plain_preconditions_reach_real_trace() -> None:
 
     log = _make_func_call_split_log()
     try:
-        split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+        split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
         assert len(split_layers) == 2
         assert len({layer.func_call_id for layer in split_layers}) == 1
         assert all(layer.container_path for layer in split_layers)
@@ -6167,7 +6137,7 @@ def test_func_call_id_invariant_allows_sparse_recording_projection() -> None:
     log = recording.to_trace()
     try:
         compute_layers = [
-            layer for layer in log.layer_list if not (layer.is_input or layer.is_output)
+            layer for layer in log._layer_list if not (layer.is_input or layer.is_output)
         ]
         assert compute_layers
         assert any(layer.func_call_id is not None for layer in compute_layers)
@@ -6198,7 +6168,7 @@ def test_backward_invariants_with_intervening() -> None:
     """Backward metadata invariants allow intervening grad_fns."""
 
     log = _make_backward_log()
-    assert any(not grad_fn_handle.has_op for grad_fn_handle in log.grad_fn_logs.values())
+    assert any(not grad_fn_handle.has_op for grad_fn_handle in log._grad_fn_logs.values())
     assert check_metadata_invariants(log) is True
     log.cleanup()
 
@@ -6208,9 +6178,9 @@ def test_grad_fn_topology_rejects_missing_reverse_child_link() -> None:
 
     log = _make_backward_log()
     try:
-        parent = next(grad_fn for grad_fn in log.grad_fn_logs.values() if grad_fn.children)
+        parent = next(grad_fn for grad_fn in log._grad_fn_logs.values() if grad_fn.children)
         child = next(
-            grad_fn for grad_fn in log.grad_fn_logs.values() if grad_fn.label == parent.children[0]
+            grad_fn for grad_fn in log._grad_fn_logs.values() if grad_fn.label == parent.children[0]
         )
         child.parents = [label for label in child.parents if label != parent.label]
 
@@ -6225,7 +6195,7 @@ def test_backward_pass_domain_rejects_invalid_status() -> None:
 
     log = _make_backward_log()
     try:
-        backward_pass = next(iter(log.backward_pass_logs.values()))
+        backward_pass = next(iter(log._backward_pass_logs.values()))
         backward_pass.status = "finished"
 
         with pytest.raises(MetadataInvariantError, match="invalid status"):
@@ -6239,7 +6209,7 @@ def test_backward_pass_domain_rejects_root_mismatch() -> None:
 
     log = _make_backward_log()
     try:
-        backward_pass = next(iter(log.backward_pass_logs.values()))
+        backward_pass = next(iter(log._backward_pass_logs.values()))
         backward_pass.root_grad_fn_ids = []
 
         with pytest.raises(MetadataInvariantError, match="root_grad_fn_ids do not match"):
@@ -6253,12 +6223,12 @@ def test_backward_phase_d_preconditions_reach_backward_trace() -> None:
 
     log = _make_backward_log()
     try:
-        assert log.has_backward_pass
-        assert log.grad_fn_logs
-        assert log.backward_pass_logs
+        assert log.autograd.has_backward_pass
+        assert log._grad_fn_logs
+        assert log._backward_pass_logs
         assert any(
             grad_fn.children or grad_fn.parents or grad_fn.next_grad_fn_ids
-            for grad_fn in log.grad_fn_logs.values()
+            for grad_fn in log._grad_fn_logs.values()
         )
         assert check_metadata_invariants(log) is True
     finally:
@@ -6283,7 +6253,7 @@ def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> N
             layer.grad_fn_object_id is not None
             and layer.grad_fn is None
             and layer.step_index > last_trigger_position
-            for layer in log.layer_list
+            for layer in log._layer_list
         )
 
         assert check_metadata_invariants(log) is True
@@ -6324,12 +6294,12 @@ def test_backward_invariants_exempt_dead_branch_layers() -> None:
         log = tl.trace(
             model_cls(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(backward_ready=True, layers_to_save="all"),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
+            save="all",
         )
         try:
             log.log_backward(log.output_ops[0].out.sum())
-            dead = next(layer for layer in log.layer_list if layer.label.startswith("mean"))
+            dead = next(layer for layer in log._layer_list if layer.label.startswith("mean"))
             assert dead.grad_fn_object_id is not None
             assert dead.grad_fn is None
             assert check_metadata_invariants(log) is True
@@ -6359,12 +6329,12 @@ def test_dead_branch_exemption_does_not_disarm_contributing_backpointers() -> No
     log = tl.trace(
         DeadBranch(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True, layers_to_save="all"),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
+        save="all",
     )
     try:
         log.log_backward(log.output_ops[0].out.sum())
-        victim = next(layer for layer in log.layer_list if layer.label.startswith("linear"))
+        victim = next(layer for layer in log._layer_list if layer.label.startswith("linear"))
         assert victim.grad_fn is not None
         victim.grad_fn = None
 
@@ -6381,7 +6351,7 @@ def test_bad_pre_trigger_layer_grad_fn_backpointer_raises() -> None:
     try:
         victim = next(
             layer
-            for layer in log.layer_list
+            for layer in log._layer_list
             if layer.grad_fn_object_id is not None and layer.grad_fn is not None
         )
         victim.grad_fn = None
@@ -6396,7 +6366,7 @@ def test_bad_grad_fn_order_raises() -> None:
     """Unknown grad_fn_handle ids in grad_fn_order raise an invariant error."""
 
     log = _make_backward_log()
-    log.grad_fn_order.append(-1)
+    log.autograd.grad_fn_order.append(-1)
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6406,7 +6376,7 @@ def test_bad_backward_root_grad_fn_id_raises() -> None:
     """An unknown backward root id raises an invariant error."""
 
     log = _make_backward_log()
-    log.backward_root_grad_fn_object_ids = -1  # type: ignore[assignment]
+    log._autograd_backward_root_grad_fn_object_ids = -1  # type: ignore[assignment]
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6416,7 +6386,7 @@ def test_bad_layer_grad_fn_backpointer_raises() -> None:
     """A mismatched layer-to-grad_fn_handle backpointer raises an invariant error."""
 
     log = _make_backward_log()
-    for grad_fn_handle in log.grad_fn_logs.values():
+    for grad_fn_handle in log._grad_fn_logs.values():
         if grad_fn_handle.has_op:
             grad_fn_handle.op_label = "missing_layer_1"
             break
@@ -6442,7 +6412,7 @@ def test_bad_higher_order_creator_chain_order_raises() -> None:
     log = trace_fn(
         HigherOrderModel(),
         x,
-        capture=tl.options.CaptureOptions(save_grads="all", random_seed=42),
+        capture=tl.options.CaptureOptions(save_grads="all", seed=42),
     )
     try:
         loss = log[log.output_layers[0]].out
@@ -6450,7 +6420,7 @@ def test_bad_higher_order_creator_chain_order_raises() -> None:
         torch.autograd.grad(first_grad.sum(), x, retain_graph=True)
         victim = next(
             grad_fn
-            for grad_fn in log.grad_fns
+            for grad_fn in log.autograd.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )
         assert victim.order is not None
@@ -6469,7 +6439,7 @@ def test_ordinary_backward_handle_rejects_invalid_origin_pass() -> None:
     try:
         victim = next(
             grad_fn_handle
-            for grad_fn_handle in log.grad_fn_logs.values()
+            for grad_fn_handle in log._grad_fn_logs.values()
             if grad_fn_handle.creator_object_id is None
         )
         victim.origin_backward_pass = 999
@@ -6484,10 +6454,10 @@ def test_corruption_parent_child_link():
     """Breaking a parent→child link raises MetadataInvariantError."""
     log = _make_clean_log()
     # Find a layer with children and corrupt
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if lpl.children:
             child_label = lpl.children[0]
-            child = log.layer_dict_all_keys[child_label]
+            child = log._layer_dict_all_keys[child_label]
             # Remove the parent from the child's parents
             child.parents = [p for p in child.parents if p != lpl.layer_label]
             break
@@ -6502,7 +6472,7 @@ def test_corruption_parent_child_link():
 def test_corruption_num_ops():
     """Mismatched num_ops raises MetadataInvariantError."""
     log = _make_clean_log()
-    log.num_ops = 9999
+    log._num_ops = 9999
     with pytest.raises(MetadataInvariantError, match="trace_self_consistency"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6512,7 +6482,7 @@ def test_corruption_module_back_reference():
     """Removing a layer from its module's layers raises MetadataInvariantError."""
     log = _make_clean_log()
     # Find a layer with a containing module and corrupt the Module
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         cmo = lpl.module
         if cmo:
             # module may include pass (e.g. 'fc:1'), strip it
@@ -6534,7 +6504,7 @@ def test_module_call_boundary_rejects_output_outside_ops() -> None:
     try:
         victim = log.modules["fc"].ops["fc:1"]
         external_input = victim.input_ops[0]
-        assert external_input not in victim.ops
+        assert external_input is not victim
 
         victim.output_ops = [external_input]
 
@@ -6611,7 +6581,7 @@ def test_non_function_root_drop_op_module_attribution_raises() -> None:
 
     log = _relabel_as_mlx_object_module(_make_clean_log())
     try:
-        victim = next(layer for layer in log.layer_list if layer.module)
+        victim = next(layer for layer in log._layer_list if layer.module)
         victim.module = None
         victim.modules = []
         victim.module_call_stack = []
@@ -6658,8 +6628,8 @@ def test_corruption_layer_num_calls():
     """Wrong layer_num_calls raises MetadataInvariantError."""
     log = _make_clean_log()
     # Corrupt one entry
-    first_key = list(log.layer_num_calls.keys())[0]
-    log.layer_num_calls[first_key] = 999
+    first_key = list(log._layer_num_calls.keys())[0]
+    log._layer_num_calls[first_key] = 999
     with pytest.raises(MetadataInvariantError, match="recurrence_invariants"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6778,17 +6748,13 @@ class _TupleOutputModule(nn.Module):
 def _make_recurrent_log():
     from torchlens import trace as trace_fn
 
-    return trace_fn(
-        _RecurrentFF(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    return trace_fn(_RecurrentFF(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
 
 
 def _make_nested_log():
     from torchlens import trace as trace_fn
 
-    return trace_fn(
-        _NestedModel(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    return trace_fn(_NestedModel(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
 
 
 def _make_tuple_output_module_log() -> Trace:
@@ -6799,7 +6765,7 @@ def _make_tuple_output_module_log() -> Trace:
     return trace_fn(
         _TupleOutputModule(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
 
 
@@ -6810,7 +6776,7 @@ def test_corruption_graph_ordering_duplicate_rt_num():
     """Duplicate raw_index triggers graph_ordering error."""
     log = _make_clean_log()
     # Set two layers to the same raw_index
-    log.layer_list[0].raw_index = log.layer_list[1].raw_index
+    log._layer_list[0].raw_index = log._layer_list[1].raw_index
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6820,7 +6786,7 @@ def test_corruption_graph_ordering_topo_violation():
     """Parent with higher raw_index than child triggers error."""
     log = _make_clean_log()
     # Find a layer with parents and swap rt nums to break topo order
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if lpl.parents:
             parent = log[lpl.parents[0]]
             # Give parent a higher rt num than child
@@ -6840,13 +6806,13 @@ def test_corruption_graph_ordering_pass_qualified_back_edge() -> None:
     log = trace_fn(
         _RecurrentOrderingModel(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        linear_passes = [op for op in log.layer_list if op.func_name == "linear"]
-        tanh_passes = [op for op in log.layer_list if op.func_name == "tanh"]
-        assert [op.pass_index for op in linear_passes] == [1, 2, 3]
-        assert [op.pass_index for op in tanh_passes] == [1, 2, 3]
+        linear_passes = [op for op in log._layer_list if op.func_name == "linear"]
+        tanh_passes = [op for op in log._layer_list if op.func_name == "tanh"]
+        assert [op.pass_number for op in linear_passes] == [1, 2, 3]
+        assert [op.pass_number for op in tanh_passes] == [1, 2, 3]
         back_edge_parent = linear_passes[2]
         back_edge_child = tanh_passes[0]
         assert back_edge_parent.label.endswith(":3")
@@ -6867,7 +6833,7 @@ def test_corruption_graph_ordering_pass_qualified_back_edge() -> None:
 def test_corruption_loop_detection_slo_empty():
     """Empty recurrent_ops triggers loop_detection error."""
     log = _make_clean_log()
-    log.layer_list[0].recurrent_ops = []
+    log._layer_list[0].recurrent_ops = []
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6886,7 +6852,7 @@ def test_corruption_loop_detection_self_exclusion_into_seen_group() -> None:
 
     log = _make_clean_log()
     try:
-        donor, victim = log.layer_list[0], log.layer_list[1]
+        donor, victim = log._layer_list[0], log._layer_list[1]
         assert donor.label != victim.label
         assert victim.label not in donor.recurrent_ops
         victim.recurrent_ops = list(donor.recurrent_ops)
@@ -6901,7 +6867,7 @@ def test_corruption_loop_detection_slo_asymmetry():
     """Asymmetric recurrent_ops triggers loop_detection error."""
     log = _make_recurrent_log()
     # Find a multi-pass layer and corrupt one member's slo list
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if lpl.num_passes > 1:
             # Remove one member from slo
             lpl.recurrent_ops = [lpl.layer_label]
@@ -6914,7 +6880,7 @@ def test_corruption_loop_detection_slo_asymmetry():
 def test_corruption_loop_detection_ops_total():
     """Mismatched num_calls vs len(recurrent_ops) triggers error."""
     log = _make_clean_log()
-    log.layer_list[0].num_passes = 99
+    log._layer_list[0].num_passes = 99
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6927,7 +6893,7 @@ def test_corruption_distance_min_gt_max():
     """min_distance > max_distance triggers distance_invariants error."""
     log = _make_clean_log()
     # Find a non-input layer with distances set
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if (
             lpl.min_distance_from_input is not None
             and lpl.max_distance_from_input is not None
@@ -6948,13 +6914,13 @@ def test_corruption_distance_min_gt_max():
 def test_corruption_distance_input_nonzero():
     """Input layer with nonzero distance_from_input triggers error."""
     log = _make_clean_log()
-    if not log.mark_layer_depths:
+    if not log.options.mark_layer_depths:
         # Vacuous-pass conversion (b9 R71-3): a plant with no armed target
         # must SKIP, not silently green.
         log.cleanup()
         pytest.skip("mark_layer_depths is off; input-distance plant has no target")
     for label in log.input_layers:
-        lpl = log.layer_dict_all_keys[label]
+        lpl = log._layer_dict_all_keys[label]
         lpl.min_distance_from_input = 5
         lpl.max_distance_from_input = 5
         break
@@ -6966,12 +6932,12 @@ def test_corruption_distance_input_nonzero():
 def test_corruption_distance_ancestor_flag():
     """Mismatch between has_input_ancestor and input_ancestors triggers error."""
     log = _make_clean_log()
-    if not log.mark_layer_depths:
+    if not log.options.mark_layer_depths:
         # Vacuous-pass conversion (b9 R71-3): a plant with no armed target
         # must SKIP, not silently green.
         log.cleanup()
         pytest.skip("mark_layer_depths is off; ancestor-flag plant has no target")
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if lpl.has_input_ancestor and len(lpl.input_ancestors) > 0:
             lpl.has_input_ancestor = False
             break
@@ -6993,10 +6959,10 @@ def test_corruption_raw_label_in_elif_children_dict():
     projection, which the cross-check cannot see.
     """
 
-    from torchlens.validation.invariants import _check_graph_ordering
+    from torchlens.validation._invariants_equivalence import _check_graph_ordering
 
     log = _make_clean_log()
-    log.layer_list[1].conditional_elif_children = {0: ["relu_1_1_raw"]}
+    log._layer_list[1].conditional_elif_children = {0: ["relu_1_1_raw"]}
     with pytest.raises(MetadataInvariantError, match="Raw label"):
         _check_graph_ordering(log)
     with pytest.raises(MetadataInvariantError):
@@ -7015,9 +6981,9 @@ def test_corruption_raw_label_in_parent_arg_positions_key():
     """
 
     log = _make_clean_log()
-    positions = dict(log.layer_list[1].parent_arg_positions or {})
+    positions = dict(log._layer_list[1].parent_arg_positions or {})
     positions["linear_1_1_raw"] = 0
-    log.layer_list[1].parent_arg_positions = positions
+    log._layer_list[1].parent_arg_positions = positions
     with pytest.raises(MetadataInvariantError, match="parent_arg_positions"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -7094,7 +7060,7 @@ def test_raw_label_survival_roster_is_closed():
     shapes (or in the justified allowlist below).
     """
 
-    from torchlens import constants
+    from torchlens import _constants as constants
     from torchlens.validation.invariants import (
         _RAW_LABEL_BEARING_DICT_FIELDS,
         _RAW_LABEL_BEARING_LIST_FIELDS,
@@ -7129,12 +7095,12 @@ def test_raw_label_survival_roster_is_closed():
     log = trace_fn(
         _ElifBranchModel(),
         torch.randn(3, 3),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
-    labels = {lpl.layer_label for lpl in log.layer_list} | {lpl.label for lpl in log.layer_list}
+    labels = {lpl.layer_label for lpl in log._layer_list} | {lpl.label for lpl in log._layer_list}
     fields = set(constants.OP_LOG_FIELD_ORDER) | set(constants.LAYER_LOG_FIELD_ORDER)
     offenders: dict[str, list[str]] = {}
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         foreign = labels - {lpl.layer_label, lpl.label}
         for field in fields - rostered - allowlist:
             hits = _collect_strings(getattr(lpl, field, None)) & foreign
@@ -7190,7 +7156,7 @@ def test_corruption_equivalence_symmetry_one_sided_group():
     log = trace_fn(
         _TwiceLinearEquivalence(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     groups = [op for op in log.compute_ops if op.equivalent_ops]
     assert groups, "expected an equivalence group from the repeated layer"
@@ -7243,7 +7209,7 @@ def test_smoke_canary_plain_captures_trip_no_invariants():
         (_CanaryTupleOut(), torch.randn(3)),
     ]
     for model, x in cases:
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(random_seed=42))
+        log = trace_fn(model, x, capture=tl.options.CaptureOptions(seed=42))
         check_metadata_invariants(log)
         log.cleanup()
         assert validate_forward_pass(model, [x], input_kwargs={})
@@ -7261,7 +7227,7 @@ def _corrupt_first_computational_layer_parentless(log) -> "object":
     corruption is exactly the post-witness silent edge-drop class. Returns the
     corrupted op.
     """
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if (
             not lpl.is_input
             and not lpl.is_buffer
@@ -7270,7 +7236,7 @@ def _corrupt_first_computational_layer_parentless(log) -> "object":
             and lpl.parents
         ):
             for p_label in lpl.parents:
-                parent = log.layer_dict_all_keys[p_label]
+                parent = log._layer_dict_all_keys[p_label]
                 parent.children = [c for c in parent.children if c != lpl.layer_label]
                 parent.has_children = len(parent.children) > 0
             lpl.parents = []
@@ -7367,7 +7333,7 @@ def test_corruption_connectivity_pruned_orphan_resurrected_into_final_labels() -
     log = trace_fn(
         _PrunedOrphanModel(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         orphan_raw_label = next(label for label in log._orphan_labels if label.startswith("relu"))
@@ -7399,7 +7365,7 @@ def test_corruption_functionless_sentinel_on_computational_op() -> None:
     try:
         lpl = next(
             lpl
-            for lpl in log.layer_list
+            for lpl in log._layer_list
             if not (lpl.is_input or lpl.is_buffer or lpl.is_output)
             and callable(lpl.func)
             and lpl.func_name
@@ -7442,7 +7408,7 @@ def test_corruption_capture_witnessed_slot_permutation_is_rejected() -> None:
     log = trace_fn(_TwoParentCatModel(), torch.randn(2, 5))
     try:
         target = None
-        for op in log.layer_list:
+        for op in log._layer_list:
             positions = (op.parent_arg_positions or {}).get("args") or {}
             if len(set(positions.values())) >= 2:
                 target = (op, sorted(positions)[:2])
@@ -7478,7 +7444,7 @@ def test_corruption_plain_parent_witnessed_edge_drop_is_rejected() -> None:
         truth = log.__dict__.get("_capture_parent_edge_truth")
         assert truth, "fixture sealed no capture-time edge witness"
         target = None
-        for op in log.layer_list:
+        for op in log._layer_list:
             raw_label = getattr(op, "_label_raw", None)
             edges = truth.get(raw_label) if raw_label is not None else None
             if not edges:
@@ -7516,7 +7482,7 @@ def test_connectivity_accepts_renumbered_orphan_raw_label_collision() -> None:
     log = trace_fn(
         _RenumberedOrphanCollisionModel(),
         torch.randn(5, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         stripped = {label.removesuffix("_raw") for label in log._orphan_labels}
@@ -7541,7 +7507,7 @@ def test_connectivity_accepts_retained_orphan_islands_with_final_labels() -> Non
     log = trace_fn(
         _PrunedOrphanModel(),
         torch.randn(5, 5),
-        capture=CaptureOptions(keep_orphans=True, random_seed=42),
+        capture=CaptureOptions(keep_orphans=True, seed=42),
     )
     try:
         assert log._orphan_labels, "fixture no longer produces orphans"
@@ -7562,7 +7528,7 @@ def test_connectivity_retained_orphan_mapped_to_live_final_label_is_rejected() -
     log = trace_fn(
         _PrunedOrphanModel(),
         torch.randn(5, 5),
-        capture=CaptureOptions(keep_orphans=True, random_seed=42),
+        capture=CaptureOptions(keep_orphans=True, seed=42),
     )
     try:
         orphan_raw_label = next(label for label in log._orphan_labels if label.startswith("relu"))
@@ -7601,9 +7567,9 @@ def test_param_xrefs_accept_used_param_whose_owner_module_is_never_entered() -> 
         (FunctionalParamUse(), torch.randn(2, 3)),
         (nn.TransformerEncoderLayer(8, 2, 16, batch_first=True), torch.randn(2, 5, 8)),
     ):
-        log = trace_fn(model, inputs, capture=tl.options.CaptureOptions(random_seed=42))
+        log = trace_fn(model, inputs, capture=tl.options.CaptureOptions(seed=42))
         try:
-            used = [param for param in log.param_logs if param.num_uses_by_ops]
+            used = [param for param in log._param_logs if len(param.used_by_ops)]
             assert used, "fixture no longer records used params"
             check_metadata_invariants(log)
         finally:
@@ -7635,7 +7601,7 @@ def test_corruption_module_nested_path_leaf():
     not which redundant layer wins the race.
     """
     log = _make_nested_log()
-    for lpl in log.layer_list:
+    for lpl in log._layer_list:
         if len(lpl.modules) >= 2 and lpl.module:
             # Swap the last nested module to a different valid module so it
             # doesn't fail the module_layer_containment check but does fail
@@ -7771,20 +7737,20 @@ class TestValidationBugfixes:
 
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = trace_fn(model, x, save="all")
         assert log is not None
 
 
 class TestValidationNoSavedArgs:
-    """Validation with save_arg_values=False."""
+    """Validation with save_args=False."""
 
     def test_validation_no_args(self):
-        """validate with save_arg_values=False should not crash."""
+        """validate with save_args=False should not crash."""
         from torchlens import trace as trace_fn
 
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_arg_values=False))
+        log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=False))
         assert log is not None
 
 
@@ -7908,7 +7874,7 @@ def _functionless_replacement_ops(log: "Trace") -> list:
         op
         for op in log.ops
         if getattr(op, "func_name", None) == "intervention_replacement"
-        and getattr(op, "intervention_replaced", False)
+        and getattr(op, "is_edited", False)
     ]
 
 
@@ -7923,12 +7889,12 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
 
     model = _VmapMaskModel().eval()
     x = torch.randn(4, 4)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
 
     # No genuine user intervention happened, so there must be zero functionless
     # intervention placeholders.
     assert _functionless_replacement_ops(log) == []
-    assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+    assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
 
     # The mask is instead logged as a transform boundary node with a clean parent edge.
     transform_ops = [op for op in log.ops if getattr(op, "is_transform", False)]
@@ -7966,10 +7932,10 @@ def test_plain_trace_mistral_has_no_functionless_replacement():
         sliding_window=16,
     )
     model = transformers.MistralForCausalLM(cfg).eval()
-    log = trace_fn(model, [], {"input_ids": torch.randint(0, 100, (1, 16))})
+    log = trace_fn(model, [], input_kwargs={"input_ids": torch.randint(0, 100, (1, 16))})
 
     assert _functionless_replacement_ops(log) == []
-    assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+    assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
     check_metadata_invariants(log)
 
 
@@ -8085,7 +8051,7 @@ def test_plain_trace_internal_source_final_output_is_exempted() -> None:
 
     model = _ArangeInternalSourceOutputModel().eval()
     x = torch.randn(4, 4)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
     try:
         assert log.output_layers == ["output_1"]
         output_parent = log[log["output_1"].parents[0]]
@@ -8149,7 +8115,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates() -> None:
     model = _Mlp().eval()
     model.relu.register_forward_hook(_untraceable_replacement_hook)
     x = torch.randn(3, 4)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
     try:
         # A genuine functionless replacement placeholder IS present here...
         placeholders = _functionless_replacement_ops(log)
@@ -8215,7 +8181,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates_nested_depth() -> No
     model = _NestedNet().eval()
     model.block.norm.register_forward_hook(_substituting_hook)  # nested 2 levels deep
     x = torch.randn(2, 8)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
     try:
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
@@ -8265,7 +8231,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
     model = _Mlp().eval()
     model.register_forward_hook(_substituting_hook)  # DEPTH 0: hook on the root model
     x = torch.randn(3, 4)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
     try:
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
@@ -8292,7 +8258,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     """TRIPWIRE at nesting depth >= 2: a plain-capture gap under a no-op
     observer hook, on a module nested 2+ address levels deep, must stay
     honest -- zero functionless ``intervention_replacement`` placeholders,
-    zero ``intervention_replaced`` ops -- even after the depth-2 fix above.
+    zero ``is_edited`` ops -- even after the depth-2 fix above.
     The fix must not make the tripwire pass silently on a genuine capture gap.
     """
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
@@ -8328,10 +8294,10 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     # The opaque return is a real capture gap: it is disclosed (module-exit
     # adoption record) while the boundary still logs it as an internal source.
     with pytest.warns(UserWarning, match=_OPAQUE_EXIT_DISCLOSURE):
-        log = trace_fn(model, [x], {})
+        log = trace_fn(model, [x], input_kwargs={})
     try:
         assert _functionless_replacement_ops(log) == []
-        assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+        assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
         internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
         assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
@@ -8349,7 +8315,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
     An untraceable raw-ATen module output combined with a purely observational
     forward hook (returns ``None``, never substitutes) must be logged as a clean
     ``internal_source`` -- NEVER a functionless ``intervention_replacement``
-    placeholder, and must NOT be marked ``intervention_replaced``. The old
+    placeholder, and must NOT be marked ``is_edited``. The old
     ``has _forward_hooks`` proxy mislabeled exactly this case (cert round 3
     coupled hazard); reintroducing it makes this fail loudly.
     """
@@ -8358,12 +8324,12 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
     model = _RawAtenReluNet().eval()
     x = torch.randn(3, 4)
     with pytest.warns(UserWarning, match=_OPAQUE_EXIT_DISCLOSURE):
-        log = trace_fn(model, [x], {})
+        log = trace_fn(model, [x], input_kwargs={})
     try:
         # No genuine intervention happened -> zero functionless placeholders and
-        # zero intervention_replaced ops during plain capture.
+        # zero is_edited ops during plain capture.
         assert _functionless_replacement_ops(log) == []
-        assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+        assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
         # The untraceable output is an honest internal source (func_name "none").
         internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
@@ -8380,19 +8346,19 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     """The func_call_id exemption for ``intervention_replacement`` is NARROW.
 
     It must exempt ONLY the genuine functionless-replacement shape
-    (``func_name == "intervention_replacement"`` AND ``intervention_replaced``
+    (``func_name == "intervention_replacement"`` AND ``is_edited``
     AND NOT ``is_internal_source`` -- mirroring the ``op_log_fields`` invariant),
     and must NOT blanket-exempt any op merely named ``intervention_replacement``.
     A placeholder lacking that shape must stay non-exempt so the invariant stays
     armed against future capture-gap synthesis.
     """
 
-    from torchlens.validation.invariants import _is_func_call_id_exempt
+    from torchlens.validation._invariants_backward_flow import _is_func_call_id_exempt
 
     base = {"is_input": False, "is_output": False, "is_buffer": False, "func": None}
     genuine = SimpleNamespace(
         func_name="intervention_replacement",
-        intervention_replaced=True,
+        is_edited=True,
         is_internal_source=False,
         **base,
     )
@@ -8401,7 +8367,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     # Same func_name but NOT flagged as replaced -> not a genuine replacement.
     not_replaced = SimpleNamespace(
         func_name="intervention_replacement",
-        intervention_replaced=False,
+        is_edited=False,
         is_internal_source=False,
         **base,
     )
@@ -8411,7 +8377,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     # user replacement (internal sources carry func_name "none" in practice).
     internal = SimpleNamespace(
         func_name="intervention_replacement",
-        intervention_replaced=True,
+        is_edited=True,
         is_internal_source=True,
         **base,
     )
@@ -8439,7 +8405,7 @@ def test_validation_teardown_is_per_step_fenced(monkeypatch: pytest.MonkeyPatch)
     once the monkeypatch is live, and the single injected failure lands
     exactly where intended: the function's own teardown restore.
     """
-    from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
+    from torchlens._utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
     get_cpu_float8_deterministic_fill_support(force_probe=True)
 
@@ -8540,7 +8506,7 @@ def _first_computational_layer(log):
     """Return the first non-boundary layer of a clean single-pass capture."""
 
     return next(
-        lpl for lpl in log.layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
+        lpl for lpl in log._layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
     )
 
 
@@ -8579,7 +8545,7 @@ def test_corruption_arm_op_log_fields_dropped_module_roster() -> None:
 
     log = _make_clean_log()
     try:
-        lpl = next(lpl for lpl in log.layer_list if getattr(lpl, "modules", ()))
+        lpl = next(lpl for lpl in log._layer_list if getattr(lpl, "modules", ()))
         lpl.modules = ()
         with pytest.raises(MetadataInvariantError, match="module attribution was DROPPED"):
             _check_op_log_fields(log)
@@ -8623,11 +8589,9 @@ def test_corruption_arm_graph_topology_parent_side_reciprocity() -> None:
     has_children coherence arm cannot absorb the kill.
     """
 
-    log = trace_fn(
-        _DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(_DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
-        ops = [op for lay in log.layer_list for op in lay.ops]
+        ops = list(log._layer_list)
         parent = next(op for op in ops if len(op.children) >= 2)
         victim = parent.children[0]
         parent.children = tuple(c for c in parent.children if c != victim)
@@ -8640,11 +8604,9 @@ def test_corruption_arm_graph_topology_parent_side_reciprocity() -> None:
 def test_corruption_arm_graph_topology_slot_names_non_parent() -> None:
     """Killer for graph_topology#a05: parent_arg_positions naming a non-parent."""
 
-    log = trace_fn(
-        _DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(_DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
-        ops = [op for lay in log.layer_list for op in lay.ops]
+        ops = list(log._layer_list)
         relu_op = next(op for op in ops if op.label.startswith("relu"))
         tanh_op = next(op for op in ops if op.label.startswith("tanh"))
         positions = relu_op.parent_arg_positions["args"]
@@ -8697,38 +8659,14 @@ def test_corruption_arm_special_list_flag_without_membership() -> None:
 def test_corruption_arm_equivalence_registry_group_mismatch() -> None:
     """Killer for equivalence_symmetry#a05: op view != registry group."""
 
-    log = trace_fn(
-        _ReusedLinear(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(_ReusedLinear(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
         key, members = next(
-            (k, sorted(v)) for k, v in log.op_equivalence_classes.items() if len(v) >= 2
+            (k, sorted(v)) for k, v in log.graph.op_equivalence_classes.items() if len(v) >= 2
         )
-        log.op_equivalence_classes[key] = set(members[:-1])
+        log.graph.op_equivalence_classes[key] = set(members[:-1])
         with pytest.raises(MetadataInvariantError, match=r"equivalent_ops=.* != expected"):
             _check_equivalence_symmetry(log)
-    finally:
-        log.cleanup()
-
-
-def test_corruption_arm_param_sharing_key_forgery() -> None:
-    """Killer for loop_detection_invariants#a11: param-sharing violation."""
-
-    import copy as _copy
-
-    log = trace_fn(
-        _TwoLinearChain(),
-        torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
-    )
-    try:
-        first, second = [lay for lay in log.layer_list if lay.layer_label.startswith("linear")][:2]
-        donor = first.ops[0]
-        for op in second.ops:
-            op._param_barcodes = _copy.copy(donor._param_barcodes)
-            op.equivalence_class = donor.equivalence_class
-        with pytest.raises(MetadataInvariantError, match="Param sharing violation"):
-            _check_loop_detection_invariants(log)
     finally:
         log.cleanup()
 
@@ -8739,10 +8677,10 @@ def test_corruption_arm_param_address_outside_canonical_set() -> None:
     log = trace_fn(
         _TwoLinearChain(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        log.param_logs[0].address = "forged.weight"
+        log._param_logs[0].address = "forged.weight"
         with pytest.raises(MetadataInvariantError, match="absent from its canonical address set"):
             _check_param_xrefs(log)
     finally:

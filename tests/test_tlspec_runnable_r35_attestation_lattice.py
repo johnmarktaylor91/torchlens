@@ -16,12 +16,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    DivergencePolicy,
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.options import CaptureOptions
 
 
 class _AddOneModel(nn.Module):
@@ -40,23 +39,22 @@ def _save(model: nn.Module, args: Any, path: Path) -> Path:
     trace = tl.trace(
         model,
         args,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
     return path
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_r35_device_diverged_run_is_never_attested(tmp_path: Path) -> None:
     """corr2_7 repro: a device-diverged poisoned run must be not_applicable."""
 
     x = torch.tensor([1.0, 2.0, 3.0])
     path = _save(_AddOneModel().eval(), x, tmp_path / "dev.tlspec")
-    result = tl.load(path).run(inputs=x.cuda(), on_divergence=DivergencePolicy.RETURN_DIVERGED)
+    result = tl.load(path).run(inputs=x.cuda(), on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
@@ -67,11 +65,11 @@ def test_r35_any_failed_input_contract_caps_attestation(tmp_path: Path) -> None:
     path = _save(_FlagModel().eval(), (x, 2.0), tmp_path / "flag.tlspec")
     result = tl.load(path).run(
         inputs=(x, 3.0),
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
 
 
 def test_r35_eligible_original_run_stays_attested(tmp_path: Path) -> None:
@@ -82,20 +80,20 @@ def test_r35_eligible_original_run_stays_attested(tmp_path: Path) -> None:
     result = tl.load(path).run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
 
 
 def test_r35_report_constructor_rejects_attested_nonverified() -> None:
     """The prohibited ATTESTED + non-VERIFIED combination is unrepresentable."""
 
-    from torchlens._runnable_execution import _run_report
-    from torchlens.runnable import (
-        ReadinessReport,
+    from torchlens._runnable import (
         ReadinessStatus,
         RunProvider,
         StateSource,
         WitnessCompleteness,
     )
+    from torchlens._runnable.path_faithfulness import _run_report
+    from torchlens.types import ReadinessReport
 
     readiness = ReadinessReport(
         status=ReadinessStatus.READY,

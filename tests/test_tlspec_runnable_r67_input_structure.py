@@ -35,17 +35,17 @@ from torchlens._input_walk import (
     snapshot_input_boundary,
 )
 from torchlens._io import runnable_load
+from torchlens._ir.container import register_container
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import (
     PathDivergenceError,
     RunCapabilityUnavailableError,
     RunnablePreflightError,
     RunPreconditionError,
 )
-from torchlens.ir.container import register_container
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x) -> tl.Trace:
@@ -63,7 +63,7 @@ def _assert_refuses_contract(trace: tl.Trace, path: Path, *needles: str) -> None
     with pytest.raises(RunnablePreflightError) as excinfo:
         _save(trace, path)
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     for needle in needles:
         assert needle in diagnostics, needle
 
@@ -260,7 +260,7 @@ def _registered_test_containers():
     ``test_no_module_level_registry_mutation_in_tests`` lints for).
     """
 
-    from torchlens.ir.container import _CONTAINER_REGISTRY
+    from torchlens._ir.container import _CONTAINER_REGISTRY
 
     register_container(
         _RegBox,
@@ -382,7 +382,7 @@ def test_r67_structure_facts_are_required_and_parse_validated(tmp_path: Path) ->
         # zero facts is legal only for zero sites; forge an inconsistent count instead
         raise runnable_load.ContextFieldInvalidError("control_witnesses.input_structure", "x")
     from torchlens._io.runnable import _encode_literal
-    from torchlens.runnable import ControlWitness, ControlWitnessKind
+    from torchlens._runnable import ControlWitness, ControlWitnessKind
 
     def _forged(fact) -> ControlWitness:
         return ControlWitness(
@@ -710,14 +710,14 @@ def test_r67_consumer_source_scan() -> None:
 
     import inspect
 
-    from torchlens import _runnable_execution
-    from torchlens.capture import trace as capture_trace
+    import torchlens._runnable.output_contracts
+    from torchlens._capture import trace as capture_trace
 
     assert "snapshot_input_boundary" in inspect.getsource(
         capture_trace._record_runnable_input_structure
     )
     assert "snapshot_input_boundary" in inspect.getsource(
-        _runnable_execution._input_structure_witness_check
+        torchlens._runnable.output_contracts._input_structure_witness_check
     )
 
 
@@ -1024,7 +1024,7 @@ def test_r71c_no_live_dict_getattr_in_normative_module() -> None:
 import json as _json  # noqa: E402
 import os as _os  # noqa: E402
 
-from torchlens.runnable import (  # noqa: E402
+from torchlens._runnable import (  # noqa: E402
     WITNESS_FAMILY_REGISTRY,
     WITNESS_FAMILY_REGISTRY_VERSION,
     ReadinessStatus,

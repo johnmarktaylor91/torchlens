@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog.exceptions import RecordingConfigError
+from torchlens.recording.exceptions import RecordingConfigError
 
 
 def _mlp() -> nn.Module:
@@ -19,7 +19,7 @@ def _mlp() -> nn.Module:
 def test_enrich_module_path_strings_populates_metadata() -> None:
     """Module path enrichment adds expected metadata fields."""
 
-    recording = tl.fastlog.record(_mlp(), torch.randn(1, 4), default_op=True)
+    recording = tl.record(_mlp(), torch.randn(1, 4), default_op=True)
     enriched = recording.enrich(["module_path_strings"])
     assert enriched is not recording
     assert enriched.records
@@ -27,20 +27,32 @@ def test_enrich_module_path_strings_populates_metadata() -> None:
     assert "module_path" in enriched.records[0].metadata
 
 
-def test_enrich_param_addresses_requires_capture_time_field() -> None:
-    """Param address enrichment raises clearly when capture data is absent."""
-
-    recording = tl.fastlog.record(_mlp(), torch.randn(1, 4), default_op=True)
-    with pytest.raises(RecordingConfigError, match="parent_param_addresses"):
-        recording.enrich(["param_addresses"])
-
-
 def test_enrich_all_feasible_matches_available_enrichments() -> None:
     """All-feasible applies all enrichments currently computable."""
 
-    recording = tl.fastlog.record(_mlp(), torch.randn(1, 4), default_op=True)
+    recording = tl.record(_mlp(), torch.randn(1, 4), default_op=True)
     by_name = recording.enrich(["module_path_strings"])
     by_preset = recording.enrich("all-feasible")
     assert [record.metadata for record in by_preset.records] == [
         record.metadata for record in by_name.records
     ]
+
+
+def test_record_postprocess_accepts_only_the_live_enrich_steps() -> None:
+    """``postprocess=`` names a live ``Recording.enrich`` step; a removed step refuses typed."""
+
+    live = tl.record(
+        _mlp(),
+        torch.randn(1, 4),
+        default_op=True,
+        postprocess="module_path_strings",
+    )
+    assert "module_path" in live.records[0].metadata
+    with pytest.raises(RecordingConfigError, match="module_path_strings") as info:
+        tl.record(
+            _mlp(),
+            torch.randn(1, 4),
+            default_op=True,
+            postprocess="param_addresses",
+        )
+    assert "param_addresses" not in str(info.value).split("must be")[1]

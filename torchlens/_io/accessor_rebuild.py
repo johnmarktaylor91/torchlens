@@ -10,14 +10,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
-from ..data_classes.buffer import Buffer, BufferAccessor
-from ..data_classes.module import ModuleAccessor
+from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
+from .._data_classes.buffer import Buffer, BufferAccessor
+from .._data_classes.module import ModuleAccessor
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module, ModuleCall
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module, ModuleCall
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 def rebuild_trace_accessors(
@@ -92,7 +92,7 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
     """
 
     buffer_versions: dict[str, list[Op]] = {}
-    for entry in trace.layer_list:
+    for entry in trace._layer_list:
         for grad_record in getattr(entry, "_grad_records", ()):
             grad_record.owner = entry
         if getattr(entry, "is_buffer", False) and entry.address is not None:

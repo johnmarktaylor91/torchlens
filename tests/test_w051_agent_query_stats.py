@@ -35,7 +35,7 @@ def test_closure_handoff_agrees_with_the_tool_on_multipass(loop: Path) -> None:
     """followed_by/preceded_by handoffs reproduce the served rows on a recurrent trace."""
 
     log = tl.load(str(loop))
-    assert any(op.num_passes > 1 for op in log.layer_list)
+    assert any(op.num_passes > 1 for op in log._layer_list)
     for query in [
         {"op": "followed_by", "item": {"op": "func", "value": "tanh"}},
         {"op": "preceded_by", "item": {"op": "func", "value": "tanh"}},
@@ -70,10 +70,10 @@ def test_reduction_out_of_range_is_a_row_status_never_a_batch_failure(tmp_path: 
     log = tl.trace(
         _ScalarTail().eval(),
         torch.randn(2, 4, generator=generator),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     path = tmp_path / "scalar.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     envelope = call_tool(
         "torchlens_payload_stats", {"path": str(path), "reduction": {"retain_dim": 0}}
     )
@@ -107,10 +107,10 @@ def test_to_agent_json_tags_nonfinite_logged_values() -> None:
             self.fc = nn.Linear(4, 4)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            tl.report.log_value("loss_nan", float("nan"))
-            tl.report.log_value("scale_inf", float("inf"))
-            tl.report.log_value("neg_inf", float("-inf"))
-            tl.report.log_value("plain", 1.5)
+            tl.observers.log_value("loss_nan", float("nan"))
+            tl.observers.log_value("scale_inf", float("inf"))
+            tl.observers.log_value("neg_inf", float("-inf"))
+            tl.observers.log_value("plain", 1.5)
             return self.fc(x)
 
     log = tl.trace(_Logs().eval(), torch.randn(2, 4, generator=torch.Generator().manual_seed(3)))

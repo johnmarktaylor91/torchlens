@@ -41,16 +41,16 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
+from torchlens._utils._torch_compat import HAS_NAMED_TENSOR_API
 from torchlens.errors import (
     PathDivergenceError,
     RunnablePreflightError,
     StateBindingError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
-from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
@@ -176,10 +176,8 @@ def test_r63_state_metadata_read_emits_escape_witness(
     escape names AND records its read kind for the producer gate.
     """
 
-    from torchlens.backends.torch.completeness_witness import (
-        host_escape_state_metadata_reads,
-        host_escape_state_source_names,
-    )
+    from torchlens.backends.torch._completeness_escape_state import host_escape_state_source_names
+    from torchlens.backends.torch._completeness_metadata import host_escape_state_metadata_reads
 
     trace = _trace(model_cls(), x)
     assert state_name in host_escape_state_source_names(trace)
@@ -606,7 +604,7 @@ def test_r63_staging_canonicalizes_physical_form(tmp_path: Path) -> None:
 def test_r63_source_tripwire_state_binding_uses_staging_helper() -> None:
     """No state-binding path calls bare ``_byte_guarded_clone`` around the staging helper."""
 
-    import torchlens._runnable_state as module
+    import torchlens._runnable.state as module
 
     source = Path(module.__file__).read_text()
 

@@ -17,7 +17,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors.episode import BundleExperimentError
-from torchlens.experiment import site_sweep, top_k
+from torchlens.experiment import sweep_sites
+from torchlens.experiment._engine import top_k
 
 
 class _Tiny(nn.Module):
@@ -31,7 +32,7 @@ class _Tiny(nn.Module):
 
 
 def _baseline(x: torch.Tensor, model: nn.Module) -> tl.Trace:
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _output_metric(member: tl.Trace) -> float:
@@ -45,29 +46,29 @@ def test_site_sweep_required_arguments_refuse_typed() -> None:
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
             metric=_output_metric,
             retain="most",
             model=model,
-            x=x,
+            inputs=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_retain_invalid"
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
             metric="not callable",  # type: ignore[arg-type]
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_metric_invalid"
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
@@ -82,14 +83,14 @@ def test_site_sweep_live_hook_lane_end_to_end() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates={"relu": "relu_1_2", "tanh": "tanh_1_4"},
         edit=tl.zero_ablate(),
         metric=_output_metric,
         retain="all",
         model=model,
-        x=x,
+        inputs=x,
     )
     assert bundle.names[0] == "baseline"
     assert set(bundle.names) == {"baseline", "relu", "tanh"}
@@ -107,7 +108,7 @@ def test_site_sweep_live_hook_lane_end_to_end() -> None:
 
     assert event_audit_rows(bundle["relu"])
     # The member axis ranks by |value - baseline|.
-    ranked = view.most_changed()
+    ranked = view.rank_changes()
     assert len(ranked) == 2 and ranked[0][1] >= ranked[1][1]
 
 
@@ -116,14 +117,14 @@ def test_site_sweep_retain_none_keeps_rows_releases_members() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2", "tanh_1_4"],
         edit=tl.zero_ablate(),
         metric=_output_metric,
         retain="none",
         model=model,
-        x=x,
+        inputs=x,
     )
     # Members released; numbers survive (extract-before-cleanup, D3c).
     assert bundle.names == ["baseline"]
@@ -137,17 +138,17 @@ def test_site_sweep_rolling_top_k_retention() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2", "tanh_1_4"],
         edit=tl.zero_ablate(),
         metric=_output_metric,
         retain=top_k(1),
         model=model,
-        x=x,
+        inputs=x,
     )
     view = bundle.effects()
-    ranked = view.most_changed()
+    ranked = view.rank_changes()
     top_candidate = ranked[0][0]
     assert set(bundle.names) == {"baseline", top_candidate}
     released = [row for row in view.rows if row.status == "released"]
@@ -160,14 +161,14 @@ def test_site_sweep_refuses_undeclared_multi_site_candidate() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates={"broadcast": tl.func("linear"), "single": "relu_1_2"},
         edit=tl.zero_ablate(),
         metric=_output_metric,
         retain="all",
         model=model,
-        x=x,
+        inputs=x,
     )
     rows = {row.candidate_id: row for row in bundle.effects().rows}
     assert rows["broadcast"].status == "refused"
@@ -179,14 +180,14 @@ def test_site_sweep_refuses_undeclared_multi_site_candidate() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("always")
-        declared = site_sweep(
+        declared = sweep_sites(
             baseline,
             candidates={"broadcast": tl.func("linear")},
             edit=tl.zero_ablate(),
             metric=_output_metric,
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
             multi_site=True,
         )
     declared_rows = {row.candidate_id: row for row in declared.effects().rows}
@@ -200,24 +201,24 @@ def test_site_sweep_duplicate_candidates_refuse_unless_replicates() -> None:
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates={"one": "relu_1_2", "two": "relu_1_2"},
             edit=tl.zero_ablate(),
             metric=_output_metric,
             retain="none",
             model=model,
-            x=x,
+            inputs=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_duplicate_candidates"
-    replicated = site_sweep(
+    replicated = sweep_sites(
         baseline,
         candidates={"one": "relu_1_2", "two": "relu_1_2"},
         edit=tl.zero_ablate(),
         metric=_output_metric,
         retain="none",
         model=model,
-        x=x,
+        inputs=x,
         replicates=True,
     )
     rows = [row for row in replicated.effects().rows if row.candidate_id != "__baseline__"]
@@ -229,14 +230,14 @@ def test_effect_table_survives_save_load_and_unarmed_ledger(tmp_path) -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2"],
         edit=tl.zero_ablate(),
         metric=_output_metric,
         retain="none",
         model=model,
-        x=x,
+        inputs=x,
     )
     path = tmp_path / "sweep_bundle"
     bundle.save(str(path))
@@ -247,30 +248,44 @@ def test_effect_table_survives_save_load_and_unarmed_ledger(tmp_path) -> None:
     # Selections are session-only: the loaded table serves numbers, never
     # a fabricated region.
     with pytest.raises(BundleExperimentError) as excinfo:
-        view.selection()
+        view.to_selection()
     assert excinfo.value.fields["code"] == "effects_selection_unavailable"
 
 
-def test_measure_members_reports_unmeasured_and_refuses_chain_order() -> None:
+def test_map_reports_released_candidates_as_unmeasured() -> None:
     torch.manual_seed(0)
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2", "tanh_1_4"],
         edit=tl.zero_ablate(),
         metric=_output_metric,
         retain=top_k(1),
         model=model,
-        x=x,
+        inputs=x,
     )
-    report = bundle.measure_members(metric=lambda member: len(member.op_labels))
-    assert set(report["values"]) == set(bundle.names)
-    assert len(report["unmeasured"]) == 1  # the released candidate, named
-    with pytest.raises(BundleExperimentError) as excinfo:
-        bundle.measure_members(metric=_output_metric, order="chain")
-    assert excinfo.value.fields["code"] == "measure_members_order_unavailable"
+    report = bundle.map(lambda member: len(member.op_labels))
+    (retained,) = [name for name in bundle.names if name != "baseline"]
+    (released,) = [
+        row.candidate_id
+        for row in bundle.effects().rows
+        if row.candidate_id != "__baseline__" and row.member_name != retained
+    ]
+    # Live members are measured; the released candidate is keyed by its
+    # candidate id and reads "unmeasured", never re-scored, never dropped.
+    assert {name: report[name] for name in bundle.names} == {
+        name: len(bundle[name].op_labels) for name in bundle.names
+    }
+    assert report[released] == "unmeasured"
+    assert set(report) == set(bundle.names) | {released}
+    # The two-argument idiom keeps the same shape.
+    named = bundle.map(lambda member, name: name)
+    assert named[retained] == retained and named[released] == "unmeasured"
+    # Bundle.map is the one per-member read: measure_members is removed
+    # (JMT 1 Nov 2026, walk names.11, per surface.8).
+    assert not hasattr(bundle, "measure_members")
 
 
 @pytest.mark.smoke
@@ -279,19 +294,19 @@ def test_effects_selection_tier_c_conversion_in_session() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2", "tanh_1_4"],
         edit=tl.zero_ablate(),
         metric=_output_metric,
         retain="all",
         model=model,
-        x=x,
+        inputs=x,
     )
-    selection = bundle.effects().top(1).selection()
-    resolved = selection.resolve(baseline) if hasattr(selection, "resolve") else None
+    selection = bundle.effects().top(1).to_selection()
     assert selection is not None
-    assert resolved is None or len(resolved.entries) >= 1
+    resolved = selection if isinstance(selection, tl.Selection) else baseline[selection]
+    assert len(resolved) >= 1
 
 
 def test_site_sweep_engine_vocabulary_closed() -> None:
@@ -302,14 +317,14 @@ def test_site_sweep_engine_vocabulary_closed() -> None:
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
             metric=_output_metric,
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
             engine="rerun",
         )
     assert excinfo.value.fields["code"] == "site_sweep_engine_invalid"
@@ -324,14 +339,14 @@ def test_site_sweep_candidate_plan_shapes_refuse_typed() -> None:
     baseline = _baseline(x, model)
 
     def _sweep(candidates) -> None:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=candidates,
             edit=tl.zero_ablate(),
             metric=_output_metric,
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
         )
 
     with pytest.raises(BundleExperimentError) as excinfo:
@@ -356,14 +371,14 @@ def test_site_sweep_keyless_baseline_refuses_typed() -> None:
     baseline = _baseline(x, model)
     baseline.ops["relu_1_2"].site_key = None  # simulate a legacy keyless capture
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
             metric=_output_metric,
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_site_key_unavailable"
 
@@ -380,17 +395,17 @@ def test_effects_view_requires_a_stored_table() -> None:
         bare.effects()
     assert excinfo.value.fields["code"] == "effects_table_missing"
 
-    swept = site_sweep(
+    swept = sweep_sites(
         baseline,
         candidates={"relu": "relu_1_2"},
         edit=tl.zero_ablate(),
         metric=_output_metric,
         retain="none",
         model=model,
-        x=x,
+        inputs=x,
     )
     with pytest.raises(BundleExperimentError) as excinfo:
-        swept.effects(operation_id="op_never_ran")
+        swept.effects(history_id="op_never_ran")
     assert excinfo.value.fields["code"] == "effects_table_missing"
 
 

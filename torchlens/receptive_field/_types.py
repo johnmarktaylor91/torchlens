@@ -8,7 +8,7 @@ from enum import Enum
 from fractions import Fraction
 from typing import TYPE_CHECKING, ClassVar, Literal, cast
 
-from ..selection import _SelectionOperand
+from .._selection.selection import _SelectionOperand
 from ._errors import ReceptiveFieldError, ReceptiveFieldValidationError
 
 if TYPE_CHECKING:
@@ -183,7 +183,7 @@ class ReceptiveField:
         "io_role",
         "input_op_label",
         "input_shape",
-        "layout",
+        "axis_roles",
         "axes",
         "status",
         "alignment",
@@ -196,7 +196,7 @@ class ReceptiveField:
     io_role: str
     input_op_label: str
     input_shape: tuple[int, ...]
-    layout: GridLayout
+    axis_roles: GridLayout
     axes: tuple[ReceptiveFieldAxis, ...] | None
     status: ReceptiveFieldStatus
     alignment: ReceptiveFieldAlignment
@@ -218,7 +218,7 @@ class ReceptiveField:
         """
 
         _validate_shape(self.input_shape, "input_shape")
-        if len(self.layout.axis_kinds) != len(self.input_shape):
+        if len(self.axis_roles.axis_kinds) != len(self.input_shape):
             raise ValueError("layout axis count must match input_shape rank.")
         if self.axes is None:
             if self.status not in {
@@ -234,9 +234,13 @@ class ReceptiveField:
                 raise ValueError("axes must be ordered by consecutive input_axis values.")
             if any(axis.input_extent != self.input_shape[axis.input_axis] for axis in self.axes):
                 raise ValueError("axis input_extent values must match input_shape.")
-            if tuple(axis.kind for axis in self.axes) != self.layout.axis_kinds:
+            if tuple(axis.kind for axis in self.axes) != self.axis_roles.axis_kinds:
                 raise ValueError("axis kinds must match the derived layout.")
-        if self.batch_coupled and self.axes is not None and "full" not in self.layout.axis_kinds:
+        if (
+            self.batch_coupled
+            and self.axes is not None
+            and "full" not in self.axis_roles.axis_kinds
+        ):
             raise ValueError("batch_coupled requires a full derived input axis.")
 
     @property
@@ -285,10 +289,10 @@ class ReceptiveField:
         """
 
         if self.axes is None:
-            raise ReceptiveFieldError("Geometric axes are unavailable; use .gradient() instead.")
+            raise ReceptiveFieldError("Geometric axes are unavailable; use .probe_grad() instead.")
         values = tuple(getattr(axis, field_name) for axis in self.axes if axis.kind == "windowed")
         if not values:
-            raise ReceptiveFieldError("No windowed axes are available; use .gradient() instead.")
+            raise ReceptiveFieldError("No windowed axes are available; use .probe_grad() instead.")
         return values
 
     @property
@@ -428,7 +432,7 @@ class ReceptiveFieldBox(_SelectionOperand):
         never a fuzzy mask.
         """
 
-        from ..selection import _selection_from_box
+        from .._selection.selection import _selection_from_box
 
         return _selection_from_box(self)
 
@@ -503,7 +507,7 @@ class ReceptiveFieldBox(_SelectionOperand):
 
 
 @dataclass(frozen=True)
-class GradientReceptiveField(_SelectionOperand):
+class GradReceptiveField(_SelectionOperand):
     """Empirical receptive-field influence set measured by autograd."""
 
     __match_args__: ClassVar[tuple[str, ...]] = (
@@ -571,7 +575,7 @@ class GradientReceptiveField(_SelectionOperand):
         (relation=``exact`` w.r.t. the empirical mask), unchanged by lifting.
         """
 
-        from ..selection import _selection_from_gradient
+        from .._selection.selection import _selection_from_gradient
 
         return _selection_from_gradient(self)
 
@@ -625,9 +629,9 @@ class ReceptiveFieldValidation:
         "op_label",
         "unit",
         "geometric",
-        "gradient",
+        "grad",
         "violations",
-        "n_violations",
+        "num_violations",
         "per_axis_excess",
         "slack_per_axis",
         "cross_batch",
@@ -639,9 +643,9 @@ class ReceptiveFieldValidation:
     op_label: str
     unit: tuple[int, ...]
     geometric: Mapping[str, ReceptiveFieldBox]
-    gradient: Mapping[str, GradientReceptiveField]
+    grad: Mapping[str, GradReceptiveField]
     violations: tuple[ReceptiveFieldViolation, ...]
-    n_violations: int
+    num_violations: int
     per_axis_excess: tuple[int, ...] | None
     slack_per_axis: tuple[int, ...] | None
     cross_batch: Literal["none", "geometric", "undeclared"]
@@ -661,9 +665,9 @@ class ReceptiveFieldValidation:
             If counts or diagnostics are structurally invalid.
         """
 
-        if self.n_violations < len(self.violations):
+        if self.num_violations < len(self.violations):
             raise ValueError("n_violations must be at least the listed violation count.")
-        if self.n_violations < 0:
+        if self.num_violations < 0:
             raise ValueError("n_violations must be non-negative.")
 
     @property
@@ -726,7 +730,7 @@ class ReceptiveFieldProfile:
 
 
 __all__ = [
-    "GradientReceptiveField",
+    "GradReceptiveField",
     "GridLayout",
     "ReceptiveField",
     "ReceptiveFieldAlignment",

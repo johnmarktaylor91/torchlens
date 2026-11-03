@@ -14,9 +14,9 @@ from typing import Any
 
 import torch
 
+from .._utils._multipass_access import get_multipass_attr
 from ..backends.registry import TORCH_BACKEND_NAME
 from ..errors._base import TorchLensWarning
-from ..utils._multipass_access import get_multipass_attr
 
 #: Verb-specific vocabulary for the shared site-selection diagnostics, so an
 #: error raised for ``rdm_evolution`` never names ``mds_evolution`` (the
@@ -201,7 +201,7 @@ def _commit_annotation_tensors(trace: Any, staged: OrderedDict[str, torch.Tensor
 
     if not staged:
         return
-    backend_name = str(getattr(trace, "backend", TORCH_BACKEND_NAME))
+    backend_name = str(trace._provenance_backend)
     if backend_name != TORCH_BACKEND_NAME:
         raise ValueError(
             "Tensor annotation blobs are supported only for torch traces in this "

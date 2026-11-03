@@ -43,11 +43,11 @@ verifier reports per-field findings with consequences instead of one alarm
 bell.
 
 ```python
-report = pp.audit(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3})
+report = pp.compare(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3})
 print(report.verdict)                  # "mismatch"
 print(report.mismatched_fields)        # ("mean", "std")
 
-pp.audit(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3}, strict=True)
+pp.compare(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3}, strict=True)
 # PreprocessingAuditError [preprocessing_audit_mismatch]: strict preprocessing
 # audit found mismatched fields -- mean: authority=(0.485, 0.456, 0.406) ...
 ```
@@ -77,8 +77,8 @@ raises a typed error whose remedy shows a working spelling. Recurrent sites
 are pass-qualified (`"cell:2"` is pass 2 of a reused module) -- pass indices
 are first-class, never collapsed.
 
-Two transform slots exist and they are not the same: `tl.trace(transform=)`
-preprocesses INPUTS; `tl.extract_dataset(transform=)` post-processes OUTPUT
+Two transform slots exist and they are not the same: `CaptureOptions(input_transform=)`
+preprocesses INPUTS; `tl.extract_dataset(output_transform=)` post-processes OUTPUT
 activations before storage. For input preprocessing at extraction scale, use
 `input_transform=` (below).
 
@@ -90,7 +90,7 @@ paths = tl.extract_dataset(
     images,                       # any iterable: PIL images, tensors, a Dataset
     ["avgpool", "layer3"],
     batch_size=32,
-    output_dir="features_run",
+    path="features_run",
     input_transform=pre,          # the authority's OWN transform, applied + recorded
     stimulus_ids=image_ids,       # row-order authority, digested into the manifest
     resume=True,                  # continue an interrupted run from its ledger
@@ -107,7 +107,7 @@ before the block existed.
 ## 5. Take the features anywhere
 
 ```python
-loaded = tl.load_extraction("features_run")
+loaded = tl.load("features_run")
 print(loaded.input_preprocessing["verdict"])
 
 from torchlens.bridge import rsatoolbox as tl_rsa
@@ -128,7 +128,7 @@ alignment transforms (including gLocal), export and apply your own -- see
 ```python
 print(loaded.manifest["signature"]["model_identity"]["digest"][:16])  # who computed this
 print(loaded.input_preprocessing["verdict"])                          # on what input regime
-tl.assert_unchanged(model)                                            # model untouched
+tl.fingerprint.assert_unchanged(model)                                            # model untouched
 ```
 
 A resumed run refuses typed on ANY semantic signature mismatch (different
@@ -140,16 +140,36 @@ compute.
 
 Pass-qualified sites make recurrent dynamics one extraction, not a custom
 hook harness -- the representational geometry of each timestep of a reused
-block:
+block. CORnet ships no `torch.hub` entry point, so install a pinned checkout
+and import it directly:
+
+```text
+pip install "git+https://github.com/dicarlolab/CORnet@d0cc17d4b34ad44dedb01683b70eafd15515adad"
+```
+
+`cornet.cornet_s()` returns the network inside `nn.DataParallel` (its
+published checkpoint is keyed that way), so load first and trace `.module`.
+`pretrained=True` downloads the published weights (about 200 MB); the
+example below runs the same mechanics on the random initialization.
 
 ```python
-model = torch.hub.load("dicarlolab/CORnet", "cornet_s", pretrained=True).eval()
-sites = inv.list_sites(model, example_batch)
-v4_passes = [r.selector for r in sites if r.module_address == "module.V4.output"]
-# ['module.V4.output:1', 'module.V4.output:2', ..] -- one per timestep
+# recipe-test: tool=cornet expected=(4, 4)
+import cornet
+import torch
 
-log = tl.trace(model, batch, save=tl.in_module("module.V4"))
-tl.repgeom.rdm_evolution(log, save=tl.in_module("module.V4"))
+import torchlens as tl
+import torchlens.inventory as inv
+
+model = cornet.cornet_s(pretrained=False).module.eval()  # pretrained=True: published weights
+torch.manual_seed(0)
+batch = torch.randn(6, 3, 64, 64)
+sites = inv.list_sites(model, batch[:1])
+v4_passes = [r.selector for r in sites if r.module_address == "V4.output"]
+# ['V4.output:1', 'V4.output:2', 'V4.output:3', 'V4.output:4'] -- one per timestep
+
+log = tl.trace(model, batch, save=tl.module("V4.output"))
+rdms = tl.repgeom.rdm_evolution(log, save=tl.module("V4.output"))  # one RDM per timestep
+RESULT = (len(v4_passes), len(rdms))
 ```
 
 ## Showpiece: whole-network geometry in one pass

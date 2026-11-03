@@ -4,7 +4,7 @@ The r22 fix positive-allowlisted first-party CALLABLES, but the bundle
 ``metadata.pkl`` unpickler still admitted ANY ``torchlens.*`` TYPE unconditionally
 ("reconstruction path, never invoked with attacker args"). That premise is FALSE: a
 pickle ``REDUCE`` INVOKES the admitted type (or its reconstructed instance) with
-attacker arguments. ``torchlens.intervention.save.LazyImportRef`` is a frozen
+attacker arguments. ``torchlens.intervention._spec_values.LazyImportRef`` is a frozen
 dataclass whose ``__call__`` resolves an ARBITRARY import path under a trust flag
 read from its OWN pickled field, so a crafted ``metadata.pkl`` reconstructs
 ``LazyImportRef(import_path="os:system", trust_custom_callables=True)`` and
@@ -40,16 +40,16 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.utils as tlutils
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
+from torchlens.intervention._resolver_registry import resolve_import_ref
+from torchlens.intervention._spec_values import LazyImportRef
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_import_ref
-from torchlens.intervention.save import LazyImportRef
 from torchlens.options import CaptureOptions
+from torchlens.report import _environment as tl_environment
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -122,7 +122,7 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) ->
     raised: BaseException | None = None
     try:
         tl.load(victim)
-    except (TorchLensIOError, pickle.UnpicklingError) as exc:
+    except (ArtifactError, pickle.UnpicklingError) as exc:
         raised = exc
 
     assert raised is not None, "forged LazyImportRef type-reduce was not blocked"
@@ -131,12 +131,43 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) ->
 
 
 @pytest.mark.smoke
-def test_lazyimportref_type_denied_at_unpickler() -> None:
-    """The LazyImportRef TYPE is denied at find_class (the reduce callable is unresolvable)."""
+@pytest.mark.parametrize(
+    "module",
+    [
+        "torchlens.intervention._spec_values",  # where the class lives
+        "torchlens.intervention.save",  # where it lived; the path resolves to nothing
+    ],
+)
+def test_lazyimportref_type_denied_at_unpickler(module: str) -> None:
+    """The LazyImportRef TYPE is denied at find_class under its live and its stale path.
+
+    The allowlist is consulted before resolution, so a non-allowlisted path refuses
+    with UnpicklingError whether it still names a class or no longer resolves at all;
+    an AttributeError leaking from a stale path would bypass the refusal contract.
+    """
 
     unpickler = SafeBundleUnpickler(io.BytesIO(b""))
     with pytest.raises(pickle.UnpicklingError):
-        unpickler.find_class("torchlens.intervention.save", "LazyImportRef")
+        unpickler.find_class(module, "LazyImportRef")
+
+
+@pytest.mark.parametrize(
+    ("module", "name"),
+    [
+        ("torchlens._data_classes.op", "TensorLog"),
+        ("torchlens.intervention.types", "HelperSpec"),
+    ],
+)
+def test_class_names_only_2x_wrote_refuse_as_2x(module: str, name: str) -> None:
+    """A global whose module lives on but whose name only 2.x pickled refuses as a 2.x file."""
+
+    from torchlens.errors import ArtifactTooOldError
+
+    unpickler = SafeBundleUnpickler(io.BytesIO(b""))
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        unpickler.find_class(module, name)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert excinfo.value.fields["observed"] == f"module_path={module}"
 
 
 def test_legit_data_types_and_snapshot_still_admit() -> None:
@@ -144,15 +175,14 @@ def test_legit_data_types_and_snapshot_still_admit() -> None:
 
     unpickler = SafeBundleUnpickler(io.BytesIO(b""))
     admitted = [
-        ("torchlens.data_classes.op", "Op"),
-        ("torchlens.data_classes.op", "TensorLog"),  # locked rename alias of Op
-        ("torchlens.data_classes.trace", "Trace"),
-        ("torchlens.data_classes.grad_fn_call", "GradFnCall"),  # rename target
+        ("torchlens._data_classes.op", "Op"),
+        ("torchlens._data_classes.trace", "Trace"),
+        ("torchlens._data_classes.grad_fn_call", "GradFnCall"),  # rename target
         ("torchlens.intervention._super.super_op", "SuperOp"),  # rename target
         ("torchlens.intervention.types", "InterventionSpec"),
-        ("torchlens.intervention.types", "HelperSpec"),
-        ("torchlens.semantic.facets", "FacetRegistrySnapshot"),
-        ("torchlens.ir.container_registry", "ContainerRecord"),
+        ("torchlens.intervention.types", "Edit"),
+        ("torchlens._semantic.facets", "FacetRegistrySnapshot"),
+        ("torchlens._ir.container_registry", "ContainerRecord"),
     ]
     for module, name in admitted:
         resolved = unpickler.find_class(module, name)
@@ -164,10 +194,10 @@ def test_r21_and_import_sink_gadgets_still_denied() -> None:
     """The r21 private import gadget and other torchlens callables stay denied."""
 
     unpickler = SafeBundleUnpickler(io.BytesIO(b""))
-    # r21 gadget: torchlens.utils._module_is_installed (importlib.import_module sink).
-    assert hasattr(tlutils, "_module_is_installed")
+    # r21 gadget: torchlens.report._environment._module_is_installed (importlib.import_module sink).
+    assert hasattr(tl_environment, "_module_is_installed")
     with pytest.raises(pickle.UnpicklingError):
-        unpickler.find_class("torchlens.utils", "_module_is_installed")
+        unpickler.find_class("torchlens.report._environment", "_module_is_installed")
     # A stdlib module reached off a torchlens module path is still denied (real module
     # pickle, not torchlens-owned).
     with pytest.raises(pickle.UnpicklingError):

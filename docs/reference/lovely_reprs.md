@@ -9,7 +9,7 @@ DOCUMENTED-UNSTABLE pending the naming session):
   repr**; every card names its exits on a `More:` line.
 - Containers point, records show: collection reprs are one-line
   composition cards (`LayerAccessor(553 layers (539 ops, 14 buffers) |
-  .head() .find() .to_pandas())`), never member dumps.
+  .head() .search() .to_pandas())`), never member dumps.
 
 ## The core line
 
@@ -53,7 +53,7 @@ and lookup keys live behind those exits.
 `(disk-backed: metadata only until read)`, `(preview backend: shape/dtype
 only)`, `(edited)` (post-intervention values are never presented as
 observed), `live v<N>` (Params render live, version-checked cores),
-`~` + `(sampled k/N)`, pass tags `(pass k/n)`. Multi-pass layers show per-pass
+`~` + `(is_sampled k/N)`, pass tags `(pass k/n)`. Multi-pass layers show per-pass
 cores or a count -- never a pooled statistic.
 
 ## What no repr library can say (the forensics exhibit)
@@ -77,11 +77,11 @@ checked capture the trace repr instead carries the per-trace PROOF line
 
 ## The graph-scale table
 
-`trace.stats_table()` renders every retained site through the same
+`trace.summary(view="stats")` renders every retained site through the same
 kernel: graph-ordered rows, typed row states (`ok` / `unsaved` /
 `disk_backed` / `unsupported` / `unscanned`), `= parent` marks backed by
 a capture-path-stable distribution verdict (function semantics +
-geometry; payload-pointer comparison is banned), a constructor element
+geometry; payload-pointer comparison is banned), a `max_scan_elements=` element
 budget echoed in the header, and disclosed sampled-column sorts.
 "Sortable, exact where it says exact."
 
@@ -91,7 +91,7 @@ budget echoed in the header, and disclosed sampled-column sorts.
 function, never a monkey-patch (`lovely-tensors` remains installable
 alongside TorchLens). A glanced line is a documented strict subset: no
 envelope, no deviation marks, no graph-proven role, and geometry-seeded
-sampling. `torchlens.stats.echo(site, sink=print)` mounts the same line
+sampling. `torchlens.stats.narrate(site, sink=print)` mounts the same line
 as a live per-firing stream on the capture hook surface;
 `summary_cell` / `treescope_card_fields` are the seam adapters the
 summary panel and HTML cards consume, so a number can never exist only

@@ -15,12 +15,13 @@ from typing import Any
 
 import pytest
 import torch
-from _stale_holders import CountedRoot, OpaqueCallable
+from _stale_holders import CountedRoot, OpaqueCallable, forward_runs
 from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+from torchlens.options import CaptureOptions
 
 
 @pytest.fixture()
@@ -58,8 +59,8 @@ def test_clean_capture_is_never_rescued() -> None:
             return torch.relu(self.linear(v))
 
     trace = tl.trace(Model(), torch.randn(3, 4))
-    assert trace.rescue_rerun is None
-    assert trace.capture_verification_reason != "mode_rescue_rerun"
+    assert trace._rescue_rerun is None
+    assert trace.provenance.verification_reason != "mode_rescue_rerun"
 
 
 def test_rescue_restores_rng_to_capture_entry() -> None:
@@ -81,6 +82,9 @@ def test_rescue_restores_rng_to_capture_entry() -> None:
             escape_diagnostics=[],
             _had_unattributed_tensor_args=len(draws) == 1,
             ops=[],
+            _layer_list=[],
+            _provenance_verified=None,
+            _provenance_verification_reason=None,
         )
 
     capture_with_rescue(run_capture)
@@ -105,12 +109,12 @@ def test_streaming_capture_skips_rescue(raw_cos: Any, tmp_path: Any) -> None:
             storage=tl.to_disk(str(tmp_path / "run.tlspec")),
         )
     assert "cos" not in [op.func_name for op in trace.ops]
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "escape_rescue_unrecovered"
-    assert trace.rescue_rerun is not None
-    assert trace.rescue_rerun["recovered"] is False
-    assert trace.rescue_rerun["skipped_reason"] == "rescue_ineligible"
-    assert trace.rescue_rerun["forward_runs"] == 1
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "escape_rescue_unrecovered"
+    assert trace._rescue_rerun is not None
+    assert trace._rescue_rerun["recovered"] is False
+    assert trace._rescue_rerun["skipped_reason"] == "rescue_ineligible"
+    assert trace._rescue_rerun["forward_runs"] == 1
 
 
 def test_ineligible_capture_with_escape_signal_settles_disclosure() -> None:
@@ -128,9 +132,9 @@ def test_ineligible_capture_with_escape_signal_settles_disclosure() -> None:
     with pytest.warns(UserWarning, match="skipped the rescue"):
         trace = capture_with_rescue(run_capture, eligible=False)
     assert len(runs) == 1
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "escape_rescue_unrecovered"
-    assert trace.rescue_rerun["skipped_reason"] == "rescue_ineligible"
+    assert trace._provenance_verified is False
+    assert trace._provenance_verification_reason == "escape_rescue_unrecovered"
+    assert trace._rescue_rerun["skipped_reason"] == "rescue_ineligible"
 
 
 def test_ineligible_clean_capture_stays_clean() -> None:
@@ -142,8 +146,8 @@ def test_ineligible_clean_capture_stays_clean() -> None:
         return _stub_trace(["relu"], signal=False)
 
     trace = capture_with_rescue(run_capture, eligible=False)
-    assert trace.capture_verification_reason is None
-    assert not hasattr(trace, "rescue_rerun") or trace.rescue_rerun is None
+    assert trace._provenance_verification_reason is None
+    assert not hasattr(trace, "_rescue_rerun") or trace._rescue_rerun is None
 
 
 def _stub_trace(
@@ -153,14 +157,21 @@ def _stub_trace(
     modules: list[Any] | None = None,
     **extra: Any,
 ) -> Any:
-    """Build a minimal trace stub for direct driver tests."""
+    """Build a minimal trace stub for direct driver tests.
 
+    ``ops`` and ``layer_list`` share one row list: the driver reads every row
+    through ``layer_list`` (sumfam F1), and tests append rows through ``ops``.
+    """
+
+    rows = [types.SimpleNamespace(func_name=name) for name in op_names]
     fields: dict[str, Any] = {
         "escape_diagnostics": [],
         "_had_unattributed_tensor_args": signal,
-        "ops": [types.SimpleNamespace(func_name=name) for name in op_names],
+        "ops": rows,
+        "_layer_list": rows,
         "modules": modules or [],
-        "capture_verification_reason": None,
+        "_provenance_verified": None,
+        "_provenance_verification_reason": None,
     }
     fields.update(extra)
     return types.SimpleNamespace(**fields)
@@ -187,8 +198,8 @@ def test_defusion_is_not_counted_as_recovery() -> None:
 
     result = capture_with_rescue(run_capture)
     assert result is primary
-    assert result.capture_verification_reason == "escape_rescue_unrecovered"
-    info = result.rescue_rerun
+    assert result._provenance_verification_reason == "escape_rescue_unrecovered"
+    info = result._rescue_rerun
     assert info["recovered"] is False
     assert "mha_fused" in info["lost_ops"]
     assert "matmul" in info["recovered_ops"]
@@ -209,8 +220,8 @@ def test_strict_superset_rescue_still_recovers() -> None:
 
     result = capture_with_rescue(run_capture)
     assert result is rescued
-    assert result.capture_verification_reason == "mode_rescue_rerun"
-    assert result.rescue_rerun["recovered_ops"] == ("cos",)
+    assert result._provenance_verification_reason == "mode_rescue_rerun"
+    assert result._rescue_rerun["recovered_ops"] == ("cos",)
 
 
 def test_buffer_writing_primary_refuses_the_rescue_rerun() -> None:
@@ -232,10 +243,10 @@ def test_buffer_writing_primary_refuses_the_rescue_rerun() -> None:
         result = capture_with_rescue(run_capture)
     assert len(runs) == 1, "the forward must run exactly once for a buffer-writing primary"
     assert result is primary
-    info = result.rescue_rerun
+    info = result._rescue_rerun
     assert info["skipped_reason"] == "buffer_writes_double_forward"
     assert info["forward_runs"] == 1
-    assert result.capture_verification_reason == "escape_rescue_unrecovered"
+    assert result._provenance_verification_reason == "escape_rescue_unrecovered"
 
 
 def test_train_mode_batchnorm_capture_skips_rescue_end_to_end(raw_cos: Any) -> None:
@@ -254,9 +265,9 @@ def test_train_mode_batchnorm_capture_skips_rescue_end_to_end(raw_cos: Any) -> N
     model = Model()
     model.train()
     with pytest.warns(UserWarning):
-        trace = tl.trace(model, torch.randn(4, 2))
+        trace = tl.trace(model, torch.randn(4, 2), capture=CaptureOptions(carry_state=True))
     assert model.bn.num_batches_tracked.item() == 1, "the forward must not run twice"
-    info = trace.rescue_rerun
+    info = trace._rescue_rerun
     assert info is not None
     assert info["skipped_reason"] == "buffer_writes_double_forward"
     assert "cos" not in [op.func_name for op in trace.ops]
@@ -301,7 +312,7 @@ def test_provably_unchanged_buffer_journal_does_not_refuse_rescue() -> None:
     result = capture_with_rescue(run_capture)
     assert len(runs) == 2, "a provably-unchanged buffer journal must not refuse the re-run"
     assert result is rescued
-    assert result.capture_verification_reason == "mode_rescue_rerun"
+    assert result._provenance_verification_reason == "mode_rescue_rerun"
 
 
 def test_eval_mode_batchnorm_capture_still_rescues_end_to_end(raw_cos: Any) -> None:
@@ -322,12 +333,12 @@ def test_eval_mode_batchnorm_capture_still_rescues_end_to_end(raw_cos: Any) -> N
     with pytest.warns(UserWarning, match="no graph/source provenance"):
         trace = tl.trace(model, torch.randn(4, 2))
     assert model.bn.num_batches_tracked.item() == 0, "eval-mode BN never writes its counter"
-    info = trace.rescue_rerun
+    info = trace._rescue_rerun
     assert info is not None
     assert info["recovered"] is True
     assert info["forward_runs"] == 2
     assert "cos" in [op.func_name for op in trace.ops]
-    assert trace.capture_verification_reason == "mode_rescue_rerun"
+    assert trace.provenance.verification_reason == "mode_rescue_rerun"
 
 
 def test_attribution_failed_rescue_refused_for_buffer_writing_primary() -> None:
@@ -396,12 +407,12 @@ def test_train_bn_attribution_failure_never_double_mutates(raw_cos: Any) -> None
         pytest.warns(UserWarning, match="double-apply"),
         pytest.raises(OutputAttributionError) as exc_info,
     ):
-        tl.trace(model, torch.randn(4, 2))
+        tl.trace(model, torch.randn(4, 2), capture=CaptureOptions(carry_state=True))
     assert model.bn.num_batches_tracked.item() == 1, "the forward must not run twice"
-    partial = getattr(exc_info.value, "partial_log", None)
+    partial = getattr(exc_info.value, "partial_trace", None)
     partial_trace = getattr(partial, "trace", None)
     assert partial_trace is not None
-    info = partial_trace.rescue_rerun
+    info = partial_trace._rescue_rerun
     assert info is not None
     assert info["skipped_reason"] == "buffer_writes_double_forward"
     assert info["forward_runs"] == 1
@@ -439,7 +450,7 @@ def test_successful_attribution_rescue_suppresses_failure_advisory(raw_cos: Any)
     """A rescued attribution failure emits NO capture-attempt-failed advisory.
 
     The advisory tells the user diagnostics ride the exception
-    (``exc.partial_log``) — untruthful when the rescue swallowed the failure
+    (``exc.partial_trace``) — untruthful when the rescue swallowed the failure
     and returned a trace. It is deferred while a rescue is possible and
     dropped on success; re-raising paths flush it (pinned by
     ``test_capture_failure_reporting``).
@@ -456,7 +467,7 @@ def test_successful_attribution_rescue_suppresses_failure_advisory(raw_cos: Any)
     with warnings_module.catch_warnings(record=True) as caught:
         warnings_module.simplefilter("always")
         trace = tl.trace(Model(), torch.tensor([0.25, 0.5]))
-    info = trace.rescue_rerun
+    info = trace._rescue_rerun
     assert info is not None
     assert info["trigger"] == "output_attribution_failed"
     assert info["recovered"] is True
@@ -492,7 +503,7 @@ def test_recovered_rescue_never_clobbers_dynamo_verdict() -> None:
     rescued = _stub_trace(
         ["relu", "cos"],
         _raw_dynamo_region_detected=True,
-        capture_verification_reason="dynamo_region_not_logged",
+        _provenance_verification_reason="dynamo_region_not_logged",
     )
 
     def run_capture() -> Any:
@@ -501,26 +512,26 @@ def test_recovered_rescue_never_clobbers_dynamo_verdict() -> None:
 
     result = capture_with_rescue(run_capture)
     assert result is rescued
-    assert result.capture_verification_reason == "dynamo_region_not_logged"
-    assert result.rescue_rerun is not None, "the rescue attempt must stay disclosed"
+    assert result._provenance_verification_reason == "dynamo_region_not_logged"
+    assert result._rescue_rerun is not None, "the rescue attempt must stay disclosed"
 
 
 def test_escape_detector_diagnostic_triggers_rescue(raw_cos: Any) -> None:
     """The opt-in shadow detector's diagnostics are a rescue trigger too."""
 
-    from torchlens._errors import TorchLensCaptureGapWarning
+    from torchlens._errors import CaptureGapWarning
 
     try:
         wrap_torch(escape_detector="shadow")
-        with pytest.warns(TorchLensCaptureGapWarning):
+        with pytest.warns(CaptureGapWarning):
             trace = tl.trace(_stale_closure_model(raw_cos), torch.tensor([0.25, 0.5]))
-        info = trace.rescue_rerun
+        info = trace._rescue_rerun
         assert info is not None and info["recovered"] is True
         # REVIEWED FLIP (b3-fable R02-2 / b6-fable R16-3): the rescued run's
         # own shadow-detector report is a MORE specific verdict than the
         # generic mode_rescue_rerun stamp and is no longer clobbered by it;
         # the rerun stays disclosed through ``rescue_rerun`` above.
-        assert trace.capture_verification_reason == "callable_escape_shadow_report"
+        assert trace.provenance.verification_reason == "callable_escape_shadow_report"
         assert info["primary_escape_diagnostics"]
         assert "cos" in [op.func_name for op in trace.ops]
     finally:
@@ -558,11 +569,11 @@ def test_rescue_never_double_applies_in_forward_parameter_writes(raw_cos: Any) -
     # Exactly ONE forward's worth of mutation survives on the user's model.
     assert torch.equal(model.lin.weight.detach(), baseline * 2.0)
     # The rescue was attempted, detected as state-writing, undone, refused.
-    assert trace.rescue_rerun is not None
-    assert trace.rescue_rerun["recovered"] is False
-    assert trace.rescue_rerun["skipped_reason"] == "state_writes_double_forward_undone"
-    assert trace.rescue_rerun["forward_runs"] == 2
-    assert trace.capture_verified is False
+    assert trace._rescue_rerun is not None
+    assert trace._rescue_rerun["recovered"] is False
+    assert trace._rescue_rerun["skipped_reason"] == "state_writes_double_forward_undone"
+    assert trace._rescue_rerun["forward_runs"] == 2
+    assert trace.provenance.verified is False
 
 
 def test_rescue_never_double_applies_journal_invisible_param_writes(raw_cos: Any) -> None:
@@ -596,8 +607,8 @@ def test_rescue_never_double_applies_journal_invisible_param_writes(raw_cos: Any
     expected = baseline.clone()
     expected[0, 0] += 1.0
     assert torch.equal(model.lin.weight.detach(), expected)
-    assert trace.rescue_rerun is not None
-    assert trace.rescue_rerun["skipped_reason"] == "state_writes_double_forward_undone"
+    assert trace._rescue_rerun is not None
+    assert trace._rescue_rerun["skipped_reason"] == "state_writes_double_forward_undone"
 
 
 def test_journal_visible_buffer_writes_still_refuse_before_the_rerun(raw_cos: Any) -> None:
@@ -622,12 +633,12 @@ def test_journal_visible_buffer_writes_still_refuse_before_the_rerun(raw_cos: An
     model.eval()
 
     with pytest.warns(UserWarning, match="wrote module buffer state"):
-        trace = tl.trace(model, torch.randn(3, 4))
+        trace = tl.trace(model, torch.randn(3, 4), capture=CaptureOptions(carry_state=True))
 
     assert float(model.count) == 1.0
-    assert trace.rescue_rerun is not None
-    assert trace.rescue_rerun["skipped_reason"] == "buffer_writes_double_forward"
-    assert trace.rescue_rerun["forward_runs"] == 1
+    assert trace._rescue_rerun is not None
+    assert trace._rescue_rerun["skipped_reason"] == "buffer_writes_double_forward"
+    assert trace._rescue_rerun["forward_runs"] == 1
 
 
 def test_minted_source_nodes_do_not_refuse_a_perfect_rescue() -> None:
@@ -649,10 +660,10 @@ def test_minted_source_nodes_do_not_refuse_a_perfect_rescue() -> None:
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is rescued
-    assert result.capture_verification_reason == "mode_rescue_rerun"
-    assert result.rescue_rerun["recovered"] is True
-    assert result.rescue_rerun["recovered_ops"] == ("cos",)
-    assert result.rescue_rerun["lost_ops"] == ()
+    assert result._provenance_verification_reason == "mode_rescue_rerun"
+    assert result._rescue_rerun["recovered"] is True
+    assert result._rescue_rerun["recovered_ops"] == ("cos",)
+    assert result._rescue_rerun["lost_ops"] == ()
 
 
 def test_module_consumed_stale_ref_is_disclosed_and_rescued(raw_cos: Any) -> None:
@@ -678,9 +689,9 @@ def test_module_consumed_stale_ref_is_disclosed_and_rescued(raw_cos: Any) -> Non
         trace = tl.trace(Model(), torch.randn(3, 4))
 
     assert "cos" in [op.func_name for op in trace.ops]
-    assert trace.rescue_rerun is not None
-    assert trace.rescue_rerun["recovered"] is True
-    assert trace.capture_verification_reason == "mode_rescue_rerun"
+    assert trace._rescue_rerun is not None
+    assert trace._rescue_rerun["recovered"] is True
+    assert trace.provenance.verification_reason == "mode_rescue_rerun"
 
 
 def test_ownership_snapshot_pins_members_against_id_reuse() -> None:
@@ -699,7 +710,7 @@ def test_ownership_snapshot_pins_members_against_id_reuse() -> None:
     import gc
     import weakref
 
-    from torchlens.backends.torch.model_prep import _collect_model_owned_tensor_ids
+    from torchlens.backends.torch._module_boundary_adoption import _collect_model_owned_tensor_ids
 
     class Model(nn.Module):
         def __init__(self) -> None:
@@ -734,7 +745,7 @@ def test_intervened_capture_never_reruns_user_callables(raw_cos: Any) -> None:
 
     calls = {"intervene": 0}
 
-    def counting_transform(value: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def counting_transform(value: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         calls["intervene"] += 1
         return value * 0.5
 
@@ -755,9 +766,9 @@ def test_intervened_capture_never_reruns_user_callables(raw_cos: Any) -> None:
 
     assert calls["intervene"] == 1
     # R16-1: the refused re-run is DISCLOSED, never silent clean fields.
-    assert trace.rescue_rerun["skipped_reason"] == "rescue_ineligible"
-    assert trace.rescue_rerun["forward_runs"] == 1
-    assert trace.capture_verification_reason == "escape_rescue_unrecovered"
+    assert trace._rescue_rerun["skipped_reason"] == "rescue_ineligible"
+    assert trace._rescue_rerun["forward_runs"] == 1
+    assert trace.provenance.verification_reason == "escape_rescue_unrecovered"
 
 
 def test_transform_callables_never_double_fire_on_rescue(raw_cos: Any) -> None:
@@ -805,8 +816,10 @@ def test_transform_callables_never_double_fire_on_rescue(raw_cos: Any) -> None:
     tl.trace(
         Control(),
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", output_transform=counting_out),
-        save=tl.options.SaveOptions(activation_transform=counting_act),
+        capture=tl.options.CaptureOptions(
+            output_transform=counting_out, activation_transform=counting_act
+        ),
+        save="all",
     )
     control_act, control_out = calls["act"], calls["out"]
     assert control_out == 1
@@ -816,16 +829,19 @@ def test_transform_callables_never_double_fire_on_rescue(raw_cos: Any) -> None:
         trace = tl.trace(
             Model(),
             torch.randn(3, 4),
-            grad_transform=lambda value, **kwargs: value,
-            capture=tl.options.CaptureOptions(layers_to_save="all", output_transform=counting_out),
-            save=tl.options.SaveOptions(activation_transform=counting_act),
+            capture=tl.options.CaptureOptions(
+                output_transform=counting_out,
+                grad_transform=lambda value, **kwargs: value,
+                activation_transform=counting_act,
+            ),
+            save="all",
         )
 
-    assert trace.rescue_rerun["skipped_reason"] == "rescue_ineligible", (
+    assert trace._rescue_rerun["skipped_reason"] == "rescue_ineligible", (
         "a capture with in-capture transform callables must refuse the rescue "
         "re-run (side effects double-apply) and disclose the refusal"
     )
-    assert trace.rescue_rerun["forward_runs"] == 1
+    assert trace._rescue_rerun["forward_runs"] == 1
     assert calls["out"] == 1, f"output_transform fired {calls['out']}x (expected once)"
     # The escaped cos op is invisible to the primary, so the escape capture
     # saves at most the control's op count; strictly more means a second run.
@@ -848,15 +864,15 @@ def test_recovered_rescue_preserves_specific_verification_reasons() -> None:
     primary = _stub_trace(["none", "linear"], signal=True)
     rescued = _stub_trace(
         ["cos", "linear"],
-        capture_verification_reason="owner_thread_tripwire_changed",
+        _provenance_verification_reason="owner_thread_tripwire_changed",
     )
     traces = iter([primary, rescued])
 
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is rescued
-    assert result.capture_verification_reason == "owner_thread_tripwire_changed"
-    assert result.rescue_rerun["recovered"] is True
+    assert result._provenance_verification_reason == "owner_thread_tripwire_changed"
+    assert result._rescue_rerun["recovered"] is True
 
 
 def test_warning_recorder_leaves_a_user_installed_handler_in_place() -> None:
@@ -907,8 +923,8 @@ def test_failed_rescue_rerun_still_restores_state_writes() -> None:
         "the failed rescue re-run's state write was not restored "
         "(double-applied mutation left on the model)"
     )
-    assert trace.capture_verification_reason == "escape_rescue_unrecovered"
-    assert "rescue died mid-forward" in trace.rescue_rerun["rescue_error"]
+    assert trace._provenance_verification_reason == "escape_rescue_unrecovered"
+    assert "rescue died mid-forward" in trace._rescue_rerun["rescue_error"]
 
 
 def test_interrupted_rescue_rerun_still_restores_state_writes() -> None:
@@ -943,7 +959,7 @@ def test_successful_rescue_rerun_warns_about_the_double_forward() -> None:
     warnings while the user's forward had executed twice.
     """
 
-    from torchlens._errors import TorchLensCaptureGapWarning
+    from torchlens._errors import CaptureGapWarning
     from torchlens.backends.torch.rescue import capture_with_rescue
 
     runs: list[str] = []
@@ -954,7 +970,7 @@ def test_successful_rescue_rerun_warns_about_the_double_forward() -> None:
         runs.append("run")
         return primary if len(runs) == 1 else rescued
 
-    with pytest.warns(TorchLensCaptureGapWarning, match="executed TWICE"):
+    with pytest.warns(CaptureGapWarning, match="executed TWICE"):
         result = capture_with_rescue(run_capture)
     assert result is rescued
 
@@ -1051,6 +1067,6 @@ def test_closure_held_original_is_rebound_without_rescue() -> None:
     model = CountedRoot(_stale_closure_model(raw))
     trace = tl.trace(model, torch.tensor([0.25, 0.5]))
 
-    assert model.calls == [1]
-    assert trace.rescue_rerun is None
+    assert forward_runs(trace, model) == 1
+    assert trace._rescue_rerun is None
     assert [op.func_name for op in trace.ops].count("cos") == 1

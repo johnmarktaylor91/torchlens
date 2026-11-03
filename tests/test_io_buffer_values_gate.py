@@ -7,7 +7,7 @@ flag, no warning, and no manifest row (b8/R62: custom attributes got exactly
 this gate+warn in a prior round; buffers were the sibling channel left open).
 Buffer values are training-data-derived state (running statistics, counters),
 so the fix mirrors the custom-attributes belt: ``include_buffer_values=`` on
-``tl.save`` and ``tl.to_disk`` defaulting to ``True`` (historical behavior
+``Trace.save`` and ``tl.to_disk`` defaulting to ``True`` (historical behavior
 preserved), a ``buffer_values_disclosure`` manifest entry on every save, a
 save-time warning when values actually embed, and NEVER rewriting values.
 These canaries plant a distinctive buffer value the forward overwrites and
@@ -73,7 +73,7 @@ def test_default_save_ships_values_warns_and_discloses(tmp_path: Path) -> None:
     assert "canary" in trace._buffer_initial_values
     bundle = tmp_path / "with_buffers"
     with pytest.warns(TorchLensWarning, match="forward-overwritten buffer"):
-        tl.save(trace, bundle, overwrite=True)
+        trace.save(bundle, overwrite=True)
 
     assert _canary_bytes() in _bundle_bytes(bundle)
     manifest = json.loads((bundle / "manifest.json").read_text())
@@ -95,7 +95,7 @@ def test_audit_level_is_gated_too(tmp_path: Path) -> None:
 
     trace = _capture()
     bundle = tmp_path / "audit_held"
-    tl.save(trace, bundle, level="audit", overwrite=True, include_buffer_values=False)
+    trace.save(bundle, level="audit", overwrite=True, include_buffer_values=False)
 
     assert _canary_bytes() not in _bundle_bytes(bundle)
     manifest = json.loads((bundle / "manifest.json").read_text())
@@ -110,7 +110,7 @@ def test_include_false_drops_channel_and_still_names_it(tmp_path: Path) -> None:
 
     trace = _capture()
     bundle = tmp_path / "without_buffers"
-    tl.save(trace, bundle, overwrite=True, include_buffer_values=False)
+    trace.save(bundle, overwrite=True, include_buffer_values=False)
 
     manifest = json.loads((bundle / "manifest.json").read_text())
     kinds = {entry["kind"] for entry in manifest["tensors"]}
@@ -131,7 +131,7 @@ def test_include_false_does_not_mutate_live_trace(tmp_path: Path) -> None:
     """The gate scrubs the ARTIFACT only; the live trace keeps its values."""
 
     trace = _capture()
-    tl.save(trace, tmp_path / "b", overwrite=True, include_buffer_values=False)
+    trace.save(tmp_path / "b", overwrite=True, include_buffer_values=False)
     assert trace._buffer_initial_values["canary"].tolist() == [_CANARY_A, _CANARY_B]
 
 
@@ -144,7 +144,7 @@ def test_bufferless_save_stays_silent_and_discloses_empty(tmp_path: Path) -> Non
     bundle = tmp_path / "no_buffers"
     with _warnings.catch_warnings():
         _warnings.simplefilter("error", TorchLensWarning)
-        tl.save(trace, bundle, overwrite=True)
+        trace.save(bundle, overwrite=True)
 
     disclosure = _manifest_disclosure(bundle)
     assert disclosure["included"] is True
@@ -153,7 +153,7 @@ def test_bufferless_save_stays_silent_and_discloses_empty(tmp_path: Path) -> Non
 
 
 def test_streaming_save_warns_and_discloses(tmp_path: Path) -> None:
-    """Streaming to_disk goes through the same belt as tl.save."""
+    """Streaming to_disk goes through the same belt as Trace.save."""
 
     bundle = tmp_path / "streamed.tl"
     with pytest.warns(TorchLensWarning, match="forward-overwritten buffer"):

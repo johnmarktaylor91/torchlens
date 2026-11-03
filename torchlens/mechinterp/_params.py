@@ -32,10 +32,17 @@ from typing import Any
 
 import torch
 
-from ..semantic.tolerances import within_reconstruction_tolerance
+from .._semantic.tolerances import within_reconstruction_tolerance
 from ._errors import refuse
+from ._factored import FactoredMatrix
 
-__all__ = ["HeadWeightViews", "ProjectionSource", "head_weight_views"]
+__all__ = [
+    "HeadWeightViews",
+    "ProjectionSource",
+    "head_weight_views",
+    "ov_circuit",
+    "qk_circuit",
+]
 
 #: Module classes whose 2D weight is stored [in_features, out_features].
 _IN_OUT_CLASSES = frozenset({"Conv1D"})
@@ -73,7 +80,7 @@ class ProjectionSource:
     module_address: str
     class_name: str
     orientation: str
-    fused_qkv: bool
+    has_fused_qkv: bool
     slice_cols: tuple[int, int] | None
     verification: str
 
@@ -97,8 +104,8 @@ class HeadWeightViews:
     b_k: torch.Tensor | None
     b_v: torch.Tensor | None
     b_o: torch.Tensor | None
-    n_q_heads: int
-    n_kv_heads: int
+    num_q_heads: int
+    num_kv_heads: int
     d_head: int
     module_address: str
     sources: dict[str, ProjectionSource]
@@ -348,9 +355,16 @@ def _verify_qkv(
     n_heads, _, d_head = weight_view.shape
     flat = weight_view.permute(1, 0, 2).reshape(hidden.shape[-1], n_heads * d_head)
     recon = hidden @ flat
+    # The reconstruction is an independent summation, so the budget carries the
+    # accumulated-|addend| magnitude (_semantic/tolerances.py); without it the
+    # strict form refuses correct views wherever q/k/v cancel (all 36 roles of
+    # real GPT-2 small, measured), while wrong views still miss by >1e4x.
+    magnitude = hidden.detach().abs() @ flat.detach().abs()
     if bias_view is not None:
         recon = recon + bias_view.reshape(-1)
+        magnitude = magnitude + bias_view.detach().abs().reshape(-1)
     recon = recon.reshape(-1, n_heads, d_head)
+    magnitude = magnitude.reshape(-1, n_heads, d_head)
     target = facet_tensor
     if target.dim() == 4 and target.shape[1] == n_heads and target.shape[3] == d_head:
         # [b, head, pos, d_head] layout: bring heads next to d_head first.
@@ -358,7 +372,9 @@ def _verify_qkv(
     if target.numel() != recon.numel():
         return "unavailable"
     target = target.reshape(-1, n_heads, d_head)
-    if not within_reconstruction_tolerance(recon, target, reduction_length=int(hidden.shape[-1])):
+    if not within_reconstruction_tolerance(
+        recon, target, magnitude=magnitude, reduction_length=int(hidden.shape[-1])
+    ):
         refuse(
             code="mi_weight_view_unverified",
             message="The derived head-indexed weight view does not reproduce the captured "
@@ -480,7 +496,7 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
             module_address=str(getattr(proj_module, "address", "")),
             class_name=class_name,
             orientation=orientation,
-            fused_qkv=fused,
+            has_fused_qkv=fused,
             slice_cols=slice_cols,
             verification=verification,
         )
@@ -500,7 +516,7 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
         module_address=str(getattr(o_module, "address", "")),
         class_name=o_class,
         orientation=o_orientation,
-        fused_qkv=False,
+        has_fused_qkv=False,
         slice_cols=None,
         verification=o_source,
     )
@@ -514,8 +530,8 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
         b_k=biases["b_k"],
         b_v=biases["b_v"],
         b_o=b_o,
-        n_q_heads=n_q_heads,
-        n_kv_heads=n_kv_heads,
+        num_q_heads=n_q_heads,
+        num_kv_heads=n_kv_heads,
         d_head=d_head,
         module_address=address,
         sources=sources,
@@ -532,3 +548,95 @@ def _output_projection(
     attn_out = _facet(view, "attn_out")
     proj_module, param, _ancestry = _projection_for(trace, attn_out, address, weight_params)
     return proj_module, param, "dataflow_anchored"
+
+
+def _kv_for_query_heads(views: HeadWeightViews, weight: torch.Tensor) -> torch.Tensor:
+    """Map a ``[n_kv_heads, ...]`` K/V view onto the query heads it serves.
+
+    Under grouped-query attention query head ``h`` reads KV head
+    ``h // (n_q_heads // n_kv_heads)`` (the contiguous grouping of
+    transformers' ``repeat_kv``), so the per-query-head circuit uses that
+    head's K/V weight. MHA (equal counts) is the identity mapping.
+    """
+
+    if views.num_kv_heads == views.num_q_heads:
+        return weight
+    if views.num_kv_heads <= 0 or views.num_q_heads % views.num_kv_heads != 0:
+        refuse(
+            code="mi_head_geometry_unavailable",
+            message=f"{views.num_q_heads} query heads do not group evenly over "
+            f"{views.num_kv_heads} KV heads at {views.module_address!r}.",
+            remedy="report the attention class; uneven KV grouping has no defined "
+            "per-query-head circuit",
+            num_q_heads=views.num_q_heads,
+            n_kv_heads=views.num_kv_heads,
+        )
+    return weight.repeat_interleave(views.num_q_heads // views.num_kv_heads, dim=0)
+
+
+def _views_for(trace: Any, attention: Any) -> HeadWeightViews:
+    """Return verified head views for ``attention`` (record, address, or views)."""
+
+    if isinstance(attention, HeadWeightViews):
+        return attention
+    return head_weight_views(trace, attention)
+
+
+def qk_circuit(trace: Any, attention: Any) -> FactoredMatrix:
+    """Return the per-query-head QK circuit ``W_Q_h @ W_K_h^T`` as a FactoredMatrix.
+
+    Built on :func:`head_weight_views` (orientation, fused-QKV slicing and
+    GQA already verified against captured payloads), the TransformerLens
+    ``model.QK`` convention: shape ``[n_q_heads, d_model, d_model]``, query
+    side on the left (``resid_dst @ QK @ resid_src^T`` gives the pre-scale
+    attention logits of the bilinear form). Biases and the ``1/sqrt(d_head)``
+    scale are not included, as in TransformerLens. Under GQA each query
+    head pairs with the KV head that serves it.
+
+    Parameters
+    ----------
+    trace:
+        A finished torchlens trace.
+    attention:
+        Attention module record or address, or an already-derived
+        :class:`HeadWeightViews`.
+
+    Returns
+    -------
+    FactoredMatrix
+        Factors ``A = W_Q`` ``[n_q_heads, d_model, d_head]`` and
+        ``B = W_K^T`` ``[n_q_heads, d_head, d_model]``.
+    """
+
+    views = _views_for(trace, attention)
+    w_k = _kv_for_query_heads(views, views.w_k)
+    return FactoredMatrix(views.w_q, w_k.transpose(-2, -1))
+
+
+def ov_circuit(trace: Any, attention: Any) -> FactoredMatrix:
+    """Return the per-query-head OV circuit ``W_V_h @ W_O_h`` as a FactoredMatrix.
+
+    The TransformerLens ``model.OV`` convention on :func:`head_weight_views`:
+    shape ``[n_q_heads, d_model, d_model]``, mapping a source residual vector
+    to the head's write into the residual stream (``resid_src @ OV``).
+    Biases are not included (``b_o`` is not attributable per head). Under
+    GQA each query head pairs with the KV head that serves it.
+
+    Parameters
+    ----------
+    trace:
+        A finished torchlens trace.
+    attention:
+        Attention module record or address, or an already-derived
+        :class:`HeadWeightViews`.
+
+    Returns
+    -------
+    FactoredMatrix
+        Factors ``A = W_V`` ``[n_q_heads, d_model, d_head]`` and
+        ``B = W_O`` ``[n_q_heads, d_head, d_model]``.
+    """
+
+    views = _views_for(trace, attention)
+    w_v = _kv_for_query_heads(views, views.w_v)
+    return FactoredMatrix(w_v, views.w_o)

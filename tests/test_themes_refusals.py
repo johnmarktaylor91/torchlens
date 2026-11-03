@@ -15,7 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import lenses
+from torchlens._visualization import lenses
 
 
 @pytest.fixture(scope="module")
@@ -55,7 +55,7 @@ def test_overview_and_blueprint_never_refuse(plain_log: Any) -> None:
 def test_detail_ceiling_refusal_names_both_remedies(plain_log: Any, monkeypatch: Any) -> None:
     """debug/dims above the ceiling refuse naming module= and the override."""
 
-    from torchlens.visualization.lenses import _resolve as resolve_module
+    from torchlens._visualization.lenses import _resolve as resolve_module
 
     monkeypatch.setattr(resolve_module, "LENS_DETAIL_CEILING", 2)
     for name in ("debug", "dims"):

@@ -45,7 +45,7 @@ def _saved_op_labels(trace: tl.Trace) -> list[str]:
         Saved Op labels in execution order.
     """
 
-    return [op.label for op in trace.layer_list if op.has_saved_activation]
+    return [op.label for op in trace._layer_list if op.has_saved_activation]
 
 
 def test_rerun_preserves_static_layers_to_save_subset() -> None:
@@ -55,10 +55,11 @@ def test_rerun_preserves_static_layers_to_save_subset() -> None:
     log = tl.trace(
         ThreeOpModel(),
         x,
-        capture=CaptureOptions(layers_to_save=["relu"], save_arg_values=True),
+        capture=CaptureOptions(save_args=True),
+        save=["relu"],
     )
     saved_before = _saved_op_labels(log)
-    num_ops_before = len(log.layer_list)
+    num_ops_before = len(log._layer_list)
 
     log.run(ThreeOpModel(), x + 1)
 
@@ -73,7 +74,7 @@ def test_rerun_preserves_predicate_save_subset() -> None:
     x = torch.randn(2, 3)
     log = tl.trace(ThreeOpModel(), x, save=tl.func("relu"))
     saved_before = _saved_op_labels(log)
-    num_ops_before = len(log.layer_list)
+    num_ops_before = len(log._layer_list)
 
     log.run(ThreeOpModel(), x + 1)
 

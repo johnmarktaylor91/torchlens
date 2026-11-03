@@ -20,12 +20,15 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
+from ..._ir.selector_eval import first_selector_kind_outside, selector_contains_kind
+from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
+from ..._selection.selectors import BaseSelector
 from ...intervention.hooks import make_hook_context, normalize_hook
-from ...intervention.selectors import BaseSelector
-from ...intervention.types import HelperSpec, InterventionDecision
-from ...ir.selector_eval import first_selector_kind_outside, selector_contains_kind
-from ...postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
+from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
+
+#: Refusal code for gradient-universe sites (registered in `_protocols.mlx`).
+_MLX_REFUSAL_BACKWARD = "backward_capture_unsupported"
 
 MLX_STATIC_INTERVENTION_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS
 """Selector kinds resolvable from static capture-time labels on MLX.
@@ -153,6 +156,7 @@ def resolve_mlx_intervention_plan(
                 "tl.when(tl.func(...) | tl.label(...) | tl.in_module(...), action) "
                 "or the PyTorch backend."
             )
+        _reject_gradient_site(selector)
         _reject_non_static_selector(selector, surface="intervene")
         plan = MLXInterventionPlan(
             selector=selector,
@@ -162,13 +166,27 @@ def resolve_mlx_intervention_plan(
         if not isinstance(halt, BaseSelector):
             raise BackendUnsupportedError(
                 "MLX backend supports trace(halt=...) only for static-label "
-                "selectors (tl.func, tl.label, tl.contains, tl.in_module and "
+                "selectors (tl.func, tl.label, tl.label_contains, tl.in_module and "
                 "boolean composites). Value-dependent halt predicates need "
                 "concrete values at predicate time; use the PyTorch backend."
             )
         _reject_non_static_selector(halt, surface="halt")
         halt_selector = halt
     return plan, halt_selector
+
+
+def _reject_gradient_site(selector: BaseSelector) -> None:
+    """Refuse a site outside the activation universe: MLX has no backward capture."""
+
+    from ...intervention.hooks import split_site_branches
+
+    if any(universe != "activation" for universe, _branch in split_site_branches(selector)):
+        raise BackendUnsupportedError(
+            "MLX backend supports forward interventions only; the site "
+            f"{selector!r} addresses a gradient, which needs backward capture "
+            "that MLX does not declare. Use the PyTorch backend for gradient edits.",
+            code=_MLX_REFUSAL_BACKWARD,
+        )
 
 
 def _reject_non_static_selector(selector: BaseSelector, *, surface: str) -> None:
@@ -189,7 +207,7 @@ def _reject_non_static_selector(selector: BaseSelector, *, surface: str) -> None
         return
     raise BackendUnsupportedError(
         f"MLX backend supports trace({surface}=...) only for static-label "
-        "selectors tl.func, tl.label, tl.contains, tl.module, tl.in_module and "
+        "selectors tl.func, tl.label, tl.label_contains, tl.module, tl.in_module and "
         f"boolean composites (&, |, ~) of those; unsupported selector kind "
         f"{unsupported!r}. Value-dependent predicates need concrete activation "
         "values at predicate time, which MLX lazy evaluation does not expose "
@@ -215,15 +233,11 @@ def _resolve_decision_applier(decision: InterventionDecision, mx: Any) -> MLXHoo
     Raises
     ------
     BackendUnsupportedError
-        For directions, actions, flags, or helpers outside the MLX contract.
+        For actions, flags, or helpers outside the MLX contract.
     """
 
-    if decision.direction != "forward":
-        raise BackendUnsupportedError(
-            "MLX backend supports forward interventions only; direction "
-            f"{decision.direction!r} requires backward capture, which MLX does "
-            "not support (functional AD has no per-op backward nodes)."
-        )
+    # Gradient sites (tl.grad(...)) are outside the static selector kinds the
+    # caller admits, so every decision reaching here edits an activation.
     if decision.keep_grad or decision.isolate:
         raise BackendUnsupportedError(
             "MLX backend interventions do not support keep_grad or isolate; "
@@ -240,12 +254,12 @@ def _resolve_decision_applier(decision: InterventionDecision, mx: Any) -> MLXHoo
             "MLX backend interventions require an action; tl.when(selector, None) "
             "declares no replacement to apply."
         )
-    if isinstance(hook, HelperSpec):
+    if isinstance(hook, Edit):
         return _resolve_helper_applier(hook, mx)
     return _resolve_callable_applier(hook)
 
 
-def _resolve_helper_applier(spec: HelperSpec, mx: Any) -> MLXHookApplier:
+def _resolve_helper_applier(spec: Edit, mx: Any) -> MLXHookApplier:
     """Resolve a built-in helper spec to its MLX-native applier.
 
     Parameters
@@ -261,7 +275,7 @@ def _resolve_helper_applier(spec: HelperSpec, mx: Any) -> MLXHookApplier:
         Curated MLX application of the helper.
     """
 
-    name = spec.helper_name
+    name = spec.name
     kwargs = dict(spec.kwargs)
     identity = f"helper:{name}"
     if name == "zero_ablate":
@@ -279,15 +293,16 @@ def _resolve_helper_applier(spec: HelperSpec, mx: Any) -> MLXHookApplier:
             )
         return MLXHookApplier(identity, lambda out: out + delta)
     if name == "clamp":
-        low = kwargs.get("min")
-        high = kwargs.get("max")
+        low = kwargs.get("low")
+        high = kwargs.get("high")
         return MLXHookApplier(identity, lambda out: mx.clip(out, low, high))
     if name == "mean_ablate":
         source = spec.args[0] if spec.args else None
-        if source is not None or kwargs.get("over", "self") != "self":
+        if source is not None or kwargs.get("dim") is not None or "population_identity" in kwargs:
             raise BackendUnsupportedError(
                 "MLX backend tl.mean_ablate(...) interventions support the "
-                "over='self' form only; tensor sources are torch-side semantics."
+                "self form with dim=None only; tensor and population sources and "
+                "axis-aware means are torch-side semantics."
             )
         return MLXHookApplier(identity, lambda out: mx.zeros_like(out) + mx.mean(out))
     if name == "replace_with":
@@ -315,7 +330,7 @@ def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
     Parameters
     ----------
     hook:
-        User callable with the standard ``fn(out, *, hook)`` hook signature.
+        User callable with the standard ``fn(out, *, ctx)`` hook signature.
 
     Returns
     -------
@@ -323,7 +338,7 @@ def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
         Applier invoking the callable with a minimal hook context.
     """
 
-    normalized = normalize_hook(hook, direction="forward")
+    normalized = normalize_hook(hook)
     identity = f"callable:{getattr(hook, '__qualname__', type(hook).__name__)}"
 
     def _apply(out: Any) -> Any:
@@ -332,9 +347,9 @@ def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
         context = make_hook_context(
             name=identity,
             timing="post",
-            direction="forward",
+            signal="forward",
         )
-        return normalized(out, hook=context)
+        return normalized(out, ctx=context)
 
     return MLXHookApplier(identity, _apply)
 

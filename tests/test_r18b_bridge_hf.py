@@ -1,6 +1,6 @@
 """Regression tests for r18b bridge/hf.py hardening.
 
-Covers four A3 findings on ``torchlens/bridge/hf.py``:
+Covers four A3 findings on ``torchlens/bridge/transformers.py``:
 
 * A3-06 -- autoroute predicates must decline implausible modality/chat values.
 * A3-07 -- list image preprocessing must not run per-item transforms N+1 times.
@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.bridge.hf as hf
+import torchlens.bridge.transformers as hf
 
 # ---------------------------------------------------------------------------
 # A3-06 -- predicate misclassification
@@ -200,9 +200,11 @@ def test_trace_text_explicit_tokenizer_end_to_end(monkeypatch: Any) -> None:
         def __call__(self, text: Any, **kwargs: Any) -> Any:
             return {"input_ids": text}
 
-    monkeypatch.setattr(tl, "trace", lambda *a, **k: SimpleNamespace(input_preprocessor=None))
+    monkeypatch.setattr(
+        tl, "trace", lambda *a, **k: SimpleNamespace(_provenance_input_preprocessor=None)
+    )
     log = hf.trace_text(Model(), "hello", tokenizer=ExplicitCustomTokenizer())
-    record = log.input_preprocessor
+    record = log._provenance_input_preprocessor
 
     assert record.verified is False
     assert record.identifier == "unknown"

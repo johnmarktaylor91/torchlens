@@ -10,7 +10,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import utils
+from torchlens import _utils as utils
+from torchlens._record_type import record_type
 from torchlens.experimental import attribute_walk
 
 
@@ -98,7 +99,7 @@ def _first_saved_label(model: nn.Module, x: torch.Tensor) -> str:
     log = _metadata_log(model, x)
     for label in log.layer_labels:
         if not label.startswith(("input", "output")):
-            if log.layer_num_calls.get(label, 1) > 1:
+            if log._layer_num_calls.get(label, 1) > 1:
                 return f"{label}:1"
             return label
     raise AssertionError("No internal layer found.")
@@ -110,7 +111,7 @@ def _metadata_log(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
 
 
@@ -155,7 +156,7 @@ def test_batched_extract_memory_and_disk_on_three_architectures(
         stimuli,
         [label],
         batch_size=x.shape[0],
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     assert len(container_paths) == 2
@@ -219,14 +220,19 @@ def test_layer_accessor_queries_and_completion(
     log = _metadata_log(model, x)
     label = _first_saved_label(model, x)
     base_label = label.split(":", 1)[0]
-    operator = log[label].func_name or log[label].layer_type
-    assert log.layers.total() == len(log.layer_logs)
+    operator = log[label].func_name or record_type(log[label])
+    assert log.layers.total() == len(log._layer_logs)
     assert base_label in log.layers._ipython_key_completions_()
     assert base_label in dir(log.layers)
-    assert isinstance(log.layers.by_operator(), dict)
-    assert base_label in log.layers.by_operator(operator)
-    assert isinstance(log.layers.by_module(), dict)
-    assert isinstance(log.layers.by_module_and_operator(), dict)
+    assert isinstance(log.layers.count_by("kind"), dict)
+    same_operator = [
+        layer.layer_label
+        for layer in log.layers
+        if (layer.func_name or layer.layer_type) == operator
+    ]
+    assert base_label in same_operator
+    assert isinstance(log.layers.count_by("module"), dict)
+    assert isinstance(log.layers.count_by("module", "kind"), dict)
 
 
 def test_trace_site_reports(architecture: tuple[nn.Module, torch.Tensor]) -> None:

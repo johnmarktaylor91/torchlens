@@ -11,16 +11,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.errors import SiteResolutionError
-from torchlens.semantic import (
-    FacetRecipe,
-    FacetSpec,
-    FacetView,
-    MissingFacetError,
-    MissingGradient,
+from torchlens._semantic import (
     facets as facets_mod,
 )
-from torchlens.semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
+from torchlens._semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
+from torchlens.errors import MissingFacetError
+from torchlens.facets import FacetFunction, FacetSpec, FacetView, MissingGrad
+from torchlens.intervention.errors import SiteResolutionError
 
 
 class _Record:
@@ -121,7 +118,7 @@ def test_empty_facet_view() -> None:
     assert not view.has("x")
     assert list(view) == []
     assert len(view) == 0
-    assert view.recipe_source is None
+    assert view.function_source is None
 
 
 def test_multi_recipe_merge_warns_and_last_wins() -> None:
@@ -140,7 +137,7 @@ def test_multi_recipe_merge_warns_and_last_wins() -> None:
         return {"x": 3, "z": 4}
 
     view = FacetView(_Record())
-    assert view.recipe_source == ("first_recipe", "second_recipe")
+    assert view.function_source == ("first_recipe", "second_recipe")
     with pytest.warns(UserWarning, match="ambiguous same-tier recipes"):
         assert view.x == 3
     assert view.y == 2
@@ -170,9 +167,7 @@ def test_trace_snapshot_is_immune_to_later_registry_mutation() -> None:
 
         return {"snapshot_value": 1}
 
-    log = tl.trace(
-        Tiny(), torch.randn(1, 2), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(Tiny(), torch.randn(1, 2), save="all")
 
     @tl.facets.register(class_name="Linear")
     def second_linear(record: Any) -> dict[str, Any]:
@@ -204,16 +199,16 @@ def test_trace_recipes_and_using_are_capture_time_additive() -> None:
     per_trace = tl.trace(
         model,
         x,
-        recipes=[local_recipe],
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        facets=[local_recipe],
+        save="all",
     )
     assert per_trace.modules["self"].facets.local_value == "present"
 
-    with tl.facets.using(local_recipe):
-        contextual = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    with tl.facets.adding(local_recipe):
+        contextual = tl.trace(model, x, save="all")
     assert contextual.modules["self"].facets.local_value == "present"
 
-    outside = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    outside = tl.trace(model, x, save="all")
     assert not outside.modules["self"].facets.has("local_value")
 
 
@@ -243,7 +238,7 @@ def test_structural_output_facets_expose_names_and_method_collisions() -> None:
             return self.block(x)
 
     x = torch.randn(2, 3)
-    log = tl.trace(Model(), x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(Model(), x, save="all")
     facets = log.modules["block"].facets
 
     assert torch.equal(facets["keys"], x + 1)
@@ -285,9 +280,7 @@ def test_structural_output_facets_expose_namedtuple_and_dataclass_names() -> Non
 
             return self.block(x)
 
-    log = tl.trace(
-        Model(), torch.randn(2, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(Model(), torch.randn(2, 3), save="all")
     facets = log.modules["block"].facets
 
     assert "out0.values" in facets.keys()
@@ -322,7 +315,7 @@ def test_structseq_output_facets_expose_torch_return_type_names() -> None:
             return self.block(x)
 
     x = torch.randn(2, 3)
-    log = tl.trace(Model(), x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(Model(), x, save="all")
     facets = log.modules["block"].facets
     expected = torch.max(x, dim=1)
 
@@ -354,7 +347,7 @@ def test_keys_has_get_are_available_now_for_unsaved_op_backed_facets() -> None:
     assert "normalized" not in facets
     assert not facets.has("normalized")
     assert facets.get("normalized", "default") == "default"
-    assert facets.menu()["normalized"].status == "needs_capture"
+    assert facets.declared()["normalized"].status == "needs_capture"
     with pytest.raises(MissingFacetError, match="save=.*including"):
         facets["normalized"]
     with pytest.raises(MissingFacetError, match="save=.*including"):
@@ -393,14 +386,12 @@ def test_structurally_absent_declared_facet_raises_plain_keyerror() -> None:
 
             return self.norm(x)
 
-    log = tl.trace(
-        Model(), torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(Model(), torch.randn(2, 4), save="all")
     facets = log.modules["norm"].facets
 
     assert "beta" not in facets.keys()
     assert "beta" not in facets
-    assert facets.menu()["beta"].status == "structurally_absent"
+    assert facets.declared()["beta"].status == "structurally_absent"
     with pytest.raises(KeyError) as exc_info:
         facets["beta"]
     assert not isinstance(exc_info.value, MissingFacetError)
@@ -426,7 +417,7 @@ def test_lstm_multi_output_facets_preserve_single_call_roles() -> None:
             return self.lstm(x)
 
     x = torch.randn(4, 2, 3)
-    log = tl.trace(LSTMModel(), x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(LSTMModel(), x, save="all")
     lstm = log.modules["lstm"]
 
     assert lstm.num_calls == 1
@@ -462,16 +453,14 @@ def test_facetspec_read_and_default_missing_gradient() -> None:
         """Return the first feature as an op-anchored FacetSpec."""
 
         op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
+        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
 
-    log = tl.trace(
-        Tiny(), torch.randn(4, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(Tiny(), torch.randn(4, 3), save="all")
     facet = log.modules["linear"].facets["first_feature"]
 
     assert torch.equal(facet, log.modules["linear"].out[..., 0])
     missing = facet.grad
-    assert isinstance(missing, MissingGradient)
+    assert isinstance(missing, MissingGrad)
     assert "backward_ready=True" in missing.reason
     assert "save_grads" in missing.reason
     assert "home_label='linear_1_1:1'" in repr(facet)
@@ -502,12 +491,13 @@ def test_facetspec_grad_matches_manual_slice_when_saved() -> None:
         """Return the first feature as an op-anchored FacetSpec."""
 
         op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
+        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
 
     log = tl.trace(
         Tiny(),
         torch.randn(4, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save="all",
     )
     log.log_backward(log[log.output_layers[0]].out.sum())
     facet = log.modules["linear"].facets["first_feature"]
@@ -539,17 +529,18 @@ def test_facetspec_grad_missing_for_unselected_home() -> None:
         """Return the first feature as an op-anchored FacetSpec."""
 
         op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
+        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
 
     log = tl.trace(
         Tiny(),
         torch.randn(4, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=["relu"]),
+        capture=tl.options.CaptureOptions(save_grads=["relu"]),
+        save="all",
     )
     log.log_backward(log[log.output_layers[0]].out.sum())
     missing = log.modules["linear"].facets["first_feature"].grad
 
-    assert isinstance(missing, MissingGradient)
+    assert isinstance(missing, MissingGrad)
     assert "home op has no saved gradient" in missing.reason
 
 
@@ -571,9 +562,7 @@ def test_parameter_builtin_facets_are_read_only_parameter_homes() -> None:
             return self.norm(x)
 
     model = Model()
-    log = tl.trace(
-        model, torch.randn(2, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(2, 3), save="all")
     gamma = log.modules["norm"].facets["gamma"]
     beta = log.modules["norm"].facets["beta"]
 
@@ -582,7 +571,7 @@ def test_parameter_builtin_facets_are_read_only_parameter_homes() -> None:
     assert gamma.spec.capability_flags.grad is False
     assert torch.equal(gamma, model.norm.weight)
     assert torch.equal(beta, model.norm.bias)
-    assert isinstance(gamma.grad, MissingGradient)
+    assert isinstance(gamma.grad, MissingGrad)
 
 
 def test_builtin_capability_inventory_is_recorded_as_data() -> None:
@@ -614,12 +603,12 @@ def test_list_info_glob_and_recipe_record() -> None:
 
         return {"q": 1}
 
-    recipes = tl.facets.list(class_name="Unit*")
+    recipes = tl.facets.functions(class_name="Unit*")
     assert len(recipes) == 1
-    assert isinstance(recipes[0], FacetRecipe)
-    assert recipes[0].recipe_name == "discovery_recipe"
-    assert tl.facets.info("UnitFacetRecord") == {
-        "recipes": ["discovery_recipe"],
+    assert isinstance(recipes[0], FacetFunction)
+    assert recipes[0].name == "discovery_recipe"
+    assert tl.facets.describe("UnitFacetRecord") == {
+        "functions": ["discovery_recipe"],
         "facets": ["q"],
     }
 
@@ -755,7 +744,8 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
     clean = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     clean_out = _trace_output(clean).clone()
 
@@ -786,7 +776,8 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
     clean = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     clean_out = _trace_output(clean).clone()
 
@@ -823,16 +814,15 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads="all", save_arg_values=True
-        ),
+        capture=tl.options.CaptureOptions(save_grads="all", save_args=True),
+        save="all",
     )
     log.log_backward(_trace_output(log).sum())
     k_head = log.modules["attn"].facets.head(3).k
 
     assert torch.equal(k_head, log.modules["attn"].facets.k[:, :, 1, :])
-    assert not isinstance(k_head.grad, MissingGradient)
-    assert torch.equal(k_head.grad, k_head.spec.apply(k_head.spec.home.grad))
+    assert not isinstance(k_head.grad, MissingGrad)
+    assert torch.equal(k_head.grad, k_head.spec.apply_transforms(k_head.spec.home.grad))
 
     edited = log.fork("gqa_refuse")
     with pytest.raises(RuntimeError, match="aliasing_selection.*alias group"):
@@ -847,7 +837,8 @@ def test_computed_facet_write_refuses() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
     with pytest.raises(RuntimeError, match="computed facets are read-only"):
@@ -876,13 +867,14 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
         """Return a facet marked as a non-raw value version."""
 
         op = module.trace.ops[module.calls[0].output_ops[0]]
-        spec = FacetSpec.from_home(op, recipe_id="unsafe_version").select(-1, 0)
+        spec = FacetSpec.from_home(op, function_id="unsafe_version").select(-1, 0)
         return {"unsafe": replace(spec, value_version="out_versions_by_child")}
 
     log = tl.trace(
         Tiny(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
@@ -898,7 +890,8 @@ def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
     clean = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     clean_out = _trace_output(clean).clone()
 
@@ -934,13 +927,13 @@ def test_missing_facet_error_survives_pickle_and_deepcopy() -> None:
     import copy
     import pickle
 
-    from torchlens.semantic.facets import AbsenceReason
+    from torchlens._semantic.facets import AbsenceReason
 
     error = MissingFacetError(
         "q",
         AbsenceReason(
             status="payload_not_saved",
-            save_hint="save=tl.in_module('attn')",
+            remedy="save=tl.in_module('attn')",
             detail="attention payloads were not retained",
         ),
     )

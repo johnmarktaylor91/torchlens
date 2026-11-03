@@ -32,8 +32,8 @@ from typing import Any
 
 import torch
 
-from . import TorchLensIOError
 from ._canonical_pickle import dump_canonical_metadata
+from .format_errors import ArtifactError
 from .state_contract import governed_artifact_load
 
 __all__ = [
@@ -94,7 +94,7 @@ def sanitize_state_annotations(state: dict[str, Any]) -> None:
     into an annotation still carries its ``tl_*`` capture attributes, so it
     pickles through the loader-denied ``_rebuild_from_type_v2`` and the saved
     artifact could never be read back. The scrubbed trace-level mapping and
-    each scrubbed record's mapping (``layer_list`` ops, ``layer_logs`` layers,
+    each scrubbed record's mapping (``_layer_list`` ops, ``_layer_logs`` layers,
     ...) are rebuilt with plain detached tensors through
     :func:`sanitize_annotation_tensors`; containers are copied, never mutated
     in place, so the live trace keeps its session-time objects.
@@ -178,7 +178,7 @@ def preflight_metadata_portability(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         ``annotation_value_unportable`` / ``metadata_value_unportable`` when
         the default loader would refuse the bytes; the ``field`` names the
         located key path and ``reason`` carries the loader's own message.
@@ -189,7 +189,7 @@ def preflight_metadata_portability(
     failure = _dry_run_failure(data, unpickler_factory)
     if failure is None:
         return data
-    if isinstance(failure, TorchLensIOError):
+    if isinstance(failure, ArtifactError):
         raise failure
     located, in_annotations = _locate_unportable(scrubbed_state, unpickler_factory)
     reason = _root_cause_text(failure)
@@ -199,7 +199,7 @@ def preflight_metadata_portability(
         "Nothing was written. Remedy: "
     )
     if in_annotations:
-        raise TorchLensIOError(
+        raise ArtifactError(
             message + _ANNOTATION_REMEDY + ".",
             code="annotation_value_unportable",
             field=located,
@@ -207,7 +207,7 @@ def preflight_metadata_portability(
             remedy=_ANNOTATION_REMEDY,
             path=str(bundle_path),
         ) from failure
-    raise TorchLensIOError(
+    raise ArtifactError(
         message + _METADATA_REMEDY + ".",
         code="metadata_value_unportable",
         field=located,

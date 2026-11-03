@@ -5,15 +5,13 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..._robustness import UnsupportedTensorVariantError
-from ...capture.flops import compute_backward_flops, compute_forward_flops
-from ...data_classes.op import (
+from ..._capture.flops import compute_backward_flops, compute_forward_flops
+from ..._data_classes.op import (
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
     _dtype_or_none,
     _effective_activation_save_mode,
     _memory_or_none,
-    _recursive_safe_copy,
     _shape_or_none,
     _stamp_reference_out,
     apply_transform,
@@ -21,20 +19,24 @@ from ...data_classes.op import (
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
-from ...utils._torch_compat import (
+from ..._robustness import UnsupportedTensorVariantError
+from ..._utils._call_site import CALL_SITE_CLASS_MARKER
+from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
-from ...utils.tensor_utils import (
+from ..._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_copy,
     safe_to,
 )
+from ._completeness_escape_state import record_alias_mutation_candidate
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     get_tensor_label,
     mark_detached_saved_activation,
     pop_same_object_mutation,
 )
-from .completeness_witness import internal_scalar_read, record_alias_mutation_candidate
+from ._user_grad_fn import pop_user_grad_fn, recorded_op_grad_fn
 from .tensor_tracking import (
     _append_module_suffix_to_equivalence_class,
     _get_equivalence_class,
@@ -42,19 +44,8 @@ from .tensor_tracking import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        _SETTER_MUTATION_FUNC_NAMES,
-        _admit_save_budget,
-        _admit_saved_args_budget,
-        _commit_save_budget,
-        _commit_saved_args_budget,
-        _is_inplace_augmented_assignment_dunder,
-        _label_version_baseline,
-        _should_keep_alias_mutation_contract,
-    )
 
 __all__ = (
     "_log_output_tensor_info",
@@ -62,6 +53,38 @@ __all__ = (
     "_stream_activation_fields",
     "_retention_device",
 )
+
+
+def _call_site_equivalence_class(
+    trace: "Trace", fields_dict: dict[str, Any], i: int, layer_type: str
+) -> str | None:
+    """Return the call-site class ``<type>@cs<N>`` for an op whose call site the walk saw.
+
+    The class goes into the raw-graph workspace side table
+    (``RawGraphWorkspace._call_site_classes``), never into ``equivalence_class``.
+
+    The key is ``(innermost module address, call-site chain, func_name, output
+    slot)``; ``N`` is its first-appearance index in this capture, so equal keys
+    get equal classes and the string is deterministic for the same model code.
+    Returns None when the chain is empty or belongs to a different wrapped call.
+    """
+
+    ws = trace._raw_graph_ws
+    pending = ws._pending_call_site
+    if pending is None or pending[0] != fields_dict["func_call_id"] or not pending[1]:
+        return None
+    modules = fields_dict["modules"]
+    scope = modules[-1][0] if modules else ""
+    slot = i if fields_dict["in_multi_output"] else None
+    key = (scope, pending[1], fields_dict["func_name"], slot)
+    index = ws._call_site_index.get(key)
+    if index is None:
+        index = len(ws._call_site_index) + 1
+        ws._call_site_index[key] = index
+    site_class = f"{layer_type}{CALL_SITE_CLASS_MARKER}{index}"
+    if slot is not None:
+        site_class += f"_outindex{slot}"
+    return site_class
 
 
 def _metadata_shape(t: torch.Tensor, op_label: str | None = None) -> tuple[int, ...]:
@@ -185,7 +208,7 @@ def _log_output_tensor_info(
         )
         base_equivalence_class = equivalence_class
         self.layers_with_params[equivalence_class].append(_label_raw)
-        fields_dict["pass_index"] = len(self.layers_with_params[equivalence_class])
+        fields_dict["pass_number"] = len(self.layers_with_params[equivalence_class])
         equivalence_class = _append_module_suffix_to_equivalence_class(
             equivalence_class, fields_dict["modules"]
         )
@@ -207,17 +230,27 @@ def _log_output_tensor_info(
             equivalence_class, fields_dict["modules"]
         )
         fields_dict["equivalence_class"] = equivalence_class
-        fields_dict["pass_index"] = 1
+        fields_dict["pass_number"] = 1
+
+    # Call-site grouping (step 7, ``callsite_v1``): when the capture walk saw
+    # where this op ran, record its call-site class in the raw-graph workspace
+    # side table that step 7 groups by. The class is internal and never
+    # persisted (grouping rule section 3): ``equivalence_class`` above keeps the
+    # argument/parameter fingerprint, so ``equivalent_ops`` and
+    # ``op_equivalence_classes`` keep their own meaning.
+    site_class = _call_site_equivalence_class(self, fields_dict, i, layer_type)
+    if site_class is not None:
+        self._raw_graph_ws._call_site_classes[_label_raw] = site_class
 
     # equivalent_ops is a DIRECT reference to the Trace-level set —
     # all entries sharing this equivalence type point to the same set object.
     # Defensive: if equivalence_class isn't yet registered (e.g. user-injected
     # tensor through intervention/raw-hook with a fresh hash), create the
     # set on demand rather than crashing with KeyError.
-    if base_equivalence_class not in self.op_equivalence_classes:
-        self.op_equivalence_classes[base_equivalence_class] = set()
-    self.op_equivalence_classes[base_equivalence_class].add(_label_raw)
-    fields_dict["equivalent_ops"] = self.op_equivalence_classes[base_equivalence_class]
+    if base_equivalence_class not in self._graph_op_equivalence_classes:
+        self._graph_op_equivalence_classes[base_equivalence_class] = set()
+    self._graph_op_equivalence_classes[base_equivalence_class].add(_label_raw)
+    fields_dict["equivalent_ops"] = self._graph_op_equivalence_classes[base_equivalence_class]
 
     # In-place ops return the same tensor object, which already has a raw label -- but so
     # does a NON-mutating identity return (``x.cpu()`` on CPU, ``x.contiguous()`` on a
@@ -296,16 +329,11 @@ def _log_output_tensor_info(
     # members are logged against a safe copy whose ``grad_fn`` is TorchLens's
     # own ``CloneBackward`` node. The wrapper stamped the USER op's live
     # autograd node on the copy; that snapshot is the operation's metadata.
-    user_grad_fn = getattr(t, "tl_user_grad_fn", None)
-    if user_grad_fn is not None:
-        try:
-            delattr(t, "tl_user_grad_fn")
-        except AttributeError:
-            pass
+    user_grad_fn = pop_user_grad_fn(t)
     # TorchLens bookkeeping ``grad_fn`` read (same r65 receiver aliasing note
     # as the ``_version`` read above).
     with internal_scalar_read():
-        op_grad_fn = user_grad_fn if user_grad_fn is not None else t.grad_fn
+        op_grad_fn = recorded_op_grad_fn(user_grad_fn, t)
     grad_fn_cls = type(op_grad_fn) if op_grad_fn is not None else None
     fields_dict["grad_fn_class_name"] = None if grad_fn_cls is None else grad_fn_cls.__name__
     fields_dict["grad_fn_class_qualname"] = (
@@ -323,7 +351,9 @@ def _log_output_tensor_info(
     else:
         fields_dict["multi_output_index"] = None
 
-    if (t.dtype == torch.bool) and (t.dim()) == 0:
+    # ``ndim`` is an unwrapped property: TorchLens's own metadata reads must not
+    # enter the call fingerprint (``_state.CallFingerprint``) as model calls.
+    if (t.dtype == torch.bool) and t.ndim == 0:
         fields_dict["is_scalar_bool"] = True
         try:
             # TorchLens's own scalar-bool value read is a capture-internal escape:
@@ -349,11 +379,11 @@ def _log_output_tensor_info(
 
     # Other labeling info
     fields_dict["layer_label"] = None
-    fields_dict["layer_label_short"] = None
+    fields_dict["short_layer_label"] = None
     fields_dict["label"] = None
-    fields_dict["label_short"] = None
+    fields_dict["short_label"] = None
     fields_dict["layer_label"] = None
-    fields_dict["layer_label_short"] = None
+    fields_dict["short_layer_label"] = None
     fields_dict["type"] = layer_type
     fields_dict["_layer_label_raw"] = _label_raw
     fields_dict["type_index"] = type_index
@@ -364,7 +394,7 @@ def _log_output_tensor_info(
     fields_dict["out"] = None
     fields_dict["transformed_out"] = None
     fields_dict["has_saved_activation"] = False
-    fields_dict["activation_transform"] = self.activation_transform
+    fields_dict["activation_transform"] = self._options_activation_transform
     # Collective boundary nodes carry their portable collective_boundary_v1
     # payload in the reserved "collective" annotations namespace; the wrapper
     # stamps it on the replay callable (same channel as the __tl_transform_*
@@ -386,7 +416,7 @@ def _log_output_tensor_info(
                 session.register_annotation_copy(fields_dict["annotations"]["collective"])
     else:
         fields_dict["annotations"] = {}
-    fields_dict["intervention_replaced"] = False
+    fields_dict["is_edited"] = False
     fields_dict["fire_results"] = ()
     fields_dict["has_saved_args"] = False
     fields_dict["saved_args"] = None
@@ -419,9 +449,16 @@ def _log_output_tensor_info(
         args,
         kwargs,
     )
-    fields_dict["flops_backward"] = compute_backward_flops(
-        fields_dict.get("func_name"),  # type: ignore[arg-type]
-        fields_dict["flops_forward"],
+    # An output with no autograd node runs no backward, so a known op costs
+    # zero backward FLOPs (e.g. frozen weights under backward_ready=True);
+    # an op with unknown forward FLOPs stays unknown.
+    fields_dict["flops_backward"] = (
+        0
+        if t.grad_fn is None and fields_dict["flops_forward"] is not None
+        else compute_backward_flops(
+            fields_dict.get("func_name"),  # type: ignore[arg-type]
+            fields_dict["flops_forward"],
+        )
     )
 
     # Child tensor variation tracking
@@ -434,6 +471,30 @@ def _log_output_tensor_info(
         fields_dict["has_internal_source_ancestor"] = True
         fields_dict["internal_source_parents"] = []
         fields_dict["internal_source_ancestors"] = {_label_raw}
+
+
+def _save_call_args_fields(
+    trace: "Trace", fields_dict: dict[str, Any], t_args: Any, t_kwargs: Any
+) -> None:
+    """Snapshot the call's arguments into ``fields_dict`` under the save budget."""
+
+    if trace._options_save_args:
+        # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
+        # used to clone every tensor argument first and charge after.
+        from ._ops_arguments import _copy_saved_call_args
+        from ._ops_retention import _admit_saved_args_budget, _commit_saved_args_budget
+
+        arg_reservations = _admit_saved_args_budget(trace, fields_dict, t_args, t_kwargs)
+        fields_dict["has_saved_args"] = True
+        saved_args, saved_kwargs = _copy_saved_call_args(
+            fields_dict["func_name"], tuple(t_args), dict(t_kwargs), True
+        )
+        fields_dict["saved_args"] = list(saved_args)
+        fields_dict["saved_kwargs"] = saved_kwargs
+        _commit_saved_args_budget(trace, fields_dict, arg_reservations)
+    else:
+        fields_dict["saved_args"] = None
+        fields_dict["saved_kwargs"] = None
 
 
 def _save_activation_fields(
@@ -474,16 +535,15 @@ def _save_activation_fields(
             func_name=fields_dict.get("func_name"),
             is_inplace=bool(fields_dict.get("is_inplace", False)),
         )
-        save_raw_activations = getattr(trace, "save_raw_activations", True)
+        save_raw_activations = trace._options_save_raw_activations
         store_raw = save_raw_activations or activation_transform is None
         # Explorer P2: when nothing raw is retained AND the transform declares
         # the non-differentiable summary role, the transient safe_copy is
         # skipped entirely -- the reducer sees a detached view of the live
         # output at the save point (correct: no later in-place mutation has
-        # run yet). Function-local import: this function is rebound into
-        # backends.torch.ops globals (_split_rebind), so a new module-level
-        # name would not resolve there.
-        from ...ir.summary_role import is_summary_transform
+        # run yet). Function-local import: layering (the summary-role module
+        # imports the backend), not a cycle at import.
+        from ..._ir.summary_role import is_summary_transform
 
         reduce_only = not store_raw and is_summary_transform(activation_transform)
         budget_reservation = (
@@ -510,7 +570,7 @@ def _save_activation_fields(
                 trace,
                 t,
                 fields_dict["annotations"],
-                getattr(trace, "save_arg_values", False),
+                trace._options_save_args,
             )
             if store_raw and save_mode == "copy"
             else None
@@ -534,7 +594,7 @@ def _save_activation_fields(
                     # R36: a cpu_async copy of THIS tensor may still be in
                     # flight; a cross-device move would read the pinned host
                     # buffer before its D2H fence. Drain pending fences first.
-                    from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
+                    from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
                     synchronize_pending_cpu_async_copies()
                 raw_out = safe_to(raw_out, fields_dict["output_device"])
@@ -556,7 +616,7 @@ def _save_activation_fields(
                     raw_out,
                     fields_dict["_layer_label_raw"],
                     fields_dict["annotations"],
-                    getattr(trace, "save_arg_values", False),
+                    trace._options_save_args,
                 )
             if isinstance(raw_out, torch.Tensor):
                 mark_detached_saved_activation(
@@ -584,9 +644,7 @@ def _save_activation_fields(
                 transformed_tensor=transformed_out,
                 transform_kind="activation",
                 tripwire_armed=train_mode_tripwire_armed(
-                    backward_ready=fields_dict.get(
-                        "backward_ready", getattr(trace, "backward_ready", False)
-                    ),
+                    backward_ready=fields_dict.get("backward_ready", trace._options_backward_ready),
                     transform=activation_transform,
                 ),
                 label=fields_dict.get("_layer_label_raw"),
@@ -598,7 +656,7 @@ def _save_activation_fields(
                 label=fields_dict.get("_layer_label_raw"),
             )
             if reduce_only:
-                from ...ir.summary_role import ensure_summary_output_owns_storage
+                from ..._ir.summary_role import ensure_summary_output_owns_storage
 
                 transformed_out = ensure_summary_output_owns_storage(transformed_out, t)
             fields_dict["transformed_out"] = transformed_out
@@ -628,19 +686,7 @@ def _save_activation_fields(
         if out_sink is not None and isinstance(fields_dict["out"], torch.Tensor):
             out_sink(fields_dict["_label_raw"], fields_dict["out"])
 
-        if trace.save_arg_values:
-            # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
-            # used to clone every tensor argument first and charge after.
-            arg_reservations = _admit_saved_args_budget(trace, fields_dict, t_args, t_kwargs)
-            fields_dict["has_saved_args"] = True
-            fields_dict["saved_args"] = [_recursive_safe_copy(arg) for arg in t_args]
-            fields_dict["saved_kwargs"] = {
-                key: _recursive_safe_copy(value) for key, value in t_kwargs.items()
-            }
-            _commit_saved_args_budget(trace, fields_dict, arg_reservations)
-        else:
-            fields_dict["saved_args"] = None
-            fields_dict["saved_kwargs"] = None
+        _save_call_args_fields(trace, fields_dict, t_args, t_kwargs)
     except Exception as exc:
         if writer is not None:
             writer.abort(f"Failed while saving out for {fields_dict['_label_raw']}: {exc}")
@@ -670,7 +716,7 @@ def _stream_activation_fields(trace: "Trace", fields_dict: dict[str, Any]) -> No
     # R36: serializing a cpu_async payload to disk is a host-side byte read;
     # the pinned buffer may still be in flight. No-op unless async fence
     # events are pending.
-    from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
+    from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
     synchronize_pending_cpu_async_copies()
 
@@ -706,3 +752,19 @@ def _retention_device(tensor: torch.Tensor, configured: Any) -> torch.device:
     if configured in (None, "same", str(tensor.device)):
         return tensor.device
     return torch.device(configured)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_capture_records import (  # noqa: E402
+    _is_inplace_augmented_assignment_dunder,
+    _label_version_baseline,
+    _should_keep_alias_mutation_contract,
+)
+from ._ops_retention import (  # noqa: E402
+    _admit_save_budget,
+    _commit_save_budget,
+)
+from .ops import (  # noqa: E402
+    _SETTER_MUTATION_FUNC_NAMES,
+)

@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 from ..errors.episode import BundleExperimentError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = ["head_ablation_candidates"]
 
@@ -37,7 +37,7 @@ __all__ = ["head_ablation_candidates"]
 def _attention_geometry(baseline: Trace, module: str) -> tuple[int | None, int | None]:
     """(n_q_heads, n_kv_heads) from the module's facet view, or (None, None)."""
 
-    from ..semantic.facets import FacetView
+    from .._semantic.facets import FacetView
 
     try:
         record = baseline.modules[module]
@@ -96,7 +96,7 @@ def head_ablation_candidates(
         semantics it cannot prove.
     """
 
-    from ..intervention.selectors import head as head_selector
+    from .._selection.selectors import head as head_selector
 
     n_q, n_kv = _attention_geometry(baseline, module)
     if n_q is None or n_kv is None or n_q != n_kv:
@@ -114,7 +114,7 @@ def head_ablation_candidates(
             "facet with your own oracle.",
             code="head_ablation_equivalence_undeclared",
             module=module,
-            n_q_heads=n_q,
+            num_q_heads=n_q,
             n_kv_heads=n_kv,
         )
     indices = list(range(heads)) if isinstance(heads, int) else [int(i) for i in heads]
@@ -129,6 +129,6 @@ def head_ablation_candidates(
             f"head indices {out_of_range} are outside this module's {n_q}-head geometry",
             code="head_ablation_heads_invalid",
             module=module,
-            n_q_heads=n_q,
+            num_q_heads=n_q,
         )
     return {f"h{i}": head_selector(i, facet).in_module(module) for i in indices}

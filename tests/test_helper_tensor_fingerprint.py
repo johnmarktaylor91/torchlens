@@ -62,7 +62,7 @@ def _truth(model: nn.Module, x: torch.Tensor, direction: torch.Tensor) -> torch.
 def _steer(direction: torch.Tensor) -> Any:
     """Return an additive steer along ``direction``."""
 
-    return tl.steer(direction, magnitude=1.0, feature_axis=-1)
+    return tl.steer(direction, strength=1.0, dim=-1)
 
 
 def _staged_trace(model: nn.Module, x: torch.Tensor, direction: torch.Tensor, door: str) -> Any:
@@ -183,3 +183,35 @@ def test_save_intervention_refuses_a_changed_helper_tensor(setup, tmp_path) -> N
         trace.save_intervention(tmp_path / "changed.tlspec", level="portable")
     assert excinfo.value.fields["code"] == _CODE
     assert not (tmp_path / "changed.tlspec").exists()
+
+
+@pytest.mark.parametrize("door", ["legacy", "fast"])
+def test_guarded_fast_rerun_refuses_a_changed_helper_tensor(setup, door: str) -> None:
+    """The guarded fast engine re-reads the staged steer, so it refuses a change too.
+
+    A module save keeps the trace eligible for the fast engine, which applies
+    the staged spec through native module hooks. An edited steer tensor must
+    refuse typed on both doors that reach that engine (the legacy
+    ``run(model, x)`` and the explicit ``run(inputs=..., fast=True)``), exactly
+    as the capture rerun does, and leave the trace's saved values unchanged.
+    """
+
+    model, x, direction = setup
+    trace = tl.trace(
+        model, x, save=tl.module("fc2"), intervene=tl.when(tl.module("fc1"), _steer(direction))
+    )
+
+    def rerun() -> Any:
+        if door == "legacy":
+            return trace.run(model, x)
+        return trace.run(inputs=x, fast=True).trace
+
+    product = rerun()
+    assert product.last_run["engine"] == "guarded_fast"
+    readout = product.find_sites(tl.module("fc2")).first().out.clone()
+    torch.testing.assert_close(readout, _truth(model, x, direction))
+    direction.add_(0.5)
+    with pytest.raises(SpecMutationError) as excinfo:
+        rerun()
+    assert excinfo.value.fields["code"] == _CODE
+    assert torch.equal(product.find_sites(tl.module("fc2")).first().out, readout)

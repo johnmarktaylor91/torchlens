@@ -6,7 +6,7 @@ non-pass-qualified ``layer_label`` while ``layer.parents`` references
 multi-pass parents by their pass-qualified ``label`` (``linear_1_1:2``), so the
 membership guard never matched. Structurally different recurrent graphs hashed
 identically (false match), defeating the operand-order guarantee and the public
-``tl.hash.assert_unchanged`` structural pin.
+``tl.fingerprint.assert_unchanged`` structural pin.
 
 MED-2: the RF staleness fingerprint ``_graph_revision`` omitted the geometry
 arguments RF rules consume (kernel/stride/padding/dilation read via
@@ -25,8 +25,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.hashing import compute_graph_shape_hash
 from torchlens.receptive_field import _engine
-from torchlens.utils.hashing import compute_graph_shape_hash
 
 
 class CrossPassReaderA(nn.Module):
@@ -121,7 +121,7 @@ def _parent_reference_order(trace: Any) -> dict[str, int]:
 
     return {
         (layer.layer_label if layer.num_passes == 1 else layer.label): index
-        for index, layer in enumerate(trace.layer_list)
+        for index, layer in enumerate(trace._layer_list)
     }
 
 
@@ -145,7 +145,7 @@ def test_recurrent_cross_pass_reader_pair_hashes_distinct() -> None:
 
     assert compute_graph_shape_hash(trace_a) != compute_graph_shape_hash(trace_b)
     # Address-free public spelling must distinguish them too.
-    assert tl.hash.trace(trace_a) != tl.hash.trace(trace_b)
+    assert tl.fingerprint.trace(trace_a) != tl.fingerprint.trace(trace_b)
 
 
 def test_recurrent_swapped_operand_pair_hashes_distinct() -> None:
@@ -156,7 +156,7 @@ def test_recurrent_swapped_operand_pair_hashes_distinct() -> None:
     trace_a, trace_b = _trace_pair(SwappedOperandA(), SwappedOperandB(), x)
 
     assert compute_graph_shape_hash(trace_a) != compute_graph_shape_hash(trace_b)
-    assert tl.hash.trace(trace_a) != tl.hash.trace(trace_b)
+    assert tl.fingerprint.trace(trace_a) != tl.fingerprint.trace(trace_b)
 
 
 def test_every_parent_edge_contributes_to_hash_input() -> None:
@@ -171,7 +171,7 @@ def test_every_parent_edge_contributes_to_hash_input() -> None:
     order_by_reference = _parent_reference_order(trace)
     edges = [
         (layer, position, parent)
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         for position, parent in enumerate(layer.parents)
     ]
     assert edges, "expected a non-trivial recurrent graph"
@@ -215,8 +215,8 @@ def test_unchanged_recurrent_model_still_hashes_same() -> None:
 
     # Structural hash is weight-blind: two fresh instances of one architecture pin
     # identically, so an existing CI pin keeps passing after the fix lands.
-    pinned = tl.hash.model(CrossPassReaderA(), x)
-    assert tl.hash.assert_unchanged(CrossPassReaderA(), x, pinned) == pinned
+    pinned = tl.fingerprint.model(CrossPassReaderA(), x)
+    assert tl.fingerprint.assert_unchanged(CrossPassReaderA(), x, pinned) == pinned
 
     trace_1 = tl.trace(CrossPassReaderA(), x)
     trace_2 = tl.trace(CrossPassReaderA(), x)
@@ -243,7 +243,7 @@ def test_rf_table_matches_at_after_geometry_mutation() -> None:
     torch.manual_seed(0)
     x = torch.randn(1, 1, 16, 16)
     log = tl.trace(DilatedConvModel(dilation=1, padding=1), x)
-    conv_op = next(op for op in log.layer_list if op.label.startswith("conv2d"))
+    conv_op = next(op for op in log._layer_list if op.label.startswith("conv2d"))
     assert tuple(conv_op.shape) == (1, 1, 16, 16)
 
     # Prime the trace-level solution cache through the public table path.
@@ -262,7 +262,7 @@ def test_rf_table_matches_at_after_geometry_mutation() -> None:
 
     # Ground truth: a fresh capture with the mutated geometry.
     fresh = tl.trace(DilatedConvModel(dilation=2, padding=2), x)
-    fresh_op = next(op for op in fresh.layer_list if op.label.startswith("conv2d"))
+    fresh_op = next(op for op in fresh._layer_list if op.label.startswith("conv2d"))
 
     table_sizes = _conv_table_sizes(log, conv_op.label)
     assert table_sizes == _conv_table_sizes(fresh, fresh_op.label) == [(5, 5)]

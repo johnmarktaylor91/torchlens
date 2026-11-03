@@ -1,0 +1,435 @@
+"""Live-model state restore for the run() and capture brackets.
+
+The default live ``run()`` snapshots the model's declared state (parameters and
+buffers) before executing and restores it afterwards (``_runnable_state``
+takes the snapshot; this module restores it). A default ``tl.trace`` is a pure
+observer: ``capture_observer_bracket`` snapshots buffers, random state,
+training modes and plain attributes and restores them after the capture, recording
+what the forward wrote to attributes on the trace;
+``CaptureOptions(carry_state=True)`` opts into forward-equivalent state.
+"""
+
+from __future__ import annotations
+
+import warnings
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any
+
+import torch
+
+from .. import _state
+from .._capture_attr_observer import (
+    ModuleAttrSnapshot,
+    settle_module_attrs,
+    snapshot_module_attrs,
+)
+from .._data_classes._trace_missing_attrs import is_live_trace
+from .._storage_bindings import rebind_if_moved, record_storage_binding
+from .._utils._sparse_parts import sparse_component_tensors
+from .state import (
+    LiveDeclaredStateSnapshot,
+    declared_slot_unchanged,
+    declared_state_versions,
+    write_back_slot,
+)
+
+__all__ = (
+    "CaptureObserverHandle",
+    "CaptureObserverSnapshot",
+    "LiveStateRestoreFailure",
+    "attach_attribute_writes",
+    "capture_observer_bracket",
+    "restore_capture_observer_state",
+    "restore_live_declared_state",
+    "snapshot_capture_observer_state",
+)
+
+
+#: Failures a compare or restore step may raise (never ``BaseException``): each
+#: is reported to the caller instead of being masked.
+_RESTORE_ERRORS = (
+    RuntimeError,
+    TypeError,
+    ValueError,
+    AttributeError,
+    KeyError,
+    NotImplementedError,
+)
+
+
+class LiveStateRestoreFailure(RuntimeError):
+    """Internal carrier for a declared-state restore that failed mid-bracket.
+
+    The transaction converts this into the typed ``run_state_restore_failed``
+    refusal with the structured fields the contract promises; the failing
+    restore exception is chained as ``__cause__``.
+    """
+
+    def __init__(self, state_dict_name: str, groups_restored: int) -> None:
+        super().__init__(
+            f"declared-state restore failed at {state_dict_name!r} after "
+            f"{groups_restored} alias group(s) were restored"
+        )
+        self.state_dict_name = state_dict_name
+        self.groups_restored = groups_restored
+
+
+def _unalias_trace_payloads(trace: Any, changed: list[torch.Tensor]) -> None:
+    """Give trace payloads that share storage with a changed state tensor their own copy.
+
+    A captured op whose output IS a live buffer (an in-place counter update, a
+    buffer layer) records that tensor, so writing the buffer back in place
+    would rewrite what the trace recorded. Each such payload is replaced by a
+    copy of its forward-time value first; the model keeps its buffer objects.
+    """
+
+    if (
+        trace is None
+        or not changed
+        or (trace._options_save_mode if is_live_trace(trace) else "copy") == "reference"
+    ):
+        # A reference-mode capture asked for aliases: restoring the live buffer is
+        # then a post-capture mutation its reference tripwire must still see.
+        return
+    from .._data_classes._state_adapter import state_items
+
+    if not is_live_trace(trace):
+        # A PartialTrace (failed capture) or husked trace holds no layer payloads.
+        return
+    storages = {key for tensor in changed for key in _storage_keys(tensor)}
+    for layer in trace._layer_list or ():
+        fields = dict(state_items(layer))
+        for field_name in ("out", "transformed_out"):
+            value = fields.get(field_name)
+            if isinstance(value, torch.Tensor) and not storages.isdisjoint(_storage_keys(value)):
+                layer._internal_set(field_name, value.detach().clone())
+
+
+def _storage_keys(tensor: torch.Tensor) -> set[tuple[torch.device, int]]:
+    """Return the (device, storage pointer) keys a tensor's bytes live under.
+
+    A sparse tensor has no storage of its own; its bytes are those of its index
+    and value components, so writing a sparse buffer back touches each of them.
+    Meta tensors and layouts without a known decomposition have no keys.
+    """
+
+    if tensor.is_meta:
+        return set()
+    if tensor.layout is torch.strided:
+        return {(tensor.device, tensor.untyped_storage().data_ptr())}
+    try:
+        parts = sparse_component_tensors(tensor)
+    except ValueError:
+        return set()
+    return {(part.device, part.untyped_storage().data_ptr()) for part in parts}
+
+
+def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot, trace: Any = None) -> None:
+    """Restore a declared-state snapshot onto the live model (finally bracket).
+
+    Runs under ``no_grad`` and ``pause_logging``, one value restore per alias
+    group (distinct live object), then re-binds any slot the forward reassigned
+    to a different object back to its ORIGINAL object -- so repeated run()
+    calls leave the model bit-identical with ``a is b`` alias semantics intact.
+    Raises :class:`LiveStateRestoreFailure` (original exception chained) on the
+    first failed restore; the caller owns the state-compromised consequence
+    (L4 5.4).
+
+    Only a slot whose bytes differ from its snapshot is written back (see
+    :func:`_write_back_slot`). An
+    unconditional ``copy_`` bumps the version counter of every parameter and
+    buffer the forward left untouched, and autograd saved those tensors (conv
+    weights, eval-mode BatchNorm running statistics) at their old version, so a
+    later ``backward()`` through the run's graph-attached activations failed
+    with torch's in-place modification error.
+    """
+
+    restored: set[int] = set()
+    with _state.pause_logging(), torch.no_grad():
+        changed = {
+            id(original): original
+            for *_rest, original in snapshot.bindings
+            if not declared_slot_unchanged(original, snapshot.clones[id(original)])
+        }
+        _unalias_trace_payloads(trace, list(changed.values()))
+        for _module, _registry_attr, _local_name, canonical, original in snapshot.bindings:
+            key = id(original)
+            if key in restored:
+                continue
+            try:
+                write_back_slot(original, snapshot.clones[key], snapshot.versions.get(key))
+            except Exception as exc:
+                raise LiveStateRestoreFailure(canonical, len(restored)) from exc
+            restored.add(key)
+        for module, registry_attr, local_name, canonical, original in snapshot.bindings:
+            try:
+                registry = getattr(module, registry_attr, None)
+                if isinstance(registry, dict) and registry.get(local_name) is not original:
+                    registry[local_name] = original
+            except Exception as exc:
+                raise LiveStateRestoreFailure(canonical, len(restored)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Capture observer bracket: a default ``tl.trace`` is a pure observer.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureObserverSnapshot:
+    """What a capture restores: buffers, RNG, modes and plain attributes.
+
+    ``buffers`` holds one ``(module, local_name, original)`` row per buffer
+    registration and ``buffer_clones`` one value clone per distinct buffer
+    object; ``buffer_bindings`` holds the storage binding of each distinct
+    rebindable buffer (see ``torchlens._storage_bindings``), so a buffer the
+    forward moved with ``Tensor.set_`` goes back onto its own storage before
+    its value is restored. ``modes`` holds every module's ``training`` flag, ``rng`` the
+    global torch (CPU and live CUDA devices), Python and NumPy generator
+    states, ``attrs`` each module's plain instance attributes (objects plus
+    value snapshots, see ``_capture_attr_observer``) and ``paths`` every
+    ``(path, module)`` row the bracket covers, for the trace record.
+    """
+
+    buffers: tuple[tuple[Any, str, torch.Tensor], ...]
+    buffer_clones: dict[int, torch.Tensor]
+    buffer_versions: dict[int, int | None]
+    modes: tuple[tuple[Any, bool], ...]
+    rng: dict[str, Any]
+    attrs: tuple[ModuleAttrSnapshot, ...]
+    paths: tuple[tuple[str, Any], ...]
+    buffer_bindings: dict[int, torch.Tensor]
+
+
+def _observed_modules(model: Any) -> list[tuple[str, Any]]:
+    """Return the module tree the observer bracket covers (lazy modules excluded).
+
+    A lazy module materializes its parameters, buffers and class on the first
+    forward; rolling its plain attributes back would desynchronize them from
+    the materialized tensors, so lazy modules are left as the forward leaves
+    them (the same boundary as a failed capture).
+    """
+
+    from torch.nn.modules.lazy import LazyModuleMixin
+
+    return [
+        (path, module)
+        for path, module in model.named_modules(remove_duplicate=False)
+        if not isinstance(module, LazyModuleMixin)
+    ]
+
+
+def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
+    """Snapshot the state a default (pure-observer) capture restores afterwards."""
+
+    from .._utils.rng import log_current_rng_states
+
+    modules = _observed_modules(model)
+    buffers: list[tuple[Any, str, torch.Tensor]] = []
+    clones: dict[int, torch.Tensor] = {}
+    versions: dict[int, int | None] = {}
+    bindings: dict[int, torch.Tensor] = {}
+    with _state.pause_logging(), torch.no_grad():
+        for _path, module in modules:
+            for local_name, value in module._buffers.items():
+                if not isinstance(value, torch.Tensor) or torch.nn.parameter.is_lazy(value):
+                    continue
+                buffers.append((module, local_name, value))
+                if id(value) not in clones:
+                    clones[id(value)] = value.detach().clone()
+                    versions.update(declared_state_versions((value,)))
+                    binding = record_storage_binding(value)
+                    if binding is not None:
+                        bindings[id(value)] = binding
+        attrs = snapshot_module_attrs(modules)
+    return CaptureObserverSnapshot(
+        buffers=tuple(buffers),
+        buffer_clones=clones,
+        buffer_versions=versions,
+        modes=tuple((module, bool(module.training)) for _path, module in modules),
+        rng=log_current_rng_states(),
+        attrs=attrs,
+        paths=tuple(modules),
+        buffer_bindings=bindings,
+    )
+
+
+def _restore_observer_buffers(snapshot: CaptureObserverSnapshot, trace: Any = None) -> None:
+    """Write back changed buffers and re-bind reassigned buffer slots."""
+
+    changed = [
+        snapshot_buffer
+        for snapshot_buffer in {id(b): b for _m, _n, b in snapshot.buffers}.values()
+        if not declared_slot_unchanged(snapshot_buffer, snapshot.buffer_clones[id(snapshot_buffer)])
+    ]
+    _unalias_trace_payloads(trace, changed)
+    # Every moved buffer goes back onto its own storage before any value is
+    # written: a buffer the forward pointed into another buffer's storage would
+    # otherwise copy its snapshot through that alias.
+    for _module, _name, original in snapshot.buffers:
+        binding = snapshot.buffer_bindings.get(id(original))
+        if binding is not None:
+            rebind_if_moved(original, binding)
+    restored: set[int] = set()
+    for module, local_name, original in snapshot.buffers:
+        key = id(original)
+        if key not in restored:
+            clone = snapshot.buffer_clones[key]
+            if original.shape != clone.shape or original.dtype != clone.dtype:
+                # The forward resized or retyped the buffer in place: swap the
+                # snapshot's storage back in, keeping the buffer object itself.
+                original.data = clone
+            else:
+                write_back_slot(original, clone, snapshot.buffer_versions.get(key))
+            restored.add(key)
+        if module._buffers.get(local_name) is not original:
+            module._buffers[local_name] = original
+
+
+def restore_capture_observer_state(
+    snapshot: CaptureObserverSnapshot, trace: Any = None
+) -> dict[int, dict[str, Any]]:
+    """Restore a capture observer snapshot (every item attempted, failures disclosed).
+
+    Returns the forward's plain-attribute writes keyed by ``id(module)``.
+
+    Buffers are written back only where their bytes changed (an unconditional
+    write bumps version counters autograd saved). Restoration never raises: a
+    capture's own exception must surface unmasked, so any item that could not
+    be restored is named in one ``capture_state_restore_incomplete`` warning.
+    """
+
+    from .._utils.rng import set_rng_from_saved_states
+    from ..errors import TorchLensWarning
+
+    failed: list[str] = []
+    with _state.pause_logging(), torch.no_grad():
+        try:
+            _restore_observer_buffers(snapshot, trace)
+        except _RESTORE_ERRORS as exc:
+            failed.append(f"buffers ({exc!r})")
+        for module, training in snapshot.modes:
+            if module.training is not training:
+                module.training = training
+        writes, attr_failures = settle_module_attrs(snapshot.attrs, restore=True)
+        failed.extend(attr_failures)
+    try:
+        set_rng_from_saved_states(snapshot.rng)
+    except _RESTORE_ERRORS as exc:
+        failed.append(f"random state ({exc!r})")
+    if failed:
+        warnings.warn(
+            TorchLensWarning(
+                "the capture could not restore every piece of model state it observed: "
+                f"{', '.join(failed[:8])}{' ...' if len(failed) > 8 else ''}. Those items "
+                "keep the values the traced forward left. Remedy: re-load the affected "
+                "state before relying on the model, or pass "
+                "CaptureOptions(carry_state=True) to keep forward-equivalent state",
+                code="capture_state_restore_incomplete",
+            ),
+            stacklevel=4,
+        )
+    return writes
+
+
+class CaptureObserverHandle:
+    """What the capture hands back to its observer bracket: the trace it produced."""
+
+    __slots__ = ("trace",)
+
+    def __init__(self) -> None:
+        self.trace: Any = None
+
+
+def attach_attribute_writes(
+    trace: Any, paths: tuple[tuple[str, Any], ...], writes: dict[int, dict[str, Any]]
+) -> None:
+    """Give each traced ``Module`` record the attribute writes its forward made.
+
+    Runs for a completed capture only (a failed capture's partial product
+    carries no record); a module the trace has no record for is skipped.
+    """
+
+    from .._data_classes.module import set_attribute_writes
+
+    records = getattr(trace, "modules", None) if trace is not None else None
+    if records is None:
+        return
+    for path, module in paths:
+        module_writes = writes.get(id(module))
+        address = path or "self"
+        if module_writes is not None and address in records:
+            set_attribute_writes(records[address], module_writes)
+
+
+@contextmanager
+def _attribute_rewind(attrs: tuple[ModuleAttrSnapshot, ...]) -> Iterator[None]:
+    """Publish the rewind the escape-rescue re-run calls before its second forward.
+
+    The rewind restores plain attributes to ``attrs`` (the pre-forward
+    snapshot); a slot it cannot restore is retried, and disclosed, by the
+    bracket's own settle after the capture.
+    """
+
+    def rewind() -> None:
+        """Restore plain attributes to the pre-forward snapshot (rescue re-run)."""
+
+        with _state.pause_logging(), torch.no_grad():
+            settle_module_attrs(attrs, restore=True)
+
+    with _state.publish_attribute_rewind(rewind):
+        yield
+
+
+@contextmanager
+def capture_observer_bracket(
+    model: Any, *, carry_state: bool, on_failure: Callable[[], None] | None = None
+) -> Iterator[CaptureObserverHandle]:
+    """Run a capture as a pure observer unless ``carry_state`` opts out.
+
+    The default snapshots buffers (persistent and non-persistent), every
+    module's ``training`` flag, every plain instance attribute and the global
+    random states before the capture, and restores them afterwards on every
+    path, success or exception. ``carry_state=True`` restores nothing: state
+    advances exactly as one direct ``model(x)`` would. Both record what the
+    forward wrote to plain attributes on the trace's ``Module`` records
+    (``Module.attribute_writes``). The caller sets ``handle.trace`` to the
+    captured trace (a failure's ``partial_trace`` is picked up from the
+    exception), so payloads that alias a restored buffer keep their
+    forward-time values. ``on_failure`` runs after the restore when the capture
+    raises (the failed-capture preparation release), before the exception
+    propagates.
+    """
+
+    handle = CaptureObserverHandle()
+    if carry_state:
+        modules = _observed_modules(model)
+        with _state.pause_logging(), torch.no_grad():
+            attrs = snapshot_module_attrs(modules)
+        with _attribute_rewind(attrs):
+            try:
+                yield handle
+            except BaseException:
+                if on_failure is not None:
+                    on_failure()
+                raise
+        # Success only: a raising forward propagates past this point.
+        with _state.pause_logging(), torch.no_grad():
+            writes, _failed = settle_module_attrs(attrs, restore=False)
+        attach_attribute_writes(handle.trace, tuple(modules), writes)
+        return
+    snapshot = snapshot_capture_observer_state(model)
+    try:
+        with _attribute_rewind(snapshot.attrs):
+            yield handle
+    except BaseException as exc:
+        restore_capture_observer_state(
+            snapshot, handle.trace or getattr(exc, "partial_trace", None)
+        )
+        if on_failure is not None:
+            on_failure()
+        raise
+    writes = restore_capture_observer_state(snapshot, handle.trace)
+    attach_attribute_writes(handle.trace, snapshot.paths, writes)

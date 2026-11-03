@@ -44,17 +44,17 @@ def _linear_layer(log: "tl.Trace") -> str:
 
 
 def _assert_root_call_mirrors_layers(log: "tl.Trace") -> None:
-    """The root ``self`` call's ops must equal ``trace.layer_labels`` verbatim.
+    """The root ``self`` call's ops equal ``trace.op_labels`` and project onto its Layers.
 
     This is the module-trace analogue of
-    ``validation._check_function_root_module_invariants``: the root op sequence
-    is never pass-qualified, so it lines up 1:1 with the trace's layer labels.
+    ``validation._check_function_root_module_invariants``: the root call lists
+    pass-qualified Op labels like every other call, and its distinct Layers in
+    order are exactly the trace's layer labels.
     """
     root_call = log["self"]
-    assert list(root_call.ops) == list(log.layer_labels), (
-        list(root_call.ops),
-        list(log.layer_labels),
-    )
+    assert list(root_call.ops) == list(log.op_labels), (list(root_call.ops), list(log.op_labels))
+    projection = list(dict.fromkeys(log.ops[label].layer_label for label in root_call.ops))
+    assert projection == list(log.layer_labels), (projection, list(log.layer_labels))
 
 
 def test_trace_submodule_as_root_after_container() -> None:

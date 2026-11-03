@@ -13,8 +13,10 @@ from typing import TYPE_CHECKING
 import torch
 from torch import nn
 
+from ._tl import get_tensor_label
+
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 def collect_pre_forward_tensor_ids(
@@ -39,7 +41,7 @@ def collect_pre_forward_tensor_ids(
     -------
     tuple[dict[int, torch.Tensor], frozenset[int]]
         The pinned ``id -> tensor`` snapshot (see
-        :func:`model_prep._collect_model_owned_tensor_ids`) and the ids reachable only from
+        :func:`_collect_model_owned_tensor_ids`) and the ids reachable only from
         forward callables.
     """
 
@@ -73,6 +75,69 @@ def collect_pre_forward_tensor_ids(
             getattr(submodule, "forward", None), seen, visit=_note_callable
         )
     return owned, frozenset(callable_only)
+
+
+def is_forward_closure_constant(trace: "Trace", t: torch.Tensor) -> bool:
+    """Return whether ``t`` is a pre-forward tensor reachable only from a forward callable.
+
+    True only for the exact object the pre-forward snapshot pinned (identity,
+    not a recycled ``id``) whose id is in the forward-callable-only subset
+    (closure cells, defaults, referenced globals; never model-held state), and
+    only while it carries no TorchLens label. Disclosed transform and dynamo
+    regions are excluded: their untagged tensors are not proven pre-forward.
+    """
+
+    if (
+        trace._raw_transform_escape_detected
+        or trace._raw_dynamo_region_detected
+        or isinstance(t, nn.Parameter)
+        or get_tensor_label(t) is not None
+    ):
+        return False
+    build_data = trace._module_capture_ws.module_build_data
+    if id(t) not in (build_data.get("forward_outside_tensor_ids_at_entry") or ()):
+        return False
+    return (build_data.get("model_owned_tensor_ids_at_entry") or {}).get(id(t)) is t
+
+
+def _collect_model_owned_tensor_ids(model: nn.Module) -> dict[int, torch.Tensor]:
+    """Snapshot tensors reachable from the model's PRE-FORWARD state, PINNED.
+
+    Walks exactly the surfaces the session-end clear walks -- submodule
+    ``__dict__`` object graphs plus each forward callable's defaults, keyword
+    defaults, closure cells, and referenced globals -- via the shared ``visit``
+    traversal, so a tensor the previous session's cleanup could reach (a
+    nested model-owned cache, a forward-global mask) is recognized as
+    model-owned by the next capture. The R16 module-entry adoption disclosure
+    consults this snapshot: a pre-forward model-owned tensor is a KNOWN
+    internal source (its stale labels were legitimately cleared between
+    sessions), while a tensor first appearing MID-forward is absent from the
+    snapshot and keeps the escape disclosure.
+
+    The mapping VALUES are strong references, deliberately (round-3 b1/b3/b4
+    merged finding): a bare ``set[int]`` of recyclable ids had no liveness
+    pinning, so a model that dropped a snapshotted cache tensor mid-forward
+    freed the object and a later stale-pre-wrap escape product could reuse the
+    exact id -- classified "model-owned known source", silently suppressing
+    the adoption disclosure (the exact laundering 3c721316 closed). Pinning
+    every snapshot member for the session makes id reuse impossible; the
+    workspace drop at the transient-state cleanup seam releases the pins.
+
+    Parameters
+    ----------
+    model
+        The prepared root model.
+
+    Returns
+    -------
+    dict[int, torch.Tensor]
+        ``id() -> tensor`` for every reachable non-Parameter tensor. Consumers
+        test membership (``id(t) in snapshot``), identical to the historical
+        set semantics; the values exist only to pin the ids.
+    """
+
+    owned, _ = collect_pre_forward_tensor_ids(model)
+    return owned
 
 
 def record_module_boundary_adoption(

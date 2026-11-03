@@ -13,7 +13,7 @@ from torchlens.intervention.errors import (
     DirectActivationWriteWarning,
     EngineDispatchError,
     ModelMismatchError,
-    MutateInPlaceWarning,
+    TraceMutationWarning,
 )
 from torchlens.io import TraceState, suppress_mutate_warnings
 from torchlens.options import CaptureOptions, InterventionOptions
@@ -71,7 +71,7 @@ class WrongModel(torch.nn.Module):
         return self.fc(x)
 
 
-def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return zeros matching the incoming out.
 
     Parameters
@@ -87,7 +87,7 @@ def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         Zero out.
     """
 
-    del hook
+    del ctx
     return out * 0
 
 
@@ -114,7 +114,7 @@ def _capture(
     log = tl.trace(
         ReluLinear() if model is None else model,
         capture_x,
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
     return log, capture_x
 
@@ -123,7 +123,7 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
     """Root mutators warn once, with call-level and session-level suppression."""
 
     log, _ = _capture()
-    with pytest.warns(MutateInPlaceWarning):
+    with pytest.warns(TraceMutationWarning):
         log.set(tl.func("relu"), torch.zeros(2, 3))
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
@@ -161,15 +161,15 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
     """Forked logs have independent specs and per-pass intervention logs."""
 
     parent, _ = _capture()
-    relu_pass = next(layer for layer in parent.layer_list if layer.func_name == "relu")
-    parent_initial_log = list(relu_pass.interventions)
+    relu_pass = next(layer for layer in parent._layer_list if layer.func_name == "relu")
+    parent_initial_log = list(relu_pass.edits)
 
     fork = parent.fork("test")
-    fork_relu_pass = next(layer for layer in fork.layer_list if layer.func_name == "relu")
-    assert fork.parent_run() is parent
-    assert fork.trace_label == "test"
+    fork_relu_pass = next(layer for layer in fork._layer_list if layer.func_name == "relu")
+    assert fork._parent_run() is parent
+    assert fork.name == "test"
     assert fork_relu_pass.out is relu_pass.out
-    assert fork_relu_pass.interventions is not relu_pass.interventions
+    assert fork_relu_pass.edits is not relu_pass.edits
     assert fork_relu_pass.equivalent_ops is not relu_pass.equivalent_ops
 
     with warnings.catch_warnings(record=True) as warnings_record:
@@ -178,8 +178,8 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
     assert warnings_record == []
     fork.push()
 
-    assert list(relu_pass.interventions) == parent_initial_log
-    assert len(fork_relu_pass.interventions) > len(parent_initial_log)
+    assert list(relu_pass.edits) == parent_initial_log
+    assert len(fork_relu_pass.edits) > len(parent_initial_log)
     assert len(fork._intervention_spec.target_value_specs) == 1
     assert len(parent._intervention_spec.target_value_specs) == 0
 
@@ -188,7 +188,7 @@ def test_direct_out_write_warns_once_and_marks_dirty() -> None:
     """Direct out writes emit a warning and mark the owning log dirty."""
 
     log, _ = _capture()
-    relu_pass = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu_pass = next(layer for layer in log._layer_list if layer.func_name == "relu")
 
     with pytest.warns(DirectActivationWriteWarning):
         relu_pass.out = relu_pass.out
@@ -208,8 +208,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     """``do`` dispatches to replay, rerun, set-only, and top-level alias paths."""
 
     replay_log, _ = _capture()
-    replay_result = tl.do(
-        replay_log,
+    replay_result = replay_log.do(
         {tl.func("relu"): _zero_hook},
         intervention=InterventionOptions(confirm_mutation=True),
     )
@@ -226,7 +225,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     rerun_result = rerun_log.do(
         {tl.func("relu"): _zero_hook},
         model=ReluLinear(),
-        x=x,
+        inputs=x,
         intervention=InterventionOptions(confirm_mutation=True),
     )
     assert rerun_result is rerun_log
@@ -257,7 +256,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
     with pytest.raises(EngineDispatchError):
         log.do(
             {tl.func("relu"): _zero_hook},
-            x=x,
+            inputs=x,
             intervention=InterventionOptions(confirm_mutation=True),
         )
 
@@ -274,7 +273,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
         log.do(
             {tl.func("relu"): _zero_hook},
             model=WrongModel(),
-            x=torch.randn(2, 99),
+            inputs=torch.randn(2, 99),
             intervention=InterventionOptions(confirm_mutation=True),
         )
     assert len(log.state_history) == history_len
@@ -285,7 +284,7 @@ def test_direct_write_propagation_warning_is_one_time() -> None:
     """Replay warns once when propagation overlays direct writes."""
 
     log, _ = _capture()
-    relu_pass = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu_pass = next(layer for layer in log._layer_list if layer.func_name == "relu")
     with pytest.warns(DirectActivationWriteWarning):
         relu_pass.out = relu_pass.out
 

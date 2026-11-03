@@ -128,6 +128,26 @@ _SIDECAR_REGISTRY = create_registry(
 # validate the envelope shape fail-closed (_io/forgery_validation.py).
 
 
+def _ensure_builtin_families() -> None:
+    """Register the in-tree TorchLens families before any door consultation.
+
+    A builtin family's contract lives with its owning lane (the
+    ``torchlens.boundary_facts`` family and its ``token_boundary_v1``
+    validator live in :mod:`torchlens.bundle._fed_by`) and registers through
+    :func:`register_sidecar_family` at that module's import. Importing the
+    owners here, on every consultation, makes every builtin family present
+    whatever was imported first, while ``import torchlens`` stays free of
+    them. The import system supplies the rest: a repeat import is a
+    ``sys.modules`` hit, the owner's own registration (which consults this
+    door mid-import) gets the partly initialized module back, and another
+    thread waits until the import finishes. Only TorchLens's own modules
+    load; out-of-tree provider code is never imported (memo 6.4).
+    """
+
+    # Importing the owner registers ``torchlens.boundary_facts``.
+    from ..bundle import _fed_by  # noqa: F401
+
+
 def register_sidecar_family(
     family: SidecarFamily,
     *,
@@ -230,12 +250,14 @@ def register_sidecar_family(
 def unregister_sidecar_family(family_id: str) -> None:
     """Remove one sidecar family registration (tests and provider teardown)."""
 
+    _ensure_builtin_families()
     _SIDECAR_REGISTRY.unregister(family_id)
 
 
 def list_sidecar_families() -> tuple[str, ...]:
-    """Return the registered sidecar family ids."""
+    """Return the registered sidecar family ids (the builtin families included)."""
 
+    _ensure_builtin_families()
     return _SIDECAR_REGISTRY.list_ids()
 
 
@@ -281,6 +303,7 @@ def attach_sidecar(trace: Any, family_id: str, payload: Any) -> None:
     ``trace.annotations["sidecar"][family_id]``.
     """
 
+    _ensure_builtin_families()
     family = _SIDECAR_REGISTRY.get(family_id)
     annotations = _annotations_mapping(trace, family_id)
     size = _canonical_payload_bytes(family_id, payload)
@@ -315,7 +338,8 @@ def read_sidecar(trace: Any, family_id: str) -> Any | AnalysisOnlySidecar:
     Any | AnalysisOnlySidecar
         The validated payload when the family is registered; an
         :class:`AnalysisOnlySidecar` (raw envelope, no validation claim) when
-        it is not. Never imports provider code.
+        it is not. Never imports out-of-tree provider code; the builtin
+        TorchLens families are always registered.
     """
 
     annotations = _annotations_mapping(trace, family_id)
@@ -337,6 +361,7 @@ def read_sidecar(trace: Any, family_id: str) -> Any | AnalysisOnlySidecar:
             family_id=family_id,
             remedy="Re-attach through attach_sidecar(); do not hand-edit envelopes.",
         )
+    _ensure_builtin_families()
     if family_id not in _SIDECAR_REGISTRY.list_ids():
         return AnalysisOnlySidecar(
             family_id=family_id,

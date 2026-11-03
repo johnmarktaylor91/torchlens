@@ -229,7 +229,7 @@ class ComponentStack:
         yield self.stack()
         yield self.labels
 
-    def top(self, k: int = 5, *, by: str = "norm") -> tuple[tuple[str, float], ...]:
+    def topk(self, k: int = 5, *, by: str = "norm") -> tuple[tuple[str, float], ...]:
         """Return the ``k`` largest rows as ``(label, score)`` pairs.
 
         Parameters
@@ -374,7 +374,7 @@ class ContributionScores:
         yield self.values
         yield self.labels
 
-    def top(
+    def topk(
         self, k: int = 5, *, position: int = -1, direction: int = 0
     ) -> tuple[tuple[str, float], ...]:
         """Return the ``k`` largest contributors at one (position, direction).

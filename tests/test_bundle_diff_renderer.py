@@ -14,8 +14,8 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention import MultiMatchWarning
-from torchlens.visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
+from torchlens._visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
+from torchlens.errors import MultiMatchWarning
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 GOLDEN_SVG = SNAPSHOT_DIR / "bundle_diff_clean_vs_zero_relu.svg"
@@ -54,7 +54,7 @@ def _canonical_bundle() -> tl.Bundle:
     torch.manual_seed(0)
     model = torchvision_models.resnet18(weights=None).eval()
     x = torch.randn(1, 3, 224, 224)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     ablated_log = trace.fork("ablated")
     with pytest.warns(MultiMatchWarning):
         ablated_log.do(
@@ -62,7 +62,7 @@ def _canonical_bundle() -> tl.Bundle:
             tl.zero_ablate(),
             intervention=tl.options.InterventionOptions(confirm_mutation=True),
         )
-    return tl.bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
+    return tl.Bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
 
 
 def _normalize_svg(svg: str) -> bytes:
@@ -152,7 +152,7 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
 
     bundle = _canonical_bundle()
     outpath = tmp_path / "bundle_diff_clean_vs_zero_relu"
-    dot_source = bundle.show_diff(vis_outpath=str(outpath), vis_save_only=True)
+    dot_source = bundle.draw(graph="diff", path=str(outpath))
     candidate_svg = outpath.with_suffix(".svg")
 
     assert dot_source.startswith("// TorchLens bundle diff")
@@ -161,7 +161,7 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
     assert "aria-label=" in svg_text
     assert "clean vs ablated" in svg_text
     assert "zero_ablate(layer1.0.relu)" not in svg_text
-    assert len(bundle.aligned_pairs("clean", "ablated")) > 0
+    assert len(bundle._aligned_pairs("clean", "ablated")) > 0
 
     candidate_normalized = _normalize_svg(svg_text)
     reference_normalized = _normalize_svg(GOLDEN_SVG.read_text(encoding="utf-8"))
@@ -208,14 +208,13 @@ def test_bundle_diff_caption_uses_selected_members(tmp_path: Path) -> None:
     model = torch.nn.Linear(3, 2).eval()
     left = tl.trace(model, torch.randn(1, 3))
     right = left.fork("patched")
-    bundle = tl.bundle({"base": left, "patched": right}, baseline="base")
+    bundle = tl.Bundle({"base": left, "patched": right}, baseline="base")
 
     outpath = tmp_path / "member_caption"
-    dot_source = bundle.show_diff(
-        left="base",
-        right="patched",
-        vis_outpath=str(outpath),
-        vis_save_only=True,
+    dot_source = bundle.draw(
+        graph="diff",
+        members=("base", "patched"),
+        path=str(outpath),
     )
     svg_text = outpath.with_suffix(".svg").read_text(encoding="utf-8")
 
@@ -232,9 +231,9 @@ def test_bundle_diff_uses_each_members_own_delta() -> None:
     left_layer = SimpleNamespace(layer_label="left_1", func_name="op", parents=[], shape=None)
     right_layer = SimpleNamespace(layer_label="right_1", func_name="op", parents=[], shape=None)
     bundle = {
-        "baseline": SimpleNamespace(layer_list=[]),
-        "left": SimpleNamespace(layer_list=[left_layer]),
-        "right": SimpleNamespace(layer_list=[right_layer]),
+        "baseline": SimpleNamespace(_layer_list=[]),
+        "left": SimpleNamespace(_layer_list=[left_layer]),
+        "right": SimpleNamespace(_layer_list=[right_layer]),
     }
 
     dot = _build_dot(
@@ -265,8 +264,7 @@ def test_bundle_diff_pair_selection_considers_left_delta() -> None:
 
     selected = _select_pairs(
         [(left_high, right_low), (left_low, right_mid)],
-        left_name="left",
-        right_name="right",
+        names=("left", "right"),
         delta_map={
             "node_high": {"left": 9.0, "right": 0.0},
             "node_mid": {"left": 0.0, "right": 5.0},

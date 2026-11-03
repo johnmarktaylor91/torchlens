@@ -27,10 +27,10 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_ledger import derive_episode_status
+from torchlens._capture._episode_ledger import derive_episode_status
+from torchlens._runnable import StateSource
 from torchlens.errors import EpisodeDeclarationError
-from torchlens.options import EpisodeSpec
-from torchlens.runnable import StateSource
+from torchlens.options import EpisodeOptions
 
 # ---------------------------------------------------------------------------
 # Axes (S2 sec 5 + amendment B.5). ``mixed_exact_ledger`` is the wildcard
@@ -187,7 +187,7 @@ def test_episode_structure_only_cell_refuses_typed() -> None:
             _GreedyRunner(model, 2),
             torch.tensor([[1, 2, 3]]),
             capture=tl.options.CaptureOptions(structure_only=True),
-            episode=EpisodeSpec(stepped_module=model),
+            episode=EpisodeOptions(stepped_module=model),
         )
     assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"
 
@@ -200,7 +200,7 @@ def test_plain_structure_only_truncation_cell_refuses_typed() -> None:
     refuses through the ONE structure-only capability chokepoint.
     """
 
-    from torchlens.capture.structure_only import StructureOnlyCapabilityError
+    from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     trace = tl.trace(

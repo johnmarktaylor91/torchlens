@@ -13,10 +13,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from ..data_classes._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
+from .._data_classes._layer_sites import layer_site_key
+from .._data_classes._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Raw-label survival pattern (mirrors the roster sweep in invariants.py):
 #: a raw label leaking into any site-key COMPONENT is an unresolvable
@@ -35,7 +36,7 @@ def _check_site_key_invariants(ml: Trace) -> None:
     """
 
     name = "site_key_invariants"
-    ops = list(ml.layer_list)
+    ops = list(ml._layer_list)
     if not any(getattr(op, "site_key", None) is not None for op in ops):
         return  # legacy artifact: out of the invariant's declared domain
     _check_site_key_totality(ops, name)
@@ -148,28 +149,28 @@ def _check_layer_site_coherence(ml: Trace, name: str) -> None:
     from .invariants import MetadataInvariantError
 
     for layer_label in getattr(ml, "layer_labels", ()) or ():
-        layer = ml.layer_logs.get(layer_label)
+        layer = ml._layer_logs.get(layer_label)
         if layer is None:
             continue
         member_keys = {op.site_key for _, op in layer.ops.items()}
         member_keys.discard(None)
         if len(member_keys) == 1:
-            accessor_value = layer.site_key
+            accessor_value = layer_site_key(layer)
             expected = next(iter(member_keys))
             if accessor_value != expected:
                 raise MetadataInvariantError(
                     name,
-                    f"I-S3': Layer '{layer_label}'.site_key returned "
+                    f"I-S3': layer_site_key('{layer_label}') returned "
                     f"{accessor_value!r}, expected {expected!r}",
                 )
         elif len(member_keys) > 1:
             try:
-                silently_read = layer.site_key
+                silently_read = layer_site_key(layer)
             except InvalidArgumentError:
                 continue
             raise MetadataInvariantError(
                 name,
                 f"I-S3': Layer '{layer_label}' spans {len(member_keys)} sites "
-                f"but site_key silently returned {silently_read!r} instead of "
+                f"but layer_site_key silently returned {silently_read!r} instead of "
                 "the typed ambiguity refusal",
             )

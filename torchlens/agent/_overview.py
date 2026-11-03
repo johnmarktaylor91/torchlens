@@ -82,7 +82,7 @@ def manifest_overview(manifest: dict[str, Any] | None) -> dict[str, Any]:
 def _coverage_block(log: Any) -> dict[str, Any]:
     """Payload/gradient coverage counts an agent needs before value work."""
 
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(log._layer_list or [])
     from ..report._agent_json import _payload_state
 
     states = [_payload_state(op) for op in ops]
@@ -134,8 +134,9 @@ def _anomalies_block(log: Any, capture: dict[str, Any]) -> list[dict[str, Any]]:
     """Notable anomalies an agent must not miss, each one structured row."""
 
     anomalies: list[dict[str, Any]] = []
-    # ``capture_verified`` is TRI-STATE (None = no ceiling recorded, a HEALTHY
-    # capture); only an explicit False is an anomaly (AUD-CODE 2.5).
+    # ``capture_verified`` is TRI-STATE (None = not checked: the completeness
+    # witness was not armed, so it is no verdict and not a clean bill); only an
+    # explicit False is an anomaly (AUD-CODE 2.5).
     if capture.get("capture_verified") is False:
         anomalies.append(
             {
@@ -340,7 +341,7 @@ def dump_view(
         return folded_overview(log), 0, 0
     if view == "full":
         return _paged_full_dump(build_agent_json(log), max_rows=max_rows, offset=offset)
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list(log._layer_list or [])
     if class_id is not None:
         fold = fold_trace(log)
         by_id = {cls.class_id: set(cls.members) for cls in fold.classes}

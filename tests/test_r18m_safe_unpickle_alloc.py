@@ -12,7 +12,7 @@ than an inline dispatch handler -- bypassed the belt entirely. A ~30-byte
 allocated an attacker-sized, uninitialized-heap buffer (OOM DoS + uninitialized-heap read
 on a public object) BEFORE any structural check.
 
-The fix overrides ``SafeBundleUnpickler._instantiate`` (invoked via normal MRO by the
+The fix overrides ``_PurePythonBundleUnpickler._instantiate`` (invoked via normal MRO by the
 inherited ``load_inst`` / ``load_obj``) so the SAME belt fires for INST/OBJ -- closing
 the check at the CONSTRUCTION primitive, not per-opcode.
 
@@ -38,6 +38,7 @@ import torch
 from torchlens._io._safe_unpickle import (
     _NUMPY_RECONSTRUCT_FUNCS,
     SafeBundleUnpickler,
+    _PurePythonBundleUnpickler,
 )
 
 # 1,000,000-element float64 ndarray == 8 MB; the same stream scales LINEARLY (an attacker
@@ -119,7 +120,7 @@ def test_other_opcode_paths_still_refused(label: str, stream: bytes) -> None:
 def test_build_on_torch_tensor_refused() -> None:
     """BUILD (``__setstate__`` / storage-rebind) on a torch tensor instance is refused."""
 
-    unpickler = SafeBundleUnpickler(io.BytesIO(b"."))
+    unpickler = _PurePythonBundleUnpickler(io.BytesIO(b"."))
     # load_build reads ``self.stack[-2]`` (the instance) and ``[-1]`` (the state).
     unpickler.stack = [torch.zeros(1), {}]  # type: ignore[attr-defined]
     with pytest.raises(pickle.UnpicklingError):
@@ -139,7 +140,7 @@ def test_instantiate_refuses_mediated_reconstruct() -> None:
     if not _NUMPY_RECONSTRUCT_FUNCS:  # pragma: no cover - numpy always present with torch
         pytest.skip("numpy _reconstruct helper not resolvable")
     reconstruct = next(iter(_NUMPY_RECONSTRUCT_FUNCS))
-    unpickler = SafeBundleUnpickler(io.BytesIO(b"."))
+    unpickler = _PurePythonBundleUnpickler(io.BytesIO(b"."))
     with pytest.raises(pickle.UnpicklingError):
         # args as a LIST, exactly as ``load_inst`` / ``load_obj`` hand it over.
         unpickler._instantiate(reconstruct, [np.ndarray, (_N,), b"b"])
@@ -189,9 +190,9 @@ def test_tlspec_roundtrip_still_loads(tmp_path: object) -> None:
     x = torch.randn(2, 4)
     log = tl.trace(model, x, save=tl.func("relu"))
     path = str(tmp_path) + "/roundtrip.tlspec"  # type: ignore[operator]
-    tl.save(log, path)
+    log.save(path)
     loaded = tl.load(path)
-    assert loaded.backend == "torch"
+    assert loaded.provenance.backend == "torch"
     assert loaded.summary()
 
 
@@ -199,8 +200,11 @@ def test_tlspec_roundtrip_still_loads(tmp_path: object) -> None:
 def test_instantiate_override_present() -> None:
     """MUTATION TRIPWIRE: reverting the ``_instantiate`` override fails here + above."""
 
-    assert "_instantiate" in SafeBundleUnpickler.__dict__
-    assert SafeBundleUnpickler._instantiate.__qualname__ == "SafeBundleUnpickler._instantiate"
+    assert "_instantiate" in _PurePythonBundleUnpickler.__dict__
+    assert (
+        _PurePythonBundleUnpickler._instantiate.__qualname__
+        == "_PurePythonBundleUnpickler._instantiate"
+    )
 
 
 def test_every_constructing_opcode_is_gated() -> None:
@@ -213,13 +217,13 @@ def test_every_constructing_opcode_is_gated() -> None:
     through via ``self._instantiate``.
     """
 
-    dispatch = SafeBundleUnpickler.dispatch
+    dispatch = _PurePythonBundleUnpickler.dispatch
     # The four dispatch-level overrides are the SUBCLASS functions, not the base ones.
     for opcode, expected in (
-        (pickle.REDUCE[0], "SafeBundleUnpickler.load_reduce"),
-        (pickle.NEWOBJ[0], "SafeBundleUnpickler.load_newobj"),
-        (pickle.NEWOBJ_EX[0], "SafeBundleUnpickler.load_newobj_ex"),
-        (pickle.BUILD[0], "SafeBundleUnpickler.load_build"),
+        (pickle.REDUCE[0], "_PurePythonBundleUnpickler.load_reduce"),
+        (pickle.NEWOBJ[0], "_PurePythonBundleUnpickler.load_newobj"),
+        (pickle.NEWOBJ_EX[0], "_PurePythonBundleUnpickler.load_newobj_ex"),
+        (pickle.BUILD[0], "_PurePythonBundleUnpickler.load_build"),
     ):
         assert dispatch[opcode].__qualname__ == expected
 
@@ -227,4 +231,4 @@ def test_every_constructing_opcode_is_gated() -> None:
     # gate lives on the overridden shared primitive, invoked via normal MRO.
     assert dispatch[pickle.INST[0]].__qualname__ == "_Unpickler.load_inst"
     assert dispatch[pickle.OBJ[0]].__qualname__ == "_Unpickler.load_obj"
-    assert "_instantiate" in SafeBundleUnpickler.__dict__
+    assert "_instantiate" in _PurePythonBundleUnpickler.__dict__

@@ -65,6 +65,15 @@ CHECK_PRECONDITION = "precondition_refusal"
 #: actually needs. ``get_validation_failure(trace)`` returned ``None`` for a
 #: ``False`` result, the bare-``repr(False)`` menagerie's ``convit_*`` rows hit.
 CHECK_RETRACE_MISMATCH = "retrace_mismatch"
+#: ``validate_backward_pass`` verdicts. Every False it returns carries one
+#: record under this check; ``extra["reason"]`` names the refusal or mismatch
+#: (``non_leaf_parameter``, ``appended_trace``, ``pristine_oracle_unavailable``,
+#: ``backward_coverage_gap``, ``module_output_grads``,
+#: ``no_module_output_evidence``, ``no_parameter_gradients``,
+#: ``degenerate_parameter_gradients``, ``parameter_census_mismatch``,
+#: ``parameter_grad_mismatch``). Before this the backward path only warned, so
+#: ``last_validation_failure()`` was None after a False backward verdict.
+CHECK_BACKWARD = "backward"
 #: Replay finished with no failed decision but could not verify every node
 #: (status ``unverified``: an op replay could not check, or no node replayed).
 #: Such a run returns ``False``; ``_non_pass_record.finish_validation_status``
@@ -85,13 +94,13 @@ CHECK_DEGENERATE_FORWARD = "degenerate_forward"
 class ValidationFailure:
     """A structured description of the first surfaced validation mismatch.
 
-    Every field is optional so partial information is still useful. ``check`` is
+    Every field is optional so partial information is still useful. ``check_name`` is
     always populated and names which validation phase fired. The tensor-shaped
     fields (``saved_shape`` etc.) are filled in only for the numeric replay /
     ground-truth paths where a saved-vs-expected tensor pair exists.
     """
 
-    check: str
+    check_name: str
     op_label: str | None = None
     func_name: str | None = None
     message: str = ""
@@ -106,6 +115,12 @@ class ValidationFailure:
     reduction_depth: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): the summary line leads, ``extra`` is counted."""
+
+        extra = f", {len(self.extra)} extra key(s)" if self.extra else ""
+        return f"ValidationFailure({self.summary()!r}{extra})"
+
     def summary(self) -> str:
         """Return a compact single-line human-readable summary.
 
@@ -117,7 +132,7 @@ class ValidationFailure:
             saved=(1,64,7,7) f32 vs recomputed=(1,64,7,7) f32"``.
         """
 
-        parts: list[str] = [f"{self.check} mismatch"]
+        parts: list[str] = [f"{self.check_name} mismatch"]
         if self.op_label is not None:
             loc = self.op_label
             if self.func_name:
@@ -157,7 +172,7 @@ class ValidationFailure:
         """Return a plain-dict view suitable for JSON/ledger serialization."""
 
         return {
-            "check": self.check,
+            "check": self.check_name,
             "op_label": self.op_label,
             "func_name": self.func_name,
             "message": self.message,
@@ -182,7 +197,7 @@ class ValidationDiagnostic:
 
     Parameters
     ----------
-    check:
+    check_name:
         Stable name for the validation diagnostic source.
     message:
         Human-readable explanation of the diagnostic.
@@ -190,9 +205,18 @@ class ValidationDiagnostic:
         Additional JSON-friendly context for downstream reporting.
     """
 
-    check: str
+    check_name: str
     message: str
     extra: dict[str, Any] = field(default_factory=dict)
+
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): the check and a clipped message, ``extra`` counted."""
+
+        message = self.message if len(self.message) <= 160 else f"{self.message[:157]}..."
+        return (
+            f"ValidationDiagnostic({self.check_name!r}, message={message!r}, "
+            f"{len(self.extra)} extra key(s))"
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of this diagnostic.
@@ -203,7 +227,7 @@ class ValidationDiagnostic:
             Stable structured diagnostic payload.
         """
 
-        return {"check": self.check, "message": self.message, "extra": dict(self.extra)}
+        return {"check": self.check_name, "message": self.message, "extra": dict(self.extra)}
 
 
 #: Mirror of the CURRENT run's first failure. The internal validation trace
@@ -248,7 +272,8 @@ def last_validation_failure() -> ValidationFailure | None:
     -------
     ValidationFailure | None
         The structured first mismatch of the last ``validate_saved_outs`` /
-        ``tl.validate`` run, or ``None`` when it passed (or never ran).
+        ``tl.validate`` run (any scope; a False backward verdict records one
+        under ``CHECK_BACKWARD``), or ``None`` when it passed (or never ran).
     """
 
     return _LAST_RUN_FAILURE[0] if _LAST_RUN_FAILURE else None
@@ -442,7 +467,7 @@ def describe_tensor_mismatch(
     """
 
     failure = ValidationFailure(
-        check=check,
+        check_name=check,
         op_label=op_label,
         func_name=func_name,
         message=message,

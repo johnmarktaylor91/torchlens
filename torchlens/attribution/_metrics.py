@@ -41,6 +41,7 @@ from torchlens.attribution._core import (
     InputKwargs,
     _AttributionTarget,
     _call_model,
+    _Caller,
     _interned_by_identity,
     _normalize_model_inputs,
     _PreparedInputs,
@@ -49,8 +50,8 @@ from torchlens.attribution._core import (
     _temporarily_eval,
 )
 from torchlens.attribution._result import (
+    Attribution,
     AttributionError,
-    AttributionResult,
     AttributionWarning,
 )
 from torchlens.attribution._sampling import (
@@ -77,7 +78,7 @@ _LOWER_IS_BETTER_QUALIFICATION = (
 
 
 @dataclass(frozen=True)
-class MetricResult:
+class AttributionMetric:
     """Frozen container for one attribution quality metric (memo D14).
 
     Attributes
@@ -109,7 +110,7 @@ class MetricResult:
 
 
 def _attribution_leaves(
-    attribution: AttributionResult | Any,
+    attribution: Attribution | Any,
     prepared: _PreparedInputs,
 ) -> tuple[Tensor, ...]:
     """Align attribution values with the attributed input leaves.
@@ -135,7 +136,7 @@ def _attribution_leaves(
         input-space expansion recipe.
     """
 
-    values = attribution.values if isinstance(attribution, AttributionResult) else attribution
+    values = attribution.values if isinstance(attribution, Attribution) else attribution
     leaves = prepared.attributed_leaves
     flat: list[Tensor] = []
 
@@ -342,12 +343,12 @@ def infidelity(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    attribution: AttributionResult | Any,
+    attribution: Attribution | Any,
     perturb: str | Callable[..., tuple[Any, Any]] = "gaussian",
     noise_std: float = 0.003,
-    n_samples: int = 10,
+    num_samples: int = 10,
     seed: int | None = None,
-) -> MetricResult:
+) -> AttributionMetric:
     """Measure how well an attribution predicts perturbation-induced changes.
 
     ``infidelity = E[(sum(attr * dx) - (f(x) - f(x - dx)))^2]`` over sampled
@@ -376,7 +377,7 @@ def infidelity(
         both returns mirror the attributed-leaf tuple.
     noise_std
         Gaussian scale, disclosed in every result (default 0.003).
-    n_samples
+    num_samples
         Number of perturbation samples (default 10, reference parity).
     seed
         Optional deterministic seed.
@@ -395,13 +396,13 @@ def infidelity(
         escape returning mismatched trees.
     """
 
-    if isinstance(n_samples, bool) or not isinstance(n_samples, int) or n_samples <= 0:
+    if isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples <= 0:
         raise AttributionError(
             "n_samples must be a positive integer. Remedy: keep the default "
             "10 for reference parity, or raise it for tighter estimates.",
             code="metric_perturbation_invalid",
         )
-    prepared = _normalize_model_inputs(inputs, input_kwargs)
+    prepared = _normalize_model_inputs(inputs, input_kwargs, _Caller("infidelity", target=target))
     attribution_leaves = _attribution_leaves(attribution, prepared)
     noise = _NoiseSource(seed, None)
     generator = torch.Generator()
@@ -436,7 +437,7 @@ def infidelity(
             original_scores = original_output[..., target].detach()
         else:
             original_scores = _scalarize_output(original_output, target).detach()
-        for sample_index in range(n_samples):
+        for sample_index in range(num_samples):
             perturbations, perturbed_leaves = _draw_sample_perturbation(
                 perturb, prepared, noise, noise_std, generator, sample_index
             )
@@ -472,12 +473,12 @@ def infidelity(
     settings = {
         "perturb": perturb_policy,
         "noise_std": noise_std if perturb == "gaussian" else None,
-        "n_samples": n_samples,
+        "num_samples": num_samples,
         "seed": seed,
         "target": _target_repr(target),
         "normalization_primary": "unnormalized",
     }
-    return MetricResult(
+    return AttributionMetric(
         metric="infidelity",
         value=unnormalized,
         settings=settings,
@@ -551,8 +552,8 @@ def _max_relative_difference(first: Any, second: Any) -> float:
 
 def _enforce_determinism_ladder(
     bound: _BoundMethod,
-    first_result: AttributionResult,
-    probe_result: AttributionResult | None,
+    first_result: Attribution,
+    probe_result: Attribution | None,
 ) -> dict[str, Any]:
     """Apply the D15 determinism ladder and return the probe disclosure.
 
@@ -628,15 +629,15 @@ def sensitivity(
     inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
-    attribute: Callable[..., AttributionResult] | None = None,
+    attribute: Callable[..., Attribution] | None = None,
     model: Module | None = None,
-    method: Callable[..., AttributionResult] | None = None,
+    method: Callable[..., Attribution] | None = None,
     method_kwargs: dict[str, Any] | None = None,
     target: Any = None,
-    n_samples: int = 10,
+    num_samples: int = 10,
     radius: float = 0.02,
     seed: int | None = None,
-) -> MetricResult:
+) -> AttributionMetric:
     """Max-sensitivity: how much the attribution moves under tiny input noise.
 
     ``sensitivity_max = max_samples ||A(x') - A(x)||_F / ||A(x)||_F`` with
@@ -661,7 +662,7 @@ def sensitivity(
         seed or stored bank in here refuses BEFORE any work (ladder rung 1).
     target
         Target for the sugar route.
-    n_samples
+    num_samples
         Number of perturbed evaluations (default 10).
     radius
         L-infinity perturbation radius (default 0.02).
@@ -680,7 +681,7 @@ def sensitivity(
         On ladder refusals or invalid sampling parameters.
     """
 
-    if isinstance(n_samples, bool) or not isinstance(n_samples, int) or n_samples <= 0:
+    if isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples <= 0:
         raise AttributionError(
             "n_samples must be a positive integer. Remedy: keep the default "
             "10, or raise it for a tighter max.",
@@ -711,7 +712,7 @@ def sensitivity(
     prepared = _normalize_model_inputs(inputs, input_kwargs)
 
     baseline_result = bound.call(*_perturbed_user_inputs(prepared, prepared.attributed_leaves))
-    probe_result: AttributionResult | None = None
+    probe_result: Attribution | None = None
     if bound.kind == "opaque":
         # The probe's second call supplies the unperturbed-attribution
         # denominator the metric needs anyway, so part of its cost is
@@ -733,7 +734,7 @@ def sensitivity(
     if seed is not None:
         generator.manual_seed(seed)
     ratios: list[float] = []
-    for _sample in range(n_samples):
+    for _sample in range(num_samples):
 
         def _perturb(slot: int) -> Tensor:
             """Uniform L-infinity perturbation of one unique leaf."""
@@ -753,12 +754,12 @@ def sensitivity(
     settings = {
         "method": bound.method_name,
         "method_kwargs": dict(bound.settings),
-        "n_samples": n_samples,
+        "n_samples": num_samples,
         "radius": radius,
         "norm": "frobenius",
         "seed": seed,
     }
-    return MetricResult(
+    return AttributionMetric(
         metric="sensitivity_max",
         value=max(ratios),
         settings=settings,
@@ -770,4 +771,4 @@ def sensitivity(
     )
 
 
-__all__ = ["MetricResult", "infidelity", "sensitivity"]
+__all__ = ["AttributionMetric", "infidelity", "sensitivity"]

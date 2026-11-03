@@ -24,17 +24,17 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _DeferredForeignCallable,
     _safe_getattr,
 )
+from torchlens._utils.display import identity
 from torchlens.options import CaptureOptions
-from torchlens.utils.display import identity
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -125,17 +125,13 @@ def _save_all_levels(tmp_path: Path) -> dict[str, Path]:
     audit = tmp_path / "audit"
     cf_a = _ControlFlow()
     keep_alive.append(cf_a)
-    tl.trace(cf_a, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        audit, level="audit"
-    )
+    tl.trace(cf_a, x, save="all").save(audit, level="audit")
     paths["analysis"] = audit
 
     portable = tmp_path / "portable"
     cf_p = _ControlFlow()
     keep_alive.append(cf_p)
-    tl.trace(cf_p, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        portable, level="portable"
-    )
+    tl.trace(cf_p, x, save="all").save(portable, level="portable")
     paths["portable"] = portable
 
     run = tmp_path / "runnable"
@@ -199,13 +195,11 @@ def test_control_flow_bundle_round_trips(tmp_path: Path) -> None:
 
     x = torch.randn(2, 4)
     bundle = tmp_path / "cf"
-    tl.trace(_ControlFlow(), x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        bundle, level="portable"
-    )
+    tl.trace(_ControlFlow(), x, save="all").save(bundle, level="portable")
     assert b"_load_from_bytes" not in _metadata_path(bundle).read_bytes()
     loaded = tl.load(bundle)
     assert loaded is not None
-    for conditional in loaded.conditionals:
+    for conditional in loaded.graph.conditionals:
         for arm in conditional.arms:
             assert arm._trace is loaded
 
@@ -229,14 +223,12 @@ def test_malicious_metadata_is_denied_and_executes_nothing(tmp_path: Path, gadge
 
     x = torch.randn(2, 4)
     bundle = tmp_path / "victim"
-    tl.trace(_ControlFlow(), x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        bundle, level="portable"
-    )
+    tl.trace(_ControlFlow(), x, save="all").save(bundle, level="portable")
 
     marker = tmp_path / "PWNED"
     _overwrite_metadata(bundle, gadget_factory(marker))
 
-    with pytest.raises((TorchLensIOError, pickle.UnpicklingError)):
+    with pytest.raises((ArtifactError, pickle.UnpicklingError)):
         tl.load(bundle)
 
     assert not marker.exists(), "load-time gadget executed"
@@ -379,9 +371,9 @@ def test_foreign_recipe_bare_reference_load_tolerated_without_import() -> None:
 def test_torchlens_owned_recipe_admitted_without_trust() -> None:
     """A torchlens-owned recipe/transform resolves to the real callable, no trust."""
 
-    from torchlens.utils.display import identity
+    from torchlens._utils.display import identity
 
-    blob = _global_ref_pickle("torchlens.utils.display", "identity")
+    blob = _global_ref_pickle("torchlens._utils.display", "identity")
     resolved = SafeBundleUnpickler(io.BytesIO(blob)).load()
     assert resolved is identity
 
@@ -394,7 +386,7 @@ def test_foreign_recipe_admission_ignores_live_registry() -> None:
     placeholder whether or not the recipe is currently registered.
     """
 
-    from torchlens.semantic import facets
+    from torchlens._semantic import facets
 
     module_name = "torchlens_r4_registry_probe_module"
     blob = _global_ref_pickle(module_name, "_reg_probe")

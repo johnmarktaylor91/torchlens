@@ -26,8 +26,10 @@ from typing import Any, Literal
 
 import torch
 
+from .._utils.fail_open import fail_open
+from ..intervention.spec import site_signal
 from ._stats_render import render_core_line, sparkline
-from ._tensor_stats import TensorStats, tensor_stats
+from ._tensor_stats import FamilyEvidence, TensorStats, tensor_stats
 
 
 def summary_cell(stats: TensorStats, *, max_width: int = 40, style: str = "ascii") -> str:
@@ -77,14 +79,14 @@ def treescope_card_fields(stats: TensorStats) -> dict[str, Any]:
         minimum), scalar facts, and per-family evidence tokens.
     """
 
-    def evidence_token(evidence: Any) -> str:
+    def evidence_token(evidence: FamilyEvidence) -> str:
         """One family's policy disclosure token."""
 
         if evidence.policy == "sampled" and evidence.sample_size:
             return f"sampled {evidence.sample_size}/{evidence.population}"
         if evidence.policy == "unavailable":
             return f"unavailable({evidence.reason})"
-        return "exact"
+        return evidence.policy
 
     counts = stats.histogram_counts
     return {
@@ -100,37 +102,37 @@ def treescope_card_fields(stats: TensorStats) -> dict[str, Any]:
         "finite_min": stats.finite_min,
         "finite_max": stats.finite_max,
         "mean": stats.mean,
-        "sd": stats.sd,
-        "zero_count": stats.zero_count,
-        "nan_count": stats.nan_count,
-        "posinf_count": stats.posinf_count,
-        "neginf_count": stats.neginf_count,
-        "magnitude_basis": stats.magnitude_basis,
+        "sd": stats.std,
+        "zero_count": stats.num_zero,
+        "nan_count": stats.num_nan,
+        "posinf_count": stats.num_posinf,
+        "neginf_count": stats.num_neginf,
+        "magnitude_basis": stats.is_magnitude_based,
         "evidence": {
             "nonfinite": evidence_token(stats.nonfinite_evidence),
             "extrema": evidence_token(stats.extrema_evidence),
             "mean": evidence_token(stats.mean_evidence),
-            "sd": evidence_token(stats.sd_evidence),
+            "sd": evidence_token(stats.std_evidence),
             "histogram": evidence_token(stats.histogram_evidence),
         },
     }
 
 
 @dataclass
-class EchoObserver:
+class NarrationObserver:
     """Live stats-line echo mounted on the shipped observer surface.
 
     Mounts exactly like a tap
-    (``capture=CaptureOptions(intervention_ready=True, hooks=echo_obs)``,
-    the ``site``/``direction``/``__call__(out, *, hook)`` protocol) and
-    returns the observed value unchanged. Each firing appends one
+    (``capture=CaptureOptions(replayable=True, hooks=echo_obs)``,
+    the ``site``/``__call__(out, *, ctx)`` protocol) and returns the observed
+    value unchanged. :attr:`signal` is derived from the site: ``tl.grad(site)``
+    narrates the gradient of the site's output on each backward pass. Each firing appends one
     ``address -> core`` line to ``lines`` and forwards it to ``sink`` when
     given. Stats computation and rendering run under ``pause_logging`` so
     the echo can never contaminate the capture with its own torch ops.
     """
 
     site: Any = None
-    direction: Literal["forward", "backward", "both"] = "forward"
     sink: Callable[[str], None] | None = None
     style: Literal["ascii", "unicode"] = "ascii"
     lines: list[str] = field(default_factory=list)
@@ -142,14 +144,19 @@ class EchoObserver:
             f"EchoObserver(site={self.site!r}, {len(self.lines)} lines echoed, style={self.style})"
         )
 
-    def __call__(self, out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    @property
+    def signal(self) -> Literal["forward", "backward", "both"]:
+        """The pass this observer narrates, derived from its site."""
+
+        return site_signal(self.site)
+
+    def __call__(self, out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Record one firing; the observed value passes through unchanged."""
 
         from .._state import pause_logging
-        from ..utils.fail_open import fail_open
 
         with pause_logging():
-            address = self._address(hook)
+            address = self._address(ctx)
             # Never break a forward from an echo: degrade to the typed token.
             core = fail_open(
                 lambda: render_core_line(tensor_stats(out, identity=address), style=self.style),
@@ -165,7 +172,7 @@ class EchoObserver:
     def _address(hook: Any) -> str | None:
         """Best-effort site address from the hook context."""
 
-        layer_log = getattr(hook, "layer_log", None)
+        layer_log = getattr(hook, "op", None)
         if layer_log is None:
             return None
         if hasattr(layer_log, "get"):
@@ -173,31 +180,29 @@ class EchoObserver:
         return getattr(layer_log, "label", None) or getattr(layer_log, "layer_label", None)
 
 
-def echo(
+def narrate(
     site: Any,
     *,
     sink: Callable[[str], None] | None = None,
-    direction: Literal["forward", "backward", "both"] = "forward",
     style: Literal["ascii", "unicode"] = "ascii",
-) -> EchoObserver:
+) -> NarrationObserver:
     """Create an echo observer (the live line density) for one site.
 
-    Mounts on the shipped hook surface exactly like ``tl.tap``::
+    Mounts on the shipped hook surface exactly like ``tl.observers.tap``::
 
-        obs = tl.stats.echo(tl.func("relu"), sink=print)
+        obs = tl.stats.narrate(tl.func("relu"), sink=print)
         tl.trace(model, x,
                  capture=tl.options.CaptureOptions(
-                     intervention_ready=True, hooks=obs))
+                     replayable=True, hooks=obs))
 
     Parameters
     ----------
     site:
-        Selector-like site to observe (any ``tap()``-accepted selector).
+        Selector-like site to observe (any ``tap()``-accepted selector);
+        ``tl.grad(site)`` narrates the gradient of the site's output.
     sink:
         Optional per-line consumer (e.g. ``print`` or a logger method);
         lines always also accumulate on ``observer.lines``.
-    direction:
-        Hook direction, as on ``tl.tap``.
     style:
         Rendering style for the echoed cores.
 
@@ -207,4 +212,4 @@ def echo(
         Callable observer for the ``hooks=`` surface.
     """
 
-    return EchoObserver(site=site, direction=direction, sink=sink, style=style)
+    return NarrationObserver(site=site, sink=sink, style=style)

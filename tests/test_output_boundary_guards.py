@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container_registry import (
+from torchlens._ir.container_registry import (
     OUTPUT_TREE_MAX_DEPTH,
     _build_container_spec,
     walk_container,
@@ -107,21 +107,25 @@ def test_cyclic_spec_degrades_to_opaque_and_unreconstructable() -> None:
 def test_runnable_prover_refuses_deep_and_cyclic_typed() -> None:
     """Refuse-unless-proved: the losslessness prover names the guard reasons."""
 
-    from torchlens.backends.torch import ops as torch_ops
+    import torchlens.backends.torch._ops_containers
 
     deep = _deep_list(OUTPUT_TREE_MAX_DEPTH + 50, torch.ones(1))
-    proved, reason = torch_ops._prove_runnable_output_lossless(deep)
+    proved, reason = torchlens.backends.torch._ops_containers._prove_runnable_output_lossless(deep)
     assert proved is False
     assert reason == "output_tree_depth_exceeded"
 
     cyclic: list[object] = [torch.ones(1)]
     cyclic.append(cyclic)
-    proved, reason = torch_ops._prove_runnable_output_lossless(cyclic)
+    proved, reason = torchlens.backends.torch._ops_containers._prove_runnable_output_lossless(
+        cyclic
+    )
     assert proved is False
     assert reason.startswith("output_tree_cycle:")
 
     shared = [torch.ones(1)]
-    proved, reason = torch_ops._prove_runnable_output_lossless([shared, shared])
+    proved, reason = torchlens.backends.torch._ops_containers._prove_runnable_output_lossless(
+        [shared, shared]
+    )
     assert proved is True
 
 

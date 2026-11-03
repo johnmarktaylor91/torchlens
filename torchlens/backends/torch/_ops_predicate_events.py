@@ -8,11 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
-from ..._capture_state_helpers import _is_uninitialized_param
-from ..._errors import TorchLensPostfuncError
-from ..._state import pause_logging
-from ..._training_validation import TrainingModeConfigError
-from ...capture.arg_positions import (
+from ..._capture.arg_positions import (
     DYNAMIC_SPEC_UNCACHEABLE,
     FUNC_ARG_SPECS,
     VARIADIC_TENSOR_ARG_FUNCS,
@@ -22,35 +18,39 @@ from ...capture.arg_positions import (
     dynamic_spec_covers_call,
     extract_tensors_and_params,
 )
-from ...capture.plan import EnrichmentLevel
-from ...capture.predicates import (
+from ..._capture.plan import EnrichmentLevel
+from ..._capture.predicates import (
     _evaluate_keep_op,
     _is_halt_only_capture,
     build_op_record_context,
 )
-from ...capture.projections import (
+from ..._capture.projections import (
     LiveOpView,
     append_projected_event,
     get_active_recording_state,
 )
-from ...capture.session import capture_session_for
-from ...capture.stop import evaluate_halt_stop
-from ...data_classes.internal_types import FuncExecutionContext
-from ...data_classes.op import (
+from ..._capture.session import capture_session_for
+from ..._capture.stop import evaluate_halt_stop
+from ..._capture_state_helpers import _is_uninitialized_param
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._data_classes.op import (
     Op,
 )
-from ...fastlog._halt import HaltSignal
-from ...fastlog.exceptions import PredicateError
-from ...fastlog.types import (
-    CaptureSpec,
-)
-from ...ir.events import (
+from ..._errors import UserTransformError
+from ..._ir.events import (
     FunctionCallRef,
 )
-from ...ir.predicate import RetroactiveCaptureDecision
-from ...utils.display import _timed_phase
-from ...utils.introspection import (
+from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._state import pause_logging
+from ..._training_validation import TrainingModeConfigError
+from ..._utils.display import _timed_phase
+from ..._utils.introspection import (
     _get_tensors_and_params_from_obj,
+)
+from ...recording._halt import StopSignal
+from ...recording.exceptions import PredicateError
+from ...recording.types import (
+    CaptureSpec,
 )
 from ._tl import (
     get_label_list,
@@ -66,19 +66,8 @@ from .tensor_tracking import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        TRANSFORM_FUNC_NAMES,
-        _is_default_ram_payload,
-        _iter_loggable_live_outputs,
-        _live_output_index,
-        _predicate_backend_semantics,
-        _predicate_function_ref,
-        _record_predicate_output,
-        _snapshot_exhaustive_module_stack,
-    )
 
 __all__ = (
     "_emit_predicate_operation_events",
@@ -143,12 +132,12 @@ def _emit_predicate_operation_events(
                 pass_index=state.pass_index,
                 event_index=state.event_index,
                 step_index=state.step_index,
-                capture_start_time=self.capture_start_time,
+                capture_start_time=self._provenance_start_time,
                 include_source_events=state.options.include_source_events,
                 sample_id=state.sample_id,
                 address=module_frame.address if module_frame else None,
                 module_type=module_frame.module_type if module_frame else None,
-                module_pass_index=module_frame.pass_index if module_frame else None,
+                module_pass_number=module_frame.pass_number if module_frame else None,
                 is_transform=bool(getattr(func, "__tl_is_transform_boundary__", False))
                 or func_name in TRANSFORM_FUNC_NAMES,
                 transform_kind=getattr(func, "__tl_transform_kind__", None)
@@ -219,9 +208,9 @@ def _emit_predicate_operation_events(
                 container_path=container_path,
             )
             evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
-        except HaltSignal:
+        except StopSignal:
             raise
-        except (TorchLensPostfuncError, TrainingModeConfigError):
+        except (UserTransformError, TrainingModeConfigError):
             # Postfunc + train-mode validation errors are storage failures and
             # must surface directly to the caller, not be aggregated through
             # the predicate-failure pipeline. The orchestrator's outer
@@ -264,7 +253,7 @@ def _emit_predicate_operation_events(
                         ctx,
                         tensor=out,
                         trace=self,
-                        intervened=bool(getattr(committed_event, "intervention_replaced", False)),
+                        intervened=bool(getattr(committed_event, "is_edited", False)),
                     )
                 state.append_context(ctx)
 
@@ -454,8 +443,8 @@ def _build_param_fields(
             continue
         param_meta = get_param_meta(param)
         addr = None if param_meta is None else param_meta.param_address
-        if addr is not None and addr in self.param_logs:
-            param_log = self.param_logs[addr]
+        if addr is not None and addr in self._param_logs:
+            param_log = self._param_logs[addr]
             if getattr(param_log, "_param_ref", None) is not param:
                 # Offload rebind rung (lane F37): accelerate offload hooks
                 # replace the prep-stamped meta parameter with a fresh
@@ -514,3 +503,23 @@ def _build_module_context_fields(
     fields_dict["is_module_output"] = False
     fields_dict["is_atomic_module"] = False
     fields_dict["atomic_module_call"] = None
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_capture_records import (  # noqa: E402
+    _snapshot_exhaustive_module_stack,
+)
+from ._ops_interventions import (  # noqa: E402
+    _iter_loggable_live_outputs,
+    _live_output_index,
+)
+from ._ops_predicates import (  # noqa: E402
+    _is_default_ram_payload,
+    _predicate_backend_semantics,
+    _predicate_function_ref,
+    _record_predicate_output,
+)
+from .ops import (  # noqa: E402
+    TRANSFORM_FUNC_NAMES,
+)

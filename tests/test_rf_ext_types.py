@@ -7,7 +7,7 @@ from dataclasses import fields
 from fractions import Fraction
 
 from torchlens.receptive_field import (
-    GradientReceptiveField,
+    GradReceptiveField,
     GridLayout,
     ReceptiveField,
     ReceptiveFieldAlignment,
@@ -140,13 +140,13 @@ def test_extension_fields_preserve_legacy_dataclass_contracts() -> None:
     """Keep legacy construction, matching, field prefixes, and reprs stable."""
 
     # Third element: sanctioned kw-only extension fields BEYOND the shared
-    # (direction, unit_shape) pair. GradientReceptiveField carries signed_grad
+    # (direction, unit_shape) pair. GradReceptiveField carries signed_grad
     # (R13-5): grad stays the magnitude view, signed values ride a defaulted
     # repr-suppressed extension so legacy construction and matching hold.
     cases = (
         (ReceptiveField, _descriptor_args(), ()),
         (ReceptiveFieldBox, _box_args(), ()),
-        (GradientReceptiveField, _gradient_args(), ("signed_grad",)),
+        (GradReceptiveField, _gradient_args(), ("signed_grad",)),
         (ReceptiveFieldValidation, _validation_args(), ()),
     )
     for result_type, args, extension_fields in cases:
@@ -189,9 +189,7 @@ def test_direction_distinguishes_results_and_derives_endpoint_keys() -> None:
         *_descriptor_args(), direction=ReceptiveFieldDirection.PROJECTIVE, unit_shape=(5,)
     )
     box = ReceptiveFieldBox(*_box_args(), direction=ReceptiveFieldDirection.PROJECTIVE)
-    gradient = GradientReceptiveField(
-        *_gradient_args(), direction=ReceptiveFieldDirection.PROJECTIVE
-    )
+    gradient = GradReceptiveField(*_gradient_args(), direction=ReceptiveFieldDirection.PROJECTIVE)
 
     assert receptive != projective
     assert (receptive.source_key, receptive.target_key) == ("input.a", "target")

@@ -76,7 +76,7 @@ def test_site_ordinal_counts_earlier_ops_sharing_the_key() -> None:
         SimpleNamespace(raw_index=9, site_key=key),
     ]
     layers = [SimpleNamespace(ops=(ops[0], ops[2])), ops[1], SimpleNamespace(ops=(ops[3],))]
-    log = SimpleNamespace(layer_list=layers)
+    log = SimpleNamespace(_layer_list=layers)
     assert captum._site_ordinal(log, ops[0], key) == 1
     assert captum._site_ordinal(log, ops[2], key) == 2
     assert captum._site_ordinal(log, ops[3], key) == 3

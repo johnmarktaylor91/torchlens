@@ -14,14 +14,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import _collapse_runs, _collapse_signatures
-from torchlens.visualization.auto_collapse import (
+from torchlens._visualization import _collapse_runs, _collapse_signatures
+from torchlens._visualization.auto_collapse import (
     _run_fold_members_uniform,
     analyze_collapse,
     resolve_repeat_folds,
 )
-from torchlens.visualization.collapse_optimizer import select_collapse_plan
-from torchlens.visualization.collapse_plan import RenderContext
+from torchlens._visualization.collapse_optimizer import select_collapse_plan
+from torchlens._visualization.collapse_plan import RenderContext
 
 
 class _Block(nn.Module):

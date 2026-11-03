@@ -11,12 +11,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.postprocess as postprocess_module
+import torchlens._postprocess.graph_traversal as graph_traversal_module
 from torchlens import trace as trace_fn
-from torchlens._io import TorchLensIOError, streaming as streaming_module
+from torchlens._data_classes.trace import Trace
+from torchlens._io import ArtifactError, streaming as streaming_module
 from torchlens._io.manifest import Manifest
-from torchlens.data_classes.trace import Trace
-from torchlens.errors import ArgumentConflictError, TorchLensPostfuncError
+from torchlens._record_type import record_type
+from torchlens.errors import ArgumentConflictError, UserTransformError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens.validation import validate_tlspec
 
@@ -78,7 +79,7 @@ def _saved_layers(trace: Trace) -> list[Any]:
         Saved layer-pass entries.
     """
 
-    return [layer for layer in trace.layer_list if layer.has_saved_activation]
+    return [layer for layer in trace._layer_list if layer.has_saved_activation]
 
 
 def _tmp_dirs_for(bundle_path: Path) -> list[Path]:
@@ -110,7 +111,7 @@ def test_streaming_writes_blobs_before_postprocess(
 
     bundle_path = tmp_path / "stream_bundle.tl"
     observed: dict[str, object] = {}
-    original_add_output_layers = postprocess_module._add_output_layers
+    original_add_output_layers = graph_traversal_module._add_output_layers
 
     def _capturing_add_output_layers(
         self: Trace,
@@ -126,14 +127,14 @@ def test_streaming_writes_blobs_before_postprocess(
             self, output_tensors, output_tensor_addresses, output_parent_labels
         )
 
-    monkeypatch.setattr(postprocess_module, "_add_output_layers", _capturing_add_output_layers)
+    monkeypatch.setattr(graph_traversal_module, "_add_output_layers", _capturing_add_output_layers)
 
     model, inputs = _make_streaming_model()
     trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, async_writes=False),
+        save="all",
+        storage=tl.options.StorageOptions(path=bundle_path, async_writes=False),
     )
 
     assert observed["final_exists"] is False
@@ -154,8 +155,8 @@ def test_step_19_finalizes_bundle_and_keeps_outs_in_memory(tmp_path: Path) -> No
     trace = tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=True),
+        save="all",
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
     )
 
     saved_layers = _saved_layers(trace)
@@ -180,8 +181,8 @@ def test_step_20_evicts_streamed_outs_when_requested(tmp_path: Path) -> None:
     trace = tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        save="all",
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
 
     saved_layers = _saved_layers(trace)
@@ -202,13 +203,13 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
         raise RuntimeError("boom")
 
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensPostfuncError, match="activation_transform raised"):
+    with pytest.raises(UserTransformError, match="activation_transform raised"):
         trace_fn(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
-            save=tl.options.SaveOptions(activation_transform=_raise_on_out),
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+            capture=tl.options.CaptureOptions(activation_transform=_raise_on_out),
+            save="all",
+            storage=tl.options.StorageOptions(path=bundle_path),
         )
 
     assert not bundle_path.exists()
@@ -223,15 +224,15 @@ def test_streaming_rejects_non_tensor_activation_transform_output(tmp_path: Path
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensIOError, match="activation_transform outputs"):
+    with pytest.raises(ArtifactError, match="activation_transform outputs"):
         trace_fn(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
-            save=tl.options.SaveOptions(
-                activation_transform=lambda tensor: tensor.detach().cpu().numpy()
+            capture=tl.options.CaptureOptions(
+                activation_transform=lambda tensor: tensor.detach().cpu().numpy(),
             ),
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+            save="all",
+            storage=tl.options.StorageOptions(path=bundle_path),
         )
 
     assert not bundle_path.exists()
@@ -245,13 +246,15 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensIOError, match="sparse"):
+    with pytest.raises(ArtifactError, match="sparse"):
         trace_fn(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
-            save=tl.options.SaveOptions(activation_transform=lambda tensor: tensor.to_sparse()),
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+            capture=tl.options.CaptureOptions(
+                activation_transform=lambda tensor: tensor.to_sparse()
+            ),
+            save="all",
+            storage=tl.options.StorageOptions(path=bundle_path),
         )
 
     assert not bundle_path.exists()
@@ -301,11 +304,11 @@ def test_streaming_finalize_baseexception_marks_partial_and_is_sweepable(
             model,
             inputs,
             storage=tl.to_disk(bundle_path),
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )
 
     # The KeyboardInterrupt must propagate unwrapped (not swallowed, not
-    # rewrapped into a TorchLensIOError) -- verified by pytest.raises above --
+    # rewrapped into a ArtifactError) -- verified by pytest.raises above --
     # while STILL marking the .tmp dir PARTIAL so it becomes sweepable.
     assert not bundle_path.exists()
     tmp_dirs = _tmp_dirs_for(bundle_path)
@@ -339,12 +342,12 @@ def test_streaming_finalize_rename_failure_marks_partial(
         return original_rename(source, target)
 
     monkeypatch.setattr(Path, "rename", fail_final_rename)
-    with pytest.raises(TorchLensIOError, match="atomically rename"):
+    with pytest.raises(ArtifactError, match="atomically rename"):
         tl.trace(
             model,
             inputs,
             storage=tl.to_disk(bundle_path),
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )
 
     tmp_dirs = _tmp_dirs_for(bundle_path)
@@ -388,7 +391,7 @@ def test_streaming_write_blob_baseexception_marks_partial_and_is_sweepable(
             model,
             inputs,
             storage=tl.to_disk(bundle_path),
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )
 
     assert not bundle_path.exists()
@@ -416,8 +419,8 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
     trace = tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StreamingOptions(out_callback=_sink),
+        save="all",
+        storage=tl.options.StorageOptions(on_save=_sink),
     )
     capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
 
@@ -431,9 +434,7 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
         trace_fn(
             model2,
             inputs2,
-            streaming=tl.options.StreamingOptions(
-                bundle_path=tmp_path / "stream_bundle.tl", out_callback=_sink
-            ),
+            storage=tl.options.StorageOptions(path=tmp_path / "stream_bundle.tl", on_save=_sink),
         )
     assert exc_info.value.fields["code"] == "output_sink_conflict"
 
@@ -447,12 +448,12 @@ def test_selective_streaming_save_writes_selected_payloads(tmp_path: Path) -> No
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="linear"),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        save="linear",
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
 
     saved = _saved_layers(trace)
-    saved_types = {layer.layer_type for layer in saved}
+    saved_types = {record_type(layer) for layer in saved}
     assert bundle_path.exists()
     assert "linear" in saved_types
     assert saved_types <= {"linear", "output"}
@@ -470,8 +471,8 @@ def test_selective_out_sink_still_works() -> None:
     trace = tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="linear"),
-        streaming=tl.options.StreamingOptions(out_callback=_sink),
+        save="linear",
+        storage=tl.options.StorageOptions(on_save=_sink),
     )
 
     capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
@@ -497,7 +498,7 @@ def test_cleanup_tmp_removes_partial_dirs_and_rejects_symlinks(tmp_path: Path) -
     symlink_dir = tmp_path / f"{bundle_path.name}.tmp.symlink"
     symlink_dir.symlink_to(target_dir, target_is_directory=True)
 
-    with pytest.raises(TorchLensIOError, match="symlink temp directory"):
+    with pytest.raises(ArtifactError, match="symlink temp directory"):
         cleanup_tmp(bundle_path)
 
 
@@ -509,8 +510,8 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
     trace = tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=True),
+        save="all",
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
     )
 
     first_saved_layer = _saved_layers(trace)[0]
@@ -520,7 +521,7 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
 
 
 def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -> None:
-    """Streaming bundles must write the same unified manifest as ``tl.save()``.
+    """Streaming bundles must write the same unified manifest as ``trace.save()``.
 
     Regression test: ``BundleStreamWriter.finalize()`` used to write a bare
     legacy ``Manifest`` with no ``"kind"`` key, so ``detect_tlspec_format()``
@@ -534,8 +535,8 @@ def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+        save="all",
+        storage=tl.options.StorageOptions(path=bundle_path),
     )
 
     assert detect_tlspec_format(bundle_path) == "v2.0_unified"
@@ -543,7 +544,7 @@ def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -
 
     loaded = tl.load(bundle_path)
     assert isinstance(loaded, Trace)
-    assert loaded.num_ops == trace.num_ops
+    assert loaded._num_ops == trace._num_ops
 
 
 class _AttrStreamingModel(nn.Module):
@@ -565,12 +566,12 @@ def _stream(model: nn.Module, inputs: torch.Tensor, bundle_path: Path) -> None:
         model,
         inputs,
         storage=tl.to_disk(bundle_path),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
 
 def test_streaming_bundle_permissions_are_tight(tmp_path: Path) -> None:
-    """Streaming bundles must match tl.save's 0700/0600 permission parity (B8-10)."""
+    """Streaming bundles must match Trace.save's 0700/0600 permission parity (B8-10)."""
 
     import os
     import stat

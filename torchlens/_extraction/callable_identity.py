@@ -46,7 +46,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
-from .dtype_policy import tensor_payload_bytes
+from .._utils.tensor_leaves import tensor_payload_bytes
 
 __tl_layer__ = "L5"
 

@@ -10,10 +10,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
+from torchlens._data_classes.layer import Layer
+from torchlens._visualization import node_spec as node_spec_mod
+from torchlens._visualization.overlays import external_overlay_value
 from torchlens.experimental.dagua import NodeSpec
-from torchlens.visualization import node_spec as node_spec_mod
-from torchlens.visualization.overlays import external_overlay_value
 
 
 def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
@@ -21,11 +21,10 @@ def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def test_default_nodespec_for_conv2d_includes_args(tmp_path: Any) -> None:
@@ -55,11 +54,10 @@ def test_default_nodespec_for_linear_suppresses_proven_redundant_args(tmp_path: 
     assert "out_features" not in dot
 
     dot_all = log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph_all"),
+        file_format="svg",
+        path=str(tmp_path / "graph_all"),
         show_redundant_args=True,
-    )
+    ).dot
     assert "in_features=16" in dot_all
     assert "out_features=32" in dot_all
 
@@ -134,7 +132,7 @@ def test_node_spec_fn_returning_none_uses_default(tmp_path: Any) -> None:
 def test_intervention_node_spec_cone_matches_short_label(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Cone styling accepts short layer labels."""
+    """Downstream tagging accepts short layer labels; the outline stays as it was."""
 
     def fake_labels(trace: Any, *, show_cone: bool) -> tuple[set[str], set[str]]:
         """Return a short-label cone member and no sites."""
@@ -148,20 +146,20 @@ def test_intervention_node_spec_cone_matches_short_label(
         graph_overrides=None,
         user_node_spec_fn=None,
     )
-    layer = SimpleNamespace(layer_label="relu_1_2", layer_label_short="relu")
+    layer = SimpleNamespace(layer_label="relu_1_2", short_layer_label="relu")
     default = NodeSpec(lines=["relu"], color="black", penwidth=1.0)
 
     assert node_spec_fn is not None
     styled = node_spec_fn(layer, default)
 
-    assert styled.color == node_spec_mod.INTERVENTION_CONE_COLOR
-    assert styled.penwidth == 1.75
+    assert styled.extra_attrs["class"] == "tl_downstream"
+    assert (styled.color, styled.penwidth) == ("black", 1.0)
 
 
 def test_intervention_node_spec_cone_matches_call_labels(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Cone styling accepts real per-pass call labels on rolled layers."""
+    """Downstream tagging accepts real per-pass call labels on rolled layers."""
 
     def fake_labels(trace: Any, *, show_cone: bool) -> tuple[set[str], set[str]]:
         """Return a per-pass cone label that matches no aggregate label."""
@@ -177,7 +175,7 @@ def test_intervention_node_spec_cone_matches_call_labels(
     )
     layer = SimpleNamespace(
         layer_label="relu_1",
-        layer_label_short="relu",
+        short_layer_label="relu",
         call_labels=["relu_1_1", "relu_1_2"],
     )
     default = NodeSpec(lines=["relu"], color="black", penwidth=1.0)
@@ -185,12 +183,12 @@ def test_intervention_node_spec_cone_matches_call_labels(
     assert node_spec_fn is not None
     styled = node_spec_fn(layer, default)
 
-    assert styled.color == node_spec_mod.INTERVENTION_CONE_COLOR
-    assert styled.penwidth == 1.75
+    assert styled.extra_attrs["class"] == "tl_downstream"
+    assert (styled.color, styled.penwidth) == ("black", 1.0)
 
     unrelated = SimpleNamespace(
         layer_label="linear_1",
-        layer_label_short="linear",
+        short_layer_label="linear",
         call_labels=["linear_1_1"],
     )
     assert node_spec_fn(unrelated, default).color == "black"
@@ -199,7 +197,7 @@ def test_intervention_node_spec_cone_matches_call_labels(
 def test_external_overlay_value_matches_short_label() -> None:
     """External overlay scores can be keyed by short label."""
 
-    node = SimpleNamespace(layer_label="relu_1_2", layer_label_short="relu")
+    node = SimpleNamespace(layer_label="relu_1_2", short_layer_label="relu")
 
     assert external_overlay_value(node, {"relu": 7}) == 7
 

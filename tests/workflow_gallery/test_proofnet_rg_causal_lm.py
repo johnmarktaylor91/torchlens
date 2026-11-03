@@ -46,7 +46,7 @@ def test_rg02_kwargs_and_cache_transport_match_direct_forward(lm: dict[str, Any]
     encoded["use_cache"] = True
     with torch.no_grad():
         direct = lm["model"](**encoded)
-    trace = tl.trace(lm["model"], (), dict(encoded))
+    trace = tl.trace(lm["model"], (), input_kwargs=dict(encoded))
     try:
         assert trace.outcome.status.name == "COMPLETE"
         matches = [
@@ -74,12 +74,11 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
     explicit facet DIFF, not both-run)."""
 
     import torchlens as tl
-    import torchlens.semantic as sem
 
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
-    trace = tl.trace(lm["model"], (), dict(encoded))
+    trace = tl.trace(lm["model"], (), input_kwargs=dict(encoded))
     try:
-        coverage = sem.facet_coverage(trace)
+        coverage = tl.facets.coverage(trace)
         assert not coverage.unresolved, f"unresolved facet rows: {coverage.unresolved}"
         by_class: dict[str, list[Any]] = {}
         for row in coverage.rows:
@@ -124,11 +123,11 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
     eager_trace = tl.trace(
         eager_model,
         (),
-        dict(encoded),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        input_kwargs=dict(encoded),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
     try:
-        eager_coverage = sem.facet_coverage(eager_trace)
+        eager_coverage = tl.facets.coverage(eager_trace)
         eager_attention = [row for row in eager_coverage.rows if row.class_name == "GPT2Attention"]
         assert eager_attention and all("pattern" in row.available for row in eager_attention), (
             "eager arm: the attention pattern facet is still unavailable --"
@@ -143,15 +142,15 @@ def test_rg04_logit_lens_final_layer_matches_native_logits(lm: dict[str, Any]) -
     """RG04: the lens at the final layer IS the model's own logits."""
 
     import torchlens as tl
-    import torchlens.semantic as sem
+    import torchlens._semantic as sem
 
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     with torch.no_grad():
         native = lm["model"](**encoded).logits
-    trace = tl.trace(lm["model"], (), dict(encoded))
+    trace = tl.trace(lm["model"], (), input_kwargs=dict(encoded))
     try:
         lens = sem.logit_lens(trace)
-        assert lens.validated, "logit_lens self-validation did not run/pass"
+        assert lens.is_validated, "logit_lens self-validation did not run/pass"
         final = lens.final_logits
         assert torch.allclose(final, native, atol=1e-4), (
             "lens-at-final-layer != the model's own logits (the flagship"
@@ -177,7 +176,7 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
     deliberately. The live numeric intervention parity for this venue rides
     RG07's frozen-complement oracle."""
 
-    import torchlens.semantic.patching as patching
+    import torchlens._semantic.patching as patching
 
     model, tokenizer = lm["model"], lm["tokenizer"]
     pair = prompt("clean-factual-1")
@@ -198,7 +197,7 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
             lambda: patching.activation_patch_residual_stream(
                 model, clean, corrupted, metric, facet_name="resid_post", patch_positions=False
             ),
-            "pass",  # SiteAmbiguityError teaches pass-qualified spellings
+            "pass",  # AmbiguousSiteError teaches pass-qualified spellings
         ),
         "mlp_output": (
             lambda: patching.activation_patch_mlp_output(model, clean, corrupted, metric),
@@ -221,7 +220,7 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
                 invoke()
         exc = excinfo.value
         assert type(exc).__name__ in {
-            "SiteAmbiguityError",
+            "AmbiguousSiteError",
             "PatchApplicationError",
             "SiteResolutionError",
         }, (
@@ -247,7 +246,10 @@ def test_rg07_replay_edit_through_cache_graph_matches_manual_ablation(
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     encoded["use_cache"] = True
     trace = tl.trace(
-        model, (), dict(encoded), capture=tl.options.CaptureOptions(intervention_ready=True)
+        model,
+        (),
+        input_kwargs=dict(encoded),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         target = None
@@ -302,14 +304,14 @@ def test_rg08_episode_captured_generation_matches_direct_generate(
     trace = tl.trace(
         model.generate,
         (ids,),
-        {"max_new_tokens": 4, "do_sample": False},
-        episode=tl.options.EpisodeSpec(
-            n_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
+        input_kwargs={"max_new_tokens": 4, "do_sample": False},
+        episode=tl.options.EpisodeOptions(
+            num_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
         ),
     )
     try:
         assert trace.outcome.status.name == "COMPLETE"
-        assert str(trace.root_entry_point).startswith("bound_method:")
+        assert str(trace.provenance.root_entry_point).startswith("bound_method:")
         ledger = trace.annotations["episode"]
         rows = ledger["rows"]
         assert [row["status"] for row in rows] == ["complete"] * 4
@@ -341,14 +343,14 @@ def test_rg18_steered_generation_fires_each_step_with_negative_control(
         baseline = model.generate(ids, max_new_tokens=4, do_sample=False)
 
     def episode_spec() -> Any:
-        return tl.options.EpisodeSpec(
-            n_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
+        return tl.options.EpisodeOptions(
+            num_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
         )
 
     steered = tl.trace(
         model.generate,
         (ids,),
-        {"max_new_tokens": 4, "do_sample": False},
+        input_kwargs={"max_new_tokens": 4, "do_sample": False},
         episode=episode_spec(),
         intervene=tl.when(tl.func("tanh"), tl.scale(3.0)),
     )
@@ -374,7 +376,7 @@ def test_rg18_steered_generation_fires_each_step_with_negative_control(
     control = tl.trace(
         model.generate,
         (ids,),
-        {"max_new_tokens": 4, "do_sample": False},
+        input_kwargs={"max_new_tokens": 4, "do_sample": False},
         episode=episode_spec(),
         intervene=tl.when(tl.func("tanh"), tl.scale(1.0)),
     )
@@ -395,18 +397,21 @@ def test_rg18_steered_generation_fires_each_step_with_negative_control(
 
 
 def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -> None:
-    """RG19 over the ACTUALLY merged surface: mean_ablate(over='self') fires
-    and moves the logits (degeneracy check), and every other over= token --
-    including the axis tokens and the one-character typo -- refuses TYPED
-    with teaching (A04's fail-closed fix for SG#15; axis-aware means are
-    honestly not implemented rather than silently global)."""
+    """RG19 over the ACTUALLY merged surface: mean_ablate(dim=None) fires
+    and moves the logits (degeneracy check), and every token outside the dim=
+    vocabulary -- a semantic axis name and the one-character typo -- refuses
+    TYPED with teaching (A04's fail-closed fix for SG#15; an axis is never
+    guessed from rank)."""
 
     import torchlens as tl
 
     model = lm["model"]
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     trace = tl.trace(
-        model, (), dict(encoded), capture=tl.options.CaptureOptions(intervention_ready=True)
+        model,
+        (),
+        input_kwargs=dict(encoded),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         target = None
@@ -422,7 +427,7 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
 
         fork = trace.fork()
         try:
-            fork.do(target, tl.mean_ablate(over="self"))
+            fork.do(target, tl.mean_ablate(dim=None))
             edited = None
             for op in fork.output_ops:
                 if getattr(op.out, "dim", lambda: 0)() == 3:
@@ -436,11 +441,10 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
 
         for bad_token in ("position", "positon", "batch"):
             with pytest.raises(Exception) as excinfo:
-                tl.mean_ablate(over=bad_token)
+                tl.mean_ablate(dim=bad_token)
             message = str(excinfo.value)
-            assert "over" in message and "self" in message, (
-                f"over={bad_token!r} refused without teaching the closed"
-                f" vocabulary: {message[:160]}"
+            assert "dim" in message, (
+                f"dim={bad_token!r} refused without teaching the dim= vocabulary: {message[:160]}"
             )
     finally:
         trace.cleanup()

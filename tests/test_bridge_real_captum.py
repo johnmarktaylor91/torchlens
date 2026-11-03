@@ -61,7 +61,7 @@ def resnet() -> Iterator[tuple[torch.nn.Module, torch.Tensor, Any]]:
     torch.manual_seed(0)
     model = torchvision.models.resnet18(weights=None).eval()
     x = torch.randn(2, 3, 64, 64)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     try:
         yield model, x, log
     finally:
@@ -153,7 +153,7 @@ def _bridged(log: Any, method_cls: Any, site: Any, x: torch.Tensor, **kwargs: An
 def _add_label(log: Any) -> str:
     """Return the label of the residual add in ``layer4.1`` (the second relu call's parent)."""
 
-    second_relu = [layer for layer in log.layer_list if "layer4.1.relu:2" in _module_calls(layer)]
+    second_relu = [layer for layer in log._layer_list if "layer4.1.relu:2" in _module_calls(layer)]
     assert len(second_relu) == 1, second_relu
     parents = list(second_relu[0].parents)
     assert len(parents) == 1, parents
@@ -166,7 +166,7 @@ def test_label_site_layer_gradcam_matches_direct(resnet) -> None:
     """LayerGradCam on layer(log, label) equals LayerGradCam on model.layer4 exactly."""
 
     model, x, log = resnet
-    label = [layer.layer_label for layer in log.layer_list if _outermost(layer) == "layer4"][-1]
+    label = [layer.layer_label for layer in log._layer_list if _outermost(layer) == "layer4"][-1]
     resolved = tl.bridge.captum.layer(log, label)
     assert resolved is model.layer4
     direct = captum_attr.LayerGradCam(model, model.layer4).attribute(x, target=_TARGET)

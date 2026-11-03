@@ -20,12 +20,17 @@ tier rows: `present` native emitters, `bridge` foreign-peer writers).
   `mlflow` tells the fluent module from an `MlflowClient` by
   `log_metric`'s first parameter (`run_id`): a client needs `run_id=`
   (typed `TypeError` otherwise); the fluent module gets it as a keyword.
+  Both `mlflow` and `aim` also log a per-layer table, the report and the
+  honesty facts as string tags (wandb-export parity); a client or run missing
+  a required method refuses `TypeError` before anything is written; the
+  fluent MLflow `set_tag` takes no run id, so with `run_id=` tags route
+  through `module.MlflowClient()`.
 - Model viewers: `model_explorer`, `netron`.
 
 ## The netron subsystem (F14; kwarg spellings DOCUMENTED-UNSTABLE)
 
 `netron(log, path=None, *, granularity="module", depth=1,
-show_buffers="meaningful", attachment=False, open=False, baseline=None)`
+show_buffers="meaningful", attachment=None, open=False, baseline=None)`
 emits schema-v2 ONNX protobuf-JSON (irVersion 10, custom domains
 `ai.torchlens.lossy` / `ai.torchlens.module`, NEVER re-domained to real
 ONNX names — ruling N1). Module split: `_netron.py` entry + validation +
@@ -35,7 +40,10 @@ default per DISSENT D1; ruling N2 makes module the FILE default);
 `_netron_fields.py` curated attrs/wording contract (module-path attr is
 never named `module`; missing-is-absent-never-zero);
 `_netron_emit.py` deterministic serialization; `_netron_attachment.py` the
-`netron:attachment` companion with four fail-closed vendor guards. Every
+`netron:attachment` companion (written by default beside every file export,
+ruling U09.3) with four fail-closed vendor guards; `_netron_diff.py` the
+`baseline=` per-node diff facts read from `torchlens.report.diff`
+(ruling U09.5). Every
 artifact must stay green under strict `onnx.ModelProto` parse +
 `check_model(full_check=True)` — the checker catches what netron's
 permissive reader swallows, including the function-cycle class that KILLS
@@ -49,13 +57,13 @@ netron outright.
   resolve lazily at call time; add new exporters with the same deferred
   pattern, never module-top imports.
 - These renderers are NOT behind the capture-outcome N-gates (those cover
-  `tl.save`/replay/validation entries); they read whatever the log exposes.
+  `Trace.save`/replay/validation entries); they read whatever the log exposes.
   Report-side honesty (unverified/halted disclosure) lives in `report/`.
 
 ## Tests
 
 `tests/test_exports.py`, `tests/test_export_behaviors.py`,
-`tests/test_export_html_minimal.py`, `tests/test_io_export.py`; the netron
+`tests/test_io_export.py`; the netron
 acceptance tiers live in `tests/test_netron_export_*.py` (T1 strict parse +
 checker contract, T3 executed-vendor node harness
 `test_netron_export_harness.mjs`, T4 headless-browser smoke, density/

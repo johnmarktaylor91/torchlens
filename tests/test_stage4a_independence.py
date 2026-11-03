@@ -33,8 +33,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 #: Dropping 4b (torchlens/attribution + its tests) must leave every one of
 #: these byte-identical and green.
 STAGE_4A_FILES: tuple[str, ...] = (
-    "torchlens/selection.py",
-    "torchlens/_selection_align.py",
+    "torchlens/_selection/selection.py",
+    "torchlens/_selection/align.py",
     "tests/test_selection_algebra.py",
     "tests/test_selection_do.py",
     "tests/test_selection_align.py",

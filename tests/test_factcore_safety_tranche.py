@@ -120,7 +120,7 @@ def test_bundle_repr_baseline_none_is_unquoted() -> None:
 
     model = _TinyMLP().eval()
     x = torch.randn(2, 8)
-    bundle = tl.bundle({"clean": tl.trace(model, x), "other": tl.trace(model, x)})
+    bundle = tl.Bundle({"clean": tl.trace(model, x), "other": tl.trace(model, x)})
     text = repr(bundle)
     assert "baseline=None" in text
     assert "baseline='None'" not in text
@@ -133,7 +133,7 @@ def test_op_accessor_iteration_yields_ops(loop_trace) -> None:
     members = list(layer.ops)
     assert len(members) == 3
     assert all(type(member).__name__ == "Op" for member in members)
-    assert [member.pass_index for member in members] == [1, 2, 3]
+    assert [member.pass_number for member in members] == [1, 2, 3]
 
 
 @pytest.mark.smoke
@@ -159,7 +159,7 @@ def test_op_accessor_repr_teaches_real_basis(loop_trace) -> None:
 
 
 def test_four_option_classes_ride_the_options_namespace() -> None:
-    """CaptureOptions/SaveOptions/ReplayOptions/InterventionOptions (bug 25).
+    """CaptureOptions/ReplayOptions/InterventionOptions (bug 25).
 
     Bug 25 wanted the four option dataclasses importable from a documented
     public spelling. That spelling is the ``tl.options`` namespace -- the
@@ -171,7 +171,7 @@ def test_four_option_classes_ride_the_options_namespace() -> None:
 
     from torchlens import options
 
-    for name in ("CaptureOptions", "SaveOptions", "ReplayOptions", "InterventionOptions"):
+    for name in ("CaptureOptions", "ReplayOptions", "InterventionOptions"):
         assert hasattr(options, name), name
         assert name not in tl.__all__, f"{name} widened the frozen root budget"
         assert name not in tl._LAZY_ATTRS, f"{name} widened the frozen root budget"
@@ -181,7 +181,7 @@ def test_edge_refusal_remedy_is_runnable_spelling(loop_trace) -> None:
     """The edges refusal teaches an importable spelling (bugs 20/25)."""
 
     with pytest.raises(Exception, match=r"tl\.options\.CaptureOptions") as excinfo:
-        _ = loop_trace.edges
+        _ = loop_trace.graph.edges
     assert getattr(excinfo.value, "fields", {}).get("code") == "edge_provenance_unavailable"
 
 

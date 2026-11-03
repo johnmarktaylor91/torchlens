@@ -31,7 +31,7 @@ from .diagnostics import (
 )
 
 if TYPE_CHECKING:
-    from .status import ValidationReplayStatus
+    from .status import ValidationStatus
 
 _CHECK_FOR_PHASE = {
     "replay": CHECK_REPLAY,
@@ -41,7 +41,7 @@ _CHECK_FOR_PHASE = {
 }
 
 
-def finish_validation_status(trace: Any, decision_recorder: Any) -> ValidationReplayStatus:
+def finish_validation_status(trace: Any, decision_recorder: Any) -> ValidationStatus:
     """Build, cache and return the run's status, recording a failure for a non-pass.
 
     Parameters
@@ -53,18 +53,18 @@ def finish_validation_status(trace: Any, decision_recorder: Any) -> ValidationRe
 
     Returns
     -------
-    ValidationReplayStatus
+    ValidationStatus
         The aggregate status, unchanged by the record.
     """
 
-    status = decision_recorder.as_status(backend=str(getattr(trace, "backend", "torch")))
+    status = decision_recorder.as_status(backend=str(trace._provenance_backend))
     trace._validation_replay_status = status
     if not status.passed and get_validation_failure(trace) is None:
         record_validation_failure(trace, _failure_for_status(trace, status))
     return status
 
 
-def _failure_for_status(trace: Any, status: ValidationReplayStatus) -> ValidationFailure:
+def _failure_for_status(trace: Any, status: ValidationStatus) -> ValidationFailure:
     """Describe a non-passing status by its first deciding decision."""
 
     decisions = list(status.decisions)
@@ -85,7 +85,7 @@ def _failure_for_status(trace: Any, status: ValidationReplayStatus) -> Validatio
     if exceptions:
         detail = f"{detail}; perturbed replay raised {exceptions[0]}"
     return ValidationFailure(
-        check=check,
+        check_name=check,
         op_label=deciding.get("op_label"),
         func_name=deciding.get("func_name"),
         message=f"{detail}; first deciding reason {reason!r}",
@@ -94,8 +94,8 @@ def _failure_for_status(trace: Any, status: ValidationReplayStatus) -> Validatio
             "status_reason": status.reason,
             "decision_phase": deciding.get("phase"),
             "decision_reason": reason,
-            "failed_node_count": status.failed_node_count,
-            "unverified_node_count": status.unverified_node_count,
+            "failed_node_count": status.num_failed_ops,
+            "unverified_node_count": status.num_unverified_ops,
             "replay_exceptions": exceptions,
         },
     )
@@ -106,7 +106,7 @@ def _replay_exceptions_for(trace: Any, op_label: str | None) -> list[str]:
 
     for diagnostic in get_validation_diagnostics(trace):
         if (
-            diagnostic.check == CHECK_PERTURBATION_EXCEPTION
+            diagnostic.check_name == CHECK_PERTURBATION_EXCEPTION
             and diagnostic.extra.get("op_label") == op_label
         ):
             return list(diagnostic.extra.get("exceptions", ()))
@@ -125,7 +125,7 @@ def record_replay_exception(
     record_validation_diagnostic(
         trace,
         ValidationDiagnostic(
-            check=CHECK_PERTURBATION_EXCEPTION,
+            check_name=CHECK_PERTURBATION_EXCEPTION,
             message=described[0] if described else "perturbed replay raised",
             extra={
                 "op_label": layer_label,

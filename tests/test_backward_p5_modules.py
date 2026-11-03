@@ -50,7 +50,8 @@ def _trace_with_backward(layers_to_save: str | list[str] = "all") -> tl.Trace:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=layers_to_save, save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save=layers_to_save,
     )
     loss = trace[trace.output_layers[0]].out.square().mean()
     trace.log_backward(loss, retain_graph=True)
@@ -64,28 +65,30 @@ def test_backward_module_containment_sources_are_projected() -> None:
     try:
         paired_by_module = {
             grad_fn.module_address
-            for grad_fn in trace.grad_fns
+            for grad_fn in trace.autograd.grad_fns
             if grad_fn.module_membership_source == "paired"
         }
         assert {"fc1", "fc2"}.issubset(paired_by_module)
 
         accumulate_modules = {
             grad_fn.module_address
-            for grad_fn in trace.grad_fns
+            for grad_fn in trace.autograd.grad_fns
             if grad_fn.class_name == "AccumulateGrad"
             and grad_fn.module_membership_source == "paired"
         }
         assert {"fc1", "fc2"}.issubset(accumulate_modules)
 
         inferred = [
-            grad_fn for grad_fn in trace.grad_fns if grad_fn.module_membership_source == "inferred"
+            grad_fn
+            for grad_fn in trace.autograd.grad_fns
+            if grad_fn.module_membership_source == "inferred"
         ]
         assert inferred
         assert {grad_fn.module_address for grad_fn in inferred} <= {"fc1", "fc2"}
 
         post_forward = [
             grad_fn
-            for grad_fn in trace.grad_fns
+            for grad_fn in trace.autograd.grad_fns
             if grad_fn.class_name in {"MeanBackward0", "PowBackward0"}
         ]
         assert post_forward
@@ -103,12 +106,12 @@ def test_backward_module_pairing_matches_selective_capture() -> None:
     try:
         full_pairs = {
             (grad_fn.class_name, grad_fn.module_address)
-            for grad_fn in full_trace.grad_fns
+            for grad_fn in full_trace.autograd.grad_fns
             if grad_fn.module_membership_source == "paired"
         }
         selective_pairs = {
             (grad_fn.class_name, grad_fn.module_address)
-            for grad_fn in selective_trace.grad_fns
+            for grad_fn in selective_trace.autograd.grad_fns
             if grad_fn.module_membership_source == "paired"
         }
         assert full_pairs == selective_pairs
@@ -141,18 +144,17 @@ def test_recurrent_tanh_grad_fns_pair_directly_before_output_boundary() -> None:
     trace = tl.trace(
         TanhRNN(),
         torch.randn(2, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads=True, backward_ready=True
-        ),
+        capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True),
+        save="all",
     )
     try:
         trace[trace.output_layers[0]].out.sum().backward()
 
         tanh_grad_fns = [
-            grad_fn for grad_fn in trace.grad_fns if grad_fn.class_name == "TanhBackward0"
+            grad_fn for grad_fn in trace.autograd.grad_fns if grad_fn.class_name == "TanhBackward0"
         ]
         addmm_grad_fns = [
-            grad_fn for grad_fn in trace.grad_fns if grad_fn.class_name == "AddmmBackward0"
+            grad_fn for grad_fn in trace.autograd.grad_fns if grad_fn.class_name == "AddmmBackward0"
         ]
         assert len(tanh_grad_fns) == 3
         assert len(addmm_grad_fns) == 3
@@ -171,7 +173,9 @@ def test_backward_module_containment_invariant_rejects_bad_source() -> None:
     trace = _trace_with_backward()
     try:
         victim = next(
-            grad_fn for grad_fn in trace.grad_fns if grad_fn.module_membership_source is not None
+            grad_fn
+            for grad_fn in trace.autograd.grad_fns
+            if grad_fn.module_membership_source is not None
         )
         victim.module_membership_source = "guessed"
         with pytest.raises(MetadataInvariantError, match="invalid module_membership_source"):
@@ -215,31 +219,32 @@ def test_multi_pass_module_grad_fns_keep_layer_label_and_hooks_see_their_own_pas
     )
     seen: list[tuple[str, Any, Any]] = []
 
-    def _probe(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def _probe(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Record the GradFn and the pass its hook context describes."""
 
         seen.append(
             (
-                hook.kwargs["grad_fn_handle"].label,
-                hook.layer_log["label"],
-                hook.layer_log["pass_index"],
+                ctx.kwargs["grad_fn_handle"].label,
+                ctx.op["label"],
+                ctx.op["pass_number"],
             )
         )
         return grad
 
     try:
-        linear = next(layer for layer in trace.layer_logs.values() if layer.layer_type == "linear")
+        linear = next(layer for layer in trace._layer_logs.values() if layer.layer_type == "linear")
         assert linear.num_passes == 2
-        trace.attach_hooks(
-            tl.grad_fn(type="AddmmBackward0"), tl.bwd_hook(_probe), confirm_mutation=True
-        )
+        trace.attach_hooks(tl.grad_fn(name="AddmmBackward0"), _probe, confirm_mutation=True)
         trace[trace.output_layers[0]].out.sum().backward()
 
-        addmm = {gf.label: gf for gf in trace.grad_fns if gf.class_name == "AddmmBackward0"}
+        addmm = {
+            gf.label: gf for gf in trace.autograd.grad_fns if gf.class_name == "AddmmBackward0"
+        }
         assert len(addmm) == 2
         assert {gf.op_label for gf in addmm.values()} == {linear.layer_label}
         assert all(
-            gf.op_label is None or gf.op_label in trace.layer_labels for gf in trace.grad_fns
+            gf.op_label is None or gf.op_label in trace.layer_labels
+            for gf in trace.autograd.grad_fns
         )
 
         # One record per grad_input slot; every slot of one node sees the same pass.

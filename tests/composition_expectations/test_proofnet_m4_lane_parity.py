@@ -42,7 +42,7 @@ def parity_trace() -> Any:
     trace = tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     yield trace
     trace.cleanup()
@@ -69,7 +69,7 @@ def test_zero_match_getitem_and_label_list_refuse_with_one_code(parity_trace: An
         tl.trace(
             model,
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(layers_to_save=[MISSING_SITE]),
+            save=[MISSING_SITE],
         )
     assert _code(list_exc.value) == "op_lookup_not_found", (
         "layers_to_save zero-match diverged from the getitem lane"
@@ -82,17 +82,15 @@ def test_zero_match_selection_lane_refuses_typed(parity_trace: Any) -> None:
     import torchlens as tl
 
     with pytest.raises(Exception) as excinfo:
-        tl.units(MISSING_SITE, [(0, 0)]).resolve(parity_trace)
+        parity_trace[tl.units(MISSING_SITE, [(0, 0)])]
     assert _code(excinfo.value) == "selection_unresolvable"
 
 
-def test_zero_match_do_lane_is_the_ledgered_codeless_cell(parity_trace: Any) -> None:
-    """The do() string lane refuses SiteResolutionError with code=None.
+def test_zero_match_do_lane_refuses_typed(parity_trace: Any) -> None:
+    """The do() string lane refuses SiteResolutionError with site_selector_no_match.
 
-    LEDGERED ASYMMETRY (compo memo named first-wave cell): typed and
-    teaching in prose, code=None -- the fields-clobber class. When the
-    intervention-errors fix lands a code here, this cell must be promoted
-    deliberately.
+    Promoted from the ledgered code=None asymmetry cell (compo memo named
+    first-wave cell) once the site-resolution refusals gained stable codes.
     """
 
     fork = parity_trace.fork()
@@ -101,10 +99,7 @@ def test_zero_match_do_lane_is_the_ledgered_codeless_cell(parity_trace: Any) -> 
             fork.do(MISSING_SITE, __import__("torchlens").zero_ablate())
         exc = excinfo.value
         assert type(exc).__name__ == "SiteResolutionError"
-        assert _code(exc) is None, (
-            "the do() zero-match refusal now carries a code -- promote this"
-            " ledgered asymmetry cell to a typed-parity assertion"
-        )
+        assert _code(exc) == "site_selector_no_match"
     finally:
         fork.cleanup()
 
@@ -161,9 +156,9 @@ def test_accept_parity_string_and_selection_lanes_edit_identically(
                     tuple(idx)
                     for idx in torch.cartesian_prod(*[torch.arange(dim) for dim in shape]).tolist()
                 ]
-                fork.do(tl.units(REAL_SITE, all_indices).resolve(fork), tl.zero_ablate())
+                fork.do(fork[tl.units(REAL_SITE, all_indices)], tl.zero_ablate())
             else:
-                fork.do(fork[REAL_SITE].__selection__().resolve(fork), tl.zero_ablate())
+                fork.do(fork[fork[REAL_SITE].__selection__()], tl.zero_ablate())
             results.append((lane, fork[REAL_SITE].out.clone(), fork.output_ops[0].out.clone()))
         finally:
             fork.cleanup()

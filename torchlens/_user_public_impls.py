@@ -6,16 +6,17 @@ import contextlib
 import os
 import random
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 from torch import nn
 from tqdm import tqdm
 
-from . import user_funcs as _user_funcs
+from torchlens.backends.registry import BackendUnsupportedError
+
+from . import _user_funcs as _user_funcs, _validation_argument_references as _arg_references
 from ._capture_state_helpers import (
-    _clone_state_dict_with_metadata,
     _model_for_ground_truth_validation,
     _model_for_validation_replay,
     _ModuleTreePlainAttrSnapshot,
@@ -24,11 +25,12 @@ from ._capture_state_helpers import (
     _unwrap_data_parallel,
     unwrap_compiled_model,
 )
+from ._data_classes.trace import Trace
 from ._deploy_env import restore_state_dict_resilient
 from ._deprecations import MISSING, MissingType
+from ._errors import CaptureNotActiveError, InvalidArgumentError
 from ._input_coerce import _coerce_input_args
 from ._literals import (
-    BufferVisibilityLiteral,
     CollapseLiteral,
     FoldRepeatsLiteral,
     OutputDeviceLiteral,
@@ -38,10 +40,26 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
-from .backends import BackendName, BackendUnsupportedError, resolve_backend_spec
-from .data_classes.trace import Trace
+from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
+from ._utils.display import warn_parallel
+from ._utils.hashing import compute_graph_shape_hash
+from ._utils.input_leaves import leaf_preserving_input_copies
+from ._utils.introspection import get_vars_of_type_from_obj
+from ._utils.rng import restores_rng_streams, set_random_seed
+from ._validation_state_snapshot import (
+    COPY_FAILED_CODE,
+    StateSnapshot,
+    restore_refusal_message,
+    restore_snapshot_if_changed,
+    snapshot_state_for_restore,
+    state_matches_snapshot,
+    with_storage_bindings_of,
+)
+from ._visualization.code_panel import CodePanelOption
+from .backends.registry import BackendName, resolve_backend_spec
 from .errors import TraceNotReproducibleWarning
 from .options import (
     CaptureOptions,
@@ -49,21 +67,11 @@ from .options import (
     merge_visualization_options,
     visualization_to_render_kwargs,
 )
-from .utils.arg_handling import (
-    leaf_preserving_input_copies,
-    normalize_input_args,
-    safe_copy_input_tree,
-)
-from .utils.display import warn_parallel
-from .utils.hashing import compute_graph_shape_hash
-from .utils.introspection import get_vars_of_type_from_obj
-from .utils.rng import set_random_seed
-from .visualization.code_panel import CodePanelOption
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .data_classes.module import Module
+    from ._data_classes.module import Module
 
 
 def release_model(model: nn.Module) -> None:
@@ -111,9 +119,8 @@ def log_model_metadata(
 ) -> Trace:
     """Return model metadata without saving any outs.
 
-    Equivalent to ``trace(model, input_args, input_kwargs,
-    capture=CaptureOptions(layers_to_save=None,
-    compute_input_output_distances=True))``.
+    Equivalent to ``trace(model, input_args, input_kwargs=input_kwargs,
+    save=None, capture=CaptureOptions(compute_input_output_distances=True))``.
 
     Parameters
     ----------
@@ -133,21 +140,21 @@ def log_model_metadata(
     model_trace = _user_funcs.trace(
         model,
         input_args,
-        input_kwargs,
+        input_kwargs=input_kwargs,
         capture=CaptureOptions(
-            layers_to_save=None,
             compute_input_output_distances=True,
         ),
+        save=None,
     )
     return model_trace
 
 
 def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input rungs plus the two execution dials ARE the spec'd surface (F17 B11)
-    model: nn.Module,
+    model: nn.Module | str,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     *,
-    input_size: Any | None = None,
+    input_shape: Any | None = None,
     execution_mode: Literal["eval", "train", "same"] = "eval",
     grad_mode: Literal["off", "same"] = "off",
     **summary_kwargs: Any,
@@ -162,7 +169,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     and never auto-prints (the repr self-displays).
 
     Input precedence follows the quickstart ladder (F17, memo D2): real
-    ``input_args`` XOR ``input_size=`` XOR nothing. ``input_size=``
+    ``input_args`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
     synthesizes seeded tensors per the quickstart grammar and the synthesis
     is disclosed in the render; a zero-input call infers a verified input
     and REUSES its verification trace (no second capture). Mixing the
@@ -171,16 +178,20 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     Parameters
     ----------
     model:
-        PyTorch model to inspect.
+        PyTorch model to inspect, or a Hugging Face Hub model id (``"gpt2"``):
+        a string fetches the config only, builds the architecture on the meta
+        device (no weight download) and takes the weights-free path, so it
+        needs ``input_shape=`` or meta inputs. Requires ``transformers``; the
+        string form is DOCUMENTED-UNSTABLE.
     input_args:
         Positional args for ``model.forward()``. The quickstart input ladder
         applies (F17): a real input is the gold rung; omit it and pass
-        ``input_size=`` for a declared shape with synthesized values; omit
+        ``input_shape=`` for a declared shape with synthesized values; omit
         both for an inferred shape. Non-gold rungs are disclosed in the
         trace's persistent provenance record and in the summary text.
     input_kwargs:
         Keyword args for ``model.forward()``.
-    input_size:
+    input_shape:
         Declared input shape(s) per the quickstart grammar (one flat tuple,
         a sequence of tuples, or a forward-keyword-to-shape mapping).
     execution_mode:
@@ -203,10 +214,14 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         A ``SummaryReport`` (``str`` subclass): canonical ASCII payload
         plus the typed result API.
     """
-    from .utils.rng import log_current_rng_states, set_rng_from_saved_states
+    from ._utils.rng import log_current_rng_states, set_rng_from_saved_states
 
     _validate_summary_modes(execution_mode, grad_mode)
     _validate_summary_grammar(summary_kwargs)
+    if isinstance(model, str):
+        from .report._summary_hub import build_hub_meta_model
+
+        model = build_hub_meta_model(model)
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
@@ -222,16 +237,16 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     ladder_provenance = None
     input_synthesis: str | None = None
     facade_report = _maybe_weightsfree_summary(
-        model, input_args, input_kwargs, input_size, summary_kwargs
+        model, input_args, input_kwargs, input_shape, summary_kwargs
     )
     if facade_report is not None:
         return facade_report
-    if input_size is not None or (input_args is None and not input_kwargs):
-        from .quickstart._resolve import attach_provenance, resolve_inputs
+    if input_shape is not None or (input_args is None and not input_kwargs):
+        from ._quickstart._resolve import attach_provenance, resolve_inputs
 
-        resolved = resolve_inputs(model, input_args, input_kwargs, input_size, verb="summary")
+        resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="summary")
         ladder_provenance = resolved.provenance
-        input_synthesis = _ladder_synthesis_note(input_size, resolved)
+        input_synthesis = _ladder_synthesis_note(input_shape, resolved)
         if (
             resolved.plan.verified_trace is not None
             and execution_mode == "eval"
@@ -275,7 +290,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         set_rng_from_saved_states(rng_snapshot)
 
     if ladder_provenance is not None:
-        from .quickstart._resolve import attach_provenance
+        from ._quickstart._resolve import attach_provenance
 
         attach_provenance(trace, ladder_provenance)
     return _summary_report_from_trace(
@@ -288,7 +303,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
 
 
 def _format_input_size(input_size: Any) -> str:
-    """Render the caller's ``input_size=`` spelling compactly for disclosure."""
+    """Render the caller's ``input_shape=`` spelling compactly for disclosure."""
 
     try:
         if isinstance(input_size, dict):
@@ -313,7 +328,7 @@ def _ladder_synthesis_note(input_size: Any, resolved: Any) -> str | None:
     """
 
     provenance = resolved.provenance
-    if provenance.values_semantic:
+    if provenance.has_semantic_values:
         return None
     recipes = provenance.recipes or ()
     recipe_names = sorted({str(row["recipe"]) for row in recipes if row.get("recipe")})
@@ -324,7 +339,7 @@ def _ladder_synthesis_note(input_size: Any, resolved: Any) -> str | None:
     if provenance.origin == "declared":
         seeds = sorted({row["seed"] for row in recipes if row.get("seed") is not None})
         seed_part = f", seed {seeds[0]}" if len(seeds) == 1 else ""
-        return f"input_size={_format_input_size(input_size)}, {recipe_part}{seed_part}"
+        return f"input_shape={_format_input_size(input_size)}, {recipe_part}{seed_part}"
     shapes = ", ".join(str(tuple(facts.shape)) for facts in provenance.tensors)
     note = f"inferred shape {shapes or 'unknown'}, {recipe_part}"
     if provenance.strategy:
@@ -378,8 +393,6 @@ def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
 def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:
     """Refuse unknown one-call summary execution/grad mode tokens typed."""
 
-    from ._errors import InvalidArgumentError
-
     if execution_mode not in ("eval", "train", "same"):
         raise InvalidArgumentError(
             f"execution_mode must be 'eval', 'train', or 'same'; got {execution_mode!r}.",
@@ -422,18 +435,16 @@ def _maybe_weightsfree_summary(
     if not _all_meta_model(model):
         return None
     if input_args is None and not input_kwargs and input_size is None:
-        from ._errors import InvalidArgumentError
-
         raise InvalidArgumentError(
             "summary() on a meta-built model needs input evidence: the "
             "zero-argument inference rung runs real probing forwards, which "
             "a weights-free model cannot serve.",
             code="weightsfree_facade_input_evidence_required",
             remedy=(
-                "pass input_size= (declared shapes; e.g. input_size=(1, 8)) "
+                "pass input_shape= (declared shapes; e.g. input_shape=(1, 8)) "
                 "or explicit meta inputs (torch.zeros(..., device='meta'))"
             ),
-            argument="input_size",
+            argument="input_shape",
         )
     return _weightsfree_summary_facade(model, input_args, input_kwargs, input_size, summary_kwargs)
 
@@ -474,7 +485,7 @@ def _weightsfree_summary_facade(
     from .options import CaptureOptions as _CaptureOptions
 
     if input_size is not None:
-        from .quickstart._resolve import resolve_inputs
+        from ._quickstart._resolve import resolve_inputs
 
         resolved = resolve_inputs(model, None, None, input_size, verb="summary")
         input_args = [
@@ -494,7 +505,7 @@ def _weightsfree_summary_facade(
         capture=_CaptureOptions(structure_only=True),
     )
     try:
-        envelope = trace.structure_evidence
+        envelope = trace._graph_structure_evidence
         if isinstance(envelope, dict) and isinstance(envelope.get("input_plan"), dict):
             envelope["input_plan"]["selection_source"] = "summary_facade_auto"
             if input_size is not None:
@@ -529,7 +540,7 @@ def show_model_graph(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    view: VisModeLiteral | MissingType = MISSING,
+    rolled: bool | MissingType = MISSING,
     depth: int | MissingType = MISSING,
     renderer: VisRendererLiteral | MissingType = MISSING,
     layout: VisNodePlacementLiteral | MissingType = MISSING,
@@ -539,7 +550,7 @@ def show_model_graph(
     fold_repeats: FoldRepeatsLiteral | MissingType = MISSING,
     order_siblings: bool | MissingType = MISSING,
     code_panel: CodePanelOption = False,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     recurrence_detection: bool | MissingType = MISSING,
     visualization: VisualizationOptions | None = None,
@@ -576,17 +587,17 @@ def show_model_graph(
     fold_repeats:
         Repeat-fold policy. ``None`` preserves the default policy. ``True`` folds
         every eligible repeated run. ``False`` disables run folding.
-    random_seed:
+    seed:
         Fixed RNG seed for stochastic models. The capture reseeds the global
         RNG engines for its forward and restores their prior states afterwards;
-        see ``CaptureOptions.random_seed``.
+        see ``CaptureOptions.seed``.
     recurrence_detection:
         If True, run full isomorphic subgraph expansion. Set this to False when
         the forward pass has more than about 1M operations and postprocessing
         speed matters.
     visualization:
         Grouped visualization options. When omitted, ``show_model_graph``
-        defaults to ``VisualizationOptions(view="unrolled")``.
+        defaults to ``VisualizationOptions()`` (the unrolled graph).
 
     Returns
     -------
@@ -605,9 +616,8 @@ def show_model_graph(
         recurrence_detection = True
     recurrence_detection_enabled = bool(recurrence_detection)
     visualization_options = merge_visualization_options(
-        function_default_mode="unrolled",
         visualization=visualization,
-        view=view,
+        rolled=rolled,
         depth=depth,
         renderer=renderer,
         layout=layout,
@@ -616,9 +626,6 @@ def show_model_graph(
         fold_repeats=fold_repeats,
         order_siblings=order_siblings,
     )
-
-    if visualization_options.view not in ["none", "rolled", "unrolled"]:
-        raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     trace = _user_funcs._run_model_and_save_specified_outs(
         model=model,
@@ -629,7 +636,7 @@ def show_model_graph(
         mark_layer_depths=False,
         detach_saved_activations=False,
         save_grads=False,
-        random_seed=random_seed,
+        seed=seed,
         recurrence_detection=recurrence_detection_enabled,
         verbose=verbose,
     )
@@ -638,7 +645,7 @@ def show_model_graph(
     try:
         render_kwargs = visualization_to_render_kwargs(visualization_options)
         if module is not None:
-            from .data_classes.module import Module
+            from ._data_classes.module import Module
 
             render_kwargs["module"] = module.address if isinstance(module, Module) else module
         if code_panel is not False:
@@ -648,164 +655,20 @@ def show_model_graph(
         trace.cleanup()
 
 
-def draw_backward(
-    trace: Trace,
-    node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    collapsed_node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    node_style: VisNodeModeLiteral | MissingType = MISSING,
-    code_panel: CodePanelOption = False,
-    vis_mode: VisModeLiteral = "rolled",
-    bwd: int | Iterable[int] | None = None,
-    visualization: VisualizationOptions | None = None,
-) -> str:
-    """Render an existing Trace's captured backward grad_fn_handle graph.
-
-    Parameters
-    ----------
-    trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.recording_backward()``.
-    node_spec_fn:
-        Optional callback receiving ``(grad_fn_handle, default_spec)``.
-    collapsed_node_spec_fn:
-        Accepted for forward-visualization API symmetry. Not applied because
-        backward graphs do not render collapsed module nodes.
-    node_style:
-        Node-style preset applied to grad_fn nodes.
-    code_panel:
-        Optional source-code panel mode.
-    vis_mode:
-        ``"rolled"`` renders one node per GradFn; ``"unrolled"`` renders one
-        node per GradFnCall grouped by backward pass.
-    bwd:
-        Optional one-based backward pass number or numbers to render.
-    visualization:
-        Grouped visualization options. Only output path, save behavior, file
-        format, direction, graph overrides, and edge overrides are used.
-
-    Returns
-    -------
-    str
-        Graphviz DOT source.
-    """
-
-    if visualization is None:
-        container_path = "backward_modelgraph"
-        save_only = False
-        file_format = "pdf"
-        direction: VisDirectionLiteral = "topdown"
-        graph_overrides = None
-        edge_overrides = None
-        node_mode: VisNodeModeLiteral = "default"
-    else:
-        container_path = visualization.container_path
-        save_only = visualization.save_only
-        file_format = visualization.file_format
-        direction = visualization.direction
-        graph_overrides = visualization.graph_overrides
-        edge_overrides = visualization.edge_overrides
-        node_mode = visualization.node_style
-
-    if node_style is not MISSING:
-        node_mode = cast(VisNodeModeLiteral, node_style)
-
-    return trace.draw_backward(
-        vis_outpath=container_path,
-        vis_graph_overrides=graph_overrides,
-        node_spec_fn=node_spec_fn,
-        collapsed_node_spec_fn=collapsed_node_spec_fn,
-        vis_node_mode=node_mode,
-        vis_edge_overrides=edge_overrides,
-        vis_save_only=save_only,
-        vis_fileformat=file_format,
-        vis_direction=direction,
-        code_panel=code_panel,
-        vis_mode=vis_mode,
-        bwd=bwd,
-    )
-
-
-def draw_combined(
-    trace: Trace,
-    node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    backward_node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    vis_mode: VisModeLiteral = "unrolled",
-    intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
-    bwd: int | Iterable[int] | None = None,
-    visualization: VisualizationOptions | None = None,
-) -> str:
-    """Render an existing Trace's forward ops and backward grad_fns together.
-
-    Parameters
-    ----------
-    trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.recording_backward()``.
-    node_spec_fn:
-        Optional callback receiving ``(layer_log, default_spec)``.
-    backward_node_spec_fn:
-        Optional callback receiving ``(grad_fn_handle, default_spec)``.
-    vis_mode:
-        Combined rendering currently supports only ``"unrolled"``.
-    intervening_cluster:
-        Placement mode for grad_fns without a corresponding forward op.
-    show_buffer_layers:
-        Buffer visibility mode for the forward side.
-    bwd:
-        Optional one-based backward pass number or numbers to render.
-    visualization:
-        Grouped visualization options. Only output path, save behavior, file
-        format, direction, graph overrides, and edge overrides are used.
-
-    Returns
-    -------
-    str
-        Graphviz DOT source.
-    """
-
-    if visualization is None:
-        container_path = "combined_modelgraph"
-        save_only = False
-        file_format = "pdf"
-        direction: VisDirectionLiteral = "leftright"
-        graph_overrides = None
-        edge_overrides = None
-    else:
-        container_path = visualization.container_path
-        save_only = visualization.save_only
-        file_format = visualization.file_format
-        direction = visualization.direction
-        graph_overrides = visualization.graph_overrides
-        edge_overrides = visualization.edge_overrides
-
-    return trace.draw_combined(
-        vis_outpath=container_path,
-        vis_graph_overrides=graph_overrides,
-        node_spec_fn=node_spec_fn,
-        backward_node_spec_fn=backward_node_spec_fn,
-        vis_edge_overrides=edge_overrides,
-        vis_save_only=save_only,
-        vis_fileformat=file_format,
-        vis_direction=direction,
-        vis_mode=vis_mode,
-        intervening_cluster=intervening_cluster,
-        show_buffer_layers=show_buffer_layers,
-        bwd=bwd,
-    )
-
-
 def show_bundle_graph(
     bundle: Any,
-    vis_outpath: str = "bundle_modelgraph",
+    path: str = "bundle_modelgraph",
     vis_mode: VisModeLiteral = "unrolled",
-    direction: str = "forward",
+    signal: str = "forward",
     vis_direction: VisDirectionLiteral = "bottomup",
     vis_graph_overrides: dict[str, Any] | None = None,
     vis_node_overrides: dict[str, Any] | None = None,
     vis_edge_overrides: dict[tuple[str, str], Any] | None = None,
     vis_save_only: bool = False,
-    vis_fileformat: str = "pdf",
+    file_format: str = "pdf",
+    nodes: Literal["ops", "members"] = "ops",
+    theme: str = "torchlens",
+    show_legend: bool | None = None,
 ) -> str | None:
     """Render a multi-trace bundle graph.
 
@@ -813,12 +676,12 @@ def show_bundle_graph(
     ----------
     bundle:
         ``torchlens.Bundle`` instance.
-    vis_outpath:
+    path:
         Output path for Graphviz rendering.
     vis_mode:
         ``"rolled"``, ``"unrolled"``, or ``"none"``.
-    direction:
-        Graph content direction: ``"forward"``, ``"backward"``, ``"both"``, or
+    signal:
+        Which pass's graph to draw: ``"forward"``, ``"backward"``, ``"both"``, or
         ``"overlay"``.
     vis_direction:
         Graphviz layout direction.
@@ -830,8 +693,24 @@ def show_bundle_graph(
         Per-edge Graphviz style overrides keyed by ``(source, target)``.
     vis_save_only:
         If True, save without opening a viewer.
-    vis_fileformat:
+    file_format:
         Output file format.
+    nodes:
+        What the picture's nodes are (spelling documented-unstable).
+        ``"ops"`` (default): the bundle's union op graph. ``"members"``: one
+        node per member and one edge per relation row, from the earlier
+        member to the later one, labelled with the kind, the row's
+        ``label`` and, on ``fed_by``, its basis and coverage; solid edges
+        carry token spans TorchLens checked, every other row is dashed.
+        Node overrides key by member name, edge overrides by
+        ``(earlier, later)``; ``signal`` must stay ``"forward"``.
+    theme:
+        Skin preset, the names ``Trace.draw`` takes: ``"torchlens"`` (default),
+        ``"paper"``, ``"dark"``, ``"colorblind"`` or ``"high_contrast"``.
+        Op nodes take ``draw``'s shapes and fills; a node or arrow every
+        member runs carries no member list.
+    show_legend:
+        ``True`` draws the key under the header, as ``draw`` does.
 
     Returns
     -------
@@ -839,59 +718,43 @@ def show_bundle_graph(
         DOT source, or ``None`` when ``vis_mode='none'``.
     """
 
+    if nodes not in {"ops", "members"}:
+        raise ValueError("nodes must be 'ops' or 'members'.")
+    if nodes == "members" and signal != "forward":
+        raise ValueError("nodes='members' draws the relation graph; leave signal='forward'.")
     if vis_mode == "none":
         return None
     if vis_mode not in {"rolled", "unrolled"}:
         raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if direction not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
+    if signal not in {"forward", "backward", "both", "overlay"}:
+        raise ValueError("signal must be 'forward', 'backward', 'both', or 'overlay'.")
 
-    import graphviz
+    from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
+    from ._visualization._render_utils import direction_to_rankdir
 
-    from .visualization._bundle_graph import (
-        _add_bundle_backward_graph,
-        _add_bundle_forward_edges,
-        _add_bundle_forward_nodes,
+    options = BundlePictureOptions(
+        outpath=path,
+        vis_mode=vis_mode,
+        direction=signal,
+        rankdir=direction_to_rankdir(vis_direction),
+        graph_overrides=vis_graph_overrides,
+        node_overrides=vis_node_overrides,
+        edge_overrides=vis_edge_overrides,
+        save_only=vis_save_only,
+        fileformat=file_format,
+        nodes=nodes,
+        theme_name=theme,
+        show_legend=show_legend is True,
     )
-    from .visualization._render_utils import (
-        direction_to_rankdir,
-        render_dot_to_file,
-        strip_known_extension,
-    )
-
-    dot = graphviz.Digraph(
-        name="TorchLens_Bundle",
-        comment="TorchLens bundle graph",
-        format=vis_fileformat,
-    )
-    graph_attrs = {
-        "rankdir": direction_to_rankdir(vis_direction),
-        "label": f"TorchLens bundle graph ({vis_mode}, {direction})",
-        "labelloc": "t",
-        "labeljust": "left",
-        "compound": "true",
-    }
-    graph_attrs.update({key: str(value) for key, value in (vis_graph_overrides or {}).items()})
-    dot.graph_attr.update(graph_attrs)
-
-    if direction in {"forward", "both", "overlay"}:
-        _add_bundle_forward_nodes(dot, bundle, vis_mode, vis_node_overrides)
-        _add_bundle_forward_edges(dot, bundle, vis_edge_overrides)
-    if direction in {"backward", "both", "overlay"}:
-        _add_bundle_backward_graph(dot, bundle)
-    return render_dot_to_file(
-        dot,
-        strip_known_extension(vis_outpath),
-        vis_fileformat,
-        vis_save_only,
-    )
+    return render_bundle_graph(bundle, options)
 
 
+@restores_rng_streams
 def validate_forward_pass(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
     *,
@@ -909,9 +772,8 @@ def validate_forward_pass(
         Input for which to validate the saved outs.
     input_kwargs:
         Keyword arguments for model forward pass.
-    random_seed:
-        Fixed RNG seed for reproducibility. Reseeds the process-global RNG
-        engines without restoring them; see ``tl.trace``'s ``random_seed``.
+    seed:
+        Fixed RNG seed; like ``tl.trace``, the caller's streams are restored on return.
     verbose:
         If True, print detailed error messages on validation failure.
     validate_metadata:
@@ -921,13 +783,13 @@ def validate_forward_pass(
     output_device:
         Where the validator capture keeps saved activations (same values and
         default as ``CaptureOptions.output_device``). Saved function
-        arguments (the replay inputs) stay on each op's device, so under
-        ``"cpu"`` the GPU footprint roughly halves rather than disappearing;
-        if the GPU budget is still exceeded, pass ``save_budget=None`` or a
-        larger value.
+        arguments (the replay inputs) other than parameters are kept there
+        too and replay moves each back to its op's device, so under ``"cpu"``
+        the GPU keeps only parameters and one forward's transients; the
+        capture's ``save_budget`` charges each copy where it lives.
     save_budget:
-        Per-device retained-bytes ceiling for the validator capture (same
-        values and default as ``CaptureOptions.save_budget``).
+        Per-device retained-bytes ceiling for the validator capture (same values and
+        default as ``CaptureOptions.save_budget``); parameters kept by reference are not charged.
 
     Returns
     -------
@@ -966,7 +828,7 @@ def validate_forward_pass(
         model,
         input_args,
         input_kwargs=input_kwargs,
-        random_seed=random_seed,
+        seed=seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
         **save_options,
@@ -975,7 +837,7 @@ def validate_forward_pass(
 
 def _restore_validation_replay_state(
     model: nn.Module,
-    state_dict: dict[str, torch.Tensor],
+    state_dict: StateSnapshot,
     plain_attr_snapshot: _ModuleTreePlainAttrSnapshot | None,
 ) -> None:
     """Restore a validation model to its pre-capture replay state.
@@ -985,12 +847,10 @@ def _restore_validation_replay_state(
     model:
         Model used for validation capture and replay.
     state_dict:
-        Cloned state dictionary from before the traced validation forward.
+        State snapshot from before the traced validation forward.
     plain_attr_snapshot:
         Optional snapshot of plain Python attributes to restore.
     """
-
-    from .validation._live_model_state import restore_state_dict_if_changed
 
     # R07: both restores always run; a raising load_state_dict must not skip
     # the plain-attribute restore (first failure re-raises, later ones chain).
@@ -1001,8 +861,20 @@ def _restore_validation_replay_state(
         # dict through load_state_dict on CPU; the resilient restore falls
         # back to proven in-place restoration (lane F37).
         restores.callback(
-            restore_state_dict_if_changed, model, state_dict, restore_state_dict_resilient
+            restore_snapshot_if_changed, model, state_dict, restore_state_dict_resilient
         )
+
+
+def _layer_signature(layer: Any) -> tuple[Any, ...]:
+    """Cheap structural signature of one layer record for divergence hints."""
+
+    return (
+        record_type(layer, None),
+        getattr(layer, "func_name", None),
+        len(getattr(layer, "parents", ()) or ()),
+        bool(getattr(layer, "is_output", False)),
+        bool(getattr(layer, "is_buffer", False)),
+    )
 
 
 def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
@@ -1022,29 +894,15 @@ def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
         available.
     """
 
-    for index, (left_layer, right_layer) in enumerate(zip(left.layer_list, right.layer_list)):
-        left_sig = (
-            getattr(left_layer, "layer_type", None),
-            getattr(left_layer, "func_name", None),
-            len(getattr(left_layer, "parents", ()) or ()),
-            bool(getattr(left_layer, "is_output", False)),
-            bool(getattr(left_layer, "is_buffer", False)),
-        )
-        right_sig = (
-            getattr(right_layer, "layer_type", None),
-            getattr(right_layer, "func_name", None),
-            len(getattr(right_layer, "parents", ()) or ()),
-            bool(getattr(right_layer, "is_output", False)),
-            bool(getattr(right_layer, "is_buffer", False)),
-        )
-        if left_sig != right_sig:
+    for index, (left_layer, right_layer) in enumerate(zip(left._layer_list, right._layer_list)):
+        if _layer_signature(left_layer) != _layer_signature(right_layer):
             return (
                 f"first divergence at op index {index}: "
                 f"{getattr(left_layer, 'func_name', None)!r} vs "
                 f"{getattr(right_layer, 'func_name', None)!r}"
             )
-    if len(left.layer_list) != len(right.layer_list):
-        return f"op count changed: {len(left.layer_list)} vs {len(right.layer_list)}"
+    if len(left._layer_list) != len(right._layer_list):
+        return f"op count changed: {len(left._layer_list)} vs {len(right._layer_list)}"
     return None
 
 
@@ -1086,7 +944,7 @@ def _warn_if_validation_trace_not_reproducible(
 
     # Read outside the guard below: a trace without its save options must fail
     # loudly, never read as an "unavailable" re-trace.
-    retrace_output_device = cast(OutputDeviceLiteral, first_trace.output_device)
+    retrace_output_device = cast(OutputDeviceLiteral, first_trace._options_output_device)
     retrace_save_budget = first_trace.save_budget
     second_trace: Trace | None = None
     try:
@@ -1113,9 +971,9 @@ def _warn_if_validation_trace_not_reproducible(
                 mark_layer_depths=False,
                 detach_saved_activations=False,
                 save_grads=False,
-                save_arg_values=False,
-                random_seed=random_seed,
-                save_rng_states=False,
+                save_args=False,
+                seed=random_seed,
+                save_rng=False,
                 output_device=retrace_output_device,
                 save_budget=retrace_save_budget,
             )
@@ -1138,13 +996,13 @@ def _warn_if_validation_trace_not_reproducible(
         record_validation_diagnostic(
             first_trace,
             ValidationDiagnostic(
-                check="trace_retrace_structure_mismatch",
+                check_name="trace_retrace_structure_mismatch",
                 message=message,
                 extra={
                     "first_graph_hash": first_hash,
                     "retrace_graph_hash": second_hash,
-                    "first_op_count": len(first_trace.layer_list),
-                    "retrace_op_count": len(second_trace.layer_list),
+                    "first_op_count": len(first_trace._layer_list),
+                    "retrace_op_count": len(second_trace._layer_list),
                     "first_divergence": hint,
                 },
             ),
@@ -1154,13 +1012,18 @@ def _warn_if_validation_trace_not_reproducible(
                 message,
                 first_graph_hash=first_hash,
                 retrace_graph_hash=second_hash,
-                first_op_count=len(first_trace.layer_list),
-                retrace_op_count=len(second_trace.layer_list),
+                first_op_count=len(first_trace._layer_list),
+                retrace_op_count=len(second_trace._layer_list),
                 first_divergence=hint,
             ),
             stacklevel=2,
         )
         return "mismatch"
+    except Warning:
+        # A filter promoted a warning (this check's own verdict warning, or one
+        # the re-trace emitted) to an error: let it propagate, never read it as
+        # "unavailable", which would silently skip the mismatch downgrade.
+        raise
     except Exception as exc:
         message = (
             "TorchLens validation could not run the fresh re-trace reproducibility "
@@ -1171,16 +1034,12 @@ def _warn_if_validation_trace_not_reproducible(
         record_validation_diagnostic(
             first_trace,
             ValidationDiagnostic(
-                check="trace_retrace_unavailable",
+                check_name="trace_retrace_unavailable",
                 message=message,
                 extra={"exception_type": type(exc).__name__},
             ),
         )
-        warnings.warn(
-            message,
-            RuntimeWarning,
-            stacklevel=2,
-        )
+        warnings.warn(message, RuntimeWarning, stacklevel=2)
         return "unavailable"
     finally:
         if second_trace is not None:
@@ -1196,7 +1055,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
         Validation trace whose pristine re-trace diverged structurally.
     """
 
-    from .validation.status import ValidationReplayStatus
+    from .validation.status import ValidationStatus
 
     current_status = trace.validation_replay_status
     unverified_reason_counts = dict(current_status.unverified_reason_counts)
@@ -1206,7 +1065,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
     setattr(
         trace,
         "_validation_replay_status",
-        ValidationReplayStatus.unverified(
+        ValidationStatus.unverified(
             backend=current_status.backend,
             source=current_status.source,
             reason="trace_retrace_structure_mismatch",
@@ -1215,12 +1074,12 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
                 "re-trace diverged structurally, so the overall validation "
                 "result is unverified."
             ),
-            replayed_node_count=current_status.replayed_node_count,
-            unverified_node_count=max(1, current_status.unverified_node_count),
+            num_replayed_ops=current_status.num_replayed_ops,
+            num_unverified_ops=max(1, current_status.num_unverified_ops),
             payload_load_status=current_status.payload_load_status,
-            pure_unverified_node_count=current_status.pure_unverified_node_count,
-            effect_region_node_count=current_status.effect_region_node_count,
-            failed_node_count=current_status.failed_node_count,
+            num_pure_unverified_ops=current_status.num_pure_unverified_ops,
+            num_effect_region_ops=current_status.num_effect_region_ops,
+            num_failed_ops=current_status.num_failed_ops,
             unverified_reason_counts=unverified_reason_counts,
             exempted_reason_counts=current_status.exempted_reason_counts,
             decisions=current_status.decisions,
@@ -1231,6 +1090,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
 def _refuse_validation_precondition(
     message: str,
     trace_observer: Callable[[Trace | None], None] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> Literal[False]:
     """Warn, record a structured precondition-refusal diagnostic, and refuse.
 
@@ -1257,6 +1117,8 @@ def _refuse_validation_precondition(
     trace_observer:
         The caller's optional ``_trace_observer``, forwarded ``None`` in
         place of a ``Trace`` so it still runs at this early exit.
+    extra:
+        Optional structured payload for the recorded failure (``code``).
 
     Returns
     -------
@@ -1271,18 +1133,22 @@ def _refuse_validation_precondition(
         record_validation_failure,
     )
 
-    record_validation_failure(None, ValidationFailure(check=CHECK_PRECONDITION, message=message))
+    record_validation_failure(
+        None,
+        ValidationFailure(check_name=CHECK_PRECONDITION, message=message, extra=dict(extra or {})),
+    )
     if trace_observer is not None:
         trace_observer(None)
     return False
 
 
+@_arg_references.with_parameter_reference_fallback
 @leaf_preserving_input_copies()
 def _validate_forward_pass_torch(
     model: nn.Module | Callable[..., Any],
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
     *,
@@ -1293,11 +1159,6 @@ def _validate_forward_pass_torch(
 ) -> bool:
     """Validate that saved outs faithfully reproduce the model's output.
 
-    Every input copy validation makes (its own and the capture's) keeps a
-    grad-tracked leaf input a leaf (:func:`leaf_preserving_input_copies`, applied
-    as this function's decorator), so a model that sets ``requires_grad`` on its
-    input validates like it runs.
-
     **How it works:**
 
     1. Run model.forward() on PRISTINE torch to get ground-truth output
@@ -1307,18 +1168,16 @@ def _validate_forward_pass_torch(
        through the wrapper layer it is meant to check (R75-1). If they
        cannot be removed (a capture is active), validation refuses with
        ``False`` rather than blessing a wrap-state-dependent ground truth.
-    2. Run ``trace`` with ``save_arg_values=True`` and ``layers_to_save='all'``
+    2. Run ``trace`` with ``save_args=True`` and ``save='all'``
        to capture every out and its creating function's arguments.
     3. Call ``Trace.validate_forward_pass`` which replays the forward pass
-       layer-by-layer from saved outs, checking that the output matches
-       ground truth.  It also injects random outs and verifies the output
-       changes (proving the saved outs are actually used, not just ignored).
+       layer-by-layer from saved outs, checking that the output matches ground
+       truth, and injects random outs to verify the output changes (the saved outs are used).
     4. If ``validate_metadata=True``, run comprehensive invariant checks on all
        metadata cross-references (graph edges, module containment, labels, etc.).
 
-    **Why save_arg_values=True is required:**  The validation replay re-executes
-    each function using its saved non-tensor arguments (e.g., stride, padding for
-    conv2d).  Without them, replay cannot reconstruct the correct computation.
+    **Why save_args=True is required:**  The validation replay re-executes each
+    function using its saved non-tensor arguments (e.g., stride, padding for conv2d).
 
     Parameters
     ----------
@@ -1328,10 +1187,9 @@ def _validate_forward_pass_torch(
         Input for which to validate the saved outs.
     input_kwargs:
         Keyword arguments for model forward pass.
-    random_seed:
-        Fixed RNG seed for reproducibility (auto-generated if None). Reseeds
-        the process-global RNG engines without restoring them; see
-        ``tl.trace``'s ``random_seed``.
+    seed:
+        Fixed RNG seed (auto-generated if None). Seeds the global RNG engines for the
+        ground-truth and logged runs; the public entries restore the caller's streams.
     verbose:
         If True, print detailed error messages on validation failure.
     validate_metadata:
@@ -1345,12 +1203,12 @@ def _validate_forward_pass_torch(
         and default as ``CaptureOptions.output_device``). Ground-truth outputs
         are snapshotted onto the same device so the output comparison stays
         exact; replay moves saved inputs back to each op's original device.
-        Saved function arguments stay on each op's device, so the GPU
-        footprint roughly halves and the GPU budget can still be exceeded.
+        Saved function arguments other than parameters are kept there too,
+        so the GPU keeps only parameters and one forward's transients.
     save_budget:
         Per-device retained-bytes ceiling for both validation captures (same
         values and default as ``CaptureOptions.save_budget``); exceeding it
-        raises ``SaveBudgetExceededError``.
+        raises ``SaveBudgetExceededError``. Parameters kept by reference are not charged.
     _trace_observer:
         Optional private callback invoked with the completed validation trace
         after replay validation and before cleanup. Also invoked with
@@ -1366,7 +1224,6 @@ def _validate_forward_pass_torch(
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
-    from .validation._live_model_state import restore_state_dict_if_changed
     from .validation.diagnostics import reset_validation_failure
 
     # Clear any stale precondition-refusal failure from a prior call on this
@@ -1377,7 +1234,6 @@ def _validate_forward_pass_torch(
     # contract as tl.trace -- a bound method of an nn.Module wraps into the
     # TL-authored synthetic root before the module-shaped preflights run;
     # other callables refuse typed (previously a bare AttributeError leak).
-    from ._errors import InvalidArgumentError
     from .backends.torch.bound_root import TLBoundMethodRoot, is_bound_method_of_module
 
     if not isinstance(model, nn.Module):
@@ -1401,9 +1257,9 @@ def _validate_forward_pass_torch(
     check_model_and_input_variants(model, input_args, input_kwargs)
     # Fix a random seed so both the ground-truth run and the logged run see
     # identical randomness (critical for models with dropout, etc.).
-    if random_seed is None:
-        random_seed = random.randint(1, 4294967294)
-    set_random_seed(random_seed)
+    if seed is None:
+        seed = random.randint(1, 4294967294)
+    set_random_seed(seed)
     input_args = normalize_input_args(input_args, model)
     if not input_kwargs:
         input_kwargs = {}
@@ -1431,8 +1287,10 @@ def _validate_forward_pass_torch(
 
     # Step 1: Get ground-truth outputs by running the model *outside* TorchLens.
     # Save state_dict first because requires_grad forcing during logging can
-    # alter parameter metadata; we restore it afterward.
-    state_dict = _clone_state_dict_with_metadata(model)
+    # alter parameter metadata; we restore it afterward. Accelerator tensors are
+    # snapshotted to host memory, so this snapshot adds no copy of the weights
+    # on the device beside the deepcopy validation runs.
+    state_dict = snapshot_state_for_restore(model)
     trace: Trace | None = None
     outs_are_valid = False
     # Determinism stabilizer for the capture + replay + perturbation region.
@@ -1499,7 +1357,7 @@ def _validate_forward_pass_torch(
         # the kernel is missing outright there, so warn_only=True cannot help,
         # and forcing crashed any validation that allocates a fresh Float8
         # CPU tensor.
-        from .utils._torch_compat import get_cpu_float8_deterministic_fill_support
+        from ._utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
         if get_cpu_float8_deterministic_fill_support():
             torch.use_deterministic_algorithms(True, warn_only=True)
@@ -1508,15 +1366,16 @@ def _validate_forward_pass_torch(
         ground_truth_model, plain_attr_snapshot = _model_for_ground_truth_validation(model)
         if plain_attr_snapshot is not None and not plain_attr_snapshot.is_complete:
             return _refuse_validation_precondition(
-                "TorchLens validation cannot prove model-state restoration after deepcopy "
-                "failed because these plain attributes are unsupported: "
-                f"{plain_attr_snapshot.unsupported_attr_paths!r}. Returning False rather "
-                "than reporting unverified success.",
+                restore_refusal_message(
+                    "model-state",
+                    plain_attr_snapshot.unsupported_attr_paths,
+                    plain_attr_snapshot.copy_failure,
+                ),
                 _trace_observer,
+                {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
-        from ._errors import CaptureContextError
-        from .backends.torch.ops import _walk_output_tensors_with_paths
-        from .validation._pristine import pristine_torch_oracle
+        from .backends.torch._ops_containers import _walk_output_tensors_with_paths
+        from .validation._pristine import pristine_ground_truth_oracle
 
         # R75-1: the phase-0 ground truth must observe through PRISTINE
         # torch. In a wrapped process this forward used to run through the
@@ -1528,9 +1387,9 @@ def _validate_forward_pass_torch(
         # capture is active), validation REFUSES rather than blessing a
         # wrap-state-dependent ground truth.
         try:
-            with pristine_torch_oracle():
+            with pristine_ground_truth_oracle(ground_truth_model):
                 ground_truth_output = ground_truth_model(*input_args_copy, **input_kwargs_copy)
-        except CaptureContextError:
+        except CaptureNotActiveError:
             return _refuse_validation_precondition(
                 "TorchLens validation could not compute a pristine-torch ground "
                 "truth (a capture is active in this process, or the unwrap "
@@ -1578,7 +1437,7 @@ def _validate_forward_pass_torch(
                 "the same defective enumeration.",
                 _trace_observer,
             )
-        # Deduplicate by structural address to match how capture/trace.py extracts
+        # Deduplicate by structural address to match how _capture/trace.py extracts
         # outputs (same tensor returned in multiple positions is counted once).
         addresses_used = []
         ground_truth_output_tensors = []
@@ -1600,11 +1459,16 @@ def _validate_forward_pass_torch(
                 ground_truth_snapshot = ground_truth_snapshot.to(output_device)
             ground_truth_output_tensors.append(ground_truth_snapshot)
             addresses_used.append(entry[1])
+        # Release the ground-truth copy (and the outputs and autograd graph that
+        # pin its weights) before the replay copy is made.
+        if ground_truth_output_all:
+            del entry
+        del ground_truth_model, ground_truth_output, ground_truth_output_all
         # Restore only if the ground-truth run changed the live model (it runs on
         # a deepcopy when one can be made): an unconditional in-place restore
         # moves every tensor's version counter and breaks a graph the caller
         # holds across validate.
-        restore_state_dict_if_changed(model, state_dict, restore_state_dict_resilient)
+        restore_snapshot_if_changed(model, state_dict, restore_state_dict_resilient)
         if plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()
 
@@ -1616,13 +1480,23 @@ def _validate_forward_pass_torch(
             and not validation_plain_attr_snapshot.is_complete
         ):
             return _refuse_validation_precondition(
-                "TorchLens validation cannot prove replay-state restoration after deepcopy "
-                "failed because these plain attributes are unsupported: "
-                f"{validation_plain_attr_snapshot.unsupported_attr_paths!r}. Returning False "
-                "rather than reporting unverified success.",
+                restore_refusal_message(
+                    "replay-state",
+                    validation_plain_attr_snapshot.unsupported_attr_paths,
+                    validation_plain_attr_snapshot.copy_failure,
+                ),
                 _trace_observer,
+                {"code": COPY_FAILED_CODE} if validation_plain_attr_snapshot.copy_failure else None,
             )
-        validation_state_dict = _clone_state_dict_with_metadata(validation_model)
+        # The replay model was just copied from (or is) the restored live model,
+        # so its state normally equals the live snapshot bit for bit: reuse its
+        # values rather than hold a second copy of the weights, with the
+        # storage bindings of the replay model's own tensors.
+        validation_state_dict = (
+            with_storage_bindings_of(state_dict, validation_model)
+            if state_matches_snapshot(validation_model, state_dict)
+            else snapshot_state_for_restore(validation_model)
+        )
         (
             validation_input_args,
             validation_input_kwargs,
@@ -1651,28 +1525,31 @@ def _validate_forward_pass_torch(
             )
 
         # Step 2: Run the model *through* TorchLens, saving all outs.
-        # save_arg_values=True is essential - the replay needs each function's
+        # save_args=True is essential - the replay needs each function's
         # non-tensor arguments to re-execute the computation from saved outs.
         from . import _state
 
         prior_witness_mode = _state._completeness_witness_mode
         _state._completeness_witness_mode = "shadow"
         try:
-            trace = _user_funcs._run_model_and_save_specified_outs(
-                model=validation_model,
-                input_args=validation_input_args,
-                input_kwargs=validation_input_kwargs,
-                layers_to_save="all",
-                activation_transform=None,
-                mark_layer_depths=False,
-                detach_saved_activations=False,
-                save_grads=False,
-                save_arg_values=True,
-                random_seed=random_seed,
-                save_rng_states=True,
-                output_device=output_device,
-                save_budget=save_budget,
-            )
+            with _arg_references.parameter_argument_references(
+                validation_model, validation_model_copied, output_device
+            ) as arg_references:
+                trace = _user_funcs._run_model_and_save_specified_outs(
+                    model=validation_model,
+                    input_args=validation_input_args,
+                    input_kwargs=validation_input_kwargs,
+                    layers_to_save="all",
+                    activation_transform=None,
+                    mark_layer_depths=False,
+                    detach_saved_activations=False,
+                    save_grads=False,
+                    save_args=True,
+                    seed=seed,
+                    save_rng=True,
+                    output_device=output_device,
+                    save_budget=save_budget,
+                )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
         from .validation._completeness_backstop import completeness_backstop_counts
@@ -1688,7 +1565,7 @@ def _validate_forward_pass_torch(
                 validation_model,
                 reproducibility_input_args,
                 reproducibility_input_kwargs,
-                random_seed,
+                seed,
             )
         else:
             from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
@@ -1696,7 +1573,7 @@ def _validate_forward_pass_torch(
             record_validation_diagnostic(
                 trace,
                 ValidationDiagnostic(
-                    check="trace_retrace_pristine_copy_unavailable",
+                    check_name="trace_retrace_pristine_copy_unavailable",
                     message=(
                         "TorchLens validation skipped the pristine trace-vs-retrace check "
                         "because the model could not be deep-copied."
@@ -1704,6 +1581,7 @@ def _validate_forward_pass_torch(
                     extra={"model_type": f"{type(model).__module__}.{type(model).__qualname__}"},
                 ),
             )
+        arg_references.raise_if_changed(trace, validation_state_dict)
         _restore_validation_replay_state(
             validation_model,
             validation_state_dict,
@@ -1740,14 +1618,14 @@ def _validate_forward_pass_torch(
                 (
                     diagnostic
                     for diagnostic in get_validation_diagnostics(trace)
-                    if diagnostic.check == "trace_retrace_structure_mismatch"
+                    if diagnostic.check_name == "trace_retrace_structure_mismatch"
                 ),
                 None,
             )
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_RETRACE_MISMATCH,
+                    check_name=CHECK_RETRACE_MISMATCH,
                     message=(
                         retrace_diagnostic.message
                         if retrace_diagnostic is not None
@@ -1779,7 +1657,7 @@ def _validate_forward_pass_torch(
             if "plain_attr_snapshot" in locals() and plain_attr_snapshot is not None:
                 teardown.callback(plain_attr_snapshot.restore_changed_attrs)
             teardown.callback(
-                restore_state_dict_if_changed, model, state_dict, restore_state_dict_resilient
+                restore_snapshot_if_changed, model, state_dict, restore_state_dict_resilient
             )
             if num_threads is not None:
                 teardown.callback(torch.set_num_threads, prior_num_threads)
@@ -1791,6 +1669,7 @@ def _validate_forward_pass_torch(
     return outs_are_valid
 
 
+@restores_rng_streams
 def validate_backward_pass(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1798,7 +1677,7 @@ def validate_backward_pass(
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
     validate_metadata: bool = True,
-    random_seed: int | None = None,
+    seed: int | None = None,
     atol: float | None = None,
     rtol: float | None = None,
     validate_layer_grads: bool = True,
@@ -1820,10 +1699,10 @@ def validate_backward_pass(
         summing all returned tensors.
     validate_metadata:
         If True, run metadata invariant checks on the captured backward trace.
-    random_seed:
-        Fixed RNG seed for stock and candidate passes. Reseeds the
-        process-global RNG engines without restoring them; see
-        ``tl.trace``'s ``random_seed``.
+    seed:
+        Fixed RNG seed for stock and candidate passes. Like ``tl.trace``, the call
+        seeds the process-global RNG engines for its runs and restores the caller's
+        streams on return and on error.
     atol:
         Absolute allclose tolerance. ``None`` (default) derives the
         tolerance per gradient dtype (R13); the historical fp32 decimal
@@ -1834,6 +1713,9 @@ def validate_backward_pass(
         gradient dtype, matching ``torchlens.validation.backward``.
     validate_layer_grads:
         If True (default), also validate captured per-module-output gradients.
+        The root module call is never compared, so a model whose forward calls
+        no child module returns False with a coded ``TorchLensWarning``
+        (``backward_validation_no_module_output_evidence``).
     layer_grad_atol:
         Optional layer-gradient absolute tolerance.
     layer_grad_rtol:
@@ -1852,7 +1734,7 @@ def validate_backward_pass(
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
         validate_metadata=validate_metadata,
-        random_seed=random_seed,
+        seed=seed,
         atol=atol,
         rtol=rtol,
         validate_layer_grads=validate_layer_grads,

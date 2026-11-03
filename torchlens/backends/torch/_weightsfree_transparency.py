@@ -15,7 +15,7 @@ is not recorded; the enclosing USER op stays the record. Suppressing the
 frames restores byte-identical labels and shapes with ZERO maintained
 mapping tables. Scoped to ADMITTED meta structure-only captures only,
 memoized per code object, root set FEATURE-DETECTED against the running
-torch (published via ``tl.compat.report()`` / ``tl.doctor()``), and
+torch (published via ``tl.report.doctor()``), and
 exception flow is never suppressed — the belt gates RECORDING only.
 
 Disclosed table condition (D3): a direct USER call to a private
@@ -42,7 +42,7 @@ _TORCH_ROOT: Final[Path] = Path(torch.__file__).resolve().parent
 #: Candidate torch-internal decomposition/meta-machinery roots. Each entry is
 #: a path relative to the torch package root; only entries that EXIST in the
 #: running torch survive feature detection (a renamed internal module drops
-#: out of the belt visibly via compat.report(), never silently misclassifies).
+#: out of the belt visibly via report.doctor(), never silently misclassifies).
 _ROOT_CANDIDATES: Final[tuple[str, ...]] = (
     "_refs",
     "_decomp",

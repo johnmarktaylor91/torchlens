@@ -30,15 +30,22 @@ import functools
 import threading
 import time
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
 import torch
 
 from ... import _state
-from ...data_classes.internal_types import FuncExecutionContext
-from ...utils.rng import log_current_autocast_state, log_current_rng_states
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ._foreign_data import (
+    FOREIGN_DATA_EXPORT_WRAPPER_NAME,
+    FOREIGN_DATA_FUNC_NAME,
+    TOLIST_EXPORT_FUNC_NAME,
+    note_plain_export,
+)
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
 """Op type / func name of the boundary op."""
@@ -74,6 +81,13 @@ output in torch and lets its C kernel write through a ``to_dlpack`` export, so t
 alone (no re-entry constructor) must count as leaving torch.
 """
 
+PLAIN_EXPORT_FUNC_NAMES = EXPORT_FUNC_NAMES | frozenset({TOLIST_EXPORT_FUNC_NAME})
+"""Exports that journal a departure in plain forward code (``tolist`` copies values).
+
+Inside a live ``Function.apply`` frame only :data:`EXPORT_FUNC_NAMES` mark the frame
+as leaving torch: ``tolist`` is metadata inside most Functions, never a kernel exit.
+"""
+
 _FRAMES: list[set[str]] = []
 """Export names seen inside each live ``Function.apply`` frame, innermost last."""
 
@@ -87,29 +101,81 @@ _INSTALLED_APPLY: classmethod[Any, Any, Any] | None = None
 _ORIGINAL_APPLY: classmethod[Any, Any, Any] | None = None
 
 
-def note_function_export(name: str) -> None:
-    """Record a numpy / dlpack export made inside the innermost live ``apply`` frame.
+def unlogged_wrapper_name(func_name: str) -> str:
+    """Census token of a wrapped-but-unlogged call.
+
+    Export spellings (``numpy``, ``__array__``) belong to the departure journal, so their
+    dispatches are accounted to :data:`FOREIGN_DATA_EXPORT_WRAPPER_NAME`; the metadata reads
+    keep their own ``torch_func:<name>:not_logged`` token.
+    """
+
+    if func_name in EXPORT_FUNC_NAMES:
+        return FOREIGN_DATA_EXPORT_WRAPPER_NAME
+    return f"torch_func:{func_name}:not_logged"
+
+
+def note_function_export(name: str, args: tuple[Any, ...] = ()) -> None:
+    """Record an export: for the innermost live ``apply`` frame, else the departure journal.
 
     Parameters
     ----------
     name:
-        Export spelling (``numpy``, ``__array__``, ``__dlpack__``, ``to_dlpack``).
+        Export spelling (``numpy``, ``__array__``, ``__dlpack__``, ``to_dlpack``, ``tolist``).
+    args:
+        The export call's positional arguments; the first is the departing tensor.
     """
 
     if _FRAMES:
-        _FRAMES[-1].add(name)
+        if name in EXPORT_FUNC_NAMES:
+            _FRAMES[-1].add(name)
+        return
+    trace = _active_plain_capture()
+    if trace is not None and args:
+        note_plain_export(trace, name, args[0])
+
+
+def _active_plain_capture() -> Any | None:
+    """Return the live capture trace when plain-code exports should be journaled."""
+
+    active_trace, logging_enabled = _state.active_capture()
+    if not logging_enabled or active_trace is None:
+        return None
+    return active_trace
+
+
+@contextmanager
+def _owned_export_dispatches(trace: Any) -> Iterator[None]:
+    """Own every census dispatch inside a plain-code export (``toDLPack``'s strides fix)."""
+
+    state = _active_witness_state(trace)
+    start = len(state.events) if state is not None else 0
+    try:
+        yield
+    finally:
+        if state is not None and len(state.events) > start:
+            token = _accounted_boundary_token(
+                torch.utils.dlpack.to_dlpack,
+                FOREIGN_DATA_EXPORT_WRAPPER_NAME,
+                FOREIGN_DATA_FUNC_NAME,
+            )
+            for event in state.events[start:]:
+                event.owner = token
 
 
 def _make_export_wrapper(original: Callable[..., Any], name: str) -> Callable[..., Any]:
-    """Wrap an unwrapped export entry point so a Function frame learns about it."""
+    """Wrap an unwrapped export entry point so a frame or the journal learns about it."""
 
     @functools.wraps(original)
     def export_wrapper(*args: Any, **kwargs: Any) -> Any:
-        """Note the export for the live frame, then call through unchanged."""
+        """Note the export for the live frame or the plain-code journal, then call through."""
 
-        if _FRAMES:
-            _FRAMES[-1].add(name)
-        return original(*args, **kwargs)
+        if _FRAMES or (trace := _active_plain_capture()) is None:
+            note_function_export(name, args)
+            return original(*args, **kwargs)
+        with _owned_export_dispatches(trace):
+            out = original(*args, **kwargs)
+        note_plain_export(trace, name, args[0] if args else None)
+        return out
 
     return export_wrapper
 
@@ -174,10 +240,15 @@ def install_function_apply_wrapper() -> None:
     -------
     None
         The base-class classmethod is replaced; subclasses overriding ``apply`` are
-        untouched, and a foreign patch layered over ours is never clobbered.
+        untouched, and a foreign patch layered over ours is never clobbered. The
+        TorchScript call hook (``_script_boundary``) is installed alongside.
     """
 
     global _INSTALLED_APPLY, _ORIGINAL_APPLY
+    from ._script_boundary import install_script_function_call_wrapper
+
+    # The TorchScript call boundary shares this core and rides the same install pair.
+    install_script_function_call_wrapper()
     if _INSTALLED_APPLY is not None:
         return
     original = torch.autograd.Function.__dict__.get("apply")
@@ -211,6 +282,9 @@ def uninstall_function_apply_wrapper() -> None:
     """
 
     global _INSTALLED_APPLY, _ORIGINAL_APPLY
+    from ._script_boundary import uninstall_script_function_call_wrapper
+
+    uninstall_script_function_call_wrapper()
     if _INSTALLED_APPLY is None or _ORIGINAL_APPLY is None:
         return
     if torch.autograd.Function.__dict__.get("apply") is _INSTALLED_APPLY:
@@ -228,7 +302,7 @@ def _active_witness_state(trace: Any) -> Any | None:
     carries the state of every armed census, runnable or not.
     """
 
-    from ...utils._torch_compat import get_current_dispatch_mode_stack
+    from ..._utils._torch_compat import get_current_dispatch_mode_stack
     from . import completeness_witness
 
     for mode in reversed(get_current_dispatch_mode_stack() or []):
@@ -317,31 +391,76 @@ def _make_replay_callable(
     return autogradfunction
 
 
+@dataclass(frozen=True)
+class BoundarySpec:
+    """What a boundary op is: its callable, op type, census owner token and source."""
+
+    replay: Callable[..., Any]
+    func_name: str
+    wrapper_name: str
+    original: Any
+
+
+@dataclass(frozen=True)
+class _BoundaryCall:
+    """One collapsed call, ready to be logged as its boundary op."""
+
+    spec: BoundarySpec
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+    out: Any
+    exec_ctx: FuncExecutionContext
+    func_call_id: int
+
+
+@dataclass(frozen=True)
+class BoundaryMarks:
+    """Journal, census and context marks taken just before a boundary call runs."""
+
+    op_events: list[Any] | None
+    journal_mark: int
+    witness_state: Any | None
+    witness_mark: int
+    capture_start_time: float
+    rng_states: dict[str, Any]
+    autocast_state: Any
+    arg_labels: list[tuple[Any, str | None]]
+
+
 def _reown_witness_events(
     state: Any,
     start: int,
     stop: int,
-    original_function: Callable[..., Any],
-    func_call_id: int,
+    call: _BoundaryCall,
 ) -> None:
     """Hand every dispatch event of the frame to one accounted boundary token."""
 
+    token = _accounted_boundary_token(
+        call.spec.original, call.spec.wrapper_name, call.spec.func_name, call.func_call_id
+    )
+    for event in state.events[start:stop]:
+        event.owner = token
+
+
+def _accounted_boundary_token(
+    original: Callable[..., Any], wrapper_name: str, func_name: str, func_call_id: int | None = None
+) -> Any:
+    """Return the capture-accounted ``expected_opaque`` owner token of one boundary."""
+
     from .escape_detection import ExpectedOriginalToken
 
-    token = ExpectedOriginalToken(
-        raw_id=id(original_function),
-        original=original_function,
-        wrapper_name=FOREIGN_FUNCTION_WRAPPER_NAME,
+    return ExpectedOriginalToken(
+        raw_id=id(original),
+        original=original,
+        wrapper_name=wrapper_name,
         wrapper_frame_id=0,
         owner_thread_id=threading.get_ident(),
         pending=False,
-        func_name=FOREIGN_FUNCTION_FUNC_NAME,
+        func_name=func_name,
         func_call_id=func_call_id,
         census_scope="expected_opaque",
         capture_accounted=True,
     )
-    for event in state.events[start:stop]:
-        event.owner = token
 
 
 def _snapshot_arg_labels(
@@ -349,7 +468,7 @@ def _snapshot_arg_labels(
 ) -> list[tuple[Any, str | None]]:
     """Record each tensor argument's live label before the forward runs."""
 
-    from ...utils.introspection import get_vars_of_type_from_obj
+    from ..._utils.introspection import get_vars_of_type_from_obj
     from ._tl import get_tensor_label
 
     tensors = get_vars_of_type_from_obj(
@@ -379,30 +498,18 @@ def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels:
             set_tensor_label(tensor, label)
 
 
-@dataclass(frozen=True)
-class _BoundaryCall:
-    """One collapsed ``Function.apply`` call, ready to be logged as the boundary op."""
-
-    replay: Callable[..., Any]
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
-    out: Any
-    exec_ctx: FuncExecutionContext
-    func_call_id: int
-
-
 def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
-    """Log the returned tensors as the one ``autogradfunction`` op."""
+    """Log the returned tensors as the call's one boundary op."""
 
-    from .ops import log_function_output_tensors
+    from ._ops_emission import log_function_output_tensors
 
     def emit() -> None:
         """Record the boundary op through the ordinary output logger."""
 
         log_function_output_tensors(
             trace,
-            call.replay,
-            FOREIGN_FUNCTION_FUNC_NAME,
+            call.spec.replay,
+            call.spec.func_name,
             call.args,
             call.kwargs,
             call.args,
@@ -445,6 +552,96 @@ def _warn_foreign_boundary(trace: Any, cls: type[Any], exits: tuple[str, ...]) -
     )
 
 
+def open_boundary_call(trace: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> BoundaryMarks:
+    """Take the marks a boundary call needs, just before the call runs.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    args:
+        Positional call arguments.
+    kwargs:
+        Keyword call arguments.
+
+    Returns
+    -------
+    BoundaryMarks
+        Journal and census positions, timing, RNG / autocast state and argument labels.
+    """
+
+    op_events = getattr(getattr(trace, "capture_events", None), "op_events", None)
+    witness_state = _active_witness_state(trace)
+    save_rng = trace._options_save_rng
+    return BoundaryMarks(
+        op_events=op_events if isinstance(op_events, list) else None,
+        journal_mark=len(op_events) if isinstance(op_events, list) else 0,
+        witness_state=witness_state,
+        witness_mark=len(witness_state.events) if witness_state is not None else 0,
+        capture_start_time=time.time(),
+        rng_states=log_current_rng_states(torch_only=True) if save_rng else {},
+        autocast_state=log_current_autocast_state(),
+        arg_labels=_snapshot_arg_labels(args, kwargs),
+    )
+
+
+def close_boundary_call(
+    trace: Any,
+    marks: BoundaryMarks,
+    spec: BoundarySpec,
+    call_parts: tuple[tuple[Any, ...], dict[str, Any], Any],
+) -> bool:
+    """Log a finished call as one boundary op that owns everything inside it.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    marks:
+        What :func:`open_boundary_call` took before the call ran.
+    spec:
+        The boundary op's callable, op type, census owner token and source callable.
+    call_parts:
+        ``(args, kwargs, out)`` of the call.
+
+    Returns
+    -------
+    bool
+        ``False`` (nothing recorded) when the call returned no tensor.
+    """
+
+    from .wrappers import _collect_output_tensors
+
+    args, kwargs, out = call_parts
+    if marks.op_events is None or not _collect_output_tensors(out):
+        return False
+    interior_events = list(marks.op_events[marks.journal_mark :])
+    witness_stop = len(marks.witness_state.events) if marks.witness_state is not None else 0
+    call = _BoundaryCall(
+        spec=spec,
+        args=args,
+        kwargs=kwargs,
+        out=out,
+        exec_ctx=FuncExecutionContext(
+            time_elapsed=time.time() - marks.capture_start_time,
+            rng_states=marks.rng_states,
+            autocast_state=marks.autocast_state,
+        ),
+        func_call_id=_state.next_func_call_id(),
+    )
+    interior_labels = {
+        label
+        for label in (_event_label(event) for event in interior_events)
+        if isinstance(label, str)
+    }
+    _restore_arg_labels(marks.arg_labels, interior_labels)
+    _log_boundary_op(trace, call)
+    trace.__dict__.setdefault("_foreign_kernel_interior_labels", set()).update(interior_labels)
+    if marks.witness_state is not None:
+        _reown_witness_events(marks.witness_state, marks.witness_mark, witness_stop, call)
+    return True
+
+
 def record_function_apply(
     trace: Any,
     cls: type[Any],
@@ -473,16 +670,7 @@ def record_function_apply(
         Whatever ``apply`` returned; the ordinary case records nothing extra.
     """
 
-    op_events = getattr(getattr(trace, "capture_events", None), "op_events", None)
-    journal_mark = len(op_events) if isinstance(op_events, list) else None
-    witness_state = _active_witness_state(trace)
-    witness_mark = len(witness_state.events) if witness_state is not None else 0
-    capture_start_time = time.time()
-    save_rng = getattr(trace, "save_rng_states", False)
-    rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
-    autocast_state = log_current_autocast_state()
-
-    arg_labels = _snapshot_arg_labels(args, kwargs)
+    marks = open_boundary_call(trace, args, kwargs)
     frame_exports: set[str] = set()
     _FRAMES.append(frame_exports)
     try:
@@ -493,38 +681,40 @@ def record_function_apply(
         elif frame_exports in _FRAMES:
             _FRAMES.remove(frame_exports)
 
-    if journal_mark is None or op_events is None:
+    if marks.op_events is None:
         return out
-    interior_events = list(op_events[journal_mark:])
     collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
-    host_entry_ops = _host_entry_ops(interior_events, collapsed)
+    host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
     exits = tuple(sorted(frame_exports)) + host_entry_ops
     if not exits:
         return out
-
-    from .wrappers import _collect_output_tensors
-
-    if not _collect_output_tensors(out):
-        return out
-    witness_stop = len(witness_state.events) if witness_state is not None else 0
-    func_call_id = _state.next_func_call_id()
-    exec_ctx = FuncExecutionContext(
-        time_elapsed=time.time() - capture_start_time,
-        rng_states=rng_states,
-        autocast_state=autocast_state,
+    spec = BoundarySpec(
+        replay=_make_replay_callable(cls, original_function, exits),
+        func_name=FOREIGN_FUNCTION_FUNC_NAME,
+        wrapper_name=FOREIGN_FUNCTION_WRAPPER_NAME,
+        original=original_function,
     )
-    replay = _make_replay_callable(cls, original_function, exits)
-    interior_labels = {
-        label
-        for label in (_event_label(event) for event in interior_events)
-        if isinstance(label, str)
-    }
-    _restore_arg_labels(arg_labels, interior_labels)
-    _log_boundary_op(trace, _BoundaryCall(replay, args, kwargs, out, exec_ctx, func_call_id))
-    trace.__dict__.setdefault("_foreign_kernel_interior_labels", set()).update(interior_labels)
-    if witness_state is not None:
-        _reown_witness_events(
-            witness_state, witness_mark, witness_stop, original_function, func_call_id
-        )
-    _warn_foreign_boundary(trace, cls, exits)
+    if close_boundary_call(trace, marks, spec, (args, kwargs, out)):
+        _warn_foreign_boundary(trace, cls, exits)
     return out
+
+
+# Functions that should never be logged — they are metadata queries, not
+# computational operations, and logging them would cause infinite recursion
+# (e.g. size() is called internally by logging code).
+funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
+
+# Wrapped calls that never demote the call enclosing them to non-bottom-level
+# (see the barcode-transparency note inside ``wrapped_func``). ``as_subclass``
+# is torch's ``__torch_function__`` return conversion. The storage accessors
+# return a storage, never a tensor, so they log no value flow of their own; a
+# Python-level tensor method that reads its storage through them
+# (``Tensor.share_memory_`` calls ``_typed_storage()``) would otherwise lose its
+# bottom-level barcode and go uncaptured.
+_BARCODE_TRANSPARENT_FUNCS = frozenset(
+    {"as_subclass", "__index__", "untyped_storage", "_typed_storage", "storage"}
+)
+
+# Print functions get special handling: intercepted to add TorchLens label
+# info to the repr without creating a new logged operation.
+print_funcs = ["__repr__", "__str__", "_str"]

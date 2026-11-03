@@ -12,8 +12,6 @@ from __future__ import annotations
 import json
 import pickle
 import shutil
-import tarfile
-import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -21,12 +19,10 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
-from _oracle_env import expect_bundle_minor_version_mismatch
+from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
-
-CORPUS = Path(__file__).parent / "release_goldens" / "genuine_release_artifacts.tar.gz"
+from torchlens._io import ArtifactError
 
 
 class _Model(nn.Module):
@@ -45,7 +41,7 @@ def source_bundle(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
     try:
         path = tmp_path_factory.mktemp("w051_anchor") / "source.tlspec"
-        tl.save(trace, path)
+        trace.save(path)
         yield path
     finally:
         trace.cleanup()
@@ -71,8 +67,8 @@ def _tampered(
     return target
 
 
-def _assert_refuses(path: Path, code: str, **fields: Any) -> TorchLensIOError:
-    with pytest.raises(TorchLensIOError) as excinfo:
+def _assert_refuses(path: Path, code: str, **fields: Any) -> ArtifactError:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == code, excinfo.value.fields
     for key, expected in fields.items():
@@ -84,14 +80,14 @@ def _assert_refuses(path: Path, code: str, **fields: Any) -> TorchLensIOError:
 
 
 def test_untampered_source_loads(source_bundle: Path) -> None:
-    assert len(tl.load(source_bundle).layer_list) > 0
+    assert len(tl.load(source_bundle)._layer_list) > 0
 
 
 def test_dropped_op_row_refuses(source_bundle: Path, tmp_path: Path) -> None:
     # A popped output row leaves its parent's ``children`` dangling, so the
     # graph-structure validator (inside rehydrate) fires first; the row-count
     # anchor is the second net (pinned separately below).
-    path = _tampered(source_bundle, tmp_path / "drop.tlspec", lambda st: st["layer_list"].pop())
+    path = _tampered(source_bundle, tmp_path / "drop.tlspec", lambda st: st["_layer_list"].pop())
     _assert_refuses(path, "artifact_graph_structure_invalid", reason="dangling_relation")
 
 
@@ -106,40 +102,18 @@ def test_manifest_row_count_disagreeing_with_metadata_refuses(
     _assert_refuses(path, "bundle_manifest_metadata_mismatch", field="n_layers")
 
 
-def test_root_stamp_disagreeing_with_manifest_refuses(source_bundle: Path, tmp_path: Path) -> None:
+def test_root_stamp_older_than_manifest_refuses_as_2x(source_bundle: Path, tmp_path: Path) -> None:
+    """A root state stamped older than its manifest is a 2.x payload: it refuses as 2.x.
+
+    The state decoder refuses an older stamp before the anchor check compares the two, so the
+    typed 2.x error is what surfaces; the anchor comparison stays as a second door.
+    """
+
     def older_root(state: dict[str, Any]) -> None:
         state["tlspec_version"] = state["tlspec_version"] - 2
 
     path = _tampered(source_bundle, tmp_path / "stamp.tlspec", older_root)
-    _assert_refuses(path, "bundle_manifest_metadata_mismatch", field="tlspec_version")
-
-
-def test_migrated_artifact_keeps_its_witnessed_stamp_lineage(tmp_path: Path) -> None:
-    from torchlens.ecosystem.migrate import migrate
-
-    with tarfile.open(CORPUS, "r:gz") as tar:
-        tar.extractall(tmp_path)
-    artifact = tmp_path / "art_v2.31.0_portable"
-    manifest = json.loads((artifact / "manifest.json").read_text())
-    assert manifest["tlspec_version"] < tl._io.TLSPEC_VERSION
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        migrate(artifact)
-    migrated = json.loads((artifact / "manifest.json").read_text())
-    assert migrated["tlspec_version"] == tl._io.TLSPEC_VERSION
-    # Root state still carries the source stamp; the witness explains it.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        loaded = tl.load(artifact)
-    assert len(loaded.layer_list) == 151
-    # Delete the witness: the same bytes now refuse (the lineage is unproven).
-    (artifact / "tl_migration_provenance.json").unlink()
-    with expect_bundle_minor_version_mismatch(), pytest.raises(TorchLensIOError) as excinfo:
-        tl.load(artifact)
-    assert excinfo.value.fields["code"] in {
-        "bundle_manifest_metadata_mismatch",
-        "artifact_producer_pair_ungoverned",
-    }
+    assert_refuses_as_2x(path)
 
 
 # --- (b) op-graph coherence ---------------------------------------------------
@@ -147,7 +121,7 @@ def test_migrated_artifact_keeps_its_witnessed_stamp_lineage(tmp_path: Path) -> 
 
 def test_duplicate_label_refuses(source_bundle: Path, tmp_path: Path) -> None:
     def duplicate(state: dict[str, Any]) -> None:
-        ops = state["layer_list"]
+        ops = state["_layer_list"]
         ops[2].label = ops[1].label
 
     path = _tampered(source_bundle, tmp_path / "dup.tlspec", duplicate)
@@ -156,7 +130,7 @@ def test_duplicate_label_refuses(source_bundle: Path, tmp_path: Path) -> None:
 
 def test_dangling_parent_refuses(source_bundle: Path, tmp_path: Path) -> None:
     def dangle(state: dict[str, Any]) -> None:
-        state["layer_list"][2].parents = ["nonexistent_op_99"]
+        state["_layer_list"][2].parents = ["nonexistent_op_99"]
 
     path = _tampered(source_bundle, tmp_path / "dangle.tlspec", dangle)
     _assert_refuses(path, "artifact_graph_structure_invalid", reason="dangling_relation")
@@ -164,13 +138,13 @@ def test_dangling_parent_refuses(source_bundle: Path, tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("attr", "value"),
-    [("pass_index", -1), ("pass_index", 0), ("num_passes", 0), ("pass_index", "1")],
+    [("pass_number", -1), ("pass_number", 0), ("num_passes", 0), ("pass_number", "1")],
 )
 def test_pass_stamp_out_of_range_refuses(
     source_bundle: Path, tmp_path: Path, attr: str, value: Any
 ) -> None:
     def stamp(state: dict[str, Any]) -> None:
-        setattr(state["layer_list"][2], attr, value)
+        setattr(state["_layer_list"][2], attr, value)
 
     path = _tampered(source_bundle, tmp_path / f"{attr}_{value}.tlspec", stamp)
     _assert_refuses(path, "artifact_graph_structure_invalid", reason="pass_stamp_range")
@@ -181,7 +155,7 @@ def test_pass_stamp_out_of_range_refuses(
 
 def test_forged_edge_substitutions_refuse(source_bundle: Path, tmp_path: Path) -> None:
     def forge(state: dict[str, Any]) -> None:
-        op = state["layer_list"][2]
+        op = state["_layer_list"][2]
         op.edge_substitutions = {("positional", (0,)): {"forged": True}}
         op.edge_replacement_stamps = {("positional", (0,)): {"forged": True}}
 
@@ -191,7 +165,7 @@ def test_forged_edge_substitutions_refuse(source_bundle: Path, tmp_path: Path) -
 
 def test_edge_carrier_without_matching_stamps_refuses(source_bundle: Path, tmp_path: Path) -> None:
     def forge(state: dict[str, Any]) -> None:
-        state["layer_list"][2].edge_substitutions = {("positional", (0,)): {}}
+        state["_layer_list"][2].edge_substitutions = {("positional", (0,)): {}}
 
     path = _tampered(source_bundle, tmp_path / "edge2.tlspec", forge)
     _assert_refuses(path, "artifact_edge_substitutions_invalid")
@@ -202,15 +176,15 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
     trace = tl.trace(
         _Model(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
-    edge = next(e for e in trace.edges if e.parent_label == "relu_1_2")
+    edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
     fork = trace.fork()
     fork.do(edge.__selection__(), trace["relu_1_2"].out.clone() * 0.5)
     path = tmp_path / "genuine_edge.tlspec"
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
-    carriers = [op for op in loaded.layer_list if getattr(op, "edge_substitutions", None)]
+    carriers = [op for op in loaded._layer_list if getattr(op, "edge_substitutions", None)]
     assert carriers, "the genuine tier-(ii) carrier must persist and load"
 
 
@@ -229,23 +203,23 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
             'Trace.annotations["distributed"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("collective", "junk"),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("collective", "junk"),
             'Op.annotations["collective"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("save_mode", "bogus"),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("save_mode", "bogus"),
             'Op.annotations["save_mode"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("saved_out_version", "x"),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("saved_out_version", "x"),
             'Op.annotations["saved_out_version"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("varying_across_passes", 12),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("varying_across_passes", 12),
             'Op.annotations["varying_across_passes"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("dedup_source_id", "abc"),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("dedup_source_id", "abc"),
             'Op.annotations["dedup_source_id"]',
         ),
     ],
@@ -264,7 +238,7 @@ def test_owned_annotation_families_refuse_off_shape(
 ) -> None:
     def apply(state: dict[str, Any]) -> None:
         state.setdefault("annotations", {})
-        ops = state["layer_list"]
+        ops = state["_layer_list"]
         if getattr(ops[2], "annotations", None) is None:
             ops[2].annotations = {}
         mutate(state)
@@ -301,7 +275,7 @@ def _boundary_payload(schema: str) -> dict[str, Any]:
 def _with_boundary(payload: dict[str, Any]) -> Callable[[dict[str, Any]], None]:
     def apply(state: dict[str, Any]) -> None:
         state.setdefault("annotations", {})["distributed"] = {"boundaries": [dict(payload)]}
-        op = state["layer_list"][2]
+        op = state["_layer_list"][2]
         if getattr(op, "annotations", None) is None:
             op.annotations = {}
         op.annotations["collective"] = dict(payload)
@@ -320,7 +294,7 @@ def test_owned_boundary_families_round_trip(
     )
     loaded = tl.load(path)
     assert loaded.annotations["distributed"]["boundaries"][0]["schema"] == schema
-    assert loaded.layer_list[2].annotations["collective"]["schema"] == schema
+    assert loaded._layer_list[2].annotations["collective"]["schema"] == schema
 
 
 def _drop_event_model(payload: dict[str, Any]) -> None:
@@ -369,7 +343,7 @@ def test_malformed_boundary_payload_refuses(
         if where == "journal":
             state["annotations"]["distributed"]["boundaries"] = [bad]
         else:
-            state["layer_list"][2].annotations["collective"] = bad
+            state["_layer_list"][2].annotations["collective"] = bad
 
     path = _tampered(source_bundle, tmp_path / "bad_boundary.tlspec", apply)
     field = (
@@ -389,23 +363,27 @@ def test_user_annotation_keys_stay_open(source_bundle: Path, tmp_path: Path) -> 
 # --- (e) root_entry_point on tlspec v9+ ---------------------------------------
 
 
-def test_absent_root_entry_point_within_v9_is_entry_dark(
-    source_bundle: Path, tmp_path: Path
-) -> None:
-    """tlspec 9 carries pre-C07X writers without the fact, so absence LOADS.
+def test_absent_root_entry_point_refuses_from_v10(source_bundle: Path, tmp_path: Path) -> None:
+    """A current-stamp artifact with ``root_entry_point`` deleted refuses typed.
 
-    Evidence: ``tests/agent_surface_goldens/clean.tlspec`` (tlspec 9, torchlens
-    2.34.1) has no ``root_entry_point``; the fail-closed rule is armed from the
-    next coordinated bump (``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``).
+    The fail-closed rule was armed for the next coordinated bump
+    (``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``), and the v10 write is that
+    bump. Earlier stamps carried pre-C07X writers without the fact, but those
+    files were written by torchlens 2.x, which this release does not read
+    (``tests/test_load_refuses_saved_by_2x.py``).
     """
 
     from torchlens._io._forgery_identity_facts import _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
 
-    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == tl._io.TLSPEC_VERSION + 1
+    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == 10 <= tl._io.TLSPEC_VERSION
     path = _tampered(
-        source_bundle, tmp_path / "rep.tlspec", lambda st: st.__setitem__("root_entry_point", None)
+        source_bundle,
+        tmp_path / "rep.tlspec",
+        lambda st: st.__setitem__("_provenance_root_entry_point", None),
     )
-    assert tl.load(path).root_entry_point is None
+    with pytest.raises(ArtifactError) as excinfo:
+        tl.load(path)
+    assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
 
 
 def test_absent_root_entry_point_refuses_from_the_armed_stamp(
@@ -419,8 +397,8 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
     monkeypatch.setattr(facts, "_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC", tl._io.TLSPEC_VERSION)
     torch.manual_seed(0)
     trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
-    trace.root_entry_point = None
-    with governed_artifact_load(), pytest.raises(TorchLensIOError) as excinfo:
+    trace._provenance_root_entry_point = None
+    with governed_artifact_load(), pytest.raises(ArtifactError) as excinfo:
         facts._validate_root_entry_point(trace)
     assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
     assert excinfo.value.fields["reason"] == "absent_on_current_schema"
@@ -428,18 +406,9 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
     facts._validate_root_entry_point(trace)
 
 
-def test_pre_v9_artifact_without_root_entry_point_still_loads(tmp_path: Path) -> None:
-    with tarfile.open(CORPUS, "r:gz") as tar:
-        tar.extractall(tmp_path)
-    with pytest.warns(Warning):
-        loaded = tl.load(tmp_path / "art_v2.34.1_portable")
-    assert loaded.root_entry_point is None
-    assert loaded.tlspec_version < 9
-
-
 def test_plain_session_pickle_tolerates_absent_root_entry_point() -> None:
     torch.manual_seed(0)
     trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
-    trace.root_entry_point = None
+    trace._provenance_root_entry_point = None
     restored = pickle.loads(pickle.dumps(trace))
-    assert restored.root_entry_point is None
+    assert restored.provenance.root_entry_point is None

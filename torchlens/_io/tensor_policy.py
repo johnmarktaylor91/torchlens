@@ -3,7 +3,7 @@
 This module codifies which tensor layouts and dtypes the portable bundle path
 accepts in this sprint. Save code calls these helpers to decide whether a
 tensor should be written, skipped under ``strict=False``, or rejected with a
-hard ``TorchLensIOError`` under the default strict policy.
+hard ``ArtifactError`` under the default strict policy.
 """
 
 from __future__ import annotations

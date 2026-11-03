@@ -48,17 +48,25 @@ log = tl.trace(Tiny(), torch.tensor([[2.0, 3.0]]))
 RESULT = log["linear_1_1"].out.detach().tolist()
 ```
 
-## The 3.x TransformerBridge cannot be traced (and it mutates your HF model)
+## A TransformerBridge cannot be traced (and it mutates your HF model)
 
-TorchLens refuses to capture a `transformer_lens.TransformerBridge` with a typed
-`CompatibilityError` naming the remedy. The bridge redirects attribute assignment to the
-HF modules it wraps, so TorchLens's forward instrumentation can never land on it; without
-the refusal, capture died partway through with an internal `AttributeError`. Trace a
-pristine model instead:
+TransformerLens 4.0 (September 2026) makes `TransformerBridge` its main model class and
+starts deprecating `HookedTransformer`. TorchLens refuses to capture a
+`transformer_lens.TransformerBridge` (3.x or 4.x) with a typed `CompatibilityError`
+naming the remedy. The bridge redirects attribute assignment to the HF modules it wraps,
+so TorchLens's forward instrumentation can never land on it; without the refusal,
+capture died partway through with an internal `AttributeError`. Trace a pristine model
+instead:
 
-- reload the HF model fresh (`AutoModelForCausalLM.from_pretrained(...)`) and trace that, or
-- trace a `HookedTransformer` directly -- it captures fully and is the same-object
-  comparison subject TorchLens's own oracle suite uses.
+- reload the HF model fresh (`AutoModelForCausalLM.from_pretrained(...)`) and trace
+  that: this is the path that keeps working as `HookedTransformer` is retired, or
+- trace a `HookedTransformer` directly while you still use one: it captures fully and
+  is the same-object comparison subject TorchLens's own oracle suite uses.
+
+Your TransformerLens hook names still work on the traced HF model:
+`torchlens.mechinterp.resolve_alias(trace, name)` accepts 2.x names, 3.x bridge-cache
+names and 4.x canonical names (for example `blocks.3.attn.o.hook_in`), and reports
+honestly when a name has no counterpart in the model in front of you.
 
 Separately, be aware that the bridge/boot machinery (`boot_transformers`, bridge
 construction) MUTATES the HF model it wraps in place. A model instance that has already

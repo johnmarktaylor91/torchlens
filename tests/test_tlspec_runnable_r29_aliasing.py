@@ -21,9 +21,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import DivergencePolicy, NumericAttestationStatus, PathFaithfulness
 
 
 def _save(model: nn.Module, args: object, path: Path) -> Path:
@@ -32,9 +32,7 @@ def _save(model: nn.Module, args: object, path: Path) -> Path:
     trace = tl.trace(
         model,
         args,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_activations=True)
     return path
@@ -74,9 +72,7 @@ def test_r29_view_mediated_input_mutation_aliased_fails_closed(tmp_path: Path) -
     shared = torch.randn(4)
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=(shared, shared))
-    diverged = tl.load(path).run(
-        inputs=(shared, shared), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=(shared, shared), on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -203,7 +199,7 @@ def test_r35_unprovable_topology_is_unverifiable_never_attested(tmp_path: Path) 
 def test_r35_zero_length_views_are_trivially_disjoint(tmp_path: Path) -> None:
     """An empty view shares no bytes with anything -> engine proves disjoint."""
 
-    from torchlens._runnable_execution import _touched_bytes_relation
+    from torchlens._runnable.input_metadata import _touched_bytes_relation
 
     base = torch.randn(6)
     assert _touched_bytes_relation(base[0:0], base[:4]) == "disjoint"
@@ -213,7 +209,7 @@ def test_r35_zero_length_views_are_trivially_disjoint(tmp_path: Path) -> None:
 def test_r35_engine_unit_matrix() -> None:
     """Unit rows for the three-valued engine (proof, not assumption)."""
 
-    from torchlens._runnable_execution import _touched_bytes_relation
+    from torchlens._runnable.input_metadata import _touched_bytes_relation
 
     base = torch.randn(16)
     # Identity geometry.

@@ -47,11 +47,11 @@ def test_bridge_keywords_exist_in_inseq() -> None:
 def test_default_attribution_matches_inseq_direct() -> None:
     torch.manual_seed(0)
     direct = _load("integrated_gradients").attribute(
-        _SOURCE, generated_texts=_TARGET, n_steps=4, show_progress=False
+        _SOURCE, generated_texts=_TARGET, num_steps=4, show_progress=False
     )
     torch.manual_seed(0)
     payload = tl.bridge.inseq.attribute(
-        _TINY, _SOURCE, generated_texts=_TARGET, n_steps=4, show_progress=False
+        _TINY, _SOURCE, generated_texts=_TARGET, num_steps=4, show_progress=False
     )
     assert payload["method"] == "integrated_gradients"
     bridged = payload["attributions"]

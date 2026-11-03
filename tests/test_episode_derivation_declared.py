@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_ledger import (
     _HEADER_PAYLOAD_KEYS,
     _ROW_PAYLOAD_KEYS,
     EPISODE_LEDGER_VERSION,
@@ -31,7 +31,7 @@ from torchlens.capture._episode_ledger import (
 )
 from torchlens.errors import TorchLensWarning
 from torchlens.errors.episode import EpisodeDeclarationError
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 V = 16
 N_STEPS = 3
@@ -99,7 +99,7 @@ def _prompt() -> torch.Tensor:
 
 
 def _episode(model: nn.Module, **spec_kwargs) -> tl.Trace:
-    spec = EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS, **spec_kwargs)
+    spec = EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS, **spec_kwargs)
     return tl.trace(model, _prompt(), episode=spec)
 
 
@@ -142,8 +142,10 @@ def test_none_kind_status_only_ledger_admits_value_free_save():
     trace = tl.trace(
         model,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS, step_output_kind="none"),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        episode=EpisodeOptions(
+            stepped_module=model.step, num_steps=N_STEPS, step_output_kind="none"
+        ),
+        save="none",
     )
     ledger = trace.episode
     assert ledger is not None
@@ -203,7 +205,7 @@ def test_kind_vocabulary_and_source_contradiction_refuse_at_declaration():
         tl.trace(
             model,
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model.step, step_output_kind="logits"),
+            episode=EpisodeOptions(stepped_module=model.step, step_output_kind="logits"),
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
     assert "'digest'" in str(excinfo.value)
@@ -212,7 +214,7 @@ def test_kind_vocabulary_and_source_contradiction_refuse_at_declaration():
         tl.trace(
             model,
             _prompt(),
-            episode=EpisodeSpec(
+            episode=EpisodeOptions(
                 stepped_module=model.step,
                 step_output_kind="none",
                 step_output_from="sequences",
@@ -228,10 +230,10 @@ def test_value_free_save_still_refuses_for_evidence_kinds():
         tl.trace(
             model,
             _prompt(),
-            episode=EpisodeSpec(
-                stepped_module=model.step, n_steps=N_STEPS, step_output_kind="digest"
+            episode=EpisodeOptions(
+                stepped_module=model.step, num_steps=N_STEPS, step_output_kind="digest"
             ),
-            capture=tl.options.CaptureOptions(layers_to_save="none"),
+            save="none",
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
     assert "step_output_kind='none'" in str(excinfo.value)
@@ -251,8 +253,8 @@ def test_capture_digest_minted_and_recomputable_from_the_product():
     trace = tl.trace(
         model,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
-        capture=tl.options.CaptureOptions(random_seed=1234),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
+        capture=tl.options.CaptureOptions(seed=1234),
     )
     ledger = trace.episode
     assert ledger is not None
@@ -289,8 +291,8 @@ def test_capture_digest_differs_across_seeds():
         return tl.trace(
             model,
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
-            capture=tl.options.CaptureOptions(random_seed=seed),
+            episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
+            capture=tl.options.CaptureOptions(seed=seed),
         )
 
     first = capture(1234).episode.header.capture_digest
@@ -386,7 +388,7 @@ def test_cross_grammar_quarantine_through_the_real_load_path():
     trace = tl.trace(
         model,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
     )
     trace.annotations["episode"] = _v1_payload()
     with warnings.catch_warnings(record=True) as caught:
@@ -399,7 +401,7 @@ def test_cross_grammar_quarantine_through_the_real_load_path():
     # A quarantined record is not claims: the public accessor serves None,
     # while the capture-kind marker still reads the declaration as episode.
     assert restored.episode is None
-    assert restored.capture_kind == "episode"
+    assert restored.provenance.kind == "episode"
 
 
 def test_cache_len_never_reappears_in_the_grammar():
@@ -418,7 +420,7 @@ def test_cache_len_never_reappears_in_the_grammar():
     trace = tl.trace(
         model,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
     )
     payload = trace.annotations["episode"]
     ledger = EpisodeLedger.from_payload(payload)

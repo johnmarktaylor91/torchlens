@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._geometry_audit import (
+from torchlens._visualization._geometry_audit import (
     ARROWHEAD_GAP_FLOOR_PT,
     compute_usability_envelope,
     parse_layout_json,
@@ -54,11 +54,10 @@ def _draw(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor, **kwargs
 
     trace = tl.trace(model, x)
     return trace.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / name),
+        file_format="svg",
+        path=str(tmp_path / name),
         **kwargs,
-    )
+    ).dot
 
 
 def test_arrowhead_oracle_known_bad(tmp_path: Path) -> None:
@@ -79,18 +78,18 @@ def test_arrowhead_oracle_known_good(tmp_path: Path) -> None:
     assert envelope.arrowhead_min_gap > ARROWHEAD_GAP_FLOOR_PT
 
 
-def test_legend_ratio_bounded_in_table_form(tmp_path: Path) -> None:
-    """The one-table legend stays under parity with content width.
+def test_key_in_header_adds_no_side_legend(tmp_path: Path) -> None:
+    """The key rides in the header label, so no legend node sits beside the graph.
 
     On the memo's measured defect the six-node strip was 839 pt beside a
-    366 pt graph (ratio 2.29). The table form on a comparable tiny model
-    stays under 1.0 -- generous headroom, not tuned-tight.
+    366 pt graph (ratio 2.29); the header-block key has no node at all.
     """
 
     model = nn.Sequential(nn.Linear(3, 3), nn.ReLU(), nn.Linear(3, 3))
     dot = _draw(tmp_path, "legend_ratio", model, torch.randn(1, 3), show_legend=True)
+    assert 'ID="tl_key"' in dot
     envelope = _envelope_of(dot)
-    assert 0.0 < envelope.legend_ratio < 1.0, envelope
+    assert envelope.legend_ratio == 0.0, envelope
 
 
 @pytest.mark.smoke

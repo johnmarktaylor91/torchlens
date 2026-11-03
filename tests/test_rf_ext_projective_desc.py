@@ -174,7 +174,7 @@ def test_projective_global_rule_uses_frozen_whole_input_status() -> None:
         )
     )
 
-    assert descriptor.layout.axis_kinds == ("pointwise", "pointwise", "full", "full")
+    assert descriptor.axis_roles.axis_kinds == ("pointwise", "pointwise", "full", "full")
     assert descriptor.status is ReceptiveFieldStatus.WHOLE_INPUT
 
 
@@ -260,7 +260,7 @@ def test_projective_target_set_cache_is_canonical_lru_and_epoch_guarded() -> Non
 
     _register_exact_rules()
     trace = tl.trace(nn.Sequential(*(nn.ReLU() for _ in range(9))), torch.randn(1, 2, 4, 4))
-    targets = [op for op in trace.layer_list if op.func_name == "relu"]
+    targets = [op for op in trace._layer_list if op.func_name == "relu"]
     paired = solve_projective(trace, [targets[1], targets[0]])
 
     assert solve_projective(trace, [targets[0], targets[1]]) is paired
@@ -270,7 +270,7 @@ def test_projective_target_set_cache_is_canonical_lru_and_epoch_guarded() -> Non
     cache = trace.__dict__["_rf_directional_solutions"]["target"]
     assert len(cache) == 8
     assert (targets[0].label, targets[1].label) not in cache
-    assert type(trace).PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
+    assert type(trace)._PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
 
     latest = solve_projective(trace, [targets[-1]])
 

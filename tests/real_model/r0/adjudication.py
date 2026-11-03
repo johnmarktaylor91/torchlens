@@ -63,7 +63,7 @@ def adjudicate(report: Any, model: nn.Module) -> tuple[Falsification, ...]:
     Parameters
     ----------
     report:
-        A ``FacetCoverageReport`` from ``torchlens.semantic.coverage``.
+        A ``FacetCoverageReport`` from ``torchlens._semantic.coverage``.
     model:
         The live model the trace captured (module-tree evidence source).
 

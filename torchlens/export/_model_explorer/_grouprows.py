@@ -16,8 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..._utils.display import human_readable_size
 from ...errors._base import TorchLensError
-from ...utils.display import human_readable_size
 from ._namespace import NamespaceLevel
 
 __tl_layer__ = "L8"

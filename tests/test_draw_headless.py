@@ -14,8 +14,8 @@ def test_view_rendered_file_skips_open_in_headless_context(
 ) -> None:
     """Headless Linux draw paths should skip viewer launch with one stderr note."""
 
-    from torchlens.visualization import _render_utils
-    from torchlens.visualization._render_dot import _view_rendered_file
+    from torchlens._visualization import _render_utils
+    from torchlens._visualization._render_dot import _view_rendered_file
 
     rendered_path = str(tmp_path / "modelgraph.pdf")
     monkeypatch.setattr(_render_utils.sys, "platform", "linux")
@@ -47,8 +47,8 @@ def test_view_rendered_file_silent_in_notebook(
 ) -> None:
     """In a notebook the figure shows inline: no viewer launch, no headless note."""
 
-    from torchlens.visualization import _render_utils
-    from torchlens.visualization._render_dot import _view_rendered_file
+    from torchlens._visualization import _render_utils
+    from torchlens._visualization._render_dot import _view_rendered_file
 
     rendered_path = str(tmp_path / "modelgraph.pdf")
     # Headless Linux remote kernel (no DISPLAY) but inside a notebook: the
@@ -57,7 +57,7 @@ def test_view_rendered_file_silent_in_notebook(
     monkeypatch.setattr(_render_utils.sys, "platform", "linux")
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
-    monkeypatch.setattr("torchlens.utils.display.in_notebook", lambda: True)
+    monkeypatch.setattr("torchlens._utils.display.in_notebook", lambda: True)
 
     def fail_if_opened(*_: object, **__: object) -> None:
         """Fail the test if the platform viewer would have been launched."""
@@ -86,12 +86,12 @@ def test_missing_graphviz_binary_refuses_typed(
     from torch import nn
 
     import torchlens as tl
-    from torchlens.visualization._render_common import GraphvizRenderError
+    from torchlens._visualization._render_common import GraphvizRenderError
 
     log = tl.trace(nn.Linear(3, 2), torch.ones(1, 3))
     monkeypatch.setenv("PATH", "/nonexistent")
     with pytest.raises(GraphvizRenderError, match="apt install graphviz"):
-        log.draw(vis_save_only=True, vis_outpath=str(tmp_path / "modelgraph"))
+        log.draw(path=str(tmp_path / "modelgraph"))
 
 
 def test_vis_mode_refuses_typed_on_forward_draw(tmp_path: Path) -> None:
@@ -104,6 +104,6 @@ def test_vis_mode_refuses_typed_on_forward_draw(tmp_path: Path) -> None:
     from torchlens._errors import InvalidArgumentError
 
     log = tl.trace(nn.Linear(3, 2), torch.ones(1, 3))
-    with pytest.raises(InvalidArgumentError, match="rolled") as exc_info:
-        log.draw(vis_mode="bogus", vis_save_only=True, vis_outpath=str(tmp_path / "modelgraph"))
+    with pytest.raises(InvalidArgumentError, match="forward") as exc_info:
+        log.draw(graph="bogus", path=str(tmp_path / "modelgraph"))
     assert exc_info.value.fields["code"] == "visualization_mode_invalid"

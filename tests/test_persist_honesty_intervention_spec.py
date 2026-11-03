@@ -17,16 +17,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import CaptureOutcomeError
+from torchlens._capture.outcome import CaptureOutcomeError
+from torchlens.errors import TraceCaptureError
+from torchlens.intervention._spec_codec import _deserialize_fire_record, _serialize_fire_record
+from torchlens.intervention._spec_values import _SerializedState
 from torchlens.intervention.errors import ReplayPreconditionError
-from torchlens.intervention.save import (
-    SaveLevel,
-    _deserialize_fire_record,
-    _serialize_fire_record,
-    _SerializedState,
-    load_intervention_spec,
-    save_intervention,
-)
+from torchlens.intervention.save import SaveLevel, load_intervention_spec, save_intervention
 from torchlens.intervention.types import FireRecord
 
 
@@ -87,9 +83,10 @@ def test_save_intervention_refuses_failed_capture(tmp_path):
             x = torch.relu(self.fc(x))
             raise RuntimeError("mid-forward failure")
 
-    with pytest.raises(RuntimeError, match="mid-forward failure") as excinfo:
+    with pytest.raises(TraceCaptureError, match="mid-forward failure") as excinfo:
         tl.trace(Boom(), torch.randn(2, 4))
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    partial = excinfo.value.partial_trace
     assert partial is not None
     with pytest.raises(CaptureOutcomeError) as gate_exc:
         save_intervention(partial, tmp_path / "spec.tlspec")

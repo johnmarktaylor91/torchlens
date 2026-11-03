@@ -5,36 +5,28 @@ plus new API coverage tests.
 """
 
 import os
+import warnings
 from collections.abc import Iterator
 from os.path import join as opj
 
 import example_models
 import pytest
 import torch
+from _validation_capture import _assert_degenerate_forward, _with_identity_weights
 
 import torchlens as tl
 from torchlens import trace
-from torchlens.io import log_model_metadata
-from torchlens.validation import last_validation_failure, validate_forward_pass
-from torchlens.visualization import show_model_graph
+from torchlens._user_funcs import log_model_metadata
+from torchlens._visualization import show_model_graph
+from torchlens.errors import TraceNotReproducibleWarning
+from torchlens.validation import validate_forward_pass
 
 VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
+
 
 # =============================================================================
 # Simple operations
 # =============================================================================
-
-
-def _assert_degenerate_forward(model: torch.nn.Module, x: torch.Tensor) -> None:
-    """Assert validation fails as degenerate: every final output element is non-finite.
-
-    Used where the NaN or inf is intrinsic to the model: no affine input change
-    ``c + s * x`` (c in [-25, 25], s in {1, 0.1, 0.01}) makes the output finite.
-    """
-
-    assert not validate_forward_pass(model, x)
-    failure = last_validation_failure()
-    assert failure is not None and failure.check == "degenerate_forward", failure
 
 
 @pytest.mark.heavy
@@ -44,9 +36,9 @@ def test_model_simple_ff(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_ff")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_ff")
         ),
     )
 
@@ -57,9 +49,9 @@ def test_model_inplace_funcs(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "inplace_funcs")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "inplace_funcs")
         ),
     )
 
@@ -70,9 +62,8 @@ def test_model_simple_internally_generated(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_internally_generated"),
         ),
     )
@@ -84,9 +75,9 @@ def test_model_new_tensor_inside(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "new_tensor_inside")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "new_tensor_inside")
         ),
     )
 
@@ -97,9 +88,8 @@ def test_model_new_tensor_from_numpy(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "new_tensor_from_numpy"),
         ),
     )
@@ -111,9 +101,9 @@ def test_model_simple_random(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_random")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_random")
         ),
     )
 
@@ -130,9 +120,9 @@ def test_dropout_model_real_train(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dropout_real_train")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dropout_real_train")
         ),
     )
 
@@ -144,9 +134,9 @@ def test_dropout_model_real_eval(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dropout_real_eval")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dropout_real_eval")
         ),
     )
 
@@ -158,9 +148,8 @@ def test_dropout_model_dummy_zero_train(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dropout_dummyzero_train"),
         ),
     )
@@ -173,9 +162,8 @@ def test_dropout_model_dummy_zero_eval(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dropout_dummyzero_eval"),
         ),
     )
@@ -193,9 +181,8 @@ def test_batchnorm_train(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             show_buffers="always",
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "batchnorm_train_showbuffer"),
         ),
@@ -203,9 +190,8 @@ def test_batchnorm_train(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             show_buffers="never",
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "batchnorm_train_invisbuffer"),
         ),
@@ -219,9 +205,9 @@ def test_batchnorm_eval(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "batchnorm_eval")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "batchnorm_eval")
         ),
     )
 
@@ -237,9 +223,9 @@ def test_concat_tensors(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "concat_tensors")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "concat_tensors")
         ),
     )
 
@@ -250,9 +236,9 @@ def test_split_tensor(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "split_tensors")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "split_tensors")
         ),
     )
 
@@ -263,9 +249,9 @@ def test_identity_model(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "identity_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "identity_model")
         ),
     )
 
@@ -276,9 +262,9 @@ def test_assign_tensor(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "assigntensor")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "assigntensor")
         ),
     )
 
@@ -289,9 +275,9 @@ def test_get_and_set_item(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "get_set_item")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "get_set_item")
         ),
     )
 
@@ -302,9 +288,9 @@ def test_getitem_tracking(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "getitem_tracking")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "getitem_tracking")
         ),
     )
 
@@ -315,9 +301,9 @@ def test_inplace_zero_tensor(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "inplace_zerotensor")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "inplace_zerotensor")
         ),
     )
 
@@ -328,9 +314,9 @@ def test_slice_operations(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "slice_operations")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "slice_operations")
         ),
     )
 
@@ -341,9 +327,9 @@ def test_dummy_operations(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dummy_operations")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dummy_operations")
         ),
     )
 
@@ -354,9 +340,9 @@ def test_sametensor_arg(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "same_tensor_arg")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "same_tensor_arg")
         ),
     )
 
@@ -372,9 +358,8 @@ def test_multiple_inputs_arg(default_input1, default_input2, default_input3):
     show_model_graph(
         model,
         [default_input1, default_input2, default_input3],
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multiple_inputs_arg"),
         ),
     )
@@ -389,9 +374,8 @@ def test_multiple_inputs_kwarg(default_input1, default_input2, default_input3):
         model,
         [],
         {"x": default_input1, "y": default_input2, "z": default_input3},
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multiple_inputs_kwarg"),
         ),
     )
@@ -406,9 +390,8 @@ def test_multiple_inputs_arg_kwarg_mix(default_input1, default_input2, default_i
         model,
         [],
         {"x": default_input1, "y": default_input2, "z": default_input3},
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multiple_inputs_arg_kwarg_mix"),
         ),
     )
@@ -420,9 +403,9 @@ def test_list_input(default_input1, default_input2, default_input3):
     show_model_graph(
         model,
         [[default_input1, default_input2, default_input3]],
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "list_inputs")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "list_inputs")
         ),
     )
 
@@ -435,9 +418,9 @@ def test_dict_input(default_input1, default_input2, default_input3):
     show_model_graph(
         model,
         [{"x": default_input1, "y": default_input2, "z": default_input3}],
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dict_inputs")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dict_inputs")
         ),
     )
 
@@ -461,9 +444,9 @@ def test_nested_input(default_input1, default_input2, default_input3, default_in
                 "list2": [default_input3, default_input4],
             }
         ],
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_inputs")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_inputs")
         ),
     )
 
@@ -474,9 +457,9 @@ def test_multi_outputs(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_outputs")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_outputs")
         ),
     )
 
@@ -487,9 +470,9 @@ def test_list_output(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "list_output")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "list_output")
         ),
     )
 
@@ -500,9 +483,9 @@ def test_dict_output(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dict_output")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dict_output")
         ),
     )
 
@@ -513,9 +496,9 @@ def test_nested_output(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_output")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_output")
         ),
     )
 
@@ -532,9 +515,8 @@ def test_buffer_model():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "buffer_visible"),
             show_buffers="always",
         ),
@@ -542,9 +524,8 @@ def test_buffer_model():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "buffer_invisible"),
             show_buffers="never",
         ),
@@ -552,16 +533,25 @@ def test_buffer_model():
 
 
 def test_buffer_rewrite_model():
+    """A forward that reassigns its buffers records the same graph from any entry state.
+
+    The re-trace starts from the buffers the first forward wrote, and its
+    ``buffer2 = x**2`` chain reaches NaN by the fifth call where the first trace
+    does not; buffer provenance is recorded, not inferred from values,
+    so only values differ and validation passes with no re-trace warning.
+    """
+
     model = example_models.BufferRewriteModel()
     model_input = torch.rand(12, 12)
-    assert validate_forward_pass(model, model_input)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", TraceNotReproducibleWarning)
+        assert validate_forward_pass(model, model_input) is True
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         depth=1,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -573,10 +563,9 @@ def test_buffer_rewrite_model():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         depth=1,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -588,9 +577,8 @@ def test_buffer_rewrite_model():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -602,9 +590,8 @@ def test_buffer_rewrite_model():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -616,10 +603,9 @@ def test_buffer_rewrite_model():
     show_model_graph(
         model,
         model_input,
-        view="rolled",
+        rolled=True,
         depth=1,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -631,10 +617,9 @@ def test_buffer_rewrite_model():
     show_model_graph(
         model,
         model_input,
-        view="rolled",
+        rolled=True,
         depth=1,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -646,9 +631,8 @@ def test_buffer_rewrite_model():
     show_model_graph(
         model,
         model_input,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -660,9 +644,8 @@ def test_buffer_rewrite_model():
     show_model_graph(
         model,
         model_input,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -684,9 +667,9 @@ def test_simple_branching(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_branching")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_branching")
         ),
     )
 
@@ -698,18 +681,16 @@ def test_conditional_branching(zeros_input, ones_input):
     show_model_graph(
         model,
         -ones_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "conditional_branching_negative"),
         ),
     )
     show_model_graph(
         model,
         ones_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "conditional_branching_positive"),
         ),
     )
@@ -726,9 +707,9 @@ def test_repeated_module(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "repeated_module")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "repeated_module")
         ),
     )
 
@@ -736,13 +717,14 @@ def test_repeated_module(default_input1):
 @pytest.mark.heavy
 def test_nested_modules(default_input1):
     model = example_models.NestedModules()
+    # Three cubings overflow float32 to inf for every input; float64 stays finite.
     _assert_degenerate_forward(model, default_input1)
+    assert validate_forward_pass(model, default_input1.double())
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_modules_fulldepth"),
         ),
     )
@@ -750,9 +732,8 @@ def test_nested_modules(default_input1):
         model,
         default_input1,
         depth=1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_modules_depth1"),
         ),
     )
@@ -760,9 +741,8 @@ def test_nested_modules(default_input1):
         model,
         default_input1,
         depth=2,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_modules_depth2"),
         ),
     )
@@ -770,9 +750,8 @@ def test_nested_modules(default_input1):
         model,
         default_input1,
         depth=3,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_modules_depth3"),
         ),
     )
@@ -780,9 +759,8 @@ def test_nested_modules(default_input1):
         model,
         default_input1,
         depth=4,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_modules_depth4"),
         ),
     )
@@ -799,35 +777,31 @@ def test_orphan_tensors(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "orphan_tensors")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "orphan_tensors")
         ),
     )
 
 
 def test_simple_loop_no_param(default_input1):
     model = example_models.SimpleLoopNoParam()
-    # The fixture input drives log() of negatives, so every output is NaN and the
-    # forward must fail as degenerate. Inputs near 20.25 keep every log argument
-    # positive through the loop: same graph, finite output, so loop replay stays covered.
+    # log() of negatives: every output NaN, degenerate; near 20.25 the same loop stays finite.
     _assert_degenerate_forward(model, default_input1)
     assert validate_forward_pass(model, 20.25 + 0.1 * default_input1)
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_loop_no_param_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_loop_no_param_rolled"),
         ),
     )
@@ -839,18 +813,16 @@ def test_same_op_repeat(vector_input):
     show_model_graph(
         model,
         vector_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "same_op_repeat_unrolled"),
         ),
     )
     show_model_graph(
         model,
         vector_input,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "same_op_repeat_rolled"),
         ),
     )
@@ -863,18 +835,16 @@ def test_repeated_op_type_in_loop(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "same_op_type_in_loop_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "same_op_type_in_loop_rolled"),
         ),
     )
@@ -883,22 +853,22 @@ def test_repeated_op_type_in_loop(default_input1):
 @pytest.mark.heavy
 def test_varying_loop_noparam1(default_input1):
     model = example_models.VaryingLoopNoParam1()
+    # The loop map drives x negative by its sixth log for every input; 3 steps stay finite.
     _assert_degenerate_forward(model, default_input1)
+    assert validate_forward_pass(example_models.VaryingLoopNoParam1(steps=3), default_input1)
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "varying_loop_noparam1_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "varying_loop_noparam1_rolled"),
         ),
     )
@@ -907,22 +877,22 @@ def test_varying_loop_noparam1(default_input1):
 @pytest.mark.heavy
 def test_varying_loop_noparam2(default_input1):
     model = example_models.VaryingLoopNoParam2()
+    # Eight steps go NaN for every input; 2 steps (one of each branch) stay finite.
     _assert_degenerate_forward(model, default_input1)
+    assert validate_forward_pass(example_models.VaryingLoopNoParam2(steps=2), default_input1)
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "varying_loop_noparam2_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "varying_loop_noparam2_rolled"),
         ),
     )
@@ -934,18 +904,16 @@ def test_varying_loop_withparam(vector_input):
     show_model_graph(
         model,
         vector_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "varying_loop_withparam_unrolled"),
         ),
     )
     show_model_graph(
         model,
         vector_input,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "varying_loop_withparam_rolled"),
         ),
     )
@@ -957,18 +925,16 @@ def test_looping_internal_funcs(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "looping_internal_funcs_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "looping_internal_funcs_rolled"),
         ),
     )
@@ -980,18 +946,16 @@ def test_looping_from_inputs1(default_input1, default_input2, default_input3):
     show_model_graph(
         model,
         [default_input1, default_input2, default_input3],
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "looping_from_inputs1_unrolled"),
         ),
     )
     show_model_graph(
         model,
         [default_input1, default_input2, default_input3],
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "looping_from_inputs1_rolled"),
         ),
     )
@@ -1003,18 +967,16 @@ def test_looping_from_inputs2(default_input1, default_input2, default_input3):
     show_model_graph(
         model,
         [[default_input1, default_input2, default_input3]],
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "looping_from_inputs2_unrolled"),
         ),
     )
     show_model_graph(
         model,
         [[default_input1, default_input2, default_input3]],
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "looping_from_inputs2_rolled"),
         ),
     )
@@ -1026,9 +988,8 @@ def test_looping_inputs_and_outputs(default_input1, default_input2, default_inpu
     show_model_graph(
         model,
         [[default_input1, default_input2, default_input3]],
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -1039,9 +1000,8 @@ def test_looping_inputs_and_outputs(default_input1, default_input2, default_inpu
     show_model_graph(
         model,
         [[default_input1, default_input2, default_input3]],
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "looping_inputs_and_outputs_rolled"),
         ),
     )
@@ -1054,54 +1014,48 @@ def test_stochastic_loop():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "stochastic_loop_unrolled1"),
         ),
     )
     show_model_graph(
         model,
         model_input,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "stochastic_loop_rolled1"),
         ),
     )
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "stochastic_loop_unrolled2"),
         ),
     )
     show_model_graph(
         model,
         model_input,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "stochastic_loop_rolled2"),
         ),
     )
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "stochastic_loop_unrolled3"),
         ),
     )
     show_model_graph(
         model,
         model_input,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "stochastic_loop_rolled3"),
         ),
     )
@@ -1118,18 +1072,16 @@ def test_recurrent_params_simple(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "recurrent_params_simple_unrolled"),
         ),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "recurrent_params_simple_rolled"),
         ),
     )
@@ -1137,22 +1089,23 @@ def test_recurrent_params_simple(input_2d):
 
 def test_recurrent_params_complex(input_2d):
     model = example_models.RecurrentParamsComplex()
+    # Random init logs a negative somewhere; identity weights with bias 1 keep every
+    # log argument above 1 and tan(x) inside (0, pi/2) for all inputs in [0, 1].
     _assert_degenerate_forward(model, input_2d)
+    assert validate_forward_pass(_with_identity_weights(model, 1.0, 1.0), input_2d)
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "recurrent_params_complex_unrolled"),
         ),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "recurrent_params_complex_rolled"),
         ),
     )
@@ -1164,9 +1117,8 @@ def test_looping_params_doublenested(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -1177,9 +1129,8 @@ def test_looping_params_doublenested(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR,
                 "toy-networks",
@@ -1200,18 +1151,16 @@ def test_module_looping_clash1(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_looping_clash1_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_looping_clash1_rolled"),
         ),
     )
@@ -1223,18 +1172,16 @@ def test_module_looping_clash2(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_looping_clash2_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_looping_clash2_rolled"),
         ),
     )
@@ -1246,18 +1193,16 @@ def test_module_looping_clash3(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_looping_clash3_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_looping_clash3_rolled"),
         ),
     )
@@ -1288,18 +1233,16 @@ def test_nested_param_free_loops(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_param_free_loops_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_param_free_loops_rolled"),
         ),
     )
@@ -1311,18 +1254,16 @@ def test_parallel_loops(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "parallel_loops_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "parallel_loops_rolled"),
         ),
     )
@@ -1334,9 +1275,8 @@ def test_shared_param_loop_external(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR, "toy-networks", "shared_param_loop_external_unrolled"
             ),
@@ -1345,9 +1285,8 @@ def test_shared_param_loop_external(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "shared_param_loop_external_rolled"),
         ),
     )
@@ -1359,9 +1298,8 @@ def test_interleaved_shared_param_loops(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR, "toy-networks", "interleaved_shared_param_loops_unrolled"
             ),
@@ -1370,9 +1308,8 @@ def test_interleaved_shared_param_loops(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR, "toy-networks", "interleaved_shared_param_loops_rolled"
             ),
@@ -1386,9 +1323,8 @@ def test_nested_loops_independent_params(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR, "toy-networks", "nested_loops_independent_params_unrolled"
             ),
@@ -1397,9 +1333,8 @@ def test_nested_loops_independent_params(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR, "toy-networks", "nested_loops_independent_params_rolled"
             ),
@@ -1413,18 +1348,16 @@ def test_self_feeding_no_param(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "self_feeding_no_param_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "self_feeding_no_param_rolled"),
         ),
     )
@@ -1436,18 +1369,16 @@ def test_diamond_loop(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "diamond_loop_unrolled"),
         ),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "diamond_loop_rolled"),
         ),
     )
@@ -1459,18 +1390,16 @@ def test_accumulator_loop(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "accumulator_loop_unrolled"),
         ),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "accumulator_loop_rolled"),
         ),
     )
@@ -1482,18 +1411,16 @@ def test_single_iteration_loop(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "single_iteration_loop_unrolled"),
         ),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "single_iteration_loop_rolled"),
         ),
     )
@@ -1505,17 +1432,17 @@ def test_long_loop(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "long_loop_unrolled")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "long_loop_unrolled")
         ),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "long_loop_rolled")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "long_loop_rolled")
         ),
     )
 
@@ -1526,9 +1453,8 @@ def test_data_dependent_branch_loop(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR, "toy-networks", "data_dependent_branch_loop_unrolled"
             ),
@@ -1537,9 +1463,8 @@ def test_data_dependent_branch_loop(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "data_dependent_branch_loop_rolled"),
         ),
     )
@@ -1559,9 +1484,8 @@ def test_sequential_param_free_loops(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR, "toy-networks", "sequential_param_free_loops_unrolled"
             ),
@@ -1570,9 +1494,8 @@ def test_sequential_param_free_loops(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(
                 VIS_OUTPUT_DIR, "toy-networks", "sequential_param_free_loops_rolled"
             ),
@@ -1591,9 +1514,9 @@ def test_propertymodel(input_complex):
     show_model_graph(
         model,
         input_complex,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "propertymodel")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "propertymodel")
         ),
     )
 
@@ -1604,9 +1527,9 @@ def test_ubermodel1(input_2d):
     show_model_graph(
         model,
         [[input_2d, input_2d * 2, input_2d * 3]],
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel1")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel1")
         ),
     )
 
@@ -1618,9 +1541,9 @@ def test_ubermodel2():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel2")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel2")
         ),
     )
 
@@ -1631,40 +1554,43 @@ def test_ubermodel3(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel3_unrolled"),
         ),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel3_rolled")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel3_rolled")
         ),
     )
 
 
 def test_ubermodel4(input_2d):
     model = example_models.UberModel4()
+    # Random init feeds log a negative. Identity fc1 (bias -2) and identity fc2 (bias 15)
+    # keep the log argument at or above 5 for inputs in [0, 1] and the value entering the
+    # final tanh below 2, where float32 tanh still moves under a perturbation (at bias 0
+    # it reaches 12 and tanh saturates to exactly 1).
     _assert_degenerate_forward(model, input_2d)
+    assert validate_forward_pass(_with_identity_weights(model, -2.0, 15.0), input_2d)
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel4_unrolled"),
         ),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel4_rolled")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel4_rolled")
         ),
     )
 
@@ -1676,9 +1602,9 @@ def test_ubermodel5():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel5")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel5")
         ),
     )
 
@@ -1689,18 +1615,17 @@ def test_ubermodel6(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel6_unrolled"),
         ),
     )
     show_model_graph(
         model,
         default_input1,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel6_rolled")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel6_rolled")
         ),
     )
 
@@ -1711,18 +1636,17 @@ def test_ubermodel7(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel7_unrolled"),
         ),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel7_rolled")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel7_rolled")
         ),
     )
 
@@ -1734,9 +1658,9 @@ def test_ubermodel8():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel8")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel8")
         ),
     )
 
@@ -1748,9 +1672,9 @@ def test_ubermodel9():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel9")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "ubermodel9")
         ),
     )
 
@@ -1766,9 +1690,9 @@ def test_gelu_model(default_input1):
     show_model_graph(
         model,
         default_input1,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "gelu_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "gelu_model")
         ),
     )
 
@@ -1781,14 +1705,12 @@ def test_gelu_model(default_input1):
 def test_trace_layers_to_save(default_input1):
     """Test layers_to_save parameter selectively saves outs."""
     model = example_models.SimpleFF()
-    mh = trace(model, default_input1, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    mh = trace(model, default_input1, save="all")
     all_labels = mh.layer_labels
     assert len(all_labels) > 0
 
     # Save only the first layer
-    mh_partial = trace(
-        model, default_input1, capture=tl.options.CaptureOptions(layers_to_save=[all_labels[0]])
-    )
+    mh_partial = trace(model, default_input1, save=[all_labels[0]])
     # The layer list should still track all layers
     assert len(mh_partial.layer_labels) > 0
     # But only the requested layer should have saved outs
@@ -1797,10 +1719,10 @@ def test_trace_layers_to_save(default_input1):
 
 
 def test_trace_save_arg_values(default_input1):
-    """Test save_arg_values=True populates saved_args on entries."""
+    """Test save_args=True populates saved_args on entries."""
     model = example_models.SimpleFF()
-    mh = trace(model, default_input1, capture=tl.options.CaptureOptions(save_arg_values=True))
-    assert mh.save_arg_values is True
+    mh = trace(model, default_input1, capture=tl.options.CaptureOptions(save_args=True))
+    assert mh.options.save_args is True
     # At least one non-input layer should have saved_args
     found = False
     for label in mh.layer_labels:
@@ -1814,7 +1736,9 @@ def test_trace_save_arg_values(default_input1):
 def test_trace_activation_transform(default_input1):
     """Test activation_transform applies to saved tensors."""
     model = example_models.SimpleFF()
-    mh = trace(model, default_input1, save=tl.options.SaveOptions(activation_transform=torch.mean))
+    mh = trace(
+        model, default_input1, capture=tl.options.CaptureOptions(activation_transform=torch.mean)
+    )
     # All saved tensors should be scalar (mean reduces to scalar)
     for label in mh.layer_labels:
         entry = mh[label]
@@ -1847,7 +1771,7 @@ def test_log_model_metadata(default_input1):
     model = example_models.SimpleFF()
     mh = log_model_metadata(model, default_input1)
     assert len(mh.layer_labels) > 0
-    assert mh.num_tensors > 0
+    assert len(mh) > 0
 
 
 def test_trace_getitem_by_index(default_input1):
@@ -1856,7 +1780,7 @@ def test_trace_getitem_by_index(default_input1):
     mh = trace(model, default_input1)
     first = mh[0]
     last = mh[-1]
-    layer_labels = [layer.layer_label for layer in mh.layer_list]
+    layer_labels = [layer.layer_label for layer in mh._layer_list]
     assert first.layer_label == layer_labels[0]
     assert last.layer_label == layer_labels[-1]
 
@@ -1874,7 +1798,7 @@ def test_trace_len(default_input1):
     """Test len(Trace) matches layer count."""
     model = example_models.SimpleFF()
     mh = trace(model, default_input1)
-    assert len(mh) == len(mh.layer_list)
+    assert len(mh) == len(mh._layer_list)
 
 
 def test_trace_iter(default_input1):
@@ -1882,7 +1806,7 @@ def test_trace_iter(default_input1):
     model = example_models.SimpleFF()
     mh = trace(model, default_input1)
     items = list(mh)
-    assert len(items) == len(mh.layer_list)
+    assert len(items) == len(mh._layer_list)
 
 
 def test_trace_layer_labels(default_input1):
@@ -1907,84 +1831,18 @@ def test_rolled_vs_unrolled_visualization(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
-        visualization=tl.options.VisualizationOptions(save_only=True, container_path=unrolled_path),
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(container_path=unrolled_path),
     )
     show_model_graph(
         model,
         input_2d,
-        view="rolled",
-        visualization=tl.options.VisualizationOptions(save_only=True, container_path=rolled_path),
+        rolled=True,
+        visualization=tl.options.VisualizationOptions(container_path=rolled_path),
     )
     # Both should produce output files
     assert os.path.exists(unrolled_path + ".pdf") or os.path.exists(unrolled_path)
     assert os.path.exists(rolled_path + ".pdf") or os.path.exists(rolled_path)
-
-
-# =============================================================================
-# View mutation / child tensor variation tests
-# =============================================================================
-
-
-def test_view_mutation_unsqueeze(input_2d):
-    """Mutation through unsqueeze view should be logged without error."""
-    model = example_models.ViewMutationUnsqueeze()
-    assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
-    assert mh is not None
-    assert len(mh.layer_labels) > 0
-
-
-def test_view_mutation_reshape(input_2d):
-    """Mutation through reshape view should be logged without error."""
-    model = example_models.ViewMutationReshape()
-    assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
-    assert mh is not None
-    assert len(mh.layer_labels) > 0
-
-
-def test_view_mutation_transpose(input_2d):
-    """Mutation through transpose view should be logged without error."""
-    model = example_models.ViewMutationTranspose()
-    assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
-    assert mh is not None
-    assert len(mh.layer_labels) > 0
-
-
-def test_multiple_view_mutations(input_2d):
-    """Multiple views mutated independently should be logged without error."""
-    model = example_models.MultipleViewMutations()
-    assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
-    assert mh is not None
-    assert len(mh.layer_labels) > 0
-
-
-def test_chained_view_mutation(input_2d):
-    """Mutation through chained views should be logged without error."""
-    model = example_models.ChainedViewMutation()
-    assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
-    assert mh is not None
-    assert len(mh.layer_labels) > 0
-
-
-def test_output_matches_parent_no_false_positive(input_2d):
-    """No mutation model: verify no false-positive child tensor variations."""
-    model = example_models.OutputMatchesParent()
-    assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
-    assert mh is not None
-    assert len(mh.layer_labels) > 0
-    # No layer should have child tensor variations since nothing is mutated
-    for label in mh.layer_labels:
-        entry = mh[label]
-        assert not entry.has_out_variations, (
-            f"Layer {label} should not have child tensor variations in a "
-            f"mutation-free model, but has_out_variations={entry.has_out_variations}"
-        )
 
 
 # =============================================================================
@@ -2041,7 +1899,7 @@ def test_functional_after_submodule_not_box():
     A torch.relu after a nn.Linear inside a container module should not get
     box-shaped rendering (which is reserved for module outputs).
     """
-    from torchlens.visualization._render_nodes import _get_node_address_shape_color
+    from torchlens._visualization._render_nodes import _get_node_address_shape_color
 
     model = example_models.FunctionalAfterSubmodule()
     x = torch.rand(2, 5)
@@ -2071,7 +1929,7 @@ def test_output_layer_saved_with_layers_to_save() -> None:
         torch.nn.Linear(5, 2),
     )
     x = torch.rand(2, 5)
-    mh = trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["relu"]))
+    mh = trace(model, x, save=["relu"])
     for label in mh.output_layers:
         entry = mh[label]
         assert entry.out is not None, f"Output layer {label} should have out"
@@ -2090,7 +1948,7 @@ def test_stochastic_depth_layers_to_save():
     model.train()
     x = torch.rand(2, 5)
     # layers_to_save accepts substring selectors on both absorbed and two-pass paths.
-    mh = trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["linear"]))
+    mh = trace(model, x, save=["linear"])
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # Linear layers should have saved outs
@@ -2109,9 +1967,8 @@ def test_multihead_attention(seq_input):
     show_model_graph(
         model,
         seq_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multihead_attention"),
         ),
     )
@@ -2124,9 +1981,8 @@ def test_scaled_dot_product_attention():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "scaled_dot_product_attention"),
         ),
     )
@@ -2138,9 +1994,8 @@ def test_transformer_encoder(seq_input):
     show_model_graph(
         model,
         seq_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "transformer_encoder"),
         ),
     )
@@ -2154,9 +2009,8 @@ def test_transformer_decoder():
     show_model_graph(
         model,
         (tgt, memory),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "transformer_decoder"),
         ),
     )
@@ -2168,9 +2022,8 @@ def test_embedding_positional(token_input):
     show_model_graph(
         model,
         token_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "embedding_positional"),
         ),
     )
@@ -2183,9 +2036,9 @@ def test_einsum():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "einsum")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "einsum")
         ),
     )
 
@@ -2201,9 +2054,9 @@ def test_module_list(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_list")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_list")
         ),
     )
 
@@ -2214,9 +2067,8 @@ def test_module_list_indexed(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_list_indexed"),
         ),
     )
@@ -2228,9 +2080,9 @@ def test_module_dict(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_dict")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "module_dict")
         ),
     )
 
@@ -2242,9 +2094,9 @@ def test_var_args():
     show_model_graph(
         model,
         inputs,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "var_args")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "var_args")
         ),
     )
 
@@ -2257,9 +2109,9 @@ def test_kwargs():
         model,
         [],
         kwargs,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "kwargs")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "kwargs")
         ),
     )
 
@@ -2276,9 +2128,9 @@ def test_torch_where():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "torch_where")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "torch_where")
         ),
     )
 
@@ -2290,9 +2142,9 @@ def test_scatter_gather():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "scatter_gather")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "scatter_gather")
         ),
     )
 
@@ -2304,9 +2156,9 @@ def test_no_grad_block():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "no_grad_block")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "no_grad_block")
         ),
     )
 
@@ -2318,9 +2170,9 @@ def test_while_loop():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "while_loop")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "while_loop")
         ),
     )
 
@@ -2332,9 +2184,8 @@ def test_nested_conditional_loop():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_conditional_loop"),
         ),
     )
@@ -2352,9 +2203,9 @@ def test_layer_norm():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "layer_norm")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "layer_norm")
         ),
     )
 
@@ -2366,9 +2217,9 @@ def test_group_norm():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "group_norm")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "group_norm")
         ),
     )
 
@@ -2380,9 +2231,9 @@ def test_instance_norm():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "instance_norm")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "instance_norm")
         ),
     )
 
@@ -2393,9 +2244,9 @@ def test_conv1d(input_1d_seq):
     show_model_graph(
         model,
         input_1d_seq,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "conv1d")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "conv1d")
         ),
     )
 
@@ -2406,9 +2257,9 @@ def test_conv3d(input_3d):
     show_model_graph(
         model,
         input_3d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "conv3d")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "conv3d")
         ),
     )
 
@@ -2425,9 +2276,9 @@ def test_residual_block():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "residual_block")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "residual_block")
         ),
     )
 
@@ -2438,9 +2289,8 @@ def test_shared_param_branch(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "shared_param_branch"),
         ),
     )
@@ -2453,9 +2303,8 @@ def test_model_calling_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "model_calling_model"),
         ),
     )
@@ -2468,9 +2317,9 @@ def test_bidirectional_gru():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "bidirectional_gru")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "bidirectional_gru")
         ),
     )
 
@@ -2487,9 +2336,9 @@ def test_in_place_chain():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "in_place_chain")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "in_place_chain")
         ),
     )
 
@@ -2501,9 +2350,9 @@ def test_type_cast_chain():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "type_cast_chain")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "type_cast_chain")
         ),
     )
 
@@ -2511,14 +2360,14 @@ def test_type_cast_chain():
 def test_like_ops():
     model = example_models.LikeOpsModel()
     x = torch.rand(3, 3)
-    assert validate_forward_pass(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, seed=42)
     show_model_graph(
         model,
         x,
-        view="unrolled",
-        random_seed=42,
+        rolled=False,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "like_ops")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "like_ops")
         ),
     )
 
@@ -2530,9 +2379,8 @@ def test_multi_tensor_return():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_tensor_return"),
         ),
     )
@@ -2545,9 +2393,9 @@ def test_mixed_dtype():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "mixed_dtype")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "mixed_dtype")
         ),
     )
 
@@ -2564,9 +2412,9 @@ def test_scalar_tensor():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "scalar_tensor")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "scalar_tensor")
         ),
     )
 
@@ -2578,9 +2426,9 @@ def test_broadcasting():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "broadcasting")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "broadcasting")
         ),
     )
 
@@ -2592,9 +2440,9 @@ def test_packed_sequence():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "packed_sequence")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "packed_sequence")
         ),
     )
 
@@ -2606,9 +2454,9 @@ def test_custom_autograd():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "custom_autograd")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "custom_autograd")
         ),
     )
 
@@ -2625,9 +2473,9 @@ def test_cross_entropy():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "cross_entropy")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "cross_entropy")
         ),
     )
 
@@ -2639,9 +2487,9 @@ def test_index_select():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "index_select")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "index_select")
         ),
     )
 
@@ -2653,9 +2501,9 @@ def test_interpolate():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "interpolate")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "interpolate")
         ),
     )
 
@@ -2666,9 +2514,9 @@ def test_forward_hooks(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "forward_hooks")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "forward_hooks")
         ),
     )
 
@@ -2681,14 +2529,14 @@ def test_forward_hooks(input_2d):
 def test_simple_vae():
     model = example_models.SimpleVAE()
     x = torch.rand(2, 1, 28, 28)
-    assert validate_forward_pass(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, seed=42)
     show_model_graph(
         model,
         x,
-        view="unrolled",
-        random_seed=42,
+        rolled=False,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "generative-models", "simple_vae")
+            container_path=opj(VIS_OUTPUT_DIR, "generative-models", "simple_vae")
         ),
     )
 
@@ -2700,9 +2548,8 @@ def test_simple_generator():
     show_model_graph(
         model,
         z,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "generative-models", "simple_generator"),
         ),
     )
@@ -2715,9 +2562,8 @@ def test_simple_discriminator():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "generative-models", "simple_discriminator"),
         ),
     )
@@ -2730,9 +2576,9 @@ def test_small_unet():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "small_unet")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "small_unet")
         ),
     )
 
@@ -2744,9 +2590,9 @@ def test_temporal_conv_net():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "time-series", "temporal_conv_net")
+            container_path=opj(VIS_OUTPUT_DIR, "time-series", "temporal_conv_net")
         ),
     )
 
@@ -2758,9 +2604,8 @@ def test_espcn_super_res():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "super-resolution", "espcn_super_res"),
         ),
     )
@@ -2773,9 +2618,9 @@ def test_simple_pointnet():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "point-cloud", "simple_pointnet")
+            container_path=opj(VIS_OUTPUT_DIR, "point-cloud", "simple_pointnet")
         ),
     )
 
@@ -2787,9 +2632,9 @@ def test_actor_critic():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "actor_critic")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "actor_critic")
         ),
     )
 
@@ -2802,9 +2647,8 @@ def test_two_tower_recommender():
     show_model_graph(
         model,
         (user, item),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "two_tower_recommender"),
         ),
     )
@@ -2817,9 +2661,8 @@ def test_simple_depth_estimator():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_depth_estimator"),
         ),
     )
@@ -2837,9 +2680,8 @@ def test_vanilla_autoencoder():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "vanilla_autoencoder"),
         ),
     )
@@ -2852,9 +2694,9 @@ def test_conv_autoencoder():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "conv_autoencoder")
+            container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "conv_autoencoder")
         ),
     )
 
@@ -2866,9 +2708,9 @@ def test_sparse_autoencoder():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "sparse_autoencoder")
+            container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "sparse_autoencoder")
         ),
     )
 
@@ -2876,14 +2718,13 @@ def test_sparse_autoencoder():
 def test_denoising_autoencoder():
     model = example_models.DenoisingAutoencoder()
     x = torch.rand(2, 784)
-    assert validate_forward_pass(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, seed=42)
     show_model_graph(
         model,
         x,
-        view="unrolled",
-        random_seed=42,
+        rolled=False,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "denoising_autoencoder"),
         ),
     )
@@ -2896,9 +2737,9 @@ def test_vq_vae():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "vq_vae")
+            container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "vq_vae")
         ),
     )
 
@@ -2906,14 +2747,14 @@ def test_vq_vae():
 def test_beta_vae():
     model = example_models.BetaVAE()
     x = torch.rand(2, 784)
-    assert validate_forward_pass(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, seed=42)
     show_model_graph(
         model,
         x,
-        view="unrolled",
-        random_seed=42,
+        rolled=False,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "beta_vae")
+            container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "beta_vae")
         ),
     )
 
@@ -2922,14 +2763,14 @@ def test_conditional_vae():
     model = example_models.ConditionalVAE()
     x = torch.rand(2, 784)
     label = torch.randint(0, 10, (2,))
-    assert validate_forward_pass(model, (x, label), random_seed=42)
+    assert validate_forward_pass(model, (x, label), seed=42)
     show_model_graph(
         model,
         (x, label),
-        view="unrolled",
-        random_seed=42,
+        rolled=False,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "conditional_vae")
+            container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "conditional_vae")
         ),
     )
 
@@ -2946,9 +2787,9 @@ def test_simple_ssm():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "state-space-models", "simple_ssm")
+            container_path=opj(VIS_OUTPUT_DIR, "state-space-models", "simple_ssm")
         ),
     )
 
@@ -2960,9 +2801,8 @@ def test_selective_ssm():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "state-space-models", "selective_ssm"),
         ),
     )
@@ -2976,9 +2816,9 @@ def test_stacked_ssm():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "state-space-models", "stacked_ssm")
+            container_path=opj(VIS_OUTPUT_DIR, "state-space-models", "stacked_ssm")
         ),
     )
 
@@ -2996,9 +2836,9 @@ def test_siamese_network():
     show_model_graph(
         model,
         (x1, x2),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "siamese_network")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "siamese_network")
         ),
     )
 
@@ -3010,9 +2850,9 @@ def test_mlp_mixer():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "mlp_mixer")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "mlp_mixer")
         ),
     )
 
@@ -3028,9 +2868,8 @@ def test_simple_gcn():
     show_model_graph(
         model,
         (x, adj),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "simple_gcn"),
         ),
     )
@@ -3047,9 +2886,8 @@ def test_simple_gat():
     show_model_graph(
         model,
         (x, adj),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "simple_gat"),
         ),
     )
@@ -3063,9 +2901,8 @@ def test_simple_diffusion():
     show_model_graph(
         model,
         (x, t),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "generative-models", "simple_diffusion"),
         ),
     )
@@ -3078,9 +2915,8 @@ def test_simple_normalizing_flow():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "generative-models", "simple_normalizing_flow"),
         ),
     )
@@ -3093,9 +2929,9 @@ def test_capsule_network():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "capsule_network")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "capsule_network")
         ),
     )
 
@@ -3112,9 +2948,8 @@ def test_multi_query_attention():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_query_attention"),
         ),
     )
@@ -3127,9 +2962,8 @@ def test_grouped_query_attention():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "grouped_query_attention"),
         ),
     )
@@ -3142,9 +2976,9 @@ def test_rope_attention():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "rope_attention")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "rope_attention")
         ),
     )
 
@@ -3156,9 +2990,9 @@ def test_alibi_attention():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "alibi_attention")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "alibi_attention")
         ),
     )
 
@@ -3170,9 +3004,9 @@ def test_slot_attention():
     show_model_graph(
         model,
         x,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "slot_attention")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "slot_attention")
         ),
     )
 
@@ -3184,9 +3018,9 @@ def test_cross_attention():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "cross_attention")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "cross_attention")
         ),
     )
 
@@ -3203,9 +3037,9 @@ def test_highway_network():
     show_model_graph(
         model,
         x,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "highway_network")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "highway_network")
         ),
     )
 
@@ -3217,9 +3051,9 @@ def test_squeeze_excitation():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "squeeze_excitation")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "squeeze_excitation")
         ),
     )
 
@@ -3231,9 +3065,8 @@ def test_depthwise_separable():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "depthwise_separable"),
         ),
     )
@@ -3246,9 +3079,9 @@ def test_inverted_residual():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "inverted_residual")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "inverted_residual")
         ),
     )
 
@@ -3260,9 +3093,8 @@ def test_feature_pyramid_net():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "feature_pyramid_net"),
         ),
     )
@@ -3276,13 +3108,12 @@ def test_feature_pyramid_net():
 def test_hierarchical_vae():
     model = example_models.HierarchicalVAE()
     x = torch.rand(4, 16)
-    assert validate_forward_pass(model, x, random_seed=1)
+    assert validate_forward_pass(model, x, seed=1)
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "generative-models", "hierarchical_vae"),
         ),
     )
@@ -3295,9 +3126,9 @@ def test_gated_conv():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "generative-models", "gated_conv")
+            container_path=opj(VIS_OUTPUT_DIR, "generative-models", "gated_conv")
         ),
     )
 
@@ -3309,9 +3140,9 @@ def test_masked_conv():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "generative-models", "masked_conv")
+            container_path=opj(VIS_OUTPUT_DIR, "generative-models", "masked_conv")
         ),
     )
 
@@ -3324,9 +3155,9 @@ def test_simclr():
     show_model_graph(
         model,
         (x1, x2),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simclr")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simclr")
         ),
     )
 
@@ -3338,9 +3169,9 @@ def test_stop_grad():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "stop_grad")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "stop_grad")
         ),
     )
 
@@ -3353,9 +3184,9 @@ def test_adain():
     show_model_graph(
         model,
         (content, style),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "adain")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "adain")
         ),
     )
 
@@ -3373,9 +3204,9 @@ def test_hyper_network():
     show_model_graph(
         model,
         (x, cond),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "hyper_network")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "hyper_network")
         ),
     )
 
@@ -3387,9 +3218,9 @@ def test_deq_model():
     show_model_graph(
         model,
         x,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "deq_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "deq_model")
         ),
     )
 
@@ -3401,9 +3232,9 @@ def test_neural_ode():
     show_model_graph(
         model,
         x,
-        view="rolled",
+        rolled=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "neural_ode")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "neural_ode")
         ),
     )
 
@@ -3415,9 +3246,9 @@ def test_memory_augmented():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "memory_augmented")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "memory_augmented")
         ),
     )
 
@@ -3429,9 +3260,9 @@ def test_swiglu_ffn():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "swiglu_ffn")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "swiglu_ffn")
         ),
     )
 
@@ -3451,9 +3282,9 @@ def test_graphsage():
     show_model_graph(
         model,
         (x, adj),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graphsage")
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graphsage")
         ),
     )
 
@@ -3468,9 +3299,9 @@ def test_gin():
     show_model_graph(
         model,
         (x, adj),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "gin")
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "gin")
         ),
     )
 
@@ -3485,9 +3316,9 @@ def test_edge_conv():
     show_model_graph(
         model,
         (x, adj),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "edge_conv")
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "edge_conv")
         ),
     )
 
@@ -3502,9 +3333,8 @@ def test_graph_transformer():
     show_model_graph(
         model,
         (x, adj),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graph_transformer"),
         ),
     )
@@ -3522,9 +3352,9 @@ def test_moe():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "moe")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "moe")
         ),
     )
 
@@ -3536,9 +3366,8 @@ def test_spatial_transformer():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "spatial_transformer"),
         ),
     )
@@ -3551,9 +3380,9 @@ def test_dueling_dqn():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dueling_dqn")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dueling_dqn")
         ),
     )
 
@@ -3565,9 +3394,9 @@ def test_rms_norm():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "rms_norm")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "rms_norm")
         ),
     )
 
@@ -3579,9 +3408,9 @@ def test_sparse_pruned():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "sparse_pruned")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "sparse_pruned")
         ),
     )
 
@@ -3593,9 +3422,9 @@ def test_fourier_mixing():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "fourier_mixing")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "fourier_mixing")
         ),
     )
 
@@ -3612,9 +3441,9 @@ def test_lenet5():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "lenet5")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "lenet5")
         ),
     )
 
@@ -3626,9 +3455,9 @@ def test_bilstm():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "bilstm")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "bilstm")
         ),
     )
 
@@ -3640,9 +3469,9 @@ def test_seq2seq_attention():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "seq2seq_attention")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "seq2seq_attention")
         ),
     )
 
@@ -3656,9 +3485,9 @@ def test_triplet_network():
     show_model_graph(
         model,
         (anchor, positive, negative),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "triplet_network")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "triplet_network")
         ),
     )
 
@@ -3671,9 +3500,9 @@ def test_barlow_twins():
     show_model_graph(
         model,
         (x1, x2),
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "barlow_twins")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "barlow_twins")
         ),
     )
 
@@ -3685,9 +3514,9 @@ def test_deep_cross_network():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "deep_cross_network")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "deep_cross_network")
         ),
     )
 
@@ -3699,9 +3528,9 @@ def test_axial_attention():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "axial_attention")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "axial_attention")
         ),
     )
 
@@ -3713,9 +3542,9 @@ def test_cbam():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "cbam")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "cbam")
         ),
     )
 
@@ -3732,9 +3561,9 @@ def test_gru_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "gru_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "gru_model")
         ),
     )
 
@@ -3746,9 +3575,9 @@ def test_nin_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nin_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "nin_model")
         ),
     )
 
@@ -3760,9 +3589,8 @@ def test_channel_shuffle_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "channel_shuffle_model"),
         ),
     )
@@ -3775,9 +3603,8 @@ def test_pixel_shuffle_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "pixel_shuffle_model"),
         ),
     )
@@ -3790,9 +3617,9 @@ def test_partial_conv_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "partial_conv_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "partial_conv_model")
         ),
     )
 
@@ -3806,9 +3633,9 @@ def test_film_model():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "film_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "film_model")
         ),
     )
 
@@ -3820,9 +3647,8 @@ def test_coordinate_attention_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "coordinate_attention_model"),
         ),
     )
@@ -3835,9 +3661,8 @@ def test_differential_attention_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "differential_attention_model"),
         ),
     )
@@ -3850,9 +3675,8 @@ def test_relative_position_attention_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "relative_position_attention_model"),
         ),
     )
@@ -3865,9 +3689,9 @@ def test_early_exit_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "early_exit_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "early_exit_model")
         ),
     )
 
@@ -3879,9 +3703,8 @@ def test_multi_scale_parallel_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_scale_parallel_model"),
         ),
     )
@@ -3894,9 +3717,9 @@ def test_gumbel_vq_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "gumbel_vq_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "gumbel_vq_model")
         ),
     )
 
@@ -3910,9 +3733,8 @@ def test_end_to_end_memory_network():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "end_to_end_memory_network"),
         ),
     )
@@ -3925,9 +3747,9 @@ def test_rbf_network():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "rbf_network")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "rbf_network")
         ),
     )
 
@@ -3939,9 +3761,9 @@ def test_siren_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "siren_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "siren_model")
         ),
     )
 
@@ -3953,9 +3775,9 @@ def test_multi_task_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_task_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_task_model")
         ),
     )
 
@@ -3967,9 +3789,8 @@ def test_wide_and_deep_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "wide_and_deep_model"),
         ),
     )
@@ -3985,9 +3806,9 @@ def test_cheb_gcn():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "cheb_gcn")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "cheb_gcn")
         ),
     )
 
@@ -4002,9 +3823,8 @@ def test_prototypical_network():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "prototypical_network"),
         ),
     )
@@ -4017,9 +3837,9 @@ def test_eca_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "eca_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "eca_model")
         ),
     )
 
@@ -4036,9 +3856,8 @@ def test_linear_attention_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "linear_attention_model"),
         ),
     )
@@ -4051,9 +3870,9 @@ def test_simple_fno():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_fno")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_fno")
         ),
     )
 
@@ -4065,9 +3884,9 @@ def test_perceiver_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "perceiver_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "perceiver_model")
         ),
     )
 
@@ -4079,9 +3898,9 @@ def test_aspp_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "aspp_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "aspp_model")
         ),
     )
 
@@ -4093,9 +3912,9 @@ def test_controlnet_model():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "controlnet_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "controlnet_model")
         ),
     )
 
@@ -4109,9 +3928,9 @@ def test_simple_egnn():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_egnn")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_egnn")
         ),
     )
 
@@ -4123,9 +3942,8 @@ def test_maml_inner_loop():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "maml_inner_loop"),
         ),
     )
@@ -4140,9 +3958,9 @@ def test_tiny_nerf():
     show_model_graph(
         model,
         model_input,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "tiny_nerf")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "tiny_nerf")
         ),
     )
 
@@ -4159,9 +3977,8 @@ def test_same_tensor_all_args():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "same_tensor_all_args"),
         ),
     )
@@ -4174,9 +3991,8 @@ def test_view_chain_mutate_middle():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "view_chain_mutate_middle"),
         ),
     )
@@ -4188,9 +4004,9 @@ def test_self_caching_model(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "self_caching_model")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "self_caching_model")
         ),
     )
 
@@ -4201,9 +4017,8 @@ def test_delete_tensor_mid_forward(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "delete_tensor_mid_forward"),
         ),
     )
@@ -4215,9 +4030,8 @@ def test_dynamic_module_creation(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "dynamic_module_creation"),
         ),
     )
@@ -4229,9 +4043,8 @@ def test_non_persistent_buffer(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "non_persistent_buffer"),
         ),
     )
@@ -4243,9 +4056,9 @@ def test_contiguous_no_op(input_2d):
     show_model_graph(
         model,
         input_2d,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "contiguous_no_op")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "contiguous_no_op")
         ),
     )
 
@@ -4257,9 +4070,8 @@ def test_stack_views_of_same_tensor():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "stack_views_same_tensor"),
         ),
     )
@@ -4272,9 +4084,9 @@ def test_saturated_softmax():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "saturated_softmax")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "saturated_softmax")
         ),
     )
 
@@ -4286,9 +4098,8 @@ def test_duplicate_value_parents():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "duplicate_value_parents"),
         ),
     )
@@ -4301,9 +4112,9 @@ def test_empty_tensor_chain():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "empty_tensor_chain")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "empty_tensor_chain")
         ),
     )
 
@@ -4315,9 +4126,9 @@ def test_clamp_narrow_range():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "clamp_narrow_range")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "clamp_narrow_range")
         ),
     )
 
@@ -4329,9 +4140,8 @@ def test_round_near_integers():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "round_near_integers"),
         ),
     )
@@ -4344,9 +4154,9 @@ def test_bool_cast_exploit():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "bool_cast_exploit")
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "bool_cast_exploit")
         ),
     )
 
@@ -4358,9 +4168,8 @@ def test_fake_loop_same_op_type():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "fake_loop_same_op_type"),
         ),
     )
@@ -4373,9 +4182,8 @@ def test_autocast_mid_forward():
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "autocast_mid_forward"),
         ),
     )
@@ -4434,29 +4242,29 @@ def _render_both(model, x, name):
     show_model_graph(
         model,
         x,
-        view="rolled",
+        rolled=True,
         recurrence_detection=True,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(LOOP_COMPARISON_DIR, f"{name}_loops_on")
+            container_path=opj(LOOP_COMPARISON_DIR, f"{name}_loops_on")
         ),
     )
     show_model_graph(
         model,
         x,
-        view="rolled",
+        rolled=True,
         recurrence_detection=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off")
+            container_path=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off")
         ),
     )
     # Also render unrolled for the no-loops case
     show_model_graph(
         model,
         x,
-        view="unrolled",
+        rolled=False,
         recurrence_detection=False,
         visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off_unrolled")
+            container_path=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off_unrolled")
         ),
     )
     # Each of the three renders must have produced a real PDF on disk.

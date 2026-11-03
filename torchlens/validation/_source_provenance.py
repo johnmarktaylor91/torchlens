@@ -29,7 +29,7 @@ from .._capture_honesty import (
 from .diagnostics import CHECK_SOURCE_PROVENANCE, ValidationFailure, record_validation_failure
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .core import ValidationDecisionRecorder
 
 _GAP_ADVISORY_KINDS = (
@@ -58,7 +58,7 @@ def source_provenance_gaps(trace: "Trace") -> list[tuple[str, str | None, str]]:
     from .core import _is_intentional_intervention_replacement
 
     gaps: list[tuple[str, str | None, str]] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.type == "output":
             continue
         positions = tuple(op.unattributed_tensor_args or ())
@@ -109,12 +109,12 @@ def check_source_provenance(
     )
     if verbose:
         print(message)
-    op = trace.layer_dict_all_keys.get(op_label) if op_label is not None else None
+    op = trace._layer_dict_all_keys.get(op_label) if op_label is not None else None
     func_name = (str(op.func_name or "") or None) if op is not None else None
     record_validation_failure(
         trace,
         ValidationFailure(
-            check=CHECK_SOURCE_PROVENANCE,
+            check_name=CHECK_SOURCE_PROVENANCE,
             op_label=op_label,
             func_name=func_name,
             message=message,

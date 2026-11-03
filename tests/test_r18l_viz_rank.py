@@ -29,8 +29,8 @@ import torchlens as tl
 from torchlens.viz.node_plots import (
     _lineplot_point,
     _normalize_finite,
-    render_heatmap,
-    render_lineplot,
+    heatmap,
+    lineplot,
 )
 
 
@@ -42,7 +42,7 @@ def test_h10_direct_writes_caption_renders(tmp_path):
     trace._has_direct_writes = True
     out = str(tmp_path / "h10")
     # Must not raise GraphvizRenderError.
-    src = trace.draw(vis_save_only=True, vis_fileformat="svg", vis_outpath=out)
+    src = trace.draw(file_format="svg", path=out).dot
     assert isinstance(src, str)
     # The FONT element must be properly closed and the direct-writes line present.
     assert "</FONT>" in src
@@ -53,7 +53,7 @@ def test_h10_direct_writes_caption_renders(tmp_path):
 def test_h10_caption_no_direct_writes_still_closes_font(tmp_path):
     trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
     out = str(tmp_path / "h10b")
-    src = trace.draw(vis_save_only=True, vis_fileformat="svg", vis_outpath=out)
+    src = trace.draw(file_format="svg", path=out).dot
     assert "</FONT>" in src
     assert "Direct writes detected" not in src
 
@@ -66,7 +66,7 @@ def test_m9_reversed_bounds_raise():
     with pytest.raises(ValueError, match="vmax must be greater than or equal to vmin"):
         _normalize_finite(arr, 3.0, 0.0)
     with pytest.raises(ValueError, match="vmax must be greater than or equal to vmin"):
-        render_heatmap(arr, vmin=3.0, vmax=0.0)
+        heatmap(arr, vmin=3.0, vmax=0.0)
 
 
 def test_m9_equal_bounds_still_uniform():
@@ -89,13 +89,13 @@ def test_m8_no_finite_pair_raises():
     xs = np.asarray([np.nan, 0.0])
     ys = np.asarray([1.0, np.nan])  # finite y and finite x at disjoint indices
     with pytest.raises(ValueError, match=r"finite \(x, y\) point"):
-        render_lineplot(ys, x_values=xs)
+        lineplot(ys, x_values=xs)
 
 
 def test_m8_one_finite_pair_ok():
     xs = np.asarray([0.0, np.nan])
     ys = np.asarray([1.0, 5.0])  # one drawable pair at index 0
-    img = render_lineplot(ys, x_values=xs)
+    img = lineplot(ys, x_values=xs)
     assert img.size[0] > 0 and img.size[1] > 0
 
 
@@ -147,7 +147,7 @@ def test_m6_channel_grid_uses_first_batch_element():
     base = torch.tensor([[[[0.0, 1.0], [2.0, 3.0]]], [[[4.0, 5.0], [6.0, 7.0]]]])
     changed_tail = base.clone()
     changed_tail[1] = torch.tensor([[[400.0, -500.0], [600.0, -700.0]]])  # batch 1 differs
-    cg = tl.viz.channel_grid(n=1, max_size=40)
+    cg = tl.viz.nodes.channel_grid(n=1, max_size=40)
     # Documented: batch element 0 is the only one rendered, so changing batch 1
     # must not change the output.
     assert cg(base).tobytes() == cg(changed_tail).tobytes()
@@ -173,7 +173,7 @@ def test_m5_feature_map_evolution_recurrent_error_vocabulary():
 
     trace = tl.trace(RecurConv(), torch.ones(2, 2, 4, 4))
     with pytest.raises(ValueError) as excinfo:
-        tl.viz.feature_map_evolution(trace)
+        tl.viz.feature_maps(trace)
     message = str(excinfo.value)
     assert "mds_evolution" not in message
     assert "MDS" not in message
@@ -186,7 +186,7 @@ def test_m5_feature_map_evolution_recurrent_error_vocabulary():
 # M4 — rank _compute_topological_layout order is PYTHONHASHSEED-independent
 # ---------------------------------------------------------------------------
 _M4_SNIPPET = (
-    "from torchlens.visualization._rank_layout_internal.layout import "
+    "from torchlens._visualization._rank_layout_internal.layout import "
     "_compute_topological_layout\n"
     "labels=['alpha','beta','gamma','delta','epsilon','zeta']\n"
     "nd={n:{'node_label':n,'attrs':{}} for n in labels}\n"
@@ -216,7 +216,7 @@ def test_m4_rank_order_deterministic_across_hashseed():
 def test_m4_within_rank_sort_is_total_order():
     # Multi-root graph, no edges: every node is its own rank-0 root; positions
     # must follow the (module, node_label) total order deterministically.
-    from torchlens.visualization._rank_layout_internal.layout import (
+    from torchlens._visualization._rank_layout_internal.layout import (
         _compute_topological_layout,
     )
 
@@ -238,30 +238,27 @@ def _rank_model():
 def test_m7_rank_engine_emits_legend(tmp_path):
     trace = tl.trace(_rank_model(), torch.ones(1, 2))
     src = trace.draw(
-        vis_outpath=str(tmp_path / "m7rank"),
-        vis_fileformat="svg",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        path=str(tmp_path / "m7rank"),
+        file_format="svg",
+        layout="rank",
         show_legend=True,
-    )
-    # One-table legend (vizmech 13): a single pinned plaintext node.
-    assert "tl_legend" in src
-    assert "TorchLens legend" in src
+    ).dot
+    # The key rides in the header label, as on the dot path; no legend node.
+    assert 'ID="tl_key"' in src
+    assert "tl_legend" not in src
     svg = (tmp_path / "m7rank.svg").read_text()
-    assert "TorchLens legend" in svg
     assert ">input<" in svg and ">output<" in svg
 
 
 def test_m7_rank_engine_no_legend_by_default(tmp_path):
     trace = tl.trace(_rank_model(), torch.ones(1, 2))
     src = trace.draw(
-        vis_outpath=str(tmp_path / "m7rank_off"),
-        vis_fileformat="svg",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        path=str(tmp_path / "m7rank_off"),
+        file_format="svg",
+        layout="rank",
         show_legend=False,
-    )
-    assert "tl_legend" not in src
+    ).dot
+    assert "tl_legend" not in src and "tl_key" not in src
 
 
 # ---------------------------------------------------------------------------
@@ -270,24 +267,22 @@ def test_m7_rank_engine_no_legend_by_default(tmp_path):
 def test_m10_rank_engine_applies_dpi_and_overrides(tmp_path):
     trace = tl.trace(_rank_model(), torch.ones(1, 2))
     src = trace.draw(
-        vis_outpath=str(tmp_path / "m10rank"),
-        vis_fileformat="png",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        path=str(tmp_path / "m10rank"),
+        file_format="png",
+        layout="rank",
         dpi=123,
-        vis_graph_overrides={"bgcolor": "lightyellow"},
-    )
+        graph_overrides={"bgcolor": "lightyellow"},
+    ).dot
     # dpi applies on the raster target (png)...
     assert "dpi=123" in src
     assert "bgcolor=" in src and "lightyellow" in src
     # ...and is DROPPED on a vector target (svg): raster-only, vizmech D23.
     src_svg = trace.draw(
-        vis_outpath=str(tmp_path / "m10rank_svg"),
-        vis_fileformat="svg",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        path=str(tmp_path / "m10rank_svg"),
+        file_format="svg",
+        layout="rank",
         dpi=123,
-    )
+    ).dot
     assert "dpi=123" not in src_svg
 
 
@@ -309,10 +304,9 @@ def test_rank_engine_creates_missing_output_directory(tmp_path):
     assert not outdir.exists()
     trace = tl.trace(_rank_model(), torch.ones(1, 2))
     trace.draw(
-        vis_outpath=str(outdir / "graph"),
-        vis_fileformat="svg",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        path=str(outdir / "graph"),
+        file_format="svg",
+        layout="rank",
     )
     # The intermediate .dot source is removed after a successful render
     # (render_rank_layout: `if render_succeeded and os.path.exists(source_path):

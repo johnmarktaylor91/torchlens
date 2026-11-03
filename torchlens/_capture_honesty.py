@@ -6,7 +6,7 @@ verification ceiling, the rescue disclosure, structure-only hypothesis status,
 sparse-run poisoning, episode capture (including the forced-tokens
 non-verifying basis), and persisted capture-time advisories.
 
-``tl.report.explain`` and ``Trace.to_agent_json`` read their honesty facts
+``Trace.explain`` and ``Trace.to_agent_json`` read their honesty facts
 through this module, and every exporter in ``torchlens.export``, every debug
 DataFrame, ``Trace.to_pandas``, and the fastlog table attach the same facts
 through :func:`attach_dataframe_honesty` / :func:`honesty_preamble_lines` --
@@ -20,7 +20,12 @@ resolved absolute-path URIs (returned text is publishable data).
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ._data_classes.trace import Trace
+
+from ._data_classes._trace_missing_attrs import is_live_trace
 
 #: Schema identifier stamped on the shared honesty fact block.
 CAPTURE_HONESTY_SCHEMA = "torchlens.capture_honesty.v1"
@@ -31,12 +36,17 @@ DATAFRAME_ATTRS_KEY = "torchlens_capture_honesty"
 #: Key under which capture-time advisories live in ``Trace.annotations``.
 ADVISORIES_ANNOTATIONS_KEY = "capture_advisories"
 
+#: Advisory kind recorded when a default (unwitnessed) capture built a tensor from a host
+#: buffer (``torch.from_numpy`` and friends; ``record_host_tensor_source_advisory``).
+ADVISORY_HOST_TENSOR_SOURCE = "host_tensor_source"
+#: Recorded op ``func_name`` values that build a tensor from a host buffer.
+HOST_TENSOR_SOURCE_FUNCS: tuple[str, ...] = ("from_numpy", "from_dlpack", "frombuffer", "as_tensor")
 #: ``Trace.annotations["capture_advisories"]`` kind recorded when a module boundary
 #: adopts an untagged tensor as an internal source (postprocess
 #: ``_warn_unattributed_tensor_args``).
 ADVISORY_MODULE_BOUNDARY_ADOPTION = "module_boundary_adoption"
 #: Advisory kind recorded when the module-held plain-tensor scan was cut
-#: (``backends/torch/buffer_writes.warn_held_scan_truncated``).
+#: (``warn_held_scan_truncated`` below).
 ADVISORY_HELD_SCAN_TRUNCATED = "held_tensor_scan_truncated"
 #: Advisory kind recorded when an orphan-pruned op had source-less tensor arguments
 #: (``G.sum().item()``, a control-flow predicate on a closure tensor): the pruned op
@@ -45,6 +55,16 @@ ADVISORY_ORPHAN_UNATTRIBUTED_ARGS = "orphan_unattributed_tensor_args"
 #: Advisory kind recorded when a direct ``torch.ops`` call wrote its arguments, returned
 #: nothing, and could not be recorded in place (``backends/torch/_torch_ops_calls.py``).
 ADVISORY_UNRECORDED_OPERATOR_MUTATION = "unrecorded_operator_mutation"
+#: Advisory kind recorded when capture held torch's fused attention fast path off so the
+#: forward, its replay and the validation ground truth all run the unfused program
+#: (``_capture._fused_attention_hold.hold_fused_attention_fastpath_off``). A disclosure, not a gap.
+ADVISORY_FUSED_ATTENTION_FASTPATH_HELD = "fused_attention_fastpath_held_off"
+#: Advisory kind recorded when a parameter the captured forward itself created (a lazy
+#: module built inside forward whose pending slot torch materialized in place) was
+#: registered late, at the wrapped call that first consumed it
+#: (``backends/torch/param_mutation``). A disclosure, not a gap: the parameter is a
+#: live slot of the captured model's own module tree and carries session provenance.
+ADVISORY_PARAMETER_CREATED_IN_FORWARD = "parameter_created_in_forward"
 
 
 def append_capture_advisory(trace: Any, kind: str, entries: list[str]) -> None:
@@ -109,9 +129,11 @@ def capture_verification(log: Any) -> dict[str, Any]:
     status_value = getattr(status, "value", None)
     return {
         "capture_status": str(status_value) if status_value is not None else "unknown",
-        "capture_verified": getattr(log, "capture_verified", None),
-        "capture_verification_reason": getattr(log, "capture_verification_reason", None),
-        "rescue_rerun": bool(getattr(log, "rescue_rerun", None) or False),
+        "capture_verified": log._provenance_verified if is_live_trace(log) else None,
+        "capture_verification_reason": log._provenance_verification_reason
+        if is_live_trace(log)
+        else None,
+        "rescue_rerun": bool(getattr(log, "__dict__", {}).get("_rescue_rerun") or False),
     }
 
 
@@ -219,6 +241,77 @@ def _step_join_fact(header: dict[str, Any]) -> str:
     return "continuous"
 
 
+def _host_source_location(op: Any) -> str | None:
+    """Return ``file:line`` of the op's first recorded user frame, when one was kept."""
+
+    for frame in getattr(op, "code_context", None) or ():
+        file = getattr(frame, "file", None)
+        line = getattr(frame, "line_number", None)
+        if isinstance(file, str) and isinstance(line, int) and "torchlens" not in file:
+            return f"{file}:{line}"
+    return None
+
+
+def record_host_tensor_source_advisory(trace: Any) -> None:
+    """Record one ``host_tensor_source`` advisory row on a default capture, when due.
+
+    A default capture never arms the completeness witness (``capture_verified`` is
+    ``None``: not checked), so a tensor the forward built from a host buffer
+    (``torch.from_numpy``, ``torch.from_dlpack``, ``torch.frombuffer``, or
+    ``torch.as_tensor`` on non-tensor data) is a source op with no tensor parents
+    whose dependence on the buffer nothing checked. The row is derived from the
+    recorded ops after the capture: it never warns, never patches torch, and never
+    moves a verdict.
+
+    Parameters
+    ----------
+    trace:
+        Completed capture.
+    """
+
+    if trace._provenance_verified is not None:
+        return
+    annotations = getattr(trace, "annotations", None)
+    if not isinstance(annotations, dict):
+        return
+    names: list[str] = []
+    count = 0
+    first_location: str | None = None
+    for op in getattr(trace, "ops", None) or ():
+        name = getattr(op, "func_name", None)
+        if name not in HOST_TENSOR_SOURCE_FUNCS:
+            continue
+        if (
+            getattr(op, "parents", None)
+            or getattr(op, "parent_params", None)
+            or getattr(op, "unattributed_tensor_args", None)
+        ):
+            continue
+        count += 1
+        if name not in names:
+            names.append(str(name))
+        if first_location is None:
+            first_location = _host_source_location(op)
+    if not count:
+        return
+    rows = annotations.setdefault(ADVISORIES_ANNOTATIONS_KEY, [])
+    if not isinstance(rows, list):
+        return
+    sources = ", ".join(f"torch.{name}" for name in names)
+    rows.append(
+        {
+            "kind": ADVISORY_HOST_TENSOR_SOURCE,
+            "count": count,
+            "first_location": first_location,
+            "message": (
+                f"tensor(s) built from a host buffer during capture ({sources}); the "
+                "dependence on that buffer is not captured and was not checked (the "
+                "completeness witness is not armed on the default capture)"
+            ),
+        }
+    )
+
+
 def capture_advisories(log: Any) -> list[dict[str, Any]]:
     """Return persisted capture-time advisories recorded on this log.
 
@@ -252,7 +345,7 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
     :func:`capture_honesty_facts` must therefore carry the intervention evidence,
     or an agent reading a zero-ablated dump has no way to know the numbers are
     not the model's. Evidence is read from the persisted record, never inferred:
-    per-op ``intervention_replaced`` flags and ``FireRecord`` lists, plus the
+    per-op ``is_edited`` flags and ``FireRecord`` lists, plus the
     ``intervention_audit`` rows (fork-side ``do()`` / ``PARAM`` / ``EVENT`` kinds).
 
     Parameters
@@ -270,10 +363,13 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
 
     replaced: list[str] = []
     fires = 0
-    for layer in getattr(log, "layer_list", None) or ():
-        records = getattr(layer, "interventions", None) or ()
+    # Export subjects include accessors, records, a PartialTrace and husked
+    # traces; only a live Trace has layers whose edit records count here.
+    layers = log._layer_list if is_live_trace(log) else None
+    for layer in layers or ():
+        records = getattr(layer, "edits", None) or ()
         fires += len(records)
-        if bool(getattr(layer, "intervention_replaced", False)):
+        if bool(getattr(layer, "is_edited", False)):
             label = getattr(layer, "layer_label", None)
             if isinstance(label, str):
                 replaced.append(label)
@@ -311,7 +407,7 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
     facts: dict[str, Any] = {
         "schema": CAPTURE_HONESTY_SCHEMA,
         **capture_verification(log),
-        "structure_only": bool(getattr(log, "structure_only", False)),
+        "structure_only": bool(log._options_structure_only if is_live_trace(log) else False),
         **poison_facts(log),
     }
     if facts["structure_only"]:
@@ -340,13 +436,13 @@ def _structure_evidence_facts(log: Any) -> dict[str, Any]:
     that should stop it.
     """
 
-    from .capture.structure_only import claim_status_for, registered_discharge
+    from ._capture.structure_only import claim_status_for, registered_discharge
 
     facts: dict[str, Any] = {
         "claim_status": claim_status_for(log).value,
         "values_available": False,
     }
-    envelope = getattr(log, "structure_evidence", None)
+    envelope = log._graph_structure_evidence if is_live_trace(log) else None
     if isinstance(envelope, dict):
         facts["substrate"] = envelope.get("substrate")
         facts["structure_evidence"] = envelope
@@ -394,10 +490,11 @@ def _structure_only_status_lines(facts: dict[str, Any]) -> list[str]:
 
 
 def _verification_verdict_lines(facts: dict[str, Any]) -> list[str]:
-    """Return the preamble's verification-verdict lines (header + ceiling/not-recorded).
+    """Return the preamble's verification-verdict lines (header + ceiling/not-checked).
 
     The ``capture_verified`` flag is tri-state: ``False`` names the ceiling reason,
-    ``True`` reads ``true``, and ``None`` reads ``not_recorded`` with the arming hint
+    ``True`` reads ``true``, and ``None`` reads ``not_recorded`` in the header and
+    "not checked" with the arming hint in the detail line
     (or, on a structure-only capture, the note that value-free captures are never verified).
     """
 
@@ -420,12 +517,12 @@ def _verification_verdict_lines(facts: dict[str, Any]) -> list[str]:
         lines.append(f"verification ceiling: {reason}")
     elif verified is None and facts["structure_only"]:
         lines.append(
-            "capture verification not recorded: a structure-only (value-free) capture is "
+            "capture verification not checked: a structure-only (value-free) capture is "
             "never verified, even with the completeness witness armed"
         )
     elif verified is None:
         lines.append(
-            "capture verification not recorded: the completeness witness is not armed on "
+            "capture verification not checked: the completeness witness is not armed on "
             "the default capture (wrap_torch(completeness_witness=True) or tl.validate arm it)"
         )
     return lines
@@ -494,7 +591,8 @@ def honesty_banner_lines(log: Any) -> list[str]:
     """Return honesty banner lines for NON-CLEAN captures only.
 
     A surface "opens with the honesty banner when the capture is non-clean":
-    unverified/rescued/structure-only/poisoned/episode/advisory facts render;
+    unverified/rescued/structure-only/poisoned/episode/intervened/advisory
+    facts render;
     a clean verified plain capture returns no lines. Use this on presenter
     surfaces (``TraceSlice.summary``, ``draw`` captions) where a full status
     block would be noise but laundering the facts away is silent wrongness.
@@ -534,6 +632,14 @@ def honesty_banner_lines(log: Any) -> list[str]:
             f"episode capture ({episode.get('n_steps_declared')} declared step(s), "
             f"fidelity_basis={basis}, step_join={episode.get('step_join')}{suffix})"
         )
+    interventions = facts.get("interventions")
+    if interventions is not None:
+        lines.append(
+            f"INTERVENED capture ({interventions.get('fire_count')} fire(s), "
+            f"{interventions.get('replaced_op_count')} replaced op(s), "
+            f"{interventions.get('audit_row_count')} audit row(s)): values at "
+            "fired sites are COUNTERFACTUAL, not the model's"
+        )
     for advisory in facts.get("advisories", ()):
         lines.append(
             f"capture advisory: {advisory.get('kind')} x{advisory.get('count')} "
@@ -571,11 +677,11 @@ _PRESENTER_REMEDIES: dict[str, str] = {
         "merged.to_pandas()) or report on one member rank Trace"
     ),
     "TraceSlice": (
-        "report on the slice's source trace (tl.report.explain("
-        "slice.source_trace)); the slice itself discloses via slice.summary()"
+        "report on the trace the slice was taken from (trace.explain()); "
+        "the slice itself discloses via slice.summary()"
     ),
-    "Bundle": "report on one member Trace (e.g. tl.report.explain(bundle[name]))",
-    "Recording": ("cook the recording into a Trace first: tl.report.explain(recording.to_trace())"),
+    "Bundle": "report on one member Trace (e.g. bundle[name].explain())",
+    "Recording": ("cook the recording into a Trace first: recording.to_trace().explain()"),
 }
 
 
@@ -627,6 +733,44 @@ def _bounded_text(value: Any, limit: int = 500) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 3] + "..."
+
+
+def warn_held_scan_truncated(truncations: list[str], trace: Trace | None = None) -> None:
+    """Disclose, once per capture, held-tensor scans cut by their bounds.
+
+    Parameters
+    ----------
+    truncations:
+        Descriptions collected by ``iter_module_held_plain_tensors``.
+    trace:
+        Capture trace; when given, the cut is persisted as a
+        ``held_tensor_scan_truncated`` capture advisory BEFORE warning, which
+        forward validation reads as a source-provenance failure.
+    """
+
+    if not truncations:
+        return
+    import warnings
+
+    from ._errors import TorchLensWarning
+
+    if trace is not None:
+        append_capture_advisory(trace, ADVISORY_HELD_SCAN_TRUNCATED, truncations)
+
+    shown = "; ".join(truncations[:5])
+    suffix = "" if len(truncations) <= 5 else f" (+{len(truncations) - 5} more)"
+    warnings.warn(
+        TorchLensWarning(
+            f"TorchLens stopped scanning module-held containers for plain tensors at "
+            f"{len(truncations)} place(s): {shown}{suffix}. A tensor past a cut that "
+            "the forward reads gets no buffer source: the capture warns about an input "
+            "with no provenance and the graph shows the read without the held tensor; "
+            "forward validation of this capture fails. Remedy: register tensors the forward "
+            "reads with register_buffer, or hold them in shallower or smaller containers",
+            code="held_tensor_scan_truncated",
+        ),
+        stacklevel=3,
+    )
 
 
 __all__ = [

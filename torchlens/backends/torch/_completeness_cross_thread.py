@@ -6,35 +6,20 @@ import functools
 import threading
 import types
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torch._ops as _torch_ops  # r47 hon2_1: enumerate the ``torch.ops.*`` __call__ classes
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ...utils._callable_safety import private_c_forward_op_module_names
+from ..._utils._callable_safety import private_c_forward_op_module_names
 from ._completeness_types import _WitnessState
 from ._tl import (
     get_buffer_address,
     get_tensor_meta,
     session_meta_is_anchored,
 )
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _ACTIVE_WITNESS_STATE,
-        _CAPTURED_STORAGE_PTRS,
-        _DISABLE_MODE_SITE_CATEGORIES,
-        _DISPATCH_TENSOR_ORIGINS,
-        _HOST_ESCAPE_CROSS_THREAD_CAPTURED,
-        _HOST_ESCAPE_OBSERVER_FAILED,
-        _RUNNABLE_INPUT_STORAGE_SITES,
-        _internal_read_state,
-        _iter_tensors_deep,
-        _raw_storage_ptr_no_observe,
-        _record_escape_source_tensor,
-    )
 
 __all__ = (
     "_nonowner_ptr_is_captured",
@@ -159,7 +144,7 @@ def observe_nonowner_operands(args: tuple[Any, ...], kwargs: dict[str, Any] | No
         The keyword operands of the wrapped torch call (``**kwargs``), or ``None``.
     """
 
-    state = _ACTIVE_WITNESS_STATE
+    state = _hub._ACTIVE_WITNESS_STATE
     if state is None or not state.belt_armed:
         return
     if _state._active_trace is not state.trace:
@@ -259,7 +244,7 @@ def _private_c_forward_op_modules() -> tuple[Any, ...]:
     """Resolve the patchable module-typed private-C forward-op modules (r49 hon2_1).
 
     Structurally enumerated from the canonical forward-op module authority
-    (:func:`torchlens.utils._callable_safety.private_c_forward_op_module_names` -> the
+    (:func:`torchlens._utils._callable_safety.private_c_forward_op_module_names` -> the
     ``torch._C._*`` entries of ``_ALLOWED_FORWARD_OP_MODULES``), resolved on the RUNNING torch
     and filtered to ``types.ModuleType`` so:
 
@@ -358,7 +343,7 @@ def string_escape_is_owner_thread(trace: Any) -> bool:
     the legacy owner behavior is preserved (``True``).
     """
 
-    state = _ACTIVE_WITNESS_STATE
+    state = _hub._ACTIVE_WITNESS_STATE
     if state is None or state.trace is not trace:
         return True
     return threading.get_ident() == state.owner_thread_id
@@ -391,7 +376,7 @@ def record_host_string_escape_source(trace: Any, tensor: Any) -> None:
     marked internal reads (``internal_scalar_read``). A no-string forward records nothing.
     """
 
-    if not getattr(trace, "intervention_ready", False):
+    if not getattr(trace, "is_replayable", False):
         return
     if not isinstance(tensor, torch.Tensor):
         return
@@ -402,7 +387,7 @@ def record_host_string_escape_source(trace: Any, tensor: Any) -> None:
     # thread applies the captured-tensor predicate (never origin resolution -- that flips the
     # global ``pause_logging`` toggle, the hon2_4 crash path): a captured-tensor stringification
     # ceilings, a benign OWN-tensor ``str()`` records nothing (no over-trigger).
-    state = _ACTIVE_WITNESS_STATE
+    state = _hub._ACTIVE_WITNESS_STATE
     if (
         state is not None
         and state.trace is trace
@@ -466,3 +451,26 @@ def _internal_read_active() -> bool:
     """
 
     return getattr(_internal_read_state, "depth", 0) > 0
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from . import completeness_witness as _hub  # noqa: E402  (owner of _ACTIVE_WITNESS_STATE)
+from ._completeness_dispatch_names import (  # noqa: E402
+    _record_escape_source_tensor,
+)
+from ._completeness_escape_state import (  # noqa: E402
+    _raw_storage_ptr_no_observe,
+)
+from ._completeness_origins import (  # noqa: E402
+    _iter_tensors_deep,
+)
+from .completeness_witness import (  # noqa: E402
+    _CAPTURED_STORAGE_PTRS,
+    _DISABLE_MODE_SITE_CATEGORIES,
+    _DISPATCH_TENSOR_ORIGINS,
+    _HOST_ESCAPE_CROSS_THREAD_CAPTURED,
+    _HOST_ESCAPE_OBSERVER_FAILED,
+    _RUNNABLE_INPUT_STORAGE_SITES,
+    _internal_read_state,
+)

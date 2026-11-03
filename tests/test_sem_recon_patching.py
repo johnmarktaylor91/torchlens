@@ -26,10 +26,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._semantic.patching import PatchApplicationError
+from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.errors._base import TorchLensWarning
-from torchlens.semantic import FacetSpec
-from torchlens.semantic.patching import PatchApplicationError
-from torchlens.utils._torch_compat import TorchCapabilityWarning
+from torchlens.facets import FacetSpec
 
 
 class ParamHeads(nn.Module):
@@ -86,8 +86,8 @@ def param_attention_recipe(module: Any) -> dict[str, Any]:
     result_op = trace.ops[result_module.calls[0].output_ops[0]]
     output_op = trace.ops[module.calls[0].output_ops[0]]
     return {
-        "result": FacetSpec.from_home(result_op, recipe_id="param_attention"),
-        "attn_out": FacetSpec.from_home(output_op, recipe_id="param_attention"),
+        "result": FacetSpec.from_home(result_op, function_id="param_attention"),
+        "attn_out": FacetSpec.from_home(output_op, function_id="param_attention"),
         "n_heads": 2,
         "head": module.facets.head,
     }
@@ -97,7 +97,7 @@ def param_attention_recipe(module: Any) -> dict[str, Any]:
 def _register_recipes() -> Iterator[None]:
     """Register this module's recipes at RUN time, restoring the registry after."""
 
-    from torchlens.semantic import facets as _facets
+    from torchlens._semantic import facets as _facets
 
     saved = list(_facets._REGISTRY)
     tl.facets.register(
@@ -193,7 +193,7 @@ class _StubRecord:
 
 class _StubLayer:
     def __init__(self, records: list[_StubRecord]) -> None:
-        self.interventions = records
+        self.edits = records
 
 
 class _StubPatchedLog:
@@ -201,7 +201,7 @@ class _StubPatchedLog:
 
     def __init__(self, records: list[_StubRecord], hooks_fired: int) -> None:
         self.last_run = {"started_at": 100.0, "timestamp": 101.0, "hooks_fired": hooks_fired}
-        self.layer_list = [_StubLayer(records)]
+        self._layer_list = [_StubLayer(records)]
 
 
 def test_fire_ledger_refuses_never_fired() -> None:
@@ -211,7 +211,7 @@ def test_fire_ledger_refuses_never_fired() -> None:
     baseline in this state (the measured real-HF silent no-op class).
     """
 
-    from torchlens.semantic.patching import _require_effective_patch
+    from torchlens._semantic.patching import _require_effective_patch
 
     with pytest.raises(PatchApplicationError, match="never fired") as never_fired_exc:
         _require_effective_patch(
@@ -231,7 +231,7 @@ def test_fire_ledger_refuses_all_refused_replacements() -> None:
     never read the fire record's replaced flag.
     """
 
-    from torchlens.semantic.patching import _require_effective_patch
+    from torchlens._semantic.patching import _require_effective_patch
 
     with pytest.raises(PatchApplicationError, match="refused.*replaced=False"):
         _require_effective_patch(
@@ -242,7 +242,7 @@ def test_fire_ledger_refuses_all_refused_replacements() -> None:
 
 
 def test_fire_ledger_accepts_replaced_fire() -> None:
-    from torchlens.semantic.patching import _require_effective_patch
+    from torchlens._semantic.patching import _require_effective_patch
 
     _require_effective_patch(
         _StubPatchedLog([_StubRecord(100.5, replaced=True)], hooks_fired=1),
@@ -254,7 +254,7 @@ def test_fire_ledger_accepts_replaced_fire() -> None:
 def test_fire_ledger_ignores_stale_records_from_earlier_runs() -> None:
     """Records minted BEFORE this run cannot vouch for it."""
 
-    from torchlens.semantic.patching import _require_effective_patch
+    from torchlens._semantic.patching import _require_effective_patch
 
     with pytest.raises(PatchApplicationError, match="never fired"):
         _require_effective_patch(
@@ -324,19 +324,19 @@ def test_user_capture_composes_required_fields() -> None:
         clean,
         corrupted,
         _metric,
-        trace_kwargs={"capture": tl.options.CaptureOptions(save_code_context=True)},
+        trace_kwargs={"capture": tl.options.CaptureOptions(save_source_context=True)},
     )
     assert table.shape == (1,)
 
 
 @pytest.mark.smoke
 def test_explicitly_conflicting_capture_refuses_typed() -> None:
-    with pytest.raises(ValueError, match="require capture options"):
+    with pytest.raises(ValueError, match="require save"):
         tl.facets.patching.activation_patch_attention_output(
             ParamToy(),
             *_inputs(),
             _metric,
-            trace_kwargs={"capture": tl.options.CaptureOptions(layers_to_save=["block"])},
+            trace_kwargs={"save": ["block"]},
         )
 
 
@@ -349,8 +349,6 @@ def test_explicit_matching_capture_passes() -> None:
         clean,
         corrupted,
         _metric,
-        trace_kwargs={
-            "capture": tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
-        },
+        trace_kwargs={"capture": tl.options.CaptureOptions(save_args=True)},
     )
     assert table.shape == (1,)

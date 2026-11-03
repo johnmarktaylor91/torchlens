@@ -24,12 +24,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, ZERO_FLOPS_OPS
 from .._errors import InvalidArgumentError
-from ..capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, ZERO_FLOPS_OPS
-from ..quantities import Flops, Macs
+from .._quantities import Flops, Macs
+from .._record_type import record_type
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)
@@ -95,7 +96,7 @@ def aggregate_forward_compute(trace: Trace) -> ComputeTotals:
     macs_unknown: list[str] = []
     counts = {"known": 0, "zero_by_rule": 0, "not_applicable": 0, "unknown": 0}
     unknown_ops: list[str] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         row_class = classify_row(op)
         counts[row_class] += 1
         if row_class == "unknown":
@@ -154,7 +155,7 @@ def unknown_op_ledger(trace: Trace) -> tuple[UnknownOpGroup, ...]:
     """
 
     groups: dict[str, list[Any]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if classify_row(op) != "unknown":
             continue
         groups.setdefault(str(getattr(op, "func_name", "?")), []).append(op)
@@ -169,7 +170,7 @@ def unknown_op_ledger(trace: Trace) -> tuple[UnknownOpGroup, ...]:
                 example_shapes=tuple(
                     tuple(op.shape) if getattr(op, "shape", None) else None for op in ops[:3]
                 ),
-                remedy=(f"torchlens.capture.flops.register_op_rule({func_name!r}, <flops_fn>)"),
+                remedy=(f"torchlens._capture.flops.register_op_rule({func_name!r}, <flops_fn>)"),
             )
         )
     return tuple(ledger)
@@ -222,6 +223,12 @@ class ComputeRow:
     device_time: float | None = None
     kernel_time: float | None = None
     attribution_status: str | None = None
+
+
+def row_mac_flops(row: ComputeRow) -> int:
+    """The FLOPs an op row spends in multiply-accumulates (``2 * fma_macs``), else 0."""
+
+    return 2 * int(row.fma_macs) if row.fma_macs else 0
 
 
 @dataclass(frozen=True)
@@ -307,7 +314,7 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
     # D22 device slots as COLUMNS, never schemas. Absent join -> all None
     # (missing is None, never zero); the name-substring bridge stays banned.
     _join = _joined_result_or_none(trace)
-    for index, op in enumerate(trace.layer_list):
+    for index, op in enumerate(trace._layer_list):
         row_class = classify_row(op)
         if getattr(op, "is_buffer", False):
             kind = "buffer"
@@ -356,7 +363,7 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
                 kind=kind,
                 phase="forward",
                 func_name=getattr(op, "func_name", None),
-                layer_type=getattr(op, "layer_type", None),
+                layer_type=record_type(op, None),
                 dtype=dtype_token,
                 flops_fma2=None if kind != "op" or flops is None else int(flops),
                 fma_macs=None if fma_macs is None else int(fma_macs),
@@ -390,7 +397,7 @@ def _joined_result_or_none(trace: Trace) -> Any | None:
     """Return the trace's session-time join result iff it reached joined."""
 
     try:
-        from ..observability._native_profile import join_result_for
+        from .._observability._native_profile import join_result_for
     except ImportError:  # pragma: no cover - torn install without the substrate
         return None
     result = join_result_for(trace)
@@ -462,7 +469,7 @@ def forward_flops_total(trace: Trace, *, fma: int = 2) -> Flops:
         )
     total = 0
     unconvertible: list[str] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if classify_row(op) in ("not_applicable", "unknown"):
             continue
         record = op.compute_record
@@ -480,7 +487,7 @@ def forward_flops_total(trace: Trace, *, fma: int = 2) -> Flops:
             code="flop_convention_unavailable",
             remedy=(
                 "Report under the stored fma=2 convention, or register a cost rule "
-                "declaring the op's MAC split (torchlens.capture.flops.register_op_rule)."
+                "declaring the op's MAC split (torchlens._capture.flops.register_op_rule)."
             ),
         )
     return Flops(total)

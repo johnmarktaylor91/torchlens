@@ -67,7 +67,7 @@ def test_resid_pre_refuses_on_ambiguous_streams() -> None:
 
     log = tl.trace(Host().eval(), torch.randn(2, 3, 8))
     block = log.modules["block"]
-    item = block.facets.menu()["resid_pre"]
+    item = block.facets.declared()["resid_pre"]
     assert item.status == "structurally_absent"
     assert "ambiguous" in (item.detail or "")
     with pytest.raises((KeyError, AttributeError)):
@@ -97,7 +97,7 @@ def test_resid_pre_refuses_when_no_input_matches_by_shape() -> None:
             return self.block(x)
 
     log = tl.trace(Host().eval(), torch.randn(2, 3, 8))
-    item = log.modules["block"].facets.menu()["resid_pre"]
+    item = log.modules["block"].facets.declared()["resid_pre"]
     assert item.status == "structurally_absent"
     assert "dataflow + shape" in (item.detail or "")
 
@@ -138,7 +138,7 @@ def test_final_norm_walk_refuses_train_mode_dropout() -> None:
 
     model = _NormHead().train()
     log = tl.trace(model, torch.randn(2, 3, 8))
-    menu = log.modules["self"].facets.menu()
+    menu = log.modules["self"].facets.declared()
     assert menu["final_norm_kind"].status == "structurally_absent"
     assert "hop" in (menu["final_norm_kind"].detail or "")
 
@@ -158,7 +158,7 @@ def test_final_norm_walk_refuses_tensor_indexing() -> None:
             return self.lm_head(self.ln(x)[:, keep, :])
 
     log = tl.trace(GatherHead().eval(), torch.randn(2, 3, 8))
-    menu = log.modules["self"].facets.menu()
+    menu = log.modules["self"].facets.declared()
     assert menu["final_norm_kind"].status == "structurally_absent"
 
 
@@ -176,7 +176,7 @@ def test_final_norm_walk_refuses_dimension_dropping_subscript() -> None:
             return self.lm_head(self.ln(x)[:, -1])
 
     log = tl.trace(LastTokenHead().eval(), torch.randn(2, 3, 8))
-    menu = log.modules["self"].facets.menu()
+    menu = log.modules["self"].facets.declared()
     assert menu["final_norm_kind"].status == "structurally_absent"
 
 
@@ -185,7 +185,7 @@ def test_hop_walk_payload_identity_tripwire_fires_on_corruption() -> None:
     """A corrupted anchor payload FAILS the endpoint verification: the walk
     refuses instead of anchoring -- the tripwire is armed, not decorative."""
 
-    from torchlens.semantic._hops import HopRefusal, HopWalk, walk_upstream
+    from torchlens._semantic._hops import HopRefusal, HopWalk, walk_upstream
 
     model = _NormHead().eval()
     log = tl.trace(model, torch.randn(2, 3, 8))
@@ -255,7 +255,14 @@ def test_transformer_bridge_refuses_typed_with_pristine_copy_remedy() -> None:
     assert excinfo.value.fields["remedy"]
     message = str(excinfo.value)
     assert "PRISTINE" in message or "pristine" in message
-    assert "HookedTransformer" in message
+    # The remedy leads with reloading the HF model fresh; HookedTransformer is
+    # offered only while the caller still uses one.
+    assert message.index("reload the HF model fresh") < message.index("HookedTransformer")
+    assert "HookedTransformer directly while you still use one" in message
+    assert "MUTATES the HF model it wraps IN PLACE" in message
+    remedy = excinfo.value.fields["remedy"]
+    assert remedy.startswith("Reload the HF model fresh")
+    assert "HookedTransformer while you still use one" in remedy
 
 
 def test_transformer_bridge_namesake_outside_namespace_traces() -> None:

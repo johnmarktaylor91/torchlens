@@ -29,7 +29,9 @@ from torchlens.errors import PayloadUnavailableError
 
 def _saved_labels(trace: tl.Trace) -> list[str]:
     return [
-        str(op.layer_label) for op in trace.layer_list if getattr(op, "has_saved_activation", False)
+        str(op.layer_label)
+        for op in trace._layer_list
+        if getattr(op, "has_saved_activation", False)
     ]
 
 
@@ -41,7 +43,7 @@ def lazy_artifact(tmp_path: Path) -> tuple[Path, tl.Trace]:
     model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4), nn.Sigmoid())
     source = tl.trace(model, torch.randn(4, 8), save=tl.func("relu"))
     destination = tmp_path / "lazy.tlspec"
-    tl.save(source, destination)
+    source.save(destination)
     return destination, source
 
 
@@ -64,7 +66,7 @@ def test_lazy_unsaved_rows_refuse_typed(lazy_artifact: tuple[Path, tl.Trace]) ->
 
     path, _ = lazy_artifact
     loaded = tl.load(path, lazy=True)
-    unsaved = [op for op in loaded.layer_list if not getattr(op, "has_saved_activation", False)]
+    unsaved = [op for op in loaded._layer_list if not getattr(op, "has_saved_activation", False)]
     assert unsaved, "fixture must retain unsaved rows"
     with pytest.raises(PayloadUnavailableError) as exc_info:
         _ = unsaved[0].out
@@ -74,7 +76,7 @@ def test_lazy_unsaved_rows_refuse_typed(lazy_artifact: tuple[Path, tl.Trace]) ->
 def test_corrupt_blob_raises_typed_not_none(lazy_artifact: tuple[Path, tl.Trace]) -> None:
     """A checksum-drifted blob refuses typed on the materializing read."""
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     path, _ = lazy_artifact
     loaded = tl.load(path, lazy=True)
@@ -82,7 +84,7 @@ def test_corrupt_blob_raises_typed_not_none(lazy_artifact: tuple[Path, tl.Trace]
     ref = loaded[label].ops[0].out_ref
     blob_path = ref.blob_path()
     blob_path.write_bytes(b"corrupted" + blob_path.read_bytes()[9:])
-    with pytest.raises(TorchLensIOError, match="sha256 mismatch"):
+    with pytest.raises(ArtifactError, match="sha256 mismatch"):
         _ = loaded[label].out
 
 
@@ -111,7 +113,7 @@ def test_declared_payload_bytes_is_exact_and_torch_free(
     declared = declared_payload_bytes(manifest)
     retained = sum(
         op.out.element_size() * op.out.numel()
-        for op in source.layer_list
+        for op in source._layer_list
         if getattr(op, "has_saved_activation", False)
     )
     assert declared == retained
@@ -128,5 +130,5 @@ def test_scoped_reader_refuses_payloadless_rows() -> None:
             save=tl.func("no_such_op"),
         )
     with pytest.raises(PayloadUnavailableError) as exc_info:
-        read_op_payload(trace.layer_list[0])
+        read_op_payload(trace._layer_list[0])
     assert exc_info.value.fields["code"] == "payload_unavailable"

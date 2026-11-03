@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import InvalidArgumentError
 
 
 def _model() -> nn.Module:
@@ -28,12 +29,12 @@ def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(3, 3), nn.ReLU())
 
 
-def test_halt_zero_match_warns_on_completed_capture() -> None:
-    """A halt selector that never fires discloses instead of staying silent."""
+def test_halt_zero_match_refuses_typed_on_completed_capture() -> None:
+    """A selector-shaped stop_after that never fires refuses typed, never silently."""
 
-    with pytest.warns(UserWarning, match="halt selector .* matched zero sites"):
-        log = tl.trace(_model(), torch.randn(2, 3), halt=tl.func("nosuchopzzz"))
-    assert log.outcome.status.name == "COMPLETE"
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.trace(_model(), torch.randn(2, 3), stop_after=tl.func("nosuchopzzz"))
+    assert excinfo.value.fields["code"] == "stop_after_never_fired"
 
 
 def test_halt_that_fires_does_not_warn() -> None:
@@ -41,8 +42,8 @@ def test_halt_that_fires_does_not_warn() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        log = tl.trace(_model(), torch.randn(2, 3), halt=tl.func("linear"))
-    assert log.outcome.status.name == "HALTED"
+        log = tl.trace(_model(), torch.randn(2, 3), stop_after=tl.func("linear"))
+    assert log.outcome.status.name == "STOPPED"
     assert not any("matched zero sites" in str(item.message) for item in caught)
 
 
@@ -51,7 +52,7 @@ def test_value_dependent_halt_callable_is_not_judged() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.trace(_model(), torch.randn(2, 3), halt=lambda ctx: False)
+        tl.trace(_model(), torch.randn(2, 3), stop_after=lambda ctx: False)
     assert not any(
         "halt selector" in str(item.message) and "matched zero" in str(item.message)
         for item in caught
@@ -137,7 +138,7 @@ def test_zero_match_selectors_leave_a_persisted_trace_record(tmp_path) -> None:
 
     # The fact survives save/load: a re-analysis of the artifact can see it.
     path = tmp_path / "zero_match.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     loaded = tl.load(str(path))
     loaded_records = loaded.annotations.get("unmatched_capture_selectors")
     assert loaded_records
@@ -161,11 +162,11 @@ def test_zero_match_halt_and_save_record_their_slots() -> None:
             _model(),
             torch.randn(2, 3),
             save=tl.func("nosuchopzzz"),
-            halt=tl.func("nosuchopyyy"),
+            stop_after=lambda ctx: ctx.kind == "op" and ctx.func_name == "nosuchopyyy",
         )
     records = log.annotations.get("unmatched_capture_selectors") or ()
     slots = {record["slot"] for record in records}
-    assert slots == {"save", "halt"}
+    assert slots == {"save", "stop_after"}
 
 
 def test_secret_bearing_save_warns_the_saver(tmp_path) -> None:
@@ -197,7 +198,7 @@ def test_secret_bearing_save_warns_the_saver(tmp_path) -> None:
     log = tl.trace(_Leaky(), torch.ones(1, 3))
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.save(log, tmp_path / "leaky.tlspec")
+        log.save(tmp_path / "leaky.tlspec")
     matching = [
         w
         for w in caught
@@ -209,12 +210,12 @@ def test_secret_bearing_save_warns_the_saver(tmp_path) -> None:
     clean = tl.trace(nn.Sequential(nn.Linear(3, 2)), torch.ones(1, 3))
     with warnings.catch_warnings(record=True) as caught_clean:
         warnings.simplefilter("always")
-        tl.save(clean, tmp_path / "clean.tlspec")
+        clean.save(tmp_path / "clean.tlspec")
     assert not [w for w in caught_clean if "custom module attribute" in str(w.message)]
 
     with warnings.catch_warnings(record=True) as caught_optout:
         warnings.simplefilter("always")
-        tl.save(log, tmp_path / "optout.tlspec", include_custom_attributes=False)
+        log.save(tmp_path / "optout.tlspec", include_custom_attributes=False)
     assert not [w for w in caught_optout if "custom module attribute" in str(w.message)]
 
 
@@ -258,7 +259,7 @@ def test_layers_to_save_zero_match_warns_and_persists(tmp_path) -> None:
         log = tl.trace(
             _model(),
             torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(layers_to_save=["nosuchlayerzzz"]),
+            save=["nosuchlayerzzz"],
         )
     assert any("matched zero layers" in str(w.message) for w in caught), (
         "typo'd layers_to_save produced no zero-match warning"
@@ -271,7 +272,7 @@ def test_layers_to_save_zero_match_warns_and_persists(tmp_path) -> None:
     # The artifact carries the record too.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(log, tmp_path / "zm.tlspec")
+        log.save(tmp_path / "zm.tlspec")
         loaded = tl.load(tmp_path / "zm.tlspec")
     loaded_entries = loaded.annotations.get("unmatched_capture_selectors", [])
     assert any(entry["slot"] == "layers_to_save" for entry in loaded_entries)
@@ -282,7 +283,7 @@ def test_layers_to_save_zero_match_warns_and_persists(tmp_path) -> None:
         control = tl.trace(
             _model(),
             torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
+            save=["linear"],
         )
     assert not any("matched zero layers" in str(w.message) for w in clean)
     assert not control.annotations.get("unmatched_capture_selectors")

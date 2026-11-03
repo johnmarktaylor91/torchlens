@@ -10,7 +10,7 @@ import torch
 from pytest import MonkeyPatch
 
 from torchlens import _state
-from torchlens.utils import _callable_safety
+from torchlens._utils import _callable_safety
 
 
 def _reference_unwrap_capture_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:

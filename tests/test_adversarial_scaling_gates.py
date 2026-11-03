@@ -4,9 +4,10 @@ Each gate runs a REAL capture at a size where a complexity regression is
 catastrophic but current behavior is comfortable (sizes calibrated 2026-08-19,
 torch 2.13, the benchmark host: wide-equivalence 300 ~0.9s, 300-pass recurrence ~1.9s,
 1400-op diameter ~3.9s, fan-out 300 ~1.0s). The wall-clock bar is the tier
-duration tripwire itself (smoke <5s / heavy <20s, load-scaled, min(wall, cpu)):
-a regression from linear to quadratic work blows the budget and fails the
-session, while the assertions below pin CORRECTNESS at scale — exact layer
+duration budget (smoke <5s / heavy <20s per test in ``tests/tiers/durations.csv``,
+checked by ``scripts/tier_durations.py check``): a regression from linear to
+quadratic work blows the budget in the next measurement, while the assertions
+below pin CORRECTNESS at scale — exact layer
 counts, exact relation tuples, O(1) identity-shared group views, and silent
 (disclosure-free) grouping below the real ceilings. No ceiling constant is
 monkeypatched here; the tiny-ceiling behavior gates live in
@@ -43,10 +44,12 @@ from collections.abc import Callable
 
 import pytest
 import torch
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import CaptureAttemptFailedWarning
+from torchlens._data_classes._layer_sites import layer_site_key
+from torchlens.errors import CaptureAttemptFailedWarning, TraceCaptureError
 
 N_STREAMS = 300
 N_PASSES = 300
@@ -145,7 +148,7 @@ def chain_capture():
 
 
 def _mult_labels(log) -> list[str]:
-    return [layer.label for layer in log.layer_list if layer.label.startswith("mul")]
+    return [layer.label for layer in log._layer_list if layer.label.startswith("mul")]
 
 
 def test_giant_equivalence_class_is_exact(wide_capture) -> None:
@@ -154,7 +157,7 @@ def test_giant_equivalence_class_is_exact(wide_capture) -> None:
     log, _ = wide_capture
     mults = _mult_labels(log)
     assert len(mults) == N_STREAMS
-    assert len(log.layer_list) == N_STREAMS + 5  # input, linear, stack, sum, output
+    assert len(log._layer_list) == N_STREAMS + 5  # input, linear, stack, sum, output
     members = log[mults[0]].equivalent_ops
     assert len(members) == N_STREAMS
     assert all(label in members for label in mults)
@@ -170,16 +173,26 @@ def test_giant_equivalence_view_is_one_shared_object(wide_capture) -> None:
     assert log[mults[0]].equivalent_ops is log[mults[-1]].equivalent_ops
 
 
-def test_giant_cohort_groups_silently_below_real_ceiling(wide_capture) -> None:
+@pytest.mark.usefixtures("legacy_structural_grouper")
+def test_giant_cohort_groups_silently_below_real_ceiling() -> None:
     """At 300 members (~45k pairs) the UNPATCHED sweep finishes with no disclosure.
 
     A pair-probe-ceiling or fixpoint-budget warning here means the real
     constants degraded on an in-band size — a scaling regression, not tuning.
     The mutually-unreachable streams must also stay ungrouped: equivalence
     never silently promotes to recurrence at scale.
+
+    The pair triangle belongs to the structural grouper (``grouper_v1``), which
+    still serves every capture without call-site evidence. Torch captures group
+    by call site, where the comprehension is one layer with a pass per stream
+    (grouping rule row 32) and no triangle runs, so this gate captures through
+    the legacy fixture.
     """
 
-    log, caught = wide_capture
+    torch.manual_seed(0)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        log = tl.trace(_ParallelStreams(N_STREAMS), torch.randn(3))
     scaling_warnings = [
         w
         for w in caught
@@ -191,13 +204,27 @@ def test_giant_cohort_groups_silently_below_real_ceiling(wide_capture) -> None:
     mults = _mult_labels(log)
     assert len(log[mults[0]].recurrent_ops) == 1
     assert len(log[mults[-1]].recurrent_ops) == 1
+    log.cleanup()
+
+
+def test_giant_comprehension_is_one_layer_under_call_sites(wide_capture) -> None:
+    """Under call-site grouping the 300-stream comprehension is one layer.
+
+    grouping rule row 32: a comprehension is one place in the code, so every
+    stream is a pass of one ``mul`` layer, sharing one recurrent_ops view.
+    """
+
+    log, _ = wide_capture
+    mults = _mult_labels(log)
+    assert len(log[mults[0]].recurrent_ops) == N_STREAMS
+    assert log[mults[0]].recurrent_ops is log[mults[-1]].recurrent_ops
 
 
 def test_deep_recurrence_rolls_to_one_layer_per_site(deep_capture) -> None:
     """300 calls of one cell group into single layers with exactly 300 passes."""
 
     log = deep_capture
-    assert len(log.layer_list) == 2 * N_PASSES + 2  # linear+tanh per step, input, output
+    assert len(log._layer_list) == 2 * N_PASSES + 2  # linear+tanh per step, input, output
     for label in ("linear_1_1", "tanh_1_2"):
         layer = log[label]
         assert layer.num_passes == N_PASSES, label
@@ -209,8 +236,8 @@ def test_deep_recurrence_pass_addressing_at_the_extremes(deep_capture) -> None:
     log = deep_capture
     first = log[f"linear_1_1:{1}"]
     last = log[f"linear_1_1:{N_PASSES}"]
-    assert first.pass_index == 1
-    assert last.pass_index == N_PASSES
+    assert first.pass_number == 1
+    assert last.pass_number == N_PASSES
     assert first.num_passes == N_PASSES
     assert last.num_passes == N_PASSES
 
@@ -230,7 +257,7 @@ def test_deep_recurrence_site_key_stable_across_passes(deep_capture) -> None:
     log = deep_capture
     keys = {log[f"linear_1_1:{p}"].site_key for p in range(1, N_PASSES + 1)}
     assert len(keys) == 1
-    assert log["linear_1_1"].site_key == keys.pop()
+    assert layer_site_key(log["linear_1_1"]) == keys.pop()
 
 
 @pytest.mark.heavy
@@ -244,7 +271,7 @@ def test_graph_diameter_capture_is_iterative(chain_capture) -> None:
 
     log, limit_before, limit_after = chain_capture
     assert limit_before == limit_after
-    assert len(log.layer_list) == N_CHAIN + 2
+    assert len(log._layer_list) == N_CHAIN + 2
 
 
 @pytest.mark.heavy
@@ -252,9 +279,11 @@ def test_graph_diameter_relations_exact_at_midpoint(chain_capture) -> None:
     """Parent/child tuples at op 700 of 1400 are exactly the neighbors."""
 
     log, _, _ = chain_capture
-    mid = log["add_700_700:1"]
-    assert mid.parents == ("add_699_699",)
-    assert mid.children == ("add_701_701",)
+    # grouping rule row 1: the loop line is one layer, so op k is pass k of
+    # ``add_1_1``.
+    mid = log["add_1_1:700"]
+    assert mid.parents == ("add_1_1:699",)
+    assert mid.children == ("add_1_1:701",)
 
 
 @pytest.mark.heavy
@@ -262,11 +291,14 @@ def test_graph_diameter_closures_exact_at_endpoints(chain_capture) -> None:
     """Input/output closures stay exact across the full 1400-op span."""
 
     log, _, _ = chain_capture
+    # grouping rule row 1: the loop line is one layer, so op k is pass k of
+    # ``add_1_1``.
     first = log["add_1_1:1"]
-    last = log[f"add_{N_CHAIN}_{N_CHAIN}:1"]
+    last = log[f"add_1_1:{N_CHAIN}"]
+    assert first.num_passes == N_CHAIN
     assert first.output_descendants == frozenset({"output_1"})
     assert last.input_ancestors == frozenset({"input_1"})
-    assert log["output_1:1"].parents == (f"add_{N_CHAIN}_{N_CHAIN}",)
+    assert log["output_1:1"].parents == (f"add_1_1:{N_CHAIN}",)
 
 
 def _stack_depth() -> int:
@@ -374,15 +406,16 @@ def test_depth_overflow_fails_clean_and_restores() -> None:
         model(inputs)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            with pytest.raises(RecursionError):
+            with pytest.raises(TraceCaptureError) as _tce_info:
                 tl.trace(model, inputs)
+            assert isinstance(_tce_info.value.__cause__, RecursionError)
     finally:
         sys.setrecursionlimit(original_limit)
     assert any(isinstance(w.message, CaptureAttemptFailedWarning) for w in caught), (
         "expected the capture-failed restore disclosure"
     )
     follow_up = tl.trace(nn.Linear(2, 2), torch.randn(1, 2))
-    assert [layer.label for layer in follow_up.layer_list] == [
+    assert [layer.label for layer in follow_up._layer_list] == [
         "input_1:1",
         "linear_1_1:1",
         "output_1:1",
@@ -396,11 +429,13 @@ def test_wide_fanout_and_fanin_relations_exact() -> None:
     log = tl.trace(_FanOut(), (torch.randn(4), N_FANOUT))
     mults = _mult_labels(log)
     assert len(mults) == N_FANOUT
-    bare_mults = [label.split(":")[0] for label in mults]
+    # grouping rule row 32: the comprehension is one ``mul`` layer with a pass
+    # per child, so relations name the pass-qualified labels.
+    assert log[mults[0]].num_passes == N_FANOUT
     input_children = log["input_1:1"].children
     assert len(input_children) == N_FANOUT
-    assert set(input_children) == set(bare_mults)
-    stack_labels = [layer.label for layer in log.layer_list if layer.label.startswith("stack")]
+    assert set(input_children) == set(mults)
+    stack_labels = [layer.label for layer in log._layer_list if layer.label.startswith("stack")]
     assert len(stack_labels) == 1
     stack_parents = log[stack_labels[0]].parents
-    assert list(stack_parents) == bare_mults  # arg order preserved
+    assert list(stack_parents) == mults  # arg order preserved

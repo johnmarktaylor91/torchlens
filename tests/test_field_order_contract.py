@@ -6,17 +6,17 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any
 
-from torchlens import constants
+from torchlens import _constants as constants
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
 from torchlens._io import FieldPolicy
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
 
 # Static contract checks over constants only: cheap enough for the commit-level
 # gate, which is exactly where a schema drift has to become visible (the
@@ -69,51 +69,54 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "_out_hash_cache",
                 "_out_identity_cache",
                 "_output_transform",
+                "_output_slot",
                 "_runnable",
                 "_source_model_ref",
                 "_transform",
                 "_visualizer_dir",
                 "_warned_direct_write",
                 "_warned_mutate_in_place",
-                "activation_transform",
-                "backward_ready",
+                "_options_activation_transform",
+                "_options_backward_ready",
                 "capture_guard_passes",
-                "capture_owner_thread_id",
-                "capture_owner_thread_qualified",
-                "capture_thread_activity_detected",
-                "capture_thread_count_end",
-                "capture_thread_count_start",
+                "_provenance_owner_thread_id",
+                "_provenance_owner_thread_qualified",
+                "_provenance_thread_activity_detected",
+                "_provenance_thread_count_end",
+                "_provenance_thread_count_start",
                 # capture_verified / capture_verification_reason left this
                 # ledger in fixwave-5 (2020c7c2): the negative verification
                 # verdict now PERSISTS across save/load (FieldPolicy.KEEP).
-                "rescue_rerun",
-                "completeness_decompositions",
+                "_rescue_rerun",
+                "_health_completeness_decompositions",
                 "completeness_diagnostics",
-                "completeness_witness_accounted_count",
-                "completeness_witness_callback_ns",
-                "completeness_witness_event_count",
-                "completeness_witness_expected_opaque_count",
-                "completeness_witness_mode",
-                "completeness_witness_unaccounted_count",
-                "completeness_witness_verified",
-                "escape_detector_backward_coverage",
-                "escape_detector_callback_ns",
-                "escape_detector_event_count",
-                "escape_detector_mode",
-                "escape_detector_verified",
+                "_health_num_accounted_witness_events",
+                "_health_completeness_callback_ns",
+                "_health_num_witness_events",
+                "_health_num_expected_opaque_witness_events",
+                "_health_completeness_mode",
+                "_health_num_unaccounted_witness_events",
+                "_health_completeness_verified",
+                "_autograd_escape_detector_backward_coverage",
+                "_health_escape_detector_callback_ns",
+                "_health_num_escape_detector_events",
+                "_health_escape_detector_mode",
+                "_health_escape_detector_verified",
                 "escape_diagnostics",
-                "facet_registry_snapshot",
-                "grad_transform",
+                "facet_functions",
+                "_options_grad_transform",
                 # grouping/grouping_policy, distributed_scope,
                 # intervention_audit, and structure_only left this ledger at
                 # the tlspec v8 coordinated bump: all five now persist
                 # (FieldPolicy.KEEP) with load validation.
                 "last_run",
                 "layer_visualizers",
-                "module_filter",
-                "num_modules",
-                "parent_run",
-                "replay_frontier",
+                "_module_filter",
+                "_parent_run",
+                # R2-37: the live pinned-graph disclosure; a loaded trace pins
+                # nothing, so it never persists.
+                "_cost_pinned_autograd_memory",
+                "_replay_frontier",
             }
         ),
     ),
@@ -139,7 +142,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "input_memory",
                 "input_ops",
                 "input_shapes",
-                # "interventions" became a KEEP (portable) ordered field in
+                # "edits" became a KEEP (portable) ordered field in
                 # cert10, so it is no longer a documented DROP display field.
                 # The public computed flag flipped KEEP->DROP in 00bc67d3; the
                 # raw _is_in_conditional_body datum stays KEEP (portable-only
@@ -182,7 +185,9 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         "Module",
         Module,
         tuple(constants.MODULE_LOG_FIELD_ORDER),
-        dropped_display_fields=frozenset({"cls"}),
+        # attribute_writes: the session-time record of the forward's plain-attribute
+        # writes (AGT-2360); arbitrary user objects, never persisted.
+        dropped_display_fields=frozenset({"cls", "attribute_writes"}),
     ),
     FieldOrderCase(
         "ModuleCall",
@@ -221,7 +226,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         "GradFnCall",
         GradFnCall,
         tuple(constants.GRAD_FN_PASS_LOG_FIELD_ORDER),
-        portable_only_fields=frozenset({"label"}),
+        portable_only_fields=frozenset({"grad_fn_label"}),
     ),
     FieldOrderCase(
         "FuncCallLocation",
@@ -251,7 +256,7 @@ def test_field_order_names_are_unique_and_backed() -> None:
         duplicates = _duplicates(case.field_order)
         assert not duplicates, f"{case.name} FIELD_ORDER duplicates: {duplicates}"
 
-        portable_fields = set(case.cls.PORTABLE_STATE_SPEC)
+        portable_fields = set(case.cls._PORTABLE_STATE_SPEC)
         class_fields = set(dir(case.cls))
         missing_backing = [
             field
@@ -267,7 +272,7 @@ def test_portable_state_display_fields_are_in_field_order_or_documented() -> Non
     for case in FIELD_ORDER_CASES:
         portable_display_fields = {
             field
-            for field, policy in case.cls.PORTABLE_STATE_SPEC.items()
+            for field, policy in case.cls._PORTABLE_STATE_SPEC.items()
             if policy not in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}
         }
         missing_from_order = portable_display_fields - set(case.field_order)
@@ -283,7 +288,7 @@ def test_field_order_drop_policy_fields_are_documented() -> None:
         dropped_in_order = {
             field
             for field in case.field_order
-            if case.cls.PORTABLE_STATE_SPEC.get(field)
+            if case.cls._PORTABLE_STATE_SPEC.get(field)
             in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}
         }
         assert dropped_in_order == case.dropped_display_fields, (
@@ -301,14 +306,15 @@ def test_known_glossary_aliases_have_backed_field_order_names() -> None:
     assert "memory" not in constants.OP_LOG_FIELD_ORDER
     assert "memory" not in constants.LAYER_LOG_FIELD_ORDER
 
-    assert "buffer_overwrite_index" in constants.BUFFER_LOG_FIELD_ORDER
-    assert "buffer_pass" in constants.BUFFER_LOG_FIELD_ORDER
-    assert hasattr(Buffer, "buffer_overwrite_index")
-    assert hasattr(Buffer, "buffer_pass")
+    assert "overwrite_index" in constants.BUFFER_LOG_FIELD_ORDER
+    assert "buffer_overwrite_index" not in constants.BUFFER_LOG_FIELD_ORDER
+    assert "buffer_pass" not in constants.BUFFER_LOG_FIELD_ORDER
+    assert hasattr(Buffer, "overwrite_index")
+    assert not hasattr(Buffer, "buffer_overwrite_index")
 
     assert "has_op" in constants.GRAD_FN_LOG_FIELD_ORDER
     assert "is_intervening" not in constants.GRAD_FN_LOG_FIELD_ORDER
-    assert "has_op" in GradFn.PORTABLE_STATE_SPEC
+    assert "has_op" in GradFn._PORTABLE_STATE_SPEC
 
 
 def _duplicates(values: Collection[str]) -> list[str]:

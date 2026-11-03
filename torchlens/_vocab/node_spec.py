@@ -4,7 +4,7 @@ The node-presentation VALUE vocabulary consumed by strata below PRESENT:
 ``options`` at the engine boundary and the viz/repgeom/receptive-field
 appliances all type against :class:`NodeSpec` and the node-callback aliases.
 Only vocabulary lives here (Rule V3: no behavior smuggling) -- the render
-behavior helpers stay in :mod:`torchlens.visualization.node_spec`, which
+behavior helpers stay in :mod:`torchlens._visualization.node_spec`, which
 re-exports these names so no public spelling changes.
 """
 
@@ -15,17 +15,20 @@ from dataclasses import dataclass, field, replace as dataclass_replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
-    from ..data_classes.layer import Layer
-    from ..data_classes.module import Module
+    from .._data_classes.grad_fn import GradFn
+    from .._data_classes.layer import Layer
+    from .._data_classes.module import Module
 
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True
 
-INTERVENTION_SITE_COLOR = "#FF00FF"
-INTERVENTION_CONE_COLOR = "#FFB3FF"
-INTERVENTION_HOOK_FILL_COLOR = "#FFE6FF"
-INTERVENTION_HOOK_BORDER_COLOR = "#CC00CC"
+# One edit purple marks the edited node's ring, its edit text, the header's
+# edit token and the downstream highlighter (JMT, 29 Oct 2026). The dark skin
+# swaps in a lighter tint (``visualization._edit_marks.edit_ink``).
+INTERVENTION_SITE_COLOR = "#7B1FA2"
+INTERVENTION_CONE_COLOR = "#7B1FA2"
+INTERVENTION_HOOK_FILL_COLOR = "#F3E5F5"
+INTERVENTION_HOOK_BORDER_COLOR = "#7B1FA2"
 INTERVENTION_OVERRIDE_KEYS = frozenset(
     {
         "intervention_site_color",
@@ -121,4 +124,4 @@ CollapsedNodeSpecFn = Callable[["Module", NodeSpec], NodeSpec | None]
 
 
 # Pickle-visible identity stays the historical path (move-compat law).
-NodeSpec.__module__ = "torchlens.visualization.node_spec"
+NodeSpec.__module__ = "torchlens._visualization.node_spec"

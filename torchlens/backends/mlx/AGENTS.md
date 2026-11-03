@@ -1,17 +1,20 @@
 # backends/mlx/ - Implementation Guide
 
 MLX preview backend: eager wrapper capture with live per-op replay validation.
-Tier-1 standalone spec (no `capture_backend`); the `BackendSpec` in
-`../default_specs.py` is the only capability truth.
+It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+`BackendSpec` in `../default_specs.py` and its protocol shell in
+`../_protocols/mlx.py` are the capability truth (contract: `../AGENTS.md`).
 
 ## backend.py
 - `MLXBackend.capture_trace()` is the standalone entry; `GradOptions`
   (re-exported from `__init__.py`) drives derived gradients including
   intermediates (`_MLXIntermediateTapObserver`, `intermediate_derived_grads=True`).
-- Static-label `intervene=` AND `halt=` both ship; combining either with
+- Static-label `intervene=` AND `stop_after=` both ship; combining either with
   `grad_options=` refuses typed (derived-grad replay would misrepresent the
-  intervened forward). Halted traces set `halted` / `halt_reason` /
-  `halt_frontier`; a halt selector matching zero sites warns.
+  intervened forward). Halted traces set `is_stopped` / `stop_reason` /
+  `halt_frontier`; a halt selector matching zero sites warns. Those
+  capture-time warnings (zero-match selectors, compiled attributes) live in
+  `_capture_disclosures.py`.
 - `mx.compile` / `mx.grad` / `mx.vmap` traced-transform entries refuse typed at
   capture entry (`_find_mlx_compiled_attributes`, `_mlx_traced_transform_type`);
   a compiled model attribute ceilings the capture (`capture_verified=False`).
@@ -22,7 +25,11 @@ Tier-1 standalone spec (no `capture_backend`); the `BackendSpec` in
 ## wrappers.py
 - `wrap_mlx()` / `unwrap_mlx()` / `is_mlx_wrapped()` install and remove the
   eager wrappers; `_MLXWrapperRegistry` owns the wrapped surface and
-  `mlx_tap_observer()` scopes an observer over a capture.
+  `mlx_tap_observer()` scopes an observer over a capture. With an observer
+  active the wrapper passes `module_address=` (the discovered module's primary
+  address, else `None`) so the intermediate-gradient replay observers mirror
+  capture's `"address:call_index"` module frames; their signatures must match
+  `op.modules` or module-shaped models get no intermediate gradients.
 
 ## interventions.py
 - `resolve_mlx_intervention_plan()` builds `MLXInterventionPlan` /
@@ -46,7 +53,7 @@ Tier-1 standalone spec (no `capture_backend`); the `BackendSpec` in
 
 ## Local Invariants
 - True backward capture is unsupported: MLX traces always report
-  `Trace.has_backward_pass = False`; RNG replay snapshots are `None`.
+  `Trace.autograd.has_backward_pass = False`; RNG replay snapshots are `None`.
 - fastlog, streaming, and rng_replay stay refused (registry flags); unsupported
   trace options refuse typed through `.._options` policies.
 - `capabilities.py` only re-exports registry truth; never hardcode flags here.

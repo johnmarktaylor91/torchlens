@@ -30,13 +30,13 @@ the session-time Kineto join: exact-attribution device nanoseconds per
 pass-qualified op, summed with the mandatory aggregation legend line on
 rolled nodes. The channel exists only on a trace captured under an owned
 profiler session whose join reached `joined`
-(`torchlens.observability.native_profile`); explicitly requesting it
+(`torchlens.report.kernel_profile`); explicitly requesting it
 anywhere else refuses typed (`device_time_unavailable`) with the cause and
 remedy — never silent zeros. Joined-but-kernel-less nodes read honest n/a.
 
 ### size_by + scale — box minimums (D4 default mapping)
 
-`draw(size_by="dims", scale="sqrt")` sizes nodes by the numel of the
+`draw(size_by="dims", size_scale="sqrt")` sizes nodes by the numel of the
 non-batch output shape (the conservative area-only mapping, applied as the
 D4 default), emitted as width/height MINIMUMS under `fixedsize=false`:
 labels never truncate, fonts never scale, encoded area clamps at 4x the
@@ -51,7 +51,7 @@ size dominates the minimum — the taper motif reads on compact nodes.
 ### stack_by — rank columns (the classic timestep diagram)
 
 `draw(stack_by=True, direction="leftright")` pins nodes sharing an
-annotation value to one Graphviz rank. The auto form derives `pass_index`
+annotation value to one Graphviz rank. The auto form derives `pass_number`
 on multi-pass ops under the LOCKSTEP LICENSE (globally monotone execution
 windows); the caption and legend disclose the annotation used.
 
@@ -74,6 +74,12 @@ the title row, escaped by the standard choke point. Single-pass layers and
 unrolled per-pass nodes carry no summary row. The `node_label_fields`
 selector token `"shape_summary"` adds the row to explicit field pickers
 (skipped when the field is unset).
+
+The `"dtype"` selector token (DOCUMENTED-UNSTABLE) adds the node's output
+dtype as one row, framework namespace dropped (`"float16"`), for reading where
+a mixed-precision graph changes dtype:
+`trace.draw(node_label_fields=["name", "shape", "dtype"])`. Nodes without a
+dtype contribute no row.
 
 ## Saved-for-backward annotation (opt-in)
 
@@ -129,7 +135,7 @@ Before/after (transformer block):
 ![before](../images/encoding/suppression_transformer_before.svg)
 ![after](../images/encoding/suppression_transformer_after.svg)
 
-Before/after (attention node_style):
+Before/after (attention style, `node_spec_fn=torchlens.experimental.node_styles.attention_node_mode`):
 
 ![before](../images/encoding/suppression_attention_style_before.svg)
 ![after](../images/encoding/suppression_attention_style_after.svg)

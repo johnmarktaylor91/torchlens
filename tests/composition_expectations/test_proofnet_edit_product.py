@@ -46,11 +46,11 @@ class EditCell:
 
 EDIT_PRODUCT_MATRIX: dict[str, EditCell] = {
     "trace_live_fork": EditCell("WORKS"),
-    "trace_live_no_fork": EditCell("WORKS_WITH_DISCLOSURE"),  # MutateInPlaceWarning
+    "trace_live_no_fork": EditCell("WORKS_WITH_DISCLOSURE"),  # TraceMutationWarning
     "trace_loaded": EditCell(
-        "REFUSES_CODELESS",
+        "REFUSES_TYPED",
+        code="replay_loaded_trace_has_no_callables",
         exc="ReplayPreconditionError",
-        gap="DIGEST-AUDIT fields-clobber: intervention ctor destroys .fields",
     ),
     "trace_structure_only": EditCell(
         "REFUSES_TYPED",
@@ -77,9 +77,9 @@ def edit_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 2)
     ).eval()
     example = torch.randn(2, 4)
-    live = tl.trace(model, example, capture=tl.options.CaptureOptions(intervention_ready=True))
+    live = tl.trace(model, example, capture=tl.options.CaptureOptions(replayable=True))
     save_path = tmp_path_factory.mktemp("editmx") / "live.tlspec"
-    tl.save(live, str(save_path))
+    live.save(str(save_path))
     products = {
         "trace_live_fork": live,
         "trace_live_no_fork": live,
@@ -87,7 +87,7 @@ def edit_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         "trace_structure_only": tl.trace(
             model, example, capture=tl.options.CaptureOptions(structure_only=True)
         ),
-        "trace_halted": tl.trace(model, example, halt=tl.func("relu")),
+        "trace_halted": tl.trace(model, example, stop_after=tl.func("relu")),
         "trace_not_intervention_ready": tl.trace(model, example),
     }
     try:
@@ -136,14 +136,14 @@ def test_edit_cell_matches_declared_state(product_name: str, edit_products: dict
         private = tl_mod.trace(
             private_model,
             torch.randn(2, 4),
-            capture=tl_mod.options.CaptureOptions(intervention_ready=True),
+            capture=tl_mod.options.CaptureOptions(replayable=True),
         )
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 _edit(private)
             names = [type(entry.message).__name__ for entry in caught]
-            assert "MutateInPlaceWarning" in names, (
+            assert "TraceMutationWarning" in names, (
                 f"in-place do() on a live trace disclosed {names}: the mutate-"
                 "in-place disclosure is the cell's contract"
             )
@@ -185,11 +185,11 @@ def test_selection_lane_edit_on_presenters_refuses_foreign_trace() -> None:
         torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 2)
     ).eval()
     example = torch.randn(2, 4)
-    options = tl.options.CaptureOptions(intervention_ready=True)
+    options = tl.options.CaptureOptions(replayable=True)
     first = tl.trace(model, example, capture=options)
     second = tl.trace(model, example, capture=options)
     try:
-        resolved_on_first = first["relu_1_2"].__selection__().resolve(first)
+        resolved_on_first = first[first["relu_1_2"].__selection__()]
         fork = second.fork()
         try:
             with pytest.raises(Exception) as excinfo:

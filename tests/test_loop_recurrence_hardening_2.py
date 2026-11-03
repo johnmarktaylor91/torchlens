@@ -23,9 +23,15 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 
 from torchlens import trace as trace_fn
 from torchlens.validation.invariants import check_metadata_invariants
+
+# This suite drives the structural grouper (grouper_v1), which serves captures
+# without call-site evidence; torch captures group by call site
+# (tests/test_grouping_call_sites.py).
+pytestmark = pytest.mark.usefixtures("legacy_structural_grouper")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -74,10 +80,8 @@ def _op_record(op) -> tuple:
 
 def _rolled_node_label_line(traced, node_name: str, outpath: str) -> str:
     """Render the rolled graph and return the named node's label line."""
-    graph = traced.draw(
-        vis_mode="rolled", vis_save_only=True, return_graph=True, vis_outpath=outpath
-    )
-    for line in graph.source.splitlines():
+    graph = traced.draw(rolled=True, path=outpath).dot
+    for line in graph.splitlines():
         if line.strip().startswith(f"{node_name} [label"):
             return line.strip()
     raise AssertionError(f"node {node_name!r} not found in rolled render")
@@ -238,7 +242,7 @@ def test_tied_distinct_modules_are_not_recurrent(direct_chain: bool) -> None:
     torch.manual_seed(0)
     traced = trace_fn(_TiedEncoderDecoder(direct_chain=direct_chain), torch.randn(1, 4))
 
-    assert traced.is_recurrent is False
+    assert traced.graph.is_recurrent is False
     linear_layers = _layers_of_type(_layer_passes(traced), "linear")
     assert len(linear_layers) == 2, linear_layers
     assert set(linear_layers.values()) == {1}, linear_layers
@@ -246,7 +250,7 @@ def test_tied_distinct_modules_are_not_recurrent(direct_chain: bool) -> None:
     # Both semantic sites survive with their own module attribution; no layer's
     # pass ops disagree on module address.
     site_addresses = set()
-    for layer in traced.layer_logs.values():
+    for layer in traced._layer_logs.values():
         addresses = {_module_addresses(op) for op in layer.ops.values()}
         assert len(addresses) <= 1, f"layer {layer.layer_label} spans module addresses {addresses}"
         site_addresses.update(addresses)
@@ -261,14 +265,12 @@ def test_tied_distinct_modules_rolled_render_shows_both_sites(tmp_path) -> None:
     torch.manual_seed(0)
     traced = trace_fn(_TiedEncoderDecoder(), torch.randn(1, 4))
     graph = traced.draw(
-        vis_mode="rolled",
-        vis_save_only=True,
-        return_graph=True,
-        vis_outpath=str(tmp_path / "tied_rolled"),
-    )
+        rolled=True,
+        path=str(tmp_path / "tied_rolled"),
+    ).dot
     label_lines = [
         line.strip()
-        for line in graph.source.splitlines()
+        for line in graph.splitlines()
         if line.strip().startswith("linear_") and "[label" in line
     ]
     assert len(label_lines) == 2, label_lines
@@ -283,12 +285,12 @@ def test_untied_control_and_reused_module_control() -> None:
     """Untied twin stays ungrouped; ONE reused module keeps genuine recurrence."""
     torch.manual_seed(0)
     untied = trace_fn(_UntiedEncoderDecoder(), torch.randn(1, 4))
-    assert untied.is_recurrent is False
+    assert untied.graph.is_recurrent is False
     assert set(_layers_of_type(_layer_passes(untied), "linear").values()) == {1}
     assert check_metadata_invariants(untied)
 
     reused = trace_fn(_ReusedModuleLoop(3), torch.randn(1, 4))
-    assert reused.is_recurrent is True
+    assert reused.graph.is_recurrent is True
     assert _layers_of_type(_layer_passes(reused), "linear") == {"linear_1_1": 3}
     assert check_metadata_invariants(reused)
 
@@ -310,7 +312,7 @@ def test_shared_kernel_divergent_args_stay_distinct(axis: str) -> None:
     torch.manual_seed(0)
     traced = trace_fn(_SharedKernelConvs(axis), torch.randn(1, 1, 5, 5))
 
-    assert traced.is_recurrent is False
+    assert traced.graph.is_recurrent is False
     conv_layers = _layers_of_type(_layer_passes(traced), "conv2d")
     assert len(conv_layers) == 2, conv_layers
     assert set(conv_layers.values()) == {1}, conv_layers
@@ -319,7 +321,7 @@ def test_shared_kernel_divergent_args_stay_distinct(axis: str) -> None:
     # call 1 onto call 2.
     conv_shapes = {
         tuple(layer.shape)
-        for layer in traced.layer_logs.values()
+        for layer in traced._layer_logs.values()
         if layer.layer_label.startswith("conv2d")
     }
     assert len(conv_shapes) == 2, conv_shapes
@@ -331,7 +333,7 @@ def test_shared_kernel_same_args_loop_still_groups() -> None:
     """Control: a genuine functional weight-tied loop with uniform args groups."""
     torch.manual_seed(0)
     traced = trace_fn(_SharedKernelSameArgsLoop(), torch.randn(1, 1, 5, 5))
-    assert traced.is_recurrent is True
+    assert traced.graph.is_recurrent is True
     assert _layers_of_type(_layer_passes(traced), "conv2d") == {"conv2d_1_1": 3}
     assert check_metadata_invariants(traced)
 
@@ -345,7 +347,7 @@ def test_variable_length_recurrence_not_projected_from_pass_1() -> None:
     """
     torch.manual_seed(0)
     traced = trace_fn(_ShrinkingRecurrent(), torch.randn(4, 4))
-    layer = traced.layer_logs["linear_1_1"]
+    layer = traced._layer_logs["linear_1_1"]
     op_shapes = [tuple(op.shape) for op in layer.ops.values()]
     assert op_shapes == [(4, 4), (3, 4), (2, 4)]
 
@@ -369,7 +371,7 @@ def test_growing_recurrence_aggregate_is_not_call_1() -> None:
     """When passes GROW, the aggregate must differ from call 1's values."""
     torch.manual_seed(0)
     traced = trace_fn(_GrowingRecurrent(), torch.randn(2, 4))
-    layer = traced.layer_logs["linear_1_1"]
+    layer = traced._layer_logs["linear_1_1"]
     # OpAccessor get/[] are 0-based positional (C02 basis fix, lovely bug 27).
     first_pass = layer.ops.get(0)
     last_pass = layer.ops.get(layer.num_passes - 1)
@@ -383,7 +385,7 @@ def test_uniform_multi_pass_layer_left_untouched() -> None:
     """Fixed-shape loops keep plain pass values and carry NO varying marker."""
     torch.manual_seed(0)
     traced = trace_fn(_FixedShapeLoop(), torch.randn(4, 4))
-    layer = traced.layer_logs["linear_1_1"]
+    layer = traced._layer_logs["linear_1_1"]
     assert layer.num_passes == 3
     assert tuple(layer.shape) == (4, 4)
     assert "varying_across_passes" not in layer.annotations
@@ -409,16 +411,16 @@ def test_rolled_unrolled_conservation(model_factory, model_input) -> None:
     """Expanding every rolled Layer through Layer.ops reconstructs the unrolled trace.
 
     The multiset of per-op structural records (label, parents, children, module
-    call, shape, dtype) reached through ``Trace.layer_logs[*].ops`` must equal
+    call, shape, dtype) reached through ``Trace._layer_logs[*].ops`` must equal
     the unrolled ``layer_list`` exactly: no op dropped, none duplicated, and no
     rolled aggregate replacing per-pass truth.
     """
     torch.manual_seed(0)
     traced = trace_fn(model_factory(), model_input)
 
-    unrolled_records = Counter(_op_record(op) for op in traced.layer_list)
+    unrolled_records = Counter(_op_record(op) for op in traced._layer_list)
     rolled_records: Counter = Counter()
-    for layer in traced.layer_logs.values():
+    for layer in traced._layer_logs.values():
         for op in layer.ops.values():
             rolled_records[_op_record(op)] += 1
 
@@ -459,7 +461,7 @@ def test_arg_signature_ignores_object_key_identity() -> None:
     """
     from types import SimpleNamespace
 
-    from torchlens.postprocess.loop_detection import _structural_arg_signature
+    from torchlens._postprocess.loop_detection import _structural_arg_signature
 
     def _op(key: object) -> SimpleNamespace:
         return SimpleNamespace(non_tensor_pos_args=(), non_tensor_kwargs={"cfg": {key: 1}})
@@ -474,7 +476,7 @@ def test_arg_signature_mixed_key_dict_is_order_and_address_free() -> None:
     """Mixed primitive/object key dicts sign identically across constructions."""
     from types import SimpleNamespace
 
-    from torchlens.postprocess.loop_detection import _structural_arg_signature
+    from torchlens._postprocess.loop_detection import _structural_arg_signature
 
     first = SimpleNamespace(
         non_tensor_pos_args=({_OpaqueKey(): 1, "z": 2},),
@@ -504,7 +506,7 @@ def test_grouping_graph_equivalent_labels_respect_argsig_split(monkeypatch) -> N
     same mixed seed set. The neutral contract requires every member of a
     node's ``equivalent_labels`` to share that node's ``equivalence_key``.
     """
-    import torchlens.postprocess.loop_detection as loop_detection
+    import torchlens._postprocess.loop_detection as loop_detection
 
     captured: dict[str, object] = {}
     real_group = loop_detection.group_recurrent_nodes

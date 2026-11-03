@@ -20,7 +20,7 @@ transformers = pytest.importorskip("transformers")
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 
 
-def _sae_like(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     """SAE-style encode/gate/decode on the hooked activation."""
 
     z = torch.relu(out @ torch.eye(out.shape[-1]))
@@ -44,7 +44,7 @@ def test_gpt2_mlp_sae_injection_persists_and_attests(tmp_path) -> None:
     host_sites = {record.provenance.host_site_key for record in records}
     assert all(isinstance(key, str) and key.startswith("s1|") for key in host_sites)
     path = str(tmp_path / "gpt2_sae.tlspec")
-    tl.save(logged, path)
+    logged.save(path)
     loaded = tl.load(path)
     restored = loaded.injected_ops
     assert len(restored) == len(records)
@@ -65,7 +65,7 @@ def test_torchvision_block_splice_injection_persists_and_attests(tmp_path) -> No
     model = torchvision.models.resnet18(weights=None).eval()
     x = torch.randn(1, 3, 64, 64)
 
-    def block_splice(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def block_splice(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Splice a channel-recombination into the block output."""
 
         pooled = torch.mean(out, dim=1, keepdim=True)
@@ -79,7 +79,7 @@ def test_torchvision_block_splice_injection_persists_and_attests(tmp_path) -> No
     func_names = {record.func_name for record in records}
     assert {"mean", "tanh", "add"} & func_names
     path = str(tmp_path / "resnet_splice.tlspec")
-    tl.save(logged, path)
+    logged.save(path)
     loaded = tl.load(path)
     assert len(loaded.injected_ops) == len(records)
     report = attest_injected_ops(loaded)
@@ -87,5 +87,5 @@ def test_torchvision_block_splice_injection_persists_and_attests(tmp_path) -> No
     assert {row.status for row in report.rows} == {"attested"}
     # the model op family is untouched by the injected rows after load
     assert not any(
-        getattr(op, "injection_provenance", None) is not None for op in loaded.layer_list
+        getattr(op, "injection_provenance", None) is not None for op in loaded._layer_list
     )

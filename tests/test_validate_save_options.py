@@ -15,8 +15,8 @@ import pytest
 import torch
 
 import torchlens as tl
+import torchlens._user_funcs as user_funcs
 import torchlens._user_public_impls as public_impls
-import torchlens.user_funcs as user_funcs
 from torchlens.errors import InvalidArgumentError, SaveBudgetExceededError
 from torchlens.options import CaptureOptions
 
@@ -83,7 +83,7 @@ def test_intervention_scope_honors_save_options() -> None:
 
     model, x = _net_and_input()
     report = tl.validate(model, x, scope="intervention", output_device="cpu", save_budget=None)
-    assert report.invariance is True
+    assert report.is_invariant is True
     with pytest.raises(SaveBudgetExceededError):
         tl.validate(model, x, scope="intervention", save_budget=64)
 
@@ -183,9 +183,7 @@ def test_both_validator_captures_receive_the_save_options() -> None:
     seen: list[tuple[Any, Any, bool]] = []
 
     def recording_runner(*args: Any, **kwargs: Any) -> Any:
-        seen.append(
-            (kwargs.get("output_device"), kwargs.get("save_budget"), kwargs["save_arg_values"])
-        )
+        seen.append((kwargs.get("output_device"), kwargs.get("save_budget"), kwargs["save_args"]))
         return real_runner(*args, **kwargs)
 
     model, x = _net_and_input()
@@ -202,7 +200,7 @@ def test_both_validator_captures_receive_the_save_options() -> None:
 def test_non_torch_backend_refuses_non_default_save_options() -> None:
     """Only the torch validator capture honors the save options."""
 
-    from torchlens.backends import BackendUnsupportedError
+    from torchlens.errors import BackendUnsupportedError
 
     fake_spec = mock.Mock()
     fake_spec.name = "jax"
@@ -256,16 +254,18 @@ _CUDA = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA d
 
 
 @_CUDA
+@pytest.mark.cuda
 @pytest.mark.parametrize("scope", ["forward", "saved", "intervention"])
 def test_cuda_model_validates_with_host_saved_activations(scope: str) -> None:
     """A CUDA model validates with ``output_device="cpu"`` on every saving scope."""
 
     model, x = _net_and_input("cuda")
     result = tl.validate(model, x, scope=scope, output_device="cpu")
-    assert bool(result) if scope != "intervention" else result.invariance
+    assert bool(result) if scope != "intervention" else result.is_invariant
 
 
 @_CUDA
+@pytest.mark.cuda
 def test_cuda_validator_capture_holds_activations_on_host() -> None:
     """The validator-equivalent capture keeps saved outs on the host under ``"cpu"``."""
 
@@ -273,9 +273,10 @@ def test_cuda_validator_capture_holds_activations_on_host() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True, output_device="cpu"),
+        capture=CaptureOptions(save_args=True, output_device="cpu"),
+        save="all",
     )
-    devices = {op.out.device.type for op in trace.layer_list if op.out is not None}
+    devices = {op.out.device.type for op in trace._layer_list if op.out is not None}
     assert devices == {"cpu"}
 
 
@@ -292,8 +293,8 @@ def _assert_corrupted_activation_fails(device: str) -> None:
 
     def corrupting_runner(*args: Any, **kwargs: Any) -> Any:
         trace = real_runner(*args, **kwargs)
-        if kwargs["save_arg_values"]:
-            relu = next(op for op in trace.layer_list if op.func_name == "relu")
+        if kwargs["save_args"]:
+            relu = next(op for op in trace._layer_list if op.func_name == "relu")
             assert relu.out.device.type == "cpu"
             relu.out = relu.out + 1.0
         return trace
@@ -311,6 +312,7 @@ def test_replay_still_detects_a_corrupted_saved_activation() -> None:
 
 
 @_CUDA
+@pytest.mark.cuda
 def test_cuda_replay_still_detects_a_corrupted_saved_activation() -> None:
     """With host-held activations of a CUDA model the tripwire still fires."""
 
@@ -318,6 +320,7 @@ def test_cuda_replay_still_detects_a_corrupted_saved_activation() -> None:
 
 
 @_CUDA
+@pytest.mark.cuda
 @pytest.mark.parametrize("model_name", ["GetAndSetItem", "InPlaceFuncs", "BatchNormModel"])
 def test_cuda_example_models_keep_their_verdict_with_host_activations(model_name: str) -> None:
     """Posthoc exemption proofs (``__setitem__`` coverage) also work across devices."""
@@ -327,15 +330,16 @@ def test_cuda_example_models_keep_their_verdict_with_host_activations(model_name
     torch.manual_seed(0)
     model = getattr(example_models, model_name)().to("cuda")
     x = torch.rand(6, 3, 24, 24, device="cuda")
-    assert tl.validate(model, x, scope="forward", random_seed=0) is True
-    assert tl.validate(model, x, scope="forward", random_seed=0, output_device="cpu") is True
+    assert tl.validate(model, x, scope="forward", seed=0) is True
+    assert tl.validate(model, x, scope="forward", seed=0, output_device="cpu") is True
 
 
 @_CUDA
+@pytest.mark.cuda
 def test_cuda_tensor_nanequal_compares_values_across_devices() -> None:
     """``tensor_nanequal`` compares a CUDA and a CPU tensor by value instead of raising."""
 
-    from torchlens.utils.tensor_utils import tensor_nanequal
+    from torchlens._utils.tensor_utils import tensor_nanequal
 
     t = torch.tensor([1.0, float("nan"), 3.0])
     assert tensor_nanequal(t.cuda(), t)

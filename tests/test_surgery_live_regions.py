@@ -29,7 +29,7 @@ from torchlens.intervention.regions import RegionTarget, region
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
 
 
 class _Chain(nn.Module):
@@ -128,14 +128,14 @@ def test_region_derivation_boundary_and_instances(chain_fork) -> None:
     slice_ = fork.between(fork["linear_1_1"], fork["tanh_1_4"])
     target = slice_.as_region()
     assert isinstance(target, RegionTarget)
-    assert target.members == ("linear_1_1:1", "relu_1_2:1", "linear_2_3:1", "tanh_1_4:1")
+    assert target.labels == ("linear_1_1:1", "relu_1_2:1", "linear_2_3:1", "tanh_1_4:1")
     (exit_edge,) = target.boundary.exits
     assert (exit_edge.parent, exit_edge.child) == ("tanh_1_4:1", "linear_3_5:1")
     assert exit_edge.addresses, "exit edges resolve pass-exact occurrence addresses"
     (entry_edge,) = target.boundary.entries
     assert entry_edge.child == "linear_1_1:1"
     assert len(target.instances) == 1
-    assert target.instances[0].exit_ops == ("tanh_1_4:1",)
+    assert target.instances[0].exit_labels == ("tanh_1_4:1",)
     assert target.region_digest.startswith("region-")
     assert "interior not replayed" in repr(target)
 
@@ -246,14 +246,14 @@ def test_region_do_round_trips(chain_fork, tmp_path) -> None:
     _model, _x, fork = chain_fork
     fork.do(fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region(), tl.zero_ablate())
     path = str(tmp_path / "region.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     (fact,) = _region_fact_rows(loaded)
     assert fact["execution_effect"] == "exits_substituted_interior_not_replayed"
 
 
 def test_region_splice_module_lowering(chain_fork) -> None:
-    """splice_module(input='in') maps region ENTRY values to exit values."""
+    """splice_module(input_route='in') maps region ENTRY values to exit values."""
 
     model, _x, fork = chain_fork
 
@@ -266,7 +266,7 @@ def test_region_splice_module_lowering(chain_fork) -> None:
             return torch.ones_like(value) * 2.0
 
     target = fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region()
-    fork.do(target, tl.splice_module(_Sub(), input="in"))
+    fork.do(target, tl.splice_module(_Sub(), input_route="in"))
     assert torch.allclose(fork["linear_3_5"].out, model.fc3(torch.full((3, 4), 2.0)), atol=1e-6)
     (fact,) = _region_fact_rows(fork)
     assert fact["edit"] == "splice_module"
@@ -286,14 +286,14 @@ def test_region_multi_exit_atomic_once_per_instance() -> None:
     )
     target = fork.subgraph(members).as_region()
     assert len(target.instances) == 1
-    assert set(target.instances[0].exit_ops) == {"linear_2_3:1", "linear_3_5:1"}
+    assert set(target.instances[0].exit_labels) == {"linear_2_3:1", "linear_3_5:1"}
     with pytest.raises(RegionError) as excinfo:
         fork.do(target, tl.zero_ablate())
     assert excinfo.value.fields["code"] == "region_edit_multi_exit_unsupported"
 
     calls = {"n": 0}
 
-    def _region_edit(outs: tuple, *, hook) -> tuple:
+    def _region_edit(outs: tuple, *, ctx) -> tuple:
         """Zero both exits from ONE coordinated evaluation."""
 
         calls["n"] += 1
@@ -320,7 +320,7 @@ def test_region_stochastic_once_per_pass() -> None:
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
     draws: list[torch.Tensor] = []
 
-    def _stochastic(outs: tuple, *, hook) -> tuple:
+    def _stochastic(outs: tuple, *, ctx) -> tuple:
         """One draw per evaluation, applied to every exit."""
 
         draw = torch.randn(())
@@ -359,7 +359,7 @@ def test_region_container_consumed_exit_extends() -> None:
     assert all(edge.child == "cat_1_7:1" for edge in target.boundary.exits)
     assert any(edge.nested for edge in target.boundary.exits), "cat consumes inside a list"
 
-    def _halves(outs: tuple, *, hook) -> tuple:
+    def _halves(outs: tuple, *, ctx) -> tuple:
         """Replace both exits with constant halves."""
 
         return tuple(torch.full_like(out, 0.5) for out in outs)
@@ -377,7 +377,7 @@ def test_region_shared_block_pass_instances() -> None:
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
     # pass-1 only: pass-qualified endpoints, one instance
     single = fork.between(fork["linear_1_1:1"], fork["linear_1_1:1"]).as_region()
-    assert single.members == ("linear_1_1:1",)
+    assert single.labels == ("linear_1_1:1",)
     assert len(single.instances) == 1
     fork.do(single, tl.zero_ablate())
     # pass 1 zeroed -> relu(0) = 0 -> pass 2 = bias-only forward
@@ -401,7 +401,7 @@ def test_region_disconnected_members_evaluate_per_instance() -> None:
     assert len(target.instances) == 2
     calls = {"n": 0}
 
-    def _edit(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def _edit(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Count evaluations; zero the exit."""
 
         calls["n"] += 1
@@ -427,7 +427,7 @@ def test_region_effect_closure_refuses_train_mode_bn() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         fork = tl.trace(model, x, capture=_CAPTURE).fork()
-    bn_label = next(op.layer_label for op in fork.layer_list if op.layer_type == "batchnorm")
+    bn_label = next(op.layer_label for op in fork._layer_list if op.type == "batchnorm")
     target = fork.between(fork["linear_1_1"], fork[bn_label]).as_region()
     with pytest.raises(RegionError) as excinfo:
         fork.do(target, tl.zero_ablate())
@@ -442,7 +442,7 @@ def test_region_effect_closure_allows_eval_mode_bn() -> None:
     model = _BN().eval()
     x = torch.randn(3, 4)
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
-    bn_label = next(op.layer_label for op in fork.layer_list if op.layer_type == "batchnorm")
+    bn_label = next(op.layer_label for op in fork._layer_list if op.type == "batchnorm")
     target = fork.between(fork["linear_1_1"], fork[bn_label]).as_region()
     assert [(e.parent, e.child) for e in target.boundary.exits] == [
         (f"{bn_label}:1", "linear_2_3:1")
@@ -516,10 +516,10 @@ def test_region_gpt2_block_module_aligned() -> None:
     total_exit_edges = len(target.boundary.exits)
     assert total_exit_edges >= 1
     fork.do(target, tl.scale(0.0)) if all(
-        len(i.exit_ops) == 1 for i in target.instances
+        len(i.exit_labels) == 1 for i in target.instances
     ) else fork.do(
         target,
-        lambda outs, *, hook: tuple(torch.zeros_like(out) for out in outs),
+        lambda outs, *, ctx: tuple(torch.zeros_like(out) for out in outs),
     )
     (fact,) = _region_fact_rows(fork)
     assert fact["execution_effect"] == "exits_substituted_interior_not_replayed"
@@ -575,11 +575,11 @@ def test_region_resnet50_block_module_aligned() -> None:
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
     slice_ = fork.subgraph(tl.in_module("layer2.0"))
     target = slice_.as_region()
-    assert len(target.members) > 5
+    assert len(target.labels) > 5
     edit = (
         tl.scale(0.0)
-        if all(len(i.exit_ops) == 1 for i in target.instances)
-        else (lambda outs, *, hook: tuple(torch.zeros_like(out) for out in outs))
+        if all(len(i.exit_labels) == 1 for i in target.instances)
+        else (lambda outs, *, ctx: tuple(torch.zeros_like(out) for out in outs))
     )
     fork.do(target, edit)
     (fact,) = _region_fact_rows(fork)
@@ -632,7 +632,7 @@ def test_region_splice_arity_mismatch_refuses() -> None:
         | fork["linear_2_3"].__selection__()
         | fork["linear_3_5"].__selection__()
     ).as_region()
-    assert len(target.instances[0].exit_ops) == 2
+    assert len(target.instances[0].exit_labels) == 2
 
     class _OneOut(nn.Module):
         """Replacement returning ONE tensor for a TWO-exit region."""
@@ -643,5 +643,5 @@ def test_region_splice_arity_mismatch_refuses() -> None:
             return torch.zeros_like(value)
 
     with pytest.raises(RegionError) as excinfo:
-        fork.do(target, tl.splice_module(_OneOut(), input="in"))
+        fork.do(target, tl.splice_module(_OneOut(), input_route="in"))
     assert excinfo.value.fields["code"] == "region_splice_arity_mismatch"

@@ -14,8 +14,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_gradient_edge_support
 from torchlens.attribution import onebackward as ob
-from torchlens.utils._torch_compat import get_gradient_edge_support
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -66,6 +66,20 @@ class TestLivenessGate:
         )
 
     @_requires_gradient_edge
+    def test_implied_inference_only_refusal_names_no_grad_and_a_working_remedy(self) -> None:
+        with torch.no_grad():
+            trace = _trace()
+        assert trace.options.inference_only is True
+        error = _read_error(
+            lambda: ob.read_edge_index(trace),
+            "read_addressing_unavailable",
+            reason="inference_only",
+        )
+        message = str(error)
+        assert "implied when the capture runs under torch.no_grad()" in message
+        assert "re-capture with gradients enabled" in error.fields["remedy"]
+
+    @_requires_gradient_edge
     def test_structure_only_refuses(self) -> None:
         trace = _trace(capture=tl.options.CaptureOptions(structure_only=True))
         _read_error(
@@ -78,7 +92,7 @@ class TestLivenessGate:
     def test_loaded_trace_refuses_not_live(self, tmp_path) -> None:
         trace = _trace()
         path = tmp_path / "artifact.tlspec"
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
         _read_error(
             lambda: ob.read_edge_index(loaded),
@@ -90,8 +104,7 @@ class TestLivenessGate:
     @_requires_gradient_edge
     def test_graph_freed_refuses_typed(self) -> None:
         trace = _trace(
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         # Free the graph with a user backward WITHOUT retain_graph.
         trace["output_1"].out.sum().backward()
@@ -132,7 +145,7 @@ class TestTargetNormalizer:
         """On a selectively-retained trace the payload route dies before the
         read; the read-level refusal for a non-tensor target is typed."""
 
-        trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = _trace(save=[])
         unsaved = trace["output_1"].out  # None on a zero-retention capture
         assert unsaved is None
         error = _read_error(
@@ -143,7 +156,7 @@ class TestTargetNormalizer:
 
     @_requires_gradient_edge
     def test_wrong_shape_cotangent_names_recorded_shape(self) -> None:
-        trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = _trace(save=[])
         error = _read_error(
             lambda: ob.read(
                 trace,
@@ -268,7 +281,7 @@ class TestPopulationContract:
 
     @_requires_gradient_edge
     def test_explicit_unretained_site_preflight_refusal(self) -> None:
-        trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = _trace(save=[])
         error = _read_error(
             lambda: ob.read(
                 trace,
@@ -307,7 +320,7 @@ class TestPopulationContract:
                 target=ob.seed("output_1", index=(0, 0)),
                 method="grad",
                 reduce="sum",
-                within=tl.params("0.weight"),
+                within=tl.param("0.weight"),
             )
         assert getattr(excinfo.value, "fields", {}).get("code") == "selection_kind_incompatible"
 
@@ -339,7 +352,7 @@ class TestBudgetAndSaveModes:
 
     @_requires_gradient_edge
     def test_view_save_mode_fails_closed_for_activation_methods(self) -> None:
-        trace = _trace(save_mode="view")
+        trace = _trace(capture=tl.options.CaptureOptions(save_mode="view"))
         _read_error(
             lambda: ob.read(
                 trace,
@@ -379,7 +392,7 @@ class TestTableRefusals:
         path = table.save(tmp_path / "scalar.json")
         loaded = ob.load_read_table(path)
         assert len(loaded) == len(table)
-        assert loaded.rescorable is False
+        assert loaded.is_rescorable is False
         assert loaded.provenance.rescorable is False
         for key, row in table.items():
             assert loaded[key].score == row.score
@@ -404,7 +417,7 @@ class TestTableRefusals:
         table = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
         )
-        _read_error(lambda: table.for_target("t99"), "read_table_target_unknown")
+        _read_error(lambda: table.target("t99"), "read_table_target_unknown")
         _read_error(lambda: table.column("nonexistent"), "read_table_column_unknown")
         _read_error(lambda: table.to_pandas(values="all"), "read_table_values_mode_invalid")
 
@@ -464,7 +477,7 @@ class TestTypedDoorProvocations:
 
     @_requires_gradient_edge
     def test_read_payload_untrustworthy(self) -> None:
-        trace = _trace(save_mode="view")
+        trace = _trace(capture=tl.options.CaptureOptions(save_mode="view"))
         with pytest.raises(ob.ReadError) as excinfo:
             ob.read(
                 trace,
@@ -483,7 +496,7 @@ class TestTypedDoorProvocations:
                 target=ob.seed("output_1", index=(0, 0)),
                 method="grad",
                 reduce="sum",
-                frozen=tl.params("0.weight"),
+                frozen=tl.param("0.weight"),
             )
         assert excinfo.value.fields["code"] == "read_frozen_selection_invalid"
 
@@ -514,7 +527,7 @@ class TestTypedDoorProvocations:
     def test_read_table_target_unknown(self) -> None:
         table = _grad_table(_trace())
         with pytest.raises(ob.ReadError) as excinfo:
-            table.for_target("t99")
+            table.target("t99")
         assert excinfo.value.fields["code"] == "read_table_target_unknown"
 
     @_requires_gradient_edge

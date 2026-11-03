@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils._multipass_access import (
+from torchlens._utils._multipass_access import (
     MISSING,
     MultiPassAmbiguityError,
     get_multipass_attr,
@@ -115,7 +115,7 @@ def test_get_multipass_attr_honesty_guard():
 
     This is the load-bearing honesty guard the whole sprint depends on. Mutation
     proof: replacing the ``except ValueError`` branch in
-    ``torchlens/utils/_multipass_access.py:get_multipass_attr`` with
+    ``torchlens/_utils/_multipass_access.py:get_multipass_attr`` with
     ``return default`` (the naive ``getattr(layer, attr, default)`` behaviour the
     DECISION forbids) makes this assertion return ``0.0`` instead of raising --
     killing the test. Verified executed in R18J_REPORT.md.
@@ -149,7 +149,7 @@ def test_get_multipass_attr_propagates_unrelated_value_error():
 
 @pytest.mark.smoke
 def test_h1_module_key_for_forward_op_no_multipass_leak():
-    from torchlens.visualization._render_leaf import (
+    from torchlens._visualization._render_leaf import (
         _forward_op_is_module_output,
         _module_key_for_forward_op,
     )
@@ -163,7 +163,7 @@ def test_h1_module_key_for_forward_op_no_multipass_leak():
 
 
 def test_h7_forward_correspondence_node_name_scoped_to_multipass():
-    from torchlens.visualization._render_leaf import _forward_correspondence_node_name
+    from torchlens._visualization._render_leaf import _forward_correspondence_node_name
 
     log = _recurrent_trace()
     single = tl.trace(FeedForward(), torch.randn(2, 8))
@@ -172,11 +172,11 @@ def test_h7_forward_correspondence_node_name_scoped_to_multipass():
     # than emit an ambiguous aggregate endpoint.
     assert _forward_correspondence_node_name(log["tanh_1_2"]) is None
     assert _forward_correspondence_node_name(None) is None
-    # A NON-recurrent op preserves the historical aggregate layer_label emission
-    # verbatim (locked render-identity oracle stays byte-identical; the feedforward
-    # phantom-correspondence cosmetic fix is DEFERRED pending an approved golden).
+    # A NON-recurrent op names the declared unrolled forward node, never the bare
+    # layer_label (which Graphviz would draw as a stray oval beside the graph).
     name = _forward_correspondence_node_name(single["linear_1_1"])
-    assert name == single["linear_1_1"].layer_label
+    assert name == "linear_1_1pass1"
+    assert name != single["linear_1_1"].layer_label
 
 
 # --------------------------------------------------------------------------- #
@@ -187,13 +187,11 @@ def test_h7_forward_correspondence_node_name_scoped_to_multipass():
 def test_h3_rolled_node_label_time_no_crash(tmp_path):
     log = _recurrent_trace()
     graph = log.draw(
-        vis_mode="rolled",
-        vis_save_only=True,
-        vis_outpath=str(tmp_path / "rolled"),
+        rolled=True,
+        path=str(tmp_path / "rolled"),
         node_label_fields=["label", "memory", "time", "flops", "pass"],
-        return_graph=True,
-    )
-    assert "linear_1_1" in graph.source  # rendered without leaking the tripwire
+    ).dot
+    assert "linear_1_1" in graph  # rendered without leaking the tripwire
 
 
 def test_f5_unrolled_pass_field_shows_real_pass_numbers(tmp_path):
@@ -201,14 +199,12 @@ def test_f5_unrolled_pass_field_shows_real_pass_numbers(tmp_path):
 
     log = _recurrent_trace()
     graph = log.draw(
-        vis_mode="unrolled",
-        vis_save_only=True,
-        vis_outpath=str(tmp_path / "unrolled"),
+        rolled=False,
+        path=str(tmp_path / "unrolled"),
         node_label_fields=["label", "pass"],
-        return_graph=True,
-    )
+    ).dot
     # The 'pass' rows must include 1, 2 and 3 -- not just 1 for every pass.
-    present = set(re.findall(r">([123])<", graph.source))
+    present = set(re.findall(r">([123])<", graph))
     assert {"1", "2", "3"} <= present
 
 
@@ -217,19 +213,17 @@ def test_f2_unrolled_titles_are_resolvable(tmp_path):
 
     log = _recurrent_trace()
     graph = log.draw(
-        vis_mode="unrolled",
-        vis_save_only=True,
-        vis_outpath=str(tmp_path / "titles"),
-        return_graph=True,
-    )
-    titles = set(re.findall(r"<B>([a-z]+_[0-9_]+:[0-9]+)</B>", graph.source))
+        rolled=False,
+        path=str(tmp_path / "titles"),
+    ).dot
+    titles = set(re.findall(r"<B>([a-z]+_[0-9_]+:[0-9]+)</B>", graph))
     assert titles, "expected pass-qualified unrolled titles"
     for title in titles:
         # Every displayed title must resolve back to a real trace layer.
         assert log[title] is not None
     # The fabricated position-renumbered forms must be gone.
-    assert "linear_1_3:2" not in graph.source
-    assert "linear_1_5:3" not in graph.source
+    assert "linear_1_3:2" not in graph
+    assert "linear_1_5:3" not in graph
 
 
 # --------------------------------------------------------------------------- #
@@ -259,17 +253,15 @@ def test_h4_layer_show_recurrent_raises_select_pass():
 def test_h6_rolled_overlays_do_not_crash(tmp_path, overlay):
     log = _recurrent_trace()
     graph = log.draw(
-        vis_mode="rolled",
+        rolled=True,
         node_overlay=overlay,
-        vis_save_only=True,
-        vis_outpath=str(tmp_path / f"ov_{overlay}"),
-        return_graph=True,
-    )
-    assert graph.source  # rendered without leaking the multi-pass tripwire
+        path=str(tmp_path / f"ov_{overlay}"),
+    ).dot
+    assert graph  # rendered without leaking the multi-pass tripwire
 
 
 def test_h6_rolled_per_pass_overlays_are_na():
-    from torchlens.visualization.overlays import builtin_overlay_value, format_overlay_value
+    from torchlens._visualization.overlays import builtin_overlay_value, format_overlay_value
 
     log = _recurrent_trace()
     layer = log["linear_1_1"]  # aggregate recurrent Layer
@@ -280,7 +272,7 @@ def test_h6_rolled_per_pass_overlays_are_na():
 
 
 def test_f15_nan_overlay_reports_na_when_nothing_inspected():
-    from torchlens.visualization.overlays import builtin_overlay_value
+    from torchlens._visualization.overlays import builtin_overlay_value
 
     # No available tensor -> "not checked" -> None -> "nan: n/a" (NOT False -> "no").
     assert builtin_overlay_value(SimpleNamespace(out=None), "nan") is None
@@ -300,28 +292,27 @@ def test_f15_nan_overlay_reports_na_when_nothing_inspected():
 
 @pytest.mark.smoke
 def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
-    from torchlens.visualization.fastlog_preview import (
+    from torchlens._visualization.fastlog_preview import (
         _build_preview_nodes,
         _make_node_spec_fn,
         preview_fastlog,
     )
-    from torchlens.visualization.node_spec import NodeSpec
+    from torchlens._visualization.node_spec import NodeSpec
 
     log = tl.trace(RecurrentReLU(), torch.tensor([-1.0, 2.0]))
     # No crash on a recurrent model.
     preview_fastlog(
         log,
-        predicate=lambda ctx: getattr(ctx, "pass_index", None) == 1,
-        vis_save_only=True,
-        vis_outpath=str(tmp_path / "preview"),
+        predicate=lambda ctx: getattr(ctx, "pass_number", None) == 1,
+        path=str(tmp_path / "preview"),
     )
     # Decisions are keyed per pass (no overwrite) with correct per-pass context.
     preview = _build_preview_nodes(log, lambda ctx: ctx.event_index == 3)
     relu_keys = sorted(k for k in preview if "relu" in k and ":" in k)
     assert relu_keys == ["relu_1_1:1", "relu_1_1:2", "relu_1_1:3"]
-    assert [preview[k].ctx.pass_index for k in relu_keys] == [0, 1, 2]
+    assert [preview[k].ctx.pass_number for k in relu_keys] == [0, 1, 2]
     # The event_index==3 predicate keeps ONLY the second recurrent call.
-    ops = list(log.layer_logs["relu_1_1"].ops.values())
+    ops = list(log._layer_logs["relu_1_1"].ops.values())
     callback = _make_node_spec_fn(
         preview,
         color_kept="green",
@@ -342,23 +333,24 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
 
 @pytest.mark.smoke
 def test_h9_intervention_colors_only_intervened_pass():
-    from torchlens.intervention import resolver
-    from torchlens.visualization.node_spec import (
+    from torchlens._selection import resolver
+    from torchlens._visualization.node_spec import (
         NodeSpec,
         intervention_site_and_cone_labels,
         make_intervention_node_spec_fn,
     )
 
     log = tl.trace(RecurrentReLU(), torch.tensor([-1.0, 2.0]))
-    ops = list(log.layer_logs["relu_1_1"].ops.values())
+    ops = list(log._layer_logs["relu_1_1"].ops.values())
     fake = SimpleNamespace(
         _intervention_spec=SimpleNamespace(
             targets=("pass2",), target_value_specs=(), hook_specs=()
         ),
-        layer_list=ops,
+        _layer_list=ops,
     )
-    original = resolver.resolve_sites
-    resolver.resolve_sites = lambda trace, target, max_fanout: [ops[1]]  # resolve pass 2 only
+    # node_spec reads the private resolver at call time; patch it by name.
+    original = resolver._resolve_sites
+    resolver._resolve_sites = lambda trace, target, max_fanout: [ops[1]]  # resolve pass 2 only
     try:
         callback = make_intervention_node_spec_fn(
             fake, show_cone=False, graph_overrides=None, user_node_spec_fn=None
@@ -369,10 +361,10 @@ def test_h9_intervention_colors_only_intervened_pass():
         assert colors[0] is None and colors[2] is None
         # A rolled aggregate Layer node still colors (any pass is a site) and never
         # leaks the multi-pass tripwire.
-        aggregate = log.layer_logs["relu_1_1"]
+        aggregate = log._layer_logs["relu_1_1"]
         assert callback(aggregate, NodeSpec(lines=["relu_1_1"])).color is not None
         # Public helper contract is UNCHANGED: aggregate layer_labels only.
         site_labels, _ = intervention_site_and_cone_labels(fake, show_cone=False)
         assert site_labels == {"relu_1_1"}
     finally:
-        resolver.resolve_sites = original
+        resolver._resolve_sites = original

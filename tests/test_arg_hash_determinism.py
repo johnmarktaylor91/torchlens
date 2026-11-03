@@ -97,21 +97,20 @@ def test_backward_pass_root_ids_persist_as_dense_ordinals(tmp_path) -> None:
     trace = tl.trace(
         _BackwardModel(),
         torch.randn(2, 4).requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     bundle = tmp_path / "backward.tlspec"
-    tl.save(trace, str(bundle))
+    trace.save(str(bundle))
     loaded = tl.load(str(bundle))
 
-    backward_passes = list(loaded.backward_pass_logs.values())
+    backward_passes = list(loaded._backward_pass_logs.values())
     assert backward_passes, "expected at least one persisted backward pass"
     all_roots = [root_id for record in backward_passes for root_id in record.root_grad_fn_ids]
     assert all_roots, "expected persisted root_grad_fn_ids"
     for root_id in all_roots:
-        assert root_id in loaded.grad_fn_logs, (
+        assert root_id in loaded._grad_fn_logs, (
             f"persisted root id {root_id} dangles outside the remapped grad_fn_logs"
         )
         assert root_id < 1_000_000, f"persisted root id {root_id} looks like a raw memory address"

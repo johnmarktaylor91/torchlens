@@ -33,13 +33,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, trace as trace_fn
-from torchlens._io import TorchLensIOError
-from torchlens.data_classes.backward_pass import BackwardPass
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.param import Param
+from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.param import Param
+from torchlens._io import ArtifactError
 from torchlens.options import CaptureOptions
 
 
@@ -93,7 +93,7 @@ def _build_buffer_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _BufferModel()
     x = torch.randn(3, 4)
-    return trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return trace_fn(model, x, save="all")
 
 
 # ---------------------------------------------------------------------------
@@ -112,27 +112,27 @@ def test_gradfn_weakref_pickle_roundtrip_with_real_backward_pass() -> None:
     """
 
     live_trace = _build_backward_trace()
-    assert live_trace.num_backward_passes >= 1
-    assert len(live_trace.grad_fn_logs) > 0
+    assert len(live_trace.autograd.backward_passes) >= 1
+    assert len(live_trace._grad_fn_logs) > 0
 
     data = pickle.dumps(live_trace)
     restored = pickle.loads(data)
 
-    assert restored.num_backward_passes == live_trace.num_backward_passes
-    assert len(restored.grad_fn_logs) == len(live_trace.grad_fn_logs)
+    assert len(restored.autograd.backward_passes) == len(live_trace.autograd.backward_passes)
+    assert len(restored._grad_fn_logs) == len(live_trace._grad_fn_logs)
     # `Trace.__setstate__` deliberately reconnects each GradFn's
-    # `source_trace` back-reference to the newly-restored (live) Trace, so
+    # `trace` back-reference to the newly-restored (live) Trace, so
     # the weakref should point at `restored`, not at a stale intermediate
     # object from the pickle stream.
-    for grad_fn_handle in restored.grad_fn_logs.values():
-        assert grad_fn_handle.source_trace is restored
+    for grad_fn_handle in restored._grad_fn_logs.values():
+        assert grad_fn_handle.trace is restored
 
 
 def test_gradfn_standalone_pickle_does_not_crash() -> None:
     """A standalone ``GradFn`` (outside its owning Trace) must pickle cleanly."""
 
     live_trace = _build_backward_trace()
-    grad_fn_handle = next(iter(live_trace.grad_fn_logs.values()))
+    grad_fn_handle = next(iter(live_trace._grad_fn_logs.values()))
 
     data = pickle.dumps(grad_fn_handle)
     restored = pickle.loads(data)
@@ -188,7 +188,7 @@ def test_layer_setstate_absent_container_field_restores_typed() -> None:
     """An absent Layer container field must restore as its typed default."""
 
     live_trace = _build_buffer_trace()
-    layer_log = next(iter(live_trace.layer_list))
+    layer_log = next(iter(live_trace._layer_list))
     state = layer_log.__getstate__()
     state.pop("equivalent_ops", None)
 
@@ -284,7 +284,7 @@ def test_grad_fn_setstate_present_but_wrong_typed_co_parents_is_coerced() -> Non
     """
 
     live_trace = _build_backward_trace()
-    grad_fn_handle = next(iter(live_trace.grad_fn_logs.values()))
+    grad_fn_handle = next(iter(live_trace._grad_fn_logs.values()))
     state = grad_fn_handle.__getstate__()
     state["co_parents"] = {"legacy_as_set"}
 
@@ -306,7 +306,7 @@ def test_grad_fn_call_setstate_survives_default_fill() -> None:
     """
 
     live_trace = _build_backward_trace()
-    grad_fn_handle = next(iter(live_trace.grad_fn_logs.values()))
+    grad_fn_handle = next(iter(live_trace._grad_fn_logs.values()))
     call = next(iter(grad_fn_handle.calls.values()))
     state = call.__getstate__()
 
@@ -327,7 +327,7 @@ def test_backward_pass_setstate_present_but_wrong_typed_grad_fn_calls_is_coerced
     """
 
     live_trace = _build_backward_trace()
-    backward_pass_log = live_trace.backward_passes[0]
+    backward_pass_log = live_trace.autograd.backward_passes[0]
     state = backward_pass_log.__getstate__()
     state["grad_fn_calls"] = tuple(state["grad_fn_calls"])
 
@@ -362,10 +362,10 @@ def test_coerce_container_typed_state_raises_on_incompatible_corruption() -> Non
     # `layer_dict_main_keys` is declared a `dict`; an `int` cannot be
     # converted to a `dict` (`dict(12345)` raises `TypeError`), so this is
     # unambiguous corruption, not a legacy container-type migration.
-    state["layer_dict_main_keys"] = 12345
+    state["_layer_dict_main_keys"] = 12345
 
     restored = Trace.__new__(Trace)
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         restored.__setstate__(state)
 
 

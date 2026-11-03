@@ -138,7 +138,7 @@ def test_loaded_trace_fork_death_does_not_evict_parent_payloads(tmp_path) -> Non
     """
 
     art = tmp_path / "payloads.tlspec"
-    tl.save(_capture(), art)
+    _capture().save(art)
     loaded = tl.load(art)
     refs = _payload_refs(loaded)
     assert len(refs) >= 2, "loaded trace should carry rehydrated tensor payloads"

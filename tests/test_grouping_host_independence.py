@@ -28,7 +28,7 @@ from torch import nn
 import torchlens as tl
 
 _PACKAGE_DIR = Path(tl.__file__).resolve().parent
-# Spelled the way ``torchlens.utils._package_frames`` spells it, computed here so the
+# Spelled the way ``torchlens._utils._package_frames`` spells it, computed here so the
 # behavioural tests below import (and fail) on a package without that module.
 _PACKAGE_PREFIX = os.path.normcase(str(_PACKAGE_DIR)) + os.sep
 
@@ -97,7 +97,7 @@ _SUBPROCESS_SOURCE = _MODEL_SOURCE + textwrap.dedent(
         trace = tl.trace(model, x)
         seen = {}
         internal = []
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if op.is_input or op.is_output or op.is_buffer:
                 continue
             seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
@@ -107,7 +107,7 @@ _SUBPROCESS_SOURCE = _MODEL_SOURCE + textwrap.dedent(
                     internal.append([op.label, str(location.file), location.func_name])
         print(json.dumps({
             "torchlens_file": tl.__file__,
-            "is_recurrent": bool(trace.is_recurrent),
+            "is_recurrent": bool(trace.graph.is_recurrent),
             "shape": sorted(seen.values()),
             "internal_context_frames": internal,
         }))
@@ -119,7 +119,7 @@ def _layer_shape(trace: Any) -> list[tuple[str, int]]:
     """Sorted (func_name, num_passes) per layer, inputs/outputs/buffers excluded."""
 
     seen: dict[str, tuple[str, int]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.is_input or op.is_output or op.is_buffer:
             continue
         seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
@@ -129,7 +129,7 @@ def _layer_shape(trace: Any) -> list[tuple[str, int]]:
 def test_is_torchlens_code_ignores_filename_spelling() -> None:
     """The frame filter answers by location, not by how the path is spelled."""
 
-    from torchlens.utils._package_frames import (
+    from torchlens._utils._package_frames import (
         TORCHLENS_PACKAGE_PREFIX,
         is_torchlens_code,
         normalized_filename,
@@ -172,7 +172,7 @@ def test_no_torchlens_frame_in_any_code_context() -> None:
     # The two ``linear`` calls inside one attention (in-projection, out-projection)
     # are two places in torch's code: two layers, never passes of one.
     assert shape[("linear", 1)] >= 3, shape
-    assert not trace.is_recurrent
+    assert not trace.graph.is_recurrent
 
 
 @pytest.mark.heavy
@@ -210,4 +210,4 @@ def test_grouping_equal_when_torchlens_imported_through_dotted_path(tmp_path: Pa
         )
     assert there["internal_context_frames"] == []
     assert [tuple(item) for item in there["shape"]] == _layer_shape(here)
-    assert there["is_recurrent"] == here.is_recurrent
+    assert there["is_recurrent"] == here.graph.is_recurrent

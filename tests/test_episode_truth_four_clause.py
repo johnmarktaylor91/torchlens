@@ -26,14 +26,14 @@ import torch.nn as nn
 from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
-from torchlens._capture_honesty import episode_facts
-from torchlens.capture import _episode_ledger as episode_ledger_module
-from torchlens.capture._episode_ledger import (
+from torchlens._capture import _episode_ledger as episode_ledger_module
+from torchlens._capture._episode_ledger import (
     ResolvedEpisode,
     _derive_step_evidence,
     episode_step_join_claim,
 )
-from torchlens.options import CaptureOptions, EpisodeSpec
+from torchlens._capture_honesty import episode_facts
+from torchlens.options import CaptureOptions, EpisodeOptions
 
 V = 16
 N_STEPS = 3
@@ -71,9 +71,9 @@ def _seeded_capture(declare_episode: bool) -> tuple[tl.Trace, torch.Tensor]:
 
     torch.manual_seed(123)
     model = _SampledRunner()
-    kwargs = {"capture": CaptureOptions(random_seed=777)}
+    kwargs = {"capture": CaptureOptions(seed=777)}
     if declare_episode:
-        kwargs["episode"] = EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS)
+        kwargs["episode"] = EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS)
     trace = tl.trace(model, torch.tensor([[1]]), **kwargs)
     return trace, torch.get_rng_state()
 
@@ -85,8 +85,8 @@ def test_four_clause_declaration_invariant():
     undeclared, undeclared_rng = _seeded_capture(declare_episode=False)
 
     # Clause 1: identical ordered recorded op labels.
-    declared_labels = [op.label for op in declared.layer_list]
-    undeclared_labels = [op.label for op in undeclared.layer_list]
+    declared_labels = [op.label for op in declared._layer_list]
+    undeclared_labels = [op.label for op in undeclared._layer_list]
     assert declared_labels == undeclared_labels
 
     # Clause 2: bit-identical root output.
@@ -128,7 +128,7 @@ def test_settlement_cost_is_exactly_the_priced_dispatcher_reads():
     trace = tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
     )
     resolved = ResolvedEpisode(
         episode_id="ep-price-probe",
@@ -161,7 +161,7 @@ def test_step_join_claim_is_per_artifact_never_the_build_switch():
     trace = tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
     )
     facts = episode_facts(trace)
     assert facts is not None
@@ -172,5 +172,5 @@ def test_step_join_claim_is_per_artifact_never_the_build_switch():
     # F40a claim-off honesty holds for every pre-measurement artifact.
     trace.annotations["episode"]["header"]["step_join"] = None
     assert episode_facts(trace)["step_join"] == "unmeasured"
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "Cross-step continuity is DECLARED, not measured" in report

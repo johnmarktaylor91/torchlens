@@ -5,7 +5,7 @@
 verbatim with no opt-out and no disclosure — tokens, private paths, usernames,
 and large containers stored as module attributes rode along in the shareable
 artifact invisibly (disputed-r2 b8). The converged fix is additive: an
-``include_custom_attributes=`` kwarg on ``tl.save`` defaulting to ``True``
+``include_custom_attributes=`` kwarg on ``Trace.save`` defaulting to ``True``
 (historical behavior preserved), a manifest disclosure naming the channel, and
 NEVER rewriting user values. These canaries plant instance attributes — the
 exact channel the earlier canary sweeps missed — and assert both halves.
@@ -65,7 +65,7 @@ def test_default_save_preserves_values_verbatim_and_discloses(tmp_path: Path) ->
 
     trace = _capture()
     bundle = tmp_path / "with_attrs"
-    tl.save(trace, bundle, overwrite=True)
+    trace.save(bundle, overwrite=True)
 
     loaded = tl.load(bundle)
     loaded_attrs = {
@@ -92,7 +92,7 @@ def test_include_false_drops_channel_from_bundle_bytes(tmp_path: Path) -> None:
 
     trace = _capture()
     bundle = tmp_path / "without_attrs"
-    tl.save(trace, bundle, overwrite=True, include_custom_attributes=False)
+    trace.save(bundle, overwrite=True, include_custom_attributes=False)
 
     raw = _bundle_bytes(bundle)
     for canary in (_CANARY_TOKEN, _CANARY_PATH, _CANARY_OWNER):
@@ -117,7 +117,7 @@ def test_include_false_does_not_mutate_live_trace(tmp_path: Path) -> None:
     """The gate scrubs the ARTIFACT only; the live trace keeps its values."""
 
     trace = _capture()
-    tl.save(trace, tmp_path / "b", overwrite=True, include_custom_attributes=False)
+    trace.save(tmp_path / "b", overwrite=True, include_custom_attributes=False)
     live_attrs = {
         module.address: dict(module.custom_attributes)
         for module in trace.modules
@@ -131,18 +131,18 @@ def test_default_save_canaries_present_in_bundle_bytes(tmp_path: Path) -> None:
 
     trace = _capture()
     bundle = tmp_path / "default"
-    tl.save(trace, bundle, overwrite=True)
+    trace.save(bundle, overwrite=True)
     raw = _bundle_bytes(bundle)
     assert _CANARY_TOKEN.encode() in raw
 
 
 def test_streaming_save_warns_and_discloses(tmp_path: Path) -> None:
-    """R62 REOPEN: streaming to_disk goes through the same belt as tl.save.
+    """R62 REOPEN: streaming to_disk goes through the same belt as Trace.save.
 
     Fail-before (sol, round 6): ``storage=tl.to_disk(...)`` hardcoded
     ``included=True``, emitted ZERO warnings, and offered no opt-out -- the
     canary token shipped in the streamed bundle silently, reopening the exact
-    class the round-5 tl.save fix closed.
+    class the round-5 Trace.save fix closed.
     """
 
     from torchlens.errors._base import TorchLensWarning

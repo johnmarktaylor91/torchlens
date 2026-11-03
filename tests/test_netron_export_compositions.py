@@ -57,11 +57,11 @@ def test_c3_halted_capture_carries_the_outcome_marker(tmp_path: Path) -> None:
     """A halted trace exports with its honest capture-outcome marker."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
-    log = tl.trace(model, torch.randn(2, 4), halt=tl.func("relu"))
+    log = tl.trace(model, torch.randn(2, 4), stop_after=tl.func("relu"))
     path = tl.export.netron(log, tmp_path / "halted.json", granularity="op")
     payload = json.loads(path.read_text(encoding="utf-8"))
     props = _props(payload)
-    assert props["torchlens.capture_outcome"] == "halted"
+    assert props["torchlens.capture_outcome"] == "stopped"
     honesty = json.loads(props["torchlens.capture_honesty"])
     assert honesty["capture_status"] != "complete"
 

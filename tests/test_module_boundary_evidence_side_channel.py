@@ -20,9 +20,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch._modes import SubclassConstructionUnderDispatchModeError
+from torchlens._utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
+from torchlens.backends.torch._modes import TensorSubclassUnsupportedError
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
 
 
 class RejectingTensor(torch.Tensor):
@@ -52,17 +52,17 @@ class TwoLinear(nn.Module):
         return self.fc2(self.fc1(x))
 
 
-def _rejecting_replace_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _rejecting_replace_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Replace the module output with a fresh attr-rejecting tensor."""
 
-    del hook
+    del ctx
     return torch.zeros_like(out).as_subclass(RejectingTensor)
 
 
-def _plain_replace_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _plain_replace_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Replace the module output with a fresh ordinary tensor."""
 
-    del hook
+    del ctx
     return torch.zeros_like(out)
 
 
@@ -73,7 +73,7 @@ def _boundary_capture(hook: Any) -> Any:
         TwoLinear(),
         torch.randn(2, 4),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.module("fc1"): hook},
         ),
     )
@@ -94,23 +94,23 @@ def test_boundary_evidence_survives_attr_rejecting_replacement() -> None:
         # intervention-ready capture's TorchLens dispatch mode is active,
         # refuses typed instead of crashing on torch's own "already
         # associated to a python object" RuntimeError. See
-        # SubclassConstructionUnderDispatchModeError.
-        with pytest.raises(SubclassConstructionUnderDispatchModeError):
+        # TensorSubclassUnsupportedError.
+        with pytest.raises(TensorSubclassUnsupportedError):
             _boundary_capture(_rejecting_replace_hook)
         return
 
     log = _boundary_capture(_rejecting_replace_hook)
 
     boundary = next(
-        op for op in log.layer_list if str(op.layer_label).startswith("interventionreplacement")
+        op for op in log._layer_list if str(op.layer_label).startswith("interventionreplacement")
     )
-    assert boundary.interventions
-    assert boundary.intervention_replaced
-    assert any(record.replaced for record in boundary.interventions)
+    assert boundary.edits
+    assert boundary.is_edited
+    assert any(record.replaced for record in boundary.edits)
     # Replaced-parent provenance (fc1's real output) survived the rejection.
     assert tuple(boundary.parents)
     # The replacement is never laundered into an untraceable internal source.
-    assert not any(bool(getattr(op, "is_internal_source", False)) for op in log.layer_list)
+    assert not any(bool(getattr(op, "is_internal_source", False)) for op in log._layer_list)
 
 
 def test_rejecting_and_plain_replacements_classify_identically() -> None:
@@ -118,7 +118,7 @@ def test_rejecting_and_plain_replacements_classify_identically() -> None:
 
     if not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE:
         # Same floor-torch gap as test_boundary_evidence_survives_attr_rejecting_replacement.
-        with pytest.raises(SubclassConstructionUnderDispatchModeError):
+        with pytest.raises(TensorSubclassUnsupportedError):
             _boundary_capture(_rejecting_replace_hook)
         return
 
@@ -129,10 +129,10 @@ def test_rejecting_and_plain_replacements_classify_identically() -> None:
         return [
             (
                 str(op.layer_label),
-                bool(op.interventions),
-                bool(getattr(op, "intervention_replaced", False)),
+                bool(op.edits),
+                bool(getattr(op, "is_edited", False)),
             )
-            for op in log.layer_list
+            for op in log._layer_list
         ]
 
     assert _shape(rejecting_log) == _shape(plain_log)

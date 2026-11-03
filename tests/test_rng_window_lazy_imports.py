@@ -45,7 +45,7 @@ class RecordingFinder:
         self.in_window = []
 
     def find_spec(self, fullname, path=None, target=None):
-        rng = sys.modules.get("torchlens.utils.rng")
+        rng = sys.modules.get("torchlens._utils.rng.monitor_state")
         if rng is not None and getattr(rng, "_ACTIVE_MONITOR", None) is not None:
             self.in_window.append(fullname)
         return None
@@ -90,7 +90,7 @@ trace = tl.trace(
     model,
     inputs,
     capture=CaptureOptions(
-        intervention_ready=True, capture_container_structure=True, cache=False
+        replayable=True, capture_container_structure=True, cache=False
     ),
 )
 assert finder.in_window == [], f"imports inside the RNG window: {finder.in_window}"

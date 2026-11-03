@@ -20,6 +20,7 @@ import textwrap
 import pytest
 import torch
 import torch.nn as nn
+from _forward_stash import stashed
 
 import torchlens as tl
 
@@ -78,16 +79,17 @@ def test_save_all_releases_live_sources_at_emission() -> None:
 
     model = _MidForwardCounter().eval()
     x = torch.randn(2, 16, 8, 8)
-    tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True))
-    assert model.mid_forward_live is not None
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True))
+    mid_forward_live = stashed(trace, "mid_forward_live")
+    assert mid_forward_live is not None
     ops_done = 2 * (N_CONVS - 1)
     # Retained copies for completed ops, plus a small live working set
     # (current output, the counter's own view, input) and slack for
     # transiently alive frame locals. The pre-fix count exceeded
     # ops_done * 2 - a full second population of pinned live sources.
     ceiling = ops_done + 8
-    assert model.mid_forward_live <= ceiling, (
-        f"{model.mid_forward_live} live activation tensors mid-forward "
+    assert mid_forward_live <= ceiling, (
+        f"{mid_forward_live} live activation tensors mid-forward "
         f"(ceiling {ceiling}): capture bookkeeping is pinning live sources "
         "again (F20 W1a regression -- identity cache or module-arg stash)"
     )
@@ -102,19 +104,20 @@ def test_selective_save_holds_no_live_population_mid_forward() -> None:
 
     model = _MidForwardCounter().eval()
     x = torch.randn(2, 16, 8, 8)
-    tl.trace(
+    trace = tl.trace(
         model,
         x,
         save=tl.func("mean"),
         capture=tl.options.CaptureOptions(inference_only=True),
     )
-    assert model.mid_forward_live is not None
+    mid_forward_live = stashed(trace, "mid_forward_live")
+    assert mid_forward_live is not None
     ops_done = 2 * (N_CONVS - 1)
     # Escrow copies (bounded by its RAM budget; tiny here) plus working set.
     # The defect shape held ~2x ops_done: every live source AND every module
     # input pinned until finalize.
     ceiling = ops_done + 8
-    assert model.mid_forward_live <= ceiling
+    assert mid_forward_live <= ceiling
 
 
 def test_module_forward_arg_stash_carries_stubs_not_payloads() -> None:

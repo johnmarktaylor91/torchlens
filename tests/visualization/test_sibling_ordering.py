@@ -12,7 +12,7 @@ pytest.importorskip("torchvision")
 import torchvision.models as tv_models  # noqa: E402
 
 import torchlens as tl
-from torchlens.visualization._render_dot import _strip_sibling_rank_groups
+from torchlens._visualization._render_dot import _strip_sibling_rank_groups
 
 
 def _plain_nodes(dot_source: str) -> dict[str, tuple[float, float]]:
@@ -102,9 +102,8 @@ def _draw_source(log: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> 
 
     return str(
         log.draw(
-            vis_outpath=str(tmp_path / name),
-            vis_save_only=True,
-            vis_fileformat="pdf",
+            path=str(tmp_path / name),
+            file_format="pdf",
             **kwargs,
         )
     )
@@ -270,15 +269,13 @@ def test_densenet_is_safe_noop(tmp_path: Path) -> None:
         try:
             # DenseNet's dense skips push the auto engine to rank layout; pin
             # dot so this test keeps exercising the sibling-ordering post-pass.
-            ordered_source = _draw_source(
-                log, tmp_path, "densenet_ordered", vis_node_placement="dot"
-            )
+            ordered_source = _draw_source(log, tmp_path, "densenet_ordered", layout="dot")
             baseline_source = _draw_source(
                 log,
                 tmp_path,
                 "densenet_baseline",
                 order_siblings=False,
-                vis_node_placement="dot",
+                layout="dot",
             )
             decision = log._last_sibling_ordering_decision
         finally:
@@ -355,7 +352,7 @@ def test_over_budget_graph_skips_verification_with_notice(
 ) -> None:
     """Graphs whose verification layouts exceed the layout budget skip the pass."""
 
-    from torchlens.visualization._rank_layout_internal import layout as rank_layout
+    from torchlens._visualization._rank_layout_internal import layout as rank_layout
 
     with torch.no_grad():
         log = tl.trace(CodexDistorter(depth=5).eval(), torch.randn(1, 3))
@@ -367,16 +364,14 @@ def test_over_budget_graph_skips_verification_with_notice(
             # verification-budget gate under the lowered threshold.
             monkeypatch.setattr(rank_layout, "RANK_LAYOUT_COST_THRESHOLD", 10)
             with pytest.warns(UserWarning, match="skipped sibling-order verification"):
-                skipped_source = _draw_source(
-                    log, tmp_path, "budget_skipped", vis_node_placement="dot"
-                )
+                skipped_source = _draw_source(log, tmp_path, "budget_skipped", layout="dot")
             skipped_decision = log._last_sibling_ordering_decision
             baseline_source = _draw_source(
                 log,
                 tmp_path,
                 "budget_baseline",
                 order_siblings=False,
-                vis_node_placement="dot",
+                layout="dot",
             )
         finally:
             log.cleanup()
@@ -400,7 +395,7 @@ def test_chainless_over_budget_graph_stays_silent(
 
     import warnings as warnings_module
 
-    from torchlens.visualization._rank_layout_internal import layout as rank_layout
+    from torchlens._visualization._rank_layout_internal import layout as rank_layout
 
     monkeypatch.setattr(rank_layout, "RANK_LAYOUT_COST_THRESHOLD", 10)
     with torch.no_grad():
@@ -408,7 +403,7 @@ def test_chainless_over_budget_graph_stays_silent(
         try:
             with warnings_module.catch_warnings(record=True) as caught:
                 warnings_module.simplefilter("always")
-                _draw_source(log, tmp_path, "chainless", vis_node_placement="dot")
+                _draw_source(log, tmp_path, "chainless", layout="dot")
             decision = log._last_sibling_ordering_decision
         finally:
             log.cleanup()

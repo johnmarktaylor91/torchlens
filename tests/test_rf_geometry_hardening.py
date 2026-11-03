@@ -19,7 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
-from torchlens.postprocess.graph_traversal import output_payload_aliases_parent
+from torchlens._postprocess.graph_traversal import output_payload_aliases_parent
 from torchlens.receptive_field import ReceptiveFieldStatus, ReceptiveFieldValidationStatus
 
 torch.manual_seed(0)
@@ -103,17 +103,16 @@ def capture(model: nn.Module, x: torch.Tensor) -> object:
     return tl.trace(
         model,
         x.detach().clone().requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 
 def sole_input(trace: object) -> object:
-    return next(op for op in trace.layer_list if op.is_input)
+    return next(op for op in trace._layer_list if op.is_input)
 
 
 def op_named(trace: object, fragment: str) -> object:
-    matches = [op for op in trace.layer_list if fragment in op.func_name]
+    matches = [op for op in trace._layer_list if fragment in op.func_name]
     assert matches, f"no op matching {fragment!r}"
     return matches[-1]
 
@@ -229,7 +228,7 @@ def test_tensor_derived_shape_control_branch_preserves_exact_rf() -> None:
     assert_box_against_truth(box, truth, (2, 3), context="tensor-derived zero shape")
     checked = target.receptive_field.check((0, 0, 4, 4))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
     verify_trace = capture(model, inputs)
     verified = tl.receptive_field.verify(verify_trace, units="center")
@@ -577,7 +576,7 @@ def test_adjoint_duality_law(model_factory) -> None:
     x = torch.randn(1, 1, extent)
     trace = capture(model, x)
     source = sole_input(trace)
-    target = [op for op in trace.layer_list if not op.is_input and not op.is_output][-1]
+    target = [op for op in trace._layer_list if not op.is_input and not op.is_output][-1]
     out_extent = int(target.shape[-1])
     for src in range(extent):
         pf_box = source.projective_field.at((src,))
@@ -612,17 +611,17 @@ def test_layer_to_layer_composition_law() -> None:
     )
     x = torch.randn(1, 1, 17)
     trace = capture(model, x)
-    convs = [op for op in trace.layer_list if "conv" in op.func_name]
+    convs = [op for op in trace._layer_list if "conv" in op.func_name]
     mid, final = convs[0], convs[1]
     source = sole_input(trace)
     for out_pos in range(int(final.shape[-1])):
-        full_box = final.receptive_field.at((out_pos,), input=source)
+        full_box = final.receptive_field.at((out_pos,), input_op=source)
         mid_box = final.receptive_field.at((out_pos,), source=mid)
         mid_axis = mid_box.axes[-1]
         assert mid_axis.clipped_start is not None
         starts, stops = [], []
         for mid_pos in range(mid_axis.clipped_start, mid_axis.clipped_stop):
-            inner = mid.receptive_field.at((mid_pos,), input=source)
+            inner = mid.receptive_field.at((mid_pos,), input_op=source)
             inner_axis = inner.axes[-1]
             starts.append(inner_axis.clipped_start)
             stops.append(inner_axis.clipped_stop)
@@ -643,7 +642,7 @@ def test_translation_equivariance() -> None:
     )
     x = torch.randn(1, 1, 33)
     trace = capture(model, x)
-    final = [op for op in trace.layer_list if "conv" in op.func_name][-1]
+    final = [op for op in trace._layer_list if "conv" in op.func_name][-1]
     view = final.receptive_field
     jump = view.jump[-1]
     base = view.at((5,), clip=False)
@@ -777,7 +776,8 @@ def test_nonempty_box_slices_match_support_hull() -> None:
 def test_multi_target_projective_raises_target_error() -> None:
     """Projective convenience properties speak target vocabulary, not input."""
 
-    from torchlens.receptive_field import AmbiguousInputError, AmbiguousTargetError
+    from torchlens.errors import AmbiguousTargetError
+    from torchlens.receptive_field import AmbiguousInputError
 
     class TwoOut(nn.Module):
         def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -785,12 +785,12 @@ def test_multi_target_projective_raises_target_error() -> None:
 
     trace = tl.trace(TwoOut(), torch.randn(1, 3))
     source = sole_input(trace)
-    for accessor in ("status", "axes", "size", "jump", "center0", "layout"):
+    for accessor in ("status", "axes", "size", "jump", "center0", "axis_roles"):
         with pytest.raises(AmbiguousTargetError, match="target") as exc_info:
             getattr(source.projective_field, accessor)
         assert not isinstance(exc_info.value, AmbiguousInputError)
         message = str(exc_info.value)
-        assert "target=" in message and "input=" not in message
+        assert "target=" in message and "input_op=" not in message
 
     class TwoIn(nn.Module):
         def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -798,7 +798,7 @@ def test_multi_target_projective_raises_target_error() -> None:
 
     trace_in = tl.trace(TwoIn(), (torch.randn(1, 3), torch.randn(1, 3)))
     add = op_named(trace_in, "add")
-    with pytest.raises(AmbiguousInputError, match="input="):
+    with pytest.raises(AmbiguousInputError, match="input_op="):
         _ = add.receptive_field.status
 
 
@@ -1059,11 +1059,11 @@ def test_geometry_refuses_typed_for_underivable_rearrangements(
 ) -> None:
     """grid_sample / unfold+fold / pixel_shuffle refuse per-unit geometry typed."""
 
-    from torchlens.receptive_field import ReceptiveFieldError
+    from torchlens.errors import ReceptiveFieldError
 
     trace = capture(model_type().eval(), torch.randn(1, 1, 8, 8))
     target = op_named(trace, fragment)
-    with pytest.raises(ReceptiveFieldError, match="use .gradient"):
+    with pytest.raises(ReceptiveFieldError, match="use .probe_grad"):
         target.receptive_field.at(unit)
 
 
@@ -1072,7 +1072,7 @@ def test_grid_sample_gradient_fallback_reports_support() -> None:
 
     trace = capture(_GridSampleConv().eval(), torch.randn(1, 1, 8, 8))
     target = op_named(trace, "conv2d")
-    results = target.receptive_field.gradient((0, 0, 2, 2))
+    results = target.receptive_field.probe_grad((0, 0, 2, 2))
     gradient = next(iter(results.values())) if isinstance(results, Mapping) else results
     assert gradient.support_mask is not None
     assert bool(gradient.support_mask.any())
@@ -1094,7 +1094,7 @@ def test_dilated_max_pool_exact_box_matches_bruteforce() -> None:
     assert_box_against_truth(box, truth, (2, 3), context="dilated max pool")
     checked = target.receptive_field.check((0, 0, 1, 1))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
 
 def test_dilated_box_axes_disclose_sparse_possible() -> None:
@@ -1151,7 +1151,7 @@ def test_batch_mean_mix_claims_full_batch_axis() -> None:
         assert (spatial.clipped_start, spatial.clipped_stop) == hull(truth, axis)
     checked = target.receptive_field.check((1, 0, 2, 2))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
 
 def test_check_exposes_retain_graph() -> None:
@@ -1171,7 +1171,7 @@ def test_check_exposes_retain_graph() -> None:
     checked = target.receptive_field.check(unit, retain_graph=True)
     assert checked.status is ReceptiveFieldValidationStatus.PASS
     # The graph survived the check, so a later gradient works.
-    assert target.receptive_field.gradient(unit, retain_graph=True)
+    assert target.receptive_field.probe_grad(unit, retain_graph=True)
 
     # The default still frees the graph (unchanged behavior, now disclosed).
     fresh = capture(model, torch.randn(1, 1, 8, 8))
@@ -1179,4 +1179,4 @@ def test_check_exposes_retain_graph() -> None:
     fresh_unit = fresh_target.receptive_field.center_unit(batch_index=0)
     fresh_target.receptive_field.check(fresh_unit)
     with pytest.raises(RuntimeError, match="backward through the graph"):
-        fresh_target.receptive_field.gradient(fresh_unit, retain_graph=True)
+        fresh_target.receptive_field.probe_grad(fresh_unit, retain_graph=True)

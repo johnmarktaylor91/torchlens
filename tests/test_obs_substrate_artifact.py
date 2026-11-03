@@ -9,20 +9,17 @@ from pathlib import Path
 import pytest
 import torch
 
-from torchlens.observability import (
-    CommittedBlock,
+from torchlens._observability import (
     Histogram,
-    HistoryArtifactError,
-    HistoryReader,
-    HistoryWriter,
     ObservationRecord,
-    RamRing,
+    RunningStats,
     RunRecord,
     SiteRecord,
-    Spine,
     StepBlockRecord,
-    coarsen_pair,
 )
+from torchlens._observability._artifact import CommittedBlock, HistoryWriter, RamRing, coarsen_pair
+from torchlens.errors import HistoryArtifactError
+from torchlens.trackers import HistoryReader
 
 
 def _run(run_id: str = "run-a", segment_id: str = "seg-a") -> RunRecord:
@@ -34,7 +31,7 @@ def _site(site_id: str = "module:enc.0") -> SiteRecord:
 
 
 def _block(step: int, *, with_sketch: bool = False, value: float = 1.0) -> CommittedBlock:
-    spine = Spine()
+    spine = RunningStats()
     spine.update(torch.tensor([value, -value, 0.0]))
     sketch = None
     if with_sketch:
@@ -47,7 +44,7 @@ def _block(step: int, *, with_sketch: bool = False, value: float = 1.0) -> Commi
         stream="activation",
         phase="forward",
         presence="observed",
-        spine=spine.result(),
+        spine=spine.compute(),
         sketch=sketch,
     )
     record = StepBlockRecord(segment_id="seg-a", global_step=step, provenance="explicit")
@@ -65,12 +62,12 @@ class TestRoundTrip:
             writer.append_block(_block(step, with_sketch=step == 1))
         reader = HistoryReader(tmp_path / "hist")
         assert reader.run.run_id == "run-a"
-        assert reader.n_chunks == 3
+        assert reader.num_chunks == 3
         assert [b.global_step for b in reader.step_blocks()] == [0, 1, 2]
         rows = reader.observations(step=1)
         assert len(rows) == 1
         row = rows[0]
-        assert row.spine is not None and row.spine.count_total == 3
+        assert row.spine is not None and row.spine.numel == 3
         assert row.sketch is not None and row.sketch.specials["zero"] == 1
         no_sketch = reader.observations(step=0)[0]
         assert no_sketch.sketch is None
@@ -111,7 +108,7 @@ class TestCrashRecovery:
         # no index row for it.
         (art / "chunk-000002.npz.tmp").write_bytes(b"partial garbage")
         reader = HistoryReader(art)
-        assert reader.n_chunks == 2
+        assert reader.num_chunks == 2
         assert len(reader.observations()) == 2
 
     def test_committed_chunk_corruption_refuses_typed(self, tmp_path: Path) -> None:
@@ -196,7 +193,7 @@ class TestRamRing:
         assert merged_obs.spine is not None
         # Exact count preservation across the pairwise merges.
         total = sum(
-            b.observations[0].spine.count_total  # type: ignore[union-attr]
+            b.observations[0].spine.numel  # type: ignore[union-attr]
             for b in ring.blocks
         )
         assert total == 4 * 3
@@ -220,4 +217,4 @@ class TestRamRing:
         assert merged.coarsened
         assert (merged.step_lo, merged.step_hi) == (0, 1)
         spine = merged.observations[0].spine
-        assert spine is not None and spine.count_total == 6
+        assert spine is not None and spine.numel == 6

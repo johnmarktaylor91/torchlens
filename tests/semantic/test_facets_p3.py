@@ -11,9 +11,11 @@ from torch import nn
 from torch.nn import functional as F
 
 import torchlens as tl
+from torchlens._semantic import facets as facets_mod
+from torchlens._semantic.recipes import activate_entrypoint_recipes
+from torchlens.errors import MissingFacetError
+from torchlens.facets import MissingFacet
 from torchlens.intervention.errors import SiteResolutionError
-from torchlens.semantic import MissingFacet, MissingFacetError, facets as facets_mod
-from torchlens.semantic.recipes import activate_entrypoint_recipes
 
 
 class LlamaSdpaAttention(nn.Module):
@@ -97,7 +99,7 @@ class TransformerBlock(nn.Module):
 def _sdpa_op(log: Any) -> Any:
     """Return the single SDPA op from a trace."""
 
-    return next(op for op in log.layer_list if "scaled_dot_product_attention" in str(op.func_name))
+    return next(op for op in log._layer_list if "scaled_dot_product_attention" in str(op.func_name))
 
 
 def _manual_pattern(op: Any) -> torch.Tensor:
@@ -120,8 +122,8 @@ def test_reconstructed_sdpa_facets_validate_against_actual_post_rope_inputs() ->
     log = tl.trace(
         model,
         x,
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(reconstruction_ready=True),
+        save="all",
     )
     view = log.modules["attn"].facets
     op = _sdpa_op(log)
@@ -144,8 +146,8 @@ def test_reconstructed_sdpa_validation_is_non_vacuous_after_corruption() -> None
     log = tl.trace(
         model,
         torch.randn(2, 3, 8),
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(reconstruction_ready=True),
+        save="all",
     )
     op = _sdpa_op(log)
     op.saved_args[0] = op.saved_args[0] + 10.0
@@ -163,8 +165,8 @@ def test_reconstructed_sdpa_gqa_and_causal_mask_validate() -> None:
     log = tl.trace(
         model,
         torch.randn(1, 4, 8),
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(reconstruction_ready=True),
+        save="all",
     )
     view = log.modules["attn"].facets
     op = _sdpa_op(log)
@@ -177,14 +179,12 @@ def test_reconstructed_sdpa_missing_prerequisite_names_arg_capture() -> None:
     """Default capture names the missing arg-capture prerequisite."""
 
     model = _AttentionWrapper(LlamaSdpaAttention())
-    log = tl.trace(
-        model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(2, 3, 8), save="all")
     facets = log.modules["attn"].facets
 
     assert "pattern" not in facets.keys()
-    assert facets.menu()["pattern"].status == "needs_capture"
-    with pytest.raises(MissingFacetError, match="save_arg_values=True"):
+    assert facets.declared()["pattern"].status == "needs_capture"
+    with pytest.raises(MissingFacetError, match="save_args=True"):
         facets.pattern
 
 
@@ -195,8 +195,8 @@ def test_fused_pattern_intervention_requires_real_eager_facet() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 3, 8),
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(reconstruction_ready=True),
+        save="all",
     )
 
     with pytest.raises(SiteResolutionError, match="read-only"):
@@ -211,9 +211,8 @@ def test_residual_facets_read_and_grad() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", backward_ready=True, save_grads="all"
-        ),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_grads="all"),
+        save="all",
     )
     log.log_backward(log[log.output_layers[0]].out.sum())
     facets = log.modules["self"].facets
@@ -252,7 +251,7 @@ def test_module_path_fallback_on_unreciped_model() -> None:
             return self.custom(x)
 
     x = torch.randn(2, 3)
-    log = tl.trace(Model(), x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(Model(), x, save="all")
     assert torch.equal(log.modules["custom"].facets["out"], x.sin())
 
 
@@ -264,24 +263,24 @@ def test_transformerlens_aliases_are_opt_in() -> None:
     log = tl.trace(
         model,
         x,
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(reconstruction_ready=True),
+        save="all",
     )
     assert "hook_pattern" not in log.modules["attn"].facets.keys()
 
-    facets_mod.enable_transformerlens_aliases(True)
+    facets_mod.enable_transformer_lens_aliases(True)
     try:
         aliased = tl.trace(
             model,
             x,
-            reconstruction_ready=True,
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            capture=tl.options.CaptureOptions(reconstruction_ready=True),
+            save="all",
         )
         view = aliased.modules["attn"].facets
         assert "hook_pattern" in view.keys()
         assert torch.allclose(view["hook_pattern"], view.pattern)
     finally:
-        facets_mod.enable_transformerlens_aliases(False)
+        facets_mod.enable_transformer_lens_aliases(False)
 
 
 def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
@@ -290,21 +289,21 @@ def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
     model = _AttentionWrapper(LlamaSdpaAttention())
     x = torch.randn(2, 3, 8)
 
-    facets_mod.enable_transformerlens_aliases(True)
+    facets_mod.enable_transformer_lens_aliases(True)
     try:
-        log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = tl.trace(model, x, save="all")
         view = log.modules["attn"].facets
-        menu = view.menu()
+        menu = view.declared()
 
         assert "pattern" not in view.keys()
         assert "hook_pattern" not in view.keys()
         assert menu["pattern"].status == "needs_capture"
         assert menu["hook_pattern"].status == "needs_capture"
         assert menu["hook_pattern"].save_hint == menu["pattern"].save_hint
-        with pytest.raises(MissingFacetError, match="save_arg_values=True"):
+        with pytest.raises(MissingFacetError, match="save_args=True"):
             view["hook_pattern"]
     finally:
-        facets_mod.enable_transformerlens_aliases(False)
+        facets_mod.enable_transformer_lens_aliases(False)
 
 
 def test_entrypoint_activation_warns_and_skips_broken_plugin(
@@ -327,7 +326,7 @@ def test_entrypoint_activation_warns_and_skips_broken_plugin(
             return [point for point in self if point.group == group]
 
     monkeypatch.setattr(
-        "torchlens.semantic.recipes.metadata.entry_points", lambda: _EntryPoints([broken])
+        "torchlens._semantic.recipes.metadata.entry_points", lambda: _EntryPoints([broken])
     )
     with pytest.warns(UserWarning, match="Skipping broken torchlens.recipes entry point"):
         activated = activate_entrypoint_recipes()
@@ -348,7 +347,7 @@ def test_entrypoint_activation_unknown_name_warns_coded(
             return [point for point in self if point.group == group]
 
     monkeypatch.setattr(
-        "torchlens.semantic.recipes.metadata.entry_points", lambda: _EntryPoints([])
+        "torchlens._semantic.recipes.metadata.entry_points", lambda: _EntryPoints([])
     )
     with pytest.warns(UserWarning, match="Unknown torchlens.recipes entry point") as caught:
         activated = activate_entrypoint_recipes(["nonexistent_provider"])

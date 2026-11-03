@@ -9,12 +9,12 @@ import pytest
 paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
 from torchlens.backends.paddle import GradOptions  # noqa: E402
 from torchlens.backends.paddle.backend import (  # noqa: E402
     PaddleIntermediateSignature,
     _paddle_trace_intermediate_signatures,
 )
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 
@@ -90,7 +90,7 @@ def test_paddle_leaf_input_and_param_grads_match_direct_reference() -> None:
         model,
         x,
         backend="paddle",
-        grad_options=GradOptions(loss_fn=_loss),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
     )
 
     x.stop_gradient = False
@@ -103,15 +103,18 @@ def test_paddle_leaf_input_and_param_grads_match_direct_reference() -> None:
         allow_unused=True,
     )
 
-    assert set(trace.derived_grads.keys()) == {
+    assert set(trace.autograd.derived_grads.keys()) == {
         "inputs.0",
         "params.linear.weight",
         "params.linear.bias",
     }
-    _assert_close(trace.derived_grads["inputs.0"].grad, expected[0])
-    _assert_close(trace.derived_grads["params.linear.weight"].grad, expected[1])
-    _assert_close(trace.derived_grads["params.linear.bias"].grad, expected[2])
-    assert trace.params["linear.weight"].grad is trace.derived_grads["params.linear.weight"].grad
+    _assert_close(trace.autograd.derived_grads["inputs.0"].grad, expected[0])
+    _assert_close(trace.autograd.derived_grads["params.linear.weight"].grad, expected[1])
+    _assert_close(trace.autograd.derived_grads["params.linear.bias"].grad, expected[2])
+    assert (
+        trace.params["linear.weight"].grad
+        is trace.autograd.derived_grads["params.linear.weight"].grad
+    )
 
 
 def test_paddle_derived_grads_do_not_create_backward_logs() -> None:
@@ -122,12 +125,12 @@ def test_paddle_derived_grads_do_not_create_backward_logs() -> None:
         LinearRelu(),
         paddle.ones([2, 3], dtype="float32"),
         backend="paddle",
-        grad_options=GradOptions(loss_fn=_loss),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
     )
 
-    assert trace.has_backward_pass is False
-    assert not trace.backward_pass_logs
-    assert not trace.grad_fn_logs
+    assert trace.autograd.has_backward_pass is False
+    assert not trace._backward_pass_logs
+    assert not trace._grad_fn_logs
 
 
 def test_paddle_intermediate_grads_match_direct_oracle_and_skip_unused() -> None:
@@ -147,14 +150,16 @@ def test_paddle_intermediate_grads_match_direct_oracle_and_skip_unused() -> None
         model,
         x,
         backend="paddle",
-        grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=8),
-        capture=tl.options.CaptureOptions(keep_orphans=True),
+        capture=tl.options.CaptureOptions(
+            keep_orphans=True,
+            grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=8),
+        ),
     )
 
-    records = trace.intermediate_derived_grads
-    unused_label = next(op.label for op in trace.layer_list if op.func_name == "tensor.__mul__")
-    relu_label = next(op.label for op in trace.layer_list if op.func_name == "functional.relu")
-    sum_label = next(op.label for op in trace.layer_list if op.func_name == "tensor.sum")
+    records = trace.autograd.intermediate_derived_grads
+    unused_label = next(op.label for op in trace._layer_list if op.func_name == "tensor.__mul__")
+    relu_label = next(op.label for op in trace._layer_list if op.func_name == "functional.relu")
+    sum_label = next(op.label for op in trace._layer_list if op.func_name == "tensor.sum")
 
     assert unused_label not in records
     _assert_close(records[relu_label].grad, paddle.ones([2, 2], dtype="float32"))
@@ -177,16 +182,18 @@ def test_paddle_same_shape_relus_are_disambiguated_by_ordinal() -> None:
         model,
         paddle.ones([2, 2], dtype="float32"),
         backend="paddle",
-        grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=16),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=16)
+        ),
     )
 
-    relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "functional.relu"]
     assert len(relu_ops) == 2
     _assert_close(
-        trace.intermediate_derived_grads[relu_ops[0].label].grad, paddle.full([2, 2], 2.0)
+        trace.autograd.intermediate_derived_grads[relu_ops[0].label].grad, paddle.full([2, 2], 2.0)
     )
     _assert_close(
-        trace.intermediate_derived_grads[relu_ops[1].label].grad, paddle.full([2, 2], 3.0)
+        trace.autograd.intermediate_derived_grads[relu_ops[1].label].grad, paddle.full([2, 2], 3.0)
     )
 
 
@@ -201,7 +208,7 @@ def test_paddle_duplicate_trace_signature_group_is_ambiguous() -> None:
         return paddle.nn.functional.relu(x) + paddle.nn.functional.relu(x)
 
     trace = tl.trace(model, paddle.ones([2, 2], dtype="float32"), backend="paddle")
-    relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "functional.relu"]
     relu_ops[1].func_call_id = relu_ops[0].func_call_id
     groups = _paddle_trace_intermediate_signatures(trace)
     # N5: ``op.parents`` holds FINAL pass-qualified labels (every op's edges
@@ -210,7 +217,7 @@ def test_paddle_duplicate_trace_signature_group_is_ambiguous() -> None:
     # label space and resolves parents back to raw via a label->raw map
     # first. The expected signature here must go through the same
     # resolution, or it never matches the production grouping.
-    label_to_raw = {op.label: op._label_raw for op in trace.layer_list}
+    label_to_raw = {op.label: op._label_raw for op in trace._layer_list}
     signature = PaddleIntermediateSignature(
         func_call_id=relu_ops[0].func_call_id,
         op_name=relu_ops[0].func_name,
@@ -231,7 +238,9 @@ def test_paddle_max_intermediate_grads_cap_raises() -> None:
             lambda x: paddle.nn.functional.relu(x + 1.0).sum(),
             paddle.ones([2, 2], dtype="float32"),
             backend="paddle",
-            grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=1),
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=1)
+            ),
         )
 
 
@@ -245,7 +254,7 @@ def test_paddle_non_scalar_output_without_loss_fn_raises() -> None:
             lambda x: x + 1.0,
             paddle.ones([2, 2], dtype="float32"),
             backend="paddle",
-            grad_options=GradOptions(),
+            capture=tl.options.CaptureOptions(grad_options=GradOptions()),
         )
 
 
@@ -273,7 +282,7 @@ def test_paddle_replay_output_divergence_refuses_grads() -> None:
             Diverges(),
             paddle.ones([2, 2], dtype="float32"),
             backend="paddle",
-            grad_options=GradOptions(),
+            capture=tl.options.CaptureOptions(grad_options=GradOptions()),
         )
 
 
@@ -290,7 +299,12 @@ def test_paddle_stop_gradient_and_grad_restore_after_success_and_exception() -> 
     model.linear.weight.stop_gradient = True
     model.linear.weight.grad = param_prior_grad
 
-    tl.trace(model, x, backend="paddle", grad_options=GradOptions(loss_fn=_loss))
+    tl.trace(
+        model,
+        x,
+        backend="paddle",
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
+    )
 
     assert x.stop_gradient is True
     assert model.linear.weight.stop_gradient is True
@@ -298,7 +312,12 @@ def test_paddle_stop_gradient_and_grad_restore_after_success_and_exception() -> 
     _assert_close(model.linear.weight.grad, param_prior_grad)
 
     with pytest.raises(ValueError, match="scalar"):
-        tl.trace(model, x, backend="paddle", grad_options=GradOptions())
+        tl.trace(
+            model,
+            x,
+            backend="paddle",
+            capture=tl.options.CaptureOptions(grad_options=GradOptions()),
+        )
 
     assert x.stop_gradient is True
     assert model.linear.weight.stop_gradient is True

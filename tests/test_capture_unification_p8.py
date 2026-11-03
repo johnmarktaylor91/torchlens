@@ -9,16 +9,13 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
-from torchlens.capture.projections import _record_from_record_context
-from torchlens.fastlog.storage_disk import _ctx_from_json, _ctx_to_json
-from torchlens.fastlog.types import CaptureSpec, RecordContext
-from torchlens.ir import (
-    _DEFERRED_VALUE,
-    CaptureEvents,
-    FunctionEventInput,
-    MLXValueUnavailableError,
-)
+from torchlens._capture.projections import _record_from_record_context
+from torchlens._ir import _DEFERRED_VALUE
+from torchlens._ir.capture_events import CaptureEvents
+from torchlens._ir.intervention import FunctionEventInput
+from torchlens.errors import BackendUnsupportedError, MLXValueUnavailableError
+from torchlens.recording.storage_disk import _ctx_from_json, _ctx_to_json
+from torchlens.recording.types import CaptureSpec, RecordContext
 
 
 def _minimal_context(**updates: Any) -> RecordContext:
@@ -28,7 +25,7 @@ def _minimal_context(**updates: Any) -> RecordContext:
         "kind": "op",
         "label": "mlx_add_1_1_raw",
         "raw_label": "mlx_add_1_1_raw",
-        "pass_index": 1,
+        "pass_number": 1,
         "event_index": 1,
         "step_index": 1,
         "layer_type": "add",
@@ -37,7 +34,7 @@ def _minimal_context(**updates: Any) -> RecordContext:
         "func_name": "add",
         "address": None,
         "module_type": None,
-        "module_pass_index": None,
+        "module_pass_number": None,
         "module_stack": (),
         "recent_events": (),
         "recent_ops": (),
@@ -130,7 +127,7 @@ def test_mlx_emit_function_outputs_produces_topology_complete_events() -> None:
         capture_events=events,
         _mlx_saved_payloads=[],
         save_raw_activations=True,
-        save_code_context=False,
+        save_source_context=False,
         detach_saved_activations=False,
         activation_transform=None,
     )

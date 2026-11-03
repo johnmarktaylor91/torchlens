@@ -9,16 +9,17 @@ from _source_corpus import module_ast, module_source
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCANNED_PATHS = (
-    REPO_ROOT / "torchlens" / "capture",
+    REPO_ROOT / "torchlens" / "_capture",
     REPO_ROOT / "torchlens" / "backends" / "torch",
-    REPO_ROOT / "torchlens" / "postprocess",
-    REPO_ROOT / "torchlens" / "fastlog",
-    REPO_ROOT / "torchlens" / "data_classes" / "op.py",
+    REPO_ROOT / "torchlens" / "_postprocess",
+    REPO_ROOT / "torchlens" / "recording",
+    REPO_ROOT / "torchlens" / "_data_classes" / "op.py",
+    REPO_ROOT / "torchlens" / "_data_classes" / "_op_save.py",
 )
 ALLOWLIST = {
     "Op._tensor_contents_str_helper",
-    "Op.log_tensor_grad",
-    "log_tensor_grad",
+    "Op._log_tensor_grad",
+    "_log_tensor_grad",
 }
 MAX_DETACH_OK_EXEMPTIONS = 5
 

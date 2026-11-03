@@ -10,11 +10,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._errors import InvalidArgumentError
-from torchlens.data_classes._layer_sites import (
+from torchlens._data_classes._layer_sites import (
     SHAPE_SUMMARY_CHARACTER_CLASS,
     layer_shape_summary,
+    layer_site_key,
 )
+from torchlens._errors import InvalidArgumentError
 
 
 class _Tied(nn.Module):
@@ -30,14 +31,16 @@ class _Tied(nn.Module):
 
 
 class _ResBlock(nn.Module):
-    """Within-call recurrence fixture: the grouper pairs the two residual
-    adds (and tanhs) of ONE block call as pass 1/2 of one layer -- a
-    site-SPANNING group (the transformer residual-add pattern in miniature).
+    """Within-call recurrence fixture: a residual line run twice by a loop
+    inside ONE block call is pass 1/2 of one layer per op (grouping rule rows
+    2 and 11) whose passes sit at two positions of that call -- a
+    site-SPANNING group. (Two residual lines written out are two layers,
+    row 10, so they no longer span.)
     """
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + torch.tanh(x)
-        x = x + torch.tanh(x)
+        for _ in range(2):
+            x = x + torch.tanh(x)
         return x
 
 
@@ -50,18 +53,31 @@ class _ResModel(nn.Module):
         return self.blk(x)
 
 
+class _BranchAct(nn.Module):
+    """Applies a relu written on a different line for each branch."""
+
+    def forward(self, x: torch.Tensor, branch: int) -> torch.Tensor:
+        if branch == 0:
+            return torch.relu(x)
+        if branch == 1:
+            return torch.relu(x)
+        return torch.relu(x)
+
+
 class _Shrink(nn.Module):
-    """Reused-relu cohort fixture: one ReLU module applied to three
-    different shapes mints three single-pass layers SHARING one site key
-    (the ResNet reused-relu pattern in miniature)."""
+    """Shared-site cohort fixture: one module called three times, each call
+    taking a different branch line, mints three single-pass relu layers
+    (grouping rule rows 41-42: per-line layers) that SHARE one site key, since
+    each is the first relu of its own call. (A reused ``nn.ReLU`` instance no
+    longer forms a cohort: its calls are one layer's passes, row 28.)"""
 
     def __init__(self) -> None:
         super().__init__()
-        self.act = nn.ReLU()
+        self.act = _BranchAct()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for k in (8, 4, 2):
-            x = self.act(x[:, :k])
+        for branch, k in enumerate((8, 4, 2)):
+            x = self.act(x[:, :k], branch)
         return x
 
 
@@ -81,14 +97,14 @@ class _Grow(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Layer.site_key
+# layer_site_key (the Layer-level site-key accessor)
 # ---------------------------------------------------------------------------
 
 
 def test_site_key_single_on_uniform_layer() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert log["linear_1_1"].site_key == "s1|lin|linear||1"
-    assert log["relu_1_2"].site_key == "s1|act|relu||1"
+    assert layer_site_key(log["linear_1_1"]) == "s1|lin|linear||1"
+    assert layer_site_key(log["relu_1_2"]) == "s1|act|relu||1"
 
 
 def test_site_key_refuses_typed_on_spanning_layer() -> None:
@@ -99,7 +115,7 @@ def test_site_key_refuses_typed_on_spanning_layer() -> None:
     member_keys = [op.site_key for _, op in sorted(layer.ops.items())]
     assert member_keys == ["s1|blk|tanh||1", "s1|blk|tanh||2"]
     with pytest.raises(InvalidArgumentError) as excinfo:
-        _ = layer.site_key
+        _ = layer_site_key(layer)
     assert excinfo.value.fields["code"] == "layer_site_ambiguous"
     assert ".ops[k].site_key" in str(excinfo.value)
 
@@ -112,7 +128,7 @@ def test_site_key_refuses_typed_when_keys_absent() -> None:
     for _, op in layer.ops.items():
         op.site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
-        _ = layer.site_key
+        _ = layer_site_key(layer)
     assert excinfo.value.fields["code"] == "site_key_unavailable"
 
 

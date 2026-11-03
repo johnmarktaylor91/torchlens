@@ -171,7 +171,7 @@ class TensorBoardSink:
             num=int(summary.get("num", sum(point.counts))),
             sum=summary.get("sum", 0.0),
             sum_squares=summary.get("sum_squares", 0.0),
-            bucket_limits=list(point.edges[1:]),
+            bucket_limits=list(point.bin_edges[1:]),
             bucket_counts=list(point.counts),
             global_step=point.step,
         )

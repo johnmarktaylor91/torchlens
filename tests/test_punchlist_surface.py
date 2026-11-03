@@ -40,7 +40,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 #: non-inventory tests) at demotion time; internal callers import the names
 #: directly and are unaffected.
 DEMOTED: dict[str, tuple[str, ...]] = {
-    "torchlens.merged": ("CollectiveJoin", "JoinRecord", "MergeDerivation", "PerRankRef"),
+    "torchlens._merged": ("CollectiveJoin", "JoinRecord", "MergeDerivation", "PerRankRef"),
     "torchlens.distributed": (
         "CollectiveRecognizer",
         "LineageEntry",
@@ -51,7 +51,6 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "merge_capture_options",
         "merge_intervention_options",
         "merge_replay_options",
-        "merge_save_options",
         "merge_streaming_options",
         "merge_visualization_options",
         "visualization_to_render_kwargs",
@@ -63,7 +62,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "GraphBreak",
         "GraphBreakReport",
     ),
-    "torchlens.runnable": (
+    "torchlens._runnable": (
         "GapSpec",
         "ActivationPayloadMember",
         "RUNNABLE_CALLABLE_REF_SCHEMA_VERSION",
@@ -72,7 +71,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "SlotByteDigest",
         "refuse_collective_boundary_trace",
     ),
-    "torchlens.ir": (
+    "torchlens._ir": (
         "register_live_event",
         "is_deferred_value",
         "ContainerSnapshot",
@@ -100,7 +99,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "normalize_hook",
         "resolve_metric",
     ),
-    "torchlens.semantic": (
+    "torchlens._semantic": (
         "FacetCoverageReport",
         "LogitLensEntry",
         "ModuleCoverageRow",
@@ -108,7 +107,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "FacetMenuItem",
         "TransformPrimitive",
     ),
-    "torchlens.semantic.facets": (
+    "torchlens._semantic.facets": (
         "FacetKey",
         "RecordScope",
         "mark_current_registry_as_builtins",
@@ -116,7 +115,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "FacetMenuItem",
         "TransformPrimitive",
     ),
-    "torchlens.capture.outcome": (
+    "torchlens._capture.outcome": (
         "count_committed_ops",
         "current_capture_phase",
         "set_capture_phase",
@@ -124,8 +123,8 @@ DEMOTED: dict[str, tuple[str, ...]] = {
     ),
     "torchlens.experimental": ("AutoCaptureSession",),
     "torchlens.backends": ("BackendName", "TORCH_BACKEND_NAME", "TINYGRAD_BACKEND_NAME"),
-    "torchlens.data_classes": ("FuncExecutionContext", "VisualizationOverrides"),
-    "torchlens.trace_slice": ("build_slice_between", "build_slice_from_selection"),
+    "torchlens._data_classes": ("FuncExecutionContext", "VisualizationOverrides"),
+    "torchlens._trace_slice": ("build_slice_between", "build_slice_from_selection"),
     "torchlens.errors": ("EpisodeErrorCode",),
     "torchlens.validation": ("ValidationReplayState",),
 }
@@ -133,7 +132,8 @@ DEMOTED: dict[str, tuple[str, ...]] = {
 #: Audit rows deliberately KEPT advertised: evidence gained since the sweep.
 KEPT_WITH_EVIDENCE: dict[str, tuple[str, ...]] = {
     "torchlens.stats": ("StreamingStat",),
-    "torchlens.semantic": ("AttentionHeadView",),
+    # The facets vocabulary is published as tl.facets (its module home).
+    "torchlens._semantic.facets": ("AttentionHeadView",),
 }
 
 #: Batch-8-retired alias spellings that must never be re-advertised by ANY
@@ -268,10 +268,12 @@ def test_retired_spellings_stay_unadvertised() -> None:
 def test_canonical_replacement_verbs_stay_advertised() -> None:
     """The retirement tail's canonical verbs remain the advertised surface."""
 
-    intervention = importlib.import_module("torchlens.intervention")
-    for canonical in ("push", "push_from", "run", "do"):
-        assert canonical in intervention.__all__, canonical
     import torchlens
 
-    for canonical in ("push", "push_from", "run", "pluck", "extract_dataset", "span"):
+    # The replay verbs (do, push, push_from, run) left the module surfaces in the
+    # 2.x rename; ``Trace.do`` is the one edit verb.
+    assert callable(getattr(torchlens.Trace, "do", None))
+    for canonical in ("pluck", "extract_dataset"):
         assert canonical in torchlens.__all__, canonical
+    # ``span`` is an observer verb: its public home is tl.observers.
+    assert "span" in torchlens.observers.__all__

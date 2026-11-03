@@ -22,9 +22,9 @@ def test_every_backend_gets_a_row_per_gated_option() -> None:
         TRACE_OPTION_CAPABILITY_GATES,
         operation_grain_capability_rows,
     )
-    from torchlens.backends.registry import registered_backend_specs
+    from torchlens.backends.registry import registered_backend_specs as specs
 
-    specs = registered_backend_specs()
+    specs = specs()
     assert specs, "no registered backends"
     all_ids: list[str] = []
     for spec in specs:
@@ -50,9 +50,9 @@ def test_rows_agree_with_the_coarse_authority() -> None:
         TRACE_OPTION_CAPABILITY_GATES,
         operation_grain_capability_rows,
     )
-    from torchlens.backends.registry import registered_backend_specs
+    from torchlens.backends.registry import registered_backend_specs as specs
 
-    for spec in registered_backend_specs():
+    for spec in specs():
         for row in operation_grain_capability_rows(spec):
             assert row.coarse_flag == TRACE_OPTION_CAPABILITY_GATES[row.option_name]
             assert row.supported == bool(getattr(spec.capabilities, row.coarse_flag)), (
@@ -66,9 +66,9 @@ def test_torch_backend_supports_the_gated_options() -> None:
     """The stable torch backend's rows read supported on the core gates."""
 
     from torchlens.backends._options import operation_grain_capability_rows
-    from torchlens.backends.registry import registered_backend_specs
+    from torchlens.backends.registry import registered_backend_specs as specs
 
-    torch_spec = next(spec for spec in registered_backend_specs() if spec.name == "torch")
+    torch_spec = next(spec for spec in specs() if spec.name == "torch")
     supported = {
         row.option_name for row in operation_grain_capability_rows(torch_spec) if row.supported
     }

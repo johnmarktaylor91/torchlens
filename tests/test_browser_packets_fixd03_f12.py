@@ -22,10 +22,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses import audit
-from torchlens.visualization.lenses.audit import stage0
-from torchlens.visualization.lenses.audit.answer_key import AnswerKey, KeyQuestion
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses import audit
+from torchlens._visualization.lenses.audit import stage0
+from torchlens._visualization.lenses.audit.answer_key import AnswerKey, KeyQuestion
 
 DOT_AVAILABLE = shutil.which("dot") is not None
 
@@ -238,7 +238,7 @@ def test_tied_extrema_accept_any_tied_label(keyed_speed: Any) -> None:
     member = resolution.source.member
     values = {
         op.layer_label: float(getattr(op, member))
-        for op in log.ops
+        for op in log._layer_list
         if getattr(op, member, None) is not None
     }
     minimum = min(values.values())

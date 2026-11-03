@@ -46,7 +46,7 @@ def _bare_site_key_collisions(model: Any, inputs: torch.Tensor) -> int:
     """
 
     log = tl.trace(model, inputs)
-    counts = collections.Counter(getattr(entry, "site_key", None) for entry in log.layer_list)
+    counts = collections.Counter(getattr(entry, "site_key", None) for entry in log._layer_list)
     return sum(count - 1 for key, count in counts.items() if key and count > 1)
 
 
@@ -104,10 +104,16 @@ def test_resnet18_eval_ids_unique_and_edges_resolve(
     assert sum(len(node.get("incomingEdges", [])) for node in graph["nodes"]) == 158
     report = tl.export.validate_model_explorer_payload(resnet18_eval_payload)
     assert report.ok, report.failures
-    # Exactly ONE root-level non-boundary op: torch.flatten in
+    # grouping rule row 28: each BasicBlock's one ReLU module called twice is
+    # one Layer with 2 passes, so resnet18 now has multi-pass layers and the
+    # export adds the rolled projection beside the unrolled graph.
+    graphs = resnet18_eval_payload["graphs"]
+    assert len(graphs) == 2
+    # Exactly ONE root-level non-boundary op per graph: torch.flatten in
     # ResNet.forward -- a real root-module op, disclosed, never an anomaly
-    # bucket (memo D19's counter stays a re-open tripwire).
-    assert report.counters["stackless_root_ops"] == 1
+    # bucket (memo D19's counter stays a re-open tripwire). The validator
+    # sums the counter over both graphs.
+    assert report.counters["stackless_root_ops"] == len(graphs)
 
 
 def test_resnet18_train_mode_changes_receipts_not_integrity() -> None:

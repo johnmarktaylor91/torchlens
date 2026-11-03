@@ -24,6 +24,7 @@ from torch import nn
 from torch.overrides import TorchFunctionMode
 
 import torchlens as tl
+from torchlens._utils._callable_safety import _ALLOWED_FORWARD_DUNDERS
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.rescue import (
     _MODE_RESPELLED_DUNDERS,
@@ -31,7 +32,6 @@ from torchlens.backends.torch.rescue import (
     capture_with_rescue,
 )
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.utils._callable_safety import _ALLOWED_FORWARD_DUNDERS
 
 _MODE_BOOKKEEPING = frozenset({"untyped_storage", "__get__"})
 
@@ -169,14 +169,17 @@ def test_respelling_rows_keep_operation_identity() -> None:
 
 
 def _stub_trace(op_names: list[str], *, signal: bool = False) -> Any:
-    """Build a minimal trace stub for direct driver tests."""
+    """Build a minimal trace stub for direct driver tests (rows in ``layer_list`` too)."""
 
+    rows = [types.SimpleNamespace(func_name=name) for name in op_names]
     return types.SimpleNamespace(
         escape_diagnostics=[],
         _had_unattributed_tensor_args=signal,
-        ops=[types.SimpleNamespace(func_name=name) for name in op_names],
+        ops=rows,
+        _layer_list=rows,
         modules=[],
-        capture_verification_reason=None,
+        _provenance_verified=None,
+        _provenance_verification_reason=None,
     )
 
 
@@ -190,9 +193,9 @@ def test_respelled_dunders_do_not_refuse_a_recovery() -> None:
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is rescued
-    assert result.capture_verification_reason == "mode_rescue_rerun"
-    assert result.rescue_rerun["recovered_ops"] == ("relu",)
-    assert result.rescue_rerun["lost_ops"] == ()
+    assert result._provenance_verification_reason == "mode_rescue_rerun"
+    assert result._rescue_rerun["recovered_ops"] == ("relu",)
+    assert result._rescue_rerun["lost_ops"] == ()
 
 
 @pytest.mark.parametrize(
@@ -215,9 +218,9 @@ def test_genuine_loss_still_refuses_the_rescue(
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is primary
-    assert result.capture_verification_reason == "escape_rescue_unrecovered"
-    assert result.rescue_rerun["recovered"] is False
-    assert result.rescue_rerun["lost_ops"] == lost
+    assert result._provenance_verification_reason == "escape_rescue_unrecovered"
+    assert result._rescue_rerun["recovered"] is False
+    assert result._rescue_rerun["lost_ops"] == lost
 
 
 @pytest.fixture()
@@ -268,8 +271,8 @@ def test_stale_ref_rescue_with_operators_returns_the_rescued_trace(
     with pytest.warns(UserWarning, match="no graph/source provenance"):
         trace = tl.trace(Model(), torch.tensor([0.25, 0.5, 0.75]))
 
-    info = trace.rescue_rerun
+    info = trace._rescue_rerun
     assert info is not None and info["recovered"] is True, info
     assert info["lost_ops"] == ()
-    assert trace.capture_verification_reason == "mode_rescue_rerun"
+    assert trace.provenance.verification_reason == "mode_rescue_rerun"
     assert "cos" in [op.func_name for op in trace.ops]

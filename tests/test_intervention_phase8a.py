@@ -9,7 +9,7 @@ import torch
 from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
-from torchlens.data_classes.cleanup import _scrub_intervention_fields_after_removal
+from torchlens._data_classes.cleanup import _scrub_intervention_fields_after_removal
 from torchlens.intervention.errors import SpecMutationError
 from torchlens.intervention.handles import HookHandle
 from torchlens.intervention.types import FireRecord, TargetSpec
@@ -17,7 +17,7 @@ from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
 
 
-def _identity_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return the out unchanged.
 
     Parameters
@@ -33,7 +33,7 @@ def _identity_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         Original out.
     """
 
-    del hook
+    del ctx
     return out
 
 
@@ -49,7 +49,7 @@ def _capture() -> Any:
     return tl.trace(
         ReluAdd(),
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
 
@@ -67,7 +67,7 @@ def _first_internal_label(log: Any) -> str:
         First internal layer label.
     """
 
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         if not (layer.is_input or layer.is_output or layer.is_buffer):
             return layer.layer_label
     raise AssertionError("expected at least one internal layer")
@@ -141,7 +141,7 @@ def test_attach_clear_and_detach_hooks_are_sticky_mutators() -> None:
     assert log._spec_revision == initial_revision + 3
     assert len(log._intervention_spec.hook_specs) == 1
 
-    assert log.detach_hooks(tl.func("relu")) is log
+    assert log.clear_edits(tl.func("relu")) is log
     assert log._spec_revision == initial_revision + 4
     assert log._intervention_spec.hook_specs == []
 
@@ -170,29 +170,29 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     """Frozen intervention-spec snapshots refresh after each public mutator."""
 
     log = _capture()
-    first_snapshot = log.intervention_spec
-    assert log.intervention_spec is first_snapshot
+    first_snapshot = log.recipe
+    assert log.recipe is first_snapshot
 
     replacement = torch.zeros(2, 3)
     log.set(tl.func("relu"), replacement, confirm_mutation=True)
-    after_set = log.intervention_spec
+    after_set = log.recipe
     assert after_set is not first_snapshot
     assert len(after_set.target_value_specs) == 1
 
     log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
-    after_attach = log.intervention_spec
+    after_attach = log.recipe
     assert after_attach is not after_set
     assert len(after_attach.hook_specs) == 1
 
-    log.detach_hooks(tl.func("relu"), confirm_mutation=True)
-    after_detach = log.intervention_spec
+    log.clear_edits(tl.func("relu"), confirm_mutation=True)
+    after_detach = log.recipe
     assert after_detach is not after_attach
     assert after_detach.hook_specs == ()
 
     log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
-    after_second_attach = log.intervention_spec
+    after_second_attach = log.recipe
     log.clear_hooks(confirm_mutation=True)
-    after_clear = log.intervention_spec
+    after_clear = log.recipe
     assert after_clear is not after_second_attach
     assert after_clear.hook_specs == ()
 
@@ -201,7 +201,7 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
         torch.ones(2, 3),
         intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
-    after_do = log.intervention_spec
+    after_do = log.recipe
     assert after_do is not after_clear
     assert len(after_do.target_value_specs) == 2
 
@@ -222,7 +222,7 @@ def test_cleanup_scrubs_all_label_bearing_intervention_spec_fields() -> None:
     _scrub_intervention_fields_after_removal(
         log,
         {target},
-        [layer for layer in log.layer_list if layer.layer_label != target],
+        [layer for layer in log._layer_list if layer.layer_label != target],
     )
 
     assert log._intervention_spec.targets == []
@@ -243,39 +243,39 @@ def test_cleanup_invalidates_cached_intervention_spec_snapshot() -> None:
         FireRecord(target_label=target, site_label=target, call_label=log[target].label)
     )
 
-    frozen_before = log.intervention_spec
+    frozen_before = log.recipe
     assert len(frozen_before.records) == 1
 
     _scrub_intervention_fields_after_removal(
         log,
         {target},
-        [layer for layer in log.layer_list if layer.layer_label != target],
+        [layer for layer in log._layer_list if layer.layer_label != target],
     )
 
-    frozen_after = log.intervention_spec
+    frozen_after = log.recipe
     assert frozen_after is not frozen_before
     assert len(log._intervention_spec.records) == 0
     assert frozen_after.records == ()
 
 
-def test_detach_hooks_no_site_is_noop_unless_strict() -> None:
-    """``detach_hooks()`` is a non-mutating no-op unless strict mode is requested."""
+def test_clear_edits_no_site_is_noop_unless_strict() -> None:
+    """``clear_edits()`` is a non-mutating no-op unless strict mode is requested."""
 
     log = _capture()
     initial_revision = log._spec_revision
 
-    assert log.detach_hooks() is log
+    assert log.clear_edits() is log
     assert log._spec_revision == initial_revision
 
     with pytest.raises(SpecMutationError, match="requires a site or handle"):
-        log.detach_hooks(strict=True)
+        log.clear_edits(strict=True)
 
 
 def test_rerun_advances_out_recipe_revision_after_set() -> None:
     """Successful rerun advances the out recipe revision."""
 
     x = torch.randn(2, 3)
-    log = tl.trace(ReluAdd(), x, capture=CaptureOptions(intervention_ready=True))
+    log = tl.trace(ReluAdd(), x, capture=CaptureOptions(replayable=True))
 
     log.set(tl.func("relu"), torch.zeros(2, 3), confirm_mutation=True)
     assert log._out_recipe_revision == 0
@@ -295,8 +295,8 @@ def test_fork_and_auto_do_are_implemented_by_phase8b() -> None:
 
     fork = log.fork("candidate")
     assert fork is not log
-    assert fork.trace_label == "candidate"
-    assert fork.parent_run() is log
+    assert fork.name == "candidate"
+    assert fork._parent_run() is log
 
     result = log.do(
         {tl.func("relu"): _identity_hook},

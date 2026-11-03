@@ -9,13 +9,13 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
 
-from ..capture.arg_positions import _normalize_func_name
+from .._capture.arg_positions import _normalize_func_name
 from ._errors import ReceptiveFieldConfigurationError
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
 
 
 RuleCallback: TypeAlias = Callable[..., object]
@@ -60,6 +60,21 @@ class ReceptiveFieldRule(Protocol):
         """
 
 
+def _loaded_parent_shapes(op: Op) -> tuple[Any, ...]:
+    """Parent output shapes, in ``parents`` order, for an op of a loaded trace.
+
+    Raises the original detached-op ``AttributeError`` when the op has no
+    owning loaded trace (a cleaned-up live trace stays an error).
+    """
+
+    ref = op._slot("_source_trace_ref")
+    trace = ref() if ref is not None else None
+    if trace is None or not trace._loaded_from_bundle:
+        raise AttributeError("This Op is detached from its source Trace.")
+    by_label = trace._layer_dict_all_keys
+    return tuple(getattr(by_label.get(label), "shape", None) for label in tuple(op.parents or ()))
+
+
 class ReceptiveFieldRuleContext:
     """Metadata and result constructors available to receptive-field rules."""
 
@@ -78,7 +93,14 @@ class ReceptiveFieldRuleContext:
     def in_shapes(self) -> tuple[tuple[int, ...], ...]:
         """Return captured input shapes, omitting unavailable inputs."""
 
-        return tuple(tuple(shape) for shape in self.op.input_shapes if shape is not None)
+        try:
+            shapes = self.op.input_shapes
+        except AttributeError:
+            # An op of a loaded trace refuses its live-trace accessors (it is
+            # detached by design); its parents' recorded output shapes are the
+            # same metadata, read through the loaded trace that owns it.
+            shapes = _loaded_parent_shapes(self.op)
+        return tuple(tuple(shape) for shape in shapes if shape is not None)
 
     @property
     def out_shape(self) -> tuple[int, ...]:

@@ -11,11 +11,11 @@ real pinned worker under Node instead of trusting any schema reading.
 | `worker.js` | `dist/worker.js` from npm `ai-edge-model-explorer-visualizer` 0.1.2 (Apache-2.0, Google Inc.); sha256 pinned in `checksums.sha256` |
 | `visualizer_custom_element.d.ts` | `src/custom_element/index.d.ts` from the same npm package (embed-config interface snapshot for the future tsc/Playwright leg) |
 | `run_worker.cjs` | TorchLens-authored headless Node runner: loads `worker.js` in a `vm` sandbox with worker-global shims, feeds it graph payloads, prints per-graph stats JSON |
-| `vendor_loader.py` | Test-support loader for the pinned pip package `ai-edge-model-explorer` 0.1.32 schema modules without executing the package `__init__` (whose server imports need flask etc.) |
+| `vendor_loader.py` | Test-support loader for the pinned pip package `ai-edge-model-explorer` 0.1.33 schema modules without executing the package `__init__` (whose server imports need flask etc.) |
 | `checksums.sha256` | sha256 pins for the two vendor files |
 
 The pip-side schema of record is `model_explorer.graph_builder` /
-`model_explorer.node_data_builder` from `ai-edge-model-explorer==0.1.32`
+`model_explorer.node_data_builder` from `ai-edge-model-explorer==0.1.33`
 (install with `--no-deps` for the schema-only environment). The npm
 TypeScript-interface compile leg needs a `tsc` toolchain and is recorded as an
 open remainder in the F15 lane report; the interface snapshot is pinned here so

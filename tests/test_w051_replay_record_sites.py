@@ -14,9 +14,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._selection.selectors import CompositeSelector, LabelSelector
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.intervention.hooks import lower_record_site_target
-from torchlens.intervention.selectors import CompositeSelector, LabelSelector
 
 _N_PASSES = 3
 
@@ -30,7 +30,10 @@ class _Loop(nn.Module):
         hidden = x
         for step in range(_N_PASSES):
             hidden = torch.relu(self.cell(hidden)) + float(step)
-        return hidden
+        # A single-pass layer for the single-pass record rows: the loop's
+        # ``+ float(step)`` is now one 3-pass Layer (grouping rule row 49:
+        # a varying scalar in a loop is one layer), so it no longer serves.
+        return hidden * 1.0
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +41,7 @@ def loop():
     torch.manual_seed(0)
     model = _Loop().eval()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         yield model, x, trace
     finally:
@@ -68,12 +71,12 @@ def _assert_matches(fork, truth):
 def test_do_op_record_edits_exactly_its_pass(loop) -> None:
     model, x, trace = loop
     fork = trace.fork()
-    fork.do(trace["relu_1_2:2"].ops[0], tl.zero_ablate())
+    fork.do(trace["relu_1_2:2"], tl.zero_ablate())
     _assert_matches(fork, _truth(model, x, {2}))
     assert torch.equal(fork["relu_1_2:1"].out, trace["relu_1_2:1"].out)
-    fires = fork["relu_1_2:2"].ops[0].interventions
+    fires = fork["relu_1_2:2"].edits
     assert fires and all(r.call_label == "relu_1_2:2" for r in fires)
-    assert not fork["relu_1_2:3"].ops[0].interventions
+    assert not fork["relu_1_2:3"].edits
 
 
 def test_do_single_pass_getitem_record(loop) -> None:
@@ -87,7 +90,7 @@ def test_do_layer_record_is_the_all_passes_spelling(loop) -> None:
     model, x, trace = loop
     fork = trace.fork()
     # The all-passes spelling fans out to every pass; the fan-out is
-    # DISCLOSED (MultiMatchWarning), exactly like ``tl.contains("relu_1")``.
+    # DISCLOSED (MultiMatchWarning), exactly like ``tl.label_contains("relu_1")``.
     with pytest.warns(MultiMatchWarning):
         fork.do(fork["relu_1_2"], tl.zero_ablate())
     _assert_matches(fork, _truth(model, x, {1, 2, 3}))
@@ -96,14 +99,14 @@ def test_do_layer_record_is_the_all_passes_spelling(loop) -> None:
 def test_do_single_pass_layer_record(loop) -> None:
     _model, _x, trace = loop
     fork = trace.fork()
-    fork.do(fork["add_1_3"], tl.zero_ablate())
-    assert bool((fork["add_1_3"].out == 0).all())
+    fork.do(fork["mul_1_4"], tl.zero_ablate())
+    assert bool((fork["mul_1_4"].out == 0).all())
 
 
 def test_attach_hooks_op_record_then_push(loop) -> None:
     model, x, trace = loop
     fork = trace.fork()
-    fork.attach_hooks(trace["relu_1_2:2"].ops[0], tl.zero_ablate())
+    fork.attach_hooks(trace["relu_1_2:2"], tl.zero_ablate())
     fork.push()
     _assert_matches(fork, _truth(model, x, {2}))
 
@@ -111,7 +114,7 @@ def test_attach_hooks_op_record_then_push(loop) -> None:
 def test_spec_target_is_pass_qualified(loop) -> None:
     _model, _x, trace = loop
     fork = trace.fork()
-    fork.do(trace["relu_1_2:2"].ops[0], tl.zero_ablate())
+    fork.do(trace["relu_1_2:2"], tl.zero_ablate())
     spec = fork._ensure_intervention_spec()
     values = [
         (spec_hook.site_target.selector_kind, spec_hook.site_target.selector_value)
@@ -123,7 +126,7 @@ def test_spec_target_is_pass_qualified(loop) -> None:
 
 def test_lower_record_site_target_shapes(loop) -> None:
     _model, _x, trace = loop
-    op_lowered = lower_record_site_target(trace["relu_1_2:2"].ops[0])
+    op_lowered = lower_record_site_target(trace["relu_1_2:2"])
     assert isinstance(op_lowered, LabelSelector) and op_lowered.selector_value == "relu_1_2:2"
     layer_lowered = lower_record_site_target(trace["relu_1_2"])
     assert isinstance(layer_lowered, CompositeSelector) and layer_lowered.operator == "or"
@@ -132,8 +135,8 @@ def test_lower_record_site_target_shapes(loop) -> None:
         "relu_1_2:2",
         "relu_1_2:3",
     ]
-    single = lower_record_site_target(trace["add_1_3"])
-    assert isinstance(single, LabelSelector) and single.selector_value == "add_1_3:1"
+    single = lower_record_site_target(trace["mul_1_4"])
+    assert isinstance(single, LabelSelector) and single.selector_value == "mul_1_4:1"
     selector = tl.label("relu_1_2:1")
     assert lower_record_site_target(selector) is selector
     assert lower_record_site_target("relu_1_2:1") == "relu_1_2:1"

@@ -42,8 +42,15 @@ from torch import nn
 
 from ._distributed import check_distributed_capture
 from ._input_walk import INPUT_TREE_MAX_DEPTH
+from ._robustness_offenses import (
+    _docs_pointer,
+    _first_user_frame,
+    _meta_state_offense,
+    _offense_entry,
+    _sparse_state_offense,
+)
+from ._utils._torch_compat import get_tracing_tensor_types
 from .errors._base import CompatibilityError, TorchLensWarning
-from .utils._torch_compat import get_tracing_tensor_types
 
 # ---------------------------------------------------------------------------
 # Per-tensor detectors
@@ -333,86 +340,6 @@ class UnsupportedTensorVariantError(CompatibilityError, RuntimeError):
     """
 
 
-def _offense_entry(name: str, reason: str, path: str, tensor: torch.Tensor) -> dict[str, Any]:
-    """Build one structured offense record (R67: WHERE, not just WHAT).
-
-    Parameters
-    ----------
-    name:
-        Variant-class label (e.g. ``"meta tensor in input"``).
-    reason:
-        Why the variant is unsupported (may be empty for compact channels).
-    path:
-        Input-tree location that reaches the offending tensor.
-    tensor:
-        The offending tensor; shape/dtype reads are guarded because shapeless
-        variants raise on ``.shape`` and hostile subclasses may raise anywhere.
-
-    Returns
-    -------
-    dict[str, Any]
-        ``{"name", "reason", "path", "shape", "dtype"}``.
-    """
-
-    try:
-        shape: tuple[int, ...] | None = tuple(tensor.shape)
-    except Exception:  # noqa: BLE001 - shapeless variants raise internal errors here
-        shape = None
-    try:
-        dtype = str(tensor.dtype)
-    except Exception:  # noqa: BLE001
-        dtype = None
-    return {"name": name, "reason": reason, "path": path, "shape": shape, "dtype": dtype}
-
-
-def _docs_pointer(section: str | None = None) -> str:
-    """Human-readable pointer to the limitations documentation.
-
-    Parameters
-    ----------
-    section:
-        Optional exact section heading of ``docs/reference/limitations.md``
-        to cite; ``None`` points at the catalog as a whole.
-
-    Returns
-    -------
-    str
-        Pointer sentence naming a real documentation location.
-    """
-    if section is None:
-        return "See docs/reference/limitations.md for supported alternatives."
-    return (
-        f"See the {section!r} section of docs/reference/limitations.md for supported alternatives."
-    )
-
-
-def _first_user_frame() -> tuple[str | None, int | None]:
-    """Return the first non-torchlens frame (the user's capture callsite).
-
-    Teaching-enrichment helper (L7a): names WHERE the refused capture was
-    requested. Best-effort; ``(None, None)`` when no external frame is
-    visible.
-    """
-
-    import inspect
-    from pathlib import Path
-
-    torchlens_root = Path(__file__).resolve().parent
-    frame = inspect.currentframe()
-    try:
-        frame = frame.f_back if frame is not None else None
-        while frame is not None:
-            filename = Path(frame.f_code.co_filename).resolve()
-            try:
-                filename.relative_to(torchlens_root)
-            except ValueError:
-                return str(filename), frame.f_lineno
-            frame = frame.f_back
-    finally:
-        del frame
-    return None, None
-
-
 def check_model_and_input_variants(
     model: nn.Module,
     input_args: Any = None,
@@ -447,7 +374,7 @@ def check_model_and_input_variants(
             distributed) is unchanged by admission.
 
     Returns:
-        ``torchlens.capture._weightsfree_admission.MetaAdmissionRecord`` when
+        ``torchlens._capture._weightsfree_admission.MetaAdmissionRecord`` when
         a meta substrate was admitted, else ``None``. The capture entry
         registers the record against the Trace; settlement consumes it (an
         admitted meta offense without the final marker fails closed).
@@ -585,17 +512,11 @@ def check_model_and_input_variants(
                     # Offload-hook-backed meta state: real values arrive at
                     # forward time from the hook's weights_map. Admitted.
                     continue
-                offenses.append(
-                    _offense_entry(
-                        "meta tensor among model parameters/buffers",
-                        "Meta-init models (e.g. HuggingFace device_map='meta') must be "
-                        "materialized on a real device before logging.",
-                        f"model.{name}",
-                        t,
-                    )
-                )
+                offenses.append(_meta_state_offense(name, t))
                 break  # one message is enough — don't list every param.
             continue  # admitted uniform-meta state; variant checks above still ran
+        if _is_sparse_tensor(t):
+            offenses.append(_sparse_state_offense(name, t))
         if tracing_kind is not None:
             offenses.append(
                 _offense_entry(
@@ -623,18 +544,16 @@ def check_model_and_input_variants(
             + (f": {offense['reason']}" if offense["reason"] else "")
             for offense in unique
         )
-        # L7a default-path teaching enrichment (memo 1.4-B item 3, ships
-        # regardless of D8): name the USER callsite and point meta-init
-        # holders at the structure-only mode's contract. No new code is
-        # minted and the offense payload shape is unchanged.
+        # L7a default-path teaching enrichment (memo 1.4-B item 3, ships regardless
+        # of D8): name the USER callsite and point meta-init holders at the
+        # structure-only mode's contract. No new code, same offense payload shape.
         caller_file, caller_line = _first_user_frame()
         callsite_note = ""
         if caller_file is not None and caller_line is not None:
-            from ._source_links import file_line_text
+            from ._source_links import file_line_text  # in-function: L3 above this L2 module
 
-            callsite_note = (
-                f"\nCapture was requested at {file_line_text(caller_file, caller_line)}."
-            )
+            at = file_line_text(caller_file, caller_line)
+            callsite_note = f"\nCapture was requested at {at}."
         meta_pointer = ""
         if any("meta tensor" in offense["name"] for offense in unique):
             if _meta_admission_row_open():
@@ -694,7 +613,7 @@ def _meta_admission_row_open() -> bool:
     the table module's own accessor, never duplicated.
     """
 
-    from .capture.structure_only import meta_admission_open
+    from ._capture.structure_only import meta_admission_open
 
     return meta_admission_open()
 
@@ -750,7 +669,7 @@ def _maybe_admit_meta(model: nn.Module, input_args: Any, input_kwargs: dict[str,
         )
 
     from . import _state
-    from .capture._weightsfree_admission import MetaAdmissionRecord, self_test_meta_identity
+    from ._capture._weightsfree_admission import MetaAdmissionRecord, self_test_meta_identity
 
     self_test_meta_identity()
 

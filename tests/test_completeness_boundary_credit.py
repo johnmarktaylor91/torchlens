@@ -22,15 +22,15 @@ from typing import Any
 
 import pytest
 import torch
-from _stale_holders import CountedRoot, OpaqueCallable, provenance_warnings
+from _stale_holders import CountedRoot, OpaqueCallable, forward_runs, provenance_warnings
 from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._user_funcs import _validate_forward_pass_torch
 from torchlens.backends.torch import rescue
 from torchlens.backends.torch.escape_detection import ExpectedOriginalToken
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.user_funcs import _validate_forward_pass_torch
 
 
 @pytest.fixture
@@ -149,7 +149,7 @@ def _validate(model: nn.Module, *, grad: bool = True) -> bool:
         param.requires_grad_(grad)
     torch.manual_seed(0)
     return _validate_forward_pass_torch(
-        model.eval(), [torch.randn(3, 4)], {}, random_seed=0, validate_metadata=True
+        model.eval(), [torch.randn(3, 4)], {}, seed=0, validate_metadata=True
     )
 
 
@@ -215,7 +215,7 @@ def test_census_names_only_the_stale_relu_in_iql_shape(monkeypatch: pytest.Monke
     operators = [row["operator"] for row in trace.completeness_diagnostics]
     assert "aten.relu.default" in operators
     assert "aten.tanh.default" not in operators
-    assert trace.capture_verified is False
+    assert trace.provenance.verified is False
 
 
 _ATEN = torch.ops.aten
@@ -387,7 +387,7 @@ def test_attribute_held_originals_are_rebound_and_validate(
         trace = tl.trace(model, torch.randn(3, 4))
     func_names = [op.func_name for op in trace.ops]
     assert "relu" in func_names
-    assert model.calls == [1]
+    assert forward_runs(trace, model) == 1
     assert provenance_warnings(caught) == []
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
     assert _validate(build(), grad=grad), tl.validation.last_validation_failure()

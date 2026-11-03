@@ -14,6 +14,7 @@ from torch import Tensor, nn
 
 import torchlens as tl
 from torchlens.attribution import occlusion
+from torchlens.attribution._viz import attribution_color_by
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _ATTRIBUTION_PREFIX = "torchlens.attribution"
@@ -22,6 +23,16 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "attribution_sum",
     "baseline",
     "bilinear_display_only",
+    "caller",
+    "derived",
+    "feature_map",
+    "grid_evidence",
+    "grid_route",
+    "layer_reason",
+    "layer_source",
+    "prefix_tokens",
+    "reshape",
+    "trace",
     "blur",
     "blur_kernel_size",
     "cmap",
@@ -34,7 +45,7 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "abs_mean",
     "abs_sum",
     "max",
-    "n_steps",
+    "num_steps",
     "native_map_resolution",
     "occluded_score",
     "occlusion",
@@ -52,12 +63,15 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "target_delta",
     "upsampling",
     "zeros",
-    "MetricResult",
+    "AttributionMetric",
     "SiteStash",
+    "SiteTarget",
+    "unit",
+    "call",
+    "integer_input_layers",
     "TokenAttributionPayload",
-    "TokenAttributionResult",
+    "TokenAttribution",
     "absolute",
-    "aggregation",
     "attribute",
     "auto",
     "average",
@@ -81,7 +95,7 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "mean_square",
     "method",
     "method_kwargs",
-    "n_samples",
+    "num_samples",
     "noise_bank",
     "noise_std",
     "noise_tunnel",
@@ -115,6 +129,132 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "text",
     "variance",
     "window",
+    "deletion_curve",
+    "insertion_curve",
+    "PerturbationCurve",
+    "CurveStep",
+    "fractions",
+    "scores",
+    "area",
+    "aopc",
+    "steps",
+    "features",
+    "patch_size",
+    "elements",
+    "pixels",
+    "patches",
+    "tokens",
+    "num_features",
+    "index",
+    "fraction",
+    "inputs",
+    "input_kwargs",
+    "build_baseline_mask",
+    "intervention",
+    "randomization_test",
+    "RandomizationTest",
+    "RandomizationStep",
+    "randomization",
+    "cascading",
+    "independent",
+    "layers",
+    "seed",
+    "keep_values",
+    "original_attribution",
+    "randomized_module_addresses",
+    "similarity",
+    "similarities",
+    "spearman",
+    "spearman_abs",
+    "ssim",
+    "values",
+    "causal_audit",
+    "CausalAudit",
+    "CausalAuditUnit",
+    "CausalAuditSet",
+    "claim",
+    "k",
+    "edit",
+    "zero",
+    "controls",
+    "top",
+    "bottom",
+    "random",
+    "num_random_draws",
+    "per_unit",
+    "site",
+    "units",
+    "sets",
+    "rank_agreement",
+    "set_of",
+    "claimed_effect",
+    "measured_effect",
+    "kind",
+    "draw",
+    "component",
+    "claim_kind",
+    "constant_row",
+    "rows_not_audited",
+    "corrupted_input",
+    "metric",
+    "edges",
+    "edge_table",
+    "edge_patch",
+    "example_reduction",
+    "logits_site",
+    "sets_not_measured",
+    "reason",
+    "road_curve",
+    "ranking",
+    "most_relevant_first",
+    "least_relevant_first",
+    "road",
+    "AttributionGraph",
+    "GraphNode",
+    "feature_activations",
+    "active_feature_indices",
+    "adjacency_matrix",
+    "build_graph",
+    "capture_outcome",
+    "constants",
+    "decoder_bias",
+    "demeaned_logits",
+    "logit_probability_coverage",
+    "disclosures",
+    "embedding_module",
+    "encoder_bias",
+    "error",
+    "error_sites",
+    "error_vectors",
+    "feature_index",
+    "frozen",
+    "input_token_ids",
+    "logit",
+    "logit_probabilities",
+    "logit_token_ids",
+    "logits_at",
+    "max_num_logits",
+    "node_counts",
+    "node_indices",
+    "node_values",
+    "nodes",
+    "other",
+    "position",
+    "token",
+    "transcoder_sites",
+    "transcoders",
+    "edge_influence_coverage",
+    "node_influence_coverage",
+    "path",
+    "prompt",
+    "model_id",
+    "slug",
+    "to_neuronpedia",
+    "tokenizer",
+    "activation",
+    "api_key",
+    "influence",
+    "upload_to_neuronpedia",
 }
 
 
@@ -153,7 +293,7 @@ def test_occlusion_routes_named_baselines_through_selection_do() -> None:
     trace = tl.trace(
         _ImageScale(),
         inputs,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = tl.units(trace.input_ops[0].label, [(0, 0, 1, 1)])
@@ -183,7 +323,7 @@ def test_occlusion_rejects_an_implicit_or_invalid_baseline() -> None:
     trace = tl.trace(
         _ImageScale(),
         inputs,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = trace.input_ops[0]
@@ -221,8 +361,8 @@ def test_attribution_kit_lane_is_detachable_from_stage4a_and_capture_core() -> N
         )
     }
     stage4a_files = (
-        "torchlens/selection.py",
-        "torchlens/_selection_align.py",
+        "torchlens/_selection/selection.py",
+        "torchlens/_selection/align.py",
         "tests/test_selection_algebra.py",
         "tests/test_selection_do.py",
         "tests/test_selection_align.py",
@@ -273,7 +413,7 @@ def test_overlay_paints_attributed_module_outputs_and_nothing_else() -> None:
     result = tl.attribution.layer_attribution(model, inputs, target=1, layer="2")
     trace = tl.trace(model, inputs)
     try:
-        color_by = tl.attribution.overlay(trace, result)
+        color_by = attribution_color_by(trace, result)
         expected = result.values.abs().sum().item()
         assert color_by(trace["conv2d_2_3"]) == pytest.approx(expected)
         assert color_by(trace["relu_1_2"]) is None
@@ -284,24 +424,20 @@ def test_overlay_paints_attributed_module_outputs_and_nothing_else() -> None:
 
 
 @pytest.mark.smoke
-def test_overlay_accepts_mappings_reduces_and_refuses_unknown_keys() -> None:
+def test_overlay_accepts_mappings_and_refuses_unknown_keys() -> None:
     """Mapping keys resolve by module name or layer label; misses refuse typed."""
 
     model = _overlay_model()
     inputs = torch.randn(2, 3, 8, 8)
     trace = tl.trace(model, inputs)
     try:
-        color_by = tl.attribution.overlay(
-            trace, {"2": torch.tensor([[1.0, -3.0]]), "relu_1_2": 0.5}, reduce="max"
-        )
-        assert color_by(trace["conv2d_2_3"]) == pytest.approx(1.0)
+        color_by = attribution_color_by(trace, {"2": torch.tensor([[1.0, -3.0]]), "relu_1_2": 0.5})
+        assert color_by(trace["conv2d_2_3"]) == pytest.approx(4.0)
         assert color_by(trace["relu_1_2"]) == pytest.approx(0.5)
-        with pytest.raises(tl.attribution.AttributionError, match="matches no module"):
-            tl.attribution.overlay(trace, {"not_a_layer": 1.0})
-        with pytest.raises(tl.attribution.AttributionError, match="reduce must be"):
-            tl.attribution.overlay(trace, {"2": 1.0}, reduce="median")
-        with pytest.raises(tl.attribution.AttributionError, match="no extra\\['layer'\\]"):
-            tl.attribution.overlay(
+        with pytest.raises(tl.errors.AttributionError, match="matches no module"):
+            attribution_color_by(trace, {"not_a_layer": 1.0})
+        with pytest.raises(tl.errors.AttributionError, match="no extra\\['layer'\\]"):
+            attribution_color_by(
                 trace,
                 [tl.attribution.saliency(model, inputs, target=0)],
             )

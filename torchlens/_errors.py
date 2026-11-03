@@ -267,7 +267,7 @@ class KeywordConflictError(_ActionableErrorMixin, ConfigurationError, TypeError)
         )
 
 
-class CaptureContextError(_ActionableErrorMixin, CaptureError, RuntimeError):
+class CaptureNotActiveError(_ActionableErrorMixin, CaptureError, RuntimeError):
     """Raised when a capture-only operation is called outside an active capture."""
 
     def __init__(
@@ -534,11 +534,11 @@ class LazyStateUnsupportedError(_ActionableErrorMixin, CaptureError, RuntimeErro
         )
 
 
-class TorchLensCaptureGapError(CaptureError, RuntimeError):
+class CaptureGapError(CaptureError, RuntimeError):
     """Reserved enforcement error for an unrepresented torch invocation."""
 
 
-class TorchLensCaptureGapWarning(TorchLensWarning):
+class CaptureGapWarning(TorchLensWarning):
     """Shadow-mode report for a possible unrepresented torch invocation."""
 
 
@@ -553,7 +553,96 @@ class OutputAttributionError(CaptureError, RuntimeError):
     """
 
 
-class TorchLensPostfuncError(CaptureError, RuntimeError):
+class TraceCaptureError(CaptureError):
+    """Raised when the model's forward raises during a TorchLens capture.
+
+    Every capture door raises this one typed error when the code it runs
+    (the model's forward, a user hook, or a torch op the forward calls) raises
+    an exception that is not a TorchLens error. The original exception is
+    chained as ``__cause__`` (``raise TraceCaptureError(...) from exc``), so its
+    type, text and traceback stay intact and unmodified. TorchLens's own typed
+    errors keep propagating as themselves.
+
+    Attributes
+    ----------
+    partial_trace:
+        The :class:`~torchlens.types.PartialTrace` holding what was captured
+        before the failure, or ``None`` when it could not be built.
+    origin:
+        The :class:`~torchlens.types.FailureOrigin` the capture outcome
+        recorded: ``user_op`` when the model's own code raised, ``torchlens``
+        when the innermost attributable frame was TorchLens, else ``unknown``.
+
+    ``fields["code"]`` is always set: ``forward_raised`` when the model's own
+    code (or an unattributable frame) raised, ``capture_internal_error`` when
+    the innermost attributable frame was TorchLens (spellings
+    DOCUMENTED-UNSTABLE).
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        partial_trace: Any = None,
+        origin: Any = None,
+        code: str = "forward_raised",
+        **payload: Any,
+    ) -> None:
+        """Initialize the failed-forward error.
+
+        Parameters
+        ----------
+        message:
+            Human-readable failure description.
+        partial_trace:
+            Partial capture recovered from the failed forward, if any.
+        origin:
+            Diagnostic failure origin from the capture outcome.
+        code:
+            Stable machine-readable refusal code; the capture door picks it
+            from ``origin`` (:func:`torchlens._capture._trace_capture_error.failed_forward_error`).
+        **payload:
+            Structured context retained on ``fields``.
+        """
+
+        super().__init__(message, code=code, **payload)
+        self.partial_trace = partial_trace
+        self.origin = origin
+
+
+def original_exception(error: BaseException) -> BaseException:
+    """The exception the forward raised: a :class:`TraceCaptureError`'s ``__cause__``, else ``error``."""
+
+    if isinstance(error, TraceCaptureError) and error.__cause__ is not None:
+        return error.__cause__
+    return error
+
+
+def attach_partial_trace(error: BaseException, partial: Any) -> None:
+    """Attach the partial capture to the escaping error.
+
+    Parameters
+    ----------
+    error:
+        Exception the capture door is about to raise.
+    partial:
+        Partial capture built from the failed session.
+
+    Raises
+    ------
+    Exception
+        Whatever the exception's attribute assignment raises; the caller
+        reports it without masking ``error``.
+    """
+
+    if isinstance(error, TraceCaptureError):
+        error.partial_trace = partial
+        return
+    if getattr(error, "partial_trace", None) is None:
+        error.partial_trace = partial  # type: ignore[attr-defined]
+
+
+class UserTransformError(CaptureError, RuntimeError):
     """Raised when activation_transform or grad_transform raises."""
 
 
@@ -567,11 +656,52 @@ class BackwardStreamUnavailableError(CaptureError, RuntimeError):
     """
 
 
+class AtenOpsUnavailableError(_ActionableErrorMixin, CaptureError, RuntimeError):
+    """Raised when ``aten_ops`` accessors are read on a trace that recorded none.
+
+    ATen operation recording is opt-in (``CaptureOptions(aten_ops=True)``): a
+    capture without the switch and a loaded artifact saved without it carry
+    no profile, so the accessors refuse typed instead of
+    returning an empty answer that looks like "this op dispatched nothing".
+    Branch on ``exc.fields["code"] == "aten_ops_unavailable"``.
+    """
+
+    def __init__(
+        self,
+        problem: str,
+        *,
+        code: str = "aten_ops_unavailable",
+        remedy: str = (
+            "re-capture with tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))"
+        ),
+        **context: object,
+    ) -> None:
+        """Initialize an actionable ATen-recording refusal.
+
+        Parameters
+        ----------
+        problem:
+            Why no ATen rows are available for the record being read.
+        code:
+            Stable machine-readable refusal code.
+        remedy:
+            Concrete caller action that resolves the refusal.
+        **context:
+            Structured, non-authoritative diagnostic context.
+        """
+        super().__init__(
+            _actionable_message(problem, remedy),
+            code=code,
+            remedy=remedy,
+            **cast(dict[str, Any], context),
+        )
+
+
 class MutatedReferenceError(CaptureError, RuntimeError):
     """Raised when a reference-mode saved tensor changed before it was read."""
 
 
-class PostTraceParamUnavailable(CaptureError, RuntimeError):
+class ParamReleasedError(CaptureError, RuntimeError):
     """Raised when a released Param cannot re-fetch its live model parameter."""
 
 
@@ -600,3 +730,13 @@ class AmbiguousOpLookupError(_ActionableErrorMixin, ConfigurationError, ValueErr
 
 class ShapeInferenceError(ConfigurationError, RuntimeError):
     """Raised when debug input-shape inference cannot produce a valid input."""
+
+
+class SelectionError(ConfigurationError, ValueError):
+    """Carrier class for the closed ``selection_*`` refusal codes.
+
+    Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
+    ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
+    ``selection_unresolvable`` / ``selection_apply_invalid`` /
+    ``selection_alignment_invalid``), never on message text.
+    """

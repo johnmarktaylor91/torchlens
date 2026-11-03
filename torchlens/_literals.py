@@ -3,12 +3,13 @@
 from typing import Literal
 
 OutputDeviceLiteral = Literal["same", "cpu", "cuda"]
+OnNonfiniteLiteral = Literal["ignore", "track", "warn", "raise"]
 BufferVisibilityLiteral = Literal["never", "meaningful", "always"]
 CollapseLiteral = Literal["none", "auto", "max"] | float
 FoldRepeatsLiteral = Literal[None, True, False]
 VisModeLiteral = Literal["none", "rolled", "unrolled"]
 VisNodeModeLiteral = Literal["default", "profiling"]
-VisDirectionLiteral = Literal["bottomup", "topdown", "leftright"]
+VisDirectionLiteral = Literal["bottomup", "topdown", "leftright", "rightleft"]
 VisNodePlacementLiteral = Literal["auto", "dot", "rank"]
 VisRendererLiteral = Literal["graphviz", "dagua"]
 VisInterventionModeLiteral = Literal["node_mark", "as_node"]

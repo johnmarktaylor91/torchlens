@@ -13,7 +13,7 @@ Behavior predicates root in OBSERVED CALLS, never metadata (D6): at the
 panel's SHA, five of seven shims presented the implementation's
 module/doc/signature to every introspective route and revealed themselves
 only when called. The registry is EMPTY today -- the package is pinned
-deprecation-free by tests/test_deprecation_inventory.py (static side; this
+deprecation-free by scripts/checks/deprecation_inventory.py (static side; this
 gate owns the call-time side) -- and the plants prove both red directions on
 a planted registry so emptiness is never mistaken for a dead channel.
 """

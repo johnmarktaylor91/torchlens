@@ -127,10 +127,10 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="functionless_source_or_boundary",
         tier="early_exit",
         contract="C3 replay-surface completeness",
-        proof="torchlens.validation.core:_is_provable_functionless_source_or_boundary",
+        proof="torchlens.validation._pre_replay:_is_provable_functionless_source_or_boundary",
         refuses=(
             "a functionless COMPUTATIONAL op, which returns failed_result "
-            "('functionless_computational_op') -- the 2026-06-02 placeholder class"
+            "('no_replayable_function') -- the 2026-06-02 placeholder class"
         ),
     ),
     Exemption(
@@ -161,6 +161,21 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         refuses=(
             "any op/arg pair outside the four declared registries; forward replay "
             "still runs for every op this only excuses from PERTURBATION"
+        ),
+    ),
+    Exemption(
+        code="torchscript_metadata_only_argument",
+        tier="early_exit",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._script_metadata_proof:script_metadata_only_proof",
+        refuses=(
+            "any op other than a TorchScript boundary call, and any perturbed parent "
+            "filling a slot whose graph input has a use outside aten::size/dim/numel "
+            "and prim::dtype/device at input 0 (an element read, also inside a nested "
+            "helper or on an untaken branch, a return, an unlisted kind), a call "
+            "whose arguments can hold a tensor below the recorded slot map (nested "
+            "containers, scripted classes) or an unreadable graph; forward replay "
+            "still runs"
         ),
     ),
     Exemption(
@@ -239,7 +254,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="discrete_value_output",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_discrete_output_decision",
+        proof="torchlens.validation.exemptions:_posthoc_value_proof_decision",
         refuses="a continuous output whose value carries the perturbed parent",
     ),
     Exemption(
@@ -371,6 +386,20 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
+        code="batch_norm_input_at_running_mean",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._norm_running_var_proof:batch_norm_input_at_running_mean",
+        refuses=(
+            "a training-mode call, a perturbed input, running_mean, weight or bias, a parent "
+            "that also occupies another slot, any channel with a non-zero weight whose "
+            "saved input differs from running_mean by any amount (no tolerance) or whose "
+            "running_mean is not exactly zero, and a running_var or eps for which validation's "
+            "own running_var perturbation could make running_var + eps non-positive or the "
+            "per-channel scale overflow"
+        ),
+    ),
+    Exemption(
         code="sdpa_zero_query_uniform_attention",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
@@ -399,6 +428,111 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         refuses=(
             "a normalized_shape spanning more than one element, and a perturbed parent "
             "other than layer_norm's own input"
+        ),
+    ),
+    Exemption(
+        code="empty_output_no_elements",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._operand_value_proofs:output_has_no_elements",
+        refuses=(
+            "any output with one element or more, whatever its parents hold; forward replay "
+            "still checks the empty output itself"
+        ),
+    ),
+    Exemption(
+        code="sdpa_zero_value_output",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._sdpa_value_proofs:sdpa_zero_value_output",
+        refuses=(
+            "a value operand with any non-zero element, a perturbed value or mask, a parent in "
+            "two slots, a non-finite saved query or key, non-zero dropout_p, a non-finite scale, "
+            "a mask that removes every key from some query row (or holds NaN or +inf), and a "
+            "saved output with any non-zero element"
+        ),
+    ),
+    Exemption(
+        code="sdpa_single_key_identity",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._sdpa_value_proofs:sdpa_single_key_identity",
+        refuses=(
+            "more than one key, a perturbed key, value or mask, a parent in two slots, a "
+            "non-finite saved query or key, non-zero dropout_p, a non-finite scale, a masked-out "
+            "key, and a saved output that differs from value in any query row"
+        ),
+    ),
+    Exemption(
+        code="sdpa_single_key_key_edge",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._sdpa_value_proofs:sdpa_single_key_key_edge",
+        refuses=(
+            "more than one key, a perturbed query, value or mask, a parent in two slots, a "
+            "non-finite saved query or key, non-zero dropout_p, a non-finite scale, a mask that "
+            "leaves a query row no key, and a saved output that differs from value in any query row"
+        ),
+    ),
+    Exemption(
+        code="einsum_zero_operand",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._operand_value_proofs:einsum_zero_operand",
+        refuses=(
+            "a perturbed parent in more than one operand slot or a keyword slot, every "
+            "non-perturbed operand with any non-zero element, and a saved output with any "
+            "non-zero (or NaN) element"
+        ),
+    ),
+    Exemption(
+        code="scatter_reduce_destination_overwritten",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._operand_value_proofs:scatter_reduce_destination_overwritten",
+        refuses=(
+            "include_self=True, a perturbed src or index, a destination parent that also fills "
+            "another slot, and an index that leaves any destination position unaddressed"
+        ),
+    ),
+    Exemption(
+        code="grid_sampler_zero_input",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._operand_value_proofs:grid_sampler_zero_input",
+        refuses=(
+            "an input with any non-zero element, a perturbed input, a grid parent in two slots, "
+            "a non-finite saved grid, and a saved output with any non-zero element"
+        ),
+    ),
+    Exemption(
+        code="conv_zero_input_output_is_bias",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._operand_value_proofs:conv_zero_input_output_is_bias",
+        refuses=(
+            "an input with any non-zero element, a perturbed input or bias, a weight parent in "
+            "two slots, and a saved output that is non-finite or differs from the bias anywhere"
+        ),
+    ),
+    Exemption(
+        code="or_absorbing_true_operand",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._operand_value_proofs:or_absorbing_true_operand",
+        refuses=(
+            "a non-perturbed operand with any False element or a non-bool dtype, a parent in "
+            "both slots, and a saved output with any False element"
+        ),
+    ),
+    Exemption(
+        code="pow_unit_base",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._operand_value_proofs:pow_unit_base",
+        refuses=(
+            "a base with any element other than exactly 1, a perturbed base, a parent in both "
+            "slots, and a saved output with any element other than exactly 1"
         ),
     ),
     Exemption(
@@ -441,15 +575,6 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
-        code="norm_centered_input_running_var",
-        tier="posthoc",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._saved_value_proofs:_batch_norm_centered_input_decision",
-        refuses=(
-            "training mode, any element where input differs from running_mean, a non-finite output, and a perturbed parent other than running_var alone (input, running_mean, weight and bias still move the output)"
-        ),
-    ),
-    Exemption(
         code="pow_zero_exponent",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
@@ -459,22 +584,15 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
-        code="pow_unit_base",
-        tier="posthoc",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._saved_value_proofs:_pow_decision",
-        refuses=(
-            "any base element other than one, an output that is not all ones, and a perturbed base"
-        ),
-    ),
-    Exemption(
         code="sdpa_singleton_key",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
         proof="torchlens.validation._saved_value_proofs:_sdpa_singleton_key_decision",
         refuses=(
-            "two or more key positions, non-zero dropout, a non-finite output, a "
-            "perturbed value, and a bool mask (it can mask the lone key out)"
+            "two or more key positions, a perturbed query, key or value (the query and "
+            "key edges are the sdpa_single_key proofs), a bool mask, a non-finite query, "
+            "key or scale, non-zero dropout, a fully masked row, and an output that "
+            "differs from the value rows"
         ),
     ),
     Exemption(
@@ -485,31 +603,6 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         refuses=(
             "an index component addressing a dim of size 2 or more, a boolean mask component, and a perturbed parent at the destination or value slot"
         ),
-    ),
-    Exemption(
-        code="scatter_reduce_excluded_destination",
-        tier="posthoc",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._saved_value_proofs:scatter_reduce_excluded_destination_decision",
-        refuses=(
-            "include_self=True (the default), an index that leaves any destination slot along dim unreached, and a perturbed src or index parent"
-        ),
-    ),
-    Exemption(
-        code="empty_split_chunk",
-        tier="posthoc",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._saved_value_proofs:_empty_split_chunk_decision",
-        refuses=(
-            "a non-empty chunk, tensor-valued split sizes, and a perturbed parent outside the input slot"
-        ),
-    ),
-    Exemption(
-        code="empty_matmul_product",
-        tier="posthoc",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._saved_value_proofs:_empty_matmul_product_decision",
-        refuses=("a non-empty product, a parent in both operand slots, and a non-tensor operand"),
     ),
 )
 

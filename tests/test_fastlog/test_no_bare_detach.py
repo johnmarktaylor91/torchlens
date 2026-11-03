@@ -10,7 +10,7 @@ def _python_files() -> list[Path]:
     """Return files whose predicate-mode branches must avoid bare detach."""
 
     return [
-        *Path("torchlens/fastlog").glob("*.py"),
+        *Path("torchlens/recording").glob("*.py"),
         Path("torchlens/backends/torch/ops.py"),
         *Path("torchlens/backends/torch").glob("_ops_*.py"),
         Path("torchlens/backends/torch/sources.py"),

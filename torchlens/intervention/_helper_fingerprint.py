@@ -1,12 +1,12 @@
 """Content fingerprints of the tensors a staged helper closes over (F9).
 
-``tl.steer``, ``tl.mean_ablate``, ``tl.project_onto``, ``tl.project_off`` and
-``tl.swap_with`` keep the caller's tensor by reference (no copy, so a large
+``tl.steer``, ``tl.mean_ablate``, ``tl.project_onto``, ``tl.project_out`` and
+the ``swap_with`` helper keep the caller's tensor by reference (no copy, so a large
 steering bank costs nothing and a loop can update a direction in place). The
 reference also means a later rerun or recipe save would silently use whatever
 the tensor holds THEN, which is not what produced the trace. Each staged entry
 therefore records a full-content digest of those tensors when it is staged
-(``tl.hash.content``: every byte, so ``.data`` and NumPy-view writes that leave
+(``tl.fingerprint.content``: every byte, so ``.data`` and NumPy-view writes that leave
 the version counter alone are seen too), and reruns and ``save_intervention``
 refuse ``helper_tensor_changed_since_capture`` when it moved. Re-staging takes
 the new value deliberately.
@@ -24,7 +24,7 @@ from typing import Any
 import torch
 
 from .._state import pause_logging
-from .types import HelperSpec
+from .types import Edit
 
 #: HookSpec metadata key holding the staged helper's tensor digests.
 DIGEST_KEY = "helper_tensor_digests"
@@ -50,7 +50,7 @@ def _collect(value: Any, found: list[torch.Tensor]) -> None:
             _collect(item, found)
 
 
-def helper_of(entry_hook: Any, helper: Any = None) -> HelperSpec | None:
+def helper_of(entry_hook: Any, helper: Any = None) -> Edit | None:
     """Return the helper spec behind a hook entry, if it came from a helper.
 
     Parameters
@@ -62,16 +62,16 @@ def helper_of(entry_hook: Any, helper: Any = None) -> HelperSpec | None:
 
     Returns
     -------
-    HelperSpec | None
+    Edit | None
         The helper spec, or ``None`` for a plain callable.
     """
 
-    if isinstance(helper, HelperSpec):
+    if isinstance(helper, Edit):
         return helper
-    return entry_hook if isinstance(entry_hook, HelperSpec) else None
+    return entry_hook if isinstance(entry_hook, Edit) else None
 
 
-def helper_digests(helper: HelperSpec | None) -> tuple[str, ...] | None:
+def helper_digests(helper: Edit | None) -> tuple[str, ...] | None:
     """Return the content digests of the tensors a helper closes over.
 
     Parameters
@@ -93,7 +93,7 @@ def helper_digests(helper: HelperSpec | None) -> tuple[str, ...] | None:
     _collect(helper.kwargs, tensors)
     if not tensors:
         return None
-    from ..hash import content
+    from ..fingerprint import content
 
     # Staging can happen mid-capture (the predicate door stages at fire time);
     # the digest's copy ops are TorchLens-internal and must not be logged.
@@ -101,7 +101,7 @@ def helper_digests(helper: HelperSpec | None) -> tuple[str, ...] | None:
         return tuple(content(tensor) for tensor in tensors)
 
 
-def helper_versions(helper: HelperSpec | None) -> tuple[int, ...] | None:
+def helper_versions(helper: Edit | None) -> tuple[int, ...] | None:
     """Return the version counters of the tensors a helper closes over.
 
     Parameters
@@ -175,7 +175,7 @@ def changed_helpers(entries: Iterable[tuple[Any, Any, Any]]) -> list[str]:
         if recorded is None or helper is None:
             continue
         if helper_digests(helper) != tuple(recorded):
-            changed.append(f"{helper.helper_name} at {site}")
+            changed.append(f"{helper.name} at {site}")
     return changed
 
 

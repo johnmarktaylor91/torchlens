@@ -38,16 +38,39 @@ from typing import Any, Literal
 import torch
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from .._selection.selectors import BaseSelector, CompositeSelector
 from ._content_identity import (
     collect_tensors,
     render_helper,
     render_value,
     tensor_version,
 )
+from ._site_signal import (
+    _selector_children,
+    addresses_autograd_nodes as addresses_autograd_nodes,
+    is_gradient_site as is_gradient_site,
+    site_signal,
+)
 from .predicates import as_intervention_decision
-from .types import HelperDirection, HelperSpec, InterventionDecision
+from .types import Edit, InterventionDecision
 
 AddressClass = Literal["structural", "recorded", "value_dependent"]
+
+#: The pass a site addresses: an activation site is ``"forward"``, a gradient
+#: (``tl.grad``) or autograd-node site is ``"backward"``, a union of both is
+#: ``"both"``. Derived from the site, never passed as a keyword.
+SiteSignal = Literal["forward", "backward", "both"]
+
+
+#: Decision renderings and the rule-id digest print a constant where the
+#: removed ``direction`` keyword and ``Rule.direction`` field used to print
+#: (always ``None`` for site-addressed rules), so renderings and rule ids
+#: minted before the removal keep their value.
+_RULE_ID_TAIL = "None"
+
+#: Values the removed ``Rule.direction`` field took; a third positional
+#: argument spelled with one of them is the old field, refused typed.
+_REMOVED_DIRECTION_VALUES: frozenset[str] = frozenset({"forward", "backward", "both"})
 
 #: Selector kinds addressable on a FIRST capture of a model (no recorded
 #: numbering required): structural positions only.
@@ -80,12 +103,12 @@ _ADDRESS_CLASS_RANK: dict[str, int] = {
 }
 
 
-def classify_where(where: Any) -> AddressClass:
+def classify_where(target: Any) -> AddressClass:
     """Classify a WHERE term under the address law (worst class wins).
 
     Parameters
     ----------
-    where:
+    target:
         Selector or predicate callable naming the rule's target.
 
     Returns
@@ -98,26 +121,113 @@ def classify_where(where: Any) -> AddressClass:
         may assume it reads structure only.
     """
 
-    from .selectors import BaseSelector
+    if isinstance(target, BaseSelector):
+        from .._ir.selector_eval import selector_contains_kind
 
-    if isinstance(where, BaseSelector):
-        from ..ir.selector_eval import selector_contains_kind
-
-        if selector_contains_kind(where, "predicate", unwrap=True):
+        if selector_contains_kind(target, "predicate", unwrap=True):
             return "value_dependent"
         worst: AddressClass = "structural"
         for kind in _RECORDED_SELECTOR_KINDS:
-            if selector_contains_kind(where, kind, unwrap=True):
+            if selector_contains_kind(target, kind, unwrap=True):
                 worst = "recorded"
                 break
         return worst
     return "value_dependent"
 
 
+def refuse_invalid_loss(loss: Any, *, has_gradient_site: bool, door: str) -> None:
+    """Refuse a ``loss=`` argument that cannot run the backward it asks for.
+
+    ``loss=`` is a callable of the returned trace (or each swept member),
+    never a tensor: under rerun semantics a tensor from the source graph
+    would differentiate the wrong execution.
+
+    Parameters
+    ----------
+    loss:
+        The caller's ``loss=`` value (``None`` means not given).
+    has_gradient_site:
+        Whether any site of the call addresses the backward pass.
+    door:
+        Door name for the message (``"do"`` / ``"sweep"``).
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``do_loss_not_callable`` for a tensor or any other non-callable;
+        ``do_loss_without_gradient_site`` when no site is a gradient site.
+    """
+
+    if loss is None:
+        return
+    if not callable(loss):
+        raise InvalidArgumentError(
+            f"{door}(loss=...) takes a callable of the returned trace; a tensor from "
+            "the source trace would differentiate the wrong execution "
+            f"(received {type(loss).__name__})",
+            code="do_loss_not_callable",
+            remedy="pass loss=lambda result: result['output_1'].out.sum(), or call "
+            "result.backward(loss) yourself on the returned trace",
+            argument="loss",
+        )
+    if not has_gradient_site:
+        raise InvalidArgumentError(
+            f"{door}(loss=...) runs a backward pass for a gradient edit, but no site "
+            "in this call is a gradient site",
+            code="do_loss_without_gradient_site",
+            remedy="address the gradient with tl.grad(site), or drop loss= for an activation edit",
+            argument="loss",
+        )
+
+
+def split_site_by_signal(site: Any) -> tuple[Any | None, Any | None]:
+    """Split a site into its activation half and its backward half.
+
+    A union mixing ``tl.grad(s)`` (or node selectors) with activation operands
+    is split at its top-level ``|``; each operand belongs to one pass.
+
+    Parameters
+    ----------
+    site:
+        Site the caller passed to a door.
+
+    Returns
+    -------
+    tuple[Any | None, Any | None]
+        ``(forward_site, backward_site)``; a half is ``None`` when the site
+        has no operand in that pass.
+    """
+
+    signal = site_signal(site)
+    if signal == "forward":
+        return site, None
+    if signal == "backward":
+        return None, site
+    forward: list[Any] = []
+    backward: list[Any] = []
+    for child in _selector_children(site):
+        child_forward, child_backward = split_site_by_signal(child)
+        if child_forward is not None:
+            forward.append(child_forward)
+        if child_backward is not None:
+            backward.append(child_backward)
+    return _join_union(forward), _join_union(backward)
+
+
+def _join_union(operands: list[Any]) -> Any | None:
+    """Rejoin union operands (``None`` for none, the operand itself for one)."""
+
+    if not operands:
+        return None
+    if len(operands) == 1:
+        return operands[0]
+    return CompositeSelector("or", tuple(operands))
+
+
 def _canonical_repr(value: Any, *, exact: bool = False) -> str:
     """Render a WHERE/action term canonically for rule identity.
 
-    ``HelperSpec`` renders as its portable ``(name, args, kwargs)`` identity
+    ``Edit`` renders as its portable ``(name, args, kwargs)`` identity
     -- two helpers differing only by an argument (``noise(std=0.1)`` vs
     ``noise(std=0.9)``) render differently BY CONSTRUCTION, which is what
     makes rule ids distinguishable (ledger memo D1d). Tensor arguments render
@@ -140,13 +250,11 @@ def _canonical_repr(value: Any, *, exact: bool = False) -> str:
         Canonical rendering.
     """
 
-    if isinstance(value, HelperSpec):
+    if isinstance(value, Edit):
         return render_helper(value, exact=exact)
     if isinstance(value, InterventionDecision):
         hook_repr = _canonical_repr(value.hook, exact=exact)
-        return f"decision:{value.action}:{hook_repr}:direction={value.direction}"
-    from .selectors import BaseSelector
-
+        return f"decision:{value.action}:{hook_repr}:direction={_RULE_ID_TAIL}"
     if isinstance(value, BaseSelector):
         return f"selector:{value!r}"
     if callable(value):
@@ -156,7 +264,7 @@ def _canonical_repr(value: Any, *, exact: bool = False) -> str:
 
 
 @dataclass(frozen=True)
-class InterventionRule:
+class Rule:
     """One immutable WHERE/ACTION clause of an :class:`InterventionSpec`.
 
     Parameters
@@ -166,13 +274,15 @@ class InterventionRule:
     action:
         Helper spec, callable transform, or intervention decision (the raw
         user spelling, preserved for audit).
-    direction:
-        Optional signal-direction override for the action.
+
+    The site decides the pass: :attr:`signal` is derived from the target
+    (``tl.grad(site)`` edits the gradient, a bare site the activation,
+    ``tl.grad(site) | site`` both) and is never a field. The removed
+    ``direction`` field refuses typed (``intervention_direction_invalid``).
     """
 
-    where: Any
-    action: Any
-    direction: HelperDirection | None = None
+    target: Any
+    edit: Any
     address_class: AddressClass = field(default="value_dependent", compare=False)
     decision: InterventionDecision | None = field(default=None, compare=False, repr=False)
     where_repr: str = field(default="", compare=False, repr=False)
@@ -182,6 +292,47 @@ class InterventionRule:
     _identity_memo: tuple[tuple[int | None, ...], tuple[str, str]] | None = field(
         default=None, init=False, compare=False, repr=False
     )
+    #: The activation half of the target (``None`` for a gradient-only or
+    #: node-only target): the only part a forward predicate may match.
+    _forward_target: Any = field(default=None, init=False, compare=False, repr=False)
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Rule:
+        """Refuse the removed ``direction`` field before the dataclass init runs.
+
+        Parameters
+        ----------
+        *args:
+            Positional constructor arguments (``target``, ``edit``, ...).
+        **kwargs:
+            Keyword constructor arguments.
+
+        Returns
+        -------
+        Rule
+            The uninitialised instance the dataclass ``__init__`` fills.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``intervention_direction_invalid`` when ``direction=`` is passed,
+            or a third positional argument is ``"forward"``, ``"backward"``
+            or ``"both"`` (the old field's slot).
+        """
+
+        positional_stale = len(args) > 2 and args[2] in _REMOVED_DIRECTION_VALUES
+        if "direction" in kwargs or positional_stale:
+            value = args[2] if positional_stale else kwargs["direction"]
+            raise InvalidArgumentError(
+                f"Rule(direction={value!r}) is removed: the site decides the pass. "
+                "A bare site edits the activation, tl.grad(site) the gradient, and "
+                "tl.grad(site) | site both. Nothing was built.",
+                code="intervention_direction_invalid",
+                remedy="drop direction= and address the pass on the target: "
+                "Rule(tl.grad(site), edit) for the gradient, Rule(site, edit) for "
+                "the activation",
+                argument="direction",
+            )
+        return super().__new__(cls)
 
     def __post_init__(self) -> None:
         """Validate the clause and derive its identity facts.
@@ -193,23 +344,24 @@ class InterventionRule:
             or the action is unsupported (existing predicate-door codes).
         """
 
-        if not callable(self.where):
+        if not callable(self.target):
             raise ArgumentTypeError(
                 "InterventionSpec rule WHERE term must be a callable selector or "
-                f"predicate; received {type(self.where).__name__}. Structural "
+                f"predicate; received {type(self.target).__name__}. Structural "
                 "spellings (valid in every lane): tl.func(...), tl.in_module(...), "
                 "tl.site(...). Recorded spellings: tl.label(...), Selections.",
                 code="intervention_where_invalid",
                 remedy="pass a selector or predicate callable as the WHERE term",
                 argument="where",
             )
-        decision = as_intervention_decision(self.action, direction=self.direction)
+        decision = as_intervention_decision(self.edit)
         action_tensors: list[torch.Tensor] = []
-        collect_tensors(self.action, action_tensors)
+        collect_tensors(self.edit, action_tensors)
         object.__setattr__(self, "decision", decision)
-        object.__setattr__(self, "where_repr", _canonical_repr(self.where))
+        object.__setattr__(self, "where_repr", _canonical_repr(self.target))
         object.__setattr__(self, "_action_tensors", tuple(action_tensors))
-        object.__setattr__(self, "address_class", classify_where(self.where))
+        object.__setattr__(self, "address_class", classify_where(self.target))
+        object.__setattr__(self, "_forward_target", split_site_by_signal(self.target)[0])
 
     def _identity(self, *, exact: bool = False) -> tuple[str, str]:
         """Return ``(action_repr, rule_id)`` for the action's CURRENT content.
@@ -236,9 +388,9 @@ class InterventionRule:
         memo = self._identity_memo
         if not exact and memo is not None and memo[0] == versions and None not in versions:
             return memo[1]
-        action_repr = _canonical_repr(self.action, exact=exact)
+        action_repr = _canonical_repr(self.edit, exact=exact)
         digest = hashlib.sha256(
-            f"{self.where_repr}||{action_repr}||{self.direction}".encode()
+            f"{self.where_repr}||{action_repr}||{_RULE_ID_TAIL}".encode()
         ).hexdigest()[:10]
         identity = (action_repr, f"r-{digest}")
         object.__setattr__(self, "_identity_memo", (versions, identity))
@@ -246,9 +398,15 @@ class InterventionRule:
 
     @property
     def rule_id(self) -> str:
-        """Content-derived rule identity over WHERE, current action, direction."""
+        """Content-derived rule identity over WHERE and the current action."""
 
         return self._identity()[1]
+
+    @property
+    def signal(self) -> SiteSignal:
+        """The pass this rule edits, derived from its target (not persisted)."""
+
+        return site_signal(self.target)
 
     @property
     def action_repr(self) -> str:
@@ -260,8 +418,8 @@ class InterventionRule:
         """Render the clause with its current rule identity."""
 
         return (
-            f"InterventionRule(where={self.where!r}, action={self.action!r}, "
-            f"direction={self.direction!r}, rule_id={self.rule_id!r}, "
+            f"Rule(target={self.target!r}, edit={self.edit!r}, "
+            f"signal={self.signal!r}, rule_id={self.rule_id!r}, "
             f"address_class={self.address_class!r})"
         )
 
@@ -273,7 +431,7 @@ class InterventionRule:
 
 
 @dataclass(frozen=True)
-class InterventionSpec:
+class Recipe:
     """The immutable multi-clause intervention spec (the ONE public noun).
 
     The same object is accepted unchanged by every intervention door.
@@ -284,7 +442,7 @@ class InterventionSpec:
     kill; ``tl.compose`` is the explicit spelling for chained values.
     """
 
-    rules: tuple[InterventionRule, ...] = ()
+    rules: tuple[Rule, ...] = ()
 
     def __post_init__(self) -> None:
         """Refuse duplicate rules typed at construction.
@@ -293,12 +451,12 @@ class InterventionSpec:
         ------
         InvalidArgumentError
             ``spec_rules_duplicate`` when two clauses carry the same rule
-            identity (same WHERE, action, and direction).
+            identity (same WHERE and action).
         """
 
         seen: dict[str, int] = {}
         for index, rule in enumerate(self.rules):
-            if not isinstance(rule, InterventionRule):
+            if not isinstance(rule, Rule):
                 raise ArgumentTypeError(
                     "InterventionSpec rules must be InterventionRule clauses; "
                     f"clause {index} is {type(rule).__name__}",
@@ -309,8 +467,8 @@ class InterventionSpec:
             if rule.rule_id in seen:
                 raise InvalidArgumentError(
                     f"duplicate intervention rule {rule.rule_id} (clauses "
-                    f"{seen[rule.rule_id]} and {index} carry the same WHERE, "
-                    "action, and direction); a spec is a SET of distinct "
+                    f"{seen[rule.rule_id]} and {index} carry the same WHERE "
+                    "and action); a spec is a SET of distinct "
                     "experiments -- repeat-application is not expressible by "
                     "duplication",
                     code="spec_rules_duplicate",
@@ -360,7 +518,7 @@ class InterventionSpec:
             )
         return decision
 
-    def match(self, ctx: Any) -> InterventionRule | None:
+    def match(self, ctx: Any) -> Rule | None:
         """Return the single rule matching one op context, or ``None``.
 
         The rule-attributing form of :meth:`__call__` (the capture door reads
@@ -379,9 +537,13 @@ class InterventionSpec:
             ``spec_rules_overlap`` when more than one rule matches one op.
         """
 
-        matched: list[InterventionRule] = []
+        matched: list[Rule] = []
         for rule in self.rules:
-            if rule.where(ctx):
+            # A forward predicate sees only each rule's activation half: a
+            # tl.grad(...) or autograd-node half edits the backward pass and is
+            # mounted there by the capture and bind doors.
+            forward_target = rule._forward_target
+            if forward_target is not None and forward_target(ctx):
                 matched.append(rule)
         if not matched:
             return None
@@ -406,7 +568,7 @@ class InterventionSpec:
         """The sole rule's WHERE term (``None`` on multi-clause specs)."""
 
         if len(self.rules) == 1:
-            return self.rules[0].where
+            return self.rules[0].target
         return None
 
     @property
@@ -418,7 +580,7 @@ class InterventionSpec:
         return None
 
     @property
-    def spec_digest(self) -> str:
+    def digest(self) -> str:
         """Content digest over the ordered rule identities, read NOW.
 
         Every read re-hashes tensor arguments (once each), so the digest
@@ -439,7 +601,7 @@ class InterventionSpec:
                 worst = rule.address_class
         return worst  # type: ignore[return-value]
 
-    def merge(self, *others: InterventionSpec) -> InterventionSpec:
+    def merge(self, *others: Recipe) -> Recipe:
         """Return the multi-clause spec joining this spec's rules and others'.
 
         Per-rule IDs are content-derived and PRESERVED by construction; a
@@ -448,7 +610,7 @@ class InterventionSpec:
 
         rules = list(self.rules)
         for index, other in enumerate(others):
-            if not isinstance(other, InterventionSpec):
+            if not isinstance(other, Recipe):
                 raise ArgumentTypeError(
                     f"merge() takes InterventionSpec operands; operand {index} "
                     f"is {type(other).__name__}",
@@ -457,9 +619,9 @@ class InterventionSpec:
                     argument="others",
                 )
             rules.extend(other.rules)
-        return InterventionSpec(rules=tuple(rules))
+        return Recipe(rules=tuple(rules))
 
-    def __and__(self, other: InterventionSpec) -> InterventionSpec:
+    def __and__(self, other: Recipe) -> Recipe:
         """``spec & spec`` sugar for :meth:`merge` (one experiment, more clauses)."""
 
         return self.merge(other)
@@ -467,9 +629,9 @@ class InterventionSpec:
     def door_pairs(self) -> list[tuple[Any, Any]]:
         """Lower the spec to ``(site, action)`` pairs for the hook-plan doors."""
 
-        return [(rule.where, rule.action) for rule in self.rules]
+        return [(rule.target, rule.edit) for rule in self.rules]
 
-    def bind(self, model: Any, *, on_zero_fire: str = "error") -> Any:
+    def bind(self, model: Any, *, on_zero_fire: str = "warn") -> Any:
         """Bind this spec to a model as a capture-free live executor (F01).
 
         Surgery memo 3.3: the result is a bound intervention executor -- a
@@ -487,14 +649,16 @@ class InterventionSpec:
             The base ``nn.Module`` (validated through the one audited
             model-door funnel; bindings do not nest).
         on_zero_fire:
-            Zero-fire settlement policy (FOLD-A3 default): ``"error"``
-            fails closed after the call when any rule never fired (the report
-            is retained on ``.last_report``); ``"disclose"`` records the
-            zero-fire rules in the report without raising.
+            Zero-fire settlement policy, the same knob at every intervention
+            door. A rule that never fired is always recorded on
+            ``.last_report.zero_fire_rule_ids``; ``"warn"`` (default) also
+            emits a ``bind_zero_fire`` coded warning, ``"error"`` raises
+            ``bind_zero_fire`` after the call, and ``"disclose"`` records
+            only.
 
         Returns
         -------
-        BoundInterventionExecutor
+        BoundModel
             The bound executor (``torchlens.intervention.binding``).
         """
 
@@ -503,12 +667,7 @@ class InterventionSpec:
         return bind_spec_to_model(self, model, on_zero_fire=on_zero_fire)
 
 
-def when(
-    condition: Callable[[Any], bool],
-    action: Any,
-    *,
-    direction: HelperDirection | None = None,
-) -> InterventionSpec:
+def when(condition: Callable[[Any], bool], action: Any) -> Recipe:
     """Build a one-clause immutable :class:`InterventionSpec`.
 
     The promoted public constructor (surgery memo 3.1): the returned spec is
@@ -522,10 +681,9 @@ def when(
         Selector or predicate evaluated against each op context (the WHERE
         term; see the address law in the module docstring).
     action:
-        Helper spec (``tl.scale``, ``tl.noise``, ...), callable transform, or
-        ``InterventionDecision``.
-    direction:
-        Optional signal direction override.
+        Helper spec (``tl.scale``, ``tl.add_noise``, ...), callable transform, or
+        ``InterventionDecision``. The condition decides which tensor it edits:
+        ``tl.when(tl.grad("relu_3"), tl.scale(0))`` edits the gradient.
 
     Returns
     -------
@@ -533,10 +691,10 @@ def when(
         Immutable one-clause spec.
     """
 
-    return InterventionSpec(rules=(InterventionRule(condition, action, direction),))
+    return Recipe(rules=(Rule(condition, action),))
 
 
-def refuse_unreplayable_rules(spec: InterventionSpec, *, door: str) -> None:
+def refuse_unreplayable_rules(spec: Recipe, *, door: str) -> None:
     """Preflight the whole spec on a recorded-graph door; refuse BY NAME.
 
     Surgery 3.1: no lane may silently drop a rule it cannot implement. The
@@ -575,7 +733,7 @@ def refuse_unreplayable_rules(spec: InterventionSpec, *, door: str) -> None:
     )
 
 
-def entries_from_spec(spec: InterventionSpec, *, door: str) -> list[Any]:
+def entries_from_spec(spec: Recipe, *, door: str) -> list[Any]:
     """Lower a public spec to normalized hook-plan entries for one door.
 
     Preflights the WHOLE spec first (:func:`refuse_unreplayable_rules`), so a
@@ -605,9 +763,8 @@ def entries_from_spec(spec: InterventionSpec, *, door: str) -> list[Any]:
     entries: list[Any] = []
     for rule in spec.rules:
         rule_entries = normalize_hook_plan(
-            rule.where,
-            rule.action,
-            direction=rule.direction,
+            rule.target,
+            rule.edit,
             allow_replay_only_site_targets=True,
         )
         for entry in rule_entries:
@@ -615,7 +772,7 @@ def entries_from_spec(spec: InterventionSpec, *, door: str) -> list[Any]:
             merged.update(
                 {
                     "spec_rule_id": rule.rule_id,
-                    "spec_digest": spec.spec_digest,
+                    "spec_digest": spec.digest,
                     "spec_where_repr": rule.where_repr,
                     "spec_action_repr": rule.action_repr,
                     "spec_address_class": rule.address_class,
@@ -628,8 +785,8 @@ def entries_from_spec(spec: InterventionSpec, *, door: str) -> list[Any]:
 
 __all__ = [
     "AddressClass",
-    "InterventionRule",
-    "InterventionSpec",
+    "Rule",
+    "Recipe",
     "classify_where",
     "entries_from_spec",
     "refuse_unreplayable_rules",

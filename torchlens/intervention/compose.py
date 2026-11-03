@@ -15,7 +15,7 @@ The D20 laws implemented:
   (never a forward/backward mix); no fusion in v1.
 - ONE fire, ONE final scatter, ONE FireRecord, with the ordered leaf names on
   the helper identity and per-leaf failures naming ``compose[i]``.
-- Flags AND-combine (``batch_independent``/``compatible_with_append``);
+- Flags AND-combine (``is_batch_independent``/``is_compatible_with_append``);
   portability is the WEAKEST leaf; a leaf failure aborts the whole fire
   (atomic -- the engine never sees a half-applied chain).
 
@@ -23,7 +23,7 @@ The D21 refusals: mixed forward/backward kinds; ANY unseeded stochastic leaf
 (the honest-draw law admits no unacknowledged RNG into a chain); ANY
 shape-changing leaf in v1 (the conditional next-leaf-declares-contract rule is
 the documented relaxation -- operationally identical today, since no
-HelperSpec declares an input contract).
+Edit declares an input contract).
 
 The D22 three-layer boundary: compose chains VALUES at one site;
 selection-batch ``do([(sel, edit), ...])`` carries MANY rules in ONE
@@ -44,7 +44,7 @@ import torch
 from .._errors import InvalidArgumentError
 from .errors import HookValueError
 from .hooks import HookContext
-from .types import HelperPortability, HelperSpec
+from .types import Edit, HelperPortability
 
 __all__ = ["compose"]
 
@@ -52,19 +52,19 @@ __all__ = ["compose"]
 _PORTABILITY_RANK: dict[str, int] = {"builtin": 0, "import_ref": 1, "opaque_audit": 2}
 
 
-def _flatten(edits: tuple[Any, ...]) -> list[HelperSpec]:
+def _flatten(edits: tuple[Any, ...]) -> list[Edit]:
     """Flatten nested compose specs into the ordered leaf list (D20)."""
 
-    leaves: list[HelperSpec] = []
+    leaves: list[Edit] = []
     for edit in edits:
-        if isinstance(edit, HelperSpec) and edit.helper_name == "compose":
-            leaves.extend(spec for spec in edit.args if isinstance(spec, HelperSpec))
+        if isinstance(edit, Edit) and edit.name == "compose":
+            leaves.extend(spec for spec in edit.args if isinstance(spec, Edit))
         else:
             leaves.append(edit)
     return leaves
 
 
-def _validate_leaves(leaves: list[HelperSpec]) -> None:
+def _validate_leaves(leaves: list[Edit]) -> None:
     """Apply the D20/D21 construction refusals over the flattened leaves."""
 
     if not leaves:
@@ -75,7 +75,7 @@ def _validate_leaves(leaves: list[HelperSpec]) -> None:
             argument="edits",
         )
     for index, leaf in enumerate(leaves):
-        if not isinstance(leaf, HelperSpec):
+        if not isinstance(leaf, Edit):
             raise InvalidArgumentError(
                 f"compose leaf {index} is {type(leaf).__name__}; v1 composes "
                 "declared helper specs only (a bare callable's kind, flags, and "
@@ -87,7 +87,7 @@ def _validate_leaves(leaves: list[HelperSpec]) -> None:
             )
         if leaf.factory is None:
             raise InvalidArgumentError(
-                f"compose[{index}] ({leaf.helper_name!r}) carries no runtime "
+                f"compose[{index}] ({leaf.name!r}) carries no runtime "
                 "factory (an audit-only spec cannot fire)",
                 code="compose_leaf_invalid",
                 remedy="compose executable helper specs only",
@@ -96,43 +96,38 @@ def _validate_leaves(leaves: list[HelperSpec]) -> None:
         kwargs = dict(leaf.kwargs)
         if "seed" in kwargs and kwargs["seed"] is None:
             raise InvalidArgumentError(
-                f"compose[{index}] ({leaf.helper_name!r}) is stochastic and "
+                f"compose[{index}] ({leaf.name!r}) is stochastic and "
                 "UNSEEDED; the honest-draw law admits no unacknowledged RNG "
                 "into a chain (an unseeded leaf is silently re-rolled by later "
                 "unrelated edits)",
                 code="compose_unseeded_stochastic",
-                remedy=f"pass an explicit seed to {leaf.helper_name} (or "
+                remedy=f"pass an explicit seed to {leaf.name} (or "
                 "seed='auto' on the derived-seed family)",
                 argument="edits",
             )
-        if kwargs.get("force_shape_change"):
+        if kwargs.get("allow_shape_change"):
             raise InvalidArgumentError(
-                f"compose[{index}] ({leaf.helper_name!r}) declares a shape "
+                f"compose[{index}] ({leaf.name!r}) declares a shape "
                 "change; v1 refuses ANY shape-changing leaf (the "
                 "next-leaf-declares-contract rule is the documented relaxation)",
                 code="compose_shape_change_unsupported",
-                remedy="drop force_shape_change= inside a chain, or apply the "
+                remedy="drop allow_shape_change= inside a chain, or apply the "
                 "shape-changing edit alone",
                 argument="edits",
             )
-    kinds = {leaf.kind for leaf in leaves}
-    if kinds != {"forward"}:
-        names = ", ".join(
-            f"compose[{i}]={leaf.helper_name}:{leaf.kind}" for i, leaf in enumerate(leaves)
-        )
-        raise InvalidArgumentError(
-            f"compose chains forward VALUE edits only in v1 ({names}); backward "
-            "hook signatures vary by grad kind, so a backward chain would fire "
-            "wrong call shapes silently -- the exact defect class this family "
-            "exists to kill",
-            code="compose_kind_mismatch",
-            remedy="chain forward helpers only; attach backward helpers as "
-            "separate rules (tl.when per site)",
-            argument="edits",
-        )
 
 
-def compose(*edits: Any) -> HelperSpec:
+def _chain_portability(leaves: list[Edit]) -> HelperPortability:
+    """Return the weakest portability across the chained leaves."""
+
+    portability: HelperPortability = "builtin"
+    for leaf in leaves:
+        if _PORTABILITY_RANK[leaf.portability] > _PORTABILITY_RANK[portability]:
+            portability = leaf.portability
+    return portability
+
+
+def compose(*edits: Any) -> Edit:
     """Chain edits left-to-right into ONE composed edit at one site.
 
     ``compose(a, b, c)(x) == c(b(a(x)))``. Non-commutative by design
@@ -151,7 +146,7 @@ def compose(*edits: Any) -> HelperSpec:
 
     Returns
     -------
-    HelperSpec
+    Edit
         One composed helper: one fire, one scatter, one FireRecord, with the
         ordered leaf identities on the spec (``args``) and the AND-combined
         flags.
@@ -165,46 +160,41 @@ def compose(*edits: Any) -> HelperSpec:
 
         leaf_hooks = [leaf.factory() for leaf in leaves if leaf.factory is not None]
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Apply every leaf in order; a leaf failure aborts the whole fire."""
 
             current = out
             for index, leaf_hook in enumerate(leaf_hooks):
                 # Thread the composed-leaf path for the derived-seed law (D6):
                 # two stochastic leaves inside one compose cannot collide.
-                hook.ctx["compose_leaf_path"] = (index,)
+                ctx.state["compose_leaf_path"] = (index,)
                 try:
-                    current = leaf_hook(current, hook=hook)
+                    current = leaf_hook(current, ctx=ctx)
                 except Exception as exc:
                     if isinstance(exc, HookValueError):
                         raise
                     raise HookValueError(
-                        f"compose[{index}] ({leaves[index].helper_name!r}) failed: "
+                        f"compose[{index}] ({leaves[index].name!r}) failed: "
                         f"{exc}. Remedy: fix the named leaf; a leaf failure aborts "
                         "the whole composed fire (atomic, never half-applied)",
                         code="compose_leaf_failed",
                         leaf_index=index,
-                        leaf_name=leaves[index].helper_name,
+                        leaf_name=leaves[index].name,
                     ) from exc
                 if not isinstance(current, torch.Tensor):
                     raise HookValueError(
-                        f"compose[{index}] ({leaves[index].helper_name!r}) "
+                        f"compose[{index}] ({leaves[index].name!r}) "
                         f"returned {type(current).__name__}; every leaf must "
                         "return a tensor for the next leaf to consume. Remedy: "
                         "make the named leaf return a tensor",
                         code="compose_leaf_failed",
                         leaf_index=index,
-                        leaf_name=leaves[index].helper_name,
+                        leaf_name=leaves[index].name,
                     )
-            hook.ctx.pop("compose_leaf_path", None)
+            ctx.state.pop("compose_leaf_path", None)
             return current
 
         return _hook
-
-    portability: HelperPortability = "builtin"
-    for leaf in leaves:
-        if _PORTABILITY_RANK[leaf.portability] > _PORTABILITY_RANK[portability]:
-            portability = leaf.portability
 
     from .helpers import _helper_spec
 
@@ -212,11 +202,13 @@ def compose(*edits: Any) -> HelperSpec:
         "compose",
         args=tuple(leaves),
         factory=factory,
-        portability=portability,
-        batch_independent=all(leaf.batch_independent for leaf in leaves),
-        compatible_with_append=all(leaf.compatible_with_append for leaf in leaves),
+        portability=_chain_portability(leaves),
+        # A chain that reads recorded forward state anywhere reads it as a whole.
+        signal="forward" if any(leaf.signal == "forward" for leaf in leaves) else None,
+        is_batch_independent=all(leaf.is_batch_independent for leaf in leaves),
+        is_compatible_with_append=all(leaf.is_compatible_with_append for leaf in leaves),
         metadata={
-            "compose_leaves": "|".join(leaf.helper_name for leaf in leaves),
+            "compose_leaves": "|".join(leaf.name for leaf in leaves),
             "compose_leaf_count": len(leaves),
             # Row-coherent leaves keep their mask-equivariance obligation
             # through the chain (the D23 check reads these facts).

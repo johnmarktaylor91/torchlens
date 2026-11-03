@@ -14,8 +14,8 @@ demo contract.
 ## Layout
 
 - Render as two columns: clean on the left, intervention on the right.
-- Align rows vertically with `bundle.show_diff(layout="paired")`.
-- Use `bundle.compare(...)["nodes"]` for per-node color values.
+- Align rows vertically with `bundle.draw(graph="diff")` (the paired layout).
+- Per-node colour values are the baseline comparison `bundle.compare(...)` reads per site.
 - Unmatched nodes receive a gray border on the side where their pair is missing.
 
 ## Color Scale
@@ -38,7 +38,7 @@ L2 norm delta.
 Snapshot tests use two independent acceptance paths and pass if either path succeeds:
 
 1. Semantic SVG normalization followed by byte comparison.
-   - Strip Graphviz-generated random IDs, including `id="node\d+"`.
+   - Strip Graphviz-generated random IDs, including node ids matching `node\d+`.
    - Strip timestamps and Graphviz comment IDs.
    - Normalize whitespace.
 2. Image threshold comparison.

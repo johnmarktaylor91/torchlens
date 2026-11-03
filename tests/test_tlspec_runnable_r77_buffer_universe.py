@@ -7,7 +7,7 @@ non-tensor (``get_extra_state()``, packed/quantized entries), and the dead-model
 silent early return. A model with benign extra state whose source object died before the
 save therefore DECLARED A DIFFERENT STATE UNIVERSE than the live lane -- never-forward-used
 persistent buffers (BatchNorm's ``num_batches_tracked`` in eval mode) were dropped -- so an
-honest tensor-only ``load_state_dict`` refused with ``state_unexpected_key``. The r74-F2
+honest tensor-only ``load_state_dict`` refused with ``state_key_unknown``. The r74-F2
 over-refusal class surviving for non-tensor-state models, violating the contract sentence
 "a runnable save never requires the SOURCE MODEL to still be alive."
 
@@ -18,7 +18,7 @@ lane declares exactly the live lane's universe. The embedded-state ceiling is un
 an extra-state model still cannot report ``verified`` (missing comparison basis --
 pre-existing, coherent, both lanes). When no capture-time record exists either
 (``state_dict()`` is not a mapping at the capture boundary), the dead save refuses LOUDLY
-and TYPED (``TorchLensIOError``, mirroring the ``include_weights=True`` lane) -- never a
+and TYPED (``ArtifactError``, mirroring the ``include_weights=True`` lane) -- never a
 silent under-declaration, never a wrong bind.
 """
 
@@ -34,10 +34,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import TorchLensIOError
+from torchlens.errors import ArtifactError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 class ExtraStateBN(nn.Module):
@@ -120,7 +120,7 @@ def test_r77_dead_extra_state_universe_matches_live_and_binds(tmp_path: Path) ->
     """RED-now-fixed: dead-save universe == live-save universe; honest bind succeeds.
 
     Pre-fix the dead save silently dropped ``bn.num_batches_tracked`` and the honest
-    tensor-only ``load_state_dict`` refused ``state_unexpected_key``. The run verdict
+    tensor-only ``load_state_dict`` refused ``state_key_unknown``. The run verdict
     stays the pre-existing extra-state ceiling (no ``verified`` without a capture-state
     comparison basis) IDENTICALLY in both lanes -- lane parity, never a wrong bind.
     """
@@ -161,7 +161,7 @@ def test_r77_dead_extra_state_universe_matches_live_and_binds(tmp_path: Path) ->
     # Lane parity: the pre-existing extra-state verdict ceiling is identical in both
     # lanes; the dead lane never diverges into refusal or a differing verdict class.
     assert dead_result.report.path_faithfulness is live_result.report.path_faithfulness
-    assert dead_result.report.poisoned == live_result.report.poisoned
+    assert dead_result.report.is_poisoned == live_result.report.is_poisoned
 
 
 def test_r77_plain_bn_dead_universe_unchanged(tmp_path: Path) -> None:
@@ -190,7 +190,7 @@ def test_r77_unknown_universe_refuses_loudly(tmp_path: Path) -> None:
 
     A ``state_dict()`` that is not a mapping defeats both the value snapshot and the
     r77 universe record, so the declared slot universe is UNKNOWABLE; the save refuses
-    with ``TorchLensIOError`` (mirroring the ``include_weights=True`` lane) instead of
+    with ``ArtifactError`` (mirroring the ``include_weights=True`` lane) instead of
     silently declaring a smaller universe.
     """
 
@@ -199,7 +199,7 @@ def test_r77_unknown_universe_refuses_loudly(tmp_path: Path) -> None:
     trace = tl.trace(model, x, capture=_CAPTURE)
     del model
     gc.collect()
-    with pytest.raises(TorchLensIOError, match="persistent-buffer state universe"):
+    with pytest.raises(ArtifactError, match="persistent-buffer state universe"):
         trace.save(tmp_path / "unknown.tlspec", level="runnable", include_weights=False)
 
 
@@ -260,7 +260,7 @@ def test_r77_unknown_universe_refuses_with_a_thread_parked_in_window(tmp_path: P
         assert parked, "the helper must still be parked in its in-window wait"
         del model
         gc.collect()
-        with pytest.raises(TorchLensIOError, match="persistent-buffer state universe"):
+        with pytest.raises(ArtifactError, match="persistent-buffer state universe"):
             trace.save(tmp_path / "unknown.tlspec", level="runnable", include_weights=False)
     finally:
         hold.set()

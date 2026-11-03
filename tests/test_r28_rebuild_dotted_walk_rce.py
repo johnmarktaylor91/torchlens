@@ -52,8 +52,8 @@ from torchlens._io._safe_unpickle import (
     _name_has_dunder_walk,
 )
 from torchlens._io.bundle import _RenameAwareUnpickler
+from torchlens._utils._callable_safety import _DENIED_MODULES
 from torchlens.io import detect_tlspec_format, inspect_tlspec
-from torchlens.utils._callable_safety import _DENIED_MODULES
 
 _UNPICKLERS = [SafeBundleUnpickler, _RenameAwareUnpickler]
 
@@ -253,8 +253,8 @@ def test_frozen_importlib_in_both_denylists(module: str) -> None:
 def test_resolve_import_ref_frozen_importlib_denied_under_trust() -> None:
     """``resolve_import_ref('_frozen_importlib:__import__', trust=True)`` is DENIED."""
 
+    from torchlens.intervention._resolver_registry import resolve_import_ref
     from torchlens.intervention.errors import UntrustedCallableError
-    from torchlens.intervention.resolver import resolve_import_ref
 
     with pytest.raises(UntrustedCallableError):
         resolve_import_ref("_frozen_importlib:__import__")
@@ -292,41 +292,41 @@ def _write_bundle_manifest(bundle: Path, obj: dict) -> None:
 def test_detect_tlspec_format_rejects_symlinked_manifest(tmp_path: Path) -> None:
     """A symlinked ``manifest.json`` child is refused during format detection."""
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     outside = tmp_path / "outside.json"
     outside.write_text(json.dumps({"kind": "x", "tlspec_version": 1}), encoding="utf-8")
     bundle = tmp_path / "bundle.tlspec"
     bundle.mkdir()
     (bundle / "manifest.json").symlink_to(outside)
-    with pytest.raises(TorchLensIOError, match="symlink"):
+    with pytest.raises(ArtifactError, match="symlink"):
         detect_tlspec_format(bundle)
 
 
 def test_detect_tlspec_format_rejects_symlinked_root(tmp_path: Path) -> None:
     """A symlinked bundle ROOT directory is refused during format detection."""
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     real_bundle = tmp_path / "real.tlspec"
     _write_bundle_manifest(real_bundle, {"kind": "x", "tlspec_version": 1})
     link = tmp_path / "link.tlspec"
     link.symlink_to(real_bundle, target_is_directory=True)
-    with pytest.raises(TorchLensIOError, match="symlink"):
+    with pytest.raises(ArtifactError, match="symlink"):
         detect_tlspec_format(link)
 
 
 def test_inspect_tlspec_rejects_symlinked_spec(tmp_path: Path) -> None:
     """A symlinked ``spec.json`` child is refused by ``inspect_tlspec``."""
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     outside = tmp_path / "outside_spec.json"
     outside.write_text(json.dumps({"format_version": 1}), encoding="utf-8")
     bundle = tmp_path / "spec_bundle.tlspec"
     bundle.mkdir()
     (bundle / "spec.json").symlink_to(outside)
-    with pytest.raises(TorchLensIOError, match="symlink"):
+    with pytest.raises(ArtifactError, match="symlink"):
         inspect_tlspec(bundle)
 
 

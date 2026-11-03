@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.projectors import RecordingProjector
+from torchlens._capture.projectors import RecordingProjector
 
 
 class DualProjectionToy(nn.Module):
@@ -25,7 +25,7 @@ def test_one_execution_has_trace_and_recording_projection_parity() -> None:
         DualProjectionToy(),
         torch.tensor([[-2.0, 3.0]]),
         save=lambda _ctx: True,
-        random_seed=47,
+        capture=tl.options.CaptureOptions(seed=47),
     )
 
     assert len(recording._captured_run_cores) == 1

@@ -8,8 +8,8 @@ independent same-process oracles, the absence-claim adjudicator against the
 enumerated known-false manifest, and the flagship logit_lens failure pinned
 enumerated-red. The single highest value-to-cost item in the memo (A4).
 
-One explicit test function per model family: the smoke duration tripwire
-budgets aggregate cost per test-function family, and each family's
+One explicit test function per model family: the smoke duration budget
+(``scripts/tier_durations.py``) bounds the slowest test per file, and each family's
 build+trace cost must land in its own budget, not the first test's.
 """
 
@@ -187,8 +187,12 @@ def _deep_sweep(family, impl, r0_capture):
                 " a stale key."
             )
         golden_n_ops = expected_n_ops(expected)
-        assert len(cap.trace.ops) == golden_n_ops, (
-            f"{family}/{impl}: op count {len(cap.trace.ops)} != golden"
+        # The golden counts every captured row (input, output and buffer rows
+        # included), which is ``trace._layer_list``; ``trace.ops`` counts only
+        # the counted ops since sumfam F1.
+        n_rows = len(cap.trace._layer_list)
+        assert n_rows == golden_n_ops, (
+            f"{family}/{impl}: op count {n_rows} != golden"
             f" {golden_n_ops} under an UNCHANGED resolved-config"
             " fingerprint -- the captured graph moved with no config cause."
         )
@@ -364,10 +368,10 @@ def test_logit_lens_true_oracle_final_layer_equals_model_logits(r0_capture):
     reproduces the model's own logits bitwise (same-process fp32 CPU).
     """
 
-    import torchlens as tl
+    import torchlens._semantic
 
     cap = r0_capture("gpt2", "sdpa")
-    result = tl.semantic.logit_lens(cap.trace)
+    result = torchlens._semantic.logit_lens(cap.trace)
     assert result.entries, "logit_lens returned no per-layer projections"
     with torch.no_grad():
         direct = cap.model(**cap.input_kwargs).logits
@@ -391,7 +395,10 @@ def test_structural_fixture_traces_faithfully(fixture_name):
             # state, and prove the buffers MOVE during capture.
             model.bn.reset_running_stats()
             baseline = model.bn.running_mean.clone()
-        trace = tl.trace(model, args, kwargs)
+        # The train-bn cell measures capture-time mutation, so it opts into
+        # forward-equivalent state (a default capture is a pure observer, U40.1).
+        capture = tl.options.CaptureOptions(carry_state=fixture_name == "train-bn")
+        trace = tl.trace(model, args, input_kwargs=kwargs, capture=capture)
     assert trace.outcome.status.name == "COMPLETE"
     if fixture_name == "container-output":
         leaves = [op.out for op in trace.output_ops]

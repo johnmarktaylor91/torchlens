@@ -152,13 +152,9 @@ def test_capability_row_references_resolve() -> None:
     """
 
     from torchlens.backends._options import operation_grain_capability_rows
-    from torchlens.backends.registry import registered_backend_specs
+    from torchlens.backends.registry import registered_backend_specs as specs
 
-    live_ids = {
-        row.row_id
-        for spec in registered_backend_specs()
-        for row in operation_grain_capability_rows(spec)
-    }
+    live_ids = {row.row_id for spec in specs() for row in operation_grain_capability_rows(spec)}
     for row in LEDGER:
         for operation_id in row.operation_ids:
             if operation_id.startswith("trace_option:"):

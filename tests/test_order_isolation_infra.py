@@ -28,7 +28,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_skip_audit import FULL_TEST_EXTRA_SENTINEL
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "checks"))
+from skip_audit import FULL_TEST_EXTRA_SENTINEL  # noqa: E402
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -234,7 +236,7 @@ def test_content_registries_are_restored_between_tests(
     fixture_fn = conftest_plugin._restore_content_registries
     raw = getattr(fixture_fn, "__wrapped__", None) or fixture_fn.__pytest_wrapped__.obj
 
-    from torchlens.capture.flops import _CUSTOM_OP_RULES
+    from torchlens._capture.flops import _CUSTOM_OP_RULES
 
     sentinel = "r76_isolation_probe_op"
     assert sentinel not in _CUSTOM_OP_RULES

@@ -7,7 +7,10 @@ Final labels exist only after postprocessing, so the live rerun matcher refuses
 them. A rerun therefore re-arms the trace's own retained predicate through the
 same capture door, hands the capture a copy of the staged spec without those
 entries, and then checks that the door re-staged exactly the entries the trace
-carries. The staged spec itself is never mutated.
+carries. The staged spec itself is never mutated. Entries a user staged on a
+final label (``Trace.set``, ``attach_hooks(tl.label(...))``) are translated to
+the raw capture labels of the ops they name (:func:`translate_staged_final_labels`),
+the same translation a mixed gradient plan's activation half uses.
 """
 
 from __future__ import annotations
@@ -16,9 +19,8 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Any
 
-from .errors import ControlFlowDivergenceError, LiveModeLabelError
-
-_LABEL_SELECTOR_KINDS = frozenset({"label", "contains", "regex"})
+from .._selection.target import TargetSpec
+from .errors import ControlFlowDivergenceError
 
 
 @dataclass(frozen=True)
@@ -86,14 +88,14 @@ def _hook_key(hook_spec: Any) -> tuple[Any, ...]:
     helper = getattr(hook_spec, "helper", None)
     hook = getattr(hook_spec, "hook", None)
     hook_identity = (
-        getattr(helper, "helper_name", None)
+        getattr(helper, "name", None)
         if helper is not None
         else getattr(hook, "__qualname__", type(hook).__name__)
     )
     return (
         hook_spec.site_target.selector_value,
         metadata.get("spec_rule_id"),
-        metadata.get("direction"),
+        metadata.get("signal"),
         metadata.get("timing"),
         hook_identity,
     )
@@ -218,58 +220,91 @@ def settle_predicate_rerun(plan: RerunSpecPlan, staged_spec: Any, new_log: Any) 
     staged_spec.records.extend(plan.capture_spec.records[plan.staged_record_count :])
 
 
-def refuse_unmatchable_staged_labels(capture_spec: Any) -> None:
-    """Refuse a rerun whose staged edits are addressed by finalized labels.
+def raw_live_labels(trace: Any, label_value: str) -> tuple[str, ...] | None:
+    """Return the capture-time raw labels of the ops a finalized label names.
 
-    A live rerun matches selectors while the forward runs, before postprocess
-    labels exist, so an entry staged on a final label (``Trace.set(label, ...)``,
-    ``attach_hooks(tl.label(...), ...)``, or a predicate-door entry whose
-    predicate the trace no longer carries) can never fire. The live matcher
-    would refuse it mid-capture with a remedy aimed at authoring selectors; this
-    refuses before the forward, names the staged entry, and keeps the trace
-    unchanged.
+    A live forward matches selectors before postprocess labels exist, so a
+    finalized label (``linear_1_1``, ``linear_1_1:2``) is translated to the
+    raw labels the same ops carried while they were captured (``linear_1_3_raw``),
+    which a live forward matches again. Each pass of a multi-pass op keeps its
+    own raw label, so a pass-qualified label lowers to that pass alone.
 
     Parameters
     ----------
-    capture_spec:
-        Spec the rerun capture would apply (predicate-door entries already
-        removed when the predicate is re-armed).
+    trace:
+        Trace that still holds the source graph the label was read from.
+    label_value:
+        A finalized label literal.
 
-    Raises
-    ------
-    LiveModeLabelError
-        ``rerun_staged_label_unmatchable`` when any staged value or hook entry
-        names a finalized label.
+    Returns
+    -------
+    tuple[str, ...] | None
+        The raw labels in resolution order, or ``None`` when the label names
+        no op or an op without a raw label (the caller leaves the entry as
+        staged, and the live matcher refuses it with its own remedy).
     """
 
-    entries = [
-        *(getattr(capture_spec, "target_value_specs", None) or ()),
-        *(getattr(capture_spec, "hook_specs", None) or ()),
-    ]
-    from ..ir.selector_eval import looks_like_finalized_label
+    fanout = len(trace._layer_list) + 1
+    ops = trace._resolve_sites(label_value, max_fanout=fanout)
+    raw = [getattr(op, "_label_raw", None) or getattr(op, "_layer_label_raw", None) for op in ops]
+    names = [name for name in raw if isinstance(name, str)]
+    if not names or len(names) != len(raw):
+        return None
+    return tuple(dict.fromkeys(names))
 
-    for entry in entries:
+
+def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
+    """Return ``capture_spec`` with its finalized exact labels readdressed for a live rerun.
+
+    Staged entries addressed by a finalized label (``Trace.set(label, ...)``,
+    ``attach_hooks(tl.label(...), ...)``) are translated to the raw capture
+    labels of the ops they name, the same translation a mixed gradient plan's
+    activation half already uses, so the edit fires on the rerun instead of
+    being refused. An exact label that names several ops, a substring or regex
+    selector, or a label that resolves to nothing stays as staged, and the live
+    matcher refuses it mid-capture with its authoring remedy.
+
+    Parameters
+    ----------
+    trace:
+        Trace about to rerun (it still holds the source graph).
+    capture_spec:
+        Spec the rerun capture would apply.
+
+    Returns
+    -------
+    Any
+        A new spec when any entry was translated, else ``capture_spec`` itself.
+    """
+
+    from .._ir.selector_eval import looks_like_finalized_label
+
+    def lower(entry: Any) -> Any:
+        """Return ``entry`` with a finalized label target lowered to its one raw live label."""
         target = entry.site_target
         value = target.selector_value
-        if target.selector_kind not in _LABEL_SELECTOR_KINDS or not isinstance(value, str):
-            continue
-        if not looks_like_finalized_label(value):
-            continue
-        metadata = getattr(entry, "metadata", None) or {}
-        origin = (
-            "a capture-time intervene= predicate this trace no longer carries"
-            if metadata.get("created_by") == "intervene_predicate"
-            else "Trace.set() or attach_hooks()"
+        if (
+            target.selector_kind != "label"
+            or not isinstance(value, str)
+            or not looks_like_finalized_label(value)
+        ):
+            return entry
+        names = raw_live_labels(trace, value)
+        if names is None or len(names) != 1:
+            return entry
+        lowered = TargetSpec(
+            selector_kind="label",
+            selector_value=names[0],
+            strict=target.strict,
+            slice_spec=target.slice_spec,
+            metadata=dict(target.metadata),
         )
-        raise LiveModeLabelError(
-            f"This trace stages an edit on tl.{target.selector_kind}({value!r}), staged by "
-            f"{origin}. That is a finalized postprocess label, and a rerun matches "
-            "selectors during the forward, before those labels exist, so the edit "
-            "could never fire; the rerun is refused and the trace is unchanged. "
-            "Remedy: re-stage the edit with a selector a live forward can match, "
-            "for example trace.set(tl.module('fc2'), value) or "
-            "trace.attach_hooks(tl.func('relu'), helper), or propagate the edit on "
-            "the captured input with tl.push",
-            code="rerun_staged_label_unmatchable",
-            staged_selector=f"{target.selector_kind}:{value}",
-        )
+        return replace(entry, site_target=lowered)
+
+    values = [lower(entry) for entry in getattr(capture_spec, "target_value_specs", None) or ()]
+    hooks = [lower(entry) for entry in getattr(capture_spec, "hook_specs", None) or ()]
+    if all(a is b for a, b in zip(values, capture_spec.target_value_specs, strict=True)) and all(
+        a is b for a, b in zip(hooks, capture_spec.hook_specs, strict=True)
+    ):
+        return capture_spec
+    return replace(capture_spec, target_value_specs=values, hook_specs=hooks)

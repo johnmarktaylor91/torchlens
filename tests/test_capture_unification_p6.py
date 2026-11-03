@@ -10,7 +10,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._training_validation import TrainingModeConfigError
-from torchlens.fastlog import CaptureSpec, PredicateError, RecordContext
+from torchlens.errors import PredicateError
+from torchlens.recording import CaptureSpec, RecordContext
 
 
 class EncoderBlock(nn.Module):
@@ -36,14 +37,14 @@ def _keep_linear_grad(ctx: RecordContext) -> CaptureSpec | bool:
     """Request graph-connected capture at linear ops."""
 
     if ctx.func_name == "linear":
-        return CaptureSpec(keep_grad=True)
+        return CaptureSpec(save_grad=True)
     return False
 
 
-def _saved_linear(log: tl.Trace) -> tl.Layer:
-    """Return the saved linear layer from a trace."""
+def _saved_linear(log: tl.Trace) -> tl.Op:
+    """Return the saved linear op (its own pass) from a trace."""
 
-    return next(layer for layer in log.layer_list if layer.layer_type == "linear")
+    return next(op for op in log._layer_list if op.type == "linear")
 
 
 def test_trace_predicate_save_to_disk_loads_layer_out(tmp_path: Path) -> None:
@@ -61,16 +62,15 @@ def test_trace_predicate_save_to_disk_loads_layer_out(tmp_path: Path) -> None:
     )
     saved = _saved_linear(log)
 
-    assert saved.ops[0].out_ref is not None
-    assert saved.ops[0]._slot("out") is None
+    assert saved.out_ref is not None
+    assert saved._slot("out") is None
     assert torch.equal(saved.out, expected)
-    assert torch.equal(saved.ops[0].out, expected)
 
 
 def test_trace_predicate_disk_only_rejects_keep_grad(tmp_path: Path) -> None:
     """Disk-only predicate storage rejects graph-connected payload requests."""
 
-    with pytest.raises(PredicateError, match="keep_grad=True.*disk-only"):
+    with pytest.raises(PredicateError, match="save_grad=True.*disk-only"):
         tl.trace(
             EncoderBlock(),
             torch.ones(1, 4),
@@ -99,7 +99,7 @@ def test_trace_predicate_storage_none_remains_ram_backed() -> None:
     log = tl.trace(EncoderBlock(), torch.ones(1, 4), save=tl.func("linear"), storage=None)
     saved = _saved_linear(log)
 
-    assert saved.ops[0].out_ref is None
+    assert saved.out_ref is None
     assert isinstance(saved.out, torch.Tensor)
 
 
@@ -116,7 +116,7 @@ def test_trace_disk_streamed_save_load_round_trip(tmp_path: Path) -> None:
     expected = _saved_linear(log).out
     bundle_path = tmp_path / "round_trip.tlspec"
 
-    tl.save(log, bundle_path)
+    log.save(bundle_path)
     loaded = tl.load(bundle_path)
 
     assert isinstance(loaded, tl.Trace)

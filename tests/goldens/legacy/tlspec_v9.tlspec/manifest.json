@@ -1,0 +1,244 @@
+{
+  "tlspec_version": 9,
+  "torchlens_version": "2.34.1",
+  "torch_version": "2.13.0+cu130",
+  "python_version": "3.10.20",
+  "platform": "linux-x86_64",
+  "created_at": "2026-08-28T06:19:56Z",
+  "bundle_format": "directory",
+  "n_layers": 9,
+  "n_out_blobs": 3,
+  "n_grad_blobs": 0,
+  "n_auxiliary_blobs": 0,
+  "tensors": [
+    {
+      "blob_id": "0000000001",
+      "kind": "out",
+      "label": "relu_1_2:1",
+      "relative_path": "blobs/0000000001.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        8
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 64,
+      "sha256": "034097c03052748c1e736f30e7b04deeb31cbf69829a32a804c7544b79878c17",
+      "requires_grad": false
+    },
+    {
+      "blob_id": "0000000002",
+      "kind": "out",
+      "label": "relu_2_4:1",
+      "relative_path": "blobs/0000000002.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        8
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 64,
+      "sha256": "98855f9077846939e1509ec9462c14098e5636cb8136186a55b3f329dc67978f",
+      "requires_grad": false
+    },
+    {
+      "blob_id": "0000000003",
+      "kind": "out",
+      "label": "relu_3_6:1",
+      "relative_path": "blobs/0000000003.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        8
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 64,
+      "sha256": "5c0df04bc73dedc3461a9f868e9936594df6e4fb423de775c956455c104b4a7e",
+      "requires_grad": false
+    }
+  ],
+  "unsupported_tensors": [],
+  "provenance": {
+    "provenance_version": 1,
+    "capture_devices": [
+      "cpu"
+    ],
+    "dtype_policy": {
+      "default_dtype": "torch.float32",
+      "observed_autocast": [
+        {
+          "__execution__": {
+            "enabled": false,
+            "dtype": null,
+            "grad_enabled": true,
+            "inference_mode": false
+          },
+          "cpu": {
+            "enabled": false,
+            "dtype": "torch.bfloat16"
+          },
+          "cuda": {
+            "enabled": false,
+            "dtype": "torch.float16"
+          }
+        }
+      ]
+    },
+    "rng_state_digests": {
+      "torch": "bde40bfd2f14541a153d5053a8db87513d70d87bd7accee217fef01c1b0ab33d"
+    },
+    "input_hash": "unavailable:PayloadUnavailableError",
+    "model_structure_hash": "b64e0ca91fabdcea447df157d84acafa3a15fa0b31d821d01699510bada0a362",
+    "git_commit_hash": "4b2fccb808c9ca838b84ac2ea389c6de61b984b9"
+  },
+  "custom_attributes_disclosure": {
+    "included": true,
+    "module_count": 7,
+    "top_level_keys": [
+      "in_features",
+      "inplace",
+      "out_features"
+    ],
+    "top_level_keys_truncated": false
+  },
+  "buffer_values_disclosure": {
+    "included": true,
+    "buffer_count": 0,
+    "buffer_names": [],
+    "buffer_names_truncated": false
+  },
+  "kind": "trace",
+  "schema_version": 1,
+  "model_signature": "tests.test_agent_surface_helpers.RepeatedBlockNet",
+  "model_fingerprint": {
+    "parameter_meta_hash": "77987320eae30dd2031428b62ff8be2746befe0736358a7a84775cb1d7d9e335",
+    "buffer_meta_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "class_qualname": "tests.test_agent_surface_helpers.RepeatedBlockNet",
+    "extra_metadata": {
+      "model_class_name": "RepeatedBlockNet",
+      "graph_shape_hash": "dffe4d652ec201519de8c84fac345b8604878df523b4d7f85a2c790fe78e6154",
+      "input_signature_hash": "8bb3ca7fdae3c7b870594d8554adfa80fbd708e58499721e09ee661d29eb5078"
+    }
+  },
+  "sites": [
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "input_1",
+      "pass_index": null,
+      "op_kind": "input_2_8_torch.float32"
+    },
+    {
+      "function_path": "linear",
+      "module_path": "blocks.0.0:1",
+      "layer_label": "linear_1_1",
+      "pass_index": null,
+      "op_kind": "linear_param_000001_param_000002blocks.0_blocks.0.0"
+    },
+    {
+      "function_path": "relu",
+      "module_path": "blocks.0.1:1",
+      "layer_label": "relu_1_2",
+      "pass_index": null,
+      "op_kind": "relu_bb836ef1f1396e4e_moduleblocks.0.1blocks.0_blocks.0.1"
+    },
+    {
+      "function_path": "linear",
+      "module_path": "blocks.1.0:1",
+      "layer_label": "linear_2_3",
+      "pass_index": null,
+      "op_kind": "linear_param_000003_param_000004blocks.1_blocks.1.0"
+    },
+    {
+      "function_path": "relu",
+      "module_path": "blocks.1.1:1",
+      "layer_label": "relu_2_4",
+      "pass_index": null,
+      "op_kind": "relu_bb836ef1f1396e4e_moduleblocks.1.1blocks.1_blocks.1.1"
+    },
+    {
+      "function_path": "linear",
+      "module_path": "blocks.2.0:1",
+      "layer_label": "linear_3_5",
+      "pass_index": null,
+      "op_kind": "linear_param_000005_param_000006blocks.2_blocks.2.0"
+    },
+    {
+      "function_path": "relu",
+      "module_path": "blocks.2.1:1",
+      "layer_label": "relu_3_6",
+      "pass_index": null,
+      "op_kind": "relu_bb836ef1f1396e4e_moduleblocks.2.1blocks.2_blocks.2.1"
+    },
+    {
+      "function_path": "linear",
+      "module_path": "head:1",
+      "layer_label": "linear_4_7",
+      "pass_index": null,
+      "op_kind": "linear_param_000007_param_000008head"
+    },
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "output_1",
+      "pass_index": null,
+      "op_kind": "output_1_2_2_torch.float32"
+    }
+  ],
+  "spec_compat_info": null,
+  "body_format": "safetensors",
+  "body_index": [
+    {
+      "filename": "blobs/0000000001.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        8
+      ],
+      "num_elements": 16,
+      "intended_use": "out",
+      "sha256": "034097c03052748c1e736f30e7b04deeb31cbf69829a32a804c7544b79878c17"
+    },
+    {
+      "filename": "blobs/0000000002.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        8
+      ],
+      "num_elements": 16,
+      "intended_use": "out",
+      "sha256": "98855f9077846939e1509ec9462c14098e5636cb8136186a55b3f329dc67978f"
+    },
+    {
+      "filename": "blobs/0000000003.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        8
+      ],
+      "num_elements": 16,
+      "intended_use": "out",
+      "sha256": "5c0df04bc73dedc3461a9f868e9936594df6e4fb423de775c956455c104b4a7e"
+    }
+  ],
+  "backward_summary": {
+    "has_backward_pass": false,
+    "num_backward_passes": 0,
+    "num_grad_fns": 0,
+    "num_grad_fn_calls": 0,
+    "num_saved_grad_records": 0,
+    "gradient_blob_count": 0,
+    "gradient_blob_kinds": [],
+    "old_bundle_policy": "legacy class remaps are accepted at load; removed backward gradient configuration fields are dropped during Trace state normalization"
+  },
+  "save_level": "portable",
+  "optional_dependencies": [],
+  "intervention_compat_metadata": null
+}

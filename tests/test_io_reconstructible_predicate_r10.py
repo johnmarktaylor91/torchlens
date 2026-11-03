@@ -91,6 +91,6 @@ def test_defaultdict_with_code_exec_factory_survives_round_trip(tmp_path) -> Non
     trace.ops[0].annotations = defaultdict(eval, {"k": 1})  # type: ignore[assignment]
     bundle = tmp_path / "b.tlspec"
     with pytest.warns(UserWarning):
-        tl.save(trace, bundle, overwrite=True)
+        trace.save(bundle, overwrite=True)
     loaded = tl.load(bundle)  # must not raise UnpicklingError
     assert loaded is not None

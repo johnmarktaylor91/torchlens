@@ -31,9 +31,11 @@ import torch
 
 from .._data_substrate import ExtractionArtifactError, read_trusted_rows
 from .._errors import InvalidArgumentError
-from ..utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import torch_attr
+from .harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
 from .ragged import RaggedBatch, to_padded
 from .shards import read_shard
+from .token_store import TokenRows, concat_token_rows, shard_token_rows
 
 __tl_layer__ = "L5"
 
@@ -926,6 +928,183 @@ class ExtractionReader:
         return out
 
     # ------------------------------------------------------------------
+    # Token rows (token SAE store; DOCUMENTED-UNSTABLE)
+    # ------------------------------------------------------------------
+
+    def token_batch(self, shard_index: int, keys: list[str] | None = None) -> TokenRows:
+        """Read ONE shard flattened to token rows (bounded memory).
+
+        A trimmed key's packed values are its token rows; a dense key
+        qualifies only when the shard ledgered a mask with every row
+        unpadded at the key's width. Every selected key must share one
+        token axis.
+
+        Parameters
+        ----------
+        shard_index:
+            Ledger-order shard position.
+        keys:
+            Optional output-key subset (default: every key).
+
+        Returns
+        -------
+        TokenRows
+            The shard's aligned token rows, stimulus rows, and positions.
+        """
+
+        payload = self.batch(shard_index, keys=keys)
+        row = self._rows[shard_index]
+        return shard_token_rows(payload, row.get("row_geometry"), int(row["row_start"]))
+
+    def token_rows(
+        self, keys: list[str] | None = None, *, max_bytes: int | None = None
+    ) -> TokenRows:
+        """Materialize every shard as aligned token rows, in ledger order.
+
+        Parameters
+        ----------
+        keys:
+            Optional output-key subset (default: every key).
+        max_bytes:
+            Optional explicit budget override (same guard as
+            :meth:`materialize`).
+
+        Returns
+        -------
+        TokenRows
+            One row per stored token across the artifact.
+
+        Raises
+        ------
+        torchlens.errors.InvalidArgumentError
+            ``extraction_eager_budget_exceeded`` over the byte budget, and
+            the :meth:`token_batch` refusals.
+        """
+
+        needed = self.requested_bytes(keys)
+        budget = max_bytes if max_bytes is not None else _default_byte_budget()
+        if needed > budget:
+            raise InvalidArgumentError(
+                f"Reading token rows of {sorted(keys) if keys else 'all keys'} needs "
+                f"exactly {needed:,} bytes, over the {budget:,}-byte budget.",
+                code="extraction_eager_budget_exceeded",
+                remedy=(
+                    "stream shards with reader.token_batch(i) or "
+                    "shuffled_batches(..., tokens=True), request fewer keys, "
+                    "or override explicitly with max_bytes="
+                ),
+                requested_bytes=needed,
+                budget_bytes=budget,
+            )
+        if keys is not None:
+            for key in keys:
+                self.logical_shape(key)  # refuses unknown keys typed
+        return concat_token_rows(
+            [self.token_batch(index, keys=keys) for index in range(len(self._rows))]
+        )
+
+    # ------------------------------------------------------------------
+    # Training views
+    # ------------------------------------------------------------------
+
+    def shuffled_batches(  # noqa: PLR0913 - the view's knob surface (token rows add two keywords)
+        self,
+        batch_size: int,
+        *,
+        seed: int = 0,
+        keys: list[str] | None = None,
+        buffer_shards: int = 1,
+        tokens: bool = False,
+    ) -> Any:
+        """Yield shuffled training batches without thrashing shard handles.
+
+        Shard order is shuffled, then a buffer of ``buffer_shards``
+        consecutive shards is shuffled across rows; each shard is touched
+        exactly once.
+
+        Parameters
+        ----------
+        batch_size:
+            Rows per yielded batch (a positive integer).
+        seed:
+            Seed of the shard and row shuffle.
+        keys:
+            Output keys to serve; ``None`` serves every key.
+        buffer_shards:
+            Shards mixed together in the shuffle buffer (a positive integer).
+        tokens:
+            Serve token rows (:class:`TokenRows`) instead of stimulus rows.
+
+        Returns
+        -------
+        Any
+            Iterator of batch dicts.
+        """
+
+        from .views import shuffled_batches
+
+        return shuffled_batches(
+            self,
+            batch_size,
+            seed=seed,
+            keys=keys,
+            buffer_shards=buffer_shards,
+            tokens=tokens,
+        )
+
+    def feature_matrix(self, key: str, *, max_bytes: int | None = None) -> torch.Tensor:
+        """Materialize one dense key as a 2D ``[n_stimuli, features]`` matrix.
+
+        Parameters
+        ----------
+        key:
+            Dense output key.
+        max_bytes:
+            Optional byte budget for the materialized matrix.
+
+        Returns
+        -------
+        torch.Tensor
+            The flattened feature matrix.
+        """
+
+        from .views import feature_matrix
+
+        return feature_matrix(self, key, max_bytes=max_bytes)
+
+    def to_torch_dataset(self, keys: list[str] | None = None) -> Any:
+        """Wrap the reader as a ``torch.utils.data.Dataset`` of per-row dicts.
+
+        Parameters
+        ----------
+        keys:
+            Output keys each row serves; ``None`` serves every key.
+
+        Returns
+        -------
+        Any
+            A map-style dataset.
+        """
+
+        from .views import as_torch_dataset
+
+        return as_torch_dataset(self, keys)
+
+    @property
+    def input_preprocessing(self) -> dict[str, Any]:
+        """The manifest's input-preprocessing block (legacy artifacts read as unknown).
+
+        Returns
+        -------
+        dict[str, Any]
+            The input-preprocessing block.
+        """
+
+        from .._extraction_provenance import input_preprocessing_of
+
+        return input_preprocessing_of(self.manifest)
+
+    # ------------------------------------------------------------------
     # Trusted-prefix monitoring
     # ------------------------------------------------------------------
 
@@ -979,7 +1158,7 @@ def check_layout_coherence(manifest: Mapping[str, Any], rows: list[dict[str, Any
 
     Raises
     ------
-    torchlens.dataset_extraction.DatasetExtractionResumeError
+    torchlens.errors.DatasetExtractionResumeError
         ``extraction_manifest_invalid`` naming the key, the offending shard,
         and both layouts.
     """
@@ -1024,11 +1203,11 @@ def _raise_mixed_layout(problem: str, **fields: Any) -> None:
 
     Raises
     ------
-    torchlens.dataset_extraction.DatasetExtractionResumeError
+    torchlens.errors.DatasetExtractionResumeError
         ``extraction_manifest_invalid``, always.
     """
 
-    from ..dataset_extraction import DatasetExtractionResumeError
+    from torchlens._extraction.resume import DatasetExtractionResumeError
 
     raise DatasetExtractionResumeError(
         problem,
@@ -1063,7 +1242,7 @@ def _merge_ragged(carriers: list[RaggedBatch]) -> RaggedBatch:
     cursor = 0
     position = 0
     for carrier in carriers:
-        for i in range(carrier.row_count):
+        for i in range(carrier.num_rows):
             cursor += int(carrier.offsets[i + 1] - carrier.offsets[i])
             position += 1
             offsets[position] = cursor
@@ -1113,7 +1292,7 @@ def _default_byte_budget() -> int:
 
 
 def open_extraction(
-    output_dir: str | Path,
+    path: str | Path,
     *,
     verify: str = "structural",
     in_progress: bool = False,
@@ -1125,7 +1304,7 @@ def open_extraction(
 
     Parameters
     ----------
-    output_dir:
+    path:
         Artifact directory written by disk-mode ``extract_dataset``.
     verify:
         ``"structural"`` (default: manifest/ledger well-formed, files
@@ -1142,7 +1321,7 @@ def open_extraction(
 
     Raises
     ------
-    torchlens.dataset_extraction.DatasetExtractionResumeError
+    torchlens.errors.DatasetExtractionResumeError
         On a missing/invalid manifest or an incomplete artifact opened
         without ``in_progress=True``.
     torchlens.errors.InvalidArgumentError
@@ -1159,19 +1338,15 @@ def open_extraction(
             remedy="pass verify='structural' or verify='first_access'",
             value=repr(verify),
         )
+    from torchlens._extraction.resume import DatasetExtractionResumeError
+
     from ..dataset_extraction import (
         MANIFEST_FILENAME,
-        MANIFEST_SCHEMA_V2,
-        DatasetExtractionResumeError,
         _load_manifest,
     )
 
-    container = Path(output_dir)
+    container = Path(path)
     manifest = _load_manifest(container / MANIFEST_FILENAME)
-    if manifest.get("schema") != MANIFEST_SCHEMA_V2:
-        from .._data_substrate import migrate_v1_artifact
-
-        manifest, _rows = migrate_v1_artifact(container, manifest)
     if manifest.get("status") != "complete" and not in_progress:
         raise DatasetExtractionResumeError(
             f"Extraction artifact at {str(container)!r} has status "
@@ -1186,6 +1361,10 @@ def open_extraction(
         )
     rows = read_trusted_rows(container)
     check_layout_coherence(manifest, rows)
+    if HARVEST_BLOCK_KEY in manifest:
+        # the counterfactual record parses fail-closed; a torn or
+        # foreign block never half-loads (absent = written before the schema).
+        validate_harvest_block(manifest[HARVEST_BLOCK_KEY])
     if manifest.get("status") == "complete":
         n_ledgered = (manifest.get("totals") or {}).get("n_shards")
         if len(rows) != n_ledgered:

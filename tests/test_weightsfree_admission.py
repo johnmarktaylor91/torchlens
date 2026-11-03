@@ -21,6 +21,7 @@ from test_weightsfree_fixtures import (
 
 import torchlens as tl
 from torchlens._robustness import UnsupportedTensorVariantError
+from torchlens.errors import TraceCaptureError
 
 
 def _meta_model() -> nn.Module:
@@ -51,7 +52,7 @@ def test_meta_with_flag_admits() -> None:
 
     tr = weightsfree_trace(_meta_model(), _meta_input())
     assert tr.outcome.status.value == "complete"
-    assert tr.structure_only is True
+    assert tr.options.structure_only is True
 
 
 def test_real_substrate_structure_only_still_works() -> None:
@@ -59,7 +60,7 @@ def test_real_substrate_structure_only_still_works() -> None:
 
     real, _ = build_twins(LinearReluLinear)
     tr = weightsfree_trace(real, torch.randn(3, 2))
-    assert tr.structure_only is True
+    assert tr.options.structure_only is True
     assert tr.outcome.status.value == "complete"
 
 
@@ -204,8 +205,9 @@ def test_failed_admitted_capture_restores_wrappers_and_flags() -> None:
     with torch.device("meta"):
         model = Boom()
     model.eval()
-    with pytest.raises(ValueError, match="user forward failure"):
+    with pytest.raises(TraceCaptureError, match="user forward failure") as _tce_info:
         weightsfree_trace(model, torch.empty(1, 2, device="meta"))
+    assert isinstance(_tce_info.value.__cause__, ValueError)
     # The factory-device slot must not leak past the failed capture: an
     # ordinary capture right after must complete with factory tensors on CPU.
     from torchlens.backends.torch._weightsfree_ctx import active_factory_device
@@ -224,7 +226,7 @@ def test_failed_admitted_capture_restores_wrappers_and_flags() -> None:
 
 def test_admitted_capture_carries_admission_and_envelope() -> None:
     tr = weightsfree_trace(_meta_model(), _meta_input())
-    envelope = tr.structure_evidence
+    envelope = tr.graph.structure_evidence
     assert envelope is not None
     assert envelope["capture_mode"] == "structure_only"
     assert envelope["substrate"] == "meta"
@@ -235,7 +237,7 @@ def test_admitted_capture_carries_admission_and_envelope() -> None:
 def test_real_structure_only_envelope_says_real() -> None:
     real, _ = build_twins(LinearReluLinear)
     tr = weightsfree_trace(real, torch.randn(3, 2))
-    envelope = tr.structure_evidence
+    envelope = tr.graph.structure_evidence
     assert envelope is not None
     assert envelope["substrate"] == "real"
     assert envelope["factory_device_policy"] == "none"
@@ -246,8 +248,8 @@ def test_identity_self_test_failure_refuses_typed(monkeypatch: pytest.MonkeyPatc
     refuses admission typed (structure_only_meta_identity_unavailable) rather
     than guessing where every data_ptr reads 0."""
 
+    from torchlens._capture import _weightsfree_admission as admission
     from torchlens._errors import WeightsfreeIntegrityError
-    from torchlens.capture import _weightsfree_admission as admission
 
     monkeypatch.setattr(
         admission,
@@ -266,7 +268,7 @@ def test_ambient_context_without_surgery_refuses_typed(
     a build without mode-stack surgery refuses typed
     (structure_only_ambient_device_context) with the exit-context remedy."""
 
-    import torchlens.utils._torch_compat as torch_compat
+    import torchlens._utils._torch_compat as torch_compat
     from torchlens._errors import WeightsfreeIntegrityError
 
     monkeypatch.setattr(torch_compat, "HAS_TORCH_FUNCTION_STACK_SURGERY", False)

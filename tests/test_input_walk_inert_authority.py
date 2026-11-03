@@ -43,7 +43,7 @@ from torchlens._input_walk import (
     unset_declared_fields,
     walk_input_boundary,
 )
-from torchlens._runnable_witness_contracts import _container_field_names
+from torchlens._runnable.witness_contracts import _container_field_names
 
 _OneField = collections.namedtuple("_OneField", "x")
 _ZeroField = collections.namedtuple("_ZeroField", "")
@@ -228,8 +228,8 @@ def test_unset_init_false_dataclass_field_no_longer_kills_the_capture():
     assert "unset_declared_field" in _reasons(snapshot)
     assert snapshot["nodes"][0]["unset_fields"] == ["cache"]
     # The whole point: an intervention-ready capture completes instead of raising.
-    trace = tl.trace(_Model(), box, capture=tl.options.CaptureOptions(intervention_ready=True))
-    assert trace.num_ops >= 1
+    trace = tl.trace(_Model(), box, capture=tl.options.CaptureOptions(replayable=True))
+    assert trace._num_ops >= 1
 
 
 def test_registered_aux_is_type_strict():
@@ -242,7 +242,7 @@ def test_registered_aux_is_type_strict():
         value: Any
         mode: Any
 
-    tl.register_container(
+    tl.types.register_container(
         _Wrap,
         lambda wrap: ((wrap.value,), wrap.mode),
         lambda children, aux: _Wrap(children[0], aux),
@@ -448,8 +448,8 @@ def test_same_class_instance_state_is_witnessed_on_protocol_subclasses():
 def test_mode_box_changed_field_diverges_runnable_replay(tmp_path):
     """The r66-R1/ModeBox end-to-end repro: same class, changed field, typed refusal."""
 
+    from torchlens._runnable import PathFaithfulness
     from torchlens.errors import PathDivergenceError
-    from torchlens.runnable import PathFaithfulness
 
     class ModeRoutedModel(nn.Module):
         """Add a mode-selected constant to the boxed tensor."""
@@ -467,13 +467,13 @@ def test_mode_box_changed_field_diverges_runnable_replay(tmp_path):
         model,
         box_a,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
     )
     path = tmp_path / "m.tlspec"
-    tl.save(captured, path, level="runnable", include_weights=True)
+    captured.save(path, level="runnable", include_weights=True)
 
     changed = _ModeBox({"x": tensor})
     changed.mode = "b"
@@ -522,11 +522,11 @@ def test_nontotal_namedtuple_input_refuses_capture_typed():
     # tolerate that pre-existing disclosure here.
     import warnings as _warnings
 
-    from torchlens._errors import TorchLensCaptureGapWarning
+    from torchlens._errors import CaptureGapWarning
 
     hidden = tuple.__new__(_OneField, (tensor, torch.ones(1)))
     with _warnings.catch_warnings():
-        _warnings.simplefilter("ignore", TorchLensCaptureGapWarning)
+        _warnings.simplefilter("ignore", CaptureGapWarning)
         with pytest.raises(InvalidArgumentError) as excinfo:
             tl.trace(model, hidden)
     assert excinfo.value.fields.get("code") == "input_namedtuple_schema_not_total"

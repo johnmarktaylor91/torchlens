@@ -2,7 +2,7 @@
 
 The autoroute detector branch of :func:`torchlens.trace` forwards the public
 keyword bundle into detectors (which re-enter ``tl.trace`` through bridge
-helpers such as ``bridge.hf.trace_text``). Any ``trace()`` parameter missing
+helpers such as ``bridge.transformers.trace_text``). Any ``trace()`` parameter missing
 from that bundle is SILENTLY DROPPED on autoroute dispatch — the worst API
 failure mode: the user configured something and nothing complained. Found
 live 2026-08-19: ``tl.trace(hf_model, "text", structure_only=True)`` returned
@@ -28,7 +28,7 @@ from _source_corpus import PACKAGE_ROOT, package_ast
 from torch import nn
 
 import torchlens as tl
-from torchlens import autoroute
+from torchlens import _autoroute as autoroute
 
 #: trace() parameters legitimately absent from the autoroute bundle. Every
 #: entry names the guard that makes the omission safe; widening this set
@@ -40,31 +40,42 @@ AUTOROUTE_EXEMPT_PARAMS = {
     "input_kwargs",
     # autoroute only runs when backend is None
     "backend",
-    # chunked forwards skip autoroute (chunk_size gate; chunk_paths without
-    # chunk_size raises before the branch)
-    "chunk_size",
+    # chunk_paths without CaptureOptions(chunk_size=) raises before the branch
     "chunk_paths",
-    # explicit backend-only options: raise before autoroute when backend is
-    # None
-    "jax_static_argnums",
-    "grad_options",
     # quickstart input ladder (F17): any non-None input_size returns via
     # _trace_via_ladder before the autoroute branch, so autoroute only ever
-    # runs with input_size=None (the ladder re-enters trace() with a real
+    # runs with input_shape=None (the ladder re-enters trace() with a real
     # input, which forwards normally)
-    "input_size",
+    "input_shape",
 }
 
 
 def _trace_function_def() -> ast.FunctionDef:
     """The public ``trace`` FunctionDef from the parsed package corpus."""
 
-    tree = package_ast(PACKAGE_ROOT / "user_funcs.py")
+    tree = package_ast(PACKAGE_ROOT / "_user_funcs.py")
     candidates = [
         node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "trace"
     ]
-    assert candidates, "public trace() not found in user_funcs.py"
+    assert candidates, "public trace() not found in _user_funcs.py"
     return candidates[-1]
+
+
+def _autoroute_forwarded_names() -> set[str]:
+    """The ``_AUTOROUTE_FORWARDED_KWARGS`` tuple of the PREPARE dispatch module."""
+
+    tree = package_ast(PACKAGE_ROOT / "_capture" / "prepare" / "dispatch.py")
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            getattr(target, "id", "") == "_AUTOROUTE_FORWARDED_KWARGS" for target in node.targets
+        ):
+            assert isinstance(node.value, ast.Tuple)
+            return {
+                element.value
+                for element in node.value.elts
+                if isinstance(element, ast.Constant) and isinstance(element.value, str)
+            }
+    raise AssertionError("_AUTOROUTE_FORWARDED_KWARGS tuple not found in prepare/dispatch.py")
 
 
 def test_autoroute_bundle_covers_every_unguarded_trace_param() -> None:
@@ -72,24 +83,12 @@ def test_autoroute_bundle_covers_every_unguarded_trace_param() -> None:
 
     node = _trace_function_def()
     params = {a.arg for a in (*node.args.args, *node.args.kwonlyargs)}
-    bundle_keys: set[str] | None = None
-    for inner in ast.walk(node):
-        if isinstance(inner, ast.Assign) and any(
-            getattr(target, "id", "") == "autoroute_kwargs" for target in inner.targets
-        ):
-            assert isinstance(inner.value, ast.Dict)
-            bundle_keys = {
-                key.value
-                for key in inner.value.keys
-                if isinstance(key, ast.Constant) and isinstance(key.value, str)
-            }
-            break
-    assert bundle_keys is not None, "autoroute_kwargs literal not found in trace()"
+    bundle_keys = _autoroute_forwarded_names()
 
     dropped = params - bundle_keys - AUTOROUTE_EXEMPT_PARAMS
     assert not dropped, (
         f"trace() parameters silently dropped on the autoroute path: "
-        f"{sorted(dropped)}. Forward them in autoroute_kwargs (detectors "
+        f"{sorted(dropped)}. Forward them in _AUTOROUTE_FORWARDED_KWARGS (detectors "
         f"re-enter tl.trace, which honors or refuses them typed) or add a "
         f"guard that provably fires before the autoroute branch and document "
         f"it in AUTOROUTE_EXEMPT_PARAMS."
@@ -109,7 +108,7 @@ class _Identity(nn.Module):
 
 @pytest.mark.smoke
 def test_detectors_receive_the_once_dropped_kwargs() -> None:
-    """A registered detector sees structure_only/episode/grouping in kwargs."""
+    """A registered detector sees capture/episode/stop_after in kwargs."""
 
     received: dict[str, object] = {}
 
@@ -121,11 +120,9 @@ def test_detectors_receive_the_once_dropped_kwargs() -> None:
 
     with autoroute.input.snapshot():
         autoroute.input.register(name="test_recorder", priority=-1000)(recorder)
-        log = tl.trace(
-            _Identity(), torch.ones(2), capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
+        log = tl.trace(_Identity(), torch.ones(2), save="none")
     assert log is not None
-    for key in ("capture", "episode", "grouping"):
+    for key in ("capture", "episode", "stop_after"):
         assert key in received, (
             f"autoroute detectors no longer receive {key!r}: it is being "
             f"silently dropped on the autoroute dispatch path again"

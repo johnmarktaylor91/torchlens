@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import warnings
 
-import pytest
 import torch
 from torch import nn
 
@@ -34,7 +33,6 @@ class _DataMaskedFill(nn.Module):
         return torch.softmax(attn, -1)
 
 
-@pytest.mark.smoke
 def test_data_alias_masked_fill_validates() -> None:
     torch.manual_seed(0)
     model = _DataMaskedFill().eval()

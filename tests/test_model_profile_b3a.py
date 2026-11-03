@@ -9,8 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.trace import ResolvedPostprocessing, ResolvedPreprocessing, Trace
+from torchlens._constants import MODEL_LOG_FIELD_ORDER
+from torchlens._data_classes.trace import ResolvedPostprocessing, ResolvedPreprocessing, Trace
 
 
 class _ProfileTiny(nn.Module):
@@ -79,17 +79,17 @@ def test_model_profile_recognizes_image_classifier_with_raw_images() -> None:
     trace = tl.trace(
         _ProfileTiny(),
         torch.ones(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
-    trace.raw_input = [_ImageLike(), _ImageLike()]
-    trace.input_preprocessor = ResolvedPreprocessing(
+    trace.input = [_ImageLike(), _ImageLike()]
+    trace._provenance_input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",
         identifier="ImageNet-default-resize256-crop224",
         verified=False,
         config={},
         description="ImageNet default",
     )
-    trace.output_postprocessor = ResolvedPostprocessing(
+    trace._provenance_output_postprocessor = ResolvedPostprocessing(
         source="hf_config",
         identifier="tiny",
         verified=True,
@@ -117,8 +117,8 @@ def test_model_profile_plain_tensor_trace_is_not_keystone_applicable() -> None:
     """Plain tensor traces should get a conservative non-applicable profile."""
 
     x = torch.ones(3, 4)
-    trace = tl.trace(_ProfileTiny(), x, capture=tl.options.CaptureOptions(layers_to_save="none"))
-    trace.raw_input = x
+    trace = tl.trace(_ProfileTiny(), x, save="none")
+    trace.input = x
 
     profile = trace.model_profile
 
@@ -137,7 +137,7 @@ def test_model_profile_is_not_a_persisted_trace_field(tmp_path: Path) -> None:
     trace = tl.trace(
         _ProfileTiny(),
         torch.ones(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     bundle_path = tmp_path / "profile.tlspec"
 
@@ -146,7 +146,7 @@ def test_model_profile_is_not_a_persisted_trace_field(tmp_path: Path) -> None:
     loaded = tl.load(bundle_path)
 
     assert "model_profile" not in MODEL_LOG_FIELD_ORDER
-    assert "model_profile" not in Trace.PORTABLE_STATE_SPEC
+    assert "model_profile" not in Trace._PORTABLE_STATE_SPEC
     assert "model_profile" not in _json_keys(manifest)
     assert "model_profile" not in loaded.__dict__
     assert loaded.model_profile.keystone_applicable is False

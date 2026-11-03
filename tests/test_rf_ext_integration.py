@@ -40,8 +40,9 @@ def _capture(model: nn.Module, inputs: torch.Tensor, *, backward_ready: bool = F
     return tl.trace(
         model.eval(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=backward_ready),
-        save_mode="reference" if backward_ready else "copy",
+        capture=tl.options.CaptureOptions(
+            backward_ready=backward_ready, save_mode="reference" if backward_ready else "copy"
+        ),
     )
 
 
@@ -52,10 +53,10 @@ def _ops(trace: object, name: str, *, field: str = "func_name") -> list[object]:
     always the canonical op name: tinygrad elementwise ops are reconstructed
     from the UOp DAG and carry the lambda wrapper's own name (``"<lambda>"``)
     as ``func_name``, with the semantic op name (``"add"``, ``"mul"``, ...)
-    only on ``layer_type`` instead. Pass ``field="layer_type"`` for those.
+    only on ``type`` instead. Pass ``field="type"`` for those.
     """
 
-    return [op for op in trace.layer_list if getattr(op, field) == name]  # type: ignore[union-attr]
+    return [op for op in trace._layer_list if getattr(op, field) == name]  # type: ignore[union-attr]
 
 
 def _window_bounds(box: object) -> tuple[tuple[int, int], ...]:
@@ -98,7 +99,7 @@ def test_real_model_matrix_covers_receptive_projective_and_layer_to_layer(
     source = trace.input_ops[0]  # type: ignore[union-attr]
     first_conv, target = _ops(trace, "conv2d")
 
-    receptive = target.receptive_field.at("center", input=source)  # type: ignore[union-attr]
+    receptive = target.receptive_field.at("center", input_op=source)  # type: ignore[union-attr]
     layer_to_layer = target.receptive_field.at(  # type: ignore[union-attr]
         "center", source=first_conv
     )
@@ -220,7 +221,7 @@ def test_inplace_relu_projective_double_vjp_succeeds_on_basic_block() -> None:
     source = trace.input_ops[0]  # type: ignore[union-attr]
     target = trace.output_ops[0]  # type: ignore[union-attr]
 
-    result = source.projective_field.gradient(  # type: ignore[union-attr]
+    result = source.projective_field.probe_grad(  # type: ignore[union-attr]
         (0, 0, 4, 4), target=target
     )
 
@@ -247,7 +248,7 @@ def test_basic_block_geometric_adjoint_battery_is_exact() -> None:
         assert forward.status is ReceptiveFieldStatus.EXACT
         forward_bounds = _window_bounds(forward)
         for target_unit in target_units:
-            backward = target.receptive_field.at(target_unit, input=source)  # type: ignore[union-attr]
+            backward = target.receptive_field.at(target_unit, input_op=source)  # type: ignore[union-attr]
             assert backward.status is ReceptiveFieldStatus.EXACT
             backward_bounds = _window_bounds(backward)
             source_in_backward = all(
@@ -339,7 +340,7 @@ def test_folded_validate_tripwire_catches_injected_inconsistency() -> None:
         ReceptiveFieldDirection.RECEPTIVE,
         ReceptiveFieldDirection.PROJECTIVE,
     }
-    assert all(failure.n_violations > 0 for failure in failures)
+    assert all(failure.num_violations > 0 for failure in failures)
 
 
 class _AddZero(nn.Module):
@@ -397,7 +398,7 @@ def test_source_target_caches_reuse_and_drop_across_portable_round_trip(
     first_target_solution = target_cache[target_key][2]
     source.projective_field.at((3, 3), target=target)  # type: ignore[union-attr]
     assert target_cache[target_key][2] is first_target_solution
-    assert type(trace).PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
+    assert type(trace)._PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
 
     path = tmp_path / "rf-endpoint-caches.tlspec"
     trace.save(path)
@@ -409,7 +410,7 @@ def test_source_target_caches_reuse_and_drop_across_portable_round_trip(
     assert loaded_target.receptive_field.at((3, 3), source=loaded_source).exact
     assert loaded_source.projective_field.at((3, 3), target=loaded_target).exact
     with pytest.raises(ReceptiveFieldUnavailableError, match="backward_ready=True"):
-        loaded_source.projective_field.gradient((0, 0, 3, 3), target=loaded_target)
+        loaded_source.projective_field.probe_grad((0, 0, 3, 3), target=loaded_target)
 
 
 @pytest.mark.backend_tinygrad
@@ -431,15 +432,15 @@ def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
 
     trace = tl.trace(add_one, tinygrad.Tensor([1.0, 2.0, 3.0]), backend="tinygrad")
     source = trace.input_ops[0]
-    target = _ops(trace, "add", field="layer_type")[-1]
+    target = _ops(trace, "add", field="type")[-1]
     receptive = next(iter(target.receptive_field.per_input.values()))
     projective = next(iter(source.projective_field.per_input.values()))
 
     assert receptive.status is ReceptiveFieldStatus.EXACT
     assert projective.status is ReceptiveFieldStatus.EXACT
-    assert receptive.layout.axis_kinds == ("pointwise",)
-    assert projective.layout.axis_kinds == ("pointwise",)
-    with pytest.raises(tl.receptive_field.BackendUnsupportedError, match="tinygrad"):
-        target.receptive_field.gradient((0,))
-    with pytest.raises(tl.receptive_field.BackendUnsupportedError, match="tinygrad"):
-        source.projective_field.gradient((0,), target=target)
+    assert receptive.axis_roles.axis_kinds == ("pointwise",)
+    assert projective.axis_roles.axis_kinds == ("pointwise",)
+    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
+        target.receptive_field.probe_grad((0,))
+    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
+        source.projective_field.probe_grad((0,), target=target)

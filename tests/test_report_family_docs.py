@@ -68,6 +68,10 @@ def test_nvtx_two_sided_effect_witness(monkeypatch) -> None:
     def _record_pop() -> None:
         return None
 
+    from torchlens.backends.torch import _op_markers
+
+    # Simulate an NVTX-capable host (a CUDA-less host refuses emit_nvtx=True).
+    monkeypatch.setattr(_op_markers, "_nvtx_host_available", lambda: True)
     monkeypatch.setattr(torch.cuda.nvtx, "range_push", _record_push)
     monkeypatch.setattr(torch.cuda.nvtx, "range_pop", _record_pop)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()

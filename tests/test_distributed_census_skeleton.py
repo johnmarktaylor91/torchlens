@@ -27,7 +27,7 @@ from tests.support.census_harness import (  # noqa: E402
 )
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
 
 # F1 ruling (Lead, 2026-10-01; test_distributed_census_topologies.py): full
@@ -36,9 +36,9 @@ from torchlens.distributed import (  # noqa: E402
 # the spawned worker, which mp.spawn re-raises as ProcessRaisedException.
 # _p2p_worker (below) arms unconditionally, so the same gate applies here.
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 

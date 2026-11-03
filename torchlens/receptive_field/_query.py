@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+import threading
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import islice
@@ -22,7 +24,7 @@ from ._types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
 
 
 _PROGRESSION_BUDGET = 16
@@ -49,6 +51,54 @@ class _Progression:
     def values(self) -> range:
         """Return a lazy range over all represented indices."""
         return range(self.start, self.stop + 1, self.step)
+
+
+def _canonical_progression(start: int, step: int, count: int) -> _Progression:
+    """Return the run :meth:`_IndexSet.from_values` derives for one progression's values.
+
+    A single value is the run ``(value, 1, 1)``; two or more equally spaced values
+    are one run with their spacing.
+    """
+    return _Progression(start, step if count > 1 else 1, count)
+
+
+def _progression_sumset(first: _Progression, second: _Progression) -> _Progression | None:
+    """Return ``{a + b : a in first, b in second}`` when it is one progression, else ``None``.
+
+    With steps ``g <= G`` and counts ``c`` (for ``g``) and ``C``: when ``G`` is a
+    multiple ``q * g`` with ``q <= c``, the sums ``g * (i + q * j)`` for
+    ``0 <= i < c`` and ``0 <= j < C`` cover every multiple of ``g`` from ``0`` to
+    ``g * (c - 1 + q * (C - 1))`` with no gap. Any other combination returns
+    ``None`` and the caller enumerates instead, so the result is always the set
+    the enumeration would produce.
+    """
+    start = first.start + second.start
+    if first.count == 1 or second.count == 1:
+        other = second if first.count == 1 else first
+        return _canonical_progression(start, other.step, other.count)
+    small, large = sorted((first, second), key=lambda item: (item.step, item.count))
+    if small.step <= 0 or large.step % small.step:
+        return None
+    ratio = large.step // small.step
+    if ratio > small.count:
+        return None
+    return _Progression(start, small.step, small.count + ratio * (large.count - 1))
+
+
+def _clipped_progression(item: _Progression, extent: int, *, exact: bool) -> _IndexSet:
+    """Intersect one progression with ``[0, extent)`` in closed form.
+
+    Equals ``_IndexSet._from_sorted_unique`` over the surviving values: the
+    survivors of an ascending progression are one contiguous run of its terms.
+    """
+    first = max(0, -(item.start // item.step)) if item.start < 0 else 0
+    last = min(item.count - 1, (extent - 1 - item.start) // item.step)
+    if last < first:
+        return _IndexSet.empty(exact=exact)
+    return _IndexSet(
+        (_canonical_progression(item.start + item.step * first, item.step, last - first + 1),),
+        exact,
+    )
 
 
 @dataclass(frozen=True)
@@ -157,6 +207,8 @@ class _IndexSet:
             # Nothing is dropped, so recompressing would rebuild this exact
             # canonical decomposition with this exact ``exact`` flag.
             return self
+        if len(progressions) == 1:
+            return _clipped_progression(progressions[0], extent, exact=self.exact)
         return _IndexSet._from_sorted_unique(
             [value for value in self.values() if 0 <= value < extent], exact=self.exact
         )
@@ -180,6 +232,95 @@ class _IndexSet:
 _AxisSets: TypeAlias = tuple[_IndexSet | None, ...]
 
 
+class _SharedQueryState(threading.local):
+    """Per-thread facts shared by the per-unit queries inside one :func:`_shared_query_scope`.
+
+    Each query derives the solved operations, their reference index and the
+    endpoint's path slice from the trace and solution alone, and its walk asks
+    the engine for every operation's local rule result. Those are pure functions
+    of the trace, the solution and the rule-registry epoch (which the engine's
+    rule memo re-checks), so queries issued back to back over one solution can
+    share them. Outside a scope nothing is cached and every query derives its
+    own, exactly as before.
+    """
+
+    def __init__(self) -> None:
+        """Start this thread with no open scope."""
+
+        self.depth = 0
+        self.graphs: dict[int, tuple[object, object, tuple[Op, ...], dict[str, Op]]] = {}
+        self.reach: dict[tuple[str, int, str], tuple[object, frozenset[str]]] = {}
+
+
+_SHARED_QUERY_STATE = _SharedQueryState()
+
+
+@contextmanager
+def _shared_query_scope() -> Iterator[None]:
+    """Share graph facts and rule results across the per-unit queries run inside it.
+
+    The always-on metadata invariants query one box per solved operation; on a
+    chain of ``n`` operations each query re-derived ``O(n)`` graph facts and
+    ``O(n)`` rule results. Inside this scope they are derived once per solution
+    (graph facts) and once per operation (rule results, through one enclosing
+    engine memo scope). Every query still walks its own path, so the boxes are
+    unchanged.
+    """
+
+    state = _SHARED_QUERY_STATE
+    with _engine._geometry_memo():
+        state.depth += 1
+        try:
+            yield
+        finally:
+            state.depth -= 1
+            if not state.depth:
+                state.graphs.clear()
+                state.reach.clear()
+
+
+def _query_graph(trace: Any, solution: Any) -> tuple[tuple[Op, ...], dict[str, Op]]:
+    """Return the solved operations in trace order and their label index."""
+
+    state = _SHARED_QUERY_STATE
+    if state.depth:
+        cached = state.graphs.get(id(solution))
+        if cached is not None and cached[0] is solution and cached[1] is trace:
+            return cached[2], cached[3]
+    operations = tuple(item for item in trace._layer_list if item.label in solution.per_op)
+    by_reference = {
+        reference: item
+        for item in operations
+        for reference in (item.label, item.layer_label, item._layer_label_raw)
+    }
+    if state.depth:
+        state.graphs[id(solution)] = (solution, trace, operations, by_reference)
+    return operations, by_reference
+
+
+def _shared_reach(
+    kind: str, solution: Any, label: str, derive: Callable[[], frozenset[str]]
+) -> frozenset[str]:
+    """Return ``derive()``, shared per ``(kind, solution, label)`` inside a scope."""
+
+    state = _SHARED_QUERY_STATE
+    if not state.depth:
+        return derive()
+    key = (kind, id(solution), label)
+    cached = state.reach.get(key)
+    if cached is not None and cached[0] is solution:
+        return cached[1]
+    value = derive()
+    state.reach[key] = (solution, value)
+    return value
+
+
+def _query_memo_scope() -> AbstractContextManager[None]:
+    """Return the per-query engine memo scope, or the enclosing shared one."""
+
+    return nullcontext() if _SHARED_QUERY_STATE.depth else _engine._geometry_memo()
+
+
 @dataclass(frozen=True)
 class _TerminalState:
     """One reverse-walk path that reached the requested model input."""
@@ -194,7 +335,7 @@ def box_for_unit(
     op: Op,
     unit: Sequence[int],
     *,
-    input: Op | str | None = None,
+    input_op: Op | str | None = None,
     source: Op | None = None,
     clip: bool = True,
     complete_unit: Sequence[int] | None = None,
@@ -210,7 +351,7 @@ def box_for_unit(
     unit:
         Coordinates over the target's derived windowed output axes, ordered
         by ascending output axis (the target's own grid order).
-    input:
+    input_op:
         Optional input operation or exact IO role/operation label.
     source:
         Optional source operation for a source-seeded solution. Its output grid is the
@@ -221,7 +362,7 @@ def box_for_unit(
         Optional complete target index used internally to route structural axes.
 
     """
-    if input is not None and source is not None:
+    if input_op is not None and source is not None:
         raise TypeError("input and source cannot be supplied together.")
     descriptors = solution.per_op.get(op.label)
     if not descriptors:
@@ -229,22 +370,22 @@ def box_for_unit(
         raise ReceptiveFieldError(
             f"No receptive-field solution is available from {endpoint} to {op.label}."
         )
-    descriptor = _select_descriptor(descriptors, source if source is not None else input)
+    descriptor = _select_descriptor(descriptors, source if source is not None else input_op)
     _validate_descriptor_for_query(descriptor)
     coordinates = _normalize_unit(op, descriptor, unit)
     initial = _initial_axis_sets(op, descriptor, coordinates, complete_unit=complete_unit)
-    trace = op.source_trace
-    operations = tuple(item for item in trace.layer_list if item.label in solution.per_op)
-    by_reference = {
-        reference: item
-        for item in operations
-        for reference in (item.label, item.layer_label, item._layer_label_raw)
-    }
-    ancestry = _ancestor_labels(descriptor.input_op_label, operations, by_reference)
+    operations, by_reference = _query_graph(op.source_trace, solution)
+    ancestry = _shared_reach(
+        "receptive",
+        solution,
+        descriptor.input_op_label,
+        lambda: _ancestor_labels(descriptor.input_op_label, operations, by_reference),
+    )
     # The walk enumerates paths, so it revisits each operation once per path
     # through it, re-deriving per-operation facts that are linear in that
-    # operation's parents. Memoize them for this one query.
-    with _engine._geometry_memo():
+    # operation's parents. Memoize them for this one query (or for every query
+    # of an enclosing shared scope).
+    with _query_memo_scope():
         terminals = _walk_to_input(
             op,
             initial,
@@ -284,11 +425,11 @@ def _validate_descriptor_for_query(descriptor: ReceptiveField) -> None:
         ReceptiveFieldStatus.UNKNOWN,
         ReceptiveFieldStatus.UNSUPPORTED,
     }:
-        raise ReceptiveFieldError("Per-unit geometry is unavailable; use .gradient() instead.")
-    if not descriptor.layout.windowed_axes:
-        raise ReceptiveFieldError("No windowed axes are available; use .gradient() instead.")
-    if any(kind == "unknown" for kind in descriptor.layout.axis_kinds):
-        raise ReceptiveFieldError("The derived layout is ambiguous; use .gradient() instead.")
+        raise ReceptiveFieldError("Per-unit geometry is unavailable; use .probe_grad() instead.")
+    if not descriptor.axis_roles.windowed_axes:
+        raise ReceptiveFieldError("No windowed axes are available; use .probe_grad() instead.")
+    if any(kind == "unknown" for kind in descriptor.axis_roles.axis_kinds):
+        raise ReceptiveFieldError("The derived layout is ambiguous; use .probe_grad() instead.")
 
 
 def _windowed_axes_in_unit_order(descriptor: ReceptiveField) -> tuple[ReceptiveFieldAxis, ...]:
@@ -395,72 +536,57 @@ def _distinct_terminals(terminals: Iterable[_TerminalState]) -> tuple[_TerminalS
     return tuple(dict.fromkeys(terminals))
 
 
-_WalkHop: TypeAlias = "tuple[Op, _AxisSets, bool]"
-"""One hop of a path walk: the next operation, its bounded axis sets, its exactness."""
-
-_WalkExpand: TypeAlias = (
-    "Callable[[Op, _AxisSets, bool], tuple[tuple[_TerminalState, ...], list[_WalkHop]]]"
-)
-"""Expands one walk state into its terminal states (at the endpoint) or its next hops."""
+_WalkKey: TypeAlias = tuple[str, _AxisSets, bool]
+_WalkStep: TypeAlias = Generator[
+    tuple["Op", _AxisSets, bool], tuple[_TerminalState, ...], tuple[_TerminalState, ...]
+]
 
 
-@dataclass
-class _WalkFrame:
-    """One pending walk state on the explicit stack of :func:`_memoized_path_walk`."""
-
-    key: tuple[str, _AxisSets, bool]
-    hops: list[_WalkHop]
-    terminals: list[_TerminalState]
-    next_hop: int = 0
-
-
-def _memoized_path_walk(
+def _run_memoized_walk(
+    body: Callable[[Op, _AxisSets, bool], _WalkStep],
     op: Op,
-    axis_sets: _AxisSets,
+    sets: _AxisSets,
     exact: bool,
-    expand: _WalkExpand,
-    memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
+    memo: dict[_WalkKey, tuple[_TerminalState, ...]],
 ) -> tuple[_TerminalState, ...]:
-    """Walk every path from one state to the walk's endpoint with an explicit stack.
+    """Drive a hop-by-hop graph walk on an explicit stack.
 
-    The result of a state ``(operation, axis sets, exact)`` is the de-duplicated
-    concatenation of its hops' results, in hop order, or the terminal states
-    ``expand`` returns at the endpoint. That definition is naturally recursive,
-    one Python frame per hop, which overflowed on deep chains (a 450-layer
-    ResNet-like stack raised ``RecursionError``). This driver evaluates the same
-    definition depth-first with a stack of :class:`_WalkFrame` objects, resolving
-    hops in the same order the recursion did, so every result and every ``memo``
-    entry is identical; depth costs list entries, not interpreter frames.
-
-    ``memo`` caches each state's pure result for one query, collapsing the path
-    enumeration (exponential in the number of merges) to distinct states.
-    Terminal de-duplication is a separate step; see :func:`_distinct_terminals`.
+    ``body(op, sets, exact)`` is a generator for one hop: it yields one
+    ``(next_op, next_sets, next_exact)`` request per branch, receives that
+    branch's terminal tuple back, and returns the hop's own terminal tuple.
+    This driver is the recursion ``f(op, sets, exact) = memo or body(...)``
+    with every pending hop kept on a list instead of the interpreter stack,
+    so the walk's depth is bounded by memory rather than the recursion limit.
+    Branches are visited in yield order and each finishes before the next
+    starts, so ``memo`` gains its ``(label, sets, exact)`` keys and the
+    terminal tuples keep their first-occurrence order exactly as the
+    recursion produced them.
     """
-    root_key = (op.label, axis_sets, exact)
-    cached = memo.get(root_key)
+    key: _WalkKey = (op.label, sets, exact)
+    cached = memo.get(key)
     if cached is not None:
         return cached
-    terminals, hops = expand(op, axis_sets, exact)
-    frames = [_WalkFrame(root_key, hops, list(terminals))]
+    stack: list[tuple[_WalkKey, _WalkStep]] = [(key, body(op, sets, exact))]
+    sent: tuple[_TerminalState, ...] | None = None
     while True:
-        frame = frames[-1]
-        if frame.next_hop < len(frame.hops):
-            next_op, next_sets, next_exact = frame.hops[frame.next_hop]
-            frame.next_hop += 1
-            key = (next_op.label, next_sets, next_exact)
-            cached = memo.get(key)
-            if cached is not None:
-                frame.terminals.extend(cached)
-                continue
-            terminals, hops = expand(next_op, next_sets, next_exact)
-            frames.append(_WalkFrame(key, hops, list(terminals)))
+        frame_key, step = stack[-1]
+        try:
+            request = next(step) if sent is None else step.send(sent)
+        except StopIteration as finished:
+            stack.pop()
+            memo[frame_key] = finished.value
+            if not stack:
+                return finished.value
+            sent = finished.value
             continue
-        frames.pop()
-        result = _distinct_terminals(frame.terminals)
-        memo[frame.key] = result
-        if not frames:
-            return result
-        frames[-1].terminals.extend(result)
+        next_op, next_sets, next_exact = request
+        next_key: _WalkKey = (next_op.label, next_sets, next_exact)
+        cached = memo.get(next_key)
+        if cached is not None:
+            sent = cached
+            continue
+        stack.append((next_key, body(next_op, next_sets, next_exact)))
+        sent = None
 
 
 def _walk_to_input(
@@ -470,38 +596,39 @@ def _walk_to_input(
     ancestry: frozenset[str],
     by_reference: Mapping[str, Op],
     exact: bool,
-    memo: dict[tuple[str, _AxisSets, bool], tuple[_TerminalState, ...]],
+    memo: dict[_WalkKey, tuple[_TerminalState, ...]],
 ) -> tuple[_TerminalState, ...]:
-    """Map a joint axis-set state to one requested model input along every path.
+    """Map a joint axis-set state to one requested model input.
 
-    The walk enumerates paths, so ``memo`` caches each ``(operation, axis-set
-    state)`` subwalk for the duration of one query; see
-    :func:`_memoized_path_walk`, which runs it without recursion.
+    The walk enumerates paths, so a merge-heavy graph re-derives the same
+    ``(operation, axis-set state)`` subwalk once per path that reaches it --
+    exponential in the number of merges. ``memo`` caches that pure subresult
+    for the duration of one query. It is plain memoization of a pure function:
+    the cached tuple is exactly what a fresh walk would rebuild. Terminal
+    de-duplication is a separate step; see :func:`_distinct_terminals`. The
+    hops run on :func:`_run_memoized_walk`'s explicit stack, so a model of any
+    depth walks without reaching the interpreter's recursion limit.
     """
 
-    def expand(
-        current: Op, sets: _AxisSets, current_exact: bool
-    ) -> tuple[tuple[_TerminalState, ...], list[_WalkHop]]:
-        """Return the reverse hops and terminal states from ``current``."""
+    def body(item: Op, sets: _AxisSets, item_exact: bool) -> _WalkStep:
+        """Start one receptive hop from ``item`` toward this query's input."""
+        return _walk_body(item, sets, input_label, ancestry, by_reference, item_exact)
 
-        return _reverse_hops(current, sets, input_label, ancestry, by_reference, current_exact)
-
-    return _memoized_path_walk(op, output_sets, exact, expand, memo)
+    return _run_memoized_walk(body, op, output_sets, exact, memo)
 
 
-def _reverse_hops(
+def _walk_body(
     op: Op,
     output_sets: _AxisSets,
     input_label: str,
     ancestry: frozenset[str],
     by_reference: Mapping[str, Op],
     exact: bool,
-) -> tuple[tuple[_TerminalState, ...], list[_WalkHop]]:
+) -> _WalkStep:
     """Map one joint axis-set state across a single reverse hop.
 
-    Returns the terminal state when ``op`` is the requested input, otherwise
-    the parent hops in parent order (a concatenation branch whose mapped sets
-    are empty is skipped).
+    Yields one request per live parent branch and receives that branch's
+    terminals; see :func:`_run_memoized_walk`.
     """
     if op.label == input_label:
         clipped = tuple(
@@ -509,14 +636,14 @@ def _reverse_hops(
             for axis, item in enumerate(output_sets)
         )
         sets_exact = all(item is None or item.exact for item in output_sets)
-        return (_TerminalState(output_sets, clipped, exact and sets_exact),), []
+        return (_TerminalState(output_sets, clipped, exact and sets_exact),)
     result, _ = _engine._rule_result(op)
     parents = tuple(
         by_reference[label]
         for label in op.parents
         if label in by_reference and by_reference[label].label in ancestry
     )
-    hops: list[_WalkHop] = []
+    terminals: list[_TerminalState] = []
     for parent in parents:
         parent_sets, hop_exact = _map_to_parent(op, parent, output_sets, result)
         if isinstance(result.values.get("concatenate_axis"), int) and any(
@@ -531,14 +658,16 @@ def _reverse_hops(
                 for axis, item in enumerate(parent_sets)
             )
         )
-        hops.append(
+        terminals.extend(
             (
-                parent,
-                bounded,
-                exact and hop_exact and all(item is None or item.exact for item in parent_sets),
+                yield (
+                    parent,
+                    bounded,
+                    exact and hop_exact and all(item is None or item.exact for item in parent_sets),
+                )
             )
         )
-    return (), hops
+    return _distinct_terminals(terminals)
 
 
 def _map_to_parent(
@@ -611,7 +740,21 @@ def _map_window(
 def _standard_window_index_set(
     output_set: _IndexSet, *, kernel: int, stride: int, padding: int, dilation: int
 ) -> _IndexSet:
-    """Map a standard affine window while retaining dilation residue structure."""
+    """Map a standard affine window while retaining dilation residue structure.
+
+    A one-progression output set whose window image is again one progression
+    (every stride-1 window over an interval) is mapped in closed form; anything
+    else enumerates. Both yield the same canonical set.
+    """
+    progressions = output_set.progressions
+    if len(progressions) == 1 and kernel > 0 and stride > 0 and dilation > 0:
+        item = progressions[0]
+        image = _progression_sumset(
+            _Progression(stride * item.start - padding, stride * item.step, item.count),
+            _Progression(0, dilation, kernel),
+        )
+        if image is not None:
+            return _IndexSet((image,), output_set.exact)
     values = (
         stride * output_index - padding + dilation * tap
         for output_index in output_set.values()
@@ -852,6 +995,19 @@ def map_transposed_convolution_index_set(
     padding_value = paddings[axis]
     dilation_value = dilations[axis]
     extent = extents[axis]
+    progressions = output_set.progressions
+    if len(progressions) == 1 and stride_value == 1 and kernel_value > 0 and dilation_value > 0:
+        # Stride 1: every output/tap pair is integral, so the feasible inputs are
+        # the sumset of the outputs (shifted by the padding) and the negated taps,
+        # clipped to the input extent; computed in closed form when it is one
+        # progression, else enumerated below.
+        item = progressions[0]
+        image = _progression_sumset(
+            _Progression(item.start + padding_value, item.step, item.count),
+            _Progression(-dilation_value * (kernel_value - 1), dilation_value, kernel_value),
+        )
+        if image is not None:
+            return _clipped_progression(image, extent, exact=output_set.exact), True
     feasible: list[int] = []
     divisor = gcd(stride_value, dilation_value)
     for output_index in output_set.values():
@@ -1020,7 +1176,7 @@ def _build_box(
     path_nonempty = any(
         all(
             item is not None and not item.is_empty
-            for item in (terminal.clipped[axis] for axis in descriptor.layout.windowed_axes)
+            for item in (terminal.clipped[axis] for axis in descriptor.axis_roles.windowed_axes)
         )
         for terminal in terminals
     )

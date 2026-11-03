@@ -17,6 +17,7 @@ import torch
 import torchlens as tl
 import torchlens.mechinterp as mi
 from torchlens.mechinterp._errors import MechInterpError
+from torchlens.transformer import receipt_from_patch_grid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "real_model" / "r0"))
 
@@ -43,7 +44,7 @@ def gpt2_trace(r0_models):
 
     torch.manual_seed(1)
     x = torch.randint(0, 500, (2, 8))
-    log = tl.trace(r0_models["gpt2"], x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(r0_models["gpt2"], x, save="all")
     try:
         yield log
     finally:
@@ -56,7 +57,7 @@ def llama_trace(r0_models):
 
     torch.manual_seed(1)
     x = torch.randint(0, 500, (2, 8))
-    log = tl.trace(r0_models["llama"], x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(r0_models["llama"], x, save="all")
     try:
         yield log
     finally:
@@ -186,7 +187,7 @@ def test_head_weight_views_verified(gpt2_trace, llama_trace):
 
     views = mi.head_weight_views(gpt2_trace, "transformer.h.0.attn")
     assert views.sources["q"].orientation == "in_out"  # Conv1D law (F5)
-    assert views.sources["q"].fused_qkv
+    assert views.sources["q"].has_fused_qkv
     assert views.sources["q"].slice_cols == (0, 64)
     assert views.sources["v"].slice_cols == (128, 192)
     assert views.sources["q"].verification == "payload_verified"
@@ -194,7 +195,7 @@ def test_head_weight_views_verified(gpt2_trace, llama_trace):
 
     gqa = mi.head_weight_views(llama_trace, "model.layers.0.self_attn")
     assert gqa.sources["q"].orientation == "out_in"  # Linear law
-    assert (gqa.n_q_heads, gqa.n_kv_heads) == (4, 2)
+    assert (gqa.num_q_heads, gqa.num_kv_heads) == (4, 2)
     assert tuple(gqa.w_k.shape)[0] == 2  # KV-group count, never repeated
 
 
@@ -236,6 +237,31 @@ def test_retention_plan_two_forward_route(r0_models):
     assert dec.identity_receipt["result"] == "bitwise_equal"
 
 
+def test_head_scores_plan_from_a_structure_only_capture(r0_models):
+    """D15: a metadata-only first forward plans the attention interiors and the token ids."""
+
+    torch.manual_seed(3)
+    seq = torch.randint(0, 500, (1, 5))
+    doubled = torch.cat([seq, seq], dim=1)
+    model = r0_models["gpt2"]
+    meta = tl.trace(model, doubled, save="none")
+    plan = mi.retention_plan(meta, "head_scores")
+    assert plan.module_subtrees and all(a.endswith(".attn") for a in plan.module_subtrees)
+    assert [site.op_label for site in plan.sites] == [str(op.label) for op in meta.input_ops]
+    selective = tl.trace(model, doubled, save=plan.predicate)
+    full = tl.trace(model, doubled, save="all")
+    assert len(selective.saved_layers) < len(full.saved_layers)
+    got = mi.head_scores(selective, kind="induction")
+    want = mi.head_scores(full, kind="induction")
+    assert got.scores == want.scores and got.eligible_rows == want.eligible_rows
+
+    # Without the token ids the scores refuse typed instead of failing on the unsaved input.
+    no_ids = tl.trace(model, doubled, save=tl.in_module(plan.module_subtrees[0]))
+    with pytest.raises(MechInterpError) as excinfo:
+        mi.head_scores(no_ids, kind="induction", layers=[0])
+    assert excinfo.value.fields["code"] == "mi_token_ids_unavailable"
+
+
 def test_prompts_and_teacher_forcing(r0_models, gpt2_trace):
     """Section 8: structured inspection, BOS disclosure, forced positions."""
 
@@ -256,18 +282,14 @@ def test_head_scores_masks_and_disclosure(r0_models):
     torch.manual_seed(3)
     seq = torch.randint(0, 500, (1, 5))
     doubled = torch.cat([seq, seq], dim=1)
-    log = tl.trace(
-        r0_models["gpt2"], doubled, capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(r0_models["gpt2"], doubled, save="all")
     scores = mi.head_scores(log, kind="induction", measure="mul")
     assert all(s is not None for layer in scores.scores for s in layer)
     assert all(count > 0 for count in scores.eligible_rows)
 
     # Distinct tokens -> no duplicate-eligible rows -> None scores, never 0.0.
     distinct = torch.arange(100, 108).reshape(1, 8)
-    log2 = tl.trace(
-        r0_models["gpt2"], distinct, capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log2 = tl.trace(r0_models["gpt2"], distinct, save="all")
     empty = mi.head_scores(log2, kind="duplicate_token")
     assert all(s is None for layer in empty.scores for s in layer)
     assert all(count == 0 for count in empty.eligible_rows)
@@ -278,10 +300,10 @@ def test_grid_refusals_are_typed(r0_models):
 
     clean = torch.randint(0, 500, (1, 6))
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(r0_models["gpt2"], clean, clean, lambda t: None, engine="replay")
+        mi.patch_grid(r0_models["gpt2"], clean, clean, lambda t: None, engine="replay")
     assert excinfo.value.fields["code"] == "mi_grid_engine_unsupported"
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(r0_models["gpt2"], clean, clean, lambda t: None, axes=("position",))
+        mi.patch_grid(r0_models["gpt2"], clean, clean, lambda t: None, axes=("position",))
     assert excinfo.value.fields["code"] == "mi_grid_axes_invalid"
 
 
@@ -328,17 +350,57 @@ def test_grid_budget_length_and_flatness(r0_models):
         return anchor_module.facets["logits"].value[0, -1, 42]
 
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(model, clean, clean, metric, sites="z", axes=("layer", "head"), budget=1)
+        mi.patch_grid(model, clean, clean, metric, sites="z", axes=("layer", "head"), budget=1)
     assert excinfo.value.fields["code"] == "mi_grid_budget_exceeded"
 
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(model, clean, torch.randint(0, 500, (1, 9)), metric, sites="z", axes=("layer",))
+        mi.patch_grid(
+            model, clean, torch.randint(0, 500, (1, 9)), metric, sites="z", axes=("layer",)
+        )
     assert excinfo.value.fields["code"] == "mi_grid_length_mismatch"
 
     # Self-patch: every fire replaces an identical value and every metric is
     # flat -- the campaign AND grid disclosures both warn (mikit D21).
     with pytest.warns(UserWarning) as caught:
-        flat = mi.grid(model, clean, clean.clone(), metric, sites="z", axes=("layer", "head"))
+        flat = mi.patch_grid(model, clean, clean.clone(), metric, sites="z", axes=("layer", "head"))
     assert bool((flat.values == flat.values.reshape(-1)[0]).all())
     codes = {getattr(w.message, "fields", {}).get("code") for w in caught}
     assert "mi_grid_all_identical" in codes  # D21: flatness DISCLOSES, never refuses
+    # The self-patch grid's receipt is the negative control: every effect is 0.
+    assert flat.receipts["corrupted_metric"] == flat.receipts["clean_metric"]
+    receipt = receipt_from_patch_grid(
+        flat,
+        layer=flat.coordinates["layer"][0],
+        negative_control=0.0,
+        positive_control=1.0,
+    )
+    assert set(receipt.effects) == {0.0}
+
+
+def test_head_grid_records_the_unpatched_baselines(r0_models):
+    """patch_heads_grid's receipts carry both baselines; receipts subtract the corrupted one."""
+
+    model = r0_models["gpt2"]
+    torch.manual_seed(2)
+    clean, corrupted = torch.randint(0, 500, (1, 6)), torch.randint(0, 500, (1, 6))
+
+    def metric(trace):
+        anchor_module = next(
+            m for m in trace.modules if m.facets is not None and "logits" in list(m.facets.keys())
+        )
+        return anchor_module.facets["logits"].value[0, -1, 42]
+
+    patched = mi.patch_heads_grid(model, clean, corrupted, metric, heads=[0, 1])
+    with torch.no_grad():
+        expected = {
+            "clean_metric": float(model(clean).logits[0, -1, 42].to(torch.float32)),
+            "corrupted_metric": float(model(corrupted).logits[0, -1, 42].to(torch.float32)),
+        }
+    assert {key: patched.receipts[key] for key in expected} == expected
+    layer = patched.coordinates["layer"][-1]
+    receipt = receipt_from_patch_grid(
+        patched, layer=layer, negative_control=0.0, positive_control=1.0
+    )
+    row = patched.values[patched.coordinates["layer"].index(layer)]
+    assert receipt.effects == tuple(float(v) - expected["corrupted_metric"] for v in row)
+    assert receipt.baseline_metric == expected["corrupted_metric"]

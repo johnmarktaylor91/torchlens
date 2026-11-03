@@ -1,10 +1,11 @@
-"""Bind a view-mutation write-back ``__setitem__`` to the base's own version.
+"""Storage-alias helpers for view mutations.
 
 ``wrappers._propagate_mutation_label_to_storage_aliases`` advances a base
-tensor's label to an in-place op on one of its views. For the write-back of an
-augmented slice assignment that made one label stand for two values; this
-module remembers the base's label from before the view mutation and rebinds
-the write-back's base slot to it.
+tensor's label to an in-place op on one of its views; this module finds the
+live labeled aliases that mutation reaches and answers whether a ``.data``
+alias write will reach a labeled base. The write-back of an augmented slice
+assignment is bound to the base's pre-mutation producer by
+``_ops_capture_records._bind_writeback_receiver_label``.
 """
 
 from __future__ import annotations
@@ -12,25 +13,18 @@ from __future__ import annotations
 from typing import Any
 
 import torch
-from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state
+from ._internal_read import internal_scalar_read
+from ._storage_overlap import (
+    _storage_overlap_byte_interval,
+    _strided_views_share_storage_elements,
+)
 from ._tl import (
-    active_label_session_token,
     get_tensor_label,
     session_storage_alias_candidates,
-    set_tensor_label,
     storage_alias_index_key,
 )
-from .completeness_witness import internal_scalar_read
-
-_VIEW_MUTATION_PRIOR_LABELS: WeakIdKeyDictionary = WeakIdKeyDictionary()
-"""Base alias -> (session token, view-mutation label, the base's label before it).
-
-Written by ``_propagate_mutation_label_to_storage_aliases`` when a view
-mutation advances an overlapping base. Read only by
-``bind_setitem_writeback_base_to_prior_label``.
-"""
 
 
 def view_mutation_propagation_enabled(trace: Any) -> bool:
@@ -41,10 +35,28 @@ def view_mutation_propagation_enabled(trace: Any) -> bool:
     """
 
     return not (
-        getattr(trace, "intervention_ready", False)
-        or getattr(trace, "backward_ready", False)
-        or getattr(trace, "save_grads", None) not in (None, False)
+        getattr(trace, "is_replayable", False)
+        or trace._options_backward_ready
+        or trace._options_save_grads not in (None, False)
     )
+
+
+def _alias_shares_elements(mutated: torch.Tensor, alias: torch.Tensor, storage_ptr: Any) -> bool:
+    """Return whether ``alias`` provably shares storage elements with ``mutated``.
+
+    Element-exact where provable (round-31 M4): interleaved element-disjoint
+    views must not inherit the mutation edge. A probe failure reads as no.
+    """
+
+    try:
+        if (
+            storage_alias_index_key(alias.untyped_storage()) != storage_ptr
+            or alias.device != mutated.device
+        ):
+            return False
+        return bool(_strided_views_share_storage_elements(mutated, alias))
+    except Exception:
+        return False
 
 
 def overlapping_labeled_aliases(
@@ -67,8 +79,6 @@ def overlapping_labeled_aliases(
     list[tuple[torch.Tensor, str]]
         ``(alias, alias_label)`` pairs, in session index order.
     """
-
-    from .wrappers import _storage_overlap_byte_interval, _strided_views_share_storage_elements
 
     try:
         # Meta-safe key (D20): data_ptr() reads 0 for EVERY meta storage.
@@ -98,18 +108,7 @@ def overlapping_labeled_aliases(
         alias_label = get_tensor_label(alias)
         if alias_label is None or alias_label == exclude_label:
             continue
-        try:
-            if (
-                storage_alias_index_key(alias.untyped_storage()) != storage_ptr
-                or alias.device != mutated.device
-            ):
-                continue
-            # Element-exact where provable (round-31 M4): interleaved
-            # element-disjoint views must not inherit the mutation edge.
-            shares_elements = _strided_views_share_storage_elements(mutated, alias)
-        except Exception:
-            continue
-        if shares_elements:
+        if _alias_shares_elements(mutated, alias, storage_ptr):
             seen.add(id(alias))
             found.append((alias, alias_label))
     return found
@@ -140,54 +139,3 @@ def data_alias_write_reaches_base(trace: Any, receiver: torch.Tensor) -> bool:
         return False
     with _state.pause_logging(), internal_scalar_read():
         return bool(overlapping_labeled_aliases(receiver, get_tensor_label(receiver)))
-
-
-def record_view_mutation_prior_label(
-    alias: torch.Tensor, mutation_label: str, prior_label: str
-) -> None:
-    """Remember ``alias``'s label from before a view mutation advanced it to ``mutation_label``."""
-
-    _VIEW_MUTATION_PRIOR_LABELS[alias] = (active_label_session_token(), mutation_label, prior_label)
-
-
-def bind_setitem_writeback_base_to_prior_label(args: tuple[Any, ...]) -> None:
-    """Give a ``__setitem__`` whose value is a mutated view of its base the base's own label.
-
-    Python runs ``x[idx] += y`` as ``v = x[idx]; v += y; x[idx] = v``. The
-    in-place ``v += y`` advances the base ``x`` to the view's label, so the
-    write-back ``__setitem__(x, idx, v)`` would bind ONE label to two slots
-    holding two different values (the full base and the view). The same holds
-    when the mutated view is written to ANOTHER region of its base
-    (``v = m[:, 0:2]; v.mul_(3); m[:, 2:4] = v``). When the value carries the
-    view-mutation label the base was advanced to, the base slot is bound to the
-    base's label from before the mutation, so each slot has its own label: the
-    value slot the mutation op, the base slot the base's own lineage. The base
-    slot consumes a later version of that label, and its actual content reaches
-    replay through the per-child version snapshot. For a same-region write-back
-    the binding is exact even without the snapshot: the write-back overwrites
-    precisely the region the mutation wrote, so ``setitem(base_before, idx, v)``
-    equals the result.
-
-    Parameters
-    ----------
-    args
-        Positional arguments of the ``__setitem__`` call, before it runs.
-    """
-
-    if len(args) < 3:
-        return
-    base, value = args[0], args[2]
-    if not isinstance(base, torch.Tensor) or not isinstance(value, torch.Tensor):
-        return
-    if base is value:
-        return
-    shared_label = get_tensor_label(value)
-    if shared_label is None or get_tensor_label(base) != shared_label:
-        return
-    entry = _VIEW_MUTATION_PRIOR_LABELS.get(base)
-    if entry is None:
-        return
-    session_token, mutation_label, prior_label = entry
-    if session_token != active_label_session_token() or mutation_label != shared_label:
-        return
-    set_tensor_label(base, prior_label)

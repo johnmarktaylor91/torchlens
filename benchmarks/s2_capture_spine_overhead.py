@@ -13,7 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import RecordContext
+from torchlens.recording import RecordContext
 
 
 class ThousandOpModel(nn.Module):
@@ -60,19 +60,19 @@ def _plain_forward(model: ThousandOpModel, x: torch.Tensor) -> None:
 def _trace_exhaustive(model: ThousandOpModel, x: torch.Tensor) -> None:
     """Run exhaustive trace capture."""
 
-    tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="none", random_seed=123))
+    tl.trace(model, x, capture=tl.options.CaptureOptions(seed=123), save="none")
 
 
 def _trace_predicate_false(model: ThousandOpModel, x: torch.Tensor) -> None:
     """Run trace predicate capture with a predicate that never saves."""
 
-    tl.trace(model, x, save=_save_no_ops, capture=tl.options.CaptureOptions(random_seed=123))
+    tl.trace(model, x, save=_save_no_ops, capture=tl.options.CaptureOptions(seed=123))
 
 
 def _record_fastlog(model: ThousandOpModel, x: torch.Tensor) -> None:
     """Run fastlog recording with a predicate that never saves."""
 
-    tl.record(model, x, save=_save_no_ops, random_seed=123)
+    tl.record(model, x, save=_save_no_ops, capture=tl.options.CaptureOptions(seed=123))
 
 
 def _time_case(

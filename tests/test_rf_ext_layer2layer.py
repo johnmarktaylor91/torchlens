@@ -65,7 +65,7 @@ class _ResidualStage(nn.Module):
 def _ops(trace: object) -> tuple[object, object, object]:
     """Return the early, middle, and post convolution operations in execution order."""
 
-    convolutions = [op for op in trace.layer_list if op.func_name == "conv1d"]  # type: ignore[attr-defined]
+    convolutions = [op for op in trace._layer_list if op.func_name == "conv1d"]  # type: ignore[attr-defined]
     assert len(convolutions) == 3
     return tuple(convolutions)  # type: ignore[return-value]
 
@@ -107,7 +107,7 @@ def test_default_source_input_box_is_unchanged() -> None:
     _, _, post = _ops(trace)
 
     default = post.receptive_field.at((5,))
-    legacy = post.receptive_field.at((5,), input=trace.input_ops[0])
+    legacy = post.receptive_field.at((5,), input_op=trace.input_ops[0])
     direct = _query.box_for_unit(post.receptive_field._solution, post, (5,))
 
     assert default == legacy == direct

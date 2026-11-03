@@ -10,8 +10,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
-from torchlens.visualization import _render_flow
+from torchlens._data_classes.trace import Trace
+from torchlens._record_type import record_type
+from torchlens._visualization import _render_flow
 
 
 class _SkipChain(nn.Module):
@@ -38,7 +39,7 @@ class _SkipChain(nn.Module):
 def _skip_activations(layer: Any) -> bool:
     """Return whether a layer is one of the consecutive test activations."""
 
-    return layer.layer_type in {"relu", "sigmoid"}
+    return record_type(layer) in {"relu", "sigmoid"}
 
 
 def test_render_pass_reuses_layer_label_reverse_indexes(
@@ -47,7 +48,7 @@ def test_render_pass_reuses_layer_label_reverse_indexes(
     """Each render-flow pass should build and reuse one reverse index."""
 
     trace = tl.trace(_SkipChain(), torch.randn(1, 4))
-    entries = dict(trace.layer_dict_main_keys)
+    entries = dict(trace._layer_dict_main_keys)
     entry_snapshot = tuple(entries.items())
 
     hidden_indexes: list[Mapping[str, Any]] = []

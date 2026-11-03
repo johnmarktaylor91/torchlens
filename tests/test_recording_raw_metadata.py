@@ -12,8 +12,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog.exceptions import RecorderStateError
-from torchlens.fastlog.types import _RAW_METADATA_FIELDS
+from torchlens.recording.exceptions import RecorderStateError
+from torchlens.recording.types import _RAW_METADATA_FIELDS
 
 
 def _model() -> nn.Module:
@@ -36,7 +36,7 @@ def test_raw_metadata_covers_every_event_payload_free() -> None:
 
     rows = recording.raw_metadata()
 
-    assert len(rows) == len(recording.recording_trace.contexts) > len(recording)
+    assert len(rows) == len(recording.lazy_trace.contexts) > len(recording)
     expected_keys = set(_RAW_METADATA_FIELDS) | {"retained"}
     assert all(set(row) == expected_keys for row in rows)
     # Payload-bearing fields never appear: a row cannot force a payload read.
@@ -109,7 +109,7 @@ def test_raw_metadata_works_on_failed_partial_recordings() -> None:
         save=tl.func("linear"),
         on_forward_error="return_partial",
     )
-    assert recording.failed
+    assert recording.is_failed
 
     rows = recording.raw_metadata()
 

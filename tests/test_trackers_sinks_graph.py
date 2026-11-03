@@ -16,6 +16,7 @@ import pytest
 import torch
 
 import torchlens as tl
+import torchlens.errors
 import torchlens.trackers as trk
 
 
@@ -60,7 +61,7 @@ class TestGraphIR:
     def test_nodes_and_edges_from_executed_dag(self, conv_trace) -> None:  # noqa: ANN001
         trace, _ = conv_trace
         ir = trk.build_graph_ir(trace)
-        assert len(ir.nodes) == len(trace.layer_list)
+        assert len(ir.nodes) == len(trace._layer_list)
         names = {node.name for node in ir.nodes}
         assert len(names) == len(ir.nodes), "node names must be unique"
         # Every input edge resolves to a real node (the frontend join).
@@ -75,7 +76,7 @@ class TestGraphIR:
 
         _, dict_trace = conv_trace
         ir = trk.build_graph_ir(dict_trace)
-        assert len(ir.nodes) == len(dict_trace.layer_list) > 0
+        assert len(ir.nodes) == len(dict_trace._layer_list) > 0
 
     def test_truthful_fields_disclosed(self, conv_trace) -> None:  # noqa: ANN001
         """No allocator claim anywhere; timing carries its evidence label."""
@@ -158,7 +159,7 @@ class TestTensorBoardIngestPin:
 
         trace, _ = conv_trace
         ir = trk.build_graph_ir(trace)
-        with pytest.raises(trk.SinkProtocolError) as info:
+        with pytest.raises(torchlens.errors.SinkProtocolError) as info:
             trk.graph_ir_to_tensorboard(ir, str(tmp_path / "tb"))
         assert info.value.fields["code"] == "tracker_sink_unavailable"
         assert "torchlens[tensorboard]" in info.value.fields["remedy"]

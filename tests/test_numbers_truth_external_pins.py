@@ -25,11 +25,11 @@ def test_one_linear_closed_form_pins() -> None:
     """one-Linear(8,16,bias) batch 2: 544 FLOPs / 192 B tracked; alias owns 0."""
 
     model = nn.Linear(8, 16, bias=True)
-    log = tl.trace(model, torch.randn(2, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = tl.trace(model, torch.randn(2, 8), save=None)
     try:
-        assert int(log.total_flops_forward) == 544  # 2*2*8*16 + 2*16 bias adds
-        assert int(log.total_activation_memory) == 192  # 64 input + 128 output
-        output_rows = [op for op in log.layer_list if op.is_output]
+        assert int(log.cost.total_flops_forward) == 544  # 2*2*8*16 + 2*16 bias adds
+        assert int(log.cost.total_activation_memory) == 192  # 64 input + 128 output
+        output_rows = [op for op in log._layer_list if op.is_output]
         assert output_rows and all(op.flops_forward is None for op in output_rows)
     finally:
         log.cleanup()
@@ -45,15 +45,15 @@ def test_gpt2_at_16_tokens_external_pins() -> None:
     model.eval()
     token_ids = torch.randint(0, 50257, (1, 16))
     with torch.no_grad():
-        log = tl.trace(model, token_ids, capture=tl.options.CaptureOptions(layers_to_save=None))
+        log = tl.trace(model, token_ids, save=None)
     try:
         assert log.num_params == GPT2_DECLARED_UNIQUE_PARAMS
         assert log.num_params == sum(p.numel() for p in model.parameters())
-        assert log.num_params_by_path == GPT2_PER_PATH_PARAMS
-        assert log.tied_param_groups, "the wte/lm_head tie must be detected and named"
-        assert int(log.total_flops_forward) == GPT2_TRUE_FORWARD_FLOPS_T16
+        assert log.params.numel_by_path == GPT2_PER_PATH_PARAMS
+        assert log.graph.tied_param_groups, "the wte/lm_head tie must be detected and named"
+        assert int(log.cost.total_flops_forward) == GPT2_TRUE_FORWARD_FLOPS_T16
         # The alias overstatement is dead: the old printed figure is unreachable.
-        assert int(log.total_flops_forward) != 5_209_841_680
+        assert int(log.cost.total_flops_forward) != 5_209_841_680
     finally:
         log.cleanup()
 
@@ -68,9 +68,9 @@ def test_resnet18_flops_against_fvcore_when_available() -> None:
     model.eval()
     x = torch.randn(1, 3, 64, 64)
     fv_total = int(fvcore_analysis.FlopCountAnalysis(model, x).total())
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = tl.trace(model, x, save=None)
     try:
-        tl_flops = int(log.total_flops_forward)
+        tl_flops = int(log.cost.total_flops_forward)
         # fvcore reports MAC-basis counts and skips most elementwise ops; the
         # FMA-family share dominates, so TL's fma=2 total lands within 10% of
         # 2x fvcore's figure. Divergences beyond that band are real bugs.

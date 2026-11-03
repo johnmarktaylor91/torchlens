@@ -22,10 +22,12 @@ import warnings
 import pytest
 import torch
 import torch.nn as nn
+from _forward_stash import stashed
 
 import torchlens as tl
 import torchlens.backends.torch.wrappers as _wrappers
-from torchlens.utils import tensor_utils as _tu
+from torchlens._utils import tensor_utils as _tu
+from torchlens.errors import TraceCaptureError
 
 
 @contextlib.contextmanager
@@ -83,10 +85,10 @@ def _zoo_trace(defer: bool, seed: int = 7, grad: bool = False, grad_defer: bool 
         torch.manual_seed(seed)
         x = torch.randn(2, 8)
         if grad:
-            log = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=99))
+            log = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=99))
         else:
             with torch.no_grad():
-                log = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=99))
+                log = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=99))
     return model, log
 
 
@@ -132,6 +134,50 @@ def test_deferred_payloads_byte_identical_grad_mode():
     _assert_payloads_identical(log_eager, log_defer)
 
 
+def _explicit_inference_only_zoo_trace(defer: bool, seed: int = 7):
+    """Trace the zoo with explicit ``inference_only=True`` under grad-ENABLED ambient.
+
+    This is brainpipe's default posture (D-13), made clone-on-write eligible by
+    AGT-2132: ``inference_only`` only wraps the forward in ``no_grad``.
+    """
+    with _payload_clone_mode(defer):
+        torch.manual_seed(seed)
+        model = _InplaceZoo().train()
+        torch.manual_seed(seed)
+        x = torch.randn(2, 8)
+        assert torch.is_grad_enabled()
+        log = tl.trace(
+            model,
+            x,
+            capture=tl.options.CaptureOptions(seed=99, inference_only=True),
+        )
+    return model, log
+
+
+def _live_pending_aliases() -> int:
+    return sum(1 for entries in _tu._DEFER_PENDING.values() for e in entries if e.ref() is not None)
+
+
+def test_explicit_inference_only_grad_enabled_payloads_byte_identical():
+    _, log_eager = _explicit_inference_only_zoo_trace(defer=False)
+    _, log_defer = _explicit_inference_only_zoo_trace(defer=True)
+    assert log_eager.options.inference_only is True
+    assert log_defer.options.inference_only is True
+    _assert_payloads_identical(log_eager, log_defer)
+
+
+def test_explicit_inference_only_grad_enabled_defers_and_kill_switch_holds():
+    import gc
+
+    gc.collect()  # earlier tests' (cyclic) traces may still pin live aliases
+    baseline_live = _live_pending_aliases()
+    _, log_eager = _explicit_inference_only_zoo_trace(defer=False)
+    assert _live_pending_aliases() == baseline_live, "kill switch left a deferred alias"
+    _, log_defer = _explicit_inference_only_zoo_trace(defer=True)
+    assert _live_pending_aliases() > baseline_live, "no payload was deferred"
+    assert log_eager.options.inference_only is True and log_defer.options.inference_only is True
+
+
 def test_post_hoc_inplace_edit_isolation():
     _, log = _zoo_trace(defer=True)
     labels = _tensor_payload_labels(log)
@@ -150,7 +196,7 @@ def test_retained_live_activation_mutation_does_not_corrupt_saved():
     saved = {k: log[k].out.clone() for k in labels}
     # The model kept a live handle to a mid-forward activation; a post-capture
     # in-place write through it must be intercepted before the bytes move.
-    model.stash.add_(999.0)
+    stashed(log, "stash").add_(999.0)
     for k in labels:
         assert torch.equal(saved[k], log[k].out), k
 
@@ -161,7 +207,7 @@ def test_validation_tripwire_green_on_deferred_capture():
         model = _InplaceZoo().train()
         torch.manual_seed(7)
         x = torch.randn(2, 8)
-        assert tl.validate(model, x, scope="forward", random_seed=99) is True
+        assert tl.validate(model, x, scope="forward", seed=99) is True
 
 
 def test_version_belt_refuses_unintercepted_mutation():
@@ -405,7 +451,7 @@ def test_custom_function_view_as_inplace_source_captures(use_tensor_resize):
         expected = model(x)
         log = tl.trace(model, x)
         assert torch.equal(log[log.layer_labels[-1]].out.detach(), expected.detach())
-        assert tl.validate(model, x, scope="forward", random_seed=0) is True
+        assert tl.validate(model, x, scope="forward", seed=0) is True
 
 
 class _CustomViewModifiedInplace(nn.Module):
@@ -440,8 +486,9 @@ def test_custom_function_view_genuinely_modified_inplace_still_raises(use_tensor
         x = torch.randn(2, 4)
         with pytest.raises(RuntimeError, match="modified inplace"):
             model(x)
-        with pytest.raises(RuntimeError, match="modified inplace"):
+        with pytest.raises(TraceCaptureError, match="modified inplace") as _tce_info2:
             tl.trace(model, x)
+        assert isinstance(_tce_info2.value.__cause__, RuntimeError)
 
 
 def test_kill_switch_restores_eager_clones():
@@ -502,7 +549,7 @@ def _positional_inplace_trace(defer: bool, seed: int = 3):
         torch.manual_seed(seed)
         x = torch.randn(2, 8)
         with torch.no_grad():
-            log = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=99))
+            log = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=99))
     return log
 
 

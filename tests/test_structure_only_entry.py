@@ -14,6 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
@@ -22,7 +23,6 @@ from torchlens._errors import (
 from torchlens._io import FieldPolicy
 from torchlens._io.prerelease import registered_prerelease_fields
 from torchlens.backends.registry import get_backend_spec
-from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 
@@ -63,15 +63,15 @@ def test_grouped_structure_only_reaches_the_field() -> None:
 
     merged = CaptureOptions(structure_only=True)
     assert merged.structure_only is True
-    assert merged.is_field_explicit("structure_only")
+    assert merged._is_field_explicit("structure_only")
 
 
 def test_non_torch_backend_refuses_explicit_structure_only_typed() -> None:
     """The capability-gate row: a backend without structure_only_capture
     refuses the explicit option instead of silently ignoring it."""
 
+    from torchlens._capture.prepare.dispatch import _enforce_capability_option_gates
     from torchlens.backends.registry import BackendUnsupportedError
-    from torchlens.user_funcs import _enforce_capability_option_gates
 
     mlx_spec = get_backend_spec("mlx")
     assert mlx_spec.capabilities.structure_only_capture is False
@@ -94,19 +94,19 @@ def test_torch_declares_and_binds_the_structure_only_capability() -> None:
 
 def test_e1_all_real_flag_on_capture_is_marked_gated_and_payload_free() -> None:
     log = _structure_capture()
-    assert log.structure_only is True
+    assert log.options.structure_only is True
     # No value payloads are retained anywhere: the contract records structure
     # and shape/dtype hypotheses only.
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         assert getattr(layer, "out", None) is None
     # The structural record itself is intact.
-    assert len(log.layer_list) >= 3  # input + linear + relu
+    assert len(log._layer_list) >= 3  # input + linear + relu
     assert tuple(log["relu_1_2"].shape) == (2, 4)
 
 
 def test_e6_flag_off_default_capture_is_zero_diff() -> None:
     log = tl.trace(TwoLayer(), torch.randn(2, 4))
-    assert log.structure_only is False
+    assert log.options.structure_only is False
     assert log["relu_1_2"].out is not None
 
 
@@ -120,10 +120,10 @@ def test_raise_on_nan_conflicts_at_entry() -> None:
         tl.trace(
             TwoLayer(),
             torch.randn(2, 4),
-            capture=CaptureOptions(structure_only=True, raise_on_nan=True),
+            capture=CaptureOptions(structure_only=True, on_nonfinite="raise"),
         )
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
-    assert "raise_on_nan" in excinfo.value.fields["arguments"]
+    assert "on_nonfinite" in excinfo.value.fields["arguments"]
 
 
 def test_intervention_ready_conflicts_at_entry() -> None:
@@ -134,28 +134,28 @@ def test_intervention_ready_conflicts_at_entry() -> None:
         tl.trace(
             TwoLayer(),
             torch.randn(2, 4),
-            capture=CaptureOptions(structure_only=True, intervention_ready=True),
+            capture=CaptureOptions(structure_only=True, replayable=True),
         )
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
-    assert "intervention_ready" in excinfo.value.fields["arguments"]
+    assert "replayable" in excinfo.value.fields["arguments"]
 
 
 def test_value_touching_halt_predicates_conflict_at_entry() -> None:
     # A bare callable's value use is unprovable: fail closed.
     with pytest.raises(StructureOnlyOptionConflictError) as excinfo:
-        _structure_capture(halt=lambda ctx: False)
+        _structure_capture(stop_after=lambda ctx: False)
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
     # tl.where escapes the static-kind allowlist: fail closed too.
     with pytest.raises(StructureOnlyOptionConflictError):
-        _structure_capture(halt=tl.where(lambda ctx: False))
+        _structure_capture(stop_after=tl.where(lambda ctx: False))
 
 
 def test_value_free_structured_halt_stays_legal() -> None:
     """Memo 4.2: truncation composes when the predicate is provably
     value-free (structured selectors)."""
 
-    log = _structure_capture(halt=tl.func("relu"))
-    assert log.structure_only is True
+    log = _structure_capture(stop_after=tl.func("relu"))
+    assert log.options.structure_only is True
 
 
 # ---------------------------------------------------------------------------
@@ -167,13 +167,12 @@ def test_value_free_structured_halt_stays_legal() -> None:
     ("description", "trace_kwargs", "capture_kwargs"),
     [
         ("save predicate", {"save": tl.func("relu")}, {}),
-        ("explicit layers_to_save", {}, {"layers_to_save": "all"}),
+        ("explicit save all", {"save": "all"}, {}),
         ("save_grads", {}, {"save_grads": True}),
-        ("save_arg_values", {}, {"save_arg_values": True}),
+        ("save_args", {}, {"save_args": True}),
         ("save_raw_input", {}, {"save_raw_input": True}),
-        ("save_raw_output", {}, {"save_raw_output": True}),
-        ("output_style", {}, {"output_style": "classification"}),
-        ("lookback payloads", {"lookback": 4, "lookback_payload_policy": "detached_raw"}, {}),
+        ("save_transformed_output", {}, {"save_transformed_output": True}),
+        ("lookback payloads", {}, {"lookback": 4, "lookback_payload_policy": "detached_raw"}),
     ],
 )
 def test_explicit_value_payload_requests_refuse_typed(
@@ -199,9 +198,10 @@ def test_explicit_metadata_only_save_stays_legal() -> None:
     log = tl.trace(
         TwoLayer(),
         torch.randn(2, 4),
-        capture=CaptureOptions(structure_only=True, layers_to_save="none"),
+        capture=CaptureOptions(structure_only=True),
+        save="none",
     )
-    assert log.structure_only is True
+    assert log.options.structure_only is True
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +219,6 @@ def test_mode_marker_persists_and_left_the_prerelease_registrar() -> None:
     the marker persists, and nothing still gates it.
     """
 
-    assert Trace.PORTABLE_STATE_SPEC["structure_only"] is FieldPolicy.KEEP
+    assert Trace._PORTABLE_STATE_SPEC["_options_structure_only"] is FieldPolicy.KEEP
     inventory = registered_prerelease_fields()
-    assert "structure_only" not in inventory.get("Trace", ())
+    assert "_options_structure_only" not in inventory.get("Trace", ())

@@ -2,37 +2,57 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from ._helper_internals import (
+    _align_direction,
+    _enqueue_nondeterminism_note,
+    _first_non_executable_arg,
+    _helper_spec,
+    _live_capture_donor,
+    _make_generator,
+    _mean_ablate_axes,
+    _non_executable_builtin_placeholder,
+    _patch_source_identity,
+    _resolve_swap_value,
+    _source_tensor_or_out,
+    _splice_module_spec,
+    _swap_with_spec,
+)
 from .errors import (
-    AxisAmbiguityError,
     HookValueError,
-    NonExecutableSpecError,
     SpliceModuleDeviceError,
     SpliceModuleDtypeError,
 )
-from .hooks import HookContext, normalize_hook
-from .types import HelperDirection, HelperPortability, HelperSpec
+from .hooks import HookContext
+from .population import Population
+from .stochastic import (
+    _prove_event_geometry,
+    _record_sampling,
+    _resolve_over_axes,
+)
+from .types import Edit
 
 HELPER_REGISTRY_VERSION = "1"
 
 
-def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
+def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
     """Create a helper that replaces an out with zeros.
 
     Parameters
     ----------
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -45,7 +65,7 @@ def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
             Hook callable that replaces an out with zeros.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return zeros with the same metadata as the out."""
 
             return torch.zeros_like(out)
@@ -54,103 +74,199 @@ def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
 
     return _helper_spec(
         "zero_ablate",
-        kwargs={"force_shape_change": force_shape_change},
+        kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
-
-
-#: The closed ``mean_ablate(over=)`` vocabulary. ``"self"`` is the only
-#: implemented policy today (a global mean of the fire-time value); axis-aware
-#: reductions are a future family and MUST refuse here until they compute
-#: something -- an accepted-but-ignored token is the audit-only-label defect
-#: this gate exists to kill (edits memo D16).
-MEAN_ABLATE_OVER_TOKENS = ("self",)
 
 
 def mean_ablate(
     source: Any | None = None,
     *,
-    over: str = "self",
-    force_shape_change: bool = False,
-) -> HelperSpec:
-    """Create a helper that fills each out with one scalar mean.
+    dim: int | tuple[int, ...] | None,
+    allow_shape_change: bool = False,
+) -> Edit:
+    """Create the one mean door: fill a site with a mean of a source.
 
     Parameters
     ----------
     source:
-        Optional external source (a tensor, or an Op-like object exposing
-        ``out``). When given, the fill value is the SOURCE's global mean and
-        never reads the traced batch, so the spec derives
-        ``batch_independent=True`` (append across batch chunks stays sound).
-        When omitted, the mean is computed from the current out at hook fire
-        time -- a value that couples every batch row, so the spec derives
-        ``batch_independent=False`` and the append gate refuses.
-    over:
-        Mean policy. The vocabulary is CLOSED and validated at construction:
-        ``"self"`` (the default -- global mean of the fire-time value) is the
-        only implemented policy. Unknown tokens refuse typed
-        (``intervention_over_invalid``); axis-aware reductions are not
-        implemented and are never silently accepted as audit-only labels.
-    force_shape_change:
+        What is averaged. ``None`` averages the site's own value at hook
+        fire time (a value that couples every batch row, so the spec derives
+        ``is_batch_independent=False`` and the append gate refuses). A tensor or
+        an Op-like object exposing ``out`` is averaged instead of the site,
+        and never reads the traced batch (``is_batch_independent=True``). A
+        :class:`~torchlens.intervention.Population` averages its members
+        elementwise first (a reduction, never a draw: no seed, prepared at
+        construction), and ``dim`` then names the further site axes.
+    dim:
+        REQUIRED. ``None`` averages every axis of a tensor or self source to
+        one scalar; an int or tuple of ints averages those axes with
+        ``keepdim`` broadcast. For a ``Population``, ``None`` is the
+        elementwise across-member mean and axes reduce that mean further. A
+        semantic axis name refuses ``axis_semantics_unknown`` until axis-role
+        evidence exists; any other spelling refuses ``intervention_over_invalid``
+        at construction (a typo can never flip ``is_batch_independent`` open).
+    allow_shape_change:
         Stored escape-hatch metadata for execution.
 
     Returns
     -------
-    HelperSpec
-        Built-in forward helper spec with a DERIVED ``batch_independent``
-        flag: ``True`` iff the fill value provably never reads the traced
-        batch (external ``source=``), ``False`` otherwise.
+    Edit
+        Built-in forward helper spec (``opaque_audit`` when the source is a
+        population, whose members are not portable) with a DERIVED
+        ``is_batch_independent`` flag: ``True`` iff the fill value provably never
+        reads the traced batch.
     """
 
-    if not isinstance(over, str) or over not in MEAN_ABLATE_OVER_TOKENS:
-        supported = ", ".join(repr(token) for token in MEAN_ABLATE_OVER_TOKENS)
+    axes = _mean_ablate_axes(dim)
+    if axes is None:
         raise InvalidArgumentError(
-            f"mean_ablate(over={over!r}) is not a supported mean policy; the "
-            f"vocabulary is closed to {supported}. Axis-aware means are not "
-            "implemented -- accepting the token would record a policy the hook "
+            f"mean_ablate(dim={dim!r}) is outside the mean vocabulary: dim=None "
+            "averages every axis, an int or tuple of ints names the axes to "
+            "average. Accepting another token would record a policy the hook "
             "does not compute",
             code="intervention_over_invalid",
             remedy=(
-                "pass over='self' for the global fire-time mean, or pass "
-                "source=<tensor> to fill from an external source's mean"
+                "pass dim=None for the mean over all axes, or the explicit integer "
+                "axis (or tuple of axes) to average; pass source=<tensor> or "
+                "source=<Population> to average something other than the site"
             ),
-            argument="over",
-            received=repr(over),
-            supported=MEAN_ABLATE_OVER_TOKENS,
+            argument="dim",
+            received=repr(dim),
         )
+    dim_kwarg: tuple[int, ...] | None = None if axes == "all" else axes
+    if isinstance(source, Population):
+        return _population_mean_spec(source, axes=dim_kwarg, allow_shape_change=allow_shape_change)
+    return _source_mean_spec(source, axes=axes, allow_shape_change=allow_shape_change)
+
+
+def _source_mean_spec(
+    source: Any | None, *, axes: Literal["all"] | tuple[int, ...], allow_shape_change: bool
+) -> Edit:
+    """Build the ``mean_ablate`` spec for a self, tensor or Op-like source."""
 
     def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for mean ablation.
+        """Return the runtime hook for mean ablation."""
 
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Hook callable that fills an out from the configured source mean.
-        """
-
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return an out-shaped tensor filled with the source mean."""
 
-            source_tensor = _source_tensor_or_out(source, out)
-            mean_value = source_tensor.to(device=out.device, dtype=out.dtype).mean()
-            return torch.zeros_like(out) + mean_value
+            values = _source_tensor_or_out(source, out).to(device=out.device, dtype=out.dtype)
+            if axes == "all":
+                return torch.zeros_like(out) + values.mean()
+            resolved = _resolve_over_axes(axes, values.ndim, verb="mean_ablate")
+            reduced = values.mean(dim=list(cast("tuple[int, ...]", resolved)), keepdim=True)
+            if source is None:
+                return torch.zeros_like(out) + reduced
+            return _broadcast_mean(reduced, out, argument="source").clone()
 
         return _hook
 
     # DERIVED, never tabled (edits memo D18): True only when the fill value
     # provably never reads the traced batch. An external source qualifies;
-    # the self-mean reads every batch row and fails closed.
+    # the self-mean reads every batch row and fails closed, and couples the
+    # rows (D34), so a chunked capture refuses it at attach.
     batch_independent = source is not None
     return _helper_spec(
         "mean_ablate",
         args=(source,),
-        kwargs={"over": over, "force_shape_change": force_shape_change},
+        kwargs={
+            "dim": None if axes == "all" else axes,
+            "allow_shape_change": allow_shape_change,
+        },
         factory=factory,
-        batch_independent=batch_independent,
-        compatible_with_append=not force_shape_change,
+        signal="forward",
+        is_batch_independent=batch_independent,
+        is_compatible_with_append=not allow_shape_change,
+        metadata={"stochastic": False, **({} if batch_independent else {"batch_coherent": True})},
     )
+
+
+def _population_mean_spec(
+    reference: Population, *, axes: tuple[int, ...] | None, allow_shape_change: bool
+) -> Edit:
+    """Build the ``mean_ablate`` spec whose source is a population.
+
+    The fill is computed eagerly at construction (populations are prepared
+    before hooks install, D10); the record says ``stochastic=False`` and no
+    seed is ever invented. ``axes=None`` is the elementwise across-member
+    mean, which must match the site's geometry exactly; explicit axes reduce
+    that mean further with ``keepdim`` and broadcast back to the site.
+    """
+
+    fill = reference.mean() if axes is None else reference.mean(axes)
+
+    def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime population-mean fill hook."""
+
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
+            """Fill the site with the prepared population mean."""
+
+            prepared = fill.detach().to(device=out.device, dtype=out.dtype)
+            if axes is None:
+                _prove_event_geometry(prepared, out, verb="mean_ablate")
+                value = prepared
+            else:
+                value = _broadcast_mean(prepared, out, argument="source")
+            _record_sampling(
+                ctx,
+                "mean_ablate",
+                {
+                    "stochastic": False,
+                    "population_identity": reference.identity,
+                    "digest_kind": reference.digest_kind,
+                    "population_count": len(reference),
+                    "eligible_count": None,
+                    "base_seed": None,
+                    "derived_seed": None,
+                    "donor_group_id": None,
+                    "share_draw": None,
+                    "logical_firing_coordinate": (),
+                    "realized_draw_digest": None,
+                    "replacement_mode": "evidence_mean",
+                    "donor_grad": "detached",
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
+                },
+            )
+            return value.clone()
+
+        return _hook
+
+    return _helper_spec(
+        "mean_ablate",
+        kwargs={
+            "dim": axes,
+            "allow_shape_change": allow_shape_change,
+            "population_identity": reference.identity,
+            "population_count": len(reference),
+        },
+        factory=factory,
+        portability="opaque_audit",
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
+        metadata={"stochastic": False},
+    )
+
+
+def _broadcast_mean(fill: torch.Tensor, out: torch.Tensor, *, argument: str) -> torch.Tensor:
+    """Expand a reduced mean to the site's shape, refusing typed when it cannot."""
+
+    if fill.shape == out.shape:
+        return fill
+    try:
+        return fill.expand(out.shape)
+    except RuntimeError:
+        raise InvalidArgumentError(
+            f"mean_ablate mean of shape {tuple(fill.shape)!r} does not broadcast to "
+            f"the site shape {tuple(out.shape)!r}",
+            code="sampling_geometry_mismatch",
+            remedy=(
+                "build the source at this site's geometry, or reduce over axes that broadcast back"
+            ),
+            argument=argument,
+        ) from None
 
 
 def scramble_elements(
@@ -158,8 +274,8 @@ def scramble_elements(
     *,
     from_: Any | None = None,
     seed: int | None = None,
-    force_shape_change: bool = False,
-) -> HelperSpec:
+    allow_shape_change: bool = False,
+) -> Edit:
     """Create a helper that fills the out with elements drawn iid from a source.
 
     Every output element is independently replaced by a uniformly sampled
@@ -192,12 +308,12 @@ def scramble_elements(
         (``intervention_source_conflict``); the two spellings name one slot.
     seed:
         Optional hook-local RNG seed.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in stochastic forward helper spec.
     """
 
@@ -223,7 +339,7 @@ def scramble_elements(
 
         generator = _make_generator(seed)
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return sampled values reshaped to the out."""
 
             source_tensor = _source_tensor_or_out(source_value, out).to(
@@ -233,7 +349,7 @@ def scramble_elements(
             if flat_source.numel() == 0:
                 raise HookValueError("scramble_elements source tensor is empty")
             if seed is None:
-                _enqueue_nondeterminism_note(hook, "scramble_elements")
+                _enqueue_nondeterminism_note(ctx, "scramble_elements")
                 indices = torch.randint(flat_source.numel(), out.shape, device=out.device)
             else:
                 # Generator is CPU-bound; sample on CPU then move to target device
@@ -251,44 +367,44 @@ def scramble_elements(
     return _helper_spec(
         "scramble_elements",
         args=(source_value,),
-        kwargs={"seed": seed, "force_shape_change": force_shape_change},
+        kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=False,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
 def steer(
     direction: torch.Tensor,
-    magnitude: float = 1.0,
+    strength: float = 1.0,
     *,
     coef: float | None = None,
-    feature_axis: int | None = None,
-    force_shape_change: bool = False,
-) -> HelperSpec:
+    dim: int | None = None,
+    allow_shape_change: bool = False,
+) -> Edit:
     """Create a helper that adds a scaled steering direction.
 
     Parameters
     ----------
     direction:
         Direction tensor.
-    magnitude:
+    strength:
         Scalar multiplier.
     coef:
-        PLAN.md alias for ``magnitude``.
-    feature_axis:
+        PLAN.md alias for ``strength``.
+    dim:
         Required when a vector direction must be aligned with an out
         axis, avoiding silent batch/position assumptions.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
-    scale_value = magnitude if coef is None else coef
+    scale_value = strength if coef is None else coef
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for steering.
@@ -299,10 +415,10 @@ def steer(
             Hook callable that adds the configured steering direction.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Add the steering vector to the out."""
 
-            aligned = _align_direction(direction, out, feature_axis=feature_axis)
+            aligned = _align_direction(direction, out, dim=dim)
             return out + aligned.to(device=out.device, dtype=out.dtype) * scale_value
 
         return _hook
@@ -311,29 +427,29 @@ def steer(
         "steer",
         args=(direction,),
         kwargs={
-            "magnitude": scale_value,
-            "feature_axis": feature_axis,
-            "force_shape_change": force_shape_change,
+            "strength": scale_value,
+            "dim": dim,
+            "allow_shape_change": allow_shape_change,
         },
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
-def scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
+def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
     """Create a helper that multiplies an out by ``factor``.
 
     Parameters
     ----------
     factor:
         Multiplicative factor.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -346,7 +462,7 @@ def scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
             Hook callable that multiplies an out by ``factor``.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Scale the out."""
 
             return out * factor
@@ -356,37 +472,37 @@ def scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
     return _helper_spec(
         "scale",
         args=(factor,),
-        kwargs={"force_shape_change": force_shape_change},
+        kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
 def clamp(
     *,
-    min: float | None = None,
-    max: float | None = None,
-    force_shape_change: bool = False,
-) -> HelperSpec:
+    low: float | None = None,
+    high: float | None = None,
+    allow_shape_change: bool = False,
+) -> Edit:
     """Create a helper that clamps out values.
 
     Parameters
     ----------
-    min:
+    low:
         Optional lower bound.
-    max:
+    high:
         Optional upper bound.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
-    if min is None and max is None:
+    if low is None and high is None:
         raise HookValueError("clamp requires min, max, or both")
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -398,28 +514,28 @@ def clamp(
             Hook callable that clamps out values.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Clamp the out."""
 
-            return torch.clamp(out, min=min, max=max)
+            return torch.clamp(out, min=low, max=high)
 
         return _hook
 
     return _helper_spec(
         "clamp",
-        kwargs={"min": min, "max": max, "force_shape_change": force_shape_change},
+        kwargs={"low": low, "high": high, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
-def noise(
+def add_noise(
     std: float,
     *,
     seed: int | None = None,
-    force_shape_change: bool = False,
-) -> HelperSpec:
+    allow_shape_change: bool = False,
+) -> Edit:
     """Create a helper that adds Gaussian noise.
 
     Parameters
@@ -429,12 +545,12 @@ def noise(
     seed:
         Optional hook-local seed. Seeded helpers use a private generator and do
         not consume global RNG.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in stochastic forward helper spec.
     """
 
@@ -449,11 +565,11 @@ def noise(
 
         generator = _make_generator(seed)
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Add Gaussian noise to the out."""
 
             if seed is None:
-                _enqueue_nondeterminism_note(hook, "noise")
+                _enqueue_nondeterminism_note(ctx, "add_noise")
                 sample = torch.randn(out.shape, device=out.device, dtype=out.dtype)
             else:
                 # Generator is CPU-bound; sample on CPU then move to target device
@@ -469,35 +585,35 @@ def noise(
         return _hook
 
     return _helper_spec(
-        "noise",
+        "add_noise",
         args=(std,),
-        kwargs={"seed": seed, "force_shape_change": force_shape_change},
+        kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
 def project_onto(
     direction: torch.Tensor,
     *,
-    feature_axis: int | None = None,
-    force_shape_change: bool = False,
-) -> HelperSpec:
+    dim: int | None = None,
+    allow_shape_change: bool = False,
+) -> Edit:
     """Create a helper that projects outs onto a direction.
 
     Parameters
     ----------
     direction:
         Projection direction.
-    feature_axis:
+    dim:
         Required when aligning a vector with a higher-rank out.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
@@ -510,16 +626,16 @@ def project_onto(
             Hook callable that projects an out onto ``direction``.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Project out onto the direction."""
 
-            aligned = _align_direction(direction, out, feature_axis=feature_axis).to(
+            aligned = _align_direction(direction, out, dim=dim).to(
                 device=out.device, dtype=out.dtype
             )
-            if feature_axis is None:
+            if dim is None:
                 reduction_dim: int | tuple[int, ...] = tuple(range(out.ndim))
             else:
-                reduction_dim = feature_axis % out.ndim
+                reduction_dim = dim % out.ndim
             denom = torch.sum(aligned * aligned, dim=reduction_dim, keepdim=True)
             if bool(torch.any(denom == 0).item()):
                 raise HookValueError("project_onto direction has zero norm")
@@ -531,40 +647,40 @@ def project_onto(
     return _helper_spec(
         "project_onto",
         args=(direction,),
-        kwargs={"feature_axis": feature_axis, "force_shape_change": force_shape_change},
+        kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
-def project_off(
+def project_out(
     direction: torch.Tensor,
     *,
-    feature_axis: int | None = None,
-    force_shape_change: bool = False,
-) -> HelperSpec:
+    dim: int | None = None,
+    allow_shape_change: bool = False,
+) -> Edit:
     """Create a helper that removes the component along a direction.
 
     Parameters
     ----------
     direction:
         Direction to remove.
-    feature_axis:
+    dim:
         Required when aligning a vector with a higher-rank out.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
     onto_spec = project_onto(
         direction,
-        feature_axis=feature_axis,
-        force_shape_change=force_shape_change,
+        dim=dim,
+        allow_shape_change=allow_shape_change,
     )
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -578,28 +694,28 @@ def project_off(
 
         onto_hook = onto_spec()
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Remove the projected component from the out."""
 
-            return cast(torch.Tensor, out - onto_hook(out, hook=hook))
+            return cast(torch.Tensor, out - onto_hook(out, ctx=ctx))
 
         return _hook
 
     return _helper_spec(
-        "project_off",
+        "project_out",
         args=(direction,),
-        kwargs={"feature_axis": feature_axis, "force_shape_change": force_shape_change},
+        kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
 def swap_with(
     other_label: str | Any,
     *,
-    force_shape_change: bool = False,
-) -> HelperSpec:
+    allow_shape_change: bool = False,
+) -> Edit:
     """Create a helper that swaps with another site's tensor.
 
     Parameters
@@ -609,12 +725,12 @@ def swap_with(
         ``out`` tensor (e.g. ``other_log['layer_x']`` from a separate,
         already-completed capture). A bare string label is **not**
         supported: see the Raises section.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
 
     Raises
@@ -625,7 +741,7 @@ def swap_with(
         label -> tensor lookup table, so a string label can never resolve
         to another site's captured activation today. Pass a
         ``torch.Tensor`` or an Op-like object with a resolved ``out``
-        tensor instead (e.g. ``tl.swap_with(other_log['layer_x'].out)``).
+        tensor instead (e.g. ``swap_with(other_log['layer_x'].out)``).
     """
 
     if isinstance(other_label, str):
@@ -635,8 +751,8 @@ def swap_with(
             "that would resolve a string label to another site's captured "
             "tensor. Pass a torch.Tensor or an Op-like object with an "
             "already-resolved `out` tensor instead, e.g. "
-            "tl.swap_with(other_log['layer_x'].out) or "
-            "tl.swap_with(other_log['layer_x'])."
+            "swap_with(other_log['layer_x'].out) or "
+            "swap_with(other_log['layer_x'])."
         )
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -648,10 +764,10 @@ def swap_with(
             Hook callable that resolves and returns the configured replacement.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return the resolved replacement tensor."""
 
-            del hook
+            del ctx
             replacement = _resolve_swap_value(other_label)
             if not isinstance(replacement, torch.Tensor):
                 raise HookValueError(
@@ -663,45 +779,49 @@ def swap_with(
 
         return _hook
 
-    return _helper_spec(
-        "swap_with",
-        args=(other_label,),
-        kwargs={"force_shape_change": force_shape_change},
-        factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
-    )
+    return _swap_with_spec(other_label, factory, allow_shape_change=allow_shape_change)
 
 
 def splice_module(
     module: nn.Module,
     *,
-    input: str = "in",
-    output: str = "out",
-    force_shape_change: bool = False,
-) -> HelperSpec:
+    input_route: str = "in",
+    output_route: str = "out",
+    allow_shape_change: bool = False,
+) -> Edit:
     """Create a helper that calls a module as a black-box forward splice.
+
+    Transcoder support: a transcoder maps a block's MLP input to its MLP
+    output, so it replaces the MLP call as a whole. Target the MLP module and
+    route its call inputs, ``hooks={tl.module("mlp"):
+    tl.splice_module(transcoder, input_route="in")}``: the transcoder runs on the
+    arguments the MLP was called with and its result becomes the MLP's
+    output. An SAE reconstructs the site's own value instead, which is
+    ``input_route="out"`` (the route ``torchlens.bridge.sae.splice`` uses).
 
     Parameters
     ----------
     module:
         Module to call under ``pause_logging()`` in the execution helper.
-    input:
+    input_route:
         Input routing policy. ``"in"`` runs ``module`` on the original call
-        inputs; ``"out"`` preserves the legacy output-transform route.
-    output:
+        inputs (a transcoder on its MLP's inputs); ``"out"`` passes the
+        site's output to ``module`` (an SAE on its site).
+    output_route:
         Output routing policy. Only ``"out"`` is supported.
-    force_shape_change:
+    allow_shape_change:
         Stored escape hatch allowing output metadata changes.
 
     Returns
     -------
-    HelperSpec
+    Edit
         Built-in forward helper spec.
     """
 
-    if input not in {"in", "out"} or output != "out":
-        raise HookValueError("splice_module only supports input in {'in', 'out'} and output='out'")
+    if input_route not in {"in", "out"} or output_route != "out":
+        raise HookValueError(
+            "splice_module only supports input_route in {'in', 'out'} and output_route='out'"
+        )
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for module splicing.
@@ -712,24 +832,24 @@ def splice_module(
             Hook callable that forwards the out through ``module``.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Call the spliced module and validate dtype/device."""
 
-            if input == "in":
-                if not hook.args and not hook.kwargs:
+            if input_route == "in":
+                if not ctx.args and not ctx.kwargs:
                     raise HookValueError(
                         "splice_module input routing requires captured call inputs"
                     )
-                result = module(*hook.args, **dict(hook.kwargs))
+                result = module(*ctx.args, **dict(ctx.kwargs))
             else:
                 result = module(out)
             if not isinstance(result, torch.Tensor):
                 raise HookValueError("splice_module must return a torch.Tensor")
-            if not force_shape_change and result.dtype != out.dtype:
+            if not allow_shape_change and result.dtype != out.dtype:
                 raise SpliceModuleDtypeError(
                     f"splice_module returned dtype {result.dtype}; expected {out.dtype}"
                 )
-            if not force_shape_change and result.device != out.device:
+            if not allow_shape_change and result.device != out.device:
                 raise SpliceModuleDeviceError(
                     f"splice_module returned device {result.device}; expected {out.device}"
                 )
@@ -737,372 +857,60 @@ def splice_module(
 
         return _hook
 
-    return _helper_spec(
-        "splice_module",
-        args=(module,),
-        kwargs={"input": input, "output": output, "force_shape_change": force_shape_change},
-        factory=factory,
-        metadata={"input": input, "output": output},
-        batch_independent=False,
-        compatible_with_append=False,
+    return _splice_module_spec(
+        module,
+        factory,
+        input_route=input_route,
+        output_route=output_route,
+        allow_shape_change=allow_shape_change,
     )
 
 
-def bwd_hook(fn: Callable[..., torch.Tensor]) -> HelperSpec:
-    """Create a live/rerun-only backward hook helper.
+def clip_norm(max_norm: float, norm_type: float = 2.0) -> Edit:
+    """Create a neutral edit that rescales a tensor so its norm is at most ``max_norm``.
 
-    Parameters
-    ----------
-    fn:
-        Gradient hook callable. The first positional argument may be named
-        ``g``; the keyword-only ``hook`` argument is still required.
-
-    Returns
-    -------
-    HelperSpec
-        Built-in backward helper spec.
-    """
-
-    normalize_hook(fn, direction="backward")
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the configured backward hook.
-
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Backward hook callable.
-        """
-
-        return fn
-
-    return _helper_spec(
-        "bwd_hook",
-        args=(fn,),
-        kind="backward",
-        factory=factory,
-        metadata={"live_rerun_only": True},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def grad_zero(*, force_shape_change: bool = False) -> HelperSpec:
-    """Create a live/rerun-only helper that zeros a grad tensor.
-
-    Parameters
-    ----------
-    force_shape_change:
-        Stored escape-hatch metadata for later execution phases.
-
-    Returns
-    -------
-    HelperSpec
-        Built-in backward helper spec.
-    """
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for zeroing grads.
-
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Hook callable that replaces a grad with zeros.
-        """
-
-        def _hook(g: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Return a zero grad."""
-
-            return torch.zeros_like(g)
-
-        return _hook
-
-    return _helper_spec(
-        "grad_zero",
-        kind="backward",
-        kwargs={"force_shape_change": force_shape_change},
-        factory=factory,
-        metadata={"live_rerun_only": True},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def grad_scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
-    """Create a live/rerun-only helper that scales a grad tensor.
-
-    Parameters
-    ----------
-    factor:
-        Multiplicative grad factor.
-    force_shape_change:
-        Stored escape-hatch metadata for later execution phases.
-
-    Returns
-    -------
-    HelperSpec
-        Built-in backward helper spec.
-    """
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for grad scaling.
-
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Hook callable that multiplies a grad by ``factor``.
-        """
-
-        def _hook(g: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Scale the grad."""
-
-            return g * factor
-
-        return _hook
-
-    return _helper_spec(
-        "grad_scale",
-        args=(factor,),
-        kind="backward",
-        kwargs={"force_shape_change": force_shape_change},
-        factory=factory,
-        metadata={"live_rerun_only": True},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def grad_clip(max_norm: float, norm_type: float = 2.0) -> HelperSpec:
-    """Create a grad_fn_handle helper that clips each grad_input tensor norm.
+    The edit is a function of one tensor, so it applies to whichever tensor
+    the site names: the activation at a bare site, or the output gradient at
+    ``tl.grad(site)``. The norm is taken over the whole tensor (one site, one
+    tensor).
 
     Parameters
     ----------
     max_norm:
-        Maximum per-tensor norm.
+        Largest allowed ``norm_type`` norm.
     norm_type:
         Norm order passed to ``torch.linalg.vector_norm``.
 
     Returns
     -------
-    HelperSpec
-        Built-in backward grad_fn_handle helper spec.
+    Edit
+        Built-in neutral helper spec.
     """
 
-    def factory() -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
-        """Return the runtime grad_fn_handle hook for clipping gradients."""
+    if not max_norm > 0:
+        raise HookValueError(f"clip_norm max_norm must be positive; got {max_norm!r}")
 
-        def _hook(
-            grad_input: tuple[torch.Tensor | None, ...],
-            *,
-            grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_handle: Any,
-            call_index: int,
-            run_ctx: dict[str, Any],
-        ) -> tuple[torch.Tensor | None, ...] | None:
-            """Clip each tensor in a grad_input tuple."""
+    def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for norm clipping."""
 
-            del grad_output, grad_fn_handle, call_index, run_ctx
-            clipped: list[torch.Tensor | None] = []
-            changed = False
-            for grad in grad_input:
-                if grad is None:
-                    clipped.append(None)
-                    continue
-                norm = torch.linalg.vector_norm(grad, ord=norm_type)
-                if norm > max_norm:
-                    scale_value = max_norm / (norm + torch.finfo(grad.dtype).eps)
-                    clipped.append(grad * scale_value)
-                    changed = True
-                else:
-                    clipped.append(grad)
-            return tuple(clipped) if changed else None
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
+            """Rescale ``out`` when its norm exceeds ``max_norm``."""
+
+            del ctx
+            norm = torch.linalg.vector_norm(out, ord=norm_type)
+            if not bool(norm > max_norm):
+                return out
+            return out * (max_norm / norm)
 
         return _hook
 
     return _helper_spec(
-        "grad_clip",
+        "clip_norm",
         args=(max_norm,),
         kwargs={"norm_type": norm_type},
-        kind="backward",
         factory=factory,
-        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
-    """Create a grad_fn_handle helper that adds Gaussian noise to grad_input tensors.
-
-    Parameters
-    ----------
-    std:
-        Noise standard deviation.
-    seed:
-        Optional hook-local seed.
-
-    Returns
-    -------
-    HelperSpec
-        Built-in backward grad_fn_handle helper spec.
-    """
-
-    def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
-        """Return the runtime grad_fn_handle hook for noisy gradients."""
-
-        generator = _make_generator(seed)
-
-        def _hook(
-            grad_input: tuple[torch.Tensor | None, ...],
-            *,
-            grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_handle: Any,
-            call_index: int,
-            run_ctx: dict[str, Any],
-        ) -> tuple[torch.Tensor | None, ...]:
-            """Add Gaussian noise to each tensor in a grad_input tuple."""
-
-            del grad_output, grad_fn_handle, call_index
-            noisy: list[torch.Tensor | None] = []
-            for grad in grad_input:
-                if grad is None:
-                    noisy.append(None)
-                    continue
-                if seed is None:
-                    run_ctx.setdefault("ledger_notes", []).append("grad_noise used unseeded RNG")
-                    sample = torch.randn(grad.shape, device=grad.device, dtype=grad.dtype)
-                else:
-                    sample = torch.randn(grad.shape, generator=generator, dtype=grad.dtype).to(
-                        grad.device
-                    )
-                noisy.append(grad + sample * std)
-            return tuple(noisy)
-
-        return _hook
-
-    return _helper_spec(
-        "grad_noise",
-        args=(std,),
-        kwargs={"seed": seed},
-        kind="backward",
-        factory=factory,
-        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def grad_clamp(min: float | None = None, max: float | None = None) -> HelperSpec:
-    """Create a grad_fn_handle helper that clamps grad_input tensors elementwise.
-
-    Parameters
-    ----------
-    min:
-        Optional lower bound.
-    max:
-        Optional upper bound.
-
-    Returns
-    -------
-    HelperSpec
-        Built-in backward grad_fn_handle helper spec.
-    """
-
-    if min is None and max is None:
-        raise HookValueError("grad_clamp requires min, max, or both")
-
-    def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
-        """Return the runtime grad_fn_handle hook for clamping gradients."""
-
-        def _hook(
-            grad_input: tuple[torch.Tensor | None, ...],
-            *,
-            grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_handle: Any,
-            call_index: int,
-            run_ctx: dict[str, Any],
-        ) -> tuple[torch.Tensor | None, ...]:
-            """Clamp each tensor in a grad_input tuple."""
-
-            del grad_output, grad_fn_handle, call_index, run_ctx
-            return tuple(
-                None if grad is None else torch.clamp(grad, min=min, max=max) for grad in grad_input
-            )
-
-        return _hook
-
-    return _helper_spec(
-        "grad_clamp",
-        kwargs={"min": min, "max": max},
-        kind="backward",
-        factory=factory,
-        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def _helper_spec(
-    helper_name: str,
-    *,
-    args: tuple[Any, ...] = (),
-    kwargs: dict[str, Any] | None = None,
-    kind: str = "forward",
-    portability: HelperPortability = "builtin",
-    factory: Callable[[], Callable[..., Any]],
-    metadata: dict[str, Any] | None = None,
-    direction: HelperDirection | None = None,
-    batch_independent: bool = False,
-    compatible_with_append: bool = False,
-) -> HelperSpec:
-    """Build a HelperSpec with stable tuple metadata.
-
-    Parameters
-    ----------
-    helper_name:
-        Helper name.
-    args:
-        Positional helper arguments.
-    kwargs:
-        Keyword helper arguments.
-    kind:
-        Forward or backward helper class.
-    portability:
-        Portability tag.
-    factory:
-        Runtime hook factory.
-    metadata:
-        Extra helper metadata.
-    direction:
-        Optional default signal direction requested by legacy helpers.
-    batch_independent:
-        Whether this helper can be applied independently to each batch item.
-    compatible_with_append:
-        Whether this helper opts into append when it changes out shape.
-
-    Returns
-    -------
-    HelperSpec
-        Helper spec.
-    """
-
-    return HelperSpec(
-        helper_name=helper_name,
-        args=args,
-        kwargs=tuple(sorted((kwargs or {}).items())),
-        kind=kind,  # type: ignore[arg-type]
-        portability=portability,
-        factory=factory,
-        metadata=tuple(sorted((metadata or {}).items())),
-        direction=direction,
-        batch_independent=batch_independent,
-        compatible_with_append=compatible_with_append,
+        is_batch_independent=False,
+        is_compatible_with_append=True,
     )
 
 
@@ -1111,7 +919,7 @@ def helper_from_serialized(
     *,
     import_resolver: Callable[[str], Callable[..., Any]],
     value_decoder: Callable[[Any], Any],
-) -> HelperSpec | Callable[..., Any]:
+) -> Edit | Callable[..., Any]:
     """Reconstruct a helper or callable from serialized helper data.
 
     Parameters
@@ -1134,7 +942,7 @@ def helper_from_serialized(
 
     Returns
     -------
-    HelperSpec | Callable[..., Any]
+    Edit | Callable[..., Any]
         Runtime helper spec or import-ref callable.
     """
 
@@ -1153,19 +961,19 @@ def helper_from_serialized(
 
             return import_resolver(import_path)()
 
-        return HelperSpec(
-            helper_name=str(data.get("name", "import_ref")),
+        return Edit(
+            name=str(data.get("name", "import_ref")),
             portability="import_ref",
             factory=factory,
             metadata=(("import_path", import_path),),
         )
     if portability == "opaque_audit":
-        return HelperSpec(
-            helper_name=data.get("name", "opaque_audit"),
+        return Edit(
+            name=data.get("name", "opaque_audit"),
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
-            batch_independent=bool(data.get("batch_independent", False)),
-            compatible_with_append=bool(data.get("compatible_with_append", False)),
+            is_batch_independent=bool(data.get("is_batch_independent", False)),
+            is_compatible_with_append=bool(data.get("is_compatible_with_append", False)),
         )
 
     name = data["name"]
@@ -1183,13 +991,91 @@ def helper_from_serialized(
     return rebuild_builtin_helper(name, args, kwargs)
 
 
-def rebuild_builtin_helper(
-    name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]
-) -> HelperSpec:
+def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
+    """Return the builtin helper-name registry (name -> public constructor).
+
+    Returns
+    -------
+    dict[str, Callable[..., Edit]]
+        Every builtin helper name a saved spec may carry. A renamed
+        helper's old name is not here: :func:`rebuild_builtin_helper` refuses
+        it typed (``intervention_helper_renamed``).
+    """
+
+    # Local import: ``add``/``replace_with`` live in ``predicates`` (which
+    # imports this module), so a module-level import would cycle. They mint
+    # portability="builtin" specs like every entry below, and their absence
+    # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
+    # load raised intervention_helper_unknown).
+    from ._affine_source import set_affine_coordinates
+    from ._subspace_spec import rebuild_subspace_edit
+    from .compose import compose
+    from .predicates import add, replace_with
+    from .stochastic import permute_batch
+    from .sweep import sweep_replace
+
+    return {
+        "add": add,
+        "replace_with": replace_with,
+        "sweep_replace": sweep_replace,
+        # F02 stochastic/population family (builtin-portability members only:
+        # the population-carrying verbs are opaque_audit and never rebuild).
+        "compose": compose,
+        "permute_batch": permute_batch,
+        "zero_ablate": zero_ablate,
+        "mean_ablate": mean_ablate,
+        "scramble_elements": scramble_elements,
+        "steer": steer,
+        "scale": scale,
+        "clamp": clamp,
+        "add_noise": add_noise,
+        "project_onto": project_onto,
+        "project_out": project_out,
+        "swap_with": swap_with,
+        "splice_module": splice_module,
+        "clip_norm": clip_norm,
+        # Projection-valued subspace edit (a learned rotation's rows travel here).
+        "subspace_edit": rebuild_subspace_edit,
+        # Its source verb (LoReFT's W h + b); saved only inside subspace_edit.
+        "set_affine_coordinates": set_affine_coordinates,
+    }
+
+
+def builtin_helper_constructor(name: str) -> Callable[..., Edit] | None:
+    """Return the public constructor registered for a builtin helper name.
+
+    Parameters
+    ----------
+    name:
+        Builtin helper name.
+
+    Returns
+    -------
+    Callable[..., Edit] | None
+        The constructor, or ``None`` when ``name`` is not a builtin helper.
+    """
+
+    return _builtin_constructors().get(name)
+
+
+def _builtin_constructor_lookup(name: str) -> tuple[dict[str, Callable[..., Edit]], str | None]:
+    """Return the builtin constructor table and ``name``'s rename target.
+
+    A removed gradient helper (or ``bwd_hook``) refuses here with its own
+    coded error before any lookup.
+    """
+
+    constructors = _builtin_constructors()
+    if name in _REMOVED_GRADIENT_HELPERS or name == "bwd_hook":
+        _refuse_removed_gradient_helper(name)
+    return constructors, _RENAMED_HELPER_NAMES.get(name)
+
+
+def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Edit:
     """Rebuild one builtin helper spec through its public constructor.
 
     The single builtin-name registry shared by ``.tlspec`` intervention-spec
-    loads and ``HelperSpec`` pickle restore: a builtin helper's runtime hook
+    loads and ``Edit`` pickle restore: a builtin helper's runtime hook
     factory is a local closure (never serialized), so both restore paths
     re-derive the whole spec from its stable ``(name, args, kwargs)``
     identity by re-invoking the constructor.
@@ -1205,328 +1091,54 @@ def rebuild_builtin_helper(
 
     Returns
     -------
-    HelperSpec
+    Edit
         Freshly constructed builtin helper spec.
 
     Raises
     ------
     InvalidArgumentError
-        If ``name`` is not a known builtin helper.
+        ``intervention_helper_unknown`` if ``name`` is not a known builtin
+        helper; ``intervention_helper_renamed`` if it is the old name of a
+        renamed one (a clean break: a saved spec naming it no longer loads).
     """
 
-    # Local import: ``add``/``replace_with`` live in ``predicates`` (which
-    # imports this module), so a module-level import would cycle. They mint
-    # portability="builtin" specs like every entry below, and their absence
-    # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
-    # load raised intervention_helper_unknown).
-    from .compose import compose
-    from .predicates import add, replace_with
-    from .stochastic import mean_fill, permute_batch
-    from .sweep import sweep_replace
-
-    constructors: dict[str, Callable[..., HelperSpec]] = {
-        "add": add,
-        "replace_with": replace_with,
-        "sweep_replace": sweep_replace,
-        # F02 stochastic/population family (builtin-portability members only:
-        # the population-carrying verbs are opaque_audit and never rebuild).
-        "compose": compose,
-        "mean_fill": mean_fill,
-        "permute_batch": permute_batch,
-        "zero_ablate": zero_ablate,
-        "mean_ablate": mean_ablate,
-        "scramble_elements": scramble_elements,
-        # Artifact-load compatibility: saved specs from before the honest
-        # rename persist helper name "resample_ablate"; they reconstruct
-        # through the same constructor (same bytes, honest name).
-        "resample_ablate": scramble_elements,
-        "steer": steer,
-        "scale": scale,
-        "clamp": clamp,
-        "noise": noise,
-        "project_onto": project_onto,
-        "project_off": project_off,
-        "swap_with": swap_with,
-        "splice_module": splice_module,
-        "bwd_hook": bwd_hook,
-        "grad_clamp": grad_clamp,
-        "grad_clip": grad_clip,
-        "grad_noise": grad_noise,
-        "grad_zero": grad_zero,
-        "grad_scale": grad_scale,
-    }
-    if name not in constructors:
+    constructors, renamed_to = _builtin_constructor_lookup(name)
+    if name not in constructors and renamed_to is None:
         raise InvalidArgumentError(
             f"Builtin intervention helper {name!r} is unknown",
             code="intervention_helper_unknown",
             remedy=f"choose one of {', '.join(sorted(constructors))}",
             argument="name",
         )
-    return constructors[name](*args, **kwargs)
-
-
-def _is_non_executable_placeholder(value: Any) -> bool:
-    """Whether a decoded argument is a non-executable ``opaque_audit`` placeholder.
-
-    Parameters
-    ----------
-    value:
-        Decoded helper argument.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``value`` is a HelperSpec that was reconstructed as an
-        ``opaque_audit`` (audit-only, factory-less) placeholder.
-    """
-
-    return isinstance(value, HelperSpec) and value.portability == "opaque_audit"
-
-
-def _first_non_executable_arg(args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Any | None:
-    """Return the first non-executable placeholder in ``args``/``kwargs``, if any.
-
-    Recurses into lists, tuples, and dict values so a placeholder nested inside a
-    container argument is still detected.
-
-    Parameters
-    ----------
-    args:
-        Decoded positional helper arguments.
-    kwargs:
-        Decoded keyword helper arguments.
-
-    Returns
-    -------
-    Any | None
-        The offending placeholder, or ``None`` when every argument is executable.
-    """
-
-    def _scan(value: Any) -> Any | None:
-        """Depth-first search for the first non-executable placeholder in one value."""
-
-        if _is_non_executable_placeholder(value):
-            return value
-        if isinstance(value, (list, tuple)):
-            for item in value:
-                found = _scan(item)
-                if found is not None:
-                    return found
-        elif isinstance(value, Mapping):
-            for item in value.values():
-                found = _scan(item)
-                if found is not None:
-                    return found
-        return None
-
-    for value in args:
-        found = _scan(value)
-        if found is not None:
-            return found
-    for value in kwargs.values():
-        found = _scan(value)
-        if found is not None:
-            return found
-    return None
-
-
-def _non_executable_builtin_placeholder(
-    name: str, opaque_arg: Any, data: Mapping[str, Any]
-) -> HelperSpec:
-    """Build a non-executable placeholder for a builtin helper with opaque args.
-
-    Parameters
-    ----------
-    name:
-        Builtin helper name.
-    opaque_arg:
-        The decoded ``opaque_audit`` placeholder that made the helper
-        non-executable.
-    data:
-        Original serialized helper payload (used to preserve identity metadata).
-
-    Returns
-    -------
-    HelperSpec
-        An ``opaque_audit`` spec whose factory raises ``NonExecutableSpecError``
-        when fired, so a corrupted argument fails loudly at use time rather than
-        several frames downstream.
-    """
-
-    def factory() -> Callable[..., Any]:
-        """Refuse to build a runtime hook for a non-executable helper.
-
-        Raises
-        ------
-        NonExecutableSpecError
-            Always -- the helper carries an audit-only opaque argument.
-        """
-
-        raise NonExecutableSpecError(
-            f"Builtin helper {name!r} was loaded with a non-executable "
-            f"(audit-only) argument {opaque_arg!r} and cannot be run. Re-save the "
-            "intervention at level='executable_with_callables' (or 'portable') "
-            "with a reconstructible argument to obtain an executable spec."
+    if renamed_to is not None:
+        raise InvalidArgumentError(
+            f"The saved intervention names builtin helper {name!r}, which was renamed to "
+            f"{renamed_to!r} with no load alias (the rename is a clean break), so it does "
+            "not load",
+            code="intervention_helper_renamed",
+            remedy=(
+                f"rebuild the edit with {_public_helper_spelling(renamed_to)}(...) (the same "
+                "helper under its new name, same arguments and bytes) and save it again"
+            ),
+            argument="name",
+            renamed_to=renamed_to,
         )
-
-    return HelperSpec(
-        helper_name=name,
-        portability="opaque_audit",
-        kind=cast(Any, data.get("kind", "forward")),
-        direction=cast(Any, data.get("direction")),
-        factory=factory,
-        metadata=(
-            ("repr", f"<non-executable {name} helper (audit-only argument)>"),
-            ("executable", False),
-        ),
-        batch_independent=bool(data.get("batch_independent", False)),
-        compatible_with_append=bool(data.get("compatible_with_append", False)),
-    )
-
-
-def _make_generator(seed: int | None) -> torch.Generator | None:
-    """Create a hook-local CPU generator when a seed is provided.
-
-    Parameters
-    ----------
-    seed:
-        Optional seed.
-
-    Returns
-    -------
-    torch.Generator | None
-        Seeded generator or ``None`` for global RNG use.
-    """
-
-    if seed is None:
-        return None
-    generator = torch.Generator()
-    generator.manual_seed(seed)
-    return generator
-
-
-def _enqueue_nondeterminism_note(hook: HookContext, helper_name: str) -> None:
-    """Record that an unseeded stochastic helper consumed global RNG.
-
-    Parameters
-    ----------
-    hook:
-        Hook context.
-    helper_name:
-        Helper name.
-    """
-
-    # Name the site only when the fire-time spelling is a PUBLIC label. On the
-    # live door only the internal raw label exists (its ordinal need not match
-    # the final label, so suffix-stripping would name the WRONG site); the
-    # FireRecord's attachment op carries the location either way.
-    site = hook.layer_log.get("label") or hook.layer_log.get("layer_label")
-    if isinstance(site, str) and site and not site.endswith("_raw"):
-        note = f"{helper_name} used unseeded stochastic RNG at {site}"
-    else:
-        note = f"{helper_name} used unseeded stochastic RNG"
-    hook.run_ctx.setdefault("ledger_notes", []).append(note)
-    state_history = hook.run_ctx.get("state_history")
-    if isinstance(state_history, list):
-        state_history.append(note)
-
-
-def _source_tensor_or_out(source: Any, out: torch.Tensor) -> torch.Tensor:
-    """Resolve a helper source object to a tensor.
-
-    Parameters
-    ----------
-    source:
-        Source object.
-    out:
-        Fallback out.
-
-    Returns
-    -------
-    torch.Tensor
-        Source tensor.
-    """
-
-    if source is None:
-        return out
-    if isinstance(source, torch.Tensor):
-        return source
-    candidate = getattr(source, "out", None)
-    if isinstance(candidate, torch.Tensor):
-        return candidate
-    raise HookValueError(f"unsupported tensor source for helper: {type(source).__name__}")
-
-
-def _align_direction(
-    direction: torch.Tensor,
-    out: torch.Tensor,
-    *,
-    feature_axis: int | None,
-) -> torch.Tensor:
-    """Align a direction tensor with an out tensor.
-
-    Parameters
-    ----------
-    direction:
-        Direction tensor.
-    out:
-        Activation tensor.
-    feature_axis:
-        Axis receiving a vector direction.
-
-    Returns
-    -------
-    torch.Tensor
-        Broadcast-compatible direction.
-    """
-
-    if tuple(direction.shape) == tuple(out.shape):
-        return direction
-    if direction.ndim == 1 and out.ndim > 1:
-        if feature_axis is None:
-            raise AxisAmbiguityError(
-                "vector directions require explicit feature_axis to avoid axis ambiguity"
-            )
-        normalized_axis = feature_axis % out.ndim
-        if direction.shape[0] != out.shape[normalized_axis]:
-            raise HookValueError(
-                f"direction length {direction.shape[0]} does not match "
-                f"out axis {normalized_axis} size {out.shape[normalized_axis]}"
-            )
-        shape = [1] * out.ndim
-        shape[normalized_axis] = direction.shape[0]
-        return direction.reshape(shape)
+    constructor = constructors[name]
     try:
-        cast(Callable[..., object], torch.broadcast_shapes)(
-            tuple(direction.shape), tuple(out.shape)
-        )
-    except RuntimeError as exc:
-        raise HookValueError(
-            f"direction shape {tuple(direction.shape)} cannot broadcast to "
-            f"out shape {tuple(out.shape)}"
+        inspect.signature(constructor).bind(*args, **kwargs)
+    except TypeError as exc:
+        raise InvalidArgumentError(
+            f"The saved intervention calls builtin helper {name!r} with arguments its "
+            f"constructor does not take ({exc}); the spec was saved by a torchlens whose "
+            "helper keywords differ",
+            code="intervention_helper_arguments_invalid",
+            remedy=(
+                "load the spec with the torchlens version that saved it, or rebuild the "
+                "edit with the current constructor and save it again"
+            ),
+            argument="kwargs",
         ) from exc
-    return direction
-
-
-def _resolve_swap_value(other_label: Any) -> Any:
-    """Resolve a swap source for helper execution.
-
-    Parameters
-    ----------
-    other_label:
-        Tensor or Op-like object with a resolved ``out`` attribute. String
-        labels are rejected earlier, in ``swap_with``, before a ``HelperSpec``
-        is ever built -- there is no fire-time lookup table for them.
-
-    Returns
-    -------
-    Any
-        Resolved tensor or unresolved object.
-    """
-
-    if isinstance(other_label, torch.Tensor):
-        return other_label
-    return getattr(other_label, "out", other_label)
+    return constructor(*args, **kwargs)
 
 
 #: The one remedy text for the retired ``resample_ablate`` spelling, shared by
@@ -1540,6 +1152,89 @@ _RESAMPLE_ABLATE_REDIRECT = (
 #: Removed spellings: each raises the typed ``facade_redirect`` error naming
 #: its replacement (clean break, no alias).
 _REDIRECTS: dict[str, str] = {"resample_ablate": _RESAMPLE_ABLATE_REDIRECT}
+
+#: Old builtin helper names a saved spec may still carry -> the new name. A load
+#: refuses them typed (``intervention_helper_renamed``); there is no load alias.
+#: Renamed builtin helpers whose public home is the package root; the others
+#: stay under ``torchlens.intervention``.
+_ROOT_HOMED_RENAMED_HELPERS: frozenset[str] = frozenset(
+    {
+        "zero_ablate",
+        "scale",
+        "clamp",
+        "clip_norm",
+        "add_noise",
+        "project_out",
+        "mean_ablate",
+    }
+)
+
+#: Removed gradient-only helpers -> the neutral edit that replaces them. The
+#: gradient is now addressed by the site (``tl.grad(site)``), not by the edit,
+#: so a saved spec naming one refuses typed with that two-part remedy. A saved
+#: ``hook_grad`` maps to ``None``: its replacement is the user callable itself.
+_REMOVED_GRADIENT_HELPERS: dict[str, str | None] = {
+    "zero_grad": "zero_ablate",
+    "scale_grad": "scale",
+    "clamp_grad": "clamp",
+    "add_grad_noise": "add_noise",
+    "clip_grad": "clip_norm",
+    "hook_grad": None,
+}
+
+
+def _refuse_removed_gradient_helper(name: str) -> None:
+    """Raise the typed refusal for a saved spec naming a removed gradient helper.
+
+    Parameters
+    ----------
+    name:
+        Saved builtin helper name (``zero_grad``, ``hook_grad``, ...).
+
+    Raises
+    ------
+    InvalidArgumentError
+        Always, ``intervention_helper_renamed`` naming the neutral replacement.
+    """
+
+    replacement = _REMOVED_GRADIENT_HELPERS.get(name)
+    edit_spelling = (
+        "the callable itself" if replacement is None else f"torchlens.{replacement}(...)"
+    )
+    raise InvalidArgumentError(
+        f"The saved intervention names the removed gradient helper {name!r}; gradients "
+        "are addressed by the site now, so the edit is the ordinary one and the site is "
+        "wrapped in tl.grad(...). The spec does not load",
+        code="intervention_helper_renamed",
+        remedy=(
+            f"rebuild the rule as trace.do(tl.grad(site), {edit_spelling}) or "
+            f"tl.when(tl.grad(site), {edit_spelling}) and save it again"
+        ),
+        argument="name",
+        renamed_to=replacement if replacement is not None else "callable",
+    )
+
+
+def _public_helper_spelling(name: str) -> str:
+    """Return the importable public spelling of a renamed builtin helper."""
+
+    if name in _ROOT_HOMED_RENAMED_HELPERS:
+        return f"torchlens.{name}"
+    return f"torchlens.intervention.{name}"
+
+
+_RENAMED_HELPER_NAMES: dict[str, str] = {
+    "resample_ablate": "scramble_elements",
+    "grad_clamp": "clamp",
+    "grad_clip": "clip_norm",
+    "grad_noise": "add_noise",
+    "grad_scale": "scale",
+    "grad_zero": "zero_ablate",
+    "noise": "add_noise",
+    "project_off": "project_out",
+    "affine_source": "set_affine_coordinates",
+    "mean_fill": "mean_ablate",
+}
 
 
 # Under ``not TYPE_CHECKING`` so type checkers keep seeing the real module
@@ -1560,7 +1255,7 @@ if not TYPE_CHECKING:
             Typed ``facade_redirect`` for a removed spelling, plain otherwise.
         """
 
-        from ..utils.facade import resolve_facade_attr
+        from .._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
             owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
@@ -1569,17 +1264,12 @@ if not TYPE_CHECKING:
 
 __all__ = [
     "HELPER_REGISTRY_VERSION",
-    "bwd_hook",
     "clamp",
-    "grad_scale",
-    "grad_clamp",
-    "grad_clip",
-    "grad_noise",
-    "grad_zero",
+    "clip_norm",
     "helper_from_serialized",
     "mean_ablate",
-    "noise",
-    "project_off",
+    "add_noise",
+    "project_out",
     "project_onto",
     "scale",
     "scramble_elements",
@@ -1604,7 +1294,7 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     context = layer_log if layer_log else {}
     qualified = context.get("label")
     bare = context.get("layer_label")
-    pass_index = context.get("pass_index")
+    pass_index = context.get("pass_number")
 
     site_label: Any = None
     if isinstance(qualified, str) and ":" in qualified:
@@ -1616,12 +1306,18 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
 
     source_site = None
     if site_label is not None:
-        source_site = source.layer_dict_all_keys.get(site_label)
+        source_site = source._layer_dict_all_keys.get(site_label)
+    if source_site is None:
+        live_label, source_site = _live_capture_donor(source, context)
+        if source_site is not None:
+            site_label = live_label
     if source_site is None:
         raise HookValueError(
             f"patch_from source trace has no site {site_label!r}; patch "
             "selections must resolve on sites the source captured "
-            "(multi-pass sites resolve pass-qualified, 'label:pass')."
+            "(multi-pass sites resolve pass-qualified, 'label:pass'; a live "
+            "rerun or bound firing resolves to the source op captured at the "
+            "same position, only when that op has the same type and shape)."
         )
     if isinstance(site_label, str) and ":" not in site_label:
         num_passes = int(getattr(source_site, "num_passes", 1) or 1)
@@ -1641,7 +1337,13 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     return site_label, source_site
 
 
-def patch_from(source: Any) -> HelperSpec:
+def patch_from(
+    source: Any,
+    *,
+    source_site: Any = None,
+    positions: Any = None,
+    position_axis: int = 1,
+) -> Edit:
     """Create a helper that patches site values from another trace's capture.
 
     For each targeted site, the replacement value is the SOURCE trace's
@@ -1662,24 +1364,58 @@ def patch_from(source: Any) -> HelperSpec:
     ONE stochastic primitive; ``patch_from(plan)`` applies it -- one coherent
     donor per logical firing under the derived-seed law).
 
+    SOURCE-TO-TARGET MAPPING (Patchscopes, SelfIE): ``source_site=`` reads
+    the donor at another site of the source trace (a label, pass-qualified on
+    multi-pass layers, or a selector naming one op) instead of the edited
+    site, and ``positions=`` writes chosen source positions into chosen
+    target positions along ``position_axis`` (default 1, the sequence axis of
+    a ``(batch, seq, hidden)`` activation), leaving every other target
+    position unchanged. ``positions`` is an ``int`` (same position on both
+    sides), a ``{source_position: target_position}`` dict, or a list of
+    pairs; negative positions count from the end. With a position map the two
+    prompts may differ in length, and a donor batch of one broadcasts across
+    the target batch.
+
+    Parameters
+    ----------
+    source:
+        Source trace (or a ``SamplingPlan``, which takes no mapping).
+    source_site:
+        Donor site on the source trace; ``None`` reads the edited site.
+    positions:
+        Source-to-target position map; ``None`` patches the whole value.
+    position_axis:
+        Axis the positions index, on both the donor and the target value.
+
+    Returns
+    -------
+    Edit
+        The patch edit.
+
     DOCUMENTED-UNSTABLE spelling pending its naming-session ratification.
     """
 
+    from ._patch_mapping import apply_position_map, normalize_positions, resolve_source_site
     from .stochastic import SamplingPlan, plan_patch_helper
 
     if isinstance(source, SamplingPlan):
+        if source_site is not None or positions is not None:
+            raise InvalidArgumentError(
+                "patch_from(SamplingPlan) takes no source_site= or positions= mapping: "
+                "the plan already chooses its donors",
+                code="patch_positions_invalid",
+                remedy="drop source_site=/positions=, or patch from a source Trace",
+                argument="source_site" if source_site is not None else "positions",
+            )
         return plan_patch_helper(source)
 
-    identity = {
-        "source_trace_label": str(getattr(source, "trace_label", "") or ""),
-        "source_model_class": str(getattr(source, "model_class_qualname", "") or ""),
-        "source_object_id": str(id(source)),
-    }
+    pairs = normalize_positions(positions)
+    identity = _patch_source_identity(source, source_site, pairs, position_axis)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook binding source values at fire time."""
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return the source trace's recorded value for this site, at
             this site's PASS.
 
@@ -1693,13 +1429,20 @@ def patch_from(source: Any) -> HelperSpec:
 
             from .errors import HookValueError
 
-            site_label, source_site = _resolve_patch_donor_site(source, hook.layer_log)
-            value = source_site.out
+            if source_site is None:
+                site_label, donor_op = _resolve_patch_donor_site(source, ctx.op)
+            else:
+                site_label, donor_op = resolve_source_site(source, source_site)
+            value = donor_op.out
             if not isinstance(value, torch.Tensor):
                 raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
             # Never hand the source trace's stored tensor itself downstream —
             # the engine writes hook outputs into this trace's records.
-            return value.detach().clone()
+            if pairs is None:
+                return value.detach().clone()
+            return apply_position_map(
+                out, value.detach(), pairs, int(position_axis), site_label=site_label
+            )
 
         return _hook
 
@@ -1708,5 +1451,6 @@ def patch_from(source: Any) -> HelperSpec:
         kwargs=identity,
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        signal="forward",
+        is_batch_independent=True,
     )

@@ -38,7 +38,7 @@ def test_security_policy_uses_one_callable_safety_authority() -> None:
     """The unpickler aliases every shared security policy from callable safety."""
 
     from torchlens._io import _safe_unpickle
-    from torchlens.utils import _callable_safety
+    from torchlens._utils import _callable_safety
 
     authority_pairs = (
         (_callable_safety._DENIED_MODULES, _safe_unpickle._DENIED_FOREIGN_MODULES),
@@ -58,15 +58,15 @@ def test_security_policy_uses_one_callable_safety_authority() -> None:
 
 
 def test_fenced_appliance_pin_matches_the_canonical_authority() -> None:
-    """The resolver's fenced appliance copy stays equal to the canonical set."""
+    """The resolver registry's fenced appliance copy stays equal to the canonical set."""
 
-    from torchlens.intervention import resolver
-    from torchlens.utils import _callable_safety
+    from torchlens._utils import _callable_safety
+    from torchlens.intervention import _resolver_registry
 
     assert not authority_drift(
         (
             _callable_safety._APPLIANCE_MODULES,
-            resolver._TORCHLENS_APPLIANCE_MODULES,
+            _resolver_registry._TORCHLENS_APPLIANCE_MODULES,
         ),
         require_identity=False,
     )
@@ -111,11 +111,12 @@ class TestSecurityDriftGateIsRedCapable:
 def test_runnable_wire_vocabulary_uses_one_authority_per_concept() -> None:
     """Writers and readers alias the same prefix and closed-vocabulary objects."""
 
-    from torchlens import _input_walk, _runnable_execution, _runnable_state
+    from torchlens import _input_walk
     from torchlens._io import runnable_load
+    from torchlens._ir import container
+    from torchlens._runnable import execution as _runnable_execution, state as _runnable_state
+    from torchlens._utils import _callable_safety
     from torchlens.backends.torch import ops
-    from torchlens.ir import container
-    from torchlens.utils import _callable_safety
 
     authority_groups = (
         (

@@ -52,11 +52,11 @@ def main() -> None:
     torch.manual_seed(0)
     model = VmapMaskedToyTransformer(width=4).eval()
     x = torch.randn(5, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
 
     print(trace.transforms)
     print(trace["vmap_1_1"].transform_config)
-    trace.draw(vis_outpath="vmap_masked_toy_transformer", vis_save_only=True)
+    trace.draw(path="vmap_masked_toy_transformer")
 
 
 if __name__ == "__main__":

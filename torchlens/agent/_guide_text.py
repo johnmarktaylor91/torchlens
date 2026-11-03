@@ -24,10 +24,10 @@ Phase 1 (Python, your process): create and annotate evidence.
 
     import torchlens as tl
     log = tl.trace(model, x, save=tl.func("relu"))
-    tl.save(log, "run.tlspec")
+    log.save("run.tlspec")
 
 Record prompt ids, experiment labels, and share-safe token strings BEFORE
-saving (tl.report.log_value) -- never make a reader infer them from a
+saving (tl.observers.log_value) -- never make a reader infer them from a
 filename.
 
 Phase 2 (any transport): inspect the saved artifact.
@@ -49,7 +49,7 @@ and the CLI (python -m torchlens <verb>).
 - torchlens_dump: view=overview|graph|full; graph and full page op rows
   (echo data.next) and graph takes class_id= for fold drill-down.
 - torchlens_explain: the plain-language report, budgeted by max_tokens
-  (default 4000); carries the same capture/audit honesty blocks as overview.
+  (default 4,000); carries the same capture/audit honesty blocks as overview.
 - torchlens_query_sites: structured site discovery over a closed JSON
   query AST (persisted facts only; value predicates stay in Python).
 - torchlens_payload_stats: bounded numbers over saved tensors -- never the
@@ -66,6 +66,9 @@ dropped) whose how_to_get_more is a concrete next call. Row tools page
 through a transparent continuation struct; artifact or query drift between
 pages refuses typed. When the token backstop trims a page, data.next is
 re-minted at the first dropped row, so paging always reaches every row.
+The served defaults (token, row and byte limits) are configuration set from a
+corpus measurement, not a guaranteed API limit: read the values a call used
+from its limits block, and always check truncation.
 
 ## Trust boundary
 
@@ -86,7 +89,7 @@ instead. An agent that can run a model already has Python:
 
     import torchlens as tl
     log = tl.load("run.tlspec")
-    print(tl.report.explain(log, max_tokens=500))
+    print(log.explain(max_tokens=500))
 """
 
 

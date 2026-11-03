@@ -4,18 +4,23 @@ Pure facts about whether an index-based write (``__setitem__``, ``index_put``,
 ``scatter``) overwrites every element of its destination exactly once, so the
 original destination values cannot reach the output. ``exemptions.py`` combines
 these facts with the perturbed-parent slot checks in its custom exemption checks
-and posthoc overwrite decision; the checks themselves stay there.
+and posthoc overwrite decision; the checks themselves stay there. The pure ``out=``
+destination predicate (registry 2 of ``core._check_perturbation_exemptions``) lives here
+too: a write-only ``out=`` target is the same overwrite-destination contract.
 
 Split from ``validation/exemptions.py`` along this seam (R43 file-size ratchet);
 the proofs are unchanged.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
 
-from ..data_classes.op import Op
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 
 def _setitem_index_targets_are_unique(index: Any) -> bool:
@@ -248,6 +253,12 @@ def _index_put_indices_are_unique(index: tuple[Any, ...]) -> bool:
     return True
 
 
+#: Overwriting scatters, the only ops the full-overwrite proof below holds for.
+#: Accumulating writes (scatter_add, index_add) add once per index entry, so a
+#: duplicate index changes the output even when every slot is covered.
+_OVERWRITE_SCATTER_FUNC_NAMES = frozenset({"scatter", "scatter_"})
+
+
 def _get_scatter_destination_dim_index(
     layer: Op,
 ) -> tuple[torch.Tensor, int, torch.Tensor] | None:
@@ -262,16 +273,18 @@ def _get_scatter_destination_dim_index(
     -------
     tuple[torch.Tensor, int, torch.Tensor] | None
         Destination tensor, scatter dimension, and index tensor, or ``None``
-        when the call shape is unsupported or uses reduce semantics.
+        when the op is not an overwriting scatter (matched by name, never by
+        argument layout alone), the call shape is unsupported, or it uses
+        reduce semantics.
     """
 
+    if getattr(layer, "func_name", None) not in _OVERWRITE_SCATTER_FUNC_NAMES:
+        return None
     args = layer.saved_args
     kwargs = layer.saved_kwargs
     if len(args) < 1 or not isinstance(args[0], torch.Tensor):
         return None
-    if kwargs.get("reduce") is not None:
-        return None
-    if len(args) > 4 and args[4] is not None:
+    if kwargs.get("reduce") is not None or (len(args) > 4 and args[4] is not None):
         return None
 
     dest = args[0]
@@ -317,6 +330,53 @@ def _scatter_index_fully_overwrites_dim(dest: torch.Tensor, dim: int, index: tor
     for row in moved:
         row_values = {int(value) for value in row.tolist() if 0 <= int(value) < n_positions}
         if not required.issubset(row_values):
+            return False
+    return True
+
+
+def _perturbed_parents_only_occupy_out_kwarg(layer: Op, layers_to_perturb: list[str]) -> bool:
+    """Return whether every perturbed parent is purely an ``out=`` destination.
+
+    Parameters
+    ----------
+    layer:
+        Operation whose parents are being perturbed.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+
+    Returns
+    -------
+    bool
+        True when each perturbed parent's only recorded position on ``layer``
+        is the ``out`` keyword argument (a write-only storage target under the
+        torch ``out=`` convention). A parent that also occupies a positional or
+        non-``out`` keyword slot feeds real values and is NOT exempt. TUPLE
+        ``out=`` destinations (``torch.sort(x, out=(values, indices))``) record
+        each member at a nested ``("out", index)`` key; those slots are the
+        same write-only destination contract and are accepted identically.
+    """
+
+    def _is_out_destination_key(key: Any) -> bool:
+        """Return whether an arg-map key addresses the ``out=`` destination."""
+
+        if key == "out":
+            return True
+        return isinstance(key, tuple) and len(key) == 2 and key[0] == "out"
+
+    if not layers_to_perturb:
+        return False
+    positions = getattr(layer, "parent_arg_positions", None) or {}
+    arg_positions = positions.get("args", {}) or {}
+    kwarg_positions = positions.get("kwargs", {}) or {}
+    for perturbed_label in layers_to_perturb:
+        if perturbed_label in arg_positions.values():
+            return False
+        occupied_kwargs = {
+            key for key, label in kwarg_positions.items() if label == perturbed_label
+        }
+        if not occupied_kwargs:
+            return False
+        if not all(_is_out_destination_key(key) for key in occupied_kwargs):
             return False
     return True
 

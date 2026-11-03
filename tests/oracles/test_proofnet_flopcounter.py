@@ -19,9 +19,9 @@ from torch.utils.flop_counter import FlopCounterMode
 def _true_macs(trace) -> int:
     """Read the disclosed true-MAC figure off the flops report."""
 
-    from torchlens.report import flops_report
+    from torchlens.report import flops
 
-    text = str(flops_report(trace))
+    text = str(flops(trace))
     match = re.search(r"true MACs: (\d+)", text)
     assert match, f"flops_report no longer discloses true MACs: {text[:200]}"
     return int(match.group(1))

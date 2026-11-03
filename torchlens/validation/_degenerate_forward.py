@@ -34,11 +34,16 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..backends.torch._autograd_grad_boundary import is_autograd_grad_recorder
-from .diagnostics import CHECK_DEGENERATE_FORWARD, CHECK_PERTURBATION, ValidationFailure
+from ..backends.torch._autograd_grad_marker import is_autograd_grad_recorder
+from .diagnostics import (
+    CHECK_DEGENERATE_FORWARD,
+    CHECK_PERTURBATION,
+    ValidationFailure,
+    record_validation_failure,
+)
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
 
 DEGENERATE_NON_FINITE_OUTPUT = "non_finite_output"
 DEGENERATE_ZERO_GRADIENT = "zero_gradient"
@@ -129,7 +134,7 @@ def perturbation_insensitive_failure(
     extra: dict[str, Any] = {"perturbed_parents": list(perturbed_parents)}
     if kind is None:
         return ValidationFailure(
-            check=CHECK_PERTURBATION,
+            check_name=CHECK_PERTURBATION,
             op_label=op_label,
             func_name=func_name,
             message=(
@@ -145,7 +150,7 @@ def perturbation_insensitive_failure(
         else "the saved autograd.grad gradient is identically zero"
     )
     return ValidationFailure(
-        check=CHECK_DEGENERATE_FORWARD,
+        check_name=CHECK_DEGENERATE_FORWARD,
         op_label=op_label,
         func_name=func_name,
         message=(
@@ -201,13 +206,11 @@ def fail_if_final_outputs_non_finite(trace: Any, ground_truth_outputs: Sequence[
     tensors = list(_out_tensors(list(ground_truth_outputs)))
     if not _all_non_finite(tensors):
         return False
-    from .diagnostics import record_validation_failure
-
     output_layers = [str(label) for label in getattr(trace, "output_layers", []) or []]
     record_validation_failure(
         trace,
         ValidationFailure(
-            check=CHECK_DEGENERATE_FORWARD,
+            check_name=CHECK_DEGENERATE_FORWARD,
             op_label=output_layers[0] if output_layers else None,
             message=(
                 "degenerate forward: every element of every final model output is "

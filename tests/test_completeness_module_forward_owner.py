@@ -24,8 +24,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._user_funcs import _validate_forward_pass_torch
 from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens.user_funcs import _validate_forward_pass_torch
 from torchlens.validation._completeness_backstop import completeness_backstop_counts
 
 _WEIGHT_NORM_MODULE = sys.modules.get("torch.nn.utils.weight_norm")
@@ -106,6 +106,9 @@ class _NestedEqualBranch(nn.Module):
         return self.block(x)
 
 
+_COPY_FALLBACK_DISCLOSURE = "could not deepcopy the model|model could not be copied"
+
+
 @pytest.fixture
 def _restore_alias() -> Iterator[None]:
     """Leave the weight_norm module alias as the test found it."""
@@ -118,10 +121,13 @@ def _restore_alias() -> Iterator[None]:
 
 
 def _validate(model: nn.Module) -> bool:
+    # Legacy weight_norm leaves a non-leaf ``weight`` that copy.deepcopy refuses,
+    # so validation discloses the live-model fallback it takes instead.
     torch.manual_seed(0)
-    return _validate_forward_pass_torch(
-        model, [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
-    )
+    with pytest.warns(RuntimeWarning, match=_COPY_FALLBACK_DISCLOSURE):
+        return _validate_forward_pass_torch(
+            model, [torch.randn(1, 4, 8)], {}, seed=0, validate_metadata=True
+        )
 
 
 @pytest.mark.usefixtures("_restore_alias")
@@ -149,7 +155,7 @@ def test_equal_allclose_control_flow_still_validates(model_cls: type[nn.Module])
 
     torch.manual_seed(0)
     passed = _validate_forward_pass_torch(
-        model_cls(), [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
+        model_cls(), [torch.randn(1, 4, 8)], {}, seed=0, validate_metadata=True
     )
     assert passed, tl.validation.last_validation_failure()
 
@@ -199,8 +205,8 @@ def _backstop_trace(
     """Wrap census inputs in a trace-shaped object for the backstop helper."""
 
     return SimpleNamespace(
-        layer_list=layer_list,
-        completeness_decompositions=decompositions,
+        _layer_list=layer_list,
+        _health_completeness_decompositions=decompositions,
         completeness_diagnostics=diagnostics,
     )
 

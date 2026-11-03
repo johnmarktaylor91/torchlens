@@ -15,8 +15,8 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.fastlog import CaptureSpec
-from torchlens.ir.summary_role import summary
+from torchlens._ir.summary_role import summary
+from torchlens.recording import CaptureSpec
 
 
 def _model() -> torch.nn.Module:
@@ -37,6 +37,22 @@ class _PtrProbe:
         return t.detach().float().sum().unsqueeze(0)
 
 
+class _HoldingPtrProbe(_PtrProbe):
+    """Pointer probe that also keeps every tensor it saw alive.
+
+    For the copy-path test only: a converted copy freed after the reducer could
+    hand its address to a later live output, a false overlap.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.seen: list[torch.Tensor] = []
+
+    def __call__(self, t: torch.Tensor) -> torch.Tensor:
+        self.seen.append(t)
+        return super().__call__(t)
+
+
 class TestCloneSkipTrace:
     """Exhaustive trace path: the reducer sees live storage."""
 
@@ -54,7 +70,9 @@ class TestCloneSkipTrace:
             log = tl.trace(
                 model,
                 x,
-                save=tl.options.SaveOptions(activation_transform=probe, save_raw_activations=False),
+                capture=tl.options.CaptureOptions(
+                    activation_transform=probe, save_raw_activations=False
+                ),
             )
         finally:
             for handle in handles:
@@ -76,7 +94,9 @@ class TestCloneSkipTrace:
         log = tl.trace(
             model,
             x,
-            save=tl.options.SaveOptions(activation_transform=probe, save_raw_activations=False),
+            capture=tl.options.CaptureOptions(
+                activation_transform=probe, save_raw_activations=False
+            ),
         )
         retained_ptrs = {
             op.transformed_out.untyped_storage().data_ptr()
@@ -100,7 +120,7 @@ class TestCloneSkipTrace:
             log = tl.trace(
                 model,
                 x,
-                save=tl.options.SaveOptions(activation_transform=summary(lambda t: t.sum())),
+                capture=tl.options.CaptureOptions(activation_transform=summary(lambda t: t.sum())),
             )
         finally:
             for handle in handles:
@@ -128,8 +148,9 @@ class TestCloneSkipFastlog:
                 model,
                 x,
                 default_op=CaptureSpec(save_out=True),
-                activation_transform=probe,
-                save_raw_activations=False,
+                capture=tl.options.CaptureOptions(
+                    activation_transform=probe, save_raw_activations=False
+                ),
             )
         finally:
             for handle in handles:
@@ -141,23 +162,28 @@ class TestCloneSkipFastlog:
 
     def test_dtype_respelling_keeps_copy_path(self) -> None:
         # spec.dtype forces the copy path (the conversion allocates anyway);
-        # the reducer then sees the converted COPY, not live storage.
+        # the reducer then sees the converted COPY, not live storage. The live
+        # outputs are held until the comparison so the allocator cannot hand a
+        # freed output's address to a later copy (a false overlap).
         model = _model()
         x = torch.randn(2, 64)
         live_ptrs: list[int] = []
+        live_outputs: list[torch.Tensor] = []
 
         def hook(module: torch.nn.Module, args: tuple, output: torch.Tensor) -> None:
+            live_outputs.append(output)
             live_ptrs.append(output.untyped_storage().data_ptr())
 
         handles = [m.register_forward_hook(hook) for m in model]
-        probe = _PtrProbe()
+        probe = _HoldingPtrProbe()
         try:
             tl.record(
                 model,
                 x,
                 default_op=CaptureSpec(save_out=True, dtype=torch.float64),
-                activation_transform=probe,
-                save_raw_activations=False,
+                capture=tl.options.CaptureOptions(
+                    activation_transform=probe, save_raw_activations=False
+                ),
             )
         finally:
             for handle in handles:
@@ -175,11 +201,11 @@ class TestReduceOnlyBudget:
         log = tl.trace(
             model,
             x,
-            save=tl.options.SaveOptions(
+            capture=tl.options.CaptureOptions(
+                save_budget=8192,
                 activation_transform=summary(lambda t: t.float().sum().unsqueeze(0)),
                 save_raw_activations=False,
             ),
-            capture=tl.options.CaptureOptions(save_budget=8192),
         )
         assert log["linear_1_1"].transformed_out is not None
 
@@ -193,10 +219,9 @@ class TestReduceOnlyBudget:
             tl.trace(
                 model,
                 x,
-                save=tl.options.SaveOptions(
-                    # A summary that is itself large: a full-size detached copy.
+                capture=tl.options.CaptureOptions(
+                    save_budget=8192,
                     activation_transform=summary(lambda t: t.float().flatten().clone()),
                     save_raw_activations=False,
                 ),
-                capture=tl.options.CaptureOptions(save_budget=8192),
             )

@@ -5,7 +5,7 @@ absolute term sits at denormal scale by design; a reconstruction is an
 independent summation, so at cancellation sites (large addends, small output)
 the replay-shaped gate refused numerically CORRECT reconstructions (measured
 19/36, input-dependently). The separate model in
-``torchlens.semantic.tolerances`` adds an elementwise accumulated-|addend|
+``torchlens._semantic.tolerances`` adds an elementwise accumulated-|addend|
 magnitude term; these tests pin BOTH directions: correct reconstructions pass
 across scales/shapes/seeds, and planted corruption (all-zero, sign flip,
 permutation) still fails with the magnitude term active.
@@ -19,7 +19,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from torchlens.semantic.tolerances import (
+from torchlens._semantic.tolerances import (
     reconstruction_error_budget,
     within_reconstruction_tolerance,
 )
@@ -135,7 +135,7 @@ def test_replay_table_untouched_by_this_model() -> None:
     table goes red here.
     """
 
-    from torchlens.utils.tensor_utils import _tolerances_for_dtype
+    from torchlens._utils.tensor_utils import _tolerances_for_dtype
 
     rtol, atol = _tolerances_for_dtype(torch.float32)
     finfo = torch.finfo(torch.float32)
@@ -196,7 +196,7 @@ def test_per_head_result_orientation_from_module_class(projection: str) -> None:
 
     pytest.importorskip("transformers")
     import torchlens as tl
-    from torchlens.semantic.reconstruction import _reconstruct_checked, find_sdpa_op
+    from torchlens._semantic.reconstruction import _reconstruct_checked, find_sdpa_op
 
     torch.manual_seed(3)
     n_heads, d_head, seq = 2, 4, 5
@@ -212,7 +212,8 @@ def test_per_head_result_orientation_from_module_class(projection: str) -> None:
     log = tl.trace(
         model,
         [q, k, v],
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     try:
         module = log.modules["self"]

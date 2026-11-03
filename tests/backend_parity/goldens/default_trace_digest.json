@@ -17,11 +17,9 @@
         "fc2"
       ],
       "ops": [
-        "input_1:1",
         "linear_1_1:1",
         "relu_1_2:1",
-        "linear_2_3:1",
-        "output_1:1"
+        "linear_2_3:1"
       ],
       "params": [
         "fc1.weight",
@@ -233,8 +231,6 @@
         "lookup_keys": [
           -1,
           4,
-          "fc2",
-          "fc2:1",
           "output",
           "output_1",
           "output_1",
@@ -268,13 +264,13 @@
     "param_source": "native-module"
   },
   "sha256_chunks": [
-    "4367500a",
-    "1adf79ee",
-    "dc6eb4a9",
-    "783cac89",
-    "fddcf488",
-    "662170fe",
-    "a54576c4",
-    "6e2643b2"
+    "88c969cb",
+    "f51400c2",
+    "64cc0809",
+    "81a641b9",
+    "fef36166",
+    "b083068e",
+    "c5b9d4da",
+    "d3568f5a"
   ]
 }

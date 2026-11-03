@@ -23,7 +23,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization.auto_collapse import _run_fold_members_uniform
+from torchlens._visualization.auto_collapse import _run_fold_members_uniform
 
 
 class _ConvBlock(nn.Module):
@@ -160,9 +160,8 @@ def test_fold_honesty_uniform_plateau_dot_differs(tmp_path) -> None:
         trace.draw(
             collapse="auto",
             fold_repeats=True,
-            vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(outpath),
+            file_format="dot",
+            path=str(outpath),
         )
         sources.append((tmp_path / f"plateau_{variant}.dot").read_text())
     assert sources[0] != sources[1], (
@@ -187,9 +186,8 @@ def test_fold_honesty_dot_sources_differ(tmp_path) -> None:
         trace.draw(
             collapse="max",
             fold_repeats=True,
-            vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(outpath),
+            file_format="dot",
+            path=str(outpath),
         )
         sources.append((tmp_path / f"fold_{variant}.dot").read_text())
     assert sources[0] != sources[1], (
@@ -275,9 +273,8 @@ def test_fold_honesty_topology_dot_differs(tmp_path) -> None:
             trace.draw(
                 collapse=mode,
                 fold_repeats=True,
-                vis_save_only=True,
-                vis_fileformat="dot",
-                vis_outpath=str(outpath),
+                file_format="dot",
+                path=str(outpath),
             )
             sources.append((tmp_path / f"topo_{mode}_{variant}.dot").read_text())
         assert sources[0] != sources[1], (
@@ -359,9 +356,8 @@ def test_fold_honesty_scalar_operand_dot_differs(tmp_path) -> None:
             trace.draw(
                 collapse=mode,
                 fold_repeats=True,
-                vis_save_only=True,
-                vis_fileformat="dot",
-                vis_outpath=str(outpath),
+                file_format="dot",
+                path=str(outpath),
             )
             sources.append((tmp_path / f"scalar_{mode}_{variant}.dot").read_text())
         assert sources[0] != sources[1], (
@@ -444,9 +440,8 @@ def test_fold_honesty_exterior_binding_dot_differs(tmp_path) -> None:
             trace.draw(
                 collapse=mode,
                 fold_repeats=True,
-                vis_save_only=True,
-                vis_fileformat="dot",
-                vis_outpath=str(outpath),
+                file_format="dot",
+                path=str(outpath),
             )
             sources.append((tmp_path / f"bind_{mode}_{variant}.dot").read_text())
         assert sources[0] != sources[1], (
@@ -469,7 +464,7 @@ def test_run_fold_never_folds_unresolvable_wiring(monkeypatch) -> None:
     # F11 (collapse memo item 6): the wiring walk moved to
     # _collapse_signatures with the B1 fingerprint memo; the patch target
     # follows the callee's defining module so the degrade arm still fires.
-    from torchlens.visualization import _collapse_signatures, auto_collapse
+    from torchlens._visualization import _collapse_signatures, auto_collapse
 
     trace = tl.trace(_WiringStack([False, False, False]), torch.randn(2, 8))
     assert _run_fold_members_uniform(trace, ("blocks.0", "blocks.1", "blocks.2"))
@@ -510,7 +505,7 @@ def test_indexed_parent_stem_shared_for_bare_root_children() -> None:
     each carried a DISTINCT run key and no run could ever extend.
     """
 
-    from torchlens.visualization.auto_collapse import _indexed_parent_stem
+    from torchlens._visualization.auto_collapse import _indexed_parent_stem
 
     stems = {_indexed_parent_stem(str(i)) for i in range(8)}
     assert len(stems) == 1, f"root siblings must share one stem; got {stems}"
@@ -529,7 +524,7 @@ def test_fold_repeats_true_folds_root_child_runs() -> None:
     the inertness was scoped precisely to direct children of the root.
     """
 
-    from torchlens.visualization.auto_collapse import resolve_repeat_folds
+    from torchlens._visualization.auto_collapse import resolve_repeat_folds
 
     torch.manual_seed(0)
     trace = tl.trace(nn.Sequential(*[_LinBlock() for _ in range(8)]), torch.randn(2, 8))
@@ -560,9 +555,8 @@ def test_fold_repeats_true_root_child_dot_not_inert(tmp_path) -> None:
         trace.draw(
             collapse="none",
             fold_repeats=fold_repeats,
-            vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(outpath),
+            file_format="dot",
+            path=str(outpath),
         )
         sources[fold_repeats] = (tmp_path / f"root_fold_{fold_repeats}.dot").read_text()
     assert sources[True] != sources[False], (

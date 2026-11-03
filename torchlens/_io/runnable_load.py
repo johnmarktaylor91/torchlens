@@ -18,15 +18,13 @@ from typing import Any, cast
 
 import torch
 
+from torchlens._runnable import ReadinessReport, RunnableCompatibility, RunnableDiagnostic
+
 from .. import _state
+from .._constants import get_orig_torch_funcs
 from .._errors import _ActionableErrorMixin
 from .._input_walk import INPUT_CONTAINER_KINDS
-from .._runnable_state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
-from ..backends import TORCH_BACKEND_NAME
-from ..constants import get_orig_torch_funcs
-from ..errors._base import TorchLensError
-from ..intervention.types import FunctionRegistryKey
-from ..runnable import (
+from .._runnable import (
     LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
@@ -64,7 +62,6 @@ from ..runnable import (
     PayloadLayerDescriptor,
     PayloadLayersDescriptor,
     ProducerPreflight,
-    ReadinessReport,
     ReadinessStatus,
     ReplayWitnessStructure,
     RequiredWitnessFamily,
@@ -72,8 +69,6 @@ from ..runnable import (
     ResolverRecord,
     ResolverStatus,
     RunnableCallDescriptor,
-    RunnableCompatibility,
-    RunnableDiagnostic,
     RunnableErrorCode,
     RunnableRngProfile,
     RunProvider,
@@ -94,13 +89,17 @@ from ..runnable import (
     derive_required_witness_members,
     derived_witness_completeness,
 )
-from ..utils._callable_safety import (
+from .._runnable.state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
+from .._utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
     is_pure_forward_callable,
     unsafe_callable_reason,
 )
-from ..utils._torch_compat import resolve_runnable_torch_alias
-from ..utils.display import identity as _module_boundary_identity
+from .._utils._torch_compat import resolve_runnable_torch_alias
+from ..backends import TORCH_BACKEND_NAME
+from ..errors._base import TorchLensError
+from ..intervention.types import FunctionRegistryKey
+from ._runnable_synthetic import TORCHLENS_SYNTHETIC_CALLABLES
 from ._torch_symbols import torch_attr
 from .runnable_coherence import _callable_registry_contradiction
 
@@ -135,20 +134,12 @@ _ENUMERATED_TORCH_NAMESPACES = frozenset(
     }
 )
 _REMOVED_TORCH_CALLABLES = frozenset({"torch.gesv"})
-# TorchLens-owned synthetic ops that capture records as computational calls. The module
-# boundary mint (``_state._decorated_identity``: ``nn.Identity`` and pass-through module
-# outputs) records ``torchlens.utils.display.identity``, a pure pass-through. This is a
-# closed table keyed on the exact persisted registry key and resolved by in-memory
-# reference: no artifact-selected module is ever imported.
+# TorchLens-owned synthetic ops: a closed table resolved by in-memory reference.
 _TORCHLENS_SYNTHETIC_CALLABLES: Mapping[FunctionRegistryKey, tuple[str, Callable[..., Any]]] = {
-    FunctionRegistryKey(
-        "custom",
-        "identity",
-        "function",
-        import_path="torchlens.utils.display:identity",
-    ): ("torchlens.utils.display.identity", _module_boundary_identity),
+    FunctionRegistryKey(space, name, kind, import_path=path): entry
+    for (space, name, kind, path), entry in TORCHLENS_SYNTHETIC_CALLABLES.items()
 }
-# Canonical copy lives in ``torchlens.utils._callable_safety`` so the capture-side
+# Canonical copy lives in ``torchlens._utils._callable_safety`` so the capture-side
 # keyer, this resolver, and the security gate's recognized-operator predicate can
 # never drift apart on the safe pure-read property surface.
 _SAFE_TENSOR_PROPERTY_NAMES = _PURE_TENSOR_PROPERTY_NAMES
@@ -341,7 +332,7 @@ def _validate_input_structure_witnesses(witnesses: Sequence[ControlWitness]) -> 
     two-string type ref, and a ``str | int`` component path.
     """
 
-    from .._runnable_execution import _decode_literal  # lazy: layering, not a cycle at import
+    from .._runnable.verification import _decode_literal
 
     field = "control_witnesses.input_structure"
     facts: list[Mapping[str, Any]] = []
@@ -423,7 +414,7 @@ def _validate_state_metadata_fact_witnesses(witnesses: Sequence[ControlWitness])
     refused HERE -- ``context_field_invalid``-class, analysis-only load -- never consumed.
     """
 
-    from .._runnable_execution import _decode_literal  # lazy: layering, not a cycle at import
+    from .._runnable.verification import _decode_literal
 
     for witness in witnesses:
         if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
@@ -548,7 +539,7 @@ def _validate_required_witness_inventory(
     literal stripping cannot hide behind site-level coverage.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable.verification import _decode_literal
     from .runnable import (
         EMPTY_CONTAINER_PATH_MARKER,
         required_witness_family_members,
@@ -1046,6 +1037,37 @@ def _validate_structural_witness_discharge(
             )
 
 
+def _validate_version_alias_targets(context: _WitnessValidationContext) -> None:
+    """Refuse a version alias of a version alias.
+
+    A version alias (``version_of`` and ``producer_slot_id`` both naming one slot) is
+    the per-consumer version of a produced slot; bind writes the produced value into
+    each direct alias and never into an alias of an alias, and the producer never
+    records one. Refusing it keeps every alias one level deep, so the run's alias maps
+    stay linear in the descriptor.
+
+    Parameters
+    ----------
+    context:
+        Indexed descriptor state for the validation pass.
+    """
+
+    for slot in context.descriptor.tensor_slots:
+        if slot.version_of is None or slot.version_of != slot.producer_slot_id:
+            continue
+        target = context.slot_by_id.get(slot.version_of)
+        if (
+            target is not None
+            and target.version_of is not None
+            and target.version_of == target.producer_slot_id
+        ):
+            raise ContextFieldInvalidError(
+                context.field,
+                f"version alias {slot.slot_id!r} names version alias {target.slot_id!r}; "
+                "aliases are one level deep",
+            )
+
+
 def _validate_terminal_slot_totality(context: _WitnessValidationContext) -> None:
     """Validate structural claims for every terminal call-produced slot.
 
@@ -1153,7 +1175,7 @@ def _validate_input_boundary_metadata_agreement(context: _WitnessValidationConte
         Indexed descriptor state for the validation pass.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable.verification import _decode_literal
 
     descriptor = context.descriptor
     boundary_tensor_sites: set[tuple[Any, Any, str]] = set()
@@ -1240,7 +1262,7 @@ def _validate_state_metadata_disposition(context: _WitnessValidationContext) -> 
         Indexed descriptor state for the validation pass.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable.verification import _decode_literal
 
     descriptor = context.descriptor
     facts_by_name: dict[str, tuple[bool, bool]] = {}
@@ -1320,7 +1342,7 @@ def _validate_opaque_leaf_gap_anchors(context: _WitnessValidationContext) -> Non
         Indexed descriptor state for the validation pass.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable.verification import _decode_literal
 
     descriptor = context.descriptor
     opaque_literal_members: set[str] = set()
@@ -1417,6 +1439,7 @@ def validate_witness_obligations(
     )
     _validate_witness_identity(context)
     _validate_call_references(context)
+    _validate_version_alias_targets(context)
     _validate_structural_witness_discharge(context, container_members=container_members)
     _validate_terminal_slot_totality(context)
     _validate_conditional_predicate_pairing(context)
@@ -1593,7 +1616,7 @@ def _validate_slot_shape(
     that fits signed 64-bit (torch storage sizes are int64). Deliberately NO
     absolute byte cap here -- real slots (multi-GiB LLM embeddings) must keep
     loading; run-preparation magnitude gating is the allocation preflight in
-    ``_runnable_state.py``, and embedded-payload slots stay value-anchored by
+    ``_runnable/state.py``, and embedded-payload slots stay value-anchored by
     the strict binder and the safetensors header.
     """
 
@@ -1914,7 +1937,7 @@ def attach_sparse_run_readiness(
             "backend context, or physical input fingerprints, and absent "
             "context is never defaulted. Re-capture and re-save with this "
             f"TorchLens version to produce {RUNNABLE_TLSPEC_SCHEMA_VERSION!r}.",
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="descriptor_legacy_version",
             details=(
                 ("capability", capability),
@@ -1925,7 +1948,7 @@ def attach_sparse_run_readiness(
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=capability,
             resolver_records=(),
             state_sources_available=(),
@@ -1943,14 +1966,14 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             RunnableErrorCode.CONTEXT_FIELD_INVALID,
             str(exc),
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="context_parse_validation",
             details=(("context_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -1968,14 +1991,14 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             exc.code,
             str(exc),
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="descriptor_parse",
             details=(("descriptor_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -1988,13 +2011,13 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
             f"Sparse runnable descriptor could not be parsed: {exc}",
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="descriptor_parse",
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -2020,14 +2043,14 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             RunnableErrorCode.CONTEXT_FIELD_INVALID,
             str(exc),
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="container_anchor_validation",
             details=(("context_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -2047,7 +2070,7 @@ def attach_sparse_run_readiness(
     # left to the resolver's own richer readiness/``ReattachError`` path.
     recorded_func_names = {
         str(getattr(layer, "layer_label", "")): getattr(layer, "func_name", None)
-        for layer in getattr(trace, "layer_list", []) or ()
+        for layer in trace._layer_list or ()
     }
     report, attachments = preflight_sparse_run_descriptor(
         descriptor, recorded_func_names=recorded_func_names
@@ -2985,7 +3008,7 @@ def _readiness_report(
 def _analysis_only_readiness(trace: Any) -> ReadinessReport:
     """Build unsupported readiness for a loaded analysis-only Trace."""
 
-    backend = str(getattr(trace, "backend", "unknown"))
+    backend = str(trace._provenance_backend)
     diagnostic = _diagnostic(
         RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
         "Loaded analysis artifact has no sparse runnable descriptor.",
@@ -3050,7 +3073,7 @@ def _diagnostic(
         current_runtime=current_runtime,
         detection_stage=detection_stage,
         resolver_provenance=provenance,
-        analysis_load_available=True,
+        is_analysis_load_available=True,
         details=details,
     )
 
@@ -3475,7 +3498,7 @@ def _parse_diagnostic(value: Mapping[str, Any]) -> RunnableDiagnostic:
         resolver_provenance=_optional_string(
             value.get("resolver_provenance"), "resolver_provenance"
         ),
-        analysis_load_available=_boolean(value, "analysis_load_available"),
+        is_analysis_load_available=_boolean(value, "analysis_load_available"),
         details=tuple(details),
     )
 
@@ -3594,7 +3617,7 @@ def _validate_torch_device_literal_shape(qualname: str) -> None:
     """Refuse a malformed ``torch.device(...)`` literal payload at descriptor parse (r41 secC).
 
     Parse-time belt for the run-time typed wrap in
-    ``torchlens._runnable_execution._decode_torch_symbol``: only the DEVICE literal's
+    ``torchlens._runnable.execution._decode_torch_symbol``: only the DEVICE literal's
     payload is validated here -- ``torch.device`` construction is inert (no import, no
     exec; it succeeds for absent backends such as ``cuda:0`` on a CPU-only host, so it
     cannot over-refuse) -- while the symbol ALLOWLIST stays exclusively the runtime

@@ -4,17 +4,20 @@ Split out of ``save.py`` (C03 fix cycle): the compat preview owns the
 site-key-first join (surgery Build 0b) -- the structural key is the join
 identity, labels stay display-only disclosure. ``save.py`` re-exports the
 public names, so ``torchlens.intervention.save.check_spec_compat`` and
-``torchlens.validation.check_spec_compat`` keep resolving.
+``torchlens.intervention.check_spec_compat`` keep resolving.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
+from ._spec_codec import _target_spec_from_json
 from .errors import GraphShapeMismatchError, SiteResolutionError
-from .resolver import resolve_sites
 from .types import InterventionSpec
+
+if TYPE_CHECKING:
+    from .._selection.resolver import _SiteTable
 
 __all__ = ["SpecCompat", "TargetManifestDiff", "check_spec_compat"]
 
@@ -51,7 +54,7 @@ class SpecCompat:
 
     outcome: Literal["EXACT", "COMPATIBLE_WITH_CONFIRMATION", "FAIL"]
     diff: TargetManifestDiff
-    targets_resolve_identically: bool
+    has_identical_target_resolution: bool
     #: Human-readable site-level diff (C03; empty when no keys on either side).
     site_diff: str = ""
 
@@ -74,6 +77,22 @@ def _site_key_for_label(log: Any, label: str) -> str | None:
     return key if isinstance(key, str) else None
 
 
+def _site_keys_for_table(log: Any, table: _SiteTable) -> list[str | None]:
+    """Return each resolved site's structural key, in table order.
+
+    Keys are looked up by each site record's own pass-qualified label, never by
+    ``_SiteTable.labels()``: those are layer labels, which a multi-pass layer
+    repeats once per pass and which name no single op.
+    """
+    from .._selection.resolver import _site_record
+
+    keys: list[str | None] = []
+    for site in table:
+        label = getattr(_site_record(site), "label", None)
+        keys.append(_site_key_for_label(log, label) if isinstance(label, str) else None)
+    return keys
+
+
 def _resolution_fanout_bound(log: Any, *, min_required: int = 1) -> int:
     """Return the strict resolver fanout bound for persistence workflows.
 
@@ -90,8 +109,8 @@ def _resolution_fanout_bound(log: Any, *, min_required: int = 1) -> int:
         Explicit resolver fanout bound.
     """
 
-    layer_list = getattr(log, "layer_list", None)
-    layer_count = len(layer_list) if layer_list is not None else len(getattr(log, "layer_logs", {}))
+    layer_list = log._layer_list
+    layer_count = len(layer_list) if layer_list is not None else len(log._layer_logs)
     return max(1, int(min_required), int(layer_count))
 
 
@@ -123,8 +142,7 @@ class _EntryFacts(NamedTuple):
 
 def _resolve_entry(new_log: Any, entry: dict[str, Any], graph_hash: Any) -> _EntryFacts:
     """Resolve one manifest entry's selector on the new log (pure lookup)."""
-
-    from .save import _target_spec_from_json
+    from .._selection.resolver import _resolve_sites
 
     saved_labels = list(entry.get("resolved_labels", []))
     saved_keys_raw = entry.get("resolved_site_keys")
@@ -133,23 +151,18 @@ def _resolve_entry(new_log: Any, entry: dict[str, Any], graph_hash: Any) -> _Ent
     hash_matches = entry.get("graph_shape_hash") == graph_hash
     selector = _target_spec_from_json(entry["selector"])
     try:
-        resolved_labels = list(
-            resolve_sites(
-                new_log,
-                selector,
-                strict=True,
-                max_fanout=_resolution_fanout_bound(new_log, min_required=len(saved_labels)),
-            ).labels()
+        table = _resolve_sites(
+            new_log,
+            selector,
+            strict=True,
+            max_fanout=_resolution_fanout_bound(new_log, min_required=len(saved_labels)),
         )
     except SiteResolutionError as exc:
         return _EntryFacts(
             saved_labels, saved_keys, keys_complete, hash_matches, None, [], str(exc)
         )
-    resolved_keys = [
-        key
-        for key in (_site_key_for_label(new_log, label) for label in resolved_labels)
-        if isinstance(key, str)
-    ]
+    resolved_labels = list(table.labels())
+    resolved_keys = [key for key in _site_keys_for_table(new_log, table) if isinstance(key, str)]
     return _EntryFacts(
         saved_labels, saved_keys, keys_complete, hash_matches, resolved_labels, resolved_keys, None
     )
@@ -244,14 +257,14 @@ def _derive_outcome(
     return outcome, targets_identical, diff
 
 
-def check_spec_compat(spec: InterventionSpec, new_log: Any) -> SpecCompat:
+def check_spec_compat(spec: InterventionSpec, trace: Any) -> SpecCompat:
     """Check whether a loaded intervention spec targets a new model log.
 
     Parameters
     ----------
     spec:
         Loaded or in-memory intervention spec.
-    new_log:
+    trace:
         Model log to check.
 
     Returns
@@ -260,10 +273,10 @@ def check_spec_compat(spec: InterventionSpec, new_log: Any) -> SpecCompat:
         Compatibility classification and target diff.
     """
 
-    graph_hash = getattr(new_log, "graph_shape_hash", None)
+    graph_hash = trace._provenance_fingerprint
     res = _ManifestResolution()
     for index, entry in enumerate(spec.metadata.get("target_manifest", [])):
-        _fold_entry(res, entry, index, _resolve_entry(new_log, entry, graph_hash))
+        _fold_entry(res, entry, index, _resolve_entry(trace, entry, graph_hash))
     outcome, targets_identical, diff = _derive_outcome(res)
 
     # A graph_shape_hash mismatch alone cannot distinguish a genuinely different

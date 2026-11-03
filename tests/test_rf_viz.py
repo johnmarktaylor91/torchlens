@@ -16,7 +16,7 @@ from torchlens.receptive_field import _rules, node_spec
 from torchlens.receptive_field._errors import AmbiguousInputError, ReceptiveFieldError
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
 from torchlens.receptive_field._types import (
-    GradientReceptiveField,
+    GradReceptiveField,
     GridLayout,
     ReceptiveField,
     ReceptiveFieldAlignment,
@@ -55,7 +55,7 @@ def _descriptor(
         input_op_label="input_1_raw",
         input_shape=shape,
         axes=axes,
-        layout=GridLayout(
+        axis_roles=GridLayout(
             tuple(axis.kind for axis in axes),
             tuple(range(2, rank + 2)),
             "derived",
@@ -75,7 +75,7 @@ def _box(descriptor: ReceptiveField) -> ReceptiveFieldBox:
     return ReceptiveFieldBox(
         op_label="target",
         io_role="input_1",
-        unit=(0, 0, *(3 for _ in descriptor.layout.windowed_axes)),
+        unit=(0, 0, *(3 for _ in descriptor.axis_roles.windowed_axes)),
         axes=tuple(
             ReceptiveFieldBoxAxis(
                 input_axis=index,
@@ -104,7 +104,7 @@ class _View:
     """Minimal T6-compatible view used to exercise the standalone adapter."""
 
     def __init__(
-        self, descriptor: ReceptiveField, gradient_result: GradientReceptiveField | None = None
+        self, descriptor: ReceptiveField, gradient_result: GradReceptiveField | None = None
     ) -> None:
         """Store one descriptor, box, and optional empirical result."""
 
@@ -112,29 +112,29 @@ class _View:
         self._box = _box(descriptor)
         self._gradient = gradient_result
 
-    def at(self, unit: Sequence[int], *, input: Any | None = None) -> ReceptiveFieldBox:
+    def at(self, unit: Sequence[int], *, input_op: Any | None = None) -> ReceptiveFieldBox:
         """Return the configured geometric box."""
 
-        _ = unit, input
+        _ = unit, input_op
         return self._box
 
-    def gradient(
-        self, unit: Sequence[int], *, input: Any | None = None, retain_graph: bool = False
-    ) -> GradientReceptiveField:
+    def probe_grad(
+        self, unit: Sequence[int], *, input_op: Any | None = None, retain_graph: bool = False
+    ) -> GradReceptiveField:
         """Return the configured empirical result."""
 
-        _ = unit, input, retain_graph
+        _ = unit, input_op, retain_graph
         assert self._gradient is not None
         return self._gradient
 
 
-def _gradient(descriptor: ReceptiveField) -> GradientReceptiveField:
+def _gradient(descriptor: ReceptiveField) -> GradReceptiveField:
     """Create a nonuniform full-input gradient payload."""
 
     values = torch.arange(int(torch.tensor(descriptor.input_shape).prod())).reshape(
         descriptor.input_shape
     )
-    return GradientReceptiveField(
+    return GradReceptiveField(
         op_label="target",
         io_role=descriptor.io_role,
         unit=(0,) * len(descriptor.input_shape),
@@ -170,9 +170,7 @@ def test_show_2d_overlay_with_gradient_and_unknown_honesty() -> None:
 
     descriptor = _descriptor(2)
     base = Image.new("RGB", (80, 60), "white")
-    rendered = show(
-        _View(descriptor, _gradient(descriptor)), (0, 0, 3, 3), image=base, gradient=True
-    )
+    rendered = show(_View(descriptor, _gradient(descriptor)), (0, 0, 3, 3), image=base, grad=True)
     assert rendered.tobytes() != base.tobytes()
 
     unknown = _descriptor(2, ReceptiveFieldStatus.UNKNOWN)
@@ -186,7 +184,7 @@ def test_show_3d_requires_explicit_slice() -> None:
     descriptor = _descriptor(3)
     with pytest.raises(
         ReceptiveFieldError,
-        match=r"3-D receptive-field visualization requires slice=\(axis, index\)\.",
+        match=r"3-D receptive-field visualization requires plane=\(axis, index\)\.",
     ):
         show(_View(descriptor), (0, 0, 3, 3, 3), image=Image.new("RGB", (80, 60)))
 
@@ -215,13 +213,12 @@ def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
             return context.window(kernel=(3, 3), stride=(1, 1), padding=(0, 0), dilation=(1, 1))
 
         trace = tl.trace(nn.Conv2d(1, 1, 3), torch.ones(1, 1, 8, 8))
-        target = next(op for op in trace.layer_list if op.func_name == "conv2d")
+        target = next(op for op in trace._layer_list if op.func_name == "conv2d")
         output_path = tmp_path / "rf_cone.svg"
         trace.draw(
             node_spec_fn=node_spec(target),
-            vis_fileformat="svg",
-            vis_save_only=True,
-            vis_outpath=str(output_path),
+            file_format="svg",
+            path=str(output_path),
         )
         svg = output_path.read_text(encoding="utf-8")
         assert "RF " in svg
@@ -233,11 +230,11 @@ def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
 
 
 def test_show_gradient_retain_graph_supports_repeated_probes() -> None:
-    """R81: show(gradient=True) must plumb retain_graph to the empirical probe.
+    """R81: show(grad=True) must plumb retain_graph to the empirical probe.
 
     Without the kwarg the internal gradient call freed the captured autograd
     graph, so the canonical doc sequence -- gradient(retain_graph=True) then
-    repeated show(gradient=True) -- raised a raw RuntimeError ("backward
+    repeated show(grad=True) -- raised a raw RuntimeError ("backward
     through the graph a second time") on the second render.
     """
 
@@ -254,15 +251,14 @@ def test_show_gradient_retain_graph_supports_repeated_probes() -> None:
     armed = tl.trace(
         _Small().eval(),
         torch.randn(1, 1, 12, 12, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     op = armed["relu_1_2"]
     unit = op.receptive_field.center_unit(batch_index=0)
-    op.receptive_field.gradient(unit, retain_graph=True)
-    first = op.receptive_field.show(unit, gradient=True, retain_graph=True)
-    second = op.receptive_field.show(unit, gradient=True, retain_graph=True)
+    op.receptive_field.probe_grad(unit, retain_graph=True)
+    first = op.receptive_field.show(unit, grad=True, retain_graph=True)
+    second = op.receptive_field.show(unit, grad=True, retain_graph=True)
     assert isinstance(first, Image.Image)
     assert isinstance(second, Image.Image)
     # A final non-retaining probe consumes the graph and still succeeds.
-    op.receptive_field.gradient(unit, retain_graph=False)
+    op.receptive_field.probe_grad(unit, retain_graph=False)

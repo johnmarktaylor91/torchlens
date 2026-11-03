@@ -64,6 +64,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.backends.torch._tl import (
     get_buffer_address,
     get_tensor_meta,
@@ -72,9 +73,8 @@ from torchlens.backends.torch._tl import (
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
@@ -414,7 +414,6 @@ def test_record_write_opwrite_stamp_cleared() -> None:
     assert _meta_clear(ext)
 
 
-@pytest.mark.smoke
 def test_stale_reassign_stamp_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F1a): the reuse launder twin must ceiling, never VERIFY.
 
@@ -431,10 +430,9 @@ def test_stale_reassign_stamp_launder_ceils(tmp_path: Path) -> None:
     path = _save(StashLaunderBranch(stash.payload).eval(), x.clone(), tmp_path / "f1a.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_stale_opwrite_stamp_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F1b): the op-write-stamped external's launder twin ceilings."""
 
@@ -447,7 +445,7 @@ def test_stale_opwrite_stamp_launder_ceils(tmp_path: Path) -> None:
     path = _save(StashLaunderBranch(ext).eval(), x.clone(), tmp_path / "f1b.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 @pytest.mark.smoke
@@ -463,7 +461,7 @@ def test_no_donor_control_ceils(tmp_path: Path) -> None:
     path = _save(StashLaunderBranch(fresh_foreign).eval(), x.clone(), tmp_path / "f1ctrl.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 # ---------------------------------------------------------------------------
@@ -489,7 +487,7 @@ def test_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
     path = _save(StashLaunderBranch(forged).eval(), x.clone(), tmp_path / "forged.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 @pytest.mark.smoke
@@ -510,10 +508,9 @@ def test_forged_stamp_address_collision_ceils(tmp_path: Path) -> None:
     path = _save(CollidingBufferLaunder(forged).eval(), x.clone(), tmp_path / "collide.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
     """White-box: a bare stale ``label_raw`` no longer satisfies the rung.
 
@@ -530,7 +527,7 @@ def test_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
     path = _save(StashLaunderBranch(forged).eval(), x.clone(), tmp_path / "label.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 # ---------------------------------------------------------------------------
@@ -538,7 +535,6 @@ def test_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_plain_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F2/M3): the direct plain-attr rebind twin must ceiling.
 
@@ -552,7 +548,7 @@ def test_plain_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
     path = _save(PlainAttrRebindBranch().eval(), x.clone(), tmp_path / "m3.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 @pytest.mark.smoke
@@ -563,7 +559,7 @@ def test_list_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
     path = _save(ListAttrRebindBranch().eval(), x.clone(), tmp_path / "m1.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 @pytest.mark.smoke
@@ -574,10 +570,9 @@ def test_underscore_attr_rebind_stays_ceiled(tmp_path: Path) -> None:
     path = _save(UnderscoreAttrRebindBranch().eval(), x.clone(), tmp_path / "m2.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
     """Control (F2/M4): the registered-buffer spelling keeps ceiling.
 
@@ -589,7 +584,7 @@ def test_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
     path = _save(RegisteredBufferRebindBranch().eval(), x.clone(), tmp_path / "m4.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 # ---------------------------------------------------------------------------
@@ -611,14 +606,13 @@ def test_plain_attr_state_layout_branch_stays_verified(tmp_path: Path) -> None:
 
     same = tl.load(path).run(inputs=x.clone())
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.poisoned
+    assert not same.report.is_poisoned
 
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not twin.report.poisoned
+    assert not twin.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_registered_buffer_layout_branch_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: a registered-buffer layout read verifies both ways."""
 
@@ -627,11 +621,11 @@ def test_registered_buffer_layout_branch_stays_verified(tmp_path: Path) -> None:
 
     same = tl.load(path).run(inputs=x.clone())
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.poisoned
+    assert not same.report.is_poisoned
 
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not twin.report.poisoned
+    assert not twin.report.is_poisoned
 
 
 @pytest.mark.smoke
@@ -643,11 +637,11 @@ def test_param_data_read_branch_stays_verified(tmp_path: Path) -> None:
 
     same = tl.load(path).run(inputs=x.clone())
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.poisoned
+    assert not same.report.is_poisoned
 
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not twin.report.poisoned
+    assert not twin.report.is_poisoned
 
 
 @pytest.mark.smoke
@@ -658,7 +652,7 @@ def test_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
     path = _save(ConvBN().eval(), x.clone(), tmp_path / "green_bn.tlspec")
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 @pytest.mark.smoke
@@ -676,7 +670,6 @@ def test_plain_attr_value_read_keeps_typed_refusal(tmp_path: Path) -> None:
         trace.save(tmp_path / "value_read.tlspec", level="runnable", include_weights=True)
 
 
-@pytest.mark.smoke
 def test_sequential_captures_registry_idempotent(tmp_path: Path) -> None:
     """Zero collateral: back-to-back captures reset and re-clean the registry.
 
@@ -695,4 +688,4 @@ def test_sequential_captures_registry_idempotent(tmp_path: Path) -> None:
     assert _meta_clear(model.q)
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned

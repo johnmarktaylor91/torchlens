@@ -54,7 +54,7 @@ class _ZeroTail(nn.Module):
 @pytest.mark.parametrize(
     "tensor_bounds",
     [
-        pytest.param(True, id="tensor_bound", marks=pytest.mark.smoke),
+        pytest.param(True, id="tensor_bound"),
         pytest.param(False, id="int_bound"),
     ],
 )

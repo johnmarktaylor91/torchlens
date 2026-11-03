@@ -1,7 +1,7 @@
 """Input-facet patcher fixes (grind-p3-fixplan T3, fix-patching lane).
 
 Four coupled defects in the input-facet patching path of
-``torchlens/semantic/patching.py``:
+``torchlens/_semantic/patching.py``:
 
 * [HIGH] the patcher indexed BFS-ordered ``input_ops`` ordinals into a DFS
   tree walk, silently patching the WRONG leaf on mixed-nesting inputs. The
@@ -27,7 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import FacetSpec
+from torchlens.facets import FacetSpec
 
 
 class MixedLeafReader(nn.Module):
@@ -127,7 +127,7 @@ def _input_facet(trace: Any, io_role: str) -> FacetSpec:
     """Return a facet spec homed on the input op recorded at ``io_role``."""
 
     home = next(op for op in trace.input_ops if getattr(op, "io_role", None) == io_role)
-    return FacetSpec.from_home(home, recipe_id="test_input_leaf_patching")
+    return FacetSpec.from_home(home, function_id="test_input_leaf_patching")
 
 
 def mixed_leaf_reader(module: Any) -> dict[str, Any]:
@@ -162,7 +162,7 @@ def _register_module_facet_recipes() -> Iterator[None]:
     (hunt-b2-sol R76/R77).
     """
 
-    from torchlens.semantic import facets as _facets
+    from torchlens._semantic import facets as _facets
 
     saved = list(_facets._REGISTRY)
     tl.facets.register(
@@ -246,7 +246,7 @@ def test_every_input_leaf_patches_its_own_recorded_address(
 
 
 @pytest.mark.smoke
-@pytest.mark.filterwarnings("ignore::torchlens._errors.TorchLensCaptureGapWarning")
+@pytest.mark.filterwarnings("ignore::torchlens._errors.CaptureGapWarning")
 def test_aliased_input_leaf_patches_every_site() -> None:
     """One tensor object at two input sites is replaced at BOTH sites.
 
@@ -306,7 +306,7 @@ def test_teardown_restores_state_when_cleanup_raises(
     fork must be released too.
     """
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     model = MixedNestingModel()
     clean, corrupted = _mixed_tree(10.0), _mixed_tree(1.0)

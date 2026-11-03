@@ -1,9 +1,9 @@
-"""grind-p3 T5.5: ``tl.fastlog.recover`` is bounded and total over hostile indexes.
+"""grind-p3 T5.5: ``tl.recording.recover`` is bounded and total over hostile indexes.
 
 ``recover.py`` parsed the JSONL index and metadata with raw ``json.loads`` /
 ``json.load`` plus an unbounded ``read_text``: a depth-bomb line escaped the
 ``JSONDecodeError`` handler as a raw ``RecursionError`` out of the public
-``tl.fastlog.recover()``; a structurally valid JSON object missing ``"ctx"``
+``tl.recording.recover()``; a structurally valid JSON object missing ``"ctx"``
 escaped as a raw ``KeyError``; and a malformed-line flood grew
 ``recovery_warnings`` without bound. Parsing now routes through the bounded
 JSON reader ``_io`` uses, record rebuilds are guarded (skip-and-warn, the
@@ -20,11 +20,11 @@ from pathlib import Path
 import pytest
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 
 # The package re-exports the recover() FUNCTION under the same name, so the
 # module object must come from the import system directly.
-recover_module = importlib.import_module("torchlens.fastlog.recover")
+recover_module = importlib.import_module("torchlens.recording.recover")
 
 
 def _bundle(tmp_path) -> Path:
@@ -39,8 +39,8 @@ def test_depth_bomb_line_is_a_warning_not_a_recursionerror(tmp_path) -> None:
     bomb = "[" * depth + "]" * depth
     bundle = _bundle(tmp_path)
     (bundle / "fastlog_index.jsonl").write_text(bomb + "\n" + bomb + "\n", encoding="utf-8")
-    recording = tl.fastlog.recover(bundle)
-    assert recording.recovered is True
+    recording = tl.recording.recover(bundle)
+    assert recording.is_recovered is True
     assert recording.records == []
     assert recording.recovery_warnings
 
@@ -49,8 +49,8 @@ def test_depth_bomb_line_is_a_warning_not_a_recursionerror(tmp_path) -> None:
 def test_missing_ctx_is_a_warning_not_a_keyerror(tmp_path) -> None:
     bundle = _bundle(tmp_path)
     (bundle / "fastlog_index.jsonl").write_text(json.dumps({"spec": {}}) + "\n", encoding="utf-8")
-    recording = tl.fastlog.recover(bundle)
-    assert recording.recovered is True
+    recording = tl.recording.recover(bundle)
+    assert recording.is_recovered is True
     assert recording.records == []
     assert any("malformed" in warning for warning in recording.recovery_warnings)
 
@@ -60,15 +60,15 @@ def test_metadata_depth_bomb_degrades_to_empty_metadata(tmp_path) -> None:
     bundle = _bundle(tmp_path)
     (bundle / "fastlog_index.jsonl").write_text("", encoding="utf-8")
     (bundle / "metadata.json").write_text("[" * depth + "]" * depth, encoding="utf-8")
-    recording = tl.fastlog.recover(bundle)
-    assert recording.recovered is True
+    recording = tl.recording.recover(bundle)
+    assert recording.is_recovered is True
 
 
 def test_recovery_warnings_are_bounded_with_a_summary(tmp_path) -> None:
     bundle = _bundle(tmp_path)
     flood = "\n".join("{malformed" for _ in range(5000)) + "\n"
     (bundle / "fastlog_index.jsonl").write_text(flood, encoding="utf-8")
-    recording = tl.fastlog.recover(bundle)
+    recording = tl.recording.recover(bundle)
     cap = recover_module._MAX_RECOVERY_WARNINGS
     assert len(recording.recovery_warnings) <= cap + 1
     assert any("suppressed" in warning for warning in recording.recovery_warnings)
@@ -78,8 +78,8 @@ def test_oversize_index_refuses_typed(tmp_path, monkeypatch) -> None:
     bundle = _bundle(tmp_path)
     (bundle / "fastlog_index.jsonl").write_text("x" * 2048, encoding="utf-8")
     monkeypatch.setattr(recover_module, "_INDEX_MAX_BYTES", 1024)
-    with pytest.raises(TorchLensIOError, match="index"):
-        tl.fastlog.recover(bundle)
+    with pytest.raises(ArtifactError, match="index"):
+        tl.recording.recover(bundle)
 
 
 def _write_blob(path: Path):
@@ -88,10 +88,10 @@ def _write_blob(path: Path):
     import torch
     from safetensors.torch import save_file
 
-    from torchlens._io.manifest import sha256_of_file
+    from torchlens._utils.hashing import sha256_file
 
     save_file({"payload": torch.arange(8, dtype=torch.float32)}, str(path))
-    return path, sha256_of_file(path)
+    return path, sha256_file(path)
 
 
 def test_blob_verify_never_reads_whole_file_before_digest(tmp_path, monkeypatch) -> None:
@@ -99,7 +99,7 @@ def test_blob_verify_never_reads_whole_file_before_digest(tmp_path, monkeypatch)
 
     ``_load_verified_blob_tensor`` previously did ``blob_path.read_bytes()`` --
     fully materializing an attacker-controlled blob BEFORE the digest check. It
-    now hashes via the chunked ``sha256_of_file`` and materializes through the
+    now hashes via the chunked ``sha256_file`` and materializes through the
     mmap-backed safetensors loader, so ``Path.read_bytes`` is never called. Ban it
     and prove a valid blob still verifies + loads.
     """
@@ -120,5 +120,5 @@ def test_blob_hash_mismatch_refuses_typed(tmp_path) -> None:
     """A tampered blob (digest mismatch) still refuses typed."""
 
     blob_path, _digest = _write_blob(tmp_path / "blob.safetensors")
-    with pytest.raises(TorchLensIOError, match="Checksum mismatch"):
+    with pytest.raises(ArtifactError, match="Checksum mismatch"):
         recover_module._load_verified_blob_tensor(blob_path, "0" * 64)

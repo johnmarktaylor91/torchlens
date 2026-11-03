@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors.episode import BundleExperimentError
-from torchlens.experiment import head_ablation_candidates, site_sweep
+from torchlens.experiment import head_ablation_candidates, sweep_sites
 
 pytestmark = pytest.mark.heavy
 
@@ -54,17 +54,17 @@ def test_head_ablation_sugar_matches_hand_written_hook_oracle() -> None:
         label = member.output_layers[0]
         return float(member[label].out[0, -1, target_token].item())
 
-    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     candidates = head_ablation_candidates(baseline, module, heads=n_heads)
     assert list(candidates) == [f"h{i}" for i in range(n_heads)]
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=candidates,
         edit=tl.zero_ablate(),
         metric=metric,
         retain="none",
         model=model,
-        x=ids,
+        inputs=ids,
     )
     sweep_values = {
         row.candidate_id: row.value
@@ -107,7 +107,7 @@ def test_head_sugar_refuses_gqa_and_unresolved_module() -> None:
     model = _gpt2()
     torch.manual_seed(0)
     ids = torch.randint(0, 100, (1, 8))
-    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     with pytest.raises(BundleExperimentError) as excinfo:
         head_ablation_candidates(baseline, "transformer.h.9.attn", heads=2)
     assert excinfo.value.fields["code"] == "head_ablation_module_unresolved"
@@ -122,20 +122,20 @@ def test_unscoped_head_selector_is_refused_as_sweep_candidate() -> None:
     model = _gpt2()
     torch.manual_seed(0)
     ids = torch.randint(0, 100, (1, 8))
-    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
 
     def metric(member: tl.Trace) -> float:
         label = member.output_layers[0]
         return float(member[label].out[0, -1, 17].item())
 
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates={"unscoped": tl.head(0)},
         edit=tl.zero_ablate(),
         metric=metric,
         retain="none",
         model=model,
-        x=ids,
+        inputs=ids,
     )
     (row,) = [r for r in bundle.effects().rows if r.candidate_id == "unscoped"]
     assert row.status == "refused"

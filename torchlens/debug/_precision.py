@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from .._debug_report import FoundReport, rows_of
+from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ._common import _compute_ops, _op_label, _safe_out, _source_line, _tensor_unavailable_reason
 
 if TYPE_CHECKING:
@@ -65,7 +67,7 @@ class PrecisionRow:
 
 
 @dataclass(frozen=True)
-class BisectPrecisionResult:
+class BisectPrecisionReport(FoundReport):
     """Result of :func:`bisect_precision`.
 
     Parameters
@@ -103,6 +105,20 @@ class BisectPrecisionResult:
     skipped: tuple[tuple[str, str], ...]
     message: str
 
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card, most severe first."""
+
+        findings = [self.message] if self.message else []
+        findings.extend(
+            f"{row.label}: max_abs_err={row.max_abs_err:.4g}" for row in self.rows if row.diverged
+        )
+        return findings
+
+    def _report_rows(self) -> list[dict[str, Any]] | None:
+        """The natural table rows behind ``to_pandas()``."""
+
+        return rows_of(self.rows)
+
 
 def bisect_precision(
     model: nn.Module,
@@ -113,7 +129,7 @@ def bisect_precision(
     rtol: float | None = None,
     atol: float | None = None,
     seed: int = 0,
-) -> BisectPrecisionResult:
+) -> BisectPrecisionReport:
     """Locate the first op whose native-precision output drifts from fp64.
 
     Both runs execute on fresh deep copies through the shared isolated-rerun
@@ -148,7 +164,7 @@ def bisect_precision(
 
     Returns
     -------
-    BisectPrecisionResult
+    BisectPrecisionReport
         First divergence plus the full per-op comparison table.
     """
 
@@ -156,7 +172,7 @@ def bisect_precision(
     from ._rerun import isolated_capture
 
     _refuse_unsupported_reference_device(model, reference_dtype)
-    capture = CaptureOptions(layers_to_save="all")
+    capture = CaptureOptions()
     native_trace = reference_trace = None
     try:
         native_trace = isolated_capture(
@@ -183,7 +199,7 @@ def bisect_precision(
 
 def _compare_traces(
     native_trace: Any, reference_trace: Any, *, rtol: float | None, atol: float | None
-) -> BisectPrecisionResult:
+) -> BisectPrecisionReport:
     """Walk both traces in execution order and build the comparison result."""
 
     reference_ops = {_op_label(op): op for op in _compute_ops(reference_trace)}
@@ -285,7 +301,7 @@ def _build_result(
     first: PrecisionRow | None,
     rows: list[PrecisionRow],
     skipped: list[tuple[str, str]],
-) -> BisectPrecisionResult:
+) -> BisectPrecisionReport:
     """Assemble the result object with an honest summary message."""
 
     skip_note = (
@@ -317,7 +333,7 @@ def _build_result(
             f"No precision divergence beyond tolerance across {len(rows)} compared "
             f"op(s).{skip_note}"
         )
-    return BisectPrecisionResult(
+    return BisectPrecisionReport(
         found=first is not None,
         label=None if first is None else first.label,
         func_name=None if first is None else first.func_name,
@@ -328,38 +344,6 @@ def _build_result(
         skipped=tuple(skipped),
         message=message,
     )
-
-
-#: Function names (trailing underscores normalized away) whose outputs depend
-#: on random draws; cross-dtype RNG consumption is not comparable for these.
-_STOCHASTIC_FUNC_NAMES = frozenset(
-    {
-        "alpha_dropout",
-        "bernoulli",
-        "binomial",
-        "dropout",
-        "dropout1d",
-        "dropout2d",
-        "dropout3d",
-        "exponential",
-        "feature_alpha_dropout",
-        "feature_dropout",
-        "geometric",
-        "multinomial",
-        "normal",
-        "poisson",
-        "rand",
-        "rand_like",
-        "randint",
-        "randint_like",
-        "randn",
-        "randn_like",
-        "randperm",
-        "rrelu",
-        "rrelu_with_noise",
-        "uniform",
-    }
-)
 
 
 def _cast_tree(value: Any, dtype: torch.dtype) -> Any:

@@ -18,7 +18,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.data_classes._nonfinite import (
+from torchlens._data_classes._nonfinite import (
     coverage_gap_note,
     inference_payload_count,
     nonfinite_coverage,
@@ -73,13 +73,11 @@ def test_coverage_record_counts_inference_payloads(inference_trace: tl.Trace) ->
 
 
 def test_report_explain_under_inference_mode_does_not_raise(inference_trace: tl.Trace) -> None:
-    from torchlens import report
-
     # D14 (F09): bare explain never scans -- arm the saved-payload basis
     # through the explicit door (it persists the record), then the
     # inference-coverage gap note renders from the basis in hand.
-    report.health_facts(inference_trace)
-    text = str(report.explain(inference_trace))
+    assert inference_trace.health_facts is not None
+    text = str(inference_trace.explain())
     assert "inference tensors" in text
 
 
@@ -93,7 +91,7 @@ def test_capture_basis_still_checks_inference_tensors() -> None:
         log = tl.trace(
             _NaNModel(),
             x,
-            capture=tl.options.CaptureOptions(track_nonfinite=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="track"),
         )
     assert any("truediv" in label for label in log.nonfinite_ops)
     coverage = log.nonfinite_coverage
@@ -122,7 +120,7 @@ class _CatModel(torch.nn.Module):
 
 
 def test_cat_left_commute_funcs() -> None:
-    from torchlens.visualization._render_common import COMMUTE_FUNCS
+    from torchlens._visualization._render_common import COMMUTE_FUNCS
 
     assert "cat" not in COMMUTE_FUNCS
     # The genuinely commutative rows stay.
@@ -133,7 +131,7 @@ def test_cat_edges_carry_argument_labels(tmp_path) -> None:
     # 3-way cat: the D14 regression row. Argument-order labels must SHOW on
     # cat's incoming edges now that the false commutativity claim is gone.
     log = tl.trace(_CatModel(), torch.randn(1, 4))
-    source = log.draw(vis_outpath=str(tmp_path / "cat"), vis_save_only=True, vis_fileformat="svg")
+    source = log.draw(path=str(tmp_path / "cat"), file_format="svg").dot
     assert "arg (0, 0)" in source
     assert "arg (0, 1)" in source
     assert "arg (0, 2)" in source
@@ -146,7 +144,7 @@ def test_wide_cat_regression_row(tmp_path) -> None:
             return torch.cat([x + i for i in range(40)], dim=1)
 
     log = tl.trace(WideCat(), torch.randn(1, 2))
-    source = log.draw(vis_outpath=str(tmp_path / "wcat"), vis_save_only=True, vis_fileformat="svg")
+    source = log.draw(path=str(tmp_path / "wcat"), file_format="svg").dot
     assert "arg (0, 0)" in source
     assert "arg (0, 39)" in source
 
@@ -155,7 +153,7 @@ def test_argument_labels_use_padded_nonbold_builder(tmp_path) -> None:
     # D9: the argument channel routes through the tuned one-cell-table
     # builder (padding 6 / 8 pt / non-bold), not the raw bold 10-pt label.
     log = tl.trace(_CatModel(), torch.randn(1, 4))
-    source = log.draw(vis_outpath=str(tmp_path / "pad"), vis_save_only=True, vis_fileformat="svg")
+    source = log.draw(path=str(tmp_path / "pad"), file_format="svg").dot
     assert 'CELLPADDING="6"' in source
     assert "<b>arg" not in source.lower().replace("</b>", "<b>")
 
@@ -173,7 +171,7 @@ def _toy_trace() -> tl.Trace:
 def test_failed_render_leaves_no_stub(tmp_path, monkeypatch) -> None:
     import subprocess as sp
 
-    from torchlens.visualization import _render_utils
+    from torchlens._visualization import _render_utils
 
     log = _toy_trace()
     outpath = tmp_path / "boom"
@@ -187,11 +185,11 @@ def test_failed_render_leaves_no_stub(tmp_path, monkeypatch) -> None:
                     partial.write(b"partial")
         raise sp.CalledProcessError(1, cmd, output=b"", stderr=b"boom")
 
-    from torchlens.visualization._render_common import GraphvizRenderError
+    from torchlens._visualization._render_common import GraphvizRenderError
 
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", exploding_subprocess)
     with pytest.raises(GraphvizRenderError):
-        log.draw(vis_outpath=str(outpath), vis_save_only=True, vis_fileformat="svg")
+        log.draw(path=str(outpath), file_format="svg")
     assert not (tmp_path / "boom.svg").exists()
     leftovers = [name for name in os.listdir(tmp_path) if "tl-partial" in name]
     assert leftovers == []
@@ -199,7 +197,7 @@ def test_failed_render_leaves_no_stub(tmp_path, monkeypatch) -> None:
 
 def test_geometry_record_populated_on_dot_path(tmp_path) -> None:
     log = _toy_trace()
-    log.draw(vis_outpath=str(tmp_path / "geo"), vis_save_only=True, vis_fileformat="svg")
+    log.draw(path=str(tmp_path / "geo"), file_format="svg")
     record = log._last_render_geometry
     assert record.layout_path == "dot"
     assert record.engine == "dot"
@@ -213,18 +211,14 @@ def test_dpi_is_raster_only_cross_format(tmp_path) -> None:
     # D23: dpi must not touch vector coordinate space. The SVG declared size
     # is invariant under dpi; PNG pixels scale with it.
     log = _toy_trace()
-    log.draw(vis_outpath=str(tmp_path / "svg72"), vis_save_only=True, vis_fileformat="svg")
+    log.draw(path=str(tmp_path / "svg72"), file_format="svg")
     base = log._last_render_geometry.declared_size_points
-    log.draw(
-        vis_outpath=str(tmp_path / "svg300"), vis_save_only=True, vis_fileformat="svg", dpi=300
-    )
+    log.draw(path=str(tmp_path / "svg300"), file_format="svg", dpi=300)
     scaled = log._last_render_geometry.declared_size_points
     assert base == scaled
-    log.draw(vis_outpath=str(tmp_path / "png96"), vis_save_only=True, vis_fileformat="png", dpi=96)
+    log.draw(path=str(tmp_path / "png96"), file_format="png", dpi=96)
     png_small = log._last_render_geometry.raster_size_pixels
-    log.draw(
-        vis_outpath=str(tmp_path / "png192"), vis_save_only=True, vis_fileformat="png", dpi=192
-    )
+    log.draw(path=str(tmp_path / "png192"), file_format="png", dpi=192)
     png_big = log._last_render_geometry.raster_size_pixels
     assert png_small is not None and png_big is not None
     assert png_big[0] > png_small[0] * 1.5
@@ -240,7 +234,7 @@ def test_geometry_record_is_runtime_only() -> None:
 
 
 def test_scale_clamp_parsing() -> None:
-    from torchlens.visualization.render_execution import parse_layout_scale
+    from torchlens._visualization.render_execution import parse_layout_scale
 
     stderr = "dot: graph is too large for cairo-renderer bitmaps. Scaling by 0.324492 to fit\n"
     assert parse_layout_scale(stderr) == pytest.approx(0.324492)
@@ -250,8 +244,8 @@ def test_scale_clamp_parsing() -> None:
 def test_exit_zero_stderr_is_surfaced(tmp_path, monkeypatch) -> None:
     import subprocess as sp
 
+    from torchlens._visualization import _render_utils
     from torchlens.errors._base import TorchLensWarning
-    from torchlens.visualization import _render_utils
 
     log = _toy_trace()
     real_run = _render_utils.run_bounded_subprocess
@@ -267,7 +261,7 @@ def test_exit_zero_stderr_is_surfaced(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", noisy_subprocess)
     with pytest.warns(TorchLensWarning, match="Scaling by 0.5"):
-        log.draw(vis_outpath=str(tmp_path / "noisy"), vis_save_only=True, vis_fileformat="svg")
+        log.draw(path=str(tmp_path / "noisy"), file_format="svg")
     assert log._last_render_geometry.scaled_by == pytest.approx(0.5)
     assert log._last_render_geometry.effective_text_scale == pytest.approx(0.5)
 
@@ -292,11 +286,10 @@ def test_rank_layout_renders_batchnorm_buffers_all_modes(tmp_path, mode) -> None
     log = _bn_trace()
     out = tmp_path / f"bn_{mode}"
     log.draw(
-        vis_outpath=str(out),
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_node_placement="rank",
-        show_buffer_layers=mode,
+        path=str(out),
+        file_format="svg",
+        layout="rank",
+        show_buffers=mode,
     )
     artifact = tmp_path / f"bn_{mode}.svg"
     assert artifact.exists() and artifact.stat().st_size > 0
@@ -304,9 +297,9 @@ def test_rank_layout_renders_batchnorm_buffers_all_modes(tmp_path, mode) -> None
 
 @pytest.mark.smoke
 def test_hidden_buffer_edges_leave_the_typed_edge_list() -> None:
-    from torchlens.visualization.node_universe import build_node_universe
-    from torchlens.visualization.request import ResolvedRenderRequest
-    from torchlens.visualization.source_graph import build_source_graph
+    from torchlens._visualization.node_universe import build_node_universe
+    from torchlens._visualization.request import ResolvedRenderRequest
+    from torchlens._visualization.source_graph import build_source_graph
 
     log = _bn_trace()
     request = ResolvedRenderRequest(show_buffer_layers="meaningful")
@@ -318,10 +311,10 @@ def test_hidden_buffer_edges_leave_the_typed_edge_list() -> None:
 
 
 def test_rank_endpoint_invariant_raises_typed() -> None:
-    from torchlens.errors import _base as errors_base  # noqa: F401  (import guard)
-    from torchlens.visualization._rank_layout_internal.layout import (
+    from torchlens._visualization._rank_layout_internal.layout import (
         RankRenderEndpointError,
     )
+    from torchlens.errors import _base as errors_base  # noqa: F401  (import guard)
 
     assert RankRenderEndpointError.code == "rank_render_endpoint_undeclared"
     assert issubclass(RankRenderEndpointError, RuntimeError)

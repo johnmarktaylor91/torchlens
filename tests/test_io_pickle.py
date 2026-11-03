@@ -11,10 +11,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, trace as trace_fn
-from torchlens._io import TLSPEC_VERSION, TorchLensIOError
+from torchlens._io import TLSPEC_VERSION, ArtifactError
 from torchlens._io.rehydrate import rehydrate_trace
 from torchlens._io.scrub import scrub_for_save
-from torchlens.quantities import Bytes
+from torchlens._quantities import Bytes
 
 
 class _TinyIOModel(nn.Module):
@@ -48,12 +48,12 @@ def _build_live_log() -> Trace:
         model,
         x,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all",
-            save_arg_values=True,
-            save_rng_states=True,
-            save_code_context=True,
-            random_seed=0,
+            save_args=True,
+            save_rng=True,
+            save_source_context=True,
+            seed=0,
         ),
+        save="all",
     )
 
 
@@ -107,32 +107,32 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     assert restored.modules["bn"]._source_trace is restored
     assert restored.buffers["bn.running_mean"].address == "bn.running_mean"
 
-    first_saved_layer = next(layer for layer in restored.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in restored._layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     assert (
-        restored.layer_logs[first_saved_layer.layer_label].ops[first_saved_layer.pass_index - 1]
+        restored._layer_logs[first_saved_layer.layer_label].ops[first_saved_layer.pass_number - 1]
         is first_saved_layer
     )
 
     first_arg_layer = next(
         layer
-        for layer in restored.layer_list
+        for layer in restored._layer_list
         if layer.saved_args is not None and len(layer.saved_args) > 0
     )
     assert isinstance(first_arg_layer.saved_args[0], torch.Tensor)
 
 
 def test_trace_setstate_refuses_pre_versioning_state() -> None:
-    """Missing version tags refuse at the 2.33 rehydration floor."""
+    """Missing version tags refuse at the tlspec-6 rehydration floor."""
 
-    from torchlens._io import ArtifactVersionBelowFloorError
+    from torchlens._io import ArtifactTooOldError
 
     live_log = _build_live_log()
     old_state = live_log.__getstate__()
     old_state.pop("tlspec_version", None)
 
     restored = Trace.__new__(Trace)
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.33"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         restored.__setstate__(old_state)
 
 
@@ -193,7 +193,7 @@ def test_trace_setstate_rejects_newer_io_versions() -> None:
     future_state["tlspec_version"] = TLSPEC_VERSION + 1
 
     restored = Trace.__new__(Trace)
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         restored.__setstate__(future_state)
 
 
@@ -203,14 +203,15 @@ def test_plain_pickle_roundtrip_still_works() -> None:
     live_log = trace_fn(
         _PlainPickleModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0),
+        capture=tl.options.CaptureOptions(seed=0),
+        save="all",
     )
     restored = pickle.loads(pickle.dumps(live_log))
 
     assert isinstance(restored, Trace)
-    assert restored.model_class_name == live_log.model_class_name
-    assert len(restored.layer_list) == len(live_log.layer_list)
-    assert restored.layer_list[0].source_trace is restored
+    assert restored.source.class_name == live_log.source.class_name
+    assert len(restored._layer_list) == len(live_log._layer_list)
+    assert restored._layer_list[0].source_trace is restored
 
 
 def test_trace_setstate_coerces_legacy_backward_gradfn_refs_dict() -> None:
@@ -283,16 +284,16 @@ def test_trace_setstate_coerces_wrong_typed_total_backward_memory() -> None:
 
     live_log = _build_live_log()
     state = live_log.__getstate__()
-    state.pop("total_backward_memory")
+    state.pop("_cost_total_backward_memory")
 
     restored = Trace.__new__(Trace)
     restored.__setstate__(state)
 
-    assert isinstance(restored.total_backward_memory, Bytes)
+    assert isinstance(restored.cost.total_backward_memory, Bytes)
     # Must format cleanly like every sibling memory field, not just compare
     # equal-by-value (Bytes subclasses int, so a bare `int` would pass a
     # naive `== 0` check while still failing `isinstance`/format checks).
-    f"{restored.total_backward_memory:.2f MB}"
+    f"{restored.cost.total_backward_memory:.2f MB}"
 
 
 def test_trace_setstate_coerces_present_but_wrong_typed_total_backward_memory() -> None:
@@ -300,13 +301,13 @@ def test_trace_setstate_coerces_present_but_wrong_typed_total_backward_memory() 
 
     live_log = _build_live_log()
     state = live_log.__getstate__()
-    state["total_backward_memory"] = 12345  # legacy plain int, not Bytes
+    state["_cost_total_backward_memory"] = 12345  # legacy plain int, not Bytes
 
     restored = Trace.__new__(Trace)
     restored.__setstate__(state)
 
-    assert isinstance(restored.total_backward_memory, Bytes)
-    assert int(restored.total_backward_memory) == 12345
+    assert isinstance(restored.cost.total_backward_memory, Bytes)
+    assert int(restored.cost.total_backward_memory) == 12345
 
 
 def test_trace_setstate_coerces_present_but_wrong_typed_container_fields() -> None:

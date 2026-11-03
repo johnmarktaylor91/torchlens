@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution import AttributionError
+from torchlens.errors import AttributionError
 
 
 class _MixedReluNet(nn.Module):
@@ -276,7 +276,7 @@ def test_noise_tunnel_over_guided_methods_works() -> None:
         method=attribution.guided_backprop,
         model=model,
         target=0,
-        n_samples=3,
+        num_samples=3,
         stdevs=0.05,
         seed=2,
     )

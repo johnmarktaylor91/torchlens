@@ -30,7 +30,7 @@ from torchlens.attribution._core import (
     _normalize_model_inputs,
     _validate_positive_int,
 )
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 from torchlens.attribution._sampling import (
     _aggregate_value_trees,
     _completeness_distributions,
@@ -103,7 +103,7 @@ def _refuse_composition(bound: _BoundMethod) -> None:
 def _grad_cam_aggregate_overlay(
     aggregated: Any,
     inputs_prepared: Any,
-    child_results: list[AttributionResult],
+    child_results: list[Attribution],
 ) -> Any:
     """Render the ONE aggregate overlay for a grad_cam child (D6).
 
@@ -183,17 +183,17 @@ def noise_tunnel(
     inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
-    attribute: Callable[..., AttributionResult] | None = None,
+    attribute: Callable[..., Attribution] | None = None,
     model: Module | None = None,
-    method: Callable[..., AttributionResult] | None = None,
+    method: Callable[..., Attribution] | None = None,
     method_kwargs: dict[str, Any] | None = None,
     target: Any = None,
-    n_samples: int = 25,
+    num_samples: int = 25,
     stdevs: float | Sequence[float],
     seed: int | None = None,
-    aggregation: str = "mean",
+    reduce: str = "mean",
     noise_bank: Sequence[Sequence[Tensor]] | None = None,
-) -> AttributionResult:
+) -> Attribution:
     """Run an attribution method on ``n_samples`` noised inputs and aggregate.
 
     Parameters
@@ -218,7 +218,7 @@ def noise_tunnel(
         ``extra["method_kwargs"]``.
     target
         Target for the ``method=`` sugar route.
-    n_samples
+    num_samples
         Number of noised copies (logical child calls).
     stdevs
         ABSOLUTE Gaussian noise scale: one nonnegative float for every
@@ -230,7 +230,7 @@ def noise_tunnel(
         Optional deterministic seed (per-device generators, seeded on first
         use). For a stochastic child with no explicit child seed, independent
         per-sample child substreams are derived from this seed and disclosed.
-    aggregation
+    reduce
         ``"mean"``, ``"mean_square"``, or population ``"variance"``.
     noise_bank
         Optional stored unit-scale draws (``noise_bank[sample][unique_leaf]``)
@@ -253,10 +253,10 @@ def noise_tunnel(
         failure (named by zero-based sample; no partial result).
     """
 
-    _validate_positive_int("n_samples", n_samples)
-    if aggregation not in _AGGREGATIONS:
+    _validate_positive_int("n_samples", num_samples)
+    if reduce not in _AGGREGATIONS:
         raise AttributionError(
-            f"aggregation must be one of {_AGGREGATIONS}; got {aggregation!r}. "
+            f"reduce must be one of {_AGGREGATIONS}; got {reduce!r}. "
             "Remedy: choose 'mean', 'mean_square', or 'variance'.",
             code="noise_aggregation_invalid",
         )
@@ -270,14 +270,14 @@ def noise_tunnel(
     _refuse_composition(bound)
     prepared = _normalize_model_inputs(inputs, input_kwargs)
     scales = _resolve_stdevs(stdevs, prepared)
-    _validate_noise_bank_coverage(noise_bank, n_samples, prepared)
+    _validate_noise_bank_coverage(noise_bank, num_samples, prepared)
     source = _NoiseSource(seed, noise_bank)
 
     child_is_grad_cam = bound.method_name == "grad_cam"
     child_is_stochastic_unseeded = bound.known_stochastic and not bound.frozen_randomness
     derived_child_seeds: list[int] = []
 
-    def _call_sample(sample_index: int) -> AttributionResult:
+    def _call_sample(sample_index: int) -> Attribution:
         """Perturb the inputs and invoke the child for one logical sample."""
 
         noised_leaves = _noised_sample_leaves(prepared, scales, source, sample_index)
@@ -305,14 +305,14 @@ def noise_tunnel(
             settings["seed"] = child_seed
         return method(model, child_inputs, child_kwargs, target=target, **settings)
 
-    run = _run_serial_samples(n_samples, _call_sample)
-    aggregated = _aggregate_value_trees([result.values for result in run.results], aggregation)
+    run = _run_serial_samples(num_samples, _call_sample)
+    aggregated = _aggregate_value_trees([result.values for result in run.results], reduce)
 
     extra: dict[str, Any] = {
         "child_method": bound.method_name,
         "method_kwargs": dict(bound.settings),
-        "aggregation": aggregation,
-        "n_samples": n_samples,
+        "reduce": reduce,
+        "n_samples": num_samples,
         "stdevs_resolved": list(scales),
         "seed": seed,
         "noise_bank_used": noise_bank is not None,
@@ -331,15 +331,15 @@ def noise_tunnel(
     if bound.model_identity is not None:
         extra["model_identity"] = bound.model_identity
     if derived_child_seeds:
-        child_n_samples = bound.settings.get("n_samples", 25)
+        child_n_samples = bound.settings.get("num_samples", 25)
         extra["child_seeds"] = list(derived_child_seeds)
         extra["child_n_samples"] = child_n_samples
-        extra["multiplicative_cost_logical"] = n_samples * int(child_n_samples)
+        extra["multiplicative_cost_logical"] = num_samples * int(child_n_samples)
     if child_is_grad_cam:
         extra["layer"] = run.results[0].extra.get("layer")
         extra["overlay"] = _grad_cam_aggregate_overlay(aggregated, prepared, run.results)
         extra["overlay_rendered_from"] = "aggregate"
-    return AttributionResult(
+    return Attribution(
         method="noise_tunnel",
         values=aggregated,
         target_repr=run.results[0].target_repr,

@@ -35,11 +35,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -115,7 +115,7 @@ def _assert_not_blessed(report) -> None:
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-    assert report.poisoned
+    assert report.is_poisoned
 
 
 # --------------------------------------------------------------------------- #
@@ -149,9 +149,15 @@ def test_changed_input_escape_is_unverifiable(
     _assert_not_blessed(result.report)
     # The recorded taken path / baked literal is stale for the changed input, so the
     # sparse output differs from a true live forward -- and the report refuses to
-    # bless it.
+    # bless it. The ``tolist`` sequence is the exception on the output side only: the
+    # ``tolist`` -> ``torch.tensor`` round trip is a captured ``foreigndata`` copy op
+    # that replays from the departed tensor, so the output follows the changed input,
+    # while the witnessed host escape still keeps the report unblessed.
     live = model_cls()(changed_x)
-    assert not torch.allclose(result.output, live)
+    if model_cls is TolistSequenceBake:
+        assert torch.allclose(result.output, live)
+    else:
+        assert not torch.allclose(result.output, live)
 
 
 @pytest.mark.parametrize(
@@ -176,7 +182,7 @@ def test_original_input_escape_still_verified_attested(
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert torch.allclose(result.output, model_cls()(capture_x.clone()))
 
 
@@ -204,7 +210,7 @@ def test_buffer_branch_original_state_still_verified(tmp_path: Path) -> None:
     # Embedded capture state (gate=True).
     embedded = tl.load(path).run(inputs=x)
     assert embedded.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not embedded.report.poisoned
+    assert not embedded.report.is_poisoned
     assert torch.allclose(embedded.output, x + 1)
 
     # Re-staging the identical capture-equivalent state stays VERIFIED.
@@ -212,7 +218,7 @@ def test_buffer_branch_original_state_still_verified(tmp_path: Path) -> None:
     loaded.load_state_dict({"gate": torch.tensor(True)})
     restaged = loaded.run(inputs=x)
     assert restaged.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not restaged.report.poisoned
+    assert not restaged.report.is_poisoned
 
 
 # --------------------------------------------------------------------------- #
@@ -238,14 +244,14 @@ def test_dead_sink_and_escape_free_models_unchanged(tmp_path: Path) -> None:
     path = _save(DeadSinkModel(), torch.tensor([1.0, 2.0]), tmp_path / "d.tlspec")
     result = tl.load(path).run(inputs=torch.tensor([7.0, 8.0]))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert torch.allclose(result.output, DeadSinkModel()(torch.tensor([7.0, 8.0])))
 
 
 def test_escape_source_recorded_by_census(tmp_path: Path) -> None:
     # The dispatch census records the source op of a scalar escape even when the
     # escaped value is transformed before use (value-equality would find nothing).
-    from torchlens.backends.torch.completeness_witness import host_escape_source_labels
+    from torchlens.backends.torch._completeness_escape_state import host_escape_source_labels
 
     trace = tl.trace(TransformedScalar(), torch.tensor([2.0, 2.0]), capture=_CAPTURE)
     assert host_escape_source_labels(trace), "census must record the .item() escape source"
@@ -287,7 +293,7 @@ def test_r10_input_escape_changed_is_unverifiable(
     tmp_path: Path,
 ) -> None:
     path = _save(model_cls(), capture_x, tmp_path / "i.tlspec")
-    result = tl.load(path).run(inputs=changed_x.clone(), on_divergence="return_diverged")
+    result = tl.load(path).run(inputs=changed_x.clone(), on_divergence="return")
     _assert_not_blessed(result.report)
     # The recorded taken path / baked literal is stale for the changed input.
     assert not torch.allclose(result.output, model_cls()(changed_x.clone()))
@@ -309,7 +315,7 @@ def test_r10_input_escape_original_still_verified(
     path = _save(model_cls(), capture_x, tmp_path / "i.tlspec")
     result = tl.load(path).run(inputs=capture_x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert torch.allclose(result.output, model_cls()(capture_x.clone()))
 
 
@@ -331,7 +337,7 @@ class DataAliasScalarEscape(nn.Module):
 
 
 def test_r10_data_alias_escape_attributes_source_label() -> None:
-    from torchlens.backends.torch.completeness_witness import (
+    from torchlens.backends.torch._completeness_escape_state import (
         host_escape_has_unattributable_opaque,
         host_escape_source_labels,
     )
@@ -350,7 +356,7 @@ def test_r10_data_alias_escape_changed_is_unverifiable(tmp_path: Path) -> None:
         tmp_path / "c.tlspec",
         include_activations=True,
     )
-    changed = tl.load(path).run(inputs=torch.tensor([10.0, 10.0]), on_divergence="return_diverged")
+    changed = tl.load(path).run(inputs=torch.tensor([10.0, 10.0]), on_divergence="return")
     _assert_not_blessed(changed.report)
     assert not torch.allclose(changed.output, DataAliasScalarEscape()(torch.tensor([10.0, 10.0])))
 
@@ -364,7 +370,7 @@ def test_r10_data_alias_escape_original_still_verified(tmp_path: Path) -> None:
     )
     original = tl.load(path).run(inputs=torch.tensor([2.0, 2.0]))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not original.report.poisoned
+    assert not original.report.is_poisoned
     assert torch.allclose(original.output, DataAliasScalarEscape()(torch.tensor([2.0, 2.0])))
 
 
@@ -394,7 +400,7 @@ def test_r10_pruned_param_escape_changed_state_is_unverifiable(tmp_path: Path) -
     path = _save(PrunedParamEscape(), x, tmp_path / "p.tlspec", include_weights=True)
     loaded = tl.load(path)
     loaded.load_state_dict({"w": torch.tensor([7.0])})
-    result = loaded.run(inputs=x.clone(), on_divergence="return_diverged")
+    result = loaded.run(inputs=x.clone(), on_divergence="return")
     _assert_not_blessed(result.report)
     # Captured s=3.0 replays 4*7 + 3 = 31; a true live forward with w=7 is 4*7 + 8 = 36.
     assert abs(result.output.item() - 31.0) < 1e-5
@@ -424,14 +430,14 @@ def test_r10_inplace_mutated_source_original_still_verified(tmp_path: Path) -> N
     # The original input is value-correct (7 * 6 = 42) and must NOT be spuriously
     # downgraded by digesting the post-mutation live slot instead of the snapshot.
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert abs(result.output.item() - 42.0) < 1e-5
 
 
 def test_r10_inplace_mutated_source_changed_is_still_unverifiable(tmp_path: Path) -> None:
     x = torch.tensor(3.0)
     path = _save(InPlaceMutatedEscapeSource(), x, tmp_path / "m3.tlspec")
-    result = tl.load(path).run(inputs=torch.tensor(5.0), on_divergence="return_diverged")
+    result = tl.load(path).run(inputs=torch.tensor(5.0), on_divergence="return")
     # Snapshot-based staleness still fires: capture s=6.0, changed production is 10.0.
     _assert_not_blessed(result.report)
     live = InPlaceMutatedEscapeSource()(torch.tensor(5.0))

@@ -23,14 +23,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import FacetSpec
-from torchlens.semantic.logit_lens import (
+from torchlens._semantic.logit_lens import (
     PROVENANCE_NATIVE,
     PROVENANCE_PROJECTED,
     LogitLensError,
     logit_lens,
     logit_lens_predictions,
 )
+from torchlens.facets import FacetSpec
 
 VOCAB, D_MODEL, SEQ, KEEP = 11, 6, 5, 2
 
@@ -80,18 +80,18 @@ class WrongNormLM(SlicedLM):
 
 def _block_recipe(module: Any) -> dict[str, Any]:
     op = module.trace.ops[module.calls[0].output_ops[0]]
-    return {"resid_post": FacetSpec.from_home(op, recipe_id="lens_toy_block")}
+    return {"resid_post": FacetSpec.from_home(op, function_id="lens_toy_block")}
 
 
 def _head_recipe(module: Any) -> dict[str, Any]:
-    from torchlens.semantic.recipes._helpers import config_value, parameter_spec
+    from torchlens._semantic.recipes._helpers import config_value, parameter_spec
 
     trace = module.trace
     head = trace.modules["lm_head"]
     norm = trace.modules["ln_f"]
     head_out = trace.ops[head.calls[0].output_ops[0]]
     result: dict[str, Any] = {
-        "logits": FacetSpec.from_home(head_out, recipe_id="lens_toy_head"),
+        "logits": FacetSpec.from_home(head_out, function_id="lens_toy_head"),
         "unembed_weight": parameter_spec(head, "weight", "lens_toy_head"),
         "final_norm_kind": "layer_norm",
         "final_norm_gamma": parameter_spec(norm, "weight", "lens_toy_head"),
@@ -117,7 +117,7 @@ _HEAD_FACETS = (
 def _register_recipes() -> Iterator[None]:
     """Register the toy recipes at RUN time, restoring the registry after."""
 
-    from torchlens.semantic import facets as _facets
+    from torchlens._semantic import facets as _facets
 
     saved = list(_facets._REGISTRY)
     tl.facets.register(class_name="LensBlock", target_scope="module", facets=("resid_post",))(
@@ -153,7 +153,8 @@ def _capture(model: nn.Module) -> Any:
     return tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
 
@@ -171,7 +172,7 @@ def test_sliced_capture_validates_and_projects(_models: dict[str, nn.Module]) ->
     log = _capture(_models["sliced"])
     try:
         result = logit_lens(log)
-        assert result.validated
+        assert result.is_validated
         assert result.lens_source == "model_head"
         assert tuple(result.final_logits.shape) == (1, KEEP, VOCAB)
         # Projections are full-sequence and numerically right.
@@ -192,7 +193,7 @@ def test_full_capture_still_validates(_models: dict[str, nn.Module]) -> None:
     log = _capture(_models["full"])
     try:
         result = logit_lens(log)
-        assert result.validated
+        assert result.is_validated
         assert tuple(result.final_logits.shape) == (1, SEQ, VOCAB)
     finally:
         log.cleanup()
@@ -219,7 +220,7 @@ def test_predictions_stream_math_and_provenance(_models: dict[str, nn.Module]) -
     try:
         result = logit_lens(log)
         preds = logit_lens_predictions(log, k=3, tokens=[0, 5])
-        assert preds.validated and preds.lens_source == "model_head"
+        assert preds.is_validated and preds.lens_source == "model_head"
         assert len(preds.rows) == 3  # b0, b1, native
         projected_rows = preds.rows[:2]
         native = preds.rows[-1]
@@ -288,7 +289,7 @@ def test_predictions_tie_ranks_share_smallest_rank(_models: dict[str, nn.Module]
         # Both tied tokens rank 2 (one strictly-greater logit each).
         assert row.token_ranks[0, 0, 0] == 2
         assert row.token_ranks[0, 0, 1] == 2
-        assert preds.lens_source == "user" and not preds.validated
+        assert preds.lens_source == "user" and not preds.is_validated
     finally:
         log.cleanup()
 

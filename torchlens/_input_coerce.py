@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ._errors import ArgumentTypeError
+
 
 def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
     """Convert common ergonomic inputs to model-ready tensors.
@@ -82,7 +84,6 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
 
     if not forward_kwargs:
         return
-    from ._errors import ArgumentTypeError
 
     unknown = ", ".join(sorted(forward_kwargs))
     raise ArgumentTypeError(
@@ -93,43 +94,77 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
             "pass them as tl.trace(model, (), input_kwargs={"
             + ", ".join(f"{key!r}: ..." for key in sorted(forward_kwargs))
             + "}); for HuggingFace text models, "
-            "torchlens.bridge.hf.trace_text(model, 'prompt') builds the "
+            "torchlens.bridge.transformers.trace_text(model, 'prompt') builds the "
             "inputs for you"
         ),
         unrouted_keywords=sorted(forward_kwargs),
     )
 
 
-def _reject_extra_positional_input(grad_transform: Any) -> None:
-    """Refuse a tensor landing in ``trace()``'s fourth positional slot.
+def _reject_extra_positional_input(extra_positional: tuple[Any, ...]) -> None:
+    """Refuse anything past ``trace()``'s two positional slots.
 
     Parameters
     ----------
-    grad_transform:
-        The value ``trace()`` received in its ``grad_transform`` slot. A
-        ``torch.Tensor`` here is almost always an extra positional model
-        input that overflowed past ``input_args``.
+    extra_positional:
+        Positional values ``trace()`` received after ``input_args``. Only
+        ``model`` and the inputs are positional; a value here is almost always
+        an extra positional model input that overflowed past ``input_args``, or
+        an ``input_kwargs`` mapping passed by position.
 
     Raises
     ------
     ArgumentTypeError
-        With code ``extra_positional_input_invalid`` when the slot holds a
-        tensor.
+        With code ``extra_positional_input_invalid`` when the tuple is not empty.
     """
 
-    import torch
-
-    if not isinstance(grad_transform, torch.Tensor):
+    if not extra_positional:
         return
-    from ._errors import ArgumentTypeError
+
+    kinds = ", ".join(type(value).__name__ for value in extra_positional)
+    raise ArgumentTypeError(
+        f"trace() takes only model and inputs by position; received {len(extra_positional)} "
+        f"extra positional value(s) ({kinds}). Bundle model inputs as one tuple, e.g. "
+        "tl.trace(model, (input_a, input_b, input_c)), and pass keyword inputs as "
+        "input_kwargs={...}.",
+        code="extra_positional_input_invalid",
+        remedy="bundle positional inputs into one tuple; every other argument is a keyword",
+    )
+
+
+def _reject_non_mapping_input_kwargs(input_kwargs: Any) -> None:
+    """Refuse a non-Mapping ``input_kwargs`` before any backend dispatch.
+
+    The natural multi-input spelling ``tl.trace(model, a, b)`` lands ``b`` in
+    ``input_kwargs``. The torch path refused it typed, but other backends (the
+    JAX two-positional spelling) crashed deep inside their capture instead, so
+    the check runs at ``trace()`` entry for every backend.
+
+    Parameters
+    ----------
+    input_kwargs:
+        The value ``trace()`` received in its ``input_kwargs`` slot.
+
+    Raises
+    ------
+    ArgumentTypeError
+        With code ``input_kwargs_type_invalid`` when the slot is neither
+        ``None`` nor a ``Mapping``.
+    """
+
+    import collections.abc
+
+    if input_kwargs is None or isinstance(input_kwargs, collections.abc.Mapping):
+        return
 
     raise ArgumentTypeError(
-        "grad_transform (the fourth positional slot) received a "
-        "torch.Tensor -- this is almost always an extra positional model "
-        "input. Bundle model inputs as one tuple, e.g. "
+        "input_kwargs must be a Mapping of keyword arguments for "
+        f"model.forward(), got {type(input_kwargs).__name__}. Passing "
+        "multiple positional inputs as separate arguments is not "
+        "supported: bundle them as one tuple, e.g. "
         "tl.trace(model, (input_a, input_b, input_c)).",
-        code="extra_positional_input_invalid",
-        remedy="bundle positional inputs into one tuple",
+        code="input_kwargs_type_invalid",
+        remedy="pass keyword args as a dict, or bundle positional inputs into one tuple",
     )
 
 
@@ -170,7 +205,7 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
         arg_type = type(input_args)
         if arg_type is tuple:
             return tuple(coerced_items)
-        from .utils.arg_handling import rebuild_tuple_like
+        from ._utils.arg_handling import rebuild_tuple_like
 
         rebuilt = rebuild_tuple_like(arg_type, coerced_items)
         if rebuilt is not None:

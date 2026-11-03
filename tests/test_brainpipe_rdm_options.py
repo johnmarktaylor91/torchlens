@@ -82,16 +82,16 @@ def test_rdm_compare_descriptive_correlations() -> None:
     acts = _acts()
     a = repgeom.rdm(acts)
     b = repgeom.rdm(acts, metric="manhattan")
-    assert abs(repgeom.rdm_compare(a, a) - 1.0) < 1e-12
-    spearman = repgeom.rdm_compare(a, b)
-    pearson = repgeom.rdm_compare(a, b, method="pearson")
-    kendall = repgeom.rdm_compare(a, b, method="kendall")
+    assert abs(repgeom.compare_rdms(a, a) - 1.0) < 1e-12
+    spearman = repgeom.compare_rdms(a, b)
+    pearson = repgeom.compare_rdms(a, b, method="pearson")
+    kendall = repgeom.compare_rdms(a, b, method="kendall")
     assert -1.0 <= spearman <= 1.0
     assert -1.0 <= pearson <= 1.0
     assert -1.0 <= kendall <= 1.0
     # Condensed and square spellings agree (the diagonal never leaks in).
     condensed = repgeom.rdm(acts, output="condensed")
-    assert repgeom.rdm_compare(condensed, b) == pytest.approx(spearman)
+    assert repgeom.compare_rdms(condensed, b) == pytest.approx(spearman)
 
 
 def test_rdm_compare_refusals_teach() -> None:
@@ -100,9 +100,9 @@ def test_rdm_compare_refusals_teach() -> None:
     a = repgeom.rdm(_acts(8))
     b = repgeom.rdm(_acts(9))
     with pytest.raises(ValueError, match="same stimuli"):
-        repgeom.rdm_compare(a, b)
+        repgeom.compare_rdms(a, b)
     with pytest.raises(ValueError, match="rsatoolbox"):
-        repgeom.rdm_compare(a, a, method="pvalue")
+        repgeom.compare_rdms(a, a, method="pvalue")
 
 
 def test_cka_gains_placement_through_one_seam() -> None:
@@ -116,7 +116,7 @@ def test_cka_gains_placement_through_one_seam() -> None:
     acc = CKA(dtype=torch.float32)
     acc.update(a[:12], b[:12])
     acc.update(a[12:], b[12:])
-    assert acc.result() == pytest.approx(legacy, abs=1e-4)
+    assert acc.compute() == pytest.approx(legacy, abs=1e-4)
     with pytest.raises(ValueError, match="floating"):
         cka(a, b, dtype=torch.int64)
 
@@ -124,4 +124,4 @@ def test_cka_gains_placement_through_one_seam() -> None:
 def test_tl_repgeom_rdm_compare_is_reachable() -> None:
     """The facade re-exports the new descriptive comparator."""
 
-    assert tl.repgeom.rdm_compare is repgeom.rdm_compare
+    assert tl.repgeom.compare_rdms is repgeom.compare_rdms

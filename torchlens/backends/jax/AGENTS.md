@@ -1,7 +1,8 @@
 # backends/jax/ - Implementation Guide
 
-Jaxpr-first JAX backend preview. Tier-1 standalone spec (no `capture_backend`);
-the `BackendSpec` in `../default_specs.py` is the only capability truth.
+Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+`BackendSpec` in `../default_specs.py` and its protocol shell in
+`../_protocols/jax.py` are the capability truth (contract: `../AGENTS.md`).
 
 ## backend.py
 - `JAXBackend.capture_trace()` derives a closed jaxpr from the callable
@@ -15,14 +16,16 @@ the `BackendSpec` in `../default_specs.py` is the only capability truth.
   `jax_max_control_flow_unroll`.
 - Typed entry refusals: `_reject_transformed_callable` (jit/grad/vmap-wrapped
   models), `_reject_tracer_inputs`, `_reject_closed_over_host_state`, and
-  `_raise_nnx_trace_context_error`.
+  `_raise_nnx_trace_context_error`; `_readable_closure_consts` (in
+  `_closure_consts.py`) refuses a function-root closure constant with no
+  readable buffer (`constant_unrealizable`).
 - Recurrence grouping calls `group_recurrent_nodes` directly (the same neutral
   grouper torch uses), gated by `recurrence_detection` (default True).
 
 ## jaxpr.py
 - Closed-jaxpr derivation and interpretation. `SAFE_JIT_NAMES` allowlists
   inlineable jit sub-jaxprs. The DEFAULT control-flow mode is `"unroll"`:
-  `cond`/`scan`/`while_loop` (and forward `custom_vjp_call` regions) are
+  `cond`/`model_id`/`while_loop` (and forward `custom_vjp_call` regions) are
   CAPTURED by mode-gated handlers that run before the refusal backstop —
   only `remat2` reaches the raise on the default path (and today as a bare
   `ValueError`, not the `BackendUnsupportedError` the backends contract
@@ -37,12 +40,12 @@ the `BackendSpec` in `../default_specs.py` is the only capability truth.
   `tlc_` scope-label prefixes that thread module identity through the jaxpr.
 
 ## capabilities.py
-- Registry-backed re-exports only. Per the registry: `interventions=False`,
+- Registry-backed re-exports only. Per the registry: `can_intervene=False`,
   `intermediate_derived_grads=True`, backward capture / fastlog / rng replay /
   streaming all False, `payload_policy="array_payloads"`.
 
 ## Local Invariants
-- `intervene=` / `halt=` are NOT supported on jax (unlike the tf/mlx/paddle
+- `intervene=` / `stop_after=` are NOT supported on jax (unlike the tf/mlx/paddle
   previews); do not claim intervention parity.
 - The capture is static (jaxpr interpretation), not eager wrapper capture;
   taken-branch honesty depends on the control-flow mode, and rejected nested

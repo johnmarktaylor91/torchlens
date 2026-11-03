@@ -1,6 +1,773 @@
 # CHANGELOG
 
 
+## Unreleased
+
+### Behavior changes
+
+- **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
+  pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
+  merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at
+  `tl.validation.validate_tlspec` and the extraction readers) with one error,
+  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the 2.x
+  origin and the remedy: load the file with torchlens 2.36.x (`pip install 'torchlens>=2.36,<3'`) or
+  capture the model again with this release. Nothing migrates a 2.x file, and there is no
+  `tl.migrate`. The promise made with 2.16.0 that its `.tlspec` files would always load is
+  withdrawn; `MIGRATIONS.md` (".tlspec Compatibility") lists every case.
+- **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
+  (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
+  the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old
+  third positional value refuse `intervention_direction_invalid`. Rule ids are unchanged.
+  `TapObserver.signal` and `tl.observers.tap(signal=)` stay.
+- **bundle**: `Bundle.measure_members` is gone. `Bundle.map(fn)` is the one per-member read: it
+  returns `fn` over every live member keyed by name, and every effect-table candidate the bundle
+  no longer holds (released, refused or failed) keyed by its candidate id with the value
+  `"unmeasured"`. The `order="chain"` view and the `measure_members_order_unavailable` code go
+  with it; `bundle.history` still lists the operations in ledger order.
+- **draw**: `trace.draw(show_containers=...)` takes four settings: `False` (default), `"labels"`,
+  `"collapsed"` and `"nodes"`. `"auto"` is gone (it drew exactly what `"collapsed"` draws and chose
+  nothing) and so is `"cluster"` (it drew `"labels"` plus a dotted box around an op-returned tuple,
+  which `"nodes"` also draws); both refuse `visualization_show_containers_invalid` with the
+  replacement named. The `overview` lens now pins `"collapsed"`. Each setting is documented in
+  `docs/containers.md`.
+- **fastlog**: the `Recording.enrich` step `"param_addresses"` is gone. It never produced an
+  enrichment (capture records carry no `parent_param_addresses` field, so it always refused);
+  the accepted steps are `"module_path_strings"` and `"all-feasible"`, and any other name
+  refuses as an unknown step.
+- **output decode**: `CaptureOptions.output_style` is gone. Output decoding is not a capture
+  option: every capture runs the automatic detector pass (Hugging Face `config.id2label`
+  classifiers, verified ImageNet models, and text models traced through
+  `tl.bridge.transformers.trace_text`, whose attached tokenizer now switches text decoding on
+  by itself). To force a style, decode again from the retained outputs at read time:
+  `trace.decode_output(style="imagenet")`, `trace.output_table(style="classification")`, or
+  `trace.decode_output(style="hf_text", tokenizer=tok)`; a custom detector registered with
+  `tl._autoroute.output.register(...)` reads `meta["style"]` (was `meta["output_style"]`) and
+  serves `decode_output(style="my_style")`. The read-time result is returned, not stored in
+  `decoded_output`. An unknown style refuses `decode_style_unknown`
+  (`tl.errors.DecodeStyleUnknownError`; was `output_style_unknown` /
+  `OutputStyleUnknownError`).
+- **output decode**: `CaptureOptions.output_head` is gone. Name the head of a multi-output
+  model at read time instead: `trace.decode_output(head="logits")` or
+  `trace.output_table(head="0")`, where the head is an output container path (`"logits"`,
+  `"0"`, `"0.logits"`). A head that is not an output head refuses `decode_head_unknown`; several
+  qualifying heads with none named refuse `decode_head_ambiguous`; both list the available
+  heads. The automatic pass keeps recording the head it selected in
+  `trace.output_postprocessor.selected_output_head`.
+- **validation**: `tl.validate` restores the caller's global RNG streams (Python `random`, NumPy,
+  torch CPU and CUDA generators) on return and on error, the way `tl.trace` does; before, a
+  backward or layer-gradient validation left the process reseeded with the validation seed.
+  The lower-level `torchlens.validation.validate_forward_pass`, `validate_backward_pass`
+  and the `Trace.validate_forward_pass` replay method make the same promise.
+- **root namespaces**: `tl.mechinterp`, `tl.semantic` and `tl.tviz` are not root attributes;
+  in a fresh process they raise a typed `AttributeError` (code `facade_redirect`) that names
+  the import. Import the subpackage (`import torchlens.mechinterp`) and call
+  `torchlens.mechinterp.edge_scores(...)`. The other root namespace rows added during this
+  release cycle (`checks`, `conformance`, `differential`, `ecosystem`, `experiment`, `features`,
+  `inventory`, `kernel_telemetry`, `observe`, `preprocessing`, `quickstart`, the four
+  `selection_*`, `snoop`, `trace_slice`, `trackers`) are gone too; import them the same way.
+  A subpackage already imported (by you or by TorchLens itself) still resolves as `tl.<name>`.
+- **visualization**: interventions draw in one purple (`#7B1FA2`; `#C084FC` on the dark skin).
+  An edited node keeps its fill, shape and dash and gets a 2.5 pt purple ring and a last label
+  row naming the edit (`Δ zero_ablate`, `Δ scale(0.5)`, `Δ steer(v)`; full spelling in the
+  tooltip); the header gets a line such as `1 edit: Δ zero_ablate on linear_1_1`. The magenta
+  site outline and pink cone outline are gone. `vis_show_cone` is now off by default; with
+  `vis_show_cone=True` the arrows and node outlines downstream of the edit keep their normal
+  strokes and gain a translucent purple underlay, laid into the SVG after layout (PDF and PNG
+  are written from that SVG and need `cairosvg`; without it TorchLens warns and draws the
+  edited node only). `intervention_cone_color` and `intervention_cone_penwidth` now set the
+  underlay's colour and width (default 8). The `vis_intervention_mode="as_node"` hook is a small
+  purple delta diamond. With `show_legend=True` the key lists `edited` and `changed by the edit`
+  instead of `intervention/cone`, and its `module` entry is a module frame.
+- **visualization**: when a module's only child hides exactly the module's operations, the
+  module (the name you wrote) is the collapse box and the child is not; a chain of such
+  wrappers keeps the outermost. `Module.collapse_score` and `Trace.module_collapse_order` read
+  0.0 for that child and rank the parent. Auto-collapse renders box `@blocks.1` rather than
+  `@blocks.1.net` for a block wrapping one `Sequential`, and parallel branches that each wrap
+  one `Sequential` fold into one repeated box again.
+
+- **replay**: replay refuses `replay_param_changed_since_capture` when a parameter the replay
+  reads changed after capture (an optimizer step, `load_state_dict`, an in-place op under
+  `torch.no_grad()`, `param.data = t`), on `do()` with the replay engine, `push`, `push_from`,
+  differentiable replay and later replays of every fork. Before, it silently computed with the
+  new weight. Re-capture, or pass `allow_changed_params=True` (`InterventionOptions` or
+  `ReplayOptions`) to replay with the current values; the run lists the parameters in
+  `trace.last_run["replayed_with_changed_params"]`. An in-place write through `param.data` is
+  still not detected.
+- **memory**: CPU peaks are opt-in. A default capture no
+  longer resets the process-wide resident high-water mark, so it leaves a caller's own `VmHWM`
+  and `ru_maxrss` readings alone; in exchange the CPU `Trace.forward_peak_memory` and
+  `Trace.backward_peak_memory` read `None`, with `forward_peak_memory_reason` and the new
+  `backward_peak_memory_reason` naming the opt-in, and the forward peak pair reads
+  `resident=None`, `resident_basis="not_requested"`. Pass
+  `CaptureOptions(measure_host_peak_memory=True)` to measure them as before (reruns and
+  refreshes of that trace inherit it). CUDA peaks and the MPS allocator delta are unchanged.
+  The module switch `torchlens.capture.peak_memory.RESET_HOST_PEAK` is removed.
+- **docs and warnings**: the torch.compile coexistence wording drops "one-time": TorchLens's
+  wrapper install/uninstall costs a bounded burst of recompilations on the first compiled call
+  after each capture, then steady state (README, the compile-stance warning, the compat report
+  row, `tl.debug.count_compiles`, debug and limitations pages).
+- **attribution**: layer-method results carry one more `extra` key, `integer_input_layers`, and
+  the uncoded float-input refusal is replaced by the coded `attribution_input_not_float`.
+- **trace.ops**: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
+  `to_pandas()` of `trace.ops` now cover only the ops `trace.num_ops` counts, so
+  `len(trace.ops) == trace.num_ops`. Input, output and buffer rows are no longer in that
+  sequence (label lookup such as `trace.ops["input_1"]` still finds them). Code that read
+  `trace.ops` as every captured row should read `trace.layer_list`, which `len(trace)`,
+  `trace[int]` and `trace[slice]` index.
+- **repgeom**: `tl.repgeom.rdm(metric="gaussian")` now computes `1 - exp(-D / mean(D))`, the
+  thingsvision bandwidth it credits, instead of `1 - exp(-D / (2 * mean(D)))`, so every gaussian
+  RDM value differs from every earlier release (for 1-D points 0, 1, 3: 0.148, 0.765, 0.474 become
+  0.275, 0.945, 0.724).
+
+- **bridge.steering_vectors / bridge.repeng**: the trainers `tl.bridge.steering_vectors.vector`
+  and `tl.bridge.repeng.control_vector` are removed, with no alias. Build the direction with
+  `torchlens.intervention.direction_from_pairs(pos_traces, neg_traces, site, method=)` and
+  convert it with `direction.to_steering_vectors()` or `direction.to_repeng()` (the bridges now
+  hold only the converters `from_direction`). repeng's `pca_diff`, `pca_center` and `umap`
+  replications are gone; the native methods are `mean_diff`, `pca` and `logistic`.
+- **bridge.dialz**: `tl.bridge.dialz.vector` is removed with no alias; build the direction with
+  `torchlens.intervention.direction_from_pairs` and convert it with `Direction.to_dialz()` (or
+  `tl.bridge.dialz.from_direction`). The `bridge_contrastive_*` refusal codes are gone with it.
+  The `dialz` extra now requires dialz 1.1 or later (`dialz>=1.1,<2`).
+- **agent**: agent-surface budgets are set from a classics-corpus measurement
+  (`tools/agent_evals/BUDGETS.md`). `torchlens_overview` now defaults to 12,000 tokens (was
+  4,000); the row tools' default and maximum `max_rows` is 150 (was 200). The numbers are
+  configuration, not a guaranteed API limit.
+- **Bundle**: the "pristine" label and baseline auto-detection now read `Trace.pristine is True`
+  instead of `Trace.state is TraceState.PRISTINE`. Intervened captures (including func-targeted
+  `intervene=` captures, whose state stayed `PRISTINE`), artifacts older than tlspec 9 and
+  non-torch traces are no longer auto baselines; plain reruns and `clear_hooks()` on an untouched
+  trace now are. With no qualifying member, baseline-anchored reads still refuse
+  `BaselineUndeterminedError`; pass `baseline=` explicitly.
+- **bridge.sae_lens**: `torchlens.bridge.sae_lens.decode(log, site, sae)` is removed with no alias:
+  it passed the site activation to `sae.decode` as if it were latents. Use
+  `torchlens.bridge.sae_lens.reconstruct(log, site, sae)` for the reconstruction, or
+  `sae.decode(latents)` on latents you hold. `SpliceResult.fraction_variance_explained` is `nan`
+  (with `zero_variance=True`) when the site's total variance is zero; it was 0.0.
+- **intervention**: `do(tl.subspace(site, basis, origin=...), edit)` now edits the component of the
+  site value along the basis span and keeps the orthogonal complement; it no longer edits every
+  element of the basis's support. `tl.patch_from(source)` under a subspace is the basis
+  interchange. Verbs with no coordinate meaning refuse `subspace_edit_unsupported`; a subspace
+  combined with set operators or resolved refuses `subspace_projection_composed` in `do()`. The
+  `dense_subspace_full_axis_edit` warning is removed.
+- **intervention**: `InterventionDecision(keep_grad=True)` now runs a gradient-connectivity check
+  and raises `edit_detached_from_graph` when the edit writes values with no autograd graph; before,
+  the flag was ignored on torch. `keep_grad=False` (the default) is unchanged.
+- **intervention**: a gradient edit (`grad_zero`, `grad_scale`, `grad_clip`, `grad_noise`,
+  `grad_clamp`, `bwd_hook`) passed to `fork.do(site, edit)` on a replay fork, or to
+  `push(replay=ReplayOptions(hooks=...))`, now refuses `InvalidArgumentError` code
+  `replay_gradient_edit_unsupported` naming the live door; before, it failed with an uncoded
+  `HookSignatureError`.
+- **trace**: a default `tl.trace` now puts back state a model builds lazily in its forward (a cache
+  attribute, a first-call init flag), so calling `tl.validate` right after a trace on such a model
+  starts from the pristine model and reports `retrace_mismatch` for its one-time first forward. Run
+  one plain forward first, or trace with `CaptureOptions(carry_state=True)`, to validate the
+  steady-state model.
+
+### Features
+
+- **intervention**: `tl.direction_from_pairs(pos_traces, neg_traces, site, method=...)` is a
+  root name (also `torchlens.intervention.direction_from_pairs`); `torchlens.__all__` has 116
+  names.
+
+- **bundle**: harness bundles gain the `selected_by` control relation kind (tlspec 10, no
+  version bump): `b.relate("selected_by", "writer", "router", chosen=1, candidates=[0, 1])`
+  records that a router's or judge's decision selected a later call without its text entering
+  that call's prompt. Optional params `chosen`, `candidates` and `evidence`; it orders members for
+  `upstream`/`downstream` and the comparison gate, and replaces the documented
+  `successor_of`-plus-metadata workaround. Readers older than tlspec 10 refuse the kind.
+- **bundle**: steer one call and re-run your harness. `b.add_alternative(second_run,
+  steered=("draft",))` merges a re-run of your own harness as `cf_<name>` members with
+  `alternative_of` rows and returns an `AlternativeReport` saying per call whether it was steered
+  and whether its prompt and output changed, from which token; it refuses a missing, unsteered,
+  position-dependent or undeclared steer, a taken name, and an unsteered call that saw the same
+  prompt but wrote different text (`alternative_*` codes). `b.token_divergence(original, rerun)`
+  returns a `TokenDivergence` with the first differing prompt and completion positions and the
+  stretches both runs share (`bundle_token_divergence_unavailable` without a bound completion
+  range). Documented-unstable; recipe in `docs/reference/harness_bundles.md`.
+
+- **attribution**: the layer methods (`layer_attribution`, `layer_integrated_gradients`,
+  `layer_conductance`, `grad_cam`) accept integer inputs such as token ids: the input path starts at
+  the embedding output, baseline ids embed to the path start, and `extra["integer_input_layers"]`
+  names the embedding. Input methods refuse integer inputs with `attribution_input_not_float` and a
+  runnable layer-method spelling. New `tl.attribution.SiteTarget(layer, unit=None, call=None)`: pass
+  it as `target=` to attribute a hidden layer's output or one unit of it (the neuron-attribution
+  family).
+- **stats**: `tl.stats.save_fitted` / `tl.stats.load_fitted` save and reload any `tl.stats`
+  accumulator mid-stream (pooled or per unit, `Histogram`, `Spine`, `Aggregator`), and the reload
+  keeps folding exactly as an uninterrupted run; `tl.aggregate(..., cache=True, cache_dir=None)`
+  skips the dataset loop on a rerun of the same run and refuses runs it cannot key by value.
+- **attribution**: `tl.attribution.grad_cam` accepts vision-transformer token layers: the patch
+  grid and leading class, distillation or register tokens are derived from a metadata-only trace
+  (ViT, DeiT, DINOv2 with registers, CLIP vision, Swin per stage); `reshape=` lays tokens out by
+  hand; unprovable grids refuse with `grad_cam_token_grid_unprovable`. `grad_cam` without `layer=`
+  chooses the layer from the trace and records `layer_source` and `layer_reason` in `extra`.
+  torch-cam is documented as the alternative for other CAM variants.
+- **stats**: `tl.stats.Quantile` and `tl.stats.TopK` take `unit_axis=` for per-unit quantiles
+  and top-k (neurons, channels, SAE latents via `encoder=`); per-unit `TopK` returns
+  `tl.stats.UnitTopK` with the example id and position of each value, deterministic ties, and a
+  once-per-session warning when state passes 256 MiB.
+- **tools**: `tools/agent_evals/` is a harness that tests whether a coding agent can drive
+  TorchLens from its docs alone; the docs-only reference solutions run in the test suite.
+- **Trace**: `Trace.pristine` (documented unstable) reads `True`, `False` or `None` for whether
+  anything ever intervened on the trace, derived from the evidence it carries, so it survives save
+  and load and no reset makes a touched trace read `True` again. `None` means no evidence (an
+  artifact older than tlspec 9, or a non-torch backend).
+- **intervention**: `torchlens.intervention.direction_from_pairs` fits a contrastive steering
+  direction (`"mean_diff"`, `"pca"` or `"logistic"`, torch only) from saved activations and
+  returns a `torchlens.intervention.Direction` with a `BasisProvenance` record, a native
+  `.steer(m)` edit and `.to_steering_vectors()` / `.to_repeng()` converters whose library
+  objects reproduce the native steer's logits.
+- **intervention**: `Direction.to_dialz()` returns a real `dialz.SteeringVector`; applied with
+  `SteeringModel.set_control(vector, scalar=m)` it reproduces `direction.steer(m)`'s logits.
+- **docs**: a conditional-steering recipe (`docs/recipes/conditional_steering.md`) with a
+  per-token audit of when the steer was applied.
+- **mechinterp**: `torchlens.mechinterp.patch_query_heads_grid` (documented unstable) builds a
+  `[layer, head]` patching grid over query heads at a key or value site under grouped-query
+  attention; each cell patches one query head's copy of its key/value group at the expansion op.
+  New refusals `mi_kv_expansion_unavailable`, `mi_kv_expansion_ambiguous` and
+  `mi_kv_heads_not_grouped`.
+- **tviz**: `torchlens.tviz.receipt_from_patch_grid` sets `CausalReceipt.effect_source` from a
+  grid's `effect_site` receipt, and refuses `kv_groups=` for a query-head interceptor grid
+  (`tv_receipt_invalid`).
+- **attribution**: `tl.attribution` gains an evaluation battery: `deletion_curve` and
+  `insertion_curve` remove or reveal the most-attributed input features in steps and report the
+  curve, its area and AOPC, and every step carries its edit as a `(tl.units(...),
+  tl.replace_with(...))` pair that replays through `trace.fork().do(...)`; `randomization_test` is
+  the model-parameter randomization test (cascading or independent, Spearman and SSIM per step) on
+  deep copies of the model. Both accept `grad_cam` results, including vision-transformer token
+  grids.
+
+- **bridge.sae**: `tl.bridge.sae.splice` results are honest: `SpliceResult` gains `latents` and
+  `edited_latents` (kept by default; `keep_latents=False` drops them; a warning past 256 MiB),
+  `fraction_variance_explained_pooled` (the SAELens / Gemma Scope per-dimension reading) and
+  `fraction_variance_explained_by_dim`, `zero_variance` with `nan` instead of a silent 0.0, and,
+  given `tokens=`, `ce_loss_clean`, `ce_loss_spliced`, `ce_loss_zero_ablated`, `ce_loss_recovered`
+  and `kl_divergence`; `unavailable_metrics` says why any metric is missing. `exclude_bos=True`
+  follows the Gemma Scope evaluation.
+- **recipes**: new recipe for pretrained SAEs (Gemma Scope 1 and 2): SAELens loads and TorchLens
+  runs, with the hook-name to site mapping and transcoders via `tl.splice_module(transcoder,
+  input="in")`.
+- **stats**: `tl.trace(model, x, save="stats")`, a reduce-and-discard save level: every op's out is
+  folded into a `tl.stats.Spine` during the forward and no payload is kept (128 bytes per op at any
+  batch size); read the statistics with `tl.stats.site_spines(trace)`. Payload reads, replay and
+  validation on such a trace refuse with stable codes.
+- **stats**: `tl.stats.measure_trajectory(model, data)`, logit-lens trajectory statistics in one
+  call (entropy, KL to the final output, top probability, and cross-entropy and rank of target
+  tokens, per layer and position), returning `tl.stats.TrajectoryStats`;
+  `torchlens.semantic.logit_lens_predictions(..., mask_input=True)` bans the input's own tokens
+  before its reductions.
+- **mechinterp**: `torchlens.mechinterp.component_graph(trace)`: the circuit-discovery component graph
+  (MIB/EAP-IG vocabulary: `input`, per-head `a{L}.h{H}`, per-layer attention output bias `b{L}`,
+  `m{L}`; receivers `a{L}.h{H}<q|k|v>`, `m{L}`, `logits`), with every receiver's pre-norm input
+  checked equal to the sum of its edges' contributions; edges are intervention selections, and
+  `torchlens.mechinterp.patch_edges(trace, edges, *, corrupt)` patches the edges into one receiver on the
+  replay engine. Documented unstable.
+- **semantic**: GPT-NeoX (Pythia) attention recipe: per-head `q`, `k`, `v`, `result` and
+  `attn_out` facets from the fused `query_key_value` projection.
+- **intervention**: `torchlens.intervention.keep_grad(edit)` and the gradient-contract page
+  `docs/gradient_contract.md` (verb x door matrix).
+- **attribution**: `tl.attribution.causal_audit` grades an internal attribution causally: it ablates
+  each unit of a layer attribution's hidden site alone, and the top-k claimed units together beside
+  bottom-k and seeded random-k controls, through `trace.fork().do(...)`, and reports each unit's
+  claimed score next to its measured effect, the Spearman rank agreement, and the replayable edit
+  behind every number; claims computed for a `SiteTarget` are audited at that site.
+  `tl.attribution.road_curve` adds ROAD (remove and debias): the deletion curve with removed pixels
+  filled by noisy linear imputation from their neighbours, each step a recorded edit.
+  `randomization_test` now refuses when no layer with parameters runs during the method call instead
+  of returning an empty result.
+- **attribution**: `tl.attribution.causal_audit` now also audits direct-logit-attribution tables
+  from `torchlens.mechinterp.direct_logit_contributions` (each component's whole site is ablated and the
+  same logit quantity is read from the unembedding head, after a check that the model reproduces the
+  table's native logits; the constant row is reported apart) and one-backward read tables from
+  `tl.attribution.read` (each activation-times-gradient site or element is ablated and the seeded
+  target measured; `EDGE` rows refuse and point to `torchlens.mechinterp.patch_edges`). Its `target=` is
+  now optional (left out for a direct-logit table), and every audit row names its `site` and
+  `component`.
+- **intervention**: `tl.intervention.keep_grad(edit)` warns `keep_grad_replay_frontier` once per
+  session under `push(replay=ReplayOptions(differentiable=True))`, where parameters upstream of the
+  replay frontier get no gradient.
+- **intervention**: `do(tl.subspace(site, basis, origin=...), verb)` with a builtin verb saves
+  portably: the staged edit is the builtin `subspace_edit` (verb, orthonormal rows, axis, digests,
+  provenance), so `tl.io.save_intervention(..., level="portable")` reloads the same projection; a
+  learned rotation (DAS, ReFT) is applied as `tl.subspace(site, R[:k], origin=...)`. Load refuses
+  `subspace_spec_invalid`, `subspace_spec_basis_tampered`, `subspace_spec_basis_not_orthonormal`.
+  New field `BasisProvenance.source_dtype`. Fire records of such edits name `subspace_edit`.
+- **mechinterp**: `torchlens.mechinterp.edge_scores(model, inputs, *, corrupted, metric, method="eap_ig",
+  steps=None, example_reduction="mean")`: edge attribution patching over the component graph (EAP,
+  and EAP-IG with a left Riemann sum over the input embedding), one capture and one backward per
+  evaluation point, each receiver's own gradient (q, k and v per head); returns a one-backward
+  `ReadTable` of `EDGE` rows addressed by edge name. `torchlens.mechinterp.circuit_performance_ratio` and
+  `torchlens.mechinterp.circuit_model_difference`: the MIB circuit track's CPR and CMD areas over a
+  faithfulness curve. Documented unstable.
+- **bridge**: `tl.bridge.sae.write_sae_dashboard(latents, tokens, path=...)` and
+  `tl.bridge.sae.write_delphi(latents, tokens, site=..., model_name=..., directory=...)` write SAE
+  latents and each latent's top examples as the files SAEDashboard 0.8.0 and delphi 0.1.3 load, from
+  one splice's `latents` or a dataset's `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` result
+  (DOCUMENTED-UNSTABLE).
+- **docs**: New recipes: training an SAE on extracted activations with dictionary_learning and
+  sparsify and splicing it back (`docs/recipes/sae_trainers.md`); model diffing with a crosscoder on
+  two traces (`docs/recipes/sae_crosscoder_diff.md`); Prisma CLIP SAEs
+  (`docs/recipes/prisma_clip_sae.md`); latent export (`docs/recipes/sae_latent_export.md`).
+- **attribution**: `tl.attribution.causal_audit` now also audits EDGE tables from
+  `torchlens.mechinterp.edge_scores`: each edge is patched alone with `torchlens.mechinterp.patch_edges` (the
+  sender's value from the corrupted run) and the metric's change `M(patched) - M(clean)` is compared
+  with the edge's score, with rank agreement and top-k, bottom-k and random-k sets (sets whose edges
+  enter several receivers are listed in `extra["sets_not_measured"]`). New keyword-only arguments
+  `corrupted=` and `metric=` (the ones the table was scored with) and `edges=` (audit a subset).
+  Documented unstable.
+- **intervention**: `tl.intervention.affine_source(weight, *, bias=None)`, a source verb for
+  subspace edits: `do(tl.subspace(site, R.T, origin=...), affine_source(W, bias=b))` writes `x + Q^T
+  (W x + b - Q x)` (LoReFT). Outside a subspace it refuses `affine_source_needs_subspace`; malformed
+  arguments refuse `affine_source_invalid`. DOCUMENTED-UNSTABLE.
+- **intervention**: a subspace edit restricted by `within=tl.units(site, mask)` with a builtin verb
+  now saves at `level="portable"` (the `subspace_edit` payload stores `mask` and `mask_sha256`) and
+  reloads bit-identically; load refuses `subspace_spec_mask_tampered`, and any stored keyword the
+  loader does not know refuses `subspace_spec_invalid`. Other masked edits are unchanged.
+- **bridge**: `tl.bridge.pyreft.read(directory, *, repo=None, revision=None)` reads a pyreft LoReFT
+  artifact into a `LoreftArtifact` (R, W, b as saved, the layer and component, provenance with file
+  sha256s and dtypes); apply with `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`.
+  No pyreft import, no extra. Refuses `pyreft_artifact_invalid`, `pyreft_artifact_unsupported`,
+  `pyreft_positions_invalid`. DOCUMENTED-UNSTABLE.
+- **bridge**: `LoreftArtifact.subspace(site, ...)` also takes the site from a trace (`trace[label]`)
+  and checks its shape at once: a trailing axis that is not the artifact's width refuses
+  `pyreft_site_invalid`, positions that do not cover the other axes refuse
+  `pyreft_positions_invalid`. DOCUMENTED-UNSTABLE.
+- **docs**: a feature-visualisation recipe (`docs/recipes/feature_visualisation.md`): optimisation
+  at any TorchLens site (an op label, a channel or unit, an SAE latent; vision and non-vision
+  models), native PyTorch through a capture-free binding.
+- **docs**: a CLIP-Dissect network dissection recipe (`docs/recipes/dissection.md`) built on
+  `tl.extract_dataset` and `tl.stats.TopK`, with the paper's soft-WPMI score.
+- **mechinterp**: `torchlens.mechinterp.patch_edges` patches edges into several receivers in one call (the
+  MIB circuit-track convention: each patched receiver sees its patched senders' corrupted values
+  while every other sender carries its value in the patched forward), so a circuit runs as one call;
+  `torchlens.mechinterp.head_scores(..., kind=torchlens.mechinterp.FixedPeriodInduction(period=n))` scores
+  fixed-period induction on repeated sequences; recipe page `docs/recipes/acdc_ioi.md` (ACDC as a
+  driver loop over edge substitution and the experiment ledger). Documented unstable.
+- **bundle**: `Bundle.measure_members(order="chain")` orders members by the bundle's validated
+  operation chain and lists members no operation recorded apart.
+- **report**: `tl.report.backward_status(trace)` counts the backward that ran: a captured backward
+  records the ATen calls it dispatches on `BackwardPass.dispatched_ops`, counted exactly for the
+  matmul and convolution families at fma2 (FlopCounterMode's convention), per pass in
+  `executed_flops_per_pass`, with every other call named in `uncounted_ops`. An observed backward
+  used to read unknown.
+- **intervention**: `Trace.do([(selection, edit), ...])` accepts batches that mix activation,
+  parameter (`tl.params(...)`) and dataflow-edge selections on the replay engine: the pairs apply in
+  order, the result equals one `do()` per pair, and the batch is atomic (a refused pair leaves the
+  trace as it was, apart from the one error event). Such a batch on another engine still refuses
+  with `selection_batch_cross_kind`, which now names the replay engine as the working spelling.
+- **report**: `BackwardPass.flops_attribution` and `tl.report.backward_status(trace).attributions`
+  charge the executed backward to the GradFn call and forward op that did the work, with an
+  `unattributed` bucket naming every call that ran under no recorded node; rows plus bucket equal
+  the executed count exactly.
+- **report**: under activation checkpointing, forward kernels replayed in the backward are labeled
+  `recompute_flops` on their row (unknown under `create_graph`).
+- **report**: `tl.report.cost_tree(trace)` rows carry forward multiply-accumulate, executed backward
+  and total FLOPs columns (one convention); without a counted backward they read not run or unknown,
+  never 0.
+- **report**: a saved trace keeps its counted executed backward and attribution
+  (`BackwardPass.executed_flops_record`, tlspec 10); loading it reads the count instead of unknown.
+- **capture**: FLOP counts cover more calls: linear and convolution weights computed in `forward`
+  (weight norm, spectral norm, weights passed as inputs), the fused `nn.RNN`, `nn.GRU`, `nn.LSTM`
+  kernels and their cells, `torch.linalg.multi_dot`, `einsum` with `...`, and `mv`, `dot`, `vdot`,
+  `spmm`; each used to read unknown.
+- **report**: `tl.report.backward_status(trace)` counts the CPU fused attention backward (equal to
+  the MATH attention backend's count) and the oneDNN LSTM layer backward; both used to be left out
+  of the printed total and named as uncounted.
+- **capture**: When the completeness witness finds operations that ran inside a TorchScript function
+  called from an eager forward, TorchLens now warns once per session (`TorchLensCaptureGapWarning`,
+  code `scripted_function_not_captured`), naming the scripted function, its definition line and the
+  calling line, and giving the remedy `PYTORCH_JIT=0`. The verdict (`capture_verified=False`) and
+  the witness counts are unchanged.
+- **capture**: The same advisory for a line that hands a tensor to another library through DLPack
+  (code `dlpack_call_not_captured`), without the JIT hint.
+- **attribution**: `tl.attribution.build_graph` builds a prompt's attribution graph from a capture
+  and per-layer or cross-layer transcoders: typed feature, error, token and logit nodes, direct
+  linear edges with attention patterns and normalisation scales held fixed, and every feature and
+  logit node accounted for by its incoming edges plus named constants
+  (`tl.attribution.AttributionGraph`). Documented-unstable.
+- **fastlog**: `tl.record(..., generate_kwargs={...})` (documented-unstable) records chosen sites at
+  every forward of one cached Hugging Face `generate()` call, each decode step holding only its new
+  position; returns a `GenerationRecording`.
+- **bridge**: SAE latents are a facet family: `tl.bridge.sae.register(name, sae, site=...)` makes
+  `tl.facet(name).latent(k)` address latent `k` wherever a head selector works (`Trace.set`,
+  `attach_hooks`, `do`, `fork().do`); an edit adds the decoder-space change of the edited latents
+  and keeps the SAE's reconstruction error; `trace[site].facets[f"{name}[{k}]"]` reads it.
+  `tl.attribution.SiteTarget(layer, sae=sae, unit=k)` attributes an SAE latent.
+  `tl.bridge.sae.splice(..., log_latents=True)` puts the latents in the spliced trace as nodes
+  (`SpliceResult.latents_site`).
+- **facets**: `trace[selector]` and `trace.resolve_sites(selector)` read a bare facet selector
+  (`tl.head(i, name)`, `tl.facet(name)`, `tl.facet(name).latent(k)`): each entry is the `Facet` the
+  record's facet view serves, so `.value` is the head's slice or the SAE latent's activation; a
+  selector nothing serves refuses with `facet_selector_no_match`.
+- **facets**: `tl.trace(model, x, save=<facet selector>)` keeps the ops a later read of that facet
+  needs: an SAE latent's registered site, or every op inside an attention module whose class has a
+  facet recipe.
+- **attribution**: Attribution graphs on Hugging Face Gemma-2 are tested, and match circuit-tracer
+  v0.5.2 on Gemma-2 2B within float32 rounding. The patterns and norm scales are frozen through op
+  labels in `frozen=`, and logits are taken before the final softcap with
+  `logits_at=SiteTarget("lm_head")`.
+- **attribution**: `tl.attribution.build_graph` reads a transcoder at an op label as well as at an
+  MLP's input, for transcoders that read inside a module (Gemma Scope reads a norm's value before
+  its gain), and refuses a read site that does not run before the MLP outputs it writes.
+- **attribution**: `build_graph(frozen=...)` takes facet selectors: `frozen=[tl.facet("pattern"),
+  tl.facet("inv_rms")]` holds every attention pattern and norm scale of a Hugging Face Gemma-2.
+  `Gemma2Attention` now serves the attention facets and `Gemma2RMSNorm` serves the new `inv_rms`
+  facet (documented-unstable).
+- **attribution**: Cross-layer transcoder attribution graphs on a tiny Hugging Face Gemma-2 are
+  tested against a plain-autograd key: edges, node accounting, error nodes and active-subset
+  exactness.
+- **attribution**: `AttributionGraph.to_neuronpedia(slug=..., scan=..., tokenizer=...)` exports an
+  attribution graph in Neuronpedia's published attribution-graph schema, pruned by circuit-tracer's
+  influence rule, so it opens in Neuronpedia's graph viewer; on Gemma-2 2B it matches
+  circuit-tracer's own export on every shared node and link within float32 rounding
+  (documented-unstable).
+- **attribution**: `tl.attribution.overlay(trace, graph)` paints an attribution graph onto its trace
+  for `trace.draw(color_by=...)`: each site holding feature or error nodes gets its nodes' total
+  influence on the logits, or with `graph_value="activation"` its feature activations
+  (documented-unstable).
+- **attribution**: `tl.attribution.graph.upload_to_neuronpedia(exported, api_key=<key>)` publishes
+  an exported attribution graph on Neuronpedia through its documented two-step upload, and
+  `Direction.upload_to_neuronpedia(api_key=<key>, scan=..., vector_label=<name>)` publishes a
+  steering vector through its "Create Vector" endpoint; standard library only, every field checked
+  before the first request, the key never written into a message (documented-unstable).
+
+### Bug Fixes
+
+- **capture**: a model with a sparse registered buffer (a `to_sparse()` adjacency fed to
+  `torch.sparse.mm`) can be captured again; the buffer-write tracker's whole-storage snapshot
+  read `untyped_storage()`, which a sparse tensor does not have, so every capture failed before
+  the forward ran. Sparse buffers are now snapshot through their index and value components,
+  and the `torch.sparse` tensor ops (`mm`, `addmm`, `sampled_addmm`, `sum`, `softmax`,
+  `log_softmax`, `spdiags`, `spsolve`) are wrapped: torch re-exports them from `torch._C._sparse`
+  into a namespace the function crawl never visited, so `torch.sparse.mm` ran unrecorded and
+  its output refused with `output_attribution_failed`.
+- **errors**: `TraceCaptureError` carries a stable `fields["code"]`: `forward_raised` when the
+  model's own code raised, `capture_internal_error` when the innermost attributable frame was
+  TorchLens's. `LiveModeLabelError` defaults to `label_selector_not_live`, so a live selector
+  naming a finalized postprocess label refuses with a code from every raise site.
+  A strict portable save that meets a tensor the codec cannot store (a sparse buffer, for one)
+  refuses with `artifact_tensor_unsupported` instead of an uncoded `ArtifactError`.
+- **capture**: call-site chains no longer include TorchLens's own frames when the package is
+  imported through a relative `sys.path` entry such as `PYTHONPATH=.`; those frames had merged
+  distinct call sites into false loops. The TorchLens-frame test now compares normalised file
+  names.
+- **replay**: a hook-style edit aimed at a buffer version that nothing threads into (an unwritten
+  buffer's initial read, such as `fork.do(tl.label("buffer_1:1"), tl.scale(0.5))`) now fires on
+  the captured value and replays its consumers; the engine used to skip the site with the
+  threading step, so the edit neither applied nor refused and no fire was recorded.
+- **capture**: a module registered under several names (`self.act = nn.Tanh()` reused inside
+  two `nn.Sequential`s) now gets its first registration path as its canonical address, as
+  `named_modules()` reports it and the glossary says; the later paths stay alias addresses. The
+  last path used to win, so backward validation's stock module hooks (keyed by `named_modules()`)
+  and the capture disagreed on the shared module's calls and the verdict was False
+  (`aenet-PyTorch` in the classics corpus).
+- **validation**: backward validation's module-output gradient check now agrees with the
+  capture on what a module's outputs are and on outputs no gradient reaches. The stock side
+  enumerates the tensor leaves of a plain object output (a `torch.distributions` object) with
+  the capture's own fallback walk, and an output that received no gradient in stock autograd
+  and none in the capture is `compared_no_grad` (agreement, recorded, not counted as evidence)
+  instead of a fail-closed gap; stock-has-gradient-capture-none and capture-has-gradient-stock-none
+  still fail, and a run that compares no gradient at all still returns False with a record saying
+  nothing was compared. `IQL (Implicit Q-Learning, rlkit actor)` in the classics corpus now
+  validates.
+- **validation**: every False verdict of `tl.validate(..., scope="backward")` now records a
+  structured failure: `last_validation_failure()` returns a record with `check="backward"` and
+  `extra["reason"]` naming the refusal or mismatch (`parameter_grad_mismatch` with the parameter
+  name and max diffs, `parameter_census_mismatch`, `module_output_grads` with the first mismatched
+  or uncaptured module call, `no_module_output_evidence`, `backward_coverage_gap`,
+  `no_parameter_gradients`, `degenerate_parameter_gradients`, `non_leaf_parameter`,
+  `pristine_oracle_unavailable`, `appended_trace`). Three of these paths used to return a bare
+  False with no warning either. A True backward verdict clears any earlier record.
+- **backward**: a second-order `torch.autograd.grad` inside forward (or a forward op applied to
+  a `create_graph` gradient and differentiated again) no longer fails forward validation on
+  `backward_graph_invariants` ("order 2 does not match creator order + 1 (3)"). GradFn order
+  assignment now runs the creator rule and the topology inference to a fixed point, so the nodes
+  created by differentiating an inferred-order node sit one order above it. The invariant is
+  unchanged.
+- **capture, to_disk**: a forward that returns one tensor in two output slots (`return a, a`)
+  gets one output op per slot, so the trace rebuilds. A streamed save no longer attaches another
+  op's tensor to an output after an orphan op shifted the blob numbering: save-time ids start
+  past the stream's issued count, and staging refuses a colliding id.
+
+- **replay**: replay no longer refuses a template parent as "ambiguous across the 2 passes of
+  that layer" when a fused multi-pass layer's public raw label equals another op's final label
+  (each residual add pair of a Hugging Face Gemma-2 decoder layer); it resolves the exact op the
+  capture recorded. No label, pass count or grouping changes.
+- **validation**: a warning filter no longer changes a `validate_forward_pass` verdict. Under a
+  filter that turns TorchLens warnings into errors, a stateful model's re-trace warning
+  (`TraceNotReproducibleWarning`) was caught as "re-trace unavailable" and validation returned
+  True; the promoted warning now propagates, and under ordinary filters the verdict is False with
+  the warning, as documented. Replayed ops and the bool evidence probes now run with warnings
+  ignored, so a warning a replayed op emits cannot fail or unverify a correct capture.
+- **runnable**: `tl.load(path).run(inputs=...)` keeps an `Op.out` copy only for the ops the
+  capture saved (plus the model outputs), as the capture did. It used to copy out every op's
+  output, so a run needed memory for activations the capture never kept, and a huge broadcast view
+  such as `x.expand(10**8, 4)` of a 4-element `x` was refused (`op_allocation_preflight`) on a host
+  with less free memory than its 1.6 GB logical size. Behavior change: on the run's result
+  trace, `Op.out` is now `None` for every op the capture did not save, since the capture kept no
+  activation for it either (the capture's own `Op.out` raises `PayloadUnavailableError` there).
+  Before, such ops showed a value the capture never had. Capture with `save=` covering an op to
+  read its activation from a run. An unsaved CPU view is admitted past the memory budget only
+  when its producer is a view op and every op that reads it, directly or through a version alias,
+  does not copy it (indexing, `sum`, `mean`, elementwise ops with a fresh output); a view read by
+  `median`, `max`, `mm`, `norm`, `unique` and similar ops, which copy their operand internally, or
+  by an op writing `out=` or in place or passing an argument it was not measured with (such as
+  `dtype=`), is still charged and refused at its full size, as is any view off CPU. A run's admitted views share a ceiling of 2**32 logical
+  elements, and the retention floor still charges every op output the run keeps alive, saved or
+  not.
+
+- **conformance**: the tinygrad preview pack's op-inventory case (`c1_op_inventory_complete`)
+  now compares against the inventory observed on tinygrad's current default device (CPU or
+  PYTHON), instead of failing on the PYTHON device, which the tinygrad replay oracles require,
+  against the CPU inventory. A device with no observed inventory runs no inventory case.
+
+- **visualization**: a rank-layout render on a Graphviz without its neato layout plugin (Graphviz 14
+  packaging on Debian forky and Ubuntu 26.04, where `apt install graphviz` leaves neato out) now
+  raises `GraphvizUnavailableError` (code `graphviz_binary_unavailable`, still a `RuntimeError`)
+  whose remedy names `libgvplugin-neato-layout8` and `vis_node_placement='dot'`, instead of a bare
+  `RuntimeError: neato rendering failed`.
+
+- **backward**: on torch 2.12 and earlier, where an autograd node can get a fresh Python wrapper
+  per access, a plain `.backward()` or `torch.autograd.grad` failed to find the captures its graph
+  reaches (a freed wrapper's address was reused by the next one and skipped as visited). Live
+  gradient edits through `intervene=` then gave wrong parameter gradients, and with two captures
+  in one backward or a `create_graph=True` second-order backward the pass went unobserved
+  (`backward_status` read `grad_enabled_unobserved`). torch 2.13 was not affected.
+- **mechinterp**: `torchlens.mechinterp.retention_plan(trace, "head_scores")` (and `"heads"`) now plans
+  the attention interiors from a structure-only first capture (`layers_to_save="none"`), which
+  before planned nothing, and `"head_scores"` also plans the model inputs whose token ids the
+  masks compare, so `save=plan.predicate` gives a capture `head_scores` can read. `head_scores` on
+  a capture whose input was not saved now refuses with `mi_token_ids_unavailable` instead of
+  raising `PayloadUnavailableError`.
+
+- **validation**: `validate_forward_pass` no longer fails, for some random seeds, on a correct
+  capture of a saturated softmax (for example `softmax(logits * 1000)`, whose output is one-hot).
+  Its retries all shifted every input entry equally, which leaves softmax unchanged, so only the
+  random draw could prove the edge. A new retry lifts one entry above the rest, which moves the
+  argmax; a parent that truly does not feed the op still fails.
+- **run**: `trace.run(inputs=..., fast=True)` now refreshes every saved pass of an input Layer that
+  folds several inputs (two inputs of the same shape and dtype consumed by one loop body); before,
+  an earlier pass kept its capture-time tensor.
+- **rerun**: a rerun whose staged edit fires at zero sites no longer raises
+  `InvalidArgumentError` when the model's inputs fold into one input Layer (two inputs of the same
+  shape and dtype consumed by one loop body); the same-inputs check compares each input pass, so
+  the rerun refuses typed (`rerun_selector_unmatchable_live`) or warns as it does for other inputs.
+- **Trace**: `Trace.input_ops` and `Trace.output_ops` no longer raise when a boundary Layer has
+  several passes (inputs consumed by one loop body); they list one Op per input or output row, and
+  `num_input_layers`/`num_output_layers` count such a Layer once. `to_agent_json()`,
+  `torchlens_dump` and the folded `torchlens_overview` work on these models again.
+- **tviz**: `torchlens.tviz.receipt_from_patch_grid` now plots effects: each cell is the patched
+  metric minus the grid's corrupted-run baseline, which `mechinterp.grid`, its presets and
+  `mechinterp.patch_query_heads_grid` record as `receipts["clean_metric"]` and
+  `receipts["corrupted_metric"]`; before, receipt cells showed the raw patched metric.
+  `render_receipt_grid` prints the baseline and names its run, no longer counts a grid's fires
+  once per row, keeps text at 8 pt or larger, prints small effects with enough digits to read
+  nonzero, says single-head effects "need not be" additive, and reserves the footer's height so it
+  no longer covers the matrix.
+- **agent**: a trimmed `torchlens_overview` names a next call it accepts
+  (`torchlens_dump view='graph'`) instead of `labels=`/`query=`.
+- **io**: the reserved `torchlens.boundary_facts` sidecar family is registered on the sidecar
+  door's first use, so listing, attaching or reading it works in a fresh interpreter regardless of
+  what was imported first (the harness_bundles reference examples failed when run alone).
+- **intervention**: `set_direction_mean` on a float64 site now uses a float64 unit direction and
+  mean coefficient, so its result and gradient are float64-precise (they were float32-precise, about
+  3e-8 off); float32 and lower-precision sites are unchanged bit for bit.
+- **visualization**: skins now own all of a render's ink. Under `vis_theme="dark"`, edges, edge
+  labels and module boxes follow the skin and node text stays readable on light fills; the rank
+  layout paints the skin's page. With `show_legend=True` the legend lists only the roles the picture
+  draws and gains a `plain op` row; buffer nodes fill with the palette's buffer colour (orange)
+  instead of the plain-op fill. `vis_intervention_mode="as_node"` keeps the edited op inside its
+  module boxes, and header advisories cite a file name and line instead of a local path.
+- **validation**: The `__setitem__` exemption check answers not-exempt instead of raising
+  `TypeError` when the call has no saved arguments.
+- **mechinterp**: patch_edges resolves receivers that read an op whose label differs from its raw
+  label, such as every layer-0 receiver.
+- **bundle**: `Bundle.most_changed` and `Bundle.diff_pair` pair ops by graph structure, so ops a
+  module intervention renumbers are no longer dropped from the comparison.
+- **rerun**: After a rerun that refreshed a fork in place, the fork's host-RNG verdict now also
+  covers the rerun's own forward pass; a rerun hook that drew host RNG was previously reported as
+  not drawing any.
+- **experiment**: `torchlens.experiment.site_sweep` runs a `tl.units(site, mask)` candidate on the
+  selected units only (it previously ablated the whole site), and distinct units at one site are
+  distinct candidates.
+- **receptive_field**: receptive- and projective-field walks no longer raise RecursionError on deep
+  models (the hop walk keeps its pending steps on an explicit stack; results unchanged).
+- **validation**: an eval-mode batch_norm whose input equals its running mean exactly no longer
+  reports running_var as a dead edge; exact value proof, no tolerance
+- **validation**: seven more exact value proofs, each read from saved values with no tolerance,
+  stop replay validation from reporting a dead edge where the parent provably cannot reach the
+  output: scaled_dot_product_attention with an all-zero value (query or key perturbed) or a single
+  key (query or key perturbed); einsum with another operand all zero; scatter_reduce with
+  `include_self=False` and every destination position written; an output with no elements;
+  grid_sampler of an all-zero input (grid perturbed) and convolution of an all-zero input (weight
+  perturbed, output equal to the bias); bool `or` against an all-True operand and `pow` with a
+  base of exactly 1.
+- **benchmarks**: the memory pass frees collectable garbage before reading its baselines, so a
+  collection inside the measured call can no longer make the phase-local peak read 0.0.
+- **capture**: an augmented slice assignment (`x[idx] += v` and the other in-place operators)
+  records its write-back with the tensor's pre-mutation producer at the receiver slot, so replay
+  validation no longer fails argument logging on it.
+- **receptive_field**: a model input with a zero-length axis no longer makes the receptive-field
+  solve, and so validate_forward_pass, raise ValueError.
+- **binding**: A capture-free binding (`spec.bind(model)`, `steer_generate`) now refuses a rule that
+  selects with a TorchLens label (final, short or pass-qualified) or with
+  `followed_by`/`preceded_by`/`input_at` when it is bound, naming the structural spelling
+  `tl.func(...) & tl.in_module(...)`, instead of failing at the first op or never firing.
+- **report**: `tl.report.backward_status` no longer raises `TypeError` on a trace with an observed
+  backward whose GradFn fires were timed.
+- **replay**: After a differentiable replay, a later plain replay of the trace or of a fork of it
+  reports `last_run["differentiable"]` False and drops the stale `frontier`; `keep_grad` no longer
+  discloses `keep_grad_replay_frontier` during such a plain replay.
+- **report**: `trace.log_backward` no longer raises `AttributeError` when a multi-output op leaves
+  an output unused (`torch.split`, `torch.svd`, `torch.linalg.eig`); the unused output records no
+  gradient.
+- **report**: a backward that raised before finishing reads its executed backward as unknown instead
+  of the count of the calls that ran before the raise.
+- **report**: `recompute_observation` (and `BackwardStatus.recompute`) reads the checkpoint witness;
+  it read "unknown" on every trace.
+- **report**: when two captures share one backward, each call is charged to the node that executed
+  it (a finished node's marker no longer absorbs later calls).
+- **capture**: The `escrow_spill_detached` warning now points at the line that called TorchLens,
+  like the other coded disclosures, so warning filters keyed on the `torchlens` module no longer
+  treat it as an internal warning.
+- **benchmarks**: The head-sweep parity benchmark runs one warm-up `torch.tanh` over every intra-op
+  thread before the model and records it, so the first-call kernel effect of a fresh process no
+  longer makes the baseline capture differ from a plain forward.
+- **fastlog**: A multi-pass `Recorder` with a selector `save=` (for example `tl.module(...)`) no
+  longer repeats every earlier pass's records after each pass.
+- **capture**: On macOS (and any host without procfs) the CPU peak-memory readers treated
+  `ru_maxrss` as kibibytes, so `Trace.backward_peak_memory` for a CPU backward and
+  `Trace.forward_peak_memory_pair["resident"]` were overstated 1024 times; they now read bytes.
+- **intervention**: A facet write (a head selector or an SAE latent) no longer fails with
+  `module_call_ambiguous` on a model that calls one module more than once; scoping a facet selector
+  to such a module with `.in_module(...)` refuses with `facet_selector_module_multi_call` and names
+  each call's read address.
+- **visualization**: The dark and colorblind skins fill plain operations with the page colour, so
+  they no longer look like nodes that use parameters (smallest colour-vision difference 11.0 to 18.9
+  in dark, 8.1 to 13.3 in colorblind).
+- **backward**: Backward FLOP attribution: a multi-root backward (`torch.autograd.backward([a, b])`,
+  `torch.autograd.grad` with several outputs) now records every root's GradFn nodes in each capture
+  the root reaches, and when two captures hook one node every call is charged to the node that is
+  executing, with the asking capture's own call and pass, in the executed-backward census, the ATen
+  recorder and the checkpoint evidence alike.
+- **facets**: Facet selectors no longer fail on a selectively saved trace because some unrelated
+  op's payload was not saved.
+- **validation**: `tl.validate(..., scope="forward")` no longer keeps extra copies of the model's
+  weights on its device: the restore snapshot is held in host memory, the ground-truth copy is
+  released before the replay copy, and the replay copy reuses the live snapshot. A GPU model now
+  needs one copy beyond itself during the ground-truth run (it needed up to five), plus the
+  capture's saved-argument values.
+- **validation**: when forward validation cannot deep-copy the model (for example CUDA out of
+  memory), the warning (code `validation_model_copy_failed`) and the refusal name the exception and
+  a remedy instead of reporting only unsupported plain attributes.
+- **rerun**: `tl.patch_from(trace)` under the rerun engine with a live selector (for example
+  `tl.func("rsqrt")`) no longer refuses every firing; each live firing takes the source value
+  captured at the same position and pass, and refuses when the source holds no op of that type and
+  shape there.
+- **visualization**: Rendered graphs use the bundled font on machines without Arial installed.
+- **capture**: CPU peak memory is no longer under-reported on kernels whose high-water mark lags the
+  exact resident size.
+- **capture**: `Tensor.to_sparse_csr`, `to_sparse_csc`, `to_sparse_bsr` and `to_sparse_bsc` are
+  recorded as ops, like `to_sparse`. torch does not route them through
+  `__torch_function__`, so a sparse tensor built in forward with one of them reached its consumer
+  (`torch.sparse.mm`, `torch.sparse.sampled_addmm`) with no provenance and capture warned.
+
+### Performance Improvements
+
+- **capture**: `tl.trace(..., save=tl.module(path))` no longer copies every op's output of the
+  forward into the deferred-selector escrow; it copies only the ops that run inside a matching
+  module pass and keeps that pass's outputs. On a 9B decoder, saving one layer used to cross the
+  16 GB escrow spill bound (`escrow_budget_exceeded`); on a tiny Qwen2 it escrows 58 ops instead
+  of 265. The same bounded escrow now also covers a `tl.module` term intersected with any other
+  selector by `&` (`tl.module(path) & tl.func("add")`). A `tl.module` term joined by `|` with a
+  non-module term, or negated, still escrows every op, and the `escrow_budget_exceeded` refusal
+  now names the components that forced that escrow and the live spelling that avoids it.
+- **rerun**: A rerun no longer copies every model parameter into the refreshed trace: on a 12-layer
+  GPT-2 head sweep each rerun clones about 0.7 GB instead of 2.3 GB, and the host RNG monitor's
+  profile hook does about 88 % less classifier work with the same verdicts.
+- **rerun**: A rerun no longer clones the model state again when it is unchanged since the source
+  capture: its pre-forward snapshot shares the source's byte-identical tensors, so on a 12-layer
+  GPT-2 head sweep each rerun copies about 54 MB instead of about 706 MB.
+- **fork**: `Trace.fork()` copies the trace's large label tables directly instead of element by
+  element; on a 12-layer GPT-2 trace a fork makes about 419,000 Python calls instead of about
+  580,000.
+- **mechinterp**: `mechinterp.patch_edges` writes each topological stage in one replay: a layer's q,
+  k and v receivers go in as one selection batch, and the projection each needs is recomputed
+  locally from the patched norm input. A call into all 445 GPT-2 small receivers costs 25 replays,
+  24 graph builds and one fork (was 877 replays and 433 forks) and runs about 25 times faster;
+  values are unchanged.
+- **receptive_field**: the always-on receptive-field metadata invariants run in about n^2 instead of
+  n^3 on deep chains (a 600-layer convolution chain's check: 169 s to 31 s) by mapping
+  single-progression index windows in closed form and sharing graph facts and rule results across
+  the check's queries; every box is unchanged.
+- **rerun**: A rerun that refreshes its fork in place releases the capture it discarded before
+  returning, so the cleanup no longer lands inside the next operation: on a 12-layer GPT-2 head
+  sweep, a fork made right after a rerun makes about 420,000 Python calls instead of about 1.25
+  million.
+- **mechinterp**: Circuit patching resolves the replay engine's hook sites through one label index
+  per replay and builds the replay cone's key set once, so one `torchlens.mechinterp.patch_edges` call into
+  every GPT-2 small receiver makes 14 times fewer selector evaluations and about 4 times fewer
+  Python calls, with bit-identical results.
+- **capture**: Incremental `LiveIndex` updates for re-seen labels. A multi-pass `Recorder`, a
+  failed-partial recording and amendment folding no longer rebuild every parent-to-child edge for
+  each op they have already indexed; only the replaced op's edges move (48-token generation recorder
+  on a tiny model: 9,323 full rebuilds to 1, Python calls per forward 501,672 to 316,504).
+- **attribution**: `tl.attribution.build_graph` assembles the graph in chunks of targets, so its
+  gradient buffer no longer grows with the number of features (Gemma-2 2B: 0.70 GB instead of 36
+  GB).
+- **rerun**: cheaper payload eviction for a discarded capture (the rerun's eviction walk makes about
+  a fifth of the calls it did), and fewer calls per fork read.
+- **fork**: cheaper trace fork (the fork's copy of its label tables makes about 30 percent fewer
+  calls).
+
+### Changed
+
+- **docs**: the smart-collapse reference gallery (`docs/images/collapse`) is re-rendered with the
+  default skin's Okabe-Ito colours and the bundled Liberation Sans face; it still showed the old
+  palette and the wider system font.
+- **save budget**: the save-budget refusal lists `save='stats'` among its cheaper spellings.
+- **model wrappers**: the `model_wrapper_uninstrumentable` refusal for a TransformerLens
+  `TransformerBridge` now leads with reloading the HF model fresh and offers a `HookedTransformer`
+  only while you still use one.
+- **mechinterp**: torchlens.mechinterp.head_scores scores attention patterns in their own dtype when
+  float32 or wider; float64 traces previously had their patterns cast to float32, so their scores
+  now carry full float64 precision.
+- **rerun**: After a rerun, the refreshed trace's replay templates hold the live parameters, as the
+  source trace and every push fork already did; an in-place edit of a model parameter now affects
+  later pushes on a rerun fork the same way it affects the source.
+- **attribution**: `tl.attribution.causal_audit` now measures every top-k, bottom-k and random-k set
+  of an EDGE table, including sets whose edges enter several receivers, by patching the set in one
+  `torchlens.mechinterp.patch_edges` call; such sets were previously listed in
+  `extra["sets_not_measured"]`, which is now empty. A set's `intervention` holds one `(selection,
+  value)` pair per receiver, read from the fork that measured it. Documented unstable.
+- **attribution**: `tl.attribution.causal_audit` measures the single-unit rows of a layer
+  attribution (any ablation) and of a read or direct-logit table under zero ablation, element-grain
+  units included, as one `torchlens.experiment.site_sweep` with one candidate per unit; every value
+  equals the previous one-fork-per-unit measurement exactly.
+- **agent**: `torchlens_explain` is documented as the one agent tool whose `max_tokens` is not a
+  ceiling: a request above its 4,000-token default is honoured.
+- **docs**: A "TorchScript and DLPack" entry in the known-gotchas reference.
+- **facets**: Facet selectors are hashable (by their spelling), so a capture `hooks=` mapping can
+  hold one; that door still refuses a facet selector with a typed error.
+- **validation**: `tl.validate(..., scope="forward")` no longer copies the model's parameters for
+  every op it records: its internal capture saves parameter arguments as aliases of the replay
+  copy's own weights, guarded by version counters and a byte comparison, so the device holds one
+  copy of the weights beyond the model through the whole validation (was two at the re-trace). A
+  model that writes a parameter in place during forward is validated again with every argument
+  copied, as before, and the run records the diagnostic `validation_parameter_reference_fallback`. A
+  user's own `save_arg_values=True` trace still saves copies.
+- **validation**: `tl.validate` / `validate_forward_pass` on the default `output_device="same"` no
+  longer charge parameter arguments to `save_budget`; the validator capture keeps them as references
+  to its own copy of the model, so they hold no extra memory (this was already so for other
+  `output_device` values). Large models no longer hit `SaveBudgetExceededError` for weight copies
+  that do not exist.
+
+### Continuous Integration
+
+- A nightly `peer-recipes` job runs the executed recipe pages with every peer installed and fails
+  on any skip.
+
 ## v2.37.0 (2026-11-02)
 
 ### Features
@@ -89,6 +856,7 @@ When torchlens was imported through a relative sys.path entry such as PYTHONPATH
 - **capture**: Key the package-frame memo by filename, since equal code objects can come from different files
   ([`a96dac2`](https://github.com/johnmarktaylor91/torchlens/commit/a96dac21fc56881c3efd2cc202122fe46c63c4e5))
 
+||||||| merged common ancestors
 
 ## v2.34.1 (2026-08-10)
 
@@ -15149,7 +15917,8 @@ RenderIREdge (source/target units, originals, owner_cluster, occurrence key, pro
 Remove the v1 greedy selector, engine switch/env override, scoring weights, and lexical crutches
   plus their pinned tests; the shared analysis/run-fold substrate stays. Public
   collapse_score/module_collapse_order now report v2-selection diagnostics with the same shape
-  (values differ by design; glossary note pending). Byte-identical on the render harness.
+  (values differ by design; since superseded: both report the eligibility priority
+  the glossary defines). Byte-identical on the render harness.
 
 ### Testing
 

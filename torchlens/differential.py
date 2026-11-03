@@ -1,6 +1,6 @@
 """The ONE guarded cross-capture delta projection (leverage B15, D-2/D-7).
 
-``diff_report(subject, reference)`` enumerates BOTH captures' structural
+``diff(subject, reference)`` enumerates BOTH captures' structural
 site keys and settles every position into exactly one row of a closed
 status vocabulary — the projection summary/cost/themes/netron/Model-Explorer
 consumers read instead of re-deriving their own joins:
@@ -19,7 +19,7 @@ consumers read instead of re-deriving their own joins:
 - ``changed``            joined, both payloads retained, delta nonzero
 
 Pairing authority is the shipped guarded site join
-(:mod:`torchlens.postprocess._site_join`): ``corroborated`` and
+(:mod:`torchlens._postprocess._site_join`): ``corroborated`` and
 ``positional`` verdicts admit comparison, refused verdicts become
 ``unresolved`` rows, and labels never enter the join key (leverage D-2).
 The report is SESSION-ONLY and never persisted. Every spelling here is
@@ -34,8 +34,9 @@ from typing import Any
 import torch
 
 from ._errors import InvalidArgumentError
+from ._record_type import record_type
 
-__all__ = ["DiffRow", "DifferentialReport", "diff_report"]
+__all__ = ["DiffRow", "DiffReport", "diff"]
 
 #: Engine-inserted machinery layer types (leverage D-7 exclusion rule).
 _MACHINERY_LAYER_TYPES = frozenset({"interventionreplacement"})
@@ -67,14 +68,14 @@ class DiffRow:
     status: str
     subject_label: str | None = None
     reference_label: str | None = None
-    pass_index: int | None = None
+    pass_number: int | None = None
     verdict: str | None = None
     max_abs_delta: float | None = None
     detail: str | None = None
 
 
 @dataclass(frozen=True)
-class DifferentialReport:
+class DiffReport:
     """The settled two-capture differential: rows plus honest totals."""
 
     rows: tuple[DiffRow, ...]
@@ -98,7 +99,7 @@ class DifferentialReport:
             for status in _ROW_STATUSES
             if self.counts.get(status, 0)
         )
-        return f"DifferentialReport({len(self.rows)} rows: {parts or 'no rows'})"
+        return f"DiffReport({len(self.rows)} rows: {parts or 'no rows'})"
 
 
 def _ops_by_key(trace: Any, keys: dict[str, str]) -> dict[str, list[str]]:
@@ -113,7 +114,7 @@ def _ops_by_key(trace: Any, keys: dict[str, str]) -> dict[str, list[str]]:
 def _pass_of(trace: Any, label: str) -> int:
     """Return one op's 1-based pass index (single-pass ops read 1)."""
 
-    return int(getattr(trace.ops[label], "pass_index", 1) or 1)
+    return int(getattr(trace.ops[label], "pass_number", 1) or 1)
 
 
 @dataclass(frozen=True)
@@ -147,7 +148,7 @@ def _value_row(
             status=status,
             subject_label=subject_label,
             reference_label=reference_label,
-            pass_index=_pass_of(subject, subject_label),
+            pass_number=_pass_of(subject, subject_label),
             verdict=verdict,
             max_abs_delta=max_abs_delta,
             detail=detail,
@@ -190,13 +191,13 @@ def _joined_rows(
     subject = ctx.subject
     rows: list[DiffRow] = []
     for subject_label in subject_labels:
-        if getattr(subject.ops[subject_label], "layer_type", None) in _MACHINERY_LAYER_TYPES:
+        if record_type(subject.ops[subject_label], None) in _MACHINERY_LAYER_TYPES:
             rows.append(
                 DiffRow(
                     site_key=key,
                     status="excluded_machinery",
                     subject_label=subject_label,
-                    pass_index=_pass_of(subject, subject_label),
+                    pass_number=_pass_of(subject, subject_label),
                     verdict=row.verdict.value,
                     detail="engine-inserted op: typed structural addition, "
                     "excluded from model-effect rows (D-7)",
@@ -211,7 +212,7 @@ def _joined_rows(
                     site_key=key,
                     status="unresolved",
                     subject_label=subject_label,
-                    pass_index=_pass_of(subject, subject_label),
+                    pass_number=_pass_of(subject, subject_label),
                     verdict=row.verdict.value,
                     detail="occurrence coordinate absent on the reference",
                 )
@@ -221,7 +222,7 @@ def _joined_rows(
     return rows
 
 
-def diff_report(subject: Any, reference: Any) -> DifferentialReport:
+def diff(subject: Any, reference: Any) -> DiffReport:
     """Settle two captures into the guarded differential projection.
 
     Parameters
@@ -233,7 +234,7 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
 
     Returns
     -------
-    DifferentialReport
+    DiffReport
         One row per structural position of the UNION of both captures, each
         in the closed added / removed / unresolved / excluded_machinery /
         unreachable / zero / changed vocabulary.
@@ -250,14 +251,14 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
 
     if subject is reference:
         raise InvalidArgumentError(
-            "diff_report(subject, reference) received the SAME capture on "
+            "diff(subject, reference) received the SAME capture on "
             "both sides: the differential of a capture with itself is "
             "identically zero, so every row would be vacuous. Pass the OTHER "
             "run as the reference (a fork after do() is a different trace).",
             code="differential_subject_is_reference",
             remedy="pass two different captures",
         )
-    from .postprocess._site_join import (
+    from ._postprocess._site_join import (
         join_site_profiles,
         occurrence_coordinates,
         site_profile,
@@ -284,15 +285,13 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
         reference_labels = reference_by_key.get(key, [])
         if not reference_labels:
             for label in subject_labels:
-                machinery = (
-                    getattr(subject.ops[label], "layer_type", None) in _MACHINERY_LAYER_TYPES
-                )
+                machinery = record_type(subject.ops[label], None) in _MACHINERY_LAYER_TYPES
                 rows.append(
                     DiffRow(
                         site_key=key,
                         status="excluded_machinery" if machinery else "added",
                         subject_label=label,
-                        pass_index=_pass_of(subject, label),
+                        pass_number=_pass_of(subject, label),
                         detail=(
                             "engine-inserted op: typed structural addition, "
                             "excluded from model-effect rows (D-7)"
@@ -308,7 +307,7 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
                     site_key=key,
                     status="removed",
                     reference_label=label,
-                    pass_index=_pass_of(reference, label),
+                    pass_number=_pass_of(reference, label),
                     detail="declared removal (reference only)",
                 )
                 for label in reference_labels
@@ -321,7 +320,7 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
                     site_key=key,
                     status="unresolved",
                     subject_label=label,
-                    pass_index=_pass_of(subject, label),
+                    pass_number=_pass_of(subject, label),
                     verdict=row.verdict.value,
                     detail="the guarded join refused this cohort",
                 )
@@ -333,4 +332,4 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
     counts: dict[str, int] = {}
     for row_record in rows:
         counts[row_record.status] = counts.get(row_record.status, 0) + 1
-    return DifferentialReport(rows=tuple(rows), counts=counts)
+    return DiffReport(rows=tuple(rows), counts=counts)

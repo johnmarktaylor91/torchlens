@@ -14,15 +14,15 @@ import numpy as np
 import pytest
 import torch
 
-from torchlens.utils import rng as rngmod
-from torchlens.utils.rng import (
+from torchlens._utils.rng import (
     AutocastRestore,
-    _call_site_argcount,
     execute_with_restored_rng_autocast,
     host_nondeterminism_monitor,
+    inventory_types as rng_inventory_types,
     log_current_autocast_state,
 )
-from torchlens.utils.tensor_utils import (
+from torchlens._utils.rng.channels import call_site_argcount
+from torchlens._utils.tensor_utils import (
     _copy_tensor_payload,
     copy_tensor_payload,
     tensor_nanequal,
@@ -231,7 +231,7 @@ def test_h6_honest_model_generator_still_found():
 
 
 # ---------------------------------------------------------------------------
-# F4 -- _call_site_argcount must decode CALL_METHOD (py3.10 attribute call), not
+# F4 -- call_site_argcount must decode CALL_METHOD (py3.10 attribute call), not
 # fail-closed-mark it as undecodable.
 # ---------------------------------------------------------------------------
 def _decode_method_call_site():
@@ -248,7 +248,7 @@ def _decode_method_call_site():
                 (i.opname for i in dis.get_instructions(frame.f_code) if i.offset == frame.f_lasti),
                 None,
             )
-            captured["argcount"] = _call_site_argcount(frame)
+            captured["argcount"] = call_site_argcount(frame)
 
     def target():
         holder = []
@@ -281,7 +281,7 @@ _F5_GEN = np.random.default_rng(0)
 
 
 def test_f5_global_name_cache_retains_code_and_globals(monkeypatch):
-    monkeypatch.setattr(rngmod, "_NUMPY_RNG_METHODS_NEED_FRAME_DIGEST", True)
+    monkeypatch.setattr(rng_inventory_types, "_NUMPY_RNG_METHODS_NEED_FRAME_DIGEST", True)
     monitor = host_nondeterminism_monitor(None)
 
     holder: dict = {}

@@ -5,7 +5,7 @@ canonical ``compute_input_output_distances`` AND the deprecated public
 ``mark_layer_depths`` alias — with the SAME default (torch's
 ``CaptureOptions`` default is ``True``) and a working ``=False`` off switch
 on every backend, with input/output hop distances plus ancestor/descendant
-lineage sets and the effective value stored on ``trace.mark_layer_depths``.
+lineage sets and the effective value stored on ``trace.options.mark_layer_depths``.
 Distances are asserted EXACTLY, including min/max splits on branch/merge
 graphs, not just non-emptiness. Previews must also store the EFFECTIVE
 ``recurrence_detection``: True where the neutral grouper actually ran
@@ -23,22 +23,22 @@ pytestmark = pytest.mark.backend_parity
 
 
 def _assert_depths(trace, expect_recurrence: bool, expected_max_depth: int) -> None:
-    ops = list(trace.layer_list)
+    ops = list(trace._layer_list)
     depths = {
         op._label_raw: (op.min_distance_from_input, op.max_distance_from_input)
         for op in ops
         if getattr(op, "min_distance_from_input", None) is not None
     }
     assert depths, "depth flood populated no op"
-    assert trace.mark_layer_depths is True
-    assert trace.recurrence_detection is expect_recurrence
+    assert trace.options.mark_layer_depths is True
+    assert trace.options.recurrence_detection is expect_recurrence
     assert max(min_d for min_d, _max_d in depths.values()) == expected_max_depth
     assert any(getattr(op, "input_ancestors", None) for op in ops)
     assert any(getattr(op, "output_descendants", None) for op in ops)
 
 
 def _depth_by_prefix(trace, prefix: str) -> tuple[int, int]:
-    op = next(op for op in trace.layer_list if op._label_raw.startswith(prefix))
+    op = next(op for op in trace._layer_list if op._label_raw.startswith(prefix))
     return op.min_distance_from_input, op.max_distance_from_input
 
 
@@ -48,9 +48,9 @@ def _assert_alias_matches(trace_fn) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         alias_trace = trace_fn()
-    assert alias_trace.mark_layer_depths is True
+    assert alias_trace.options.mark_layer_depths is True
     assert any(
-        getattr(op, "min_distance_from_input", None) is not None for op in alias_trace.layer_list
+        getattr(op, "min_distance_from_input", None) is not None for op in alias_trace._layer_list
     )
 
 
@@ -66,13 +66,13 @@ def _assert_default_on_and_off_switch(trace_fn) -> None:
     from torchlens.options import CaptureOptions
 
     default_trace = trace_fn(CaptureOptions())
-    assert default_trace.mark_layer_depths is True
+    assert default_trace.options.mark_layer_depths is True
     assert any(
-        getattr(op, "min_distance_from_input", None) is not None for op in default_trace.layer_list
+        getattr(op, "min_distance_from_input", None) is not None for op in default_trace._layer_list
     )
     off_trace = trace_fn(CaptureOptions(compute_input_output_distances=False))
-    assert off_trace.mark_layer_depths is False
-    assert all(getattr(op, "min_distance_from_input", None) is None for op in off_trace.layer_list)
+    assert off_trace.options.mark_layer_depths is False
+    assert all(getattr(op, "min_distance_from_input", None) is None for op in off_trace._layer_list)
 
 
 @pytest.mark.backend_paddle
@@ -112,14 +112,14 @@ def test_paddle_depth_parity() -> None:
         lambda capture: tl.trace(M(), paddle.ones([1, 4]), backend="paddle", capture=capture)
     )
     base = tl.trace(M(), paddle.ones([1, 4]), backend="paddle")
-    assert base.recurrence_detection is True
+    assert base.options.recurrence_detection is True
     ungrouped = tl.trace(
         M(),
         paddle.ones([1, 4]),
         backend="paddle",
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
-    assert ungrouped.recurrence_detection is False
+    assert ungrouped.options.recurrence_detection is False
 
 
 @pytest.mark.backend_tinygrad

@@ -10,14 +10,20 @@ from typing import Any
 import example_models
 import pytest
 import torch
+from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 
-import torchlens.postprocess.loop_grouping_adapter as lga
+import torchlens._postprocess.loop_grouping_adapter as lga
 from torchlens import trace as trace_fn
-from torchlens.postprocess.loop_grouping_adapter import (
+from torchlens._postprocess.loop_grouping_adapter import (
     RecurrenceGroupingGraph,
     RecurrenceNode,
     group_recurrent_nodes,
 )
+
+# This suite drives the structural grouper (grouper_v1), which serves captures
+# without call-site evidence; torch captures group by call site
+# (tests/test_grouping_call_sites.py).
+pytestmark = pytest.mark.usefixtures("legacy_structural_grouper")
 
 
 def _raw_label(trace: Any, final_label: str) -> str:
@@ -52,7 +58,7 @@ def _raw_recurrent_member_sets(trace: Any) -> set[frozenset[str]]:
         Raw-label recurrent groups with at least two members.
     """
     member_sets: set[frozenset[str]] = set()
-    for op in trace.ops:
+    for op in trace._layer_list:
         if len(op.recurrent_ops) <= 1:
             continue
         raw_members = frozenset(_raw_label(trace, label) for label in op.recurrent_ops)
@@ -75,13 +81,13 @@ def _neutral_graph_from_torch_recurrent_fixture(trace: Any) -> RecurrenceGroupin
     """
     nodes: dict[str, RecurrenceNode] = {}
     raw_labels: list[str] = []
-    raw_label_set = {op._label_raw for op in trace.ops}
+    raw_label_set = {op._label_raw for op in trace._layer_list}
     # ``equivalent_ops`` holds finalized OP labels (pass-qualified), which are keyed
     # differently from the final LAYER labels in ``_final_to_raw_layer_labels`` --
     # map them back to raw labels through the ops themselves.
-    op_label_to_raw = {op.label: op._label_raw for op in trace.ops}
+    op_label_to_raw = {op.label: op._label_raw for op in trace._layer_list}
 
-    for op in trace.ops:
+    for op in trace._layer_list:
         raw_label = op._label_raw
         raw_labels.append(raw_label)
         nodes[raw_label] = RecurrenceNode(
@@ -96,16 +102,16 @@ def _neutral_graph_from_torch_recurrent_fixture(trace: Any) -> RecurrenceGroupin
             data_parents=tuple(
                 _raw_label(trace, parent)
                 for parent in op.parents
-                if parent in trace.layer_dict_all_keys
+                if parent in trace._layer_dict_all_keys
             ),
             data_children=tuple(
                 _raw_label(trace, child)
                 for child in op.children
-                if child in trace.layer_dict_all_keys
+                if child in trace._layer_dict_all_keys
             ),
             layer_label=raw_label,
             recurrent_labels=(),
-            uses_params=bool(op.uses_params),
+            uses_params=bool(op.has_params),
             func_name=op.func_name,
             param_barcodes=tuple(op._param_barcodes),
             retain=raw_label in raw_label_set,
@@ -247,7 +253,7 @@ def test_bare_chain_sweep_is_linear_in_group_size() -> None:
 
     # Grouping oracle: a bare chain mints NO recurrent layers (layers == ops).
     assert all(op.num_passes == 1 for op in traced.ops)
-    assert traced.num_ops == num_steps
+    assert traced._num_ops == num_steps
     # Pre-fix this is >= 2*C(400,2) = 159,600; the bucketed sweep needs O(N).
     assert find_calls < 12_000
 
@@ -750,7 +756,6 @@ def _reference_reaches(workspace: Any, src_label: str, dst_label: str) -> bool:
     return False
 
 
-@pytest.mark.smoke
 def test_adaptive_reachability_matches_reference_on_random_dags() -> None:
     """Sparse, dense, and repeated queries all match ground-truth reachability.
 
@@ -892,7 +897,7 @@ def test_merge_iso_groups_visits_linear_pairs_on_an_unrelated_chain() -> None:
     counting node_to_subgraph lookups (two per visited pair).
     """
 
-    from torchlens.postprocess.loop_grouping_adapter import (
+    from torchlens._postprocess.loop_grouping_adapter import (
         SubgraphInfo,
         _GroupingWorkspace,
         _merge_iso_groups_to_layers,

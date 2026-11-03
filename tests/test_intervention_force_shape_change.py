@@ -21,7 +21,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.intervention.errors import HookValueError
 from torchlens.intervention.hooks import normalize_hook_plan
-from torchlens.intervention.types import HelperSpec
+from torchlens.intervention.types import Edit
 
 
 class _ReluNet(nn.Module):
@@ -58,18 +58,18 @@ def _relu_layer(log: tl.Trace):
     return log[key]
 
 
-_FLAG_HELPERS: dict[str, Callable[[], HelperSpec]] = {
-    "zero_ablate": lambda: tl.zero_ablate(force_shape_change=True),
-    "replace_with": lambda: tl.replace_with(torch.ones(1, 8), force_shape_change=True),
-    "scale": lambda: tl.scale(0.5, force_shape_change=True),
-    "noise": lambda: tl.noise(0.1, seed=0, force_shape_change=True),
-    "clamp": lambda: tl.clamp(min=0.0, force_shape_change=True),
-    "mean_ablate": lambda: tl.mean_ablate(force_shape_change=True),
-    "scramble_elements": lambda: tl.intervention.scramble_elements(seed=0, force_shape_change=True),
-    "add": lambda: tl.add(1.0, force_shape_change=True),
-    "splice_module": lambda: tl.splice_module(_ToDouble(), force_shape_change=True),
-    "grad_zero": lambda: tl.grad_zero(force_shape_change=True),
-    "grad_scale": lambda: tl.grad_scale(2.0, force_shape_change=True),
+_FLAG_HELPERS: dict[str, Callable[[], Edit]] = {
+    "zero_ablate": lambda: tl.zero_ablate(allow_shape_change=True),
+    "replace_with": lambda: tl.replace_with(torch.ones(1, 8), allow_shape_change=True),
+    "scale": lambda: tl.scale(0.5, allow_shape_change=True),
+    "noise": lambda: tl.add_noise(0.1, seed=0, allow_shape_change=True),
+    "clamp": lambda: tl.clamp(low=0.0, allow_shape_change=True),
+    "mean_ablate": lambda: tl.mean_ablate(dim=None, allow_shape_change=True),
+    "scramble_elements": lambda: tl.intervention.scramble_elements(seed=0, allow_shape_change=True),
+    "add": lambda: tl.add(1.0, allow_shape_change=True),
+    "splice_module": lambda: tl.splice_module(_ToDouble(), allow_shape_change=True),
+    "grad_zero": lambda: tl.zero_ablate(allow_shape_change=True),
+    "grad_scale": lambda: tl.scale(2.0, allow_shape_change=True),
 }
 
 
@@ -79,12 +79,15 @@ def test_helper_flag_reaches_entry_metadata(helper_name: str) -> None:
     """helper(force_shape_change=True) must stamp True on every plan entry."""
 
     helper = _FLAG_HELPERS[helper_name]()
-    entries = normalize_hook_plan(helper, default_site_target=tl.func("relu"))
+    site = tl.func("relu")
+    if helper_name.startswith("grad_"):
+        site = tl.grad(site)
+    entries = normalize_hook_plan(helper, default_site_target=site)
     assert entries, f"{helper_name} produced no hook-plan entries"
     for entry in entries:
-        assert entry.metadata.get("force_shape_change") is True, (
+        assert entry.metadata.get("allow_shape_change") is True, (
             f"{helper_name}: helper kwargs request force_shape_change=True but the "
-            f"normalized entry metadata says {entry.metadata.get('force_shape_change')!r}"
+            f"normalized entry metadata says {entry.metadata.get('allow_shape_change')!r}"
         )
 
 
@@ -94,7 +97,7 @@ def test_helper_flag_default_false_metadata() -> None:
     entries = normalize_hook_plan(tl.zero_ablate(), default_site_target=tl.func("relu"))
     assert entries
     for entry in entries:
-        assert entry.metadata.get("force_shape_change") is False
+        assert entry.metadata.get("allow_shape_change") is False
 
 
 def test_intervene_shape_change_applies() -> None:
@@ -106,13 +109,13 @@ def test_intervene_shape_change_applies() -> None:
         x,
         save=lambda ctx: True,
         intervene=tl.when(
-            tl.func("relu"), tl.replace_with(torch.ones(1, 8), force_shape_change=True)
+            tl.func("relu"), tl.replace_with(torch.ones(1, 8), allow_shape_change=True)
         ),
     )
     assert float(_output_out(log)) == pytest.approx(8.0)
     relu = _relu_layer(log)
     assert tuple(relu.out.shape) == (1, 8)
-    assert relu.intervention_replaced is True
+    assert relu.is_edited is True
 
 
 def test_hooks_kwarg_shape_change_applies() -> None:
@@ -124,7 +127,7 @@ def test_hooks_kwarg_shape_change_applies() -> None:
         x,
         save=lambda ctx: True,
         capture=tl.options.CaptureOptions(
-            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
+            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), allow_shape_change=True)}
         ),
     )
     assert float(_output_out(log)) == pytest.approx(8.0)
@@ -140,11 +143,11 @@ def test_replay_hooks_shape_change_applies() -> None:
         model,
         x,
         save=lambda ctx: True,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     replayed = log.push(
         replay=tl.options.ReplayOptions(
-            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
+            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), allow_shape_change=True)}
         )
     )
     assert float(_output_out(replayed)) == pytest.approx(8.0)
@@ -160,11 +163,11 @@ def test_push_replay_options_shape_change_applies() -> None:
         model,
         x,
         save=lambda ctx: True,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     pushed = log.push(
         replay=ReplayOptions(
-            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
+            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), allow_shape_change=True)}
         )
     )
     assert float(_output_out(pushed)) == pytest.approx(8.0)
@@ -179,7 +182,7 @@ def test_splice_module_dtype_change_applies() -> None:
         model,
         x,
         save=lambda ctx: True,
-        intervene=tl.when(tl.func("relu"), tl.splice_module(_ToDouble(), force_shape_change=True)),
+        intervene=tl.when(tl.func("relu"), tl.splice_module(_ToDouble(), allow_shape_change=True)),
     )
     assert _output_out(log).dtype == torch.float64
 
@@ -206,7 +209,7 @@ def test_default_false_still_raises_on_shape_change_replay() -> None:
         model,
         x,
         save=lambda ctx: True,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     with pytest.raises(HookValueError):
         log.push(

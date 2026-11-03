@@ -43,8 +43,8 @@ import torch
 
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._io.bundle import _RenameAwareUnpickler
+from torchlens.intervention._spec_values import _resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.save import _resolve_import_ref
 
 _UNPICKLERS = [SafeBundleUnpickler, _RenameAwareUnpickler]
 
@@ -221,7 +221,7 @@ def test_resolver_legit_foreign_trusted_callable_still_resolves(tmp_path: Path) 
     """A genuinely foreign (non-torch) trusted callable is NOT purity-gated (no regression)."""
 
     mod_name = "r27_resolver_trusted_mod"
-    (tmp_path / f"{mod_name}.py").write_text("def hook(out, *, hook):\n    return out * 2\n")
+    (tmp_path / f"{mod_name}.py").write_text("def hook(out, *, ctx):\n    return out * 2\n")
     sys.path.insert(0, str(tmp_path))
     try:
         mod = importlib.import_module(mod_name)
@@ -285,17 +285,16 @@ def test_unpickler_legit_trusted_callable_still_resolves(_trusted_os_module: str
 def test_weights_only_load_capability_in_snapshot() -> None:
     """The named capability flag surfaces in the torch capability snapshot / doctor report."""
 
-    import torchlens.utils as tl_utils
-    from torchlens.utils._torch_compat import get_torch_capability_snapshot
+    import torchlens as tl
+    from torchlens._utils._torch_compat import get_torch_capability_snapshot
 
     snapshot = get_torch_capability_snapshot()
     assert "HAS_SAFE_WEIGHTS_ONLY_LOAD" in snapshot
     assert isinstance(snapshot["HAS_SAFE_WEIGHTS_ONLY_LOAD"], bool)
-    # Surfaced in the model-free doctor diagnostic (tl.compat.report needs a
-    # model). The doctor row is a bounded absences-first summary, so a present
+    # Surfaced in the model-free doctor diagnostic. The doctor row is a bounded absences-first summary, so a present
     # flag lives on the report's capability_snapshot() detail accessor, while
     # an ABSENT flag (the degradation) must be named in the visible row text.
-    report = tl_utils.doctor()
+    report = tl.report.doctor()
     assert "HAS_SAFE_WEIGHTS_ONLY_LOAD" in report.capability_snapshot()
     if not snapshot["HAS_SAFE_WEIGHTS_ONLY_LOAD"]:
         assert "HAS_SAFE_WEIGHTS_ONLY_LOAD" in str(report)

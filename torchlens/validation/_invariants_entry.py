@@ -9,19 +9,8 @@ from typing import TYPE_CHECKING
 from .status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
-    from .invariants import (
-        InvariantResult,
-        MetadataInvariantError,
-        _check_module_containment_logic,
-        _check_module_hierarchy,
-        _check_module_layer_containment,
-        _check_param_xrefs,
-        _is_func_call_id_exempt,
-        _metadata_invariant_contracts_for_trace,
-        _plain_func_call_group_signature,
-    )
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 __all__ = (
     "check_metadata_invariants",
@@ -100,7 +89,7 @@ def _check_backend_neutral_module_mode_invariants(trace: Trace) -> None:
         If mode-specific module metadata is internally inconsistent.
     """
 
-    if getattr(trace, "module_identity_mode", None) == "function_root":
+    if trace._options_module_identity_mode == "function_root":
         _check_function_root_module_invariants(trace)
         return
 
@@ -130,7 +119,7 @@ def _check_region_replay_provenance(trace: Trace) -> None:
     trace_annotations = getattr(trace, "annotations", None)
     if trace_annotations is not None and not isinstance(trace_annotations, Mapping):
         trace_annotations = None
-    for layer in getattr(trace, "layer_list", ()):
+    for layer in trace._layer_list:
         op_annotations = getattr(layer, "annotations", None)
         if op_annotations is not None and not isinstance(op_annotations, Mapping):
             op_annotations = None
@@ -181,11 +170,20 @@ def _check_function_root_module_invariants(trace: Trace) -> None:
     root_call = root.ops.get(1)
     if root_call is None:
         raise MetadataInvariantError(name, "root module must have exactly one self:1 call")
-    if list(root_call.ops) != trace_layer_labels:
-        raise MetadataInvariantError(
-            name,
-            "root module self:1 ops must exactly match trace.layer_labels",
-        )
+    # The call lists pass-qualified Op labels in execution order (exactly
+    # trace.op_labels), and its distinct Layers in order are exactly
+    # trace.layer_labels. One raise site for the check.
+    root_call_ops = list(root_call.ops)
+    root_call_problem = (
+        "root module self:1 ops must exactly match trace.op_labels"
+        if root_call_ops != list(trace.op_labels)
+        else "root module self:1 ops must project onto exactly trace.layer_labels"
+        if list(dict.fromkeys(trace.ops[label].layer_label for label in root_call_ops))
+        != list(trace_layer_labels)
+        else None
+    )
+    if root_call_problem is not None:
+        raise MetadataInvariantError(name, root_call_problem)
 
     trace_layer_set = set(trace_layer_labels)
     for owner_label, owner in (("root module", root), ("root module call", root_call)):
@@ -274,7 +272,7 @@ def _compute_ops(trace: Trace) -> list[Op]:
 
     return [
         layer
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         if not (layer.is_input or layer.is_output or layer.is_buffer)
     ]
 
@@ -353,18 +351,22 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
         If backend identity fields are invalid or unsupported by the registry.
     """
 
-    from ..backends import UnknownBackendError, get_backend_spec
+    from torchlens.backends.registry import UnknownBackendError
+
+    from ..backends.registry import get_backend_spec
 
     name = "backend_identity_invariants"
-    backend = getattr(trace, "backend", None)
+    backend = trace._provenance_backend
     if not isinstance(backend, str) or backend == "":
-        raise MetadataInvariantError(name, "Trace.backend must be a non-empty string")
+        raise MetadataInvariantError(name, "Trace.provenance.backend must be a non-empty string")
     try:
         spec = get_backend_spec(backend)
     except UnknownBackendError as exc:
-        raise MetadataInvariantError(name, f"Trace.backend {backend!r} is not registered") from exc
+        raise MetadataInvariantError(
+            name, f"Trace.provenance.backend {backend!r} is not registered"
+        ) from exc
 
-    module_identity_mode = getattr(trace, "module_identity_mode", None)
+    module_identity_mode = trace._options_module_identity_mode
     if module_identity_mode not in spec.capabilities.module_identity_modes:
         raise MetadataInvariantError(
             name,
@@ -372,11 +374,11 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
             f"{backend!r}",
         )
 
-    param_source = getattr(trace, "param_source", None)
+    param_source = trace._provenance_param_source
     valid_param_sources = {"native-module", "pytree-derived", "none"}
     if param_source not in valid_param_sources:
         raise MetadataInvariantError(name, f"param_source={param_source!r} is invalid")
-    if param_source == "none" and getattr(trace, "num_param_tensors", 0) != 0:
+    if param_source == "none" and trace._num_param_tensors != 0:
         raise MetadataInvariantError(
             name,
             "param_source='none' requires num_param_tensors=0",
@@ -398,21 +400,21 @@ def _check_non_torch_backward_inert(trace: Trace) -> None:
     """
 
     name = "non_torch_backward_inert"
-    if getattr(trace, "has_backward_pass", False):
+    if trace._autograd_has_backward_pass:
         raise MetadataInvariantError(name, "non-torch traces must not set has_backward_pass")
-    if getattr(trace, "grad_fn_logs", None):
-        raise MetadataInvariantError(name, "non-torch traces must not populate grad_fn_logs")
-    if getattr(trace, "grad_fn_order", None):
+    if trace._grad_fn_logs:
+        raise MetadataInvariantError(name, "non-torch traces must not populate _grad_fn_logs")
+    if trace._autograd_grad_fn_order:
         raise MetadataInvariantError(name, "non-torch traces must not populate grad_fn_order")
-    if getattr(trace, "backward_pass_logs", None):
-        raise MetadataInvariantError(name, "non-torch traces must not populate backward_pass_logs")
-    if getattr(trace, "backward_root_grad_fn_object_ids", None):
+    if trace._backward_pass_logs:
+        raise MetadataInvariantError(name, "non-torch traces must not populate _backward_pass_logs")
+    if trace._autograd_backward_root_grad_fn_object_ids:
         raise MetadataInvariantError(
             name,
             "non-torch traces must not populate backward_root_grad_fn_object_ids",
         )
-    if getattr(trace, "num_backward_passes", 0) != 0:
-        raise MetadataInvariantError(name, "non-torch traces must have num_backward_passes=0")
+    if trace._num_backward_passes != 0:
+        raise MetadataInvariantError(name, "non-torch traces must have _num_backward_passes=0")
 
 
 def _check_backend_neutral_accessor_refs(trace: Trace) -> None:
@@ -443,9 +445,9 @@ def _check_backend_neutral_accessor_refs(trace: Trace) -> None:
     name = "backend_neutral_accessor_refs"
     valid_statuses = {"resolved", "unresolved", "audit_only", "metadata_only"}
     records = [
-        *getattr(trace, "layer_list", ()),
-        *list(getattr(trace, "layer_logs", {}).values()),
-        *list(getattr(trace, "param_logs", {}).values()),
+        *trace._layer_list,
+        *list(trace._layer_logs.values()),
+        *list(trace._param_logs.values()),
     ]
     for record in records:
         if not _record_has_backend_neutral_accessor_metadata(record):
@@ -497,7 +499,7 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
     Precondition contract: torch exhaustive and predicate captures populate
     ``func_call_id`` for non-synthetic compute outputs. Synthetic input,
     output, buffer, and internal placeholder nodes are exempt. Sparse recording
-    projections may have empty templates, ``edge_use='unknown'`` records, and
+    projections may have empty templates, ``_edge_use='unknown'`` records, and
     ``container_spec=None``; those fields are not required for this invariant.
     When a ``func_call_id`` group is populated, members must agree only on the
     plain-capture-stable function name and container spec, and populated
@@ -518,7 +520,7 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
 
     name = "func_call_id_consistency"
     groups: dict[int, list[Op]] = defaultdict(list)
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         if _is_func_call_id_exempt(layer):
             continue
         func_call_id = getattr(layer, "func_call_id", None)
@@ -553,3 +555,26 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
             if container_path:
                 container_paths.append(container_path)
     return InvariantResult(name=name, passed=True)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_backward_flow import (  # noqa: E402
+    _is_func_call_id_exempt,
+    _plain_func_call_group_signature,
+)
+from ._invariants_conditional_modules import (  # noqa: E402
+    _check_module_hierarchy,
+    _check_module_layer_containment,
+)
+from ._invariants_connectivity import (  # noqa: E402
+    _check_module_containment_logic,
+    _metadata_invariant_contracts_for_trace,
+)
+from ._invariants_modules_params import (  # noqa: E402
+    _check_param_xrefs,
+)
+from .invariants import (  # noqa: E402
+    InvariantResult,
+    MetadataInvariantError,
+)

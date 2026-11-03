@@ -145,21 +145,6 @@ class _OfflineBenchmark:
         return float(out.detach().float().mean().item() + len(layer) * 0.001)
 
 
-class _TraceObject:
-    """nnsight-like cached trace fixture."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return a trace dictionary.
-
-        Returns
-        -------
-        dict[str, Any]
-            Trace payload.
-        """
-
-        return {"nodes": [{"name": "embed"}, {"name": "proj"}], "source": "offline-fixture"}
-
-
 def _cnn_log() -> tuple[_TinyCnn, torch.Tensor, Any]:
     """Build a deterministic CNN log.
 
@@ -172,7 +157,7 @@ def _cnn_log() -> tuple[_TinyCnn, torch.Tensor, Any]:
     torch.manual_seed(12)
     model = _TinyCnn().eval()
     x = torch.randn(3, 1, 8, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     return model, x, log
 
 
@@ -197,7 +182,7 @@ def test_sae_lens_bridge_encode_matches_direct_sae() -> None:
     torch.manual_seed(13)
     model = _TinyTransformer().eval()
     tokens = torch.tensor([[1, 2, 3], [4, 5, 6]])
-    log = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, tokens, save="all")
     out = log["linear_1_2"].out
     sae = _TinySae(width=out.shape[-1])
 
@@ -208,11 +193,11 @@ def test_sae_lens_bridge_encode_matches_direct_sae() -> None:
 
 
 @pytest.mark.heavy
-def test_sae_lens_bridge_decode_matches_direct_sae() -> None:
-    """SAE Lens bridge decoding should match a direct SAE decode call.
+def test_sae_lens_bridge_reconstruct_matches_direct_sae() -> None:
+    """SAE Lens bridge reconstruction should match a direct encode then decode.
 
     Measured at 11.2s wall (weekly leg, 2026-10-01), over the unmarked/smoke
-    7s budget (tests/conftest.py); the heavy tier's 20s+grace budget covers
+    7s budget (``scripts/tier_durations.py``); the heavy tier's 20s+grace budget covers
     it. The bridge-gate step (weekly.yml) runs this whole file unfiltered, so
     the executed-floor count (11) is unaffected by the marker.
     """
@@ -221,32 +206,32 @@ def test_sae_lens_bridge_decode_matches_direct_sae() -> None:
     torch.manual_seed(14)
     model = _TinyTransformer().eval()
     tokens = torch.tensor([[1, 2, 3], [4, 5, 6]])
-    log = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, tokens, save="all")
     out = log["linear_1_2"].out
     sae = _TinySae(width=out.shape[-1])
 
-    bridge_result = tl.bridge.sae_lens.decode(log, "linear_1_2", sae)
-    direct_result = sae.decode(out)
+    bridge_result = tl.bridge.sae_lens.reconstruct(log, "linear_1_2", sae)
+    direct_result = sae.decode(sae.encode(out))
 
     assert torch.allclose(bridge_result, direct_result)
 
 
-def test_sae_lens_bridge_decode_with_fake_optional_dependency(
+def test_sae_lens_bridge_reconstruct_with_fake_optional_dependency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A fake SAE object should exercise decode without installing SAE Lens."""
+    """A fake SAE object should exercise reconstruct without installing SAE Lens."""
 
     monkeypatch.setitem(sys.modules, "sae_lens", type(sys)("sae_lens"))
     torch.manual_seed(15)
     model = _TinyTransformer().eval()
     tokens = torch.tensor([[1, 2, 3], [4, 5, 6]])
-    log = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, tokens, save="all")
     out = log["linear_1_2"].out
     sae = _TinySae(width=out.shape[-1])
 
-    result = tl.bridge.sae_lens.decode(log, "linear_1_2", sae)
+    result = tl.bridge.sae_lens.reconstruct(log, "linear_1_2", sae)
 
-    assert torch.equal(result, sae.decode(out))
+    assert torch.equal(result, sae.decode(sae.encode(out)))
 
 
 def test_rsatoolbox_bridge_rdm_matches_direct_dataset() -> None:
@@ -279,10 +264,11 @@ def test_brain_score_bridge_mocked_offline_fixture_matches_direct_scores() -> No
     bridge_scores = tl.bridge.brain_score.per_layer(log, benchmark, sites=sites)
     direct_scores = {
         layer.layer_label: benchmark(layer.out, layer=layer.layer_label)
-        for layer in [log.resolve_sites(site, max_fanout=1).first() for site in sites]
+        for layer in [log[log[tl.func(site)].labels[0]] for site in sites]
     }
 
-    assert bridge_scores == direct_scores
+    assert {label: parts.raw for label, parts in bridge_scores.items()} == direct_scores
+    assert all(parts.ceiling_normalised is None for parts in bridge_scores.values())
 
 
 @pytest.mark.heavy
@@ -290,7 +276,7 @@ def test_lightning_layer_profiler_callback_fires_and_saves_results(tmp_path: Pat
     """Lightning callback should profile one batch and persist a JSONL record.
 
     Measured at 10.1s wall (weekly leg, 2026-10-02), over the unmarked/smoke
-    7s budget (tests/conftest.py); the heavy tier's 20s+grace budget covers
+    7s budget (``scripts/tier_durations.py``); the heavy tier's 20s+grace budget covers
     it. The bridge-gate step (weekly.yml) runs this whole file unfiltered, so
     the executed-floor count (11) is unaffected by the marker.
     """
@@ -350,13 +336,15 @@ def test_lightning_callback_missing_extra_errors_on_use(
     def fail_lightning(name: str, *args: Any, **kwargs: Any) -> Any:
         """Raise ImportError for Lightning imports only."""
 
-        if name == "lightning" or name.startswith("lightning."):
+        if name.split(".")[0] in {"lightning", "pytorch_lightning"}:
             raise ImportError("missing lightning")
         return real_import(name, *args, **kwargs)
 
     monkeypatch.delitem(sys.modules, "lightning", raising=False)
     monkeypatch.delitem(sys.modules, "lightning.pytorch", raising=False)
     monkeypatch.delitem(sys.modules, "lightning.pytorch.callbacks", raising=False)
+    monkeypatch.delitem(sys.modules, "pytorch_lightning", raising=False)
+    monkeypatch.delitem(sys.modules, "pytorch_lightning.callbacks", raising=False)
     monkeypatch.setattr(builtins, "__import__", fail_lightning)
 
     lightning_callbacks = tl_callbacks.lightning
@@ -423,7 +411,7 @@ def test_profiler_join_merges_per_op_timing(tmp_path: Path) -> None:
     """Profiler join should attach Kineto event durations to TorchLens ops."""
 
     _model, _x, log = _cnn_log()
-    conv_layer = log.resolve_sites("conv2d", max_fanout=1).first()
+    conv_layer = log[log[tl.func("conv2d")].labels[0]]
     trace_path = tmp_path / "kineto.json"
     trace_path.write_text(
         json.dumps(
@@ -443,23 +431,3 @@ def test_profiler_join_merges_per_op_timing(tmp_path: Path) -> None:
 
     assert conv_row["kineto_event_count"] == 1
     assert conv_row["kineto_duration_us"] == 12.5
-
-
-def test_nnsight_bridge_normalizes_offline_trace_fixture() -> None:
-    """nnsight bridge should normalize an offline cached trace-like object."""
-
-    payload = tl.bridge.nnsight.from_trace(_TraceObject())
-
-    assert payload["schema"] == "torchlens.nnsight_trace.v1"
-    assert payload["nodes"] == [{"name": "embed"}, {"name": "proj"}]
-    assert payload["metadata"]["source"] == "offline-fixture"
-
-
-def test_nnsight_bridge_refuses_unsupported_objects() -> None:
-    """An object with no mapping, to_dict() or nodes is refused, never emptied."""
-
-    class _LiveTracer:
-        """Stand-in for a live tracer: no to_dict, no nodes."""
-
-    with pytest.raises(TypeError, match="supports a mapping"):
-        tl.bridge.nnsight.from_trace(_LiveTracer())

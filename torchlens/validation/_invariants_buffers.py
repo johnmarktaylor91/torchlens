@@ -6,13 +6,8 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
-    from .invariants import (
-        MetadataInvariantError,
-        _module_claim_address,
-        _module_claims,
-    )
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 __all__ = (
     "_param_log_list_contains_param",
@@ -64,7 +59,7 @@ def _param_log_list_contains_param(param_logs: object, param: object) -> bool:
 def _param_address_index(ml: Trace) -> dict[object, object]:
     """Build a one-pass primary/alias address -> Param index.
 
-    Replaces a per-lookup linear scan over ``ml.param_logs``. Co-parent
+    Replaces a per-lookup linear scan over ``ml._param_logs``. Co-parent
     resolution runs once per param, so the scan made ``param_xrefs`` quadratic in
     the parameter count: every weight-tied or bias/weight sibling link re-walked
     the whole parameter list (800 lookups x 800 params on an 800-layer chain).
@@ -102,7 +97,7 @@ def _param_address_index(ml: Trace) -> dict[object, object]:
     # param before any co-parent lookup happens, so this pass adds no resolution
     # the check did not already perform.
     index: dict[object, object] = {}
-    for param in ml.param_logs:
+    for param in ml._param_logs:
         address = getattr(param, "address", None)
         if address not in index:
             index[address] = param
@@ -197,7 +192,7 @@ def _check_buffer_static_versions(ml: Trace, buf: object, name: str) -> None:
                 f"Buffer '{address}' version '{label}' has address "
                 f"{getattr(version, 'address', None)!r}",
             )
-        if label not in getattr(ml, "layer_dict_all_keys", {}):
+        if label not in ml._layer_dict_all_keys:
             raise MetadataInvariantError(
                 name,
                 f"Buffer '{address}' version '{label}' does not resolve in trace",
@@ -433,7 +428,7 @@ def _resolve_trace_label(ml: Trace, label: str) -> str | None:
     # rebuilding the set made every resolution O(n_labels). This helper is
     # called once per edge-use record and per module boundary, so the copy made
     # `check_metadata_invariants` quadratic in trace size.
-    all_keys = getattr(ml, "layer_dict_all_keys", {})
+    all_keys = ml._layer_dict_all_keys
     final_label = getattr(ml, "_raw_to_final_layer_labels", {}).get(label)
     # `.get(label)` returns None both when `label` genuinely has no raw-label
     # mapping (the common case for an already-final label) and, in principle,
@@ -523,3 +518,14 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
                 f"Buffer '{address}' version '{label}' claims replay validation without "
                 "comparable payloads",
             )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_entry import (  # noqa: E402
+    _module_claim_address,
+    _module_claims,
+)
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

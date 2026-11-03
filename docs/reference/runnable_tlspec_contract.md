@@ -5,7 +5,7 @@ explicit, versioned contract amendment superseding the frozen `sparse_recorded_t
 text; v1 artifacts remain covered by the legacy posture in section 1a).
 
 This is the single implementation contract for the complete sparse runnable `.tlspec` surface. The
-definitions in `torchlens.runnable` are its behavior-free typed mirror. A disagreement between this
+definitions in `torchlens._runnable` are its behavior-free typed mirror. A disagreement between this
 document and those types is a release-blocking schema defect. Neither may change without an explicit,
 versioned contract amendment.
 
@@ -78,7 +78,7 @@ Other fixed sets are:
 | Enum | Values |
 |---|---|
 | `PathFaithfulness` | `verified`, `diverged`, `unverifiable` |
-| `DivergencePolicy` | `raise`, `return_diverged` |
+| `DivergencePolicy` | `raise`, `return` |
 | `ReadinessStatus` | `ready`, `unavailable` |
 | `RunProvider` | `live`, `loaded_sparse`, `loaded_analysis` |
 | `StateSource` | `live_model_state`, `embedded_capture_state`, `user_state_dict`, `random_initialization`, `not_applicable` |
@@ -95,7 +95,7 @@ recipe.
 | Node | Exact fields | Constraint |
 |---|---|---|
 | `LiteralAtom` | `kind`, `value` | kind is `none`, `bool`, `int`, `float`, `str`, or `ellipsis`; value has exactly that Python type (`None` for `none` and for `ellipsis` -- the atom KIND, not the wire value, disambiguates a real `None` index from a `...` index) |
-| `LiteralSlice` | `start`, `stop`, `step` | each component is a `LiteralAtom` restricted to kind `none` or `int`; **classifier-first (r71 B)** -- a semantic-typed component (`IntEnum`, int subclass) refuses `semantic_scalar_type`; decodes to `slice(start, stop, step)` |
+| `LiteralSlice` | `start`, `stop`, `step` | each component is a `LiteralAtom` restricted to kind `none` or `int`; **classifier-first (r71 B)** -- a semantic-typed component (`IntEnum`, int subclass) refuses `semantic_scalar_type`; decodes to `plane(start, stop, step)` |
 | `LiteralTorchSymbol` | `qualname` | non-callable symbol below an explicitly allowlisted stock torch root |
 | `LiteralSequence` | `kind`, `items` | kind is `list` or `tuple`; items are ordered literal nodes |
 | `LiteralMapping` | `entries` | ordered `LiteralMappingEntry` nodes; duplicate keys invalid |
@@ -103,13 +103,13 @@ recipe.
 | `LiteralTupleKey` | `items` | ordered `LiteralAtom` or `LiteralTupleKey` nodes only |
 
 Floats round-trip without coercion, including non-finite values. Booleans are not integers. Dict
-order, tuple versus list, key types, nesting, and `None` are preserved. A Python `slice` (e.g. the
+order, tuple versus list, key types, nesting, and `None` are preserved. A Python `plane` (e.g. the
 key of `x[:, 3:]`), a bare `Ellipsis` (`x[..., 0]`), and a bare `None` newaxis index (`x[:, None]`)
 are inert value types with no callables or imports, so they round-trip exactly through the
 `LiteralSlice` node and the `none`/`ellipsis` `LiteralAtom` kinds -- including inside the tuple key
 `__getitem__` produces for multi-axis indexing (`LiteralSequence` of kind `tuple`). Bytes, complex
 values, sets, arbitrary objects, tensors, callables, classes, import references, pickles, and
-opaque reprs are outside the grammar and fail preflight with `unsupported_literal`.
+opaque reprs are outside the grammar and fail preflight with `literal_unsupported`.
 
 Scalar admission is decided by ONE closed type-class classifier (r69 B,
 `torchlens._input_walk.classify_scalar`), consumed by snapshotting, literal encoding, runtime
@@ -130,7 +130,7 @@ CLASSIFIER-FIRST at `_encode_literal`, so no recipe path can launder a semantic 
   family: `IntEnum`, `IntFlag`, `StrEnum`, float-Enum, plain `Enum`) and every other
   `int`/`float`/`str` or non-stock NumPy scalar subclass -- carry application semantics in
   their TYPE identity that no persisted value fact can witness. A semantic-typed scalar VALUE
-  leaf at any depth refuses the runnable save typed (`missing_input_container_contract`, reason
+  leaf at any depth refuses the runnable save typed (`input_container_contract_missing`, reason
   `semantic_scalar_type`); no import-bearing type recipe is persisted. Symmetrically, an
   admitted builtin/stock-wrapper capture replayed with a same-value semantic type DIVERGES
   (both admitted lanes, both directions); a semantic runtime value can never verify or attest.
@@ -144,11 +144,11 @@ every recursive `NonTensorLiteral` edge routes through -- `LiteralSlice` start/s
 `_encode_literal`, `LiteralMapping` keys and `LiteralTupleKey` items via the classifier-backed
 `encode_mapping_key`. It is both implementation authority and a future-kind meta-test: a new
 composite node without a declared component policy REDs. secA-F1 (an `IntEnum` /  int-subclass
-`slice` component laundering into a plain `int` because `_encode_slice_component` gated only
+`plane` component laundering into a plain `int` because `_encode_slice_component` gated only
 `isinstance(int)`) is closed: the encoder classifies first, the snapshot preflight applies the
-component policy to composite `slice` leaves (the SAME `semantic_scalar_type` refusal at save
+component policy to composite `plane` leaves (the SAME `semantic_scalar_type` refusal at save
 and in the symmetric runtime snapshot), and `_literal_leaf_equal` compares slices
-component-by-component through the scalar rules -- `slice.__eq__` (value-only) is never the
+component-by-component through the scalar rules -- `plane.__eq__` (value-only) is never the
 authority.
 
 No runnable-save input-boundary path may fail untyped: every producer-preflight refusal
@@ -171,7 +171,7 @@ autocast dtype apply) route through the same helper for the `torch` module root;
 (`torch.Tensor` / `_VariableFunctions` / `torch._C`), the proxying `torch._VF` module, `torch.backends`,
 and literal-name `getattr(torch, "...")` module-layout constants -- which carry no lazy-import hazard --
 stay out of the helper's scope. A malformed `torch.device(...)` literal
-payload raises a typed `RunPreconditionError` (`unsupported_literal`) at decode (r41 secC -- never a
+payload raises a typed `RunPreconditionError` (`literal_unsupported`) at decode (r41 secC -- never a
 raw torch error); a malformed device qualname additionally refuses at descriptor parse, degrading the
 load to analysis-only with the typed diagnostic intact per the corr2_3 disposition.
 
@@ -185,7 +185,7 @@ Rung 1 retains the existing `FunctionRegistryKey` shape exactly:
 | `qualname` | `str` | qualified name below the namespace |
 | `dispatch_kind` | `function | method | dunder | namespace_alias` | receiver/dispatch contract |
 | `version` | `int` | must equal `1` |
-| `import_path` | `str | null` | null for the fixed namespaces; on `custom`, any path outside the section 6 rung-1 exact forms is `untrusted_custom_import` and is never imported |
+| `import_path` | `str | null` | null for the fixed namespaces; on `custom`, any path outside the section 6 rung-1 exact forms is `custom_import_untrusted` and is never imported |
 
 `callable_registry` deduplicates keys as `CallableRegistryEntry(registry_id: str,
 key: FunctionRegistryKey)`. IDs are unique; every computational call names one; unused entries are
@@ -268,7 +268,7 @@ The invariant (deletion-closure), stated once:
 > or an UNVERIFIABLE floor, never VERIFIED. The single out-of-scope boundary is coherent
 > reauthoring (threat-model subsection below).
 
-**Registry v2.** `WITNESS_FAMILY_REGISTRY` (`torchlens/runnable.py`, discriminator
+**Registry v2.** `WITNESS_FAMILY_REGISTRY` (`torchlens._runnable`, discriminator
 `witness_family_registry_v2`) is a closed table of typed `FamilySpec` rows -- one per
 verdict-steering witness family. It now covers the four DIRECT control kinds (`scalar_bool`,
 `loop_predicate`, `conditional_arm_entry`, `tensor_derived_scalar_literal`) that r70's
@@ -520,7 +520,7 @@ execution context: `cudnn.benchmark=true`, or a documented CUDA-nondeterministic
 transpose-conv atomicAdd family and the documented index/scatter accumulation set) running on a
 CUDA device without `use_deterministic_algorithms(True)`. Such a capture can replay and verify
 its path, but byte-exact numeric attestation is `not_applicable` -- fail-safe, never a false
-`attested` and never a spurious `numeric_attestation_failed`. Users who want transpose-conv
+`attested` and never a spurious `replay_value_mismatch`. Users who want transpose-conv
 attestation on CUDA should capture (and replay) under `torch.use_deterministic_algorithms(True)`.
 
 `CallExecutionContext` (one REQUIRED per call descriptor) records the per-device autocast state
@@ -692,8 +692,8 @@ input-conditional at run time, not a static descriptor flag.
 
 The producer can emit a runnable descriptor only when the source capture recorded replay-template
 metadata. Users must capture with
-`capture=tl.options.CaptureOptions(intervention_ready=True)` (or flat
-`intervention_ready=True`) before `tl.save(..., level="runnable")`. This capture flag is required
+`capture=tl.options.CaptureOptions(replayable=True)` (or flat
+`replayable=True`) before `trace.save(..., level="runnable")`. This capture flag is required
 even when the user intends replay without an intervention. Omitting it produces a typed
 `RunnablePreflightError` with the `MISSING_CALLABLE_REF` finding; analysis saves remain available,
 but save-time code never guesses or reconstructs missing call templates.
@@ -746,10 +746,10 @@ rungs unchanged; the persistent-buffer slot universe falls back to the capture-b
 snapshot + cooked `Param` addresses + the capture-time alias-topology snapshot when the weak
 model reference is dead. Before r75, `tl.trace(Model(), x)` (caller holding no model reference)
 followed by a `gc.collect()` before `save(level="runnable")` nondeterministically refused
-`unsupported_tensor_constant` (two same-shape+dtype BN params, identity chain dead) or
-`state_unexpected_key` (never-forward-used persistent buffers dropped from the declared
+`tensor_constant_unsupported` (two same-shape+dtype BN params, identity chain dead) or
+`state_key_unknown` (never-forward-used persistent buffers dropped from the declared
 universe) -- an honest-save over-refusal, never a wrong verdict, now closed. A
-genuinely-unmatched tensor constant still refuses `unsupported_tensor_constant`.
+genuinely-unmatched tensor constant still refuses `tensor_constant_unsupported`.
 
 **The recorded buffer address is AUTHORITATIVE (r83).** Postprocess resolves a source
 buffer's address from the address the CAPTURE recorded for that event; the
@@ -763,7 +763,7 @@ the `address not in buffer_names` refusal, and was bound to the WRONG state at r
 constant registered and one a plain attribute sufficed). It also corrupted plain,
 save-free public metadata: `trace[...].address` reported a name that was not that tensor's.
 A recorded address that is not a registered buffer now reaches the honest
-`unsupported_tensor_constant` refusal, which is the correct outcome -- a non-registered
+`tensor_constant_unsupported` refusal, which is the correct outcome -- a non-registered
 constant is not part of the declared state model. Registered buffers, including nested ones
 and the BatchNorm running-stat / `num_batches_tracked` pre-assignments, resolve to their own
 dotted addresses exactly as before. r77 F2
@@ -777,7 +777,7 @@ honest tensor-only `load_state_dict` binds identically in both lanes. The embedd
 ceiling is untouched: an extra-state model still cannot report `verified` (missing
 comparison basis, coherent in both lanes). If NEITHER capture-time record exists
 (`state_dict()` not a mapping at the capture boundary), the dead save refuses loudly and
-typed (`TorchLensIOError`, mirroring the `include_weights=True` lane) -- never a silent
+typed (`ArtifactError`, mirroring the `include_weights=True` lane) -- never a silent
 under-declaration.
 
 1. A computational group lacks a key, uses another ref schema, requests custom/import code, or is
@@ -829,7 +829,7 @@ under-declaration.
    identical captured input), and it requires exactly one match. Opaque/non-grammar keys,
    semantic-typed scalar VALUE leaves (section 2, reason `semantic_scalar_type`), and
    undeclared per-instance container state REFUSE at runnable save through the EXISTING
-   `missing_input_container_contract` (no new enum), with the SYMMETRIC bind-side check
+   `input_container_contract_missing` (no new enum), with the SYMMETRIC bind-side check
    refusing runtime-added undeclared state. A `dict`-backed mapping whose `items()`
    protocol view disagrees with the physical `dict.__len__` storage (a lying
    `items()`/`keys()` override hiding or padding entries) refuses through the same
@@ -893,7 +893,7 @@ under-declaration.
 11. The model output has ZERO tensor slots (r37, `zero_tensor_slot_output`): an all-literal tree,
     a literal root, or empty containers pass the losslessness proof but leave no output Op to
     carry the root `ContainerSpec`, so a loaded run would reconstruct `None`. Unrepresentable
-    means refuse at save with `missing_output_container_contract`, uniformly with every other
+    means refuse at save with `output_container_contract_missing`, uniformly with every other
     output refusal.
 12. The captured forward READ physical state metadata that transport normalizes away (r63,
     escape-gated; r65 extends the net to the FULL input-accessor mirror; r67 C3/C6 gates
@@ -931,7 +931,7 @@ The hard invariant is:
 
 Sparse raw-value rule (r69 E): a runnable save scrubs the Trace `raw_input`/`raw_output`
 diagnostic fields to `None` under the sparse effective `DROP` policy BEFORE any field-specific
-raw-value serialization runs -- including when the ordinary `save_raw_input`/`save_raw_output`
+raw-value serialization runs -- including when the ordinary `save_raw_input`/`save_transformed_output`
 policy is `True` or `"small"` and for nested tensor/string containers. An effective
 `DROP`/`WEAKREF_STRIP` always wins over a field-specific serializer, so the diagnostic
 raw-value policy can never re-introduce a tensor into the value-free sparse core (a fully
@@ -979,11 +979,11 @@ paths. Runnable model-output traversal never relies on the generic BFS fallback,
 leaf that merely *contains* tensors is not reconstructable. Sets, frozensets, their subclasses,
 and unordered/opaque containers are unsupported runnable outputs at every depth and cardinality
 (including zero and one tensor) and are uniformly refused at save with
-`missing_output_container_contract`. Ordinary analysis capture is unaffected. Proof failure is a
+`output_container_contract_missing`. Ordinary analysis capture is unaffected. Proof failure is a
 typed producer refusal -- refuse-unless-proved, never accept-unless-flagged.
 
 r37 adds ONE per-kind reconstruction capability table (`CONTAINER_KIND_CAPABILITIES` in
-`torchlens/ir/container.py`) shared by spec construction, this producer proof, and the runtime
+`torchlens/_ir/container.py`) shared by spec construction, this producer proof, and the runtime
 independent recompute; a kind existing in only one site fails a coverage meta-test. The load-time
 recompute and sparse reconstruction are additionally coupled through ONE shared plain-substitution
 predicate (`_reconstruction_would_substitute_plain`), so any future gate/reconstruction criterion
@@ -1055,9 +1055,21 @@ instance-state rules it encodes:
   the exact-type gate (extra instance state is not type-observable on the trusted bases); honest
   captures never produce a stateful instance because the save refuses it.
 - `registered` requires the registration's explicit `state_complete=True` declaration
-  (`tl.register_container(..., state_complete=True)`) before an instance carrying extra
+  (`tl.types.register_container(..., state_complete=True)`) before an instance carrying extra
   `__dict__` state may save (`registered_container_instance_state` otherwise); the declaration is
   the trusted statement that `unflatten` restores everything `flatten` observed.
+- `distribution` (a `torch.distributions.Distribution` output) records every instance attribute:
+  each tensor is one output leaf at an attribute path (`.loc`, `.scale`; the family's
+  `arg_constraints` parameters first), each nested distribution is a child container
+  (`.base_dist.loc`), literal state (shapes, flags, counts) and identity aliases
+  (`Categorical._param` is `logits`) ride in `aux_data`. Reconstruction allocates the type through
+  its inert `__new__` and restores that instance dictionary, so no `__init__` and no argument
+  validation run and the rebuilt object holds exactly the recorded tensors. Any other attribute (a
+  transform list, an `nn.Parameter`, a callable) flags the node lossy with the losslessness
+  reason `distribution_state_unrecordable:<Type>.<attribute>`; the recorded attributes stay
+  addressable. The load-time recompute re-derives lossiness from the resolved type (a
+  `Distribution` subclass with an inert `__new__`, no recorded name a data descriptor, no
+  metaclass `__call__`), so a forged `lossy_reconstruction=False` cannot bless it.
 - `opaque` is always a typed save refusal.
 
 ## 6. Resolver protocol
@@ -1079,9 +1091,9 @@ The torch ladder is fixed:
    The one non-torch exact entry is the closed TorchLens synthetic-op table: the module-boundary
    identity op (`nn.Identity` and pass-through module outputs, minted by
    `_state._decorated_identity`) is keyed `custom` / `identity` /
-   `torchlens.utils.display:identity` and resolves, by that exact key only, to the in-memory
-   `torchlens.utils.display.identity` (a pure pass-through; provenance
-   `torchlens_synthetic:torchlens.utils.display.identity`). No module is imported for it.
+   `torchlens._utils.display:identity` and resolves, by that exact key only, to the in-memory
+   `torchlens._utils.display.identity` (a pure pass-through; provenance
+   `torchlens_synthetic:torchlens._utils.display.identity`). No module is imported for it.
 2. Explicit producer-version-bounded aliases in `utils/_torch_compat.py`, including
    `Tensor`/`_TensorBase`/`TensorBase` and enumerated private-to-public mappings. Aliases never
    reinterpret exact matches. Current-runtime target availability remains capability-detected.
@@ -1091,7 +1103,7 @@ The torch ladder is fixed:
    and execute under `pause_logging()`.
 
 No custom import, `eval`, arbitrary walk, pickle tier, or artifact code is permitted. Non-torch
-backends report `unsupported_backend_replay`; analysis load still succeeds. Attachment is
+backends report `backend_replay_unsupported`; analysis load still succeeds. Attachment is
 `O(unique callable refs)`.
 
 `ResolverRecord` is exactly `registry_id: str`, `status: ResolverStatus`,
@@ -1105,28 +1117,28 @@ The exact `RunnableErrorCode` values are:
 ```text
 run_capability_unavailable
 sparse_preflight_failed
-sparse_core_tensor_payload
-unsupported_literal
-unsupported_tensor_constant
-missing_tensor_slot
-missing_input_container_contract
-missing_output_container_contract
-missing_control_classification
-missing_callable_ref
-unsupported_backend_replay
-unsupported_ref_schema
-unresolved_qualname
-ambiguous_qualname
-callable_moved_or_renamed
-callable_removed
+sparse_core_payload_invalid
+literal_unsupported
+tensor_constant_unsupported
+tensor_slot_missing
+input_container_contract_missing
+output_container_contract_missing
+control_classification_missing
+callable_ref_missing
+backend_replay_unsupported
+ref_schema_unsupported
+qualname_unresolved
+qualname_ambiguous
+callable_unresolved
+callable_unavailable
 private_api_unavailable
-signature_drift
-runtime_signature_drift
-semantic_drift
-wrapper_shadowed
-untrusted_custom_import
-state_missing_key
-state_unexpected_key
+signature_mismatch
+runtime_signature_mismatch
+semantic_mismatch
+callable_wrapper_mismatch
+custom_import_untrusted
+state_key_missing
+state_key_unknown
 state_shape_mismatch
 state_dtype_mismatch
 state_role_mismatch
@@ -1137,35 +1149,43 @@ input_tree_mismatch
 input_shape_mismatch
 input_dtype_mismatch
 call_arity_mismatch
-input_arity_extra
+input_arity_mismatch
 call_structure_mismatch
 output_structure_mismatch
 output_shape_mismatch
 output_dtype_mismatch
 slot_production_mismatch
 mutation_version_mismatch
-scalar_bool_divergence
-conditional_arm_divergence
-loop_predicate_divergence
+scalar_bool_mismatch
+conditional_arm_mismatch
+loop_predicate_mismatch
 input_alias_topology_unresolved
 state_alias_topology_unsupported
 execution_context_unavailable
 context_field_invalid
-numeric_attestation_failed
-poisoned_run_refused
-collective_boundary_runnable_unsupported
-halted_capture_not_runnable
-user_intervention_not_replayable
-buffer_sink_routing_mutable
+replay_value_mismatch
+poisoned_run_unsupported
+collective_boundary_unsupported
+stopped_capture_unsupported
+user_intervention_unsupported
+buffer_sink_routing_unsupported
 ```
 
-`halted_capture_not_runnable` (early-stopping unification, N4) is the SAVE-time runnable
+`stopped_capture_unsupported` (early-stopping unification, N4) is the SAVE-time runnable
 preflight refusal for a HALTED capture: the taken-path DAG ends at the halt frontier, so a
 runnable descriptor would replay a truncated program while claiming faithfulness to the full
 forward. Analysis-level saves of halted captures remain allowed; the refusal surfaces as
-`RunnablePreflightError` at `tl.save(level="runnable")` entry.
+`RunnablePreflightError` at `trace.save(path, level="runnable")` entry.
 
-`user_intervention_not_replayable` is the SAVE-time producer refusal (stage
+`user_intervention_unsupported` is also the RUN-time ceiling diagnostic (stage
+`hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...,
+fast=True)` on a live trace that applies its staged hooks or value replacements returns an
+edited forward, not the model's own, and no hook-aware check exists yet, so the report settles
+`unverifiable` (poisoned, never `verified`) and the trace is no longer pristine. A run with
+nothing staged keeps its verdict; the ordinary `run(inputs=)` keeps refusing staged edits it
+would not apply (`run_staged_spec_unapplied`).
+
+`user_intervention_unsupported` is the SAVE-time producer refusal (stage
 `producer_user_intervention`) for a capture whose taken path carries at least one
 user-intervention-replaced op (`trace(intervene=...)`, `set`, or a raw forward hook that
 substituted a value). The replacement value has no traceable function, so a sparse runnable
@@ -1175,7 +1195,7 @@ diagnostic names every replaced op label. An armed selector that fired on zero s
 the capture unreplaced and runnable; analysis-level saves of intervened captures remain
 allowed, and the intervention spec itself stays separately saveable.
 
-`buffer_sink_routing_mutable` (D18; PROVISIONAL SPELLING, documented-unstable pending
+`buffer_sink_routing_unsupported` (D18; PROVISIONAL SPELLING, documented-unstable pending
 naming ratification) is the LIVE refresh projector's mode-aware buffer-sink routing
 refusal (`BufferSinkRoutingError`, stage `refresh_buffer_sink_routing`), raised on the
 default `run()` / `save_new_outs` path by all four typed arms of one closed rule --
@@ -1197,14 +1217,14 @@ graph changed" term. The generic (untyped) graph-signature arm is unchanged and
 carries no D18 obligation. The fast tier's mode-aware `fast_state_static_guard` and
 the loaded-sparse buffer-write attestation downgrade are untouched by this code.
 
-`collective_boundary_runnable_unsupported` (merge-ranks tier b) is both a SAVE-time producer
+`collective_boundary_unsupported` (merge-ranks tier b) is both a SAVE-time producer
 refusal (stage `producer_collective_boundary`) and the forward-replay validation refusal
 (`CollectiveBoundaryReplayError`) for a rank-local trace whose taken path crosses a collective
 boundary node: a collective cannot be replayed single-device -- re-issuing it outside its
 communicator hangs or fabricates peer-dependent values. Metadata invariants remain available on
 such traces; cross-rank merging (merge-ranks tier c) is the supported replay story.
 
-`input_arity_extra` (r43, corr1_1) is raised when a loaded sparse `.run()` call carries MORE
+`input_arity_mismatch` (r43, corr1_1) is raised when a loaded sparse `.run()` call carries MORE
 top-level positional/keyword input sites than the capture recorded: the descriptor encodes a
 finite concrete site set (even for Python variadic signatures), so an extra runtime argument is
 outside the recorded taken path and must never report `verified`.
@@ -1266,11 +1286,39 @@ free_1): before the taken-path DAG executes, every recorded op-output slot (role
 and `output`) is compared **per slot** against the identical never-under-estimating live budget,
 and a single recorded output larger than the whole device budget is refused typed before it can
 allocate. It is compared ADDITIONALLY as a per-device **retention floor** (r59, detection stage
-`run_retention_preflight`): loaded-sparse replay retains a materialized clone of every taken-path
-op output (one `Op.out` clone per `(call, output_slot_id)` at bind, plus one reconstruct clone per
-model-`output` slot) for the life of the returned trace, so the SUM of recorded op-output bytes is
-a guaranteed lower bound on replay memory. A descriptor whose per-device floor exceeds the device
-budget could never complete on this host and is refused typed at `run_retention_preflight` before
+`run_retention_preflight`): loaded-sparse replay keeps every taken-path op output alive in its
+slot values until the run ends (plus an `Op.out` clone for each op the capture saved), and one
+reconstruct clone per model-`output` slot for the life of the returned trace, so one charge per
+op output plus one per model output is a guaranteed lower bound on replay memory. An op the
+capture did not save keeps no `Op.out` on the result trace. At the per-slot bound, an unsaved slot
+is admitted past the budget only when it lives on CPU (where the reader lists were measured), its
+producer is a view op (indexing, `select`, `narrow`,
+`permute`, `transpose`, `expand`, `broadcast_to`, `split`, `chunk`, `unbind`, `view` and the like),
+the projection (FakeTensor, contiguous operands from the recorded shapes, no real-kernel fallback)
+shows it aliases an operand, and every op that reads it, directly or through a version alias of it,
+is either such a view op whose outputs are proven views too or a reduction or elementwise op
+measured not to copy a stride-0 operand (`sum`, `mean`, `amax`, `amin`, `prod`, `var`, `std`,
+`add`, `mul`, `exp`, `relu`) that writes a fresh output (no `out=`, not in place) and passes literal
+arguments only in the forms it was measured with (`dim` and `keepdim` for the reductions, also
+`correction` for `var` and `std`, a scalar `other`, and `alpha` for `add`); any other literal keeps
+the full charge (`sum`, `mean` and `prod` with `dtype=` cast a full-size copy of the operand first). A view read by
+any other op (`median`, `max`, `argmax`, `mm`, `matmul`, `norm`, `unique`, `sort`, ...) keeps its
+full logical charge, because those kernels copy their operand where FakeTensor cannot see it; so
+does a view read by an `out=` or in-place op, whose real output is resized to the view's full size
+where the projection sees an alias, and every view off CPU. Admitted
+views own no storage, so the retention floor does not charge them, and they share one ceiling of
+`2**32` logical elements per run, which bounds the work of the ops that read them; past it the run
+refuses at `op_allocation_preflight` with fields `logical_elements` and `logical_element_ceiling`.
+A call producing an admitted view must pass its run-time projection: where any other call fails
+open (no size source, FakeTensor unavailable, a non-allocation projection error), it is refused at
+`op_allocation_preflight`. At bind, each realized output the run does not copy is held to the
+`2**32` rule before any consumer runs (detection stage `op_allocation_execution`, same fields), so
+a size literal inflated without its recorded slot cannot hand an unbounded view to the next op. A
+view admitted past the budget whose realized value is not on CPU is refused there too, since the
+recorded device is the file's claim. Loading refuses a version alias whose target is itself a
+version alias (`context_field_invalid`): bind writes only direct aliases, so the run's alias maps
+stay one level deep. A
+descriptor whose per-device floor exceeds the device budget could never complete on this host and is refused typed at `run_retention_preflight` before
 any call executes -- closing the accumulation seam (r58 free_1/free_2) where many honest,
 individually-feasible output slots together exhaust the host, each passing the per-slot bound and
 each clone passing its per-clone byte guard. A long trace with many small outputs is still never
@@ -1319,7 +1367,7 @@ only newly materialized tensors are charged -- by construction, not an op/view l
 output storage is charged (fail-closed: an unreadable materializer never masquerades as a view). A
 call whose numeric literal drives a coupled-shape validation (`fold` `output_size`) fails the
 projection open, but the real op raises its own consistency check before allocating -- caught as
-`runtime_signature_drift`, never an allocation bomb. The allocation invariant
+`runtime_signature_mismatch`, never an allocation bomb. The allocation invariant
 thus covers literal sizes, tensor slots, output slots, and staged state uniformly, before allocation:
 the fake-tensor projection is the primary per-call layer and the run-preparation output-slot bound is
 its fail-open fallback.
@@ -1371,7 +1419,7 @@ strictly less than the real op, so a projection that cannot even fake-project is
 call's identical prelude dies too, and failing open just runs the death twice. Every OTHER projection
 failure keeps today's fail-open. Symmetrically, an allocation-classed exception from the REAL call
 raises `run_capability_unavailable` at detection stage `op_allocation_execution` (never a misleading
-`runtime_signature_drift`) -- an allocator death is a capability fact, not signature drift. Both are
+`runtime_signature_mismatch`) -- an allocator death is a capability fact, not signature drift. Both are
 re-typings of already-failing paths; neither can refuse a completable run. Together these gates close
 the allocation-DoS class as a WHOLE -- output-count blindness (r58 free_1), the re-materialization /
 bind-clone seam (r58 free_2), and the honest-slot accumulation seam are all CLOSED, not patched
@@ -1382,10 +1430,10 @@ frame before the first `__torch_dispatch__`); it cannot allocate past the gates 
 in a typed refusal, so cumulative-projected-bytes, projection-step, and wall-clock bounds are
 DIAGNOSTIC-ONLY and never hard refusals (a legit deep model or slow-CI host would otherwise false-refuse).
 
-`callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
-but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent
+`callable_unresolved` is a successful alias diagnostic. `runtime_signature_mismatch` rolls back
+but is compatibility failure, not path divergence. `semantic_mismatch` comes only from the independent
 live-model oracle and never rebaselines an artifact. A malformed `torch.device(...)` literal
-payload raises `RunPreconditionError` (`unsupported_literal`) at decode -- every branch of the
+payload raises `RunPreconditionError` (`literal_unsupported`) at decode -- every branch of the
 torch-symbol decoder is typed (r41 secC); a malformed device qualname additionally refuses at
 descriptor parse and degrades the load to analysis-only per the corr2_3 disposition.
 
@@ -1431,7 +1479,7 @@ Exception classes are `RunnableTLSPECError(TorchLensError)`,
 `RunPreconditionError(ConfigurationError, ValueError)`,
 `RuntimeSignatureDriftError(CompatibilityError, RuntimeError)`,
 `PathDivergenceError(ValidationError, RuntimeError, ValueError)`,
-`NumericAttestationError(ValidationError, RuntimeError)`,
+`ReplayValueMismatchError(ValidationError, RuntimeError)`,
 `PoisonedRunError(ValidationError, RuntimeError)`, and
 `SparseCorePayloadError(ValidationError, AssertionError)`. Each also subclasses
 `RunnableTLSPECError`. The machine code is in its diagnostic/report; exception text is not a
@@ -1439,7 +1487,7 @@ compatibility surface.
 
 `SparseCorePayloadError` (r25-2) is the value-free sparse-core tripwire class raised by
 `assert_sparse_core_has_no_tensor_payload` with
-`fields["code"] == "sparse_core_tensor_payload"` and the dotted payload path on
+`fields["code"] == "sparse_core_payload_invalid"` and the dotted payload path on
 `fields["payload_path"]`. `AssertionError` stays in its MRO deliberately: the tripwire's
 historical raise class was a bare `AssertionError`, so existing `except AssertionError`
 callers keep working while new callers branch on the stable code.
@@ -1525,7 +1573,11 @@ the C4 certified-fresh vocabulary is not yet shipped, so any candidate skip disc
 declared-state mutations on the live model. The DEFAULT live run brackets execution with a
 declared-state snapshot-restore (named parameters plus every registered buffer, one clone and
 one restore per alias group with `a is b` preserved, restore in `finally` on every path), so
-repeated `run()` calls leave the model bit-identical and report `False`. The snapshot is taken
+repeated `run()` calls leave the model bit-identical and report `False`. The restore writes back
+only the slots whose bytes changed, so the version counters of parameters and buffers the forward
+left untouched stay put and `backward()` through the default run's graph-attached activations
+works without `carry_state=True` (an unconditional write-back bumped every counter autograd had
+saved and raised torch's in-place modification error). The snapshot is taken
 and validated BEFORE any forward runs: enumeration failure, an unprovable or overlapping alias
 topology, and a clone/allocation failure each refuse typed (`run_state_snapshot_unsupported`,
 fail-before-execute). A restore that fails AFTER execution poisons the transactional fork,
@@ -1563,7 +1615,7 @@ def run(
     *,
     seed: int | None = None,
     fast: bool = False,
-    on_divergence: DivergencePolicy = DivergencePolicy.RAISE,
+    on_divergence: DivergencePolicy = "raise",
 ) -> RunResult: ...
 
 def load_state_dict(self, sd: Mapping[str, Any]) -> None: ...
@@ -1602,7 +1654,7 @@ input shape/dtype, and saved plus model-output structure/shape/dtype on every ca
 change that alters the name sequence, count, shape, or dtype at a requested site cannot be silently
 relabelled as the captured activation: those mismatches raise `PathDivergenceError`. Subject to the
 caller's assertion that unsaved internals remain static, unchanged requested-site observables retain
-their captured labels. `return_diverged` is unavailable in fast mode. Fast iterations
+their captured labels. `on_divergence="return"` is unavailable in fast mode. Fast iterations
 deliberately reuse one result Trace in place, so callers needing immutable per-example results must
 copy the selected tensors. Cleanup removes the cached hooks/session. An explicit `seed` reseeds the
 native call; omitting it leaves native ambient RNG behavior intact.
@@ -1639,7 +1691,7 @@ persistence/trainability, and alias coherence are verified. Missing, unexpected,
 module mismatches and alias conflicts are errors. Positional/shape-only matching is forbidden.
 Strict staging never silently random-fills a missing key. Intermediates are never initialized.
 
-`tl.save(trace, path, level="runnable", include_weights=True)` is the confirmed Stage 7 spelling.
+`trace.save(path, level="runnable", include_weights=True)` is the confirmed Stage 7 spelling.
 The default is false and writes no weight entries. When true, load decodes the schema-versioned
 weight family and validates it atomically through this same strict contract before returning the
 Trace. A run that uses it reports `embedded_capture_state` with no random-filled slots. Explicitly
@@ -1651,7 +1703,7 @@ capture-selected retained `out`/`transformed_out` payloads plus slot membership 
 Load exposes immutable records through `Trace.archived_activations` for offline inspection. The
 scheduler never reads them. Original-input runs with embedded or byte-equivalent staged capture
 state compare freshly recomputed raw saved slots against the archive before exposure and report
-`attested`; first mismatch is `numeric_attestation_failed` and rolls back. Changed-input,
+`attested`; first mismatch is `replay_value_mismatch` and rolls back. Changed-input,
 random-state, and non-equivalent-state runs report `not_applicable`.
 
 ## 10. N1-a initializer and seed
@@ -1723,12 +1775,12 @@ complete witnesses. `diverged` means an observed contradiction. `unverifiable` m
 without contradiction but incomplete witnesses. No mismatch alone never promotes to verified.
 
 Default `on_divergence=raise` stops at first contradiction, rolls back all updates, and raises
-`PathDivergenceError`. The only opt-in is `return_diverged`: it may finish the recorded schedule but
+`PathDivergenceError`. The only opt-in is `on_divergence="return"`: it may finish the recorded schedule but
 returns a permanently, monotonically poisoned result/Trace. Contradiction is diverged; incomplete
 proof is unverifiable; both have `poisoned=true`. The mark cannot be cleared by another run.
 
 Validation, runnable export, faithful comparison, path-assuming intervention chaining, and any
-model-faithful presentation reject poison with `PoisonedRunError`/`poisoned_run_refused`. The LIVE
+model-faithful presentation reject poison with `PoisonedRunError`/`poisoned_run_unsupported`. The LIVE
 refresh provider finalizes through the SAME spine as the sparse provider (r37 corr2-5): the
 monotonic Trace path-status mark, the shared divergence-policy enforcement (with `on_divergence`
 threaded from the public `run` surface), and the one report finalizer whose `poisoned` flag is
@@ -1739,10 +1791,10 @@ There are exactly two independent reproduction oracles:
 
 1. Load original state, supply original input, and compare sparse output/intermediates to a separate
    live-model run. References are runtime/test inputs, never sparse payload. Contract-compatible
-   disagreement is `semantic_drift`.
+   disagreement is `semantic_mismatch`.
 2. When activation payload exists, original-input plus embedded/equivalent real state compares every
    saved selected activation byte-exactly before exposure. First mismatch is
-   `numeric_attestation_failed`, identifies slot/call/digest, and rolls back. Blobs never seed run.
+   `replay_value_mismatch`, identifies slot/call/digest, and rolls back. Blobs never seed run.
 
 Changed-input/random-state activation runs and sparse-only runs are `not_applicable`; no sparse run
 silently claims a numeric pass. Unsaved slots have no numeric claim. Sparse-only promises
@@ -2272,8 +2324,8 @@ arm, loop predicate, tensor-derived scalar witness) whose source is tainted ceil
 `unverifiable` -- including a family op whose control-driving chain was orphan-pruned from the
 descriptor, which the producer records through the pruned-nondeterministic-control side table;
 an archived activation or output slot reached by taint makes numeric attestation
-`not_applicable` upfront (never a contradictory `numeric_attestation_failed`); a byte mismatch
-on an UNTAINTED slot still raises `numeric_attestation_failed`. A tainted value that reaches
+`not_applicable` upfront (never a contradictory `replay_value_mismatch`); a byte mismatch
+on an UNTAINTED slot still raises `replay_value_mismatch`. A tainted value that reaches
 only the model output leaves path faithfulness `verified` (path-only) and is declared through
 `RunReport.nondeterministic_sources`. Escape attribution treats `uninitialized_alloc` origins
 as unattributable (fail-closed), like raw seeded-RNG output.
@@ -2370,7 +2422,7 @@ Loaded sparse `.run(inputs=...)` must match the captured top-level model input s
 Extra positional arguments or keyword arguments not present in the captured site set are observed
 input-tree contradictions and cannot be ignored or reported `verified`, including for captures of
 Python variadic signatures whose recorded taken path contains only a finite concrete site set
-(`INPUT_ARITY_EXTRA`; default policy raises `PathDivergenceError`, `return_diverged` returns
+(`INPUT_ARITY_EXTRA`; default policy raises `PathDivergenceError`, `on_divergence="return"` returns
 `diverged`). Dataclass model-input containers are traversed by declared fields using the same
 tensor/non-tensor leaf vocabulary as tuples, mappings, and namedtuples; a tensor-only dataclass is
 fully witnessable (`verified`, attestation-eligible), while a genuinely-opaque dataclass field still
@@ -2398,7 +2450,7 @@ exists, which a source meta-test pins.
 ### Three-valued input alias topology
 
 Runtime input aliasing against the de-aliased capture is judged by ONE shared three-valued
-touched-byte engine (`torchlens.utils.alias_footprint`, r37 INV-2 (split out of tensor_utils in e11dd787)): identity (`a is b`) and PROVED
+touched-byte engine (`torchlens._utils.alias_footprint`, r37 INV-2 (split out of tensor_utils in e11dd787)): identity (`a is b`) and PROVED
 overlap of recorded-disjoint inputs are observed contradictions (`diverged`); PROVED disjointness
 passes; anything unproven is `unknown`, which adds the `input_alias_topology_unresolved` ceiling
 -- `unverifiable` path, `not_applicable` attestation -- never `overlap` by assumption and never
@@ -2446,7 +2498,7 @@ contract); environment identity (CPU ISA dispatch, library builds, GPU architect
 allocator) -- attestation is same-environment by contract; CUDA stream identity (inert for a
 serially replayed DAG); and autotuner cache state (subsumed by the `cudnn.benchmark` positive
 ineligibility marking). Where one of these residuals changes bytes, the byte-exact attestation
-tripwire fails loud (`numeric_attestation_failed`), never falsely `attested`.
+tripwire fails loud (`replay_value_mismatch`), never falsely `attested`.
 
 ### Threat-model scope: coherent reauthoring is out of contract scope (r71)
 
@@ -2484,9 +2536,9 @@ and reported `verified` with different numbers while three other persisted field
 records for the same op, INSIDE the resolver's success sink -- so it fires ONLY for a registry
 key that resolves to a real, signature-compatible callable (the threat: a swap between two
 valid ops that would otherwise silently run), and a definite disagreement refuses
-`semantic_drift` (analysis-only, diagnostic intact, aggregate `ReattachError` on `.run()`). An
+`semantic_mismatch` (analysis-only, diagnostic intact, aggregate `ReattachError` on `.run()`). An
 UNRESOLVABLE or signature-incompatible key never reaches the reconciliation -- it keeps the
-resolver's own richer `unresolved_qualname`/`callable_removed`/`signature_drift` readiness and
+resolver's own richer `qualname_unresolved`/`callable_unavailable`/`signature_mismatch` readiness and
 `ReattachError`, undisturbed. This is defence in depth against artifact CORRUPTION and partial
 rewrites -- an attacker gains nothing, since capturing the wrong program honestly is the
 in-scope coherent-reauthoring endpoint above. The attestation
@@ -2554,7 +2606,7 @@ run; `wrap_torch(completeness_witness=True)` arms it for every capture; the spar
 save-time census runs it) — observable writes are caught by whole-storage byte comparison (including
 per-consumption sampling), and the only unobservable surface (a raw `data_ptr()` pointer) fails
 closed to `unverifiable`. The DEFAULT live `run()` provider does NOT arm the witness: a default
-capture whose forward wrote through such an alias carries `capture_verified=None` (not recorded,
+capture whose forward wrote through such an alias carries `capture_verified=None` (not checked,
 never a clean bill), its parent/child payloads may disagree, and the live refresh can still settle
 `verified` under oracle 1 (the fresh forward IS the model) while `tl.validate(scope="forward")`
 and the loaded-sparse provider catch the contradiction. Read `capture_verified=None` as "no
@@ -2589,7 +2641,7 @@ authority -- moves embedded capture state, staged user state, and required non-p
 buffers to their recorded slot devices, once per shared value (alias groups keep one allocation),
 preserving dtype and `requires_grad`, publishing nothing on failure. A post-staging
 in-transaction `state_device` tripwire catches a broken staging hook typed -- never a mid-call
-`runtime_signature_drift`. Defensive run clones MIRROR fidelity: runtime input clones restore
+`runtime_signature_mismatch`. Defensive run clones MIRROR fidelity: runtime input clones restore
 the live leaf's `requires_grad` (the recorded grad context stays semantically live and the exact
 original input remains attestation-eligible; an intentionally changed flag stays a physical
 input change -> `not_applicable`), while state clones restore the RECORDED per-slot trainable
@@ -2760,7 +2812,7 @@ Documented residual (locked r67): on pre-guard-era supported torch, the user's O
 actual return and adds no compatibility branch and no speculative second read.
 
 Every state-metadata row carries exactly one disposition from the CLOSED four-class
-oracle-policy vocabulary (`STATE_METADATA_ORACLE_POLICY` in `torchlens._runnable_state`,
+oracle-policy vocabulary (`STATE_METADATA_ORACLE_POLICY` in `torchlens._runnable.state`,
 r67 C4), and producer checks, signatures, staging tripwires, and diagnostics consume the SAME
 rows:
 
@@ -2928,7 +2980,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   `ModelOutput` whose contract the capture did not persist -- since W051-CAPT2 the final-output
   `ContainerSpec` is registered on EVERY capture, so this arm is reachable only from artifacts
   written before that change; the remedy still names
-  `CaptureOptions(capture_container_structure=True)`, which `intervention_ready=True` implies, or
+  `CaptureOptions(capture_container_structure=True)`, which `replayable=True` implies, or
   returning a bare tensor), `opaque_leaf` (a declared container carrying a tensor-holding object the
   contract cannot rebuild, e.g. a HuggingFace `DynamicCache` under `past_key_values` -- pass
   `use_cache=False` / `return_dict=False` or wrap the model to return the logits tensor; the
@@ -2941,7 +2993,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   refusal (value-dependent control flow took another branch) is a PATH DIVERGENCE on the live
   provider: it settles through the shared divergence-policy spine with code
   `call_structure_mismatch` (`details["reason"] == "refresh_graph_changed"`, stage
-  `refresh_graph_signature`). `on_divergence=return_diverged` returns the poisoned `diverged`
+  `refresh_graph_signature`). `on_divergence="return"` returns the poisoned `diverged`
   result through the one finalizer (`output` is `None`: no faithful refreshed output exists; the
   returned fork retains the SOURCE capture's values under the poison mark). The default `raise`
   carries `fields["code"]`, `["path_faithfulness"]`, `["first_mismatch"]`, `["contract_check"]`,
@@ -2958,7 +3010,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   `set`/`frozenset`/custom container (which yields the same "one leaf, no spec, no path" signature)
   is therefore NOT blessed a bare tensor: it returns the best-effort value with a failed
   `live_output_reconstruction` check -> `unverifiable` + poison, never `verified`. The sparse
-  producer refuses the same outputs at save (`missing_output_container_contract`); the parity
+  producer refuses the same outputs at save (`output_container_contract_missing`); the parity
   matrix asserts an identical verdict CLASS across both providers.
 - **Descriptorless payload degradation (corr2_3).** ONE structural disposition governs every
   runnable payload family (weights, non-persistent buffers, archived activations, and any future
@@ -2971,7 +3023,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   (`provider == loaded_analysis`) carrying STRAY runnable blobs still hard-fails.
 - **Divergence-aware call raise (corr2_4).** Shape/dtype/device input checks stay SOFT so an
   EXECUTABLE divergent input (a changed batch dimension) returns `diverged` + poison under
-  `return_diverged`. But an admitted-but-INEXECUTABLE divergent input (a wrong feature shape that
+  `on_divergence="return"`. But an admitted-but-INEXECUTABLE divergent input (a wrong feature shape that
   fails the native call) surfaces as `PathDivergenceError` carrying the first-failed input check --
   NOT `RuntimeSignatureDriftError`, which stays reserved for genuine resolved-callable / torch-version
   drift with all input checks passing. Both policies roll back the transactional fork. The live
@@ -2982,7 +3034,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
 
 ## 12. Optional-payload API spelling and docs lockstep
 
-`include_weights` and `include_activations` are confirmed on `tl.save`/`Trace.save` with
+`include_weights` and `include_activations` are confirmed on `Trace.save`/`Trace.save` with
 `level="runnable"`. Both default false and are independent. Weights mean the full `state_dict`
 (named parameters plus persistent buffers), not only trainable weights. Activations mean exactly the
 already-retained capture-time `save=` selection, not a second selector.
@@ -2996,7 +3048,7 @@ class body (including class-level constants), `__init__`/`forward` source, docst
 kept by default. Because it is a shareable artifact, this disclosure is explicit: a default save
 ships the model source.
 
-`include_source: bool = True` on `tl.save`/`Trace.save` is the opt-out. It applies at **every** save
+`include_source: bool = True` on `Trace.save`/`Trace.save` is the opt-out. It applies at **every** save
 `level` (audit, executable_with_callables, portable, runnable) because the source blob and
 `code_context` are backend-neutral metadata scrubbed on the one shared serialization path.
 
@@ -3020,15 +3072,15 @@ Model preparation harvests every public, non-callable module instance attribute 
 `Module.custom_attributes`, and portable saves persist the whole channel by default -- arbitrary
 user values (config scalars, but equally tokens, host paths, usernames, or large containers a
 module happens to hold as public attributes) ship in the shareable artifact.
-`include_custom_attributes: bool = True` on `tl.save`/`Trace.save` is the opt-out: `False` drops
+`include_custom_attributes: bool = True` on `Trace.save`/`Trace.save` is the opt-out: `False` drops
 the entire channel from the artifact (the live `Trace` is untouched). Values are NEVER rewritten
 or partially scrubbed -- the channel ships verbatim or not at all, because a save that silently
 mutates documented metadata values is worse than the disclosure problem it would paper over.
 Every save writes a `custom_attributes_disclosure` entry in `manifest.json` naming the channel:
-the effective `included` flag, the count of modules carrying attributes, and the bounded sorted
+the effective `is_included` flag, the count of modules carrying attributes, and the bounded sorted
 union of top-level key names (names only, never values). Sparse runnable cores always drop the
 field regardless of the flag (it is in the sparse DROP set), and their disclosure records
-`included: false`.
+`is_included: false`.
 
 ### Captured pre-forward buffer values and `include_buffer_values` (privacy disclosure)
 
@@ -3037,10 +3089,10 @@ caches), capture records the value the buffer held BEFORE the forward in
 `Trace._buffer_initial_values`, and every save level -- audit included -- shipped those tensors
 verbatim with no flag, warning, or manifest row. Buffer values are training-data-derived state,
 so the channel gets the same belt as custom attributes: `include_buffer_values: bool = True` on
-`tl.save`/`Trace.save` (and `tl.to_disk` for streaming) is the opt-out; `False` drops the entire
+`Trace.save`/`Trace.save` (and `tl.to_disk` for streaming) is the opt-out; `False` drops the entire
 channel from the artifact, values are never rewritten or partially scrubbed, and the live `Trace`
 is untouched. Every save writes a `buffer_values_disclosure` entry in `manifest.json` (the
-effective `included` flag, `buffer_count`, and the bounded sorted `buffer_names` -- names only,
+effective `is_included` flag, `buffer_count`, and the bounded sorted `buffer_names` -- names only,
 never values), and a save that actually embeds captured buffer values warns the saver. Sparse
 runnable cores always drop the field regardless of the flag; used non-persistent buffers ship
 there separately as the REQUIRED, independently disclosed `runnable_nonpersistent_buffer_v1`
@@ -3062,7 +3114,7 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
 - `non_tensor_args_tensor_slots_and_context_v2` -- the call recipe introduced by this
   amendment, carrying the REQUIRED `CallExecutionContext` per call. SUPERSEDED: the shipped
   recipe is `non_tensor_args_tensor_slots_context_and_obligations_v3`
-  (`torchlens/runnable.py::RUNNABLE_CALL_RECIPE_VERSION`), which additionally stamps the r71
+  (`torchlens._runnable.RUNNABLE_CALL_RECIPE_VERSION`), which additionally stamps the r71
   typed witness obligations.
 - `CallExecutionContext` / `AutocastDeviceContext` -- per-call autocast (explicit disabled) and
   grad/inference mode, entered tightly around each resolved call at replay.
@@ -3087,7 +3139,7 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
   outside its closed vocabulary (section 7).
 - `CONTAINER_KIND_CAPABILITIES` (r37) -- the one per-kind output reconstruction capability table
   shared by spec construction, producer proof, and runtime recompute (section 5).
-- `tl.register_container(..., state_complete=...)` (r37) -- the explicit trusted declaration that
+- `tl.types.register_container(..., state_complete=...)` (r37) -- the explicit trusted declaration that
   a registered container's hooks round-trip all per-instance state; without it, runnable saves
   refuse instances carrying extra state.
 - `stage_state_to_slot_devices` (r37) -- the single atomic run-preparation staging authority for
@@ -3098,7 +3150,7 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
   verifies). Classified by the one closed `classify_scalar` lattice (section 2).
 - **semantic-typed scalar** (r69) -- a scalar whose TYPE identity is application semantics: any
   `enum.Enum` member or any `int`/`float`/`str`/non-stock-NumPy scalar subclass. Refuses runnable
-  save typed as `semantic_scalar_type` (through `missing_input_container_contract`); a same-value
+  save typed as `semantic_scalar_type` (through `input_container_contract_missing`); a same-value
   semantic runtime replacement for an admitted capture diverges in both directions. Never
   persisted as a type recipe.
 - **canonical mapping-key token** (r69) -- the `str | int` component produced by the ONE
@@ -3137,9 +3189,9 @@ legacy dtype-constructor and `Variable` family below), and nothing broader is ex
 
 - `FunctionRegistryKey("torch.Tensor", "__new__", "method")`, the legacy `torch.Tensor(...)`
   constructor called inside `forward`. Observable behavior: runnable save refuses typed at the
-  producer (`unsupported_literal`, detection stage `producer_literal`), because the constructor's
+  producer (`literal_unsupported`, detection stage `producer_literal`), because the constructor's
   class argument is outside the section 2 literal grammar; the resolver also keeps the raw callable
-  `unavailable` (`untrusted_custom_import`, provenance `nonforward_callable_denied`), because its
+  `unavailable` (`custom_import_untrusted`, provenance `nonforward_callable_denied`), because its
   hidden `cdata=` overload wraps a raw pointer as a tensor and would be a memory-safety hole for an
   untrusted bundle. Bound: only forwards that call the legacy constructor; analysis saves and loads
   are unaffected, and `torch.tensor(...)` / `Tensor.new(...)` stay runnable. The remedy is a

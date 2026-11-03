@@ -5,7 +5,7 @@ consumes (resolved by dataflow, never forward enumeration, never an
 architecture registry): each qualifying addition is a SPINE step whose other
 operand is the WRITER that wrote into the stream; hops across
 value-preserving ops are proposed by the shared op-kind grammar and verified
-by payload identity (``torchlens.semantic._hops``); every step carries the
+by payload identity (``torchlens._semantic._hops``); every step carries the
 op's pass-qualified label and live site key (day-one identity -- a pass-blind
 walk is silently half-wrong on a plain gpt2 forward, measured 13/25).
 
@@ -33,7 +33,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
-from ..semantic._hops import VALUE_GRAMMAR, HopRefusal, HopWalk, walk_upstream
+from .._semantic._hops import VALUE_GRAMMAR, HopRefusal, HopWalk, walk_upstream
 from ._errors import refuse
 
 __all__ = ["SpineNode", "SpineWalk", "walk_spine"]
@@ -166,7 +166,10 @@ def _reaches(trace: Any, from_label: str, target_label: str, *, limit: int = 200
 
     Bounded breadth-first search over parent edges; the bound refuses rather
     than silently truncating (a wrong reachability answer would misassign
-    spine membership).
+    spine membership). Parent edges name a single-pass op by its bare layer
+    label and a pass of a multi-pass layer pass-qualified, while
+    ``target_label`` is an op's ``label`` (always pass-qualified), so each
+    visited edge is compared through the op it resolves to.
     """
 
     seen: set[str] = set()
@@ -191,6 +194,8 @@ def _reaches(trace: Any, from_label: str, target_label: str, *, limit: int = 200
             op = trace.ops[label]
         except (KeyError, ValueError):
             continue
+        if str(getattr(op, "label", label)) == target_label:
+            return True
         frontier.extend(str(parent) for parent in (getattr(op, "parents", ()) or ()))
     return False
 

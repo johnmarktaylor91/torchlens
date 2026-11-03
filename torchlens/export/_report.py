@@ -43,12 +43,14 @@ from pathlib import Path
 from typing import Any
 
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._partial import PartialTrace
+from .._utils.display import atomic_write_text
 from ..errors._base import TorchLensWarning
-from ..utils.display import atomic_write_text
 from ._common import _static_graph_data
 
-__all__ = ["ReportOptions", "write_report"]
+__all__ = ["HtmlReportOptions", "write_report"]
 
 #: Report artifact schema identity (manifest field).
 REPORT_SCHEMA = "torchlens.report_html.v1"
@@ -66,7 +68,7 @@ _HOME = os.path.expanduser("~")
 
 
 @dataclass(frozen=True)
-class ReportOptions:
+class HtmlReportOptions:
     """Emission plumbing for the offline HTML report (C06 house pattern).
 
     The content doors (``arrays=`` / ``graph=``) stay flat keywords on
@@ -81,7 +83,7 @@ class ReportOptions:
     #: Suppress the manifest timestamp (byte-exact regeneration).
     deterministic: bool = False
     #: Optional graph-depth knob, forwarded to ``draw`` and disclosed.
-    vis_call_depth: int | None = None
+    depth: int | None = None
     #: Thumbnail site budget, enforced before payloads are written.
     max_array_sites: int = MAX_ARRAY_SITES_DEFAULT
     #: Thumbnail byte budget, enforced before payloads are written.
@@ -120,7 +122,7 @@ class _ArrayPlan:
 def _is_partial(log: Any) -> bool:
     """Whether the subject is a failed-capture PartialTrace."""
 
-    return getattr(log, "layer_logs", None) is None and hasattr(log, "raw_layers")
+    return isinstance(log, PartialTrace)
 
 
 def _intervention_sites(log: Any) -> list[tuple[str, str]]:
@@ -144,7 +146,7 @@ def _intervention_hop(log: Any, label: str) -> tuple[tuple[str, ...], tuple[str,
     try:
         op = log[label]
         intervened = bool(
-            getattr(op, "intervention_replaced", False) or getattr(op, "edge_substitutions", None)
+            getattr(op, "is_edited", False) or getattr(op, "edge_substitutions", None)
         )
         if not intervened:
             return None
@@ -172,17 +174,17 @@ def _op_labels(log: Any) -> tuple[str, ...]:
 def _selection_sites(log: Any, selection: Any) -> list[tuple[str, str]]:
     """Resolve an ``arrays=<Selection>`` value to op labels (row X15)."""
 
-    resolved = selection.resolve(log)
-    # SiteEntry rows live on ``_entries`` today (the public spelling is an
+    resolved = selection._resolve(log)
+    # Site rows live on ``_entries`` today (the public spelling is an
     # L6 naming-session item); prefer a public ``entries`` once it exists.
     entries = getattr(resolved, "entries", None) or getattr(resolved, "_entries", ()) or ()
-    site_keys = {entry.site_key for entry in entries}
+    site_keys = {entry.key for entry in entries}
     sites: list[tuple[str, str]] = []
     for label in _op_labels(log):
         op = _op_or_none(log, label)
         if op is None:
             continue
-        # SiteEntry keys are (layer_label, pass_index) pairs today; ops also
+        # Site keys are (layer_label, pass_index) pairs today; ops also
         # carry the L1 structural string -- match either spelling.
         base, _, pass_text = label.rpartition(":")
         pair = (base, int(pass_text)) if base and pass_text.isdigit() else None
@@ -209,7 +211,7 @@ def _array_plan(log: Any, arrays: Any, share_safe: bool) -> _ArrayPlan:
         ``report_arrays_invalid`` for an unrecognized ``arrays=`` value.
     """
 
-    from ..notebook.frontier import nonfinite_frontier
+    from ..report._notebook.frontier import nonfinite_frontier
 
     frontier = nonfinite_frontier(log) if not _is_partial(log) else None
     flagged_total = frontier.flagged_total if frontier else 0
@@ -227,13 +229,13 @@ def _array_plan(log: Any, arrays: Any, share_safe: bool) -> _ArrayPlan:
         ordered = frontier_labels + [lbl for lbl in flagged if lbl not in frontier_labels]
         sites = [(lbl, "flagged") for lbl in ordered] + _intervention_sites(log)
         return _ArrayPlan("flagged", tuple(sites), flagged_total, len(sites), False)
-    if hasattr(arrays, "resolve"):
+    if hasattr(arrays, "_resolve"):
         sites = _selection_sites(log, arrays)
         return _ArrayPlan("selection", tuple(sites), flagged_total, len(sites), False)
     raise InvalidArgumentError(
         f"arrays= must be 'frontier', 'flagged', 'none', or a Selection; received {arrays!r}",
         code="report_arrays_invalid",
-        remedy="pass one of the documented presets or a tl.Selection instance",
+        remedy="pass one of the documented presets or a tl.Selector instance",
     )
 
 
@@ -293,11 +295,12 @@ def _site_tensor(log: Any, label: str) -> Any | None:
 def _site_render(tensor: Any) -> tuple[str | None, str | None]:
     """Stats line + thumbnail grid for one payload, degrade-safe."""
 
-    from ..notebook._grid import GridBudgets, array_grid_html
+    from ..report._notebook._grid import GridBudgets, array_grid_html
 
     line: str | None = None
     try:
-        from ..stats import render_core_line, tensor_stats
+        from ..stats import tensor_stats
+        from ..stats._stats_render import render_core_line
 
         line = render_core_line(tensor_stats(tensor))
     except Exception:  # noqa: BLE001 - the grid may still render
@@ -330,7 +333,7 @@ def _graph_section(log: Any, graph: str, vis_call_depth: int | None) -> tuple[st
             '<div id="tl-graph-wrap" class="tl-report-graph">'
             f'<div id="tl-graph-inner">{svg}</div></div>'
             f'<div class="tl-report-stats">graph: real layout, collapse={collapse!r}'
-            + (f", vis_call_depth={vis_call_depth}" if vis_call_depth is not None else "")
+            + (f", depth={vis_call_depth}" if vis_call_depth is not None else "")
             + "</div>"
         )
         return html, facts
@@ -339,7 +342,7 @@ def _graph_section(log: Any, graph: str, vis_call_depth: int | None) -> tuple[st
         TorchLensWarning(
             "the report could not embed the real graph layout and fell back to "
             "the labeled schematic canvas. "
-            "Remedy: install Graphviz, or reduce the graph with vis_call_depth/"
+            "Remedy: install Graphviz, or reduce the graph with depth/"
             "module focus and re-export",
             code="report_graph_fallback",
         ),
@@ -378,12 +381,11 @@ def _draw_svg(log: Any, collapse: str, vis_call_depth: int | None) -> str | None
             outpath = os.path.join(tmp, "graph")
             kwargs: dict[str, Any] = {
                 "collapse": collapse,
-                "vis_save_only": True,
-                "vis_outpath": outpath,
-                "vis_fileformat": "svg",
+                "path": outpath,
+                "file_format": "svg",
             }
             if vis_call_depth is not None:
-                kwargs["vis_call_depth"] = vis_call_depth
+                kwargs["depth"] = vis_call_depth
             log.draw(**kwargs)
             svg_text = Path(f"{outpath}.svg").read_text(encoding="utf-8")
     except Exception:  # noqa: BLE001 - the ladder decides what happens next
@@ -492,7 +494,7 @@ def _banner(log: Any, plan: _ArrayPlan) -> str:
     """Sticky identity + outcome banner; embed disclosure is mandatory."""
 
     kind = "PartialTrace (FAILED CAPTURE)" if _is_partial(log) else "Trace"
-    title = str(getattr(log, "trace_label", None) or getattr(log, "model_label", None) or kind)
+    title = str(getattr(log, "name", None) or getattr(log, "model_name", None) or kind)
     status = getattr(getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN")
     if plan.stripped:
         embed_note = "share_safe: every embedded value stripped"
@@ -558,7 +560,7 @@ def write_report(
     *,
     arrays: Any = "frontier",
     graph: str = "collapsed",
-    options: ReportOptions | None = None,
+    options: HtmlReportOptions | None = None,
 ) -> Path:
     """Write the single-file offline HTML report for one capture.
 
@@ -572,12 +574,12 @@ def write_report(
         Destination ``.html`` path.
     arrays:
         ``"frontier"`` (default) / ``"flagged"`` / ``"none"`` / a
-        ``tl.Selection``.
+        ``tl.Selector``.
     graph:
         ``"collapsed"`` (default: module-collapsed real graph, depth
         disclosed) / ``"flat"`` / ``"none"``.
     options:
-        Emission plumbing (``ReportOptions``): redaction, byte-stability,
+        Emission plumbing (``HtmlReportOptions``): redaction, byte-stability,
         renderer depth, thumbnail budgets.
 
     Returns
@@ -586,10 +588,10 @@ def write_report(
         The written report path.
     """
 
-    opts = options if options is not None else ReportOptions()
+    opts = options if options is not None else HtmlReportOptions()
     share_safe = opts.share_safe
     deterministic = opts.deterministic
-    vis_call_depth = opts.vis_call_depth
+    vis_call_depth = opts.depth
     max_array_sites = opts.max_array_sites
     max_array_bytes = opts.max_array_bytes
     destination = Path(path)
@@ -637,7 +639,7 @@ def write_report(
         f"<pre>{escape(_scrub(_safe_json(manifest)))}</pre></details></section>"
     )
 
-    title = escape(_scrub(str(getattr(log, "model_label", None) or "TorchLens report")))
+    title = escape(_scrub(str(getattr(log, "model_name", None) or "TorchLens report")))
     document = (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         + _CSP_META
@@ -655,8 +657,8 @@ def write_report(
 def _partial_body(log: Any) -> str:
     """Failure-first body for a PartialTrace report."""
 
-    from ..notebook.cards import partial_trace_card
-    from ..notebook.cardtree import render_card_html
+    from ..report._notebook.cards import partial_trace_card
+    from ..report._notebook.cardtree import render_card_html
 
     try:
         card = render_card_html(partial_trace_card(log), include_css=True)
@@ -690,15 +692,15 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
         # getattr spelling: the layer lint's torch-privates text scan would
         # otherwise match the dunder attribute access as a private touch.
         "torch_version": getattr(torch, "__version__", "unknown"),
-        "model": _scrub(str(getattr(log, "model_label", "unknown"))),
-        "backend": str(getattr(log, "backend", "unknown")),
+        "model": _scrub(str(getattr(log, "model_name", "unknown"))),
+        "backend": str(log._provenance_backend if is_live_trace(log) else "unknown"),
         "outcome": getattr(
             getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN"
         ),
         "counts": {
-            "ops": getattr(log, "num_ops", None),
-            "saved_ops": getattr(log, "num_saved_ops", None),
-            "modules": getattr(log, "num_modules", None),
+            "ops": None if _is_partial(log) else log._num_ops,
+            "saved_ops": len(log.saved_ops) if hasattr(log, "saved_ops") else None,
+            "modules": len(log.modules) if hasattr(log, "modules") else None,
         },
         "arrays": {
             "mode": plan.mode,

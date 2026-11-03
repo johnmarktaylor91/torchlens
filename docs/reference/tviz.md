@@ -1,6 +1,6 @@
-# Transformer pictures (`torchlens.tviz`)
+# Transformer pictures (`torchlens.transformer`)
 
-`torchlens.tviz` renders the transformer-visualization picture families --
+`torchlens.transformer` renders the transformer-visualization picture families --
 token-labeled attention heatmaps and grids, the attention atlas, colored-token
 strips, logit-lens prediction pictures, per-token loss/entropy strips, the
 term-complete score decomposition -- plus the one picture the dormant
@@ -8,7 +8,7 @@ incumbents (CircuitsVis, BertViz, Ecco, inspectus) never shipped: attention
 annotated with **measured** ablation effects.
 
 Every spelling is DOCUMENTED-UNSTABLE pending the naming session. Import as
-`import torchlens.tviz` (the root-name budget is frozen; a root spelling
+`import torchlens.transformer` (the root-name budget is frozen; a root spelling
 awaits the registration sweep). Display records are session-only values and
 are never persisted into `.tlspec` artifacts.
 
@@ -44,7 +44,7 @@ and the CircuitsVis bridge without re-derivation:
 | `TokenMetrics` | per-token loss / per-context entropy strips |
 | `ScoreDecomposition` | the BertViz neuron-view data (term-complete) |
 | `CausalReceipt` / `Annotation` | measured-effect attachment (closed 4-kind grammar) |
-| `Artifact` | every save's result: paths + every rendered disclosure line |
+| `SavedFigure` | every save's result: paths + every rendered disclosure line |
 
 Attention semantics are fixed and printed: canonical
 `[query_head, destination_query, source_key]` layout, "rows attend from
@@ -66,29 +66,33 @@ exact wording "zero and masked positions are not distinguished".
 
 ```python
 import torchlens as tl
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 
 log = tl.trace(model, input_ids)  # eager attention captures the real pattern
 views = tviz.attention_views(log, tokens=tokens)
 
-tviz.render_attention(views[0], "layer0.pdf")            # per-head grid, paged
-tviz.render_attention(views[0].head_view(9), "h9.svg")   # one square panel
-tviz.render_attention_atlas(views, "atlas.pdf")           # overview + detail pages
+tl.viz.attention(views[0], "layer0.pdf")            # per-head grid, paged
+tl.viz.attention(views[0].head_view(9), "h9.svg")   # one square panel
+tl.viz.attention_atlas(views, "atlas.pdf")           # overview + detail pages
 
 # Streaming lens pictures (probabilities always full-vocabulary denominator)
-from torchlens.semantic.logit_lens import logit_lens_predictions
+from torchlens._semantic.logit_lens import logit_lens_predictions
 preds = logit_lens_predictions(log, tokens=[answer_id])
 traj = tviz.prediction_trajectory(preds, tokenizer=tok, target_token_id=answer_id)
 tviz.render_prediction_ribbon(traj, "ribbon.pdf")
 tviz.render_answer_trajectory(traj, "answer.pdf")
 
+# Layers-by-positions heatmap over the full logit-lens result
+from torchlens._semantic.logit_lens import logit_lens
+tl.viz.logit_lens(logit_lens(log), "lens.pdf", tokens=tokens, tokenizer=tok)
+
 # Loss + entropy strips from ONE logits source (alignment proof travels)
 loss, entropy = tviz.token_metrics(logits, input_ids[0], token_strings)
-tviz.render_metric_strip(loss, "loss.pdf")
+tl.viz.metric_strip(loss, "loss.pdf")
 
 # Colored tokens from the attribution kit's payload
 scores = tviz.TokenScores.from_attribution(result.payload())
-tviz.render_token_strip(scores, "tokens.pdf")
+tl.viz.token_strip(scores, "tokens.pdf")
 print(tviz.token_strip_html(scores))  # zero-dependency notebook path
 ```
 
@@ -107,21 +111,68 @@ receipt = tviz.receipt_from_patch_grid(
     layer="transformer.h.0.attn",
     negative_control=neg,     # measured self-patch delta (must be ~0)
     positive_control=pos,     # measured large perturbation (must move)
-    joint_effect=joint,       # one extra run: all heads ablated together
+    joint_effect=joint,       # one extra run: all heads patched together, as a delta
 )
-tviz.render_receipt_grid(receipt, "receipts.pdf")
+tl.viz.ablation_grid(receipt, "receipts.pdf")
 ann = tviz.Annotation.from_receipt(receipt)
-tviz.render_attention(views[0], "annotated.pdf", annotation=ann)
+tl.viz.attention(views[0], "annotated.pdf", annotation=ann)
 ```
+
+A grid's `values` are the metric of each patched run. Its receipts also
+record the unpatched baselines, `grid.receipts["clean_metric"]` and
+`grid.receipts["corrupted_metric"]`. A receipt cell is an effect: the patched
+metric minus `corrupted_metric`, because every cell patches clean values into
+a corrupted rerun, so a cell that changes nothing reads `+0.00` (the same
+quantity the self-patch negative control measures). The figure's footer
+prints the baseline value, and the joint effect and both controls are deltas
+from the same run. `receipt_from_patch_grid` refuses a grid without
+`corrupted_metric` (`tv_receipt_invalid`) rather than plotting raw metric
+values. The footer's height is reserved below the matrix, so the disclosure
+lines never cover a cell or a label.
 
 The validity rules are enforced, not advisory: zero fires refuses (a hook
 that did not fire is an exception, never a number), a moved negative control
 refuses, an unmoved positive control refuses (the only check that catches
 the silent no-fire class), and the grid **figure** refuses without the
-measured joint effect -- single-head effects are not additive (measured on
+measured joint effect -- single-head effects need not be additive (measured on
 gpt2 layer 0: one head `+13.27` alone, all twelve together `-0.68`), so
 every grid prints the joint measurement beside the cell sum. Unmeasured
 cells are blank, never zero, and the figure prints "measured N of M".
+
+Under grouped-query attention a key or value site holds one tensor per KV
+group, read by several query heads, so a grid over that site
+(`mi.patch_grid(..., sites="v", axes=("layer", "head"))`) measures groups, not
+query heads. Pass the grouping and the receipt becomes a kv-group receipt:
+
+```python
+gqa = tviz.GqaInfo(num_query_heads=14, num_key_value_heads=2)
+receipt = tviz.receipt_from_patch_grid(
+    v_grid, layer="model.layers.0.self_attn", negative_control=neg,
+    positive_control=pos, joint_effect=joint, kv_groups=gqa,
+)
+receipt.sharing_lines()  # ("kv group 1 of 2, shared by query heads 0-6", ...)
+tl.viz.ablation_grid(receipt, "kv_receipts.pdf")
+```
+
+The grid labels each column `kv g` over its query-head range and prints that
+no cell is a per-query-head effect. `Annotation.from_receipt` refuses a
+kv-group receipt (`tv_annotation_invalid`): attention panels are per query
+head, and one group's effect is not any single query head's.
+
+To measure one query head at a value site, patch its own copy of the group
+with `mi.patch_query_heads_grid`. The grid counts query heads, so its
+receipt is an ordinary query-head receipt; the grid's `effect_site` becomes
+the receipt's `effect_source`, printed on the figure:
+
+```python
+q_grid = mi.patch_query_heads_grid(model, clean, corrupted, metric, site="v")
+receipt = tviz.receipt_from_patch_grid(
+    q_grid, layer="model.layers.0.self_attn", negative_control=neg,
+    positive_control=pos, joint_effect=joint,
+)
+receipt.effect_source  # "expanded value copy read by one query head (op-level interceptor)"
+ann = tviz.Annotation.from_receipt(receipt)
+```
 
 Annotation kinds are a closed set of four -- `descriptive_head_score`,
 `additive_logit_contribution`, `screening_estimate`, `intervention_effect`
@@ -180,7 +231,7 @@ recon_err = float(nmf.reconstruction_err_)
 #    factor that does not reappear across seeds is noise, not structure.
 
 # 4. Render: one strip row per factor, disclosures in the footer.
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 rows = tuple(
     tviz.TokenScoreRow(label=f"factor {k}", scores=tuple(weights[:, k].tolist()))
     for k in range(rank)
@@ -195,7 +246,7 @@ record = tviz.TokenScores(
     ),
     provenance="NMF recipe (docs/reference/tviz.md)",
 )
-tviz.render_token_strip(record, "factors.pdf")
+tl.viz.token_strip(record, "factors.pdf")
 ```
 
 The last footer line is not optional: factors are descriptive, order is
@@ -208,13 +259,14 @@ exists.
 Episode/generation views: `EpisodeCoordinates` (step / role / completion /
 member) lands on the records from day one, so per-step sheets and the
 staircase render against the episode substrate without recomputation.
-Per-query-head GQA receipts at the value site are **not measurable** (a KV
-group is shared storage); wave 1 renders the honest kv-group disclosure
-("kv group g of G, shared by query heads a-b") and the op-level interceptor
-is the wave-2 buyer.
+A value-site grid measures KV groups (a group is shared storage); kv-group
+receipts (above) render the disclosure ("kv group g of G, shared by query
+heads a-b"). Per-query-head value-site receipts come from the op-level
+interceptor (`mi.patch_query_heads_grid`, above), which patches one query
+head's expanded copy.
 
 ## Refusal codes
 
-All tviz refusals ride `torchlens.tviz.TvizError` with a stable
+All tviz refusals ride `torchlens.errors.RenderError` with a stable
 `fields["code"]`; the contract rows live in
 `docs/reference/error_refusal_contract.md`.

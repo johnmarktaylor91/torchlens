@@ -43,3 +43,15 @@ pre-hook. It prints JSON suitable for comparing revisions:
 ```bash
 PYTHONPATH=$PWD python benchmarks/prehook_provenance_overhead.py
 ```
+
+## Live-index re-seen labels
+
+`live_index_append_counters.py` counts what a re-seen raw label costs the
+`LiveIndex` (a multi-pass `Recorder` fold, a failed-partial concatenation, an
+amendment replace): full edge rebuilds, child-list operations against the old
+plus new parent count, and total Python calls per forward, with a digest of the
+index state after every pass. Counters gate; wall time is context only:
+
+```bash
+python benchmarks/live_index_append_counters.py --out live_index_counters.json
+```

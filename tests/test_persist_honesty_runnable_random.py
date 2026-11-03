@@ -18,18 +18,18 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import StateSource
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
-from torchlens.runnable import StateSource
 
 
 @pytest.fixture()
 def runnable_bundle(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     path = tmp_path / "runnable"
-    tl.save(trace, path, level="runnable")
+    trace.save(path, level="runnable")
     return path, model, x
 
 
@@ -51,9 +51,9 @@ def test_random_state_run_warns(runnable_bundle):
 def test_embedded_weights_run_does_not_warn(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     path = tmp_path / "runnable_weights"
-    tl.save(trace, path, level="runnable", include_weights=True)
+    trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

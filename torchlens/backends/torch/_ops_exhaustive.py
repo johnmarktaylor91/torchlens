@@ -5,58 +5,41 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ...capture.projections import LiveOpView
-from ...capture.stop import evaluate_halt_stop
-from ...data_classes.internal_types import FuncExecutionContext
-from ...data_classes.op import (
+from ..._capture.projections import LiveOpView
+from ..._capture.stop import evaluate_halt_stop
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._data_classes.op import (
     Op,
 )
-from ...ir.events import (
+from ..._ir.events import (
     FunctionCallRef,
 )
-from ...ir.intervention import FunctionEventInput
-from ...utils._torch_compat import (
+from ..._ir.intervention import FunctionEventInput
+from ..._utils._torch_compat import (
     saved_tensors_default_hooks_active,
 )
-from ...utils.collections import index_nested
-from ...utils.display import _timed_phase
-from ...utils.tensor_utils import (
+from ..._utils.collections import index_nested
+from ..._utils.display import _timed_phase
+from ..._utils.tensor_utils import (
     safe_copy,
 )
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     get_tensor_label,
     set_tensor_label,
 )
+from ._user_grad_fn import stamp_user_grad_fn
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
 )
-from .completeness_witness import internal_scalar_read
 from .tensor_tracking import (
     _add_tensor_backward_hook,
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        _AUTOGRAD_SAVED_ATTR_PREFIX,
-        _build_edge_use_records,
-        _build_graph_relationship_fields,
-        _build_shared_fields_dict,
-        _build_trace_predicate_context,
-        _classify_new_tensor_in_trace,
-        _log_output_tensor_info,
-        _make_layer_log_entry,
-        _module_frames_from_fields,
-        _OutputTensorEntry,
-        _partition_output_entries_with_autograd_stats,
-        _pop_tensor_live_fire_results,
-        _register_call_output_container_snapshot,
-        _should_keep_alias_mutation_contract,
-        _tag_tensor_and_track_variations,
-    )
 
 __all__ = (
     "_emit_exhaustive_operation_events",
@@ -219,11 +202,7 @@ def _emit_exhaustive_operation_events(
             # minted copy's ``CloneBackward`` is bookkeeping, not op metadata.
             live_member_grad_fn = out_tensor.grad_fn
             out_tensor = safe_copy(out_tensor)
-            if live_member_grad_fn is not None:
-                try:
-                    setattr(out_tensor, "tl_user_grad_fn", live_member_grad_fn)
-                except AttributeError:
-                    pass
+            stamp_user_grad_fn(out_tensor, live_member_grad_fn)
 
         # M7: per-output isolation is a plain dict copy. Every per-output
         # writer REASSIGNS its fields (``_log_output_tensor_info``,
@@ -267,7 +246,7 @@ def _emit_exhaustive_operation_events(
             if isinstance(samples_store, dict):
                 call_samples = samples_store.pop(f"call:{func_call_id}", None)
                 if call_samples is not None:
-                    from ...observe._device_memory import flat_field_projection
+                    from ..._observe._device_memory import flat_field_projection
 
                     samples_store[fields_dict_onetensor["_label_raw"]] = call_samples
                     delta_value, peak_value = flat_field_projection(call_samples)
@@ -295,13 +274,11 @@ def _emit_exhaustive_operation_events(
         fire_results = _pop_tensor_live_fire_results(out_tensor)
         if fire_results:
             fields_dict_onetensor["fire_results"] = fire_results
-            fields_dict_onetensor["interventions"] = [
+            fields_dict_onetensor["edits"] = [
                 result.fire_record for result in fire_results if result.fire_record is not None
             ]
-            fields_dict_onetensor["intervention_replaced"] = any(
-                result.replaced for result in fire_results
-            )
-        if getattr(self, "intervention_ready", False):
+            fields_dict_onetensor["is_edited"] = any(result.replaced for result in fire_results)
+        if getattr(self, "is_replayable", False):
             fields_dict_onetensor["_edge_uses"] = _build_edge_use_records(
                 self,
                 fields_dict_onetensor["parent_arg_positions"],
@@ -325,7 +302,7 @@ def _emit_exhaustive_operation_events(
                 fields_dict=fields_dict_onetensor,
                 t_args=arg_copies,
                 t_kwargs=kwarg_copies,
-                activation_transform=self.activation_transform,
+                activation_transform=self._options_activation_transform,
                 event_module_stack=event_module_stack,
                 call_ref_box=call_ref_box,
             ),
@@ -597,3 +574,42 @@ def _collect_tensor_values(value: Any) -> list[torch.Tensor]:
     if isinstance(value, dict):
         return [item for item in value.values() if isinstance(item, torch.Tensor)]
     return []
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_activations import (  # noqa: E402
+    _log_output_tensor_info,
+)
+from ._ops_arguments import (  # noqa: E402
+    _build_edge_use_records,
+)
+from ._ops_autograd import (  # noqa: E402
+    _partition_output_entries_with_autograd_stats,
+    _register_call_output_container_snapshot,
+)
+from ._ops_capture_records import (  # noqa: E402
+    _module_frames_from_fields,
+    _should_keep_alias_mutation_contract,
+)
+from ._ops_finalize import (  # noqa: E402
+    _make_layer_log_entry,
+)
+from ._ops_interventions import (  # noqa: E402
+    _pop_tensor_live_fire_results,
+)
+from ._ops_predicate_events import (  # noqa: E402
+    _build_graph_relationship_fields,
+)
+from ._ops_retention import (  # noqa: E402
+    _build_trace_predicate_context,
+)
+from ._ops_shared_fields import (  # noqa: E402
+    _build_shared_fields_dict,
+    _classify_new_tensor_in_trace,
+    _tag_tensor_and_track_variations,
+)
+from .ops import (  # noqa: E402
+    _AUTOGRAD_SAVED_ATTR_PREFIX,
+    _OutputTensorEntry,
+)

@@ -8,7 +8,7 @@ Covers:
 * M17 ``_non_torch_array_summary`` rejects callable ``.shape``/``.dtype``.
 * M20 ``copy_arg_tree`` cycle safety.
 * M3 ``suppress_mutate_warnings`` context-manager state restoration.
-* F9 ``CaptureOptions.from_values`` validation parity with ``__init__``.
+* F9 ``CaptureOptions._from_values`` validation parity with ``__init__``.
 """
 
 from __future__ import annotations
@@ -20,13 +20,13 @@ from typing import Any
 import pytest
 import torch
 
+from torchlens._utils import _torch_compat
+from torchlens._utils.arg_handling import copy_arg_tree
+from torchlens._utils.display import _non_torch_array_summary
 from torchlens.options import (
     CaptureOptions,
     suppress_mutate_warnings,
 )
-from torchlens.utils import _torch_compat
-from torchlens.utils.arg_handling import copy_arg_tree
-from torchlens.utils.display import _non_torch_array_summary
 
 # --------------------------------------------------------------------------- #
 # M15 -- runnable torch alias target-existence probe
@@ -271,7 +271,7 @@ def test_m3_context_suppresses_warning_body() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# F9 -- CaptureOptions.from_values validation parity
+# F9 -- CaptureOptions._from_values validation parity
 # --------------------------------------------------------------------------- #
 
 
@@ -284,27 +284,27 @@ def _capture_values(**overrides: Any) -> dict[str, Any]:
 
 
 def test_f9_from_values_rejects_bad_jax_control_flow() -> None:
-    """``from_values`` rejects an invalid ``jax_control_flow`` like ``__init__``.
+    """``_from_values`` rejects an invalid ``jax_control_flow`` like ``__init__``.
 
     Mutation-killing test: removing the ``_validate_capture_values`` call from
-    ``from_values`` makes this pass silently (no raise), failing the test.
+    ``_from_values`` makes this pass silently (no raise), failing the test.
     """
 
     with pytest.raises(ValueError, match="jax_control_flow"):
-        CaptureOptions.from_values(_capture_values(jax_control_flow="garbage"), frozenset())
+        CaptureOptions._from_values(_capture_values(jax_control_flow="garbage"), frozenset())
 
 
 def test_f9_from_values_rejects_nonpositive_unroll() -> None:
-    """``from_values`` rejects a non-positive unroll bound like ``__init__``."""
+    """``_from_values`` rejects a non-positive unroll bound like ``__init__``."""
 
     with pytest.raises(ValueError, match="jax_max_control_flow_unroll"):
-        CaptureOptions.from_values(_capture_values(jax_max_control_flow_unroll=-5), frozenset())
+        CaptureOptions._from_values(_capture_values(jax_max_control_flow_unroll=-5), frozenset())
 
 
 def test_f9_from_values_accepts_valid_values() -> None:
     """Valid resolved values still construct successfully."""
 
-    opts = CaptureOptions.from_values(
+    opts = CaptureOptions._from_values(
         _capture_values(jax_control_flow="region", jax_max_control_flow_unroll=8),
         frozenset({"jax_control_flow"}),
     )
@@ -317,7 +317,7 @@ def test_f9_flat_merge_path_validates() -> None:
 
     with pytest.raises((ValueError, TypeError)):
         CaptureOptions(jax_control_flow="garbage")
-    # The flat merge uses from_values under the hood; a bad value must not
+    # The flat merge uses _from_values under the hood; a bad value must not
     # silently construct an invalid CaptureOptions.
     with pytest.raises(ValueError):
-        CaptureOptions.from_values(_capture_values(jax_control_flow="garbage"), frozenset())
+        CaptureOptions._from_values(_capture_values(jax_control_flow="garbage"), frozenset())

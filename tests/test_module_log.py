@@ -7,7 +7,8 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens.data_classes import ModuleAccessor, ParamAccessor
+from torchlens._data_classes.module import ModuleAccessor
+from torchlens._data_classes.param import ParamAccessor
 from torchlens.types import Module, ModuleCall
 
 # ---------------------------------------------------------------------------
@@ -190,7 +191,7 @@ class TestModuleLogFields:
         log = trace_fn(
             _make_simple_model(),
             _simple_input(),
-            capture=tl.options.CaptureOptions(save_code_context=True),
+            capture=tl.options.CaptureOptions(save_source_context=True),
         )
         ml = log.modules["0"]
         assert ml.class_source_file is not None  # nn.Linear has inspectable source
@@ -237,7 +238,7 @@ class TestModuleLogFields:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         assert len(ml.layers) > 0
-        assert ml.num_layers == len(ml.layers)
+        assert len(ml.layer_labels) == len(ml.layers)
 
     def test_params_accessor(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -363,7 +364,7 @@ class TestSinglePassDelegation:
     def test_forward_args_delegates(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        # GC-11 (torchlens/postprocess/finalization.py) unconditionally nulls
+        # GC-11 (torchlens/_postprocess/finalization.py) unconditionally nulls
         # ModuleCall.forward_args/forward_kwargs after Trace construction for
         # the default "torch_module" identity mode -- the only modes GC-11
         # exempts ("pytree_module"/"object_module") are JAX/TF/MLX/paddle/
@@ -389,7 +390,7 @@ class TestSinglePassDelegation:
         ``_single_pass_or_error`` delegation mechanism, rather than trivially
         passing regardless of what the property returns.
         """
-        from torchlens.data_classes.module import Module
+        from torchlens._data_classes.module import Module
 
         def _swapped_forward_args_summary(self: Module) -> str:
             """Wrong delegation: returns kwargs summary instead of args summary."""
@@ -443,7 +444,7 @@ class TestModuleAccessorSummary:
         # (it stays None with no transform), so the single-pass-vs-multi-pass
         # None-guard assertions below are meaningful rather than trivially true.
         log = trace_fn(
-            model, input_2d, save=tl.options.SaveOptions(activation_transform=lambda x: x)
+            model, input_2d, capture=tl.options.CaptureOptions(activation_transform=lambda x: x)
         )
 
         # The whole table renders without raising.
@@ -453,7 +454,7 @@ class TestModuleAccessorSummary:
         # Root aggregates sum over ALL ops (every recurrent pass), with no
         # double-count and no miss versus a manual sum over log.ops.
         root = log.root_module
-        all_ops = list(log.ops)
+        all_ops = list(log._layer_list)
         manual_func = sum(getattr(op, "func_duration", 0.0) or 0.0 for op in all_ops)
         manual_autograd = sum(int(getattr(op, "autograd_memory", 0) or 0) for op in all_ops)
         out_label_set = set(root.calls[0].output_ops)
@@ -508,7 +509,7 @@ class TestModuleAccessorSummary:
 
         # 3) trace.modules["addr"].to_pandas() -- the per-module layer export.
         fc1_layers_df = fc1.to_pandas()
-        assert len(fc1_layers_df) == fc1.num_layers
+        assert len(fc1_layers_df) == len(fc1.layer_labels)
         fc1_layer_row = fc1_layers_df[fc1_layers_df["layer_label"] == multi_pass_labels[0]].iloc[0]
         assert fc1_layer_row["transformed_out"] is None
         assert fc1_layer_row["transformed_grad"] is None
@@ -537,7 +538,7 @@ class TestModuleLogIntegration:
     def test_root_layers_equals_model_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         root = log.root_module
-        assert root.layer_labels == [layer.layer_label for layer in log.layer_list]
+        assert root.layer_labels == [layer.layer_label for layer in log._layer_list]
 
     def test_root_params_count(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -566,18 +567,18 @@ class TestModuleLogIntegration:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         df = ml.to_pandas()
-        assert len(df) == ml.num_layers
+        assert len(df) == len(ml.layer_labels)
 
     def test_module_log_iter(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         entries = list(ml)
-        assert len(entries) == ml.num_layers
+        assert len(entries) == len(ml.layer_labels)
 
     def test_module_log_getitem(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        if ml.num_layers > 0:
+        if len(ml.layer_labels) > 0:
             entry = ml[0]
             assert entry.layer_label == ml.layer_labels[0]
 
@@ -599,8 +600,8 @@ class TestModuleLogIntegration:
         log = trace_fn(model, torch.randn(1, 3, 8, 8))
 
         block_layers = [log.modules[f"blocks.{idx}"].layer_labels for idx in range(4)]
-        block_counts = [log.modules[f"blocks.{idx}"].num_layers for idx in range(4)]
-        batchnorm_counts = [log.modules[f"blocks.{idx}.bn"].num_layers for idx in range(4)]
+        block_counts = [len(log.modules[f"blocks.{idx}"].layer_labels) for idx in range(4)]
+        batchnorm_counts = [len(log.modules[f"blocks.{idx}.bn"].layer_labels) for idx in range(4)]
 
         assert block_counts == [7, 7, 7, 7]
         assert [len(labels) for labels in block_layers] == block_counts

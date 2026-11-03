@@ -13,8 +13,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.hashing import compute_graph_shape_hash
 from torchlens.options import CaptureOptions
-from torchlens.utils.hashing import compute_graph_shape_hash
 
 HashPair = tuple[str, str]
 ModelCase = tuple[str, Callable[[], tuple[nn.Module, Any]]]
@@ -457,7 +457,7 @@ def _trace_hash_pair(model: nn.Module, example_input: Any) -> HashPair:
     """
 
     trace = _trace_model(model, example_input)
-    return str(trace.graph_shape_hash), str(trace._raw_event_shape_hash)  # noqa: SLF001
+    return str(trace.provenance.fingerprint), str(trace._raw_event_shape_hash)  # noqa: SLF001
 
 
 def _graph_hash_for_tiny_mlp(seed: int, device: str = "cpu") -> str:
@@ -572,7 +572,7 @@ def test_graph_shape_hash_matches_across_fresh_python_process() -> None:
 
         import torchlens as tl
         from torchlens.options import CaptureOptions
-        from torchlens.utils.hashing import compute_graph_shape_hash
+        from torchlens._utils.hashing import compute_graph_shape_hash
 
 
         class TinyMlp(nn.Module):
@@ -602,6 +602,7 @@ def test_graph_shape_hash_matches_across_fresh_python_process() -> None:
     assert actual_hash == expected_hash
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
 def test_graph_shape_hash_matches_between_cpu_and_cuda() -> None:
     """Graph-shape hash is device-blind for the same model topology."""
@@ -619,8 +620,8 @@ def test_graph_shape_hash_distinguishes_identical_ops_under_different_module_pac
     direct_trace = _trace_model(DirectPackingModel(), example_input)
     nested_trace = _trace_model(NestedPackingModel(), example_input)
 
-    direct_ops = [layer.func_name for layer in direct_trace.layer_list]
-    nested_ops = [layer.func_name for layer in nested_trace.layer_list]
+    direct_ops = [layer.func_name for layer in direct_trace._layer_list]
+    nested_ops = [layer.func_name for layer in nested_trace._layer_list]
 
     assert direct_ops == nested_ops
     assert compute_graph_shape_hash(direct_trace) != compute_graph_shape_hash(nested_trace)

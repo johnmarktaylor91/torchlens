@@ -17,7 +17,7 @@ from ._base import ConfigurationError, TorchLensError, ValidationError
 
 __all__ = [
     "BundleRelationError",
-    "CheckpointSeriesLiveParamsError",
+    "ParamEvidenceMissingError",
     "EpisodeCaptureError",
     "EpisodeDeclarationError",
     "EpisodeErrorCode",
@@ -64,7 +64,7 @@ class EpisodeErrorCode(str, Enum):
     #: episode-dependent claims across it (step-series reads, whole-episode
     #: replay, the blessing fold, escalation) refuse. Also the settlement
     #: refusal under the FORK-4 ``on_feed_break="refuse"`` arm (partial
-    #: evidence on ``exc.partial_log``).
+    #: evidence on ``exc.partial_trace``).
     EPISODE_FEED_BREAK_EXOGENOUS = "episode_feed_break_exogenous"
 
     #: ``feed="closed"`` was declared and an UNDECLARED crossing was
@@ -124,6 +124,26 @@ class EpisodeErrorCode(str, Enum):
     #: belong in a sidecar family, cited by digest.
     BUNDLE_RELATION_EVIDENCE_OVER_BUDGET = "bundle_relation_evidence_over_budget"
 
+    #: A ``fed_by`` span row reaches past a member's bound token stream
+    #: (harness bundles; ``fields["side"]`` names which).
+    BUNDLE_RELATION_SPAN_OUT_OF_BOUNDS = "bundle_relation_span_out_of_bounds"
+
+    #: A ``fed_by`` row claims ``basis="verified"``/``"matched"`` but its
+    #: members' retained token ids contradict it (re-checked at every door).
+    BUNDLE_RELATION_SPAN_UNVERIFIED = "bundle_relation_span_unverified"
+
+    #: ``token_spans="auto"`` lacks its evidence: no source completion range,
+    #: no reader binding, or token ids not retained.
+    BUNDLE_RELATION_AUTO_SPANS_UNAVAILABLE = "bundle_relation_auto_spans_unavailable"
+
+    #: ``token_spans="auto"`` found several placements of the source output
+    #: (a repeated quote, or a tie between two trims); declare the spans.
+    BUNDLE_RELATION_AUTO_SPANS_AMBIGUOUS = "bundle_relation_auto_spans_ambiguous"
+
+    #: ``token_spans="auto"`` found no run of the source output in the
+    #: reader's prompt, even trimmed; retokenized text needs declared spans.
+    BUNDLE_RELATION_AUTO_SPANS_UNMATCHED = "bundle_relation_auto_spans_unmatched"
+
     #: A cross-member parameter value/difference/trajectory read with no
     #: immutable capture-time parameter evidence on every member (A-CKPT).
     #: Parameter reads resolve through a live model handle (or nothing at
@@ -163,8 +183,7 @@ class EpisodeJoinError(EpisodeCaptureError, ValidationError, RuntimeError):
     ``episode_join_unmeasured``, or ``episode_join_declared_crossing``;
     ``fields["break_step"]`` names the broken join's step where one exists.
     Strict-arm instances raised mid-capture carry the settled partial
-    product on ``exc.partial_log`` (recover with
-    ``tl.partial.from_failed_capture(exc)``).
+    product on ``exc.partial_trace``.
     """
 
 
@@ -172,8 +191,19 @@ class BundleRelationError(ValidationError, ValueError):
     """Bundle member-relation table refusal (S6, grammar v2).
 
     ``fields["code"]`` carries ``bundle_relation_member_missing``,
-    ``bundle_member_has_relations``, ``bundle_relation_schema_invalid``, or
-    ``bundle_relation_evidence_over_budget``.
+    ``bundle_member_has_relations``, ``bundle_relation_schema_invalid``,
+    ``bundle_relation_evidence_over_budget``, or one of the ``fed_by`` span
+    codes: ``bundle_relation_span_out_of_bounds``,
+    ``bundle_relation_span_unverified``,
+    ``bundle_relation_auto_spans_unavailable``,
+    ``bundle_relation_auto_spans_ambiguous``, or
+    ``bundle_relation_auto_spans_unmatched``; ``Bundle.token_divergence``
+    refuses ``bundle_token_divergence_unavailable`` and
+    ``Bundle.add_alternative`` refuses ``alternative_target_missing``,
+    ``alternative_target_unsteered``,
+    ``alternative_capture_position_dependent``,
+    ``alternative_steer_undeclared``, ``alternative_member_name_taken`` or
+    ``alternative_unchanged_call_diverged``.
     """
 
 
@@ -188,7 +218,7 @@ class BundleExperimentError(ValidationError, RuntimeError):
     """
 
 
-class CheckpointSeriesLiveParamsError(ValidationError, RuntimeError):
+class ParamEvidenceMissingError(ValidationError, RuntimeError):
     """Cross-member parameter read refused: no immutable capture-time evidence.
 
     TorchLens records which parameter a run used, not its bytes, so a

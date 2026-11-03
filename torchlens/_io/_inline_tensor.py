@@ -36,7 +36,8 @@ from typing import Any
 
 import torch
 
-from ..utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import torch_attr
+from .._utils.tensor_leaves import flat_byte_view
 
 __all__ = [
     "INLINE_TENSOR_GLOBAL",
@@ -46,6 +47,12 @@ __all__ = [
 
 #: The ``(module, name)`` pair the restricted loader admits for this reduction.
 INLINE_TENSOR_GLOBAL: tuple[str, str] = ("torchlens._io._inline_tensor", "rebuild_inline_tensor")
+
+
+#: What ``torch.empty`` raises for a dtype it cannot allocate plainly: c10 errors
+#: surface as ``RuntimeError`` (``NotImplementedError`` is one), argument-parser
+#: rejections as ``TypeError`` or ``ValueError``.
+_NOT_ALLOCATABLE_ERRORS: tuple[type[Exception], ...] = (RuntimeError, TypeError, ValueError)
 
 
 @cache
@@ -89,7 +96,7 @@ def _plain_itemsize(dtype: torch.dtype) -> int | None:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             probe = torch.empty((), dtype=dtype)
-    except Exception:  # noqa: BLE001 -- not a plainly allocatable dtype
+    except _NOT_ALLOCATABLE_ERRORS:
         return None
     if probe.is_quantized:
         return None
@@ -127,7 +134,7 @@ def reduce_inline_tensor(tensor: torch.Tensor) -> tuple[Any, tuple[Any, ...]] | 
         return None
     with torch.no_grad():
         flat = tensor.detach().cpu().resolve_conj().resolve_neg().contiguous().reshape(-1)
-        data = flat.view(torch.uint8).numpy().tobytes() if flat.numel() else b""
+        data = flat_byte_view(flat).numpy().tobytes() if flat.numel() else b""
     return (
         rebuild_inline_tensor,
         (
@@ -179,11 +186,44 @@ def rebuild_inline_tensor(
         device is unavailable on this machine.
     """
 
-    def _malformed(detail: str) -> pickle.UnpicklingError:
-        """Return the typed refusal for a malformed inline tensor, naming ``detail``."""
-        return pickle.UnpicklingError(
-            "Blocked malformed inline tensor during bundle metadata unpickle: " + detail
-        )
+    dtype, numel = _checked_dtype_and_numel(data, dtype_name, shape, requires_grad, device)
+    if numel == 0:
+        tensor = torch.empty(shape, dtype=dtype)
+    else:
+        # ``bytearray`` copies the stream bytes into a writable buffer; the storage
+        # ``torch.frombuffer`` wraps around it is not resizable.
+        tensor = torch.frombuffer(bytearray(data), dtype=torch.uint8).view(dtype).reshape(shape)
+    return _on_saved_device(tensor, device, requires_grad, dtype_name)
+
+
+def _malformed(detail: str) -> pickle.UnpicklingError:
+    """Return the typed refusal for a malformed inline tensor, naming ``detail``."""
+    return pickle.UnpicklingError(
+        "Blocked malformed inline tensor during bundle metadata unpickle: " + detail
+    )
+
+
+def _checked_dtype_and_numel(
+    data: Any,
+    dtype_name: Any,
+    shape: Any,
+    requires_grad: Any,
+    device: Any,
+) -> tuple[torch.dtype, int]:
+    """Validate every inline-tensor argument by exact type, then the byte length.
+
+    Runs before any allocation. Arguments are those of ``rebuild_inline_tensor``.
+
+    Returns
+    -------
+    tuple[torch.dtype, int]
+        The plain dtype named by ``dtype_name`` and the element count of ``shape``.
+
+    Raises
+    ------
+    pickle.UnpicklingError
+        If any argument is malformed or ``len(data) != numel * itemsize``.
+    """
 
     if type(data) is not bytes:
         raise _malformed(f"payload must be bytes, got {type(data).__name__}.")
@@ -206,12 +246,20 @@ def rebuild_inline_tensor(
             f"byte length {len(data)} does not match shape {shape} of dtype {dtype_name} "
             f"({numel} x {itemsize} bytes)."
         )
-    if numel == 0:
-        tensor = torch.empty(shape, dtype=dtype)
-    else:
-        # ``bytearray`` copies the stream bytes into a writable buffer; the storage
-        # ``torch.frombuffer`` wraps around it is not resizable.
-        tensor = torch.frombuffer(bytearray(data), dtype=torch.uint8).view(dtype).reshape(shape)
+    return dtype, numel
+
+
+def _on_saved_device(
+    tensor: torch.Tensor, device: str, requires_grad: bool, dtype_name: str
+) -> torch.Tensor:
+    """Move a rebuilt CPU tensor to its saved device and restore ``requires_grad``.
+
+    Raises
+    ------
+    pickle.UnpicklingError
+        If the saved device is unavailable here or the dtype cannot require grad.
+    """
+
     if device != "cpu":
         try:
             tensor = tensor.to(torch.device(device))

@@ -13,14 +13,17 @@ capture/intervention digest, never by output equality alone.
 
 from __future__ import annotations
 
+import warnings
+
 import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens import at_step
+from torchlens.errors import TraceCaptureError
 from torchlens.errors.episode import EpisodeCaptureError
-from torchlens.intervention import at_step
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 SEED = 1234
 
@@ -107,13 +110,13 @@ def _ids() -> torch.Tensor:
 
 
 def _coupled(runner: nn.Module, ids: torch.Tensor, intervene: object, **spec_kwargs):
-    spec = EpisodeSpec(stepped_module=runner.model, **spec_kwargs)
+    spec = EpisodeOptions(stepped_module=runner.model, **spec_kwargs)
     return tl.trace(
         runner,
         ids,
         episode=spec,
         intervene=intervene,
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
 
 
@@ -135,7 +138,7 @@ def test_episode_x_intervene_cell_is_coupled():
 
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=4)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), n_steps=4)
+    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), num_steps=4)
     attestation = log.episode_coupling
     assert attestation.coupled is True
     assert attestation.bound is True  # product binding: the capture digest
@@ -159,7 +162,7 @@ def test_fires_before_inside_and_after_a_stepped_call():
     # every step. One spec fires at all three positions (add is dtype-safe
     # on the integer token sites where scale would refuse).
     spec = tl.when(tl.func("abs") | tl.func("mul") | tl.func("tanh"), tl.add(1))
-    log = _coupled(runner, _ids(), spec, n_steps=3)
+    log = _coupled(runner, _ids(), spec, num_steps=3)
     assert _fire_counts(log) == [1, 1, 1]  # tanh only: one per step
     # The before/after fires are outside-step evidence: folded into the
     # digest, never guessed into a row. A tanh-only capture (no
@@ -169,7 +172,7 @@ def test_fires_before_inside_and_after_a_stepped_call():
         GreedyRunner(TinyLM(), n_steps=3),
         _ids(),
         tl.when(tl.func("tanh"), tl.scale(1.0)),
-        n_steps=3,
+        num_steps=3,
     )
     assert _fire_counts(tanh_only) == [1, 1, 1]
     assert _header(log)["intervention_digest"] != _header(tanh_only)["intervention_digest"]
@@ -182,7 +185,7 @@ def test_zero_and_multiple_fires_are_first_class():
     runner = GreedyRunner(TinyLM(), n_steps=3)
     with pytest.warns(UserWarning, match="matched zero sites"):
         zero = _coupled(
-            runner, _ids(), tl.when(tl.func("nonexistent_func"), tl.zero_ablate()), n_steps=3
+            runner, _ids(), tl.when(tl.func("nonexistent_func"), tl.zero_ablate()), num_steps=3
         )
     assert _fire_counts(zero) == [0, 0, 0]  # measured zeros, never None
     attestation = zero.episode_coupling
@@ -194,7 +197,7 @@ def test_zero_and_multiple_fires_are_first_class():
         GreedyRunner(TinyLM(), n_steps=3),
         _ids(),
         tl.when(tl.func("tanh") | tl.func("mean"), tl.scale(1.0)),
-        n_steps=3,
+        num_steps=3,
     )
     assert _fire_counts(multi) == [2, 2, 2]
 
@@ -204,7 +207,9 @@ def test_step_qualified_intervention_fires_at_exactly_one_step():
 
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=4)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh") & at_step(2), tl.scale(0.5)), n_steps=4)
+    log = _coupled(
+        runner, _ids(), tl.when(tl.func("tanh") & at_step(2), tl.scale(0.5)), num_steps=4
+    )
     assert _fire_counts(log) == [0, 0, 1, 0]
     assert _header(log)["fidelity_basis"] == "perturbed"
 
@@ -218,8 +223,8 @@ def test_changed_output_and_changed_step_count():
     baseline = tl.trace(
         EosRunner(model, eos=int(model(ids).argmax(-1)[0]), max_steps=5),
         ids,
-        episode=EpisodeSpec(stepped_module=model),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        episode=EpisodeOptions(stepped_module=model),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     baseline_steps = len(baseline.annotations["episode"]["rows"])
 
@@ -232,9 +237,9 @@ def test_changed_output_and_changed_step_count():
     perturbed = tl.trace(
         EosRunner(model2, eos=eos2, max_steps=5),
         ids,
-        episode=EpisodeSpec(stepped_module=model2),
+        episode=EpisodeOptions(stepped_module=model2),
         intervene=tl.when(tl.func("tanh"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     perturbed_steps = len(perturbed.annotations["episode"]["rows"])
     assert perturbed.outcome.status.name == "COMPLETE"
@@ -257,7 +262,7 @@ def test_identical_coupled_reruns_mint_identical_digests():
         torch.manual_seed(0)
         runner = GreedyRunner(TinyLM(), n_steps=3)
         return _coupled(
-            runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), n_steps=3
+            runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), num_steps=3
         )
 
     first, second = capture(), capture()
@@ -277,7 +282,7 @@ def test_replay_refuses_coupled_products_on_both_engines():
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=3)
     ids = _ids()
-    log = _coupled(runner, ids, tl.when(tl.func("tanh"), tl.scale(0.5)), n_steps=3)
+    log = _coupled(runner, ids, tl.when(tl.func("tanh"), tl.scale(0.5)), num_steps=3)
     for inputs in (ids, torch.tensor([[4, 5, 6]])):
         for fast in (False, True):
             with pytest.raises(EpisodeCaptureError) as excinfo:
@@ -295,13 +300,19 @@ def test_uncoupled_episode_replay_never_carries_the_ledger():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=3),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=3),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
-    # A growing-context refresh legitimately warns on multi-pass shape
-    # drift; the regression under test is the LEDGER, not the shapes.
-    with pytest.warns(UserWarning, match="Tensor shape changed"):
+    # The new input has the captured length, so every pass keeps its captured
+    # shape. The "Tensor shape changed" warning this row used to expect came
+    # from the refresh projector pairing ops by raw layer label, which compared
+    # every pass of a multi-pass layer (the growing-context cat) with its last
+    # pass; ops now pair positionally (lane A, projectors.py), so a same-length
+    # replay must not warn. The regression under test is the LEDGER.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         result = log.run(inputs=torch.tensor([[4, 5, 6]]))
+    assert not [w for w in caught if "Tensor shape changed" in str(w.message)]
     episode_key = result.trace.annotations.get("episode")
     assert episode_key is not None and episode_key.get("quarantined") is True
 
@@ -338,9 +349,9 @@ def test_forced_feed_couples_with_perturbation_disclosed():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=model, forced_tokens=forced),
+        episode=EpisodeOptions(stepped_module=model, forced_tokens=forced),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     header = _header(log)
     assert header["token_feed"] == "forced"
@@ -371,12 +382,12 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=4),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=4),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
-        halt=stop_at_third_step,
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        stop_after=stop_at_third_step,
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
-    assert log.outcome.status.name == "HALTED"
+    assert log.outcome.status.name == "STOPPED"
     rows = log.annotations["episode"]["rows"]
     statuses = [row["status"] for row in rows]
     assert statuses[-1] == "absent"  # the never-started tail is absent
@@ -401,10 +412,10 @@ def test_selective_save_couples_and_keeps_evidence():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=3),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=3),
         intervene=tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)),
         save=tl.func("tanh"),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     assert _fire_counts(log) == [0, 1, 0]
     assert log.episode_coupling.coupled is True
@@ -425,9 +436,11 @@ def test_coupled_product_survives_save_load_and_loaded_replay_refuses(tmp_path):
 
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=3)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), n_steps=3)
+    log = _coupled(
+        runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), num_steps=3
+    )
     target = tmp_path / "coupled.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     header = _header(loaded)
     assert header["intervention_digest"] == _header(log)["intervention_digest"]
@@ -453,9 +466,9 @@ def test_exogenous_join_couples_with_per_segment_facts():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=5),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=5),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
-        capture=tl.options.CaptureOptions(random_seed=SEED),
+        capture=tl.options.CaptureOptions(seed=SEED),
     )
     envelope = _header(log)["step_join"]
     assert envelope is not None and envelope["break_step"] == 2
@@ -487,14 +500,18 @@ def test_failed_forward_coupled_episode_attaches_partial_evidence():
             return current
 
     runner = CrashRunner(model)
-    with pytest.raises(RuntimeError, match="mid-episode crash"), pytest.warns(Warning):
+    with (
+        pytest.raises(TraceCaptureError, match="mid-episode crash") as _tce_info,
+        pytest.warns(Warning),
+    ):
         tl.trace(
             runner,
             _ids(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=4),
+            episode=EpisodeOptions(stepped_module=model, num_steps=4),
             intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
-            capture=tl.options.CaptureOptions(random_seed=SEED),
+            capture=tl.options.CaptureOptions(seed=SEED),
         )
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
 
 def test_the_old_refusal_site_is_retired():
@@ -502,6 +519,6 @@ def test_the_old_refusal_site_is_retired():
 
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=2)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), n_steps=2)
+    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), num_steps=2)
     assert log.outcome.status.name == "COMPLETE"
     assert log.episode_coupling.coupled is True

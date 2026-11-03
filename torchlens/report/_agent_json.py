@@ -3,7 +3,7 @@
 DOCUMENTED-UNSTABLE spelling (naming ratification deferred to the UI/naming
 sprint). The dump describes the SAME public surface a human drives -- it is a
 navigation aid, never a parallel API: every record points back at the live
-spelling (``trace[label]``, ``tl.func(...)``, ``tl.report.explain(...)``) an
+spelling (``trace[label]``, ``tl.func(...)``, ``trace.explain()``) an
 agent should call next.
 
 Honesty contract (report/AGENTS.md): capture outcome/verification facts are
@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._capture_honesty import (
+    _structure_evidence_facts,
     capture_advisories,
     capture_verification,
     episode_facts,
@@ -23,7 +24,12 @@ from .._capture_honesty import (
     poison_facts,
     refuse_presenter_subject,
 )
+from .._data_classes._trace_missing_attrs import is_live_trace
+from .._data_classes._value_repr import _payload_state as _payload_state
+from ..agent._envelope import json_safe
 from ._explain import _safe_len
+from ._factcore import _memory, factcore
+from ._health import health_facts
 
 #: Schema identifier for the agent trace dump.
 AGENT_TRACE_SCHEMA = "torchlens.agent_trace.v1"
@@ -99,28 +105,28 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
 
     steps: dict[str, str] = {
         "summary": "trace.summary()",
-        "plain_language_report": "tl.report.explain(trace)",
-        "budgeted_report": "tl.report.explain(trace, max_tokens=500)",
+        "plain_language_report": "trace.explain()",
+        "budgeted_report": "trace.explain(max_tokens=500)",
         "health_audit": "trace.audit()",
         "resource_profile": "trace.profile(level='module')",
         "inventory": "trace.bill_of_materials()",
         "nonfinite_evidence": "trace.first_nonfinite()",
         "nonfinite_coverage": "trace.nonfinite_coverage",
     }
-    if int(getattr(log, "num_saved_ops", 0) or 0) > 0:
+    if len(getattr(log, "saved_ops", ())) > 0:
         steps["one_activation"] = "trace[<layer_label>].out"
     steps["receptive_field"] = "trace[<layer_label>].receptive_field"
     steps["draw_graph"] = "trace.draw()"
     if _pandas_available():
         steps["op_table"] = "trace.to_pandas()"
         if _first_op_site_key(log) is not None:
-            steps["sites_table"] = "trace.sites_table()"
-        if getattr(log, "decoded_output", None) is not None:
-            steps["output_table"] = "trace.output_table(top_n=5)"
+            steps["sites_table"] = "trace.sites()"
+        if is_live_trace(log) and log._decoded_output is not None:
+            steps["output_table"] = "trace.output_table(k=5)"
     logged = (getattr(log, "annotations", {}) or {}).get("logged_values")
     if isinstance(logged, dict) and logged:
         steps["logged_values"] = "trace.logged_values"
-    steps["environment_diagnosis"] = "tl.utils.doctor()"
+    steps["environment_diagnosis"] = "tl.report.doctor()"
     return steps
 
 
@@ -138,7 +144,7 @@ def _pandas_available() -> bool:
 def _first_op_site_key(log: Any) -> str | None:
     """Return the first op's site key, or ``None`` on keyless artifacts."""
 
-    for op in getattr(log, "layer_list", []) or []:
+    for op in (log._layer_list if is_live_trace(log) else None) or []:
         return getattr(op, "site_key", None)
     return None
 
@@ -164,8 +170,6 @@ def _json_safe_value(value: Any) -> Any:
         # Non-finite floats are not JSON: tag them the way every agent-surface
         # envelope does (AUD-CODE 2.6) so ``json.dumps(..., allow_nan=False)``
         # -- the documented JSON-serializable promise -- holds.
-        from ..agent._envelope import json_safe
-
         return json_safe(value)
     if value is None or isinstance(value, bool | int | str):
         return value
@@ -222,15 +226,13 @@ def _json_shape(shape: Any) -> list[int] | None:
 def _memory_scopes(log: Any) -> dict[str, Any]:
     """Both payload-scope byte figures, named (C02; sumfam D8)."""
 
-    from ._factcore import _memory
-
     memory = _memory(log)
     return {
-        "at_capture_bytes": memory.at_capture_bytes,
-        "at_capture_saved_ops": memory.at_capture_saved_ops,
-        "retained_now_bytes": memory.retained_now_bytes,
-        "retained_now_present_ops": memory.retained_now_present_ops,
-        "retained_now_lazy_ops": memory.retained_now_lazy_ops,
+        "at_capture_bytes": memory.captured_bytes,
+        "at_capture_saved_ops": memory.captured_saved_ops,
+        "retained_now_bytes": memory.retained_bytes,
+        "retained_now_present_ops": memory.retained_present_ops,
+        "retained_now_lazy_ops": memory.retained_lazy_ops,
         "scope_note": memory.scope_note,
     }
 
@@ -244,15 +246,13 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
     """
 
     try:
-        from ._factcore import factcore
-
         core = factcore(log)
     except Exception:  # noqa: BLE001 -- foreign/partial logs keep the raw fallback
         return {
             "layers": _safe_len(getattr(log, "layer_labels", None)),
-            "operations": int(getattr(log, "num_ops", 0) or 0),
-            "tensors_total": int(getattr(log, "num_tensors", 0) or 0),
-            "tensors_saved": int(getattr(log, "num_saved_ops", 0) or 0),
+            "operations": int((log._num_ops if is_live_trace(log) else 0) or 0),
+            "tensors_total": len(log) if hasattr(log, "__len__") else 0,
+            "tensors_saved": len(getattr(log, "saved_ops", ())),
             "parameters": int(getattr(log, "num_params", 0) or 0),
             "modules": module_row_count,
         }
@@ -261,8 +261,8 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
         "operations": core.counts.tracked_tensor_rows,
         "compute_ops": core.counts.compute_ops,
         "alias_rows": core.counts.alias_rows,
-        "tensors_total": int(getattr(log, "num_tensors", 0) or 0),
-        "tensors_saved": core.memory.at_capture_saved_ops,
+        "tensors_total": len(log) if hasattr(log, "__len__") else 0,
+        "tensors_saved": core.memory.captured_saved_ops,
         "parameters": core.params.total or 0,
         "modules": module_row_count,
     }
@@ -273,55 +273,19 @@ def _health_summary(log: Any) -> dict[str, Any]:
 
     D4 (F09 item 13): a machine dump never implicitly pays for a payload
     scan -- this serves the basis in hand and reads NOT-CHECKED otherwise
-    (the explicit scan spelling is ``tl.report.health_facts(trace)``).
+    (the explicit scan spelling is ``trace.health_facts``).
     """
-
-    from ._health import health_facts
 
     facts = health_facts(log, allow_scan=False)
     return {
         "verdict": facts.verdict,
         "basis": facts.basis,
-        "checked": facts.checked,
+        "checked": facts.num_checked_ops,
         "nonfinite_labels": list(facts.nonfinite_labels),
         "alias_nonfinite_labels": list(facts.alias_nonfinite_labels),
-        "unexamined": facts.unexamined,
-        "unchecked": facts.unchecked,
+        "unexamined": facts.num_unexamined_ops,
+        "unchecked": facts.num_unchecked_ops,
     }
-
-
-def _payload_state(op: Any) -> str:
-    """Return the op's CURRENT payload state: present | lazy | unsaved.
-
-    Capture-time ``saved`` used to mean two different things (agent memo P0
-    part 4): "a payload is resident" and "a lazy ref could materialize one".
-    This is the resident-now answer, read through the private slot accessor
-    so the probe itself never triggers a materializing ``op.out`` read. A
-    row with ``saved=true`` and ``payload_state="unsaved"`` is a
-    payload-stripped artifact -- saved at capture, no bytes here.
-
-    Parameters
-    ----------
-    op:
-        Operation record.
-
-    Returns
-    -------
-    str
-        ``"present"`` (resident tensor), ``"lazy"`` (materializable blob
-        ref), or ``"unsaved"`` (no payload here).
-    """
-
-    slot = getattr(op, "_slot", None)
-    if callable(slot):
-        if slot("out") is not None:
-            return "present"
-        if slot("out_ref") is not None:
-            return "lazy"
-        return "unsaved"
-    if getattr(op, "out_ref", None) is not None:
-        return "lazy"
-    return "present" if getattr(op, "has_saved_activation", False) else "unsaved"
 
 
 def _site_key_or_none(op: Any) -> str | None:
@@ -351,7 +315,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
     Parameters
     ----------
     op:
-        Operation record from ``trace.layer_list``.
+        Operation record from ``trace._layer_list``.
 
     Returns
     -------
@@ -372,7 +336,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
         "payload_state": _payload_state(op),
         "label": str(getattr(op, "label", getattr(op, "layer_label", "unknown"))),
         "layer_label": str(getattr(op, "layer_label", "unknown")),
-        "pass_index": int(getattr(op, "pass_index", 1) or 1),
+        "pass_index": int(getattr(op, "pass_number", 1) or 1),
         "num_passes": int(getattr(op, "num_passes", 1) or 1),
         "func_name": str(getattr(op, "func_name", "unknown")),
         "shape": _json_shape(getattr(op, "shape", None)),
@@ -471,7 +435,7 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
             "omit it to dump every op."
         )
 
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list((log._layer_list if is_live_trace(log) else None) or [])
     truncation: dict[str, Any] | None = None
     if max_ops is not None and len(ops) > max_ops:
         truncation = {
@@ -488,17 +452,22 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
 
     capture = {
         **capture_verification(log),
-        "backend": str(getattr(log, "backend", "unknown")),
-        "model_class": str(getattr(log, "model_class_name", type(log).__name__)),
-        "structure_only": bool(getattr(log, "structure_only", False)),
-        "grouping": str(getattr(log, "grouping", "unknown")),
-        "has_backward_pass": bool(getattr(log, "has_backward_pass", False)),
+        "backend": str(log._provenance_backend if is_live_trace(log) else "unknown"),
+        "model_class": str(log._source_class_name if is_live_trace(log) else type(log).__name__),
+        "structure_only": bool(log._options_structure_only if is_live_trace(log) else False),
+        "grouping": str(log._options_grouping if is_live_trace(log) else "unknown"),
+        "has_backward_pass": bool(log._autograd_has_backward_pass if is_live_trace(log) else False),
         "device_summary": getattr(log, "backend_runtime_device_summary", None),
         # Poison, episode, and advisory facts are honesty disclosures: a
         # diverged sparse run or a forced-tokens episode must never dump as an
         # ordinary clean forward (WT1 A-V row 23).
         **poison_facts(log),
     }
+    if capture["structure_only"]:
+        # The claim-status ladder and evidence envelope: an agent reading
+        # ``structure_only: true`` without ``claim_status`` cannot learn that a
+        # discharge already REFUTED these shapes (export parity).
+        capture.update(_structure_evidence_facts(log))
     episode = episode_facts(log)
     if episode is not None:
         capture["episode"] = episode

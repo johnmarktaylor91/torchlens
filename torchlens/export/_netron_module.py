@@ -18,6 +18,7 @@ import contextlib
 from dataclasses import dataclass, field
 from typing import Any, NamedTuple
 
+from .._record_type import record_type
 from ._netron_fields import _strip_single_pass, build_leaf_attrs, node_doc, port_names
 from ._netron_records import (
     NETRON_MODULE_DOMAIN,
@@ -77,7 +78,7 @@ def _call_levels(module_calls: Any) -> tuple[dict[str, int], dict[str, Any]]:
 
         if label in levels:
             return levels[label]
-        parent = records[label].call_parent_label
+        parent = records[label].parent_label
         levels[label] = 0 if parent is None else _level(str(parent)) + 1
         return levels[label]
 
@@ -95,7 +96,7 @@ def _retained_scopes(
     for label, level in levels.items():
         if level < depth:
             continue
-        parent_label = str(records[label].call_parent_label)
+        parent_label = str(records[label].parent_label)
         parent = parent_label if levels.get(parent_label, 0) >= depth else _ROOT_SCOPE
         scopes[label] = _Scope(label=label, call=records[label], parent=parent)
     return scopes
@@ -257,7 +258,7 @@ def _module_call_attrs(scope: _Scope, display: str) -> list[NetronAttr]:
             attrs.append(
                 NetronAttr("observed_duration_inclusive_us", "i", int(float(duration) * 1e6))
             )
-    ops_inside = getattr(call, "num_ops", None)
+    ops_inside = len(call.ops) if hasattr(call, "ops") else None
     if ops_inside:
         attrs.append(NetronAttr("ops_inside", "i", int(ops_inside)))
     param_bytes = getattr(call, "internal_param_memory", None)
@@ -309,7 +310,7 @@ def _place_entries(
         inputs = _visible_inputs(entry, classified, projection)
         node = NetronNode(
             name=node_id,
-            op_type=str(getattr(entry, "layer_type", None) or getattr(entry, "func_name", "")),
+            op_type=str(record_type(entry, None) or getattr(entry, "func_name", "")),
             domain=NETRON_OP_DOMAIN,
             inputs=inputs,
             outputs=[node_id],
@@ -355,7 +356,7 @@ def _settle_scopes(
         cursor = owner
         while cursor and cursor not in scopes:
             parent = records.get(cursor)
-            cursor = str(parent.call_parent_label) if parent is not None else ""
+            cursor = str(parent.parent_label) if parent is not None else ""
             if cursor == "None":
                 cursor = ""
         hidden_by_scope.setdefault(cursor, []).extend(buffer_names)

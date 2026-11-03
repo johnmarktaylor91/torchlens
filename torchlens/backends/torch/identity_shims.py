@@ -25,7 +25,10 @@ that shape). The runtime membership-container census and its reviewed
 allowlist (``torch._library.utils._RANDOM_FUNCTIONS``, the MaskedTensor
 reduce maps, the lazy-module ``_allowed_methods`` allowlist -- each safe on
 an eager-import or protocol-supplied-original basis) live in
-``tests/test_wrap_state_compat.py``; an unreviewed new table fails that gate. A fourth normalization rides along:
+``tests/test_wrap_state_compat.py``; an unreviewed new table fails that gate. A THIRD-PARTY
+handler table keyed on wrappers by a post-wrap import (tensordict) gets no
+per-library shim: the wrapper re-offers a fully declined dispatch under its
+own identity, and unwrap aliases such tables generically (``_protocol_redispatch``). A fourth normalization rides along:
 ``torch.overrides.resolve_name`` keys its cached index by the pre-warm
 originals, so a wrapper argument resolved to ``None`` -- the shim retries a
 miss with the ledger original. A fifth normalizes TorchScript's overload
@@ -53,9 +56,16 @@ no-op. The one lazily-importable site (causal bias) is additionally covered
 by a meta-path import hook, so a module first imported WHILE wrappers are
 installed is shimmed the moment it executes — never left broken until the
 next capture entry. Site availability is feature-detected in
-``torchlens.utils._torch_compat`` (``HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG``,
-``HAS_ATTENTION_CAUSAL_BIAS``, ``HAS_EXPANDED_WEIGHTS_CONV_PICKER``) and is
-visible through the doctor/compat capability snapshot.
+``torchlens._utils._torch_compat`` (``HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG``,
+``HAS_ATTENTION_CAUSAL_BIAS``, ``HAS_EXPANDED_WEIGHTS_CONV_PICKER``,
+``HAS_LAZY_MODULE_ALLOWED_METHODS``) and is visible through the doctor/compat
+capability snapshot. A ninth site is the membership shape the census grep
+cannot see, found by the stress matrix: the lazy-module
+``UninitializedTensorMixin._allowed_methods`` list, consulted from a
+``__torch_function__`` whose ``func`` operand is the CURRENT ``torch.Tensor``
+class attribute (the wrapper) for tensor methods; it gets a ledger-resolving
+view so a plain ``model.to(...)`` on an un-run lazy module keeps working
+outside capture.
 """
 
 from __future__ import annotations
@@ -74,7 +84,13 @@ from typing import Any
 import torch
 
 from ... import _state
-from ...utils import _torch_compat
+from ..._utils import _torch_compat
+from ._identity_shim_views import (
+    _LedgerResolvingDefaultTable,
+    _LedgerResolvingMembers,
+    _LedgerResolvingTable,
+    _resolve,
+)
 
 __all__ = [
     "identity_shims_installed",
@@ -222,27 +238,6 @@ def _remove_import_hook() -> None:
         _import_hook = None
 
 
-def _resolve(fn: Any) -> Any:
-    """Follow the wrapper ledger from a torchlens wrapper to its original.
-
-    Parameters
-    ----------
-    fn:
-        Any object; non-wrappers resolve to themselves.
-
-    Returns
-    -------
-    Any
-        The original torch callable for a torchlens wrapper, else ``fn``.
-    """
-
-    seen: set[int] = set()
-    while id(fn) in _state._decorated_to_orig and id(fn) not in seen:
-        seen.add(id(fn))
-        fn = _state._decorated_to_orig[id(fn)]
-    return fn
-
-
 def _register_shim(fn: Any) -> Any:
     """Mark ``fn`` as a torchlens shim and enroll it in the identity registry."""
 
@@ -293,6 +288,11 @@ def install_identity_shims() -> None:
     """
 
     global _family_installed
+    # Wrappers return to the call path: drop the original keys the last unwrap
+    # aliased into third-party handler tables (``_protocol_redispatch``).
+    from ._protocol_redispatch import undo_table_aliases
+
+    undo_table_aliases()
     if _family_installed:
         # The causal-bias site resolves only through sys.modules (lazy-import
         # belt). The import hook shims a post-wrap import the moment the
@@ -320,6 +320,7 @@ def install_identity_shims() -> None:
         _install_fx_trace_shim(records)
         _install_overrides_membership_shims(records)
         _install_protocol_identity_shims(records)
+        _install_lazy_module_allowlist_shim(records)
     except Exception:
         _restore(records)
         raise
@@ -340,6 +341,11 @@ def remove_identity_shims() -> None:
     global _family_installed
     _family_installed = False
     _remove_import_hook()
+    # Third-party handler tables keyed on wrappers by a post-wrap import gain
+    # their original keys while the wrappers are off the call path.
+    from ._protocol_redispatch import alias_wrapper_keyed_tables
+
+    alias_wrapper_keyed_tables()
     _restore(_installed)
     _installed.clear()
     _live_shims.clear()
@@ -795,91 +801,11 @@ def _install_fx_trace_shim(records: list[tuple[Any, str, Any]]) -> None:
 # ---------------------------------------------------------------------------
 
 
-class _LedgerResolvingTable(dict):
-    """Dict view whose LOOKUPS resolve torchlens wrappers to originals.
-
-    Iteration/keys stay exactly the underlying original-keyed contents (the
-    wrapper-poisoning census gate keeps holding); only ``in``/``[]``/``get``
-    additionally accept the live wrapper alias, so the documented
-    ``func in torch.overrides.get_testing_overrides()`` membership check
-    answers the same in both wrap epochs (grind-r5 b7 R55-A).
-    """
-
-    def __contains__(self, key: Any) -> bool:
-        if super().__contains__(key):
-            return True
-        original = _resolve(key)
-        return original is not key and super().__contains__(original)
-
-    def __getitem__(self, key: Any) -> Any:
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            original = _resolve(key)
-            if original is not key:
-                return super().__getitem__(original)
-            raise
-
-    def get(self, key: Any, default: Any = None) -> Any:
-        """Return the value for ``key`` (wrapper-resolving), else ``default``."""
-
-        try:
-            return self[key]
-        except KeyError:
-            return default
-
-
-class _LedgerResolvingMembers(list):
-    """List view whose membership test resolves torchlens wrappers."""
-
-    def __contains__(self, item: Any) -> bool:
-        if super().__contains__(item):
-            return True
-        original = _resolve(item)
-        return original is not item and super().__contains__(original)
-
-
-class _LedgerResolvingDefaultTable(collections.defaultdict):
-    """Wrapper-resolving view that PRESERVES defaultdict semantics.
-
-    ``get_overridable_functions()`` returns a ``defaultdict(list)``; the r5
-    membership fix rebuilt it as a plain resolving dict, so a caller indexing
-    a namespace with no recorded entries -- auto-vivification the upstream
-    type guarantees -- started raising KeyError (grind-r6 b8 R56, opus
-    wave-introduced residue). Ledger resolution runs BEFORE the default
-    factory so a wrapper alias still finds its original's row rather than
-    minting an empty one.
-    """
-
-    def __contains__(self, key: Any) -> bool:
-        if dict.__contains__(self, key):
-            return True
-        original = _resolve(key)
-        return original is not key and dict.__contains__(self, original)
-
-    def __getitem__(self, key: Any) -> Any:
-        if not dict.__contains__(self, key):
-            original = _resolve(key)
-            if original is not key and dict.__contains__(self, original):
-                return dict.__getitem__(self, original)
-        return super().__getitem__(key)
-
-    def get(self, key: Any, default: Any = None) -> Any:
-        """Return the value for ``key`` (wrapper-resolving), never auto-creating."""
-
-        if dict.__contains__(self, key):
-            return dict.__getitem__(self, key)
-        original = _resolve(key)
-        if original is not key and dict.__contains__(self, original):
-            return dict.__getitem__(self, original)
-        return default
-
-
 def _install_overrides_membership_shims(records: list[tuple[Any, str, Any]]) -> None:
     """Shim the two cached ``torch.overrides`` table accessors for membership.
 
     ``decorate_all_once`` pre-warms both caches so their CONTENTS stay keyed
-    by pristine originals (r4 F3, verified). But membership by the CURRENT
+    by pristine originals (round-4 finding 3, verified). But membership by the CURRENT
     namespace read -- ``F.relu in get_testing_overrides()`` or
     ``my_op in get_overridable_functions()[F]``, the documented
     ``__torch_function__`` author checks -- was False for every wrapped
@@ -945,6 +871,43 @@ def _install_overrides_membership_shims(records: list[tuple[Any, str, Any]]) -> 
         _register_shim(shim)
         setattr(overrides_module, accessor_name, shim)
         records.append((overrides_module, accessor_name, orig_accessor))
+
+
+# ---------------------------------------------------------------------------
+# Site 9: torch.nn.parameter.UninitializedTensorMixin._allowed_methods
+# ---------------------------------------------------------------------------
+
+
+def _install_lazy_module_allowlist_shim(records: list[tuple[Any, str, Any]]) -> None:
+    """Resolve wrappers in the lazy-module materialization allowlist.
+
+    ``UninitializedTensorMixin.__torch_function__`` admits only the methods in
+    its class-level ``_allowed_methods`` list (``size``, ``is_floating_point``,
+    ``to``, ``copy_``, ...), built at import time from the pristine
+    ``torch.Tensor`` attributes. For a TENSOR METHOD the C-level protocol
+    hands the handler the CURRENT ``torch.Tensor.<name>`` class attribute,
+    which is the torchlens wrapper once wrappers are installed, so the
+    membership check missed and torch raised its own "uninitialized
+    parameter" ``ValueError`` from a plain ``model.to(...)`` on any model
+    holding an un-run lazy module, outside any capture (wave-3 stress case 2).
+    Swapping the list for a ledger-resolving view keeps upstream's decision
+    (the ``in`` test and the error for every other method are torch's own)
+    while the wrapper alias resolves to its original.
+    """
+
+    if not _torch_compat.HAS_LAZY_MODULE_ALLOWED_METHODS:
+        return
+    # Resolved by name: torch's stubs do not declare the mixin on the module.
+    mixin: Any = getattr(torch.nn.parameter, "UninitializedTensorMixin", None)
+    if mixin is None:
+        return
+    current = vars(mixin).get("_allowed_methods")
+    if current is None or _is_shimmed(current):
+        return
+    view = _LedgerResolvingMembers(current)
+    _register_shim(view)
+    mixin._allowed_methods = view
+    records.append((mixin, "_allowed_methods", current))
 
 
 # ---------------------------------------------------------------------------

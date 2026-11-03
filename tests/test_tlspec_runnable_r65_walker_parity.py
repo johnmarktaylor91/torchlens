@@ -38,6 +38,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.trace import (
+    _OPAQUE_INPUT_LEAF,
+    _record_runnable_input_literal_leaves,
+    _record_runnable_input_tensor_sites,
+)
 from torchlens._input_walk import (
     INPUT_CONTAINER_KINDS,
     classify_input_container,
@@ -48,26 +53,20 @@ from torchlens._io.runnable import (
     EMPTY_CONTAINER_PATH_MARKER,
     _UnsupportedLiteralError,
 )
-from torchlens._runnable_execution import (
-    _container_kind,
-    _container_leaf_paths,
-    _runtime_nontensor_leaf_paths,
-    _tensor_leaf_paths,
-    _value_at_path,
-)
-from torchlens._runnable_seam import runnable_trace_state
-from torchlens.capture.trace import (
-    _OPAQUE_INPUT_LEAF,
-    _record_runnable_input_literal_leaves,
-    _record_runnable_input_tensor_sites,
-)
-from torchlens.errors import PathDivergenceError, RunnablePreflightError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    DivergencePolicy,
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens._runnable.input_aliases import _runtime_nontensor_leaf_paths
+from torchlens._runnable.seam import runnable_trace_state
+from torchlens._runnable.verification import _value_at_path
+from torchlens._runnable.witness_contracts import (
+    _container_kind,
+    _container_leaf_paths,
+    _tensor_leaf_paths,
+)
+from torchlens.errors import PathDivergenceError, RunnablePreflightError
+from torchlens.options import CaptureOptions
 
 # ======================================================================================
 # Shared fixtures: probe containers spanning the closed container-kind vocabulary
@@ -102,7 +101,7 @@ class _ProbeBox:
 class _FakeTrace:
     """Minimal weak-referenceable Trace stand-in for standalone walker runs."""
 
-    intervention_ready = True
+    is_replayable = True
 
 
 def _w1_leaves(root: Any) -> tuple[tuple[object, tuple[Any, ...], Any], ...]:
@@ -206,7 +205,7 @@ class _RegisteredProbe:
         self.t = t
 
 
-from torchlens.ir.container import register_container as _register_container  # noqa: E402
+from torchlens._ir.container import register_container as _register_container  # noqa: E402
 
 _register_container(
     _RegisteredProbe,
@@ -399,7 +398,7 @@ def _capture_runnable(model: nn.Module, box: _LayoutBox, path: Path) -> Any:
         model,
         box,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -440,12 +439,10 @@ def test_r64_dataclass_metadata_read_witnessed_and_layout_twin_diverges(
     twin = _layout_twin(x)
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=_LayoutBox(twin))
-    diverged = tl.load(path).run(
-        inputs=_LayoutBox(twin), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=_LayoutBox(twin), on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
     # A fresh model on the twin takes the OTHER arm; the replayed arm is wrong.
     fresh = _DataclassLayoutBranch()(_LayoutBox(twin))
     assert torch.equal(fresh, twin - 10)
@@ -624,20 +621,20 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
 
     # Prong A (r67 C2 disposition matrix): a consumed tensor under a non-grammar key
     # refuses TYPED at runnable save through the positive structure proof (the existing
-    # missing_input_container_contract) -- no artifact exists that could ever replay it
+    # input_container_contract_missing) -- no artifact exists that could ever replay it
     # as VERIFIED.
     trace = tl.trace(
         _EnumKeyedModel(),
         consumed,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
     )
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(tmp_path / "enum_key.tlspec", level="runnable", include_activations=True)
-    assert "missing_input_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+    assert "input_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))
     assert "opaque_mapping_key" in str(excinfo.value.fields.get("diagnostics"))
 
     # Prong B (r67 C2): an opaque-keyed NON-tensor sibling refuses at save the SAME
@@ -649,11 +646,11 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
         _StrKeyedModel(),
         sibling,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
     )
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(tmp_path / "bytes_key.tlspec", level="runnable", include_activations=True)
-    assert "missing_input_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+    assert "input_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))

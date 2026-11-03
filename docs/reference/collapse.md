@@ -79,6 +79,17 @@ network lacks.
 They assert adjacency only: a segment is not a real module and never pretends mixed content has one
 module class.*
 
+## Output bundles
+
+A decoder that returns its cache returns one output per cached tensor, and each would otherwise
+draw as its own node. In an overview render (`collapse="auto"`, `"max"` or a level above 0,
+unrolled, without `show_containers`), three or more model outputs that share a container key and
+named role, dtype and shape draw as one node, such as `OUTPUTS: past_key_values.keys` with
+`12 tensors, 1x2x8x8 each`, when one top-level module made all of them and that module is drawn as
+one box. When the module is expanded, its outputs come from several drawn nodes and every output
+is drawn on its own again. A named single output such as `logits` or `last_hidden_state` is never
+bundled, and `collapse="none"` never bundles. The bundle counts as one node in the readable band.
+
 ## What `(xN)` and `+N more` promise
 
 These labels look similar but make different, deliberately strict promises about hidden content.
@@ -100,7 +111,7 @@ or total that the hidden content does not support.*
 
 Smart-collapse admission is now gated on the RENDERED UNIVERSE, not raw op count
 (collapse memo D5): the gate variable is `U` — the full plan's rendered node count after
-`module=` focus, `vis_call_depth`, and rolled reductions — tiered by a measured
+`module=` focus, `depth=`, and rolled reductions — tiered by a measured
 `(U, W)` work estimator (`0.0095 * U**1.43 * W**1.02` ms, W = widest rendered sibling
 group). `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) survives as the defensive constant: the
 quality planner is admitted when `U <= 2000` AND the predicted cost fits the budget.
@@ -110,19 +121,30 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
   `collapse_budget_fallback` warning and `OptimizerResult.planner="linear_fallback"` —
   never an uncollapsed wall.
 - Only PATHOLOGICAL inputs (raw ops above 20x the constant) still decline outright:
-  `draw` warns (`collapse_pathological_skip`) and renders uncollapsed,
-  `Trace.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
+  `draw` warns (`collapse_pathological_skip`) and renders a bounded top-level
+  module overview plus an expansion manifest (forks.11 FK4; uncollapsed only when
+  the root has no child module), `Trace.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
   `collapse_ops_ceiling`), and `Trace.collapse_schedule()` degrades to its single
   full-graph step.
+- Over-ceiling residuals (forks.11 FK4, DOCUMENTED-UNSTABLE): when the served
+  overview is still above the readable band -- a floor-fallback plan, or the
+  pathological top-level overview -- `draw` writes `<outpath>.expansion.json` beside
+  the picture (schema `torchlens_expansion_manifest_v1`: one entry per collapsed unit
+  with a stable `expansion_id` and the `draw()` keywords that open it) and warns
+  `collapse_expansion_manifest` with its path.
 - A generous wall-clock watchdog (off in CI and under `TORCHLENS_DETERMINISTIC`;
   `TORCHLENS_COLLAPSE_WATCHDOG=0` disables) may abandon the quality planner mid-run to
   the same fallback; every firing is disclosed as an estimator bug
   (`collapse_watchdog_fallback`, with U, W, predicted, and actual).
 
 Context reductions are therefore real remedies for the first time: focusing with
-`module=`, bounding `vis_call_depth`, or rendering rolled genuinely re-admits the
+`module=`, bounding `depth=`, or rendering rolled genuinely re-admits the
 quality planner. The gate is a compute guard, not a correctness limit — the trace
 itself is complete.
+
+The decline is disclosed, never silent. To get a collapsed view of a very large trace, reduce
+the rendered graph first with `module=` focus, `depth=`, or rolled mode; `fold_repeats`
+and `show_containers` styling are unaffected.
 
 ## `collapse_plan()` diagnostics
 
@@ -135,35 +157,3 @@ from pixels.
 
 *This image is generated from the same ResNet-18 trace as the ladder. It shows real `auto` and
 `max` plans followed by every schedule step; visible counts are monotone as `t` increases.*
-
-## The compute ceiling
-
-Smart-collapse admission is now gated on the RENDERED UNIVERSE, not raw op count
-(collapse memo D5): the gate variable is `U` — the full plan's rendered node count after
-`module=` focus, `vis_call_depth`, and rolled reductions — tiered by a measured
-`(U, W)` work estimator (`0.0095 * U**1.43 * W**1.02` ms, W = widest rendered sibling
-group). `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) survives as the defensive constant: the
-quality planner is admitted when `U <= 2000` AND the predicted cost fits the budget.
-
-- Over-budget requests **degrade to a deterministic compact fallback plan**
-  (significance-greedy boxes plus standard fold discovery), disclosed with the coded
-  `collapse_budget_fallback` warning and `OptimizerResult.planner="linear_fallback"` —
-  never an uncollapsed wall.
-- Only PATHOLOGICAL inputs (raw ops above 20x the constant) still decline outright:
-  `draw` warns (`collapse_pathological_skip`) and renders uncollapsed,
-  `Trace.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
-  `collapse_ops_ceiling`), and `Trace.collapse_schedule()` degrades to its single
-  full-graph step.
-- A generous wall-clock watchdog (off in CI and under `TORCHLENS_DETERMINISTIC`;
-  `TORCHLENS_COLLAPSE_WATCHDOG=0` disables) may abandon the quality planner mid-run to
-  the same fallback; every firing is disclosed as an estimator bug
-  (`collapse_watchdog_fallback`, with U, W, predicted, and actual).
-
-Context reductions are therefore real remedies for the first time: focusing with
-`module=`, bounding `vis_call_depth`, or rendering rolled genuinely re-admits the
-quality planner. The gate is a compute guard, not a correctness limit — the trace
-itself is complete.
-
-The decline is disclosed, never silent. To get a collapsed view of a very large trace, reduce
-the rendered graph first with `module=` focus, `vis_call_depth`, or rolled mode; `fold_repeats`
-and `show_containers` styling are unaffected.

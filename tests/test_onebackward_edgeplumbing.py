@@ -15,8 +15,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_gradient_edge_support
 from torchlens.attribution import onebackward as ob
-from torchlens.utils._torch_compat import get_gradient_edge_support
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -24,7 +24,7 @@ _requires_gradient_edge = pytest.mark.skipif(
 )
 
 
-def _trace(intervention_ready: bool = True) -> tl.Trace:
+def _trace(replayable: bool = True) -> tl.Trace:
     """Trace the toy MLP with edge provenance on by default."""
 
     torch.manual_seed(0)
@@ -32,7 +32,7 @@ def _trace(intervention_ready: bool = True) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=intervention_ready),
+        capture=tl.options.CaptureOptions(replayable=replayable),
     )
 
 
@@ -69,11 +69,11 @@ class TestGradInputUseMap:
 
     @_requires_gradient_edge
     def test_provenance_gate_refuses_typed(self) -> None:
-        trace = _trace(intervention_ready=False)
+        trace = _trace(replayable=False)
         with pytest.raises(ob.ReadError) as excinfo:
             ob.mint_grad_input_use_map(trace)
         assert excinfo.value.fields["code"] == "read_edge_provenance_unavailable"
-        assert "intervention_ready" in excinfo.value.fields["remedy"]
+        assert "replayable" in excinfo.value.fields["remedy"]
 
 
 class TestPassOriginStamps:
@@ -93,8 +93,7 @@ class TestPassOriginStamps:
         trace = tl.trace(
             model,
             torch.randn(2, 4, requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
         origins = ob.backward_pass_origins(trace)
@@ -152,13 +151,13 @@ class TestDeferredSiblingSeams:
             retention=None,
             capture_status=None,
             resolution="exact",
-            frozen_requested=False,
-            frozen_resolved=False,
+            is_frozen_requested=False,
+            is_frozen_resolved=False,
             frozen_reached=None,
             policy_digest=None,
-            detached=True,
+            is_detached=True,
             sample_id=None,
-            rescorable=True,
+            is_rescorable=True,
         )
         assert row.key == ("t0", "EDGE", (7, "positional", (0,)))
 

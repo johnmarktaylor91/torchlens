@@ -24,16 +24,18 @@ refuses as newer-than-runtime.
 
 from __future__ import annotations
 
+import json
 import warnings
 from pathlib import Path
 
 import pytest
 import torch
 import torch.nn as nn
+from _refuses_as_2x import assert_refuses_as_2x
 from torch.utils.checkpoint import checkpoint
 
 import torchlens as tl
-from torchlens._io import TLSPEC_VERSION, FieldPolicy, TorchLensIOError
+from torchlens._io import TLSPEC_VERSION, ArtifactError, FieldPolicy
 from torchlens._io.prerelease import (
     PRERELEASE_STATE_KEY,
     gated_annotations_keys,
@@ -50,7 +52,7 @@ from torchlens._io.scrub import scrub_for_save
 
 #: family id -> claimed registrar rows ("Owner.field" or "Trace.annotations.key").
 ACCEPTANCE_COVERAGE: dict[str, frozenset[str]] = {
-    "l1-grouping": frozenset({"Trace.grouping", "Trace.grouping_policy"}),
+    "l1-grouping": frozenset({"Trace._options_grouping", "Trace._options_grouping_policy"}),
     "l1-site-key": frozenset({"Op.site_key"}),
     "l2-episode": frozenset({"Trace.annotations.episode"}),
     "l3-aten-profile": frozenset(
@@ -164,12 +166,12 @@ ACCEPTANCE_COVERAGE: dict[str, frozenset[str]] = {
         }
         | {f"_TelemetryPayload.{name}" for name in ("_available", "_launches", "_relations")}
     ),
-    "l6-selection": frozenset({"HelperSpec.selection_recipe", "Trace.intervention_audit"}),
+    "l6-selection": frozenset({"Edit.selection_recipe", "Trace.intervention_audit"}),
     "l6-edges": frozenset(
         {"Op.edge_substitutions", "Op.edge_replacement_stamps", "FireRecord.edge_address"}
     ),
-    "l7a-structure-only": frozenset({"Trace.structure_only"}),
-    "l8-distributed-scope": frozenset({"Trace.distributed_scope"}),
+    "l7a-structure-only": frozenset({"Trace._options_structure_only"}),
+    "l8-distributed-scope": frozenset({"Trace._provenance_distributed_scope"}),
     "l9-timing-provenance": frozenset({"Trace.grad_fn_timing_provenance"}),
     "l9-checkpoint-witness": frozenset({"Trace.checkpoint_invocation_witness"}),
 }
@@ -180,17 +182,17 @@ _ANNOTATION_ROWS = frozenset({"Trace.annotations.episode", "Trace.annotations._k
 
 #: Owner-class resolution for the per-family activation check.
 _OWNER_CLASSES: dict[str, str] = {
-    "Trace": "torchlens.data_classes.trace",
-    "Op": "torchlens.data_classes.op",
-    "AtenOp": "torchlens.data_classes.aten_op",
-    "OpRef": "torchlens.data_classes.aten_op",
-    "_ModePausedInteriorGap": "torchlens.data_classes.aten_op",
-    "_PrimitiveOpProfile": "torchlens.data_classes.aten_op",
-    "_AtenTensorFact": "torchlens.ir.events",
-    "_AtenExecutionContext": "torchlens.ir.events",
-    "KernelLaunch": "torchlens.kernel_telemetry",
-    "_TelemetryPayload": "torchlens.kernel_telemetry",
-    "HelperSpec": "torchlens.intervention.types",
+    "Trace": "torchlens._data_classes.trace",
+    "Op": "torchlens._data_classes.op",
+    "AtenOp": "torchlens._data_classes.aten_op",
+    "OpRef": "torchlens._data_classes.aten_op",
+    "_ModePausedInteriorGap": "torchlens._data_classes.aten_op",
+    "_PrimitiveOpProfile": "torchlens._data_classes.aten_op",
+    "_AtenTensorFact": "torchlens._ir.events",
+    "_AtenExecutionContext": "torchlens._ir.events",
+    "KernelLaunch": "torchlens._kernel_telemetry",
+    "_TelemetryPayload": "torchlens._kernel_telemetry",
+    "Edit": "torchlens.intervention.types",
     "FireRecord": "torchlens.intervention.types",
 }
 
@@ -215,7 +217,7 @@ def test_every_family_activated_and_registrar_retired() -> None:
             owner_name, field_name = row.rsplit(".", 1)
             module = importlib.import_module(_OWNER_CLASSES[owner_name])
             owner = getattr(module, owner_name)
-            if owner.PORTABLE_STATE_SPEC[field_name] is FieldPolicy.DROP:
+            if owner._PORTABLE_STATE_SPEC[field_name] is FieldPolicy.DROP:
                 still_dropped.append(row)
     assert not still_dropped, f"families left inactive by the bump: {sorted(still_dropped)}"
     # The v8 bump retired every v8 registration and the v9 bump (C07)
@@ -234,7 +236,7 @@ def test_every_family_activated_and_registrar_retired() -> None:
 def _persisted_eq(a: object, b: object) -> bool:
     """Deep equality over the PERSISTED surface: bitwise tensors, exact scalars.
 
-    Objects declaring ``PORTABLE_STATE_SPEC`` compare field-wise over the
+    Objects declaring ``_PORTABLE_STATE_SPEC`` compare field-wise over the
     declared non-DROP fields; session-time DROP fields are excluded.
     """
 
@@ -246,7 +248,7 @@ def _persisted_eq(a: object, b: object) -> bool:
             and a.shape == b.shape
             and torch.equal(a, b)
         )
-    spec = getattr(type(a), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(a), "_PORTABLE_STATE_SPEC", None)
     if isinstance(spec, dict) and type(a) is type(b):
         for name, policy in spec.items():
             if policy is FieldPolicy.DROP:
@@ -276,7 +278,7 @@ def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str) -> tl.Trace:
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, str(path))
+        trace.save(str(path))
         return tl.load(str(path))
 
 
@@ -286,7 +288,7 @@ def _second_generation(loaded: tl.Trace, tmp_path, name: str) -> tl.Trace:
     path = tmp_path / f"{name}_gen2.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(loaded, str(path))
+        loaded.save(str(path))
         return tl.load(str(path))
 
 
@@ -310,7 +312,7 @@ def _selection_fork() -> tl.Trace:
     trace = tl.trace(
         _TwoConv(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     fork = trace.fork()
     fork.do(tl.units("relu_1_2", [(0, 0, 1, 1)]), tl.zero_ablate())
@@ -332,9 +334,9 @@ def _edge_fork() -> tl.Trace:
     trace = tl.trace(
         _EdgeNet(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
-    edge = next(e for e in trace.edges if e.parent_label == "relu_1_2")
+    edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
     fork = trace.fork()
     fork.do(edge.__selection__(), trace["relu_1_2"].out.clone())
     return fork
@@ -354,8 +356,7 @@ def _backward_trace() -> tl.Trace:
     trace = tl.trace(
         _BackwardTiny(),
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.log_backward(trace.output_ops[0].out.sum())
     return trace
@@ -376,8 +377,7 @@ def _checkpoint_trace() -> tl.Trace:
     trace = tl.trace(
         _OneCheckpoint(),
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.log_backward(trace.output_ops[0].out.sum())
     return trace
@@ -419,7 +419,7 @@ def _episode_trace(n_steps: int = 2) -> tl.Trace:
         return tl.trace(
             runner,
             torch.zeros(1, 3, dtype=torch.long),
-            episode=tl.options.EpisodeSpec(stepped_module=lm, n_steps=n_steps),
+            episode=tl.options.EpisodeOptions(stepped_module=lm, num_steps=n_steps),
         )
 
 
@@ -433,19 +433,22 @@ def _structure_only_trace() -> tl.Trace:
 
 
 def _armed_aten_trace() -> tl.Trace:
-    from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
-
     torch.manual_seed(0)
-    with _activate_aten_recording_for_tests():
-        return tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
+    return tl.trace(
+        nn.Sequential(nn.Linear(4, 4), nn.ReLU()),
+        torch.randn(1, 4),
+        capture=tl.options.CaptureOptions(aten_ops=True),
+    )
 
 
 def _telemetry_trace() -> tl.Trace:
-    from torchlens import kernel_telemetry as telemetry
+    from torchlens import _kernel_telemetry as telemetry
 
     torch.manual_seed(0)
     return telemetry._profile_trace_with_cuda_kernels(
-        lambda: tl.trace(nn.Linear(2, 2), torch.ones(2, 2))
+        lambda: tl.trace(
+            nn.Linear(2, 2), torch.ones(2, 2), capture=tl.options.CaptureOptions(aten_ops=True)
+        )
     )
 
 
@@ -457,10 +460,10 @@ def _telemetry_trace() -> tl.Trace:
 def test_l1_grouping_family_roundtrip(tmp_path) -> None:
     trace = _tiny_trace()
     loaded = _plain_roundtrip(trace, tmp_path, "grouping")
-    assert loaded.grouping == trace.grouping == "structural"
-    assert loaded.grouping_policy == trace.grouping_policy
+    assert loaded.options.grouping == trace.options.grouping == "structural"
+    assert loaded.options.grouping_policy == trace.options.grouping_policy
     gen2 = _second_generation(loaded, tmp_path, "grouping")
-    assert gen2.grouping_policy == loaded.grouping_policy
+    assert gen2.options.grouping_policy == loaded.options.grouping_policy
 
 
 def test_l1_site_key_family_roundtrip(tmp_path) -> None:
@@ -493,7 +496,7 @@ def test_l3_aten_profile_family_roundtrip(tmp_path) -> None:
 
 
 def test_l3_kernel_telemetry_family_roundtrip(tmp_path) -> None:
-    from torchlens import kernel_telemetry as telemetry
+    from torchlens import _kernel_telemetry as telemetry
 
     trace = _telemetry_trace()
     live_payload = trace.annotations["_kernel_telemetry"]
@@ -513,17 +516,17 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
     fork = _selection_fork()
     live_audit = fork.intervention_audit
     live_recipe = next(
-        record.helper.selection_recipe
-        for record in fork["relu_1_2"].ops[0].interventions
-        if record.helper is not None
+        record.edit.selection_recipe
+        for record in fork["relu_1_2"].ops[0].edits
+        if record.edit is not None
     )
     assert live_recipe["resolve_digest"]
     loaded = _plain_roundtrip(fork, tmp_path, "selection")
     assert loaded.intervention_audit == live_audit
     loaded_recipe = next(
-        record.helper.selection_recipe
-        for record in loaded["relu_1_2"].ops[0].interventions
-        if record.helper is not None
+        record.edit.selection_recipe
+        for record in loaded["relu_1_2"].ops[0].edits
+        if record.edit is not None
     )
     assert loaded_recipe == live_recipe
     gen2 = _second_generation(loaded, tmp_path, "selection")
@@ -537,15 +540,13 @@ def test_l6_edge_family_roundtrip(tmp_path) -> None:
     assert store_key in child.edge_substitutions
     live_value = child.edge_substitutions[store_key]["value"]
     live_stamps = child.edge_replacement_stamps
-    live_edge_address = next(
-        record.edge_address for record in child.interventions if record.edge_address
-    )
+    live_edge_address = next(record.edge_address for record in child.edits if record.edge_address)
     loaded = _plain_roundtrip(fork, tmp_path, "edges")
     loaded_child = loaded["conv2d_2_3"].ops[0]
     assert torch.equal(loaded_child.edge_substitutions[store_key]["value"], live_value)
     assert _persisted_eq(loaded_child.edge_replacement_stamps, live_stamps)
     assert (
-        next(record.edge_address for record in loaded_child.interventions if record.edge_address)
+        next(record.edge_address for record in loaded_child.edits if record.edge_address)
         == live_edge_address
     )
     gen2 = _second_generation(loaded, tmp_path, "edges")
@@ -555,11 +556,11 @@ def test_l6_edge_family_roundtrip(tmp_path) -> None:
 
 def test_l7a_structure_only_family_roundtrip(tmp_path) -> None:
     trace = _structure_only_trace()
-    assert trace.structure_only is True
+    assert trace.options.structure_only is True
     loaded = _plain_roundtrip(trace, tmp_path, "structure_only")
-    assert loaded.structure_only is True
+    assert loaded.options.structure_only is True
     gen2 = _second_generation(loaded, tmp_path, "structure_only")
-    assert gen2.structure_only is True
+    assert gen2.options.structure_only is True
 
 
 def test_l8_distributed_scope_family_roundtrip(tmp_path) -> None:
@@ -568,11 +569,11 @@ def test_l8_distributed_scope_family_roundtrip(tmp_path) -> None:
 
     lifecycle.disarm()
     trace = _tiny_trace()
-    trace.distributed_scope = RANK_LOCAL_SHARD
+    trace._provenance_distributed_scope = RANK_LOCAL_SHARD
     loaded = _plain_roundtrip(trace, tmp_path, "distributed_scope")
-    assert loaded.distributed_scope == RANK_LOCAL_SHARD
+    assert loaded.provenance.distributed_scope == RANK_LOCAL_SHARD
     gen2 = _second_generation(loaded, tmp_path, "distributed_scope")
-    assert gen2.distributed_scope == RANK_LOCAL_SHARD
+    assert gen2.provenance.distributed_scope == RANK_LOCAL_SHARD
 
 
 def test_l9_timing_provenance_family_roundtrip(tmp_path) -> None:
@@ -607,12 +608,12 @@ def test_l9_checkpoint_witness_family_roundtrip(tmp_path) -> None:
 
 #: Field row -> validation status TODAY.
 FORGERY_SURFACE_LEDGER: dict[str, str] = {
-    "Trace.grouping_policy": "validated_degrade_typed",  # C1-C8, test_grouping_stamp
+    "Trace.options.grouping_policy": "validated_degrade_typed",  # C1-C8, test_grouping_stamp
     "Trace.annotations.episode": "validated_refuse_or_quarantine",  # test_episode_capture
     "Trace._primitive_op_profile": "validated_fk_refusal",  # test_aten_profile
     "Op.edge_substitutions": "validated_at_validation_time",  # boundary check, test_edge_substitution
     "Op.site_key": "validated_refuse_typed",
-    "Trace.distributed_scope": "validated_refuse_typed",
+    "Trace.provenance.distributed_scope": "validated_refuse_typed",
     "Trace.grad_fn_timing_provenance": "validated_refuse_typed",
     "Trace.checkpoint_invocation_witness": "validated_refuse_typed",
     "Trace.intervention_audit": "validated_refuse_typed",
@@ -620,7 +621,7 @@ FORGERY_SURFACE_LEDGER: dict[str, str] = {
     # v8 bump: the structure-only marker gained its M-C2/M-C3 coherence rows
     # (torchlens/_io/forgery_validation.py). M-C1's stripped-marker form-(a)
     # case is a documented scope statement there, not a silent gap.
-    "Trace.structure_only": "validated_refuse_typed",
+    "Trace.options.structure_only": "validated_refuse_typed",
 }
 
 
@@ -630,7 +631,7 @@ def _tampered_refuses(
     name: str,
     *,
     field: str,
-) -> TorchLensIOError:
+) -> ArtifactError:
     """Prove one planted tamper refuses teachingly and stays marker-contained.
 
     Parameters
@@ -646,15 +647,15 @@ def _tampered_refuses(
 
     Returns
     -------
-    TorchLensIOError
+    ArtifactError
         The typed load-boundary refusal for code-specific assertions.
     """
 
     path = tmp_path / f"{name}_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, str(path))
-    with pytest.raises(TorchLensIOError) as excinfo:
+        trace.save(str(path))
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(path))
     refusal = excinfo.value
     assert refusal.fields["field"] == field
@@ -686,15 +687,15 @@ def test_tamper_distributed_scope_refuses_typed(tmp_path) -> None:
 
     from torchlens.distributed import _lifecycle as lifecycle
 
-    assert FORGERY_SURFACE_LEDGER["Trace.distributed_scope"] == "validated_refuse_typed"
+    assert FORGERY_SURFACE_LEDGER["Trace.provenance.distributed_scope"] == "validated_refuse_typed"
     lifecycle.disarm()
     trace = _tiny_trace()
-    trace.distributed_scope = "forged_scope_value"
+    trace._provenance_distributed_scope = "forged_scope_value"
     refusal = _tampered_refuses(
         trace,
         tmp_path,
         "distributed_scope",
-        field="Trace.distributed_scope",
+        field="Trace.provenance.distributed_scope",
     )
     assert refusal.fields["code"] == "artifact_distributed_scope_invalid"
 
@@ -771,19 +772,19 @@ def test_tamper_grouping_policy_validated_degrades_typed(tmp_path) -> None:
     (fail-closed settlement), re-proven here so the ledger's validated class
     has an in-module witness alongside the owning lane suite."""
 
+    from torchlens._postprocess._grouping_stamp import degraded_grouping_policy_stamp
     from torchlens.errors import TorchLensWarning
-    from torchlens.postprocess._grouping_stamp import degraded_grouping_policy_stamp
 
-    assert FORGERY_SURFACE_LEDGER["Trace.grouping_policy"].startswith("validated")
+    assert FORGERY_SURFACE_LEDGER["Trace.options.grouping_policy"].startswith("validated")
     trace = _tiny_trace()
-    trace.grouping_policy = {**trace.grouping_policy, "policy": "greedy"}
+    trace._options_grouping_policy = {**trace.options.grouping_policy, "policy": "greedy"}
     path = tmp_path / "grouping_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, str(path))
+        trace.save(str(path))
     with pytest.warns(TorchLensWarning, match="grouping_policy stamp is invalid"):
         loaded = tl.load(str(path))
-    assert loaded.grouping_policy == degraded_grouping_policy_stamp("vocabulary")
+    assert loaded.options.grouping_policy == degraded_grouping_policy_stamp("vocabulary")
 
 
 # ---------------------------------------------------------------------------
@@ -817,7 +818,7 @@ def test_combination_episode_structure_only_refuses() -> None:
         tl.trace(
             runner,
             torch.zeros(1, 3, dtype=torch.long),
-            episode=tl.options.EpisodeSpec(stepped_module=lm, n_steps=2),
+            episode=tl.options.EpisodeOptions(stepped_module=lm, num_steps=2),
             capture=tl.options.CaptureOptions(structure_only=True),
         )
     assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"
@@ -830,7 +831,7 @@ def test_combination_plain_truncation_legal_run_result_term_only() -> None:
     SOURCE capture outcome stays COMPLETE (never a CaptureStatus).
     """
 
-    from torchlens.capture.outcome import CaptureStatus
+    from torchlens._capture.outcome import CaptureStatus
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
@@ -858,7 +859,7 @@ def test_combination_plain_structure_only_absent_legal() -> None:
     """Cell (plain, structure_only=True, truncation absent) = LEGAL (L7a core)."""
 
     trace = _structure_only_trace()
-    assert trace.structure_only is True
+    assert trace.options.structure_only is True
     assert trace.ops  # structure recorded, values hypothesized
 
 
@@ -877,113 +878,106 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
     artifact's metadata -- stays strict and unchanged.
     """
 
-    assert FORGERY_SURFACE_LEDGER["Trace.structure_only"] == "validated_refuse_typed"
+    assert FORGERY_SURFACE_LEDGER["Trace.options.structure_only"] == "validated_refuse_typed"
     trace = _tiny_trace()  # an ordinary VALUE capture with retained payloads
-    trace.structure_only = True  # forged marker over real payloads
+    trace._options_structure_only = True  # forged marker over real payloads
     # Layer 1 (save-side mirror, WT1 A-IV item 22/W3): the forged save refuses
     # typed BEFORE any bytes land.
     save_path = tmp_path / "forged_marker.tlspec"
-    with pytest.raises(TorchLensIOError, match="structure-only"):
-        tl.save(trace, str(save_path))
+    with pytest.raises(ArtifactError, match="structure-only"):
+        trace.save(str(save_path))
     assert not save_path.exists()
 
     # Layer 2 (load-side M-C2, unchanged): write the SAME capture honestly,
     # then tamper the marker into the persisted metadata on disk.
     import pickle as _pickle
 
-    trace.structure_only = False
+    trace._options_structure_only = False
     honest_path = tmp_path / "structure_only_payload_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, str(honest_path))
+        trace.save(str(honest_path))
     metadata_path = honest_path / "metadata.pkl"
     state = _pickle.loads(metadata_path.read_bytes())
-    state["structure_only"] = True
+    state["_options_structure_only"] = True
     metadata_path.write_bytes(_pickle.dumps(state))
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(honest_path))
     refusal = excinfo.value
-    assert refusal.fields["field"] == "Trace.structure_only"
+    assert refusal.fields["field"] == "Trace.options.structure_only"
     assert "Remedy:" in str(refusal)
     assert refusal.fields["code"] == "artifact_structure_only_incoherent"
     assert refusal.fields["reason"] == "value_payload_present"
 
 
-def test_tamper_structure_only_verified_claim_refuses_typed(tmp_path) -> None:
-    """M-C3: a marked trace claiming capture_verified=True refuses loudly."""
+@pytest.mark.parametrize(
+    ("forged_field", "forged_value", "tamper_name", "reason"),
+    [
+        ("_provenance_verified", True, "structure_only_verified", "verification_claim"),
+        ("_options_structure_only", "yes", "structure_only_type", "type"),
+    ],
+    ids=[
+        "tamper_structure_only_verified_claim_refuses_typed",
+        "tamper_structure_only_nonbool_marker_refuses_typed",
+    ],
+)
+def test_tamper_structure_only_refuses_typed(
+    tmp_path, forged_field: str, forged_value: object, tamper_name: str, reason: str
+) -> None:
+    """M-C3: a marked trace claiming capture_verified=True (a forged positive
+    verdict) refuses loudly; a non-bool marker value refuses (closed type,
+    never truthiness)."""
 
     trace = _structure_only_trace()
-    trace.__dict__["capture_verified"] = True  # forged positive verdict
+    trace.__dict__[forged_field] = forged_value
     refusal = _tampered_refuses(
         trace,
         tmp_path,
-        "structure_only_verified",
-        field="Trace.structure_only",
+        tamper_name,
+        field="Trace.options.structure_only",
     )
     assert refusal.fields["code"] == "artifact_structure_only_incoherent"
-    assert refusal.fields["reason"] == "verification_claim"
-
-
-def test_tamper_structure_only_nonbool_marker_refuses_typed(tmp_path) -> None:
-    """A non-bool marker value refuses (closed type, never truthiness)."""
-
-    trace = _structure_only_trace()
-    trace.__dict__["structure_only"] = "yes"
-    refusal = _tampered_refuses(
-        trace,
-        tmp_path,
-        "structure_only_type",
-        field="Trace.structure_only",
-    )
-    assert refusal.fields["code"] == "artifact_structure_only_incoherent"
-    assert refusal.fields["reason"] == "type"
+    assert refusal.fields["reason"] == reason
 
 
 # ---------------------------------------------------------------------------
-# Version proofs: v7 still loads, v9 is distinguishable, v10 refuses.
+# Version proofs: the v7 (2.x) snapshot refuses, v10 is distinguishable,
+# a newer stamp refuses.
 # ---------------------------------------------------------------------------
 
-_V7_FIXTURE = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
+_V7_FIXTURE = Path(__file__).parent / "goldens" / "legacy" / "tlspec_v7.tlspec"
 
 
-def test_real_v7_artifact_still_loads_at_recorded_schema() -> None:
-    """The checked-in pre-bump v7 byte snapshot loads correctly after the bump.
+def test_real_v7_artifact_refuses_as_2x() -> None:
+    """The checked-in pre-bump v7 byte snapshot refuses typed after the bump.
 
-    It loads at its RECORDED schema with one age advisory: version 7,
-    wholly-keyless site keys (legal at the v6/v7 boundary), no grouping
-    stamp, payloads intact.
+    The snapshot was written by torchlens 2.x, which this release does not
+    read: it refuses with the one typed 2.x error naming the re-save remedy.
+    Its manifest still records stamp 7.
     """
 
-    from torchlens._io import ArtifactSchemaAgeWarning
-
-    with pytest.warns(ArtifactSchemaAgeWarning, match="older than runtime"):
-        loaded = tl.load(str(_V7_FIXTURE))
-    assert loaded.tlspec_version == 7
-    assert all(op.site_key is None for op in loaded.ops)
-    # The legacy stampless artifact settles to the canonical degraded
-    # grouping-policy representation, never a fabricated healthy stamp.
-    assert loaded.grouping_policy["policy"] == "unknown"
-    assert loaded["relu_1_2"].out is not None
-    assert loaded.structure_only in (None, False)
+    manifest = json.loads((_V7_FIXTURE / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["tlspec_version"] == 7
+    assert_refuses_as_2x(_V7_FIXTURE)
 
 
-def test_v9_artifact_is_distinguishable_from_v7(tmp_path) -> None:
-    """A fresh save stamps tlspec_version 9; the v7 fixture stays 7."""
+def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
+    """A fresh save stamps tlspec_version 11; the v7 fixture stays 7."""
 
     trace = _tiny_trace()
     state, _, _ = scrub_for_save(trace)
-    assert state["tlspec_version"] == TLSPEC_VERSION == 9
-    path = tmp_path / "fresh_v9.tlspec"
-    tl.save(trace, str(path))
+    assert state["tlspec_version"] == TLSPEC_VERSION == 11
+    path = tmp_path / "fresh_v11.tlspec"
+    trace.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.tlspec_version == 9
+    assert loaded.tlspec_version == 11
     assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
 
 
 def test_newer_than_runtime_version_refuses_typed() -> None:
-    """A claimed tlspec_version=10 state refuses as newer-than-runtime."""
+    """A claimed tlspec_version=12 state refuses as newer-than-runtime."""
 
     from torchlens._io import read_tlspec_version
 
-    with pytest.raises(TorchLensIOError, match="only supports up to 9"):
-        read_tlspec_version({"tlspec_version": 10}, cls_name="Trace")
+    with pytest.raises(ArtifactError, match="only supports up to 11"):
+        read_tlspec_version({"tlspec_version": 12}, cls_name="Trace")

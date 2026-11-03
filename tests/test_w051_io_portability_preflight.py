@@ -1,6 +1,6 @@
 """W051-IO: write/read symmetry for ``metadata.pkl`` (AUD-CODE 2.20 / 3.11g).
 
-``tl.save`` must never write metadata bytes that a default ``tl.load`` cannot
+``Trace.save`` must never write metadata bytes that a default ``tl.load`` cannot
 read back. Before this lane an arbitrary user object under
 ``Trace.annotations`` saved silently and made the WHOLE artifact unloadable
 with a misleading "corrupt pickle" refusal, and a tensor logged during the
@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io._portability_preflight import (
     preflight_metadata_portability,
     sanitize_annotation_tensors,
@@ -35,9 +35,9 @@ def _tiny_trace() -> tl.Trace:
     return tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
 
 
-def _refusal(trace: tl.Trace, path: Path) -> TorchLensIOError:
-    with pytest.raises(TorchLensIOError) as excinfo:
-        tl.save(trace, path)
+def _refusal(trace: tl.Trace, path: Path) -> ArtifactError:
+    with pytest.raises(ArtifactError) as excinfo:
+        trace.save(path)
     assert not path.exists(), "a refused save must leave nothing behind"
     return excinfo.value
 
@@ -67,7 +67,7 @@ def test_user_object_in_op_annotation_refuses_naming_the_op(tmp_path: Path) -> N
     assert exc.fields["code"] == "annotation_value_unportable"
     # The op's annotations mirror onto its persisted Layer record too; the
     # located path names whichever persisted record fails first, by label.
-    assert exc.fields["field"].startswith("Trace.layer_")
+    assert exc.fields["field"].startswith("Trace._layer_")
     assert "linear_1_1" in exc.fields["field"]
     assert exc.fields["field"].endswith(".annotations['foo']")
 
@@ -89,7 +89,7 @@ def test_log_value_tensor_round_trips(tmp_path: Path) -> None:
     live_value = trace.annotations["logged_values"]["y_tensor"]
     assert isinstance(live_value, torch.Tensor)
     path = tmp_path / "lv.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     # The live trace keeps its session-time object; only the artifact copy is coerced.
     assert trace.annotations["logged_values"]["y_tensor"] is live_value
     loaded = tl.load(path)
@@ -106,7 +106,7 @@ def test_parameter_and_plain_tensor_annotations_round_trip(tmp_path: Path) -> No
     trace.annotations.setdefault("user", {})["plain"] = plain
     trace.annotations["user"]["param"] = nn.Parameter(torch.ones(2))
     path = tmp_path / "p.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     torch.testing.assert_close(loaded.annotations["user"]["plain"], plain)
     restored = loaded.annotations["user"]["param"]
@@ -144,7 +144,7 @@ def test_preflight_returns_bytes_the_loader_reads() -> None:
 @pytest.mark.smoke
 def test_preflight_names_metadata_paths_outside_annotations() -> None:
     state = {"tlspec_version": 9, "some_field": [1, {"deep": _UserObject()}]}
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         preflight_metadata_portability(
             state, unpickler_factory=_RenameAwareUnpickler, bundle_path="<memory>"
         )

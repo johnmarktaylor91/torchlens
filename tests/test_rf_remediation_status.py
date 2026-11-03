@@ -36,7 +36,7 @@ def _op(trace: object, name: str) -> object:
 
     return next(
         item
-        for item in reversed(trace.layer_list)  # type: ignore[union-attr]
+        for item in reversed(trace._layer_list)  # type: ignore[union-attr]
         if item.func_name == name
     )
 
@@ -44,7 +44,7 @@ def _op(trace: object, name: str) -> object:
 def _input_op(trace: object) -> object:
     """Return the canonical input operation from a one-input trace."""
 
-    return next(item for item in trace.layer_list if item.is_input)  # type: ignore[union-attr]
+    return next(item for item in trace._layer_list if item.is_input)  # type: ignore[union-attr]
 
 
 def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
@@ -53,8 +53,7 @@ def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
     return tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 
@@ -89,7 +88,7 @@ def test_pooling_preserves_exact_pointwise_channels(pool: nn.Module) -> None:
     """Keep bare max and average pooling channel-pointwise and gradient-valid."""
 
     trace = _trace(pool, torch.randn(1, 3, 6, 6, requires_grad=True))
-    target = next(item for item in trace.layer_list if "pool2d" in str(item.func_name))
+    target = next(item for item in trace._layer_list if "pool2d" in str(item.func_name))
     descriptor = target.receptive_field._descriptor()
 
     assert descriptor.status is ReceptiveFieldStatus.EXACT
@@ -113,7 +112,7 @@ def test_depthwise_convolution_then_pooling_remains_channel_pointwise() -> None:
     with torch.no_grad():
         model[0].weight.fill_(1.0)
     trace = _trace(model, torch.randn(1, 3, 6, 6, requires_grad=True))
-    target = next(item for item in trace.layer_list if item.func_name == "max_pool2d")
+    target = next(item for item in trace._layer_list if item.func_name == "max_pool2d")
     descriptor = target.receptive_field._descriptor()
 
     assert descriptor.status is ReceptiveFieldStatus.EXACT
@@ -153,8 +152,8 @@ def test_grouped_convolution_keeps_spatial_windows_with_channel_upper_bound() ->
 @pytest.mark.parametrize("surface", ["check", "verify"])
 def test_poisoned_trace_refuses_receptive_field_verdicts(surface: str) -> None:
     """RF verdict producers share the monotonic poisoned-trace refusal gate."""
+    from torchlens._runnable import PathFaithfulness, mark_trace_path_status
     from torchlens.errors import PoisonedRunError
-    from torchlens.runnable import PathFaithfulness, mark_trace_path_status
 
     model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
     trace = _trace(model, torch.ones(1, 1, 5, 5, requires_grad=True))
@@ -193,8 +192,7 @@ def test_sdpa_feature_axis_upper_bound_contains_query_gradients() -> None:
     trace = tl.trace(
         _DistinctAttention(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = _op(trace, "scaled_dot_product_attention")
     descriptor = target.receptive_field._descriptor(trace.input_ops[0])
@@ -227,8 +225,7 @@ def test_sdpa_grouped_query_attention_widens_key_value_heads() -> None:
     trace = tl.trace(
         _GroupedQueryAttention(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = _op(trace, "scaled_dot_product_attention")
     key_value_inputs = list(trace.input_ops)[1:]
@@ -261,8 +258,7 @@ def test_sdpa_broadcast_widens_key_value_batch_and_head_axes() -> None:
     trace = tl.trace(
         _DistinctAttention(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = _op(trace, "scaled_dot_product_attention")
     key_value_inputs = list(trace.input_ops)[1:]

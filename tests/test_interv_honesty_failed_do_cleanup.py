@@ -32,11 +32,11 @@ def _log() -> tl.Trace:
     return tl.trace(
         _ConvRelu().eval(),
         torch.randn(2, 1, 4, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
-def _bad_hook(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _bad_hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
     raise RuntimeError("boom")
 
 

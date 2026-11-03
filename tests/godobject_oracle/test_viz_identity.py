@@ -52,8 +52,8 @@ torch.manual_seed({seed})
 trace = tl.trace(VizCNN(), torch.linspace(-1.0, 1.0, 16).reshape(1, 1, 4, 4))
 with tempfile.TemporaryDirectory() as tmp:
     source = trace.draw(
-        vis_save_only=True, vis_fileformat="svg", vis_outpath=tmp + "/g"
-    )
+        file_format="svg", path=tmp + "/g"
+    ).dot
 print(hashlib.sha256(source.encode()).hexdigest())
 """
 
@@ -105,11 +105,10 @@ def _dot(trace: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     """Render a trace and return its DOT source."""
 
     return trace.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 #: The ``graphviz`` python package is the direct DOT emitter for these
@@ -248,22 +247,21 @@ def test_backward_dot_in_process_stable(tmp_path: Path) -> None:
         trace = tl.trace(
             VizCNN(),
             x,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
     loss = trace[trace.ops.keys()[-1]].out.sum()
     trace.log_backward(loss)
 
-    first = trace.draw_backward(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "b1"),
-    )
-    second = trace.draw_backward(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "b2"),
-    )
+    first = trace.draw(
+        graph="backward",
+        file_format="svg",
+        path=str(tmp_path / "b1"),
+    ).dot
+    second = trace.draw(
+        graph="backward",
+        file_format="svg",
+        path=str(tmp_path / "b2"),
+    ).dot
     assert first == second
 
     node_count = sum(1 for line in first.splitlines() if " [" in line and "->" not in line)

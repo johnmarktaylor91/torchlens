@@ -55,7 +55,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, MissingDependencyError
+from ..report._notebook._card_suppression import register_card_suppressor
 
 __all__ = [
     "BRIDGE_LEDGER",
@@ -81,16 +83,16 @@ __all__ = [
 #: paths; absent optional types are skipped at register() and disclosed in
 #: :func:`status`.
 BRIDGE_LEDGER: dict[str, str] = {
-    "torchlens.data_classes.trace.Trace": "rich",
-    "torchlens.partial.PartialTrace": "rich",
-    "torchlens.data_classes.layer.Layer": "rich",
-    "torchlens.data_classes.op.Op": "rich",
-    "torchlens.data_classes.module.Module": "one_line",
-    "torchlens.data_classes.module.ModuleCall": "one_line",
-    "torchlens.fastlog.types.Recording": "one_line",
-    "torchlens.runnable.RunResult": "one_line",
-    "torchlens.data_classes.grad_fn.GradFn": "one_line",
-    "torchlens.data_classes.grad_fn.GradFnCall": "one_line",
+    "torchlens._data_classes.trace.Trace": "rich",
+    "torchlens._partial.PartialTrace": "rich",
+    "torchlens._data_classes.layer.Layer": "rich",
+    "torchlens._data_classes.op.Op": "rich",
+    "torchlens._data_classes.module.Module": "one_line",
+    "torchlens._data_classes.module.ModuleCall": "one_line",
+    "torchlens.recording.types.Recording": "one_line",
+    "torchlens._runnable.RunResult": "one_line",
+    "torchlens._data_classes.grad_fn.GradFn": "one_line",
+    "torchlens._data_classes.grad_fn.GradFnCall": "one_line",
 }
 
 #: Budget for the foldable key index a bridged Trace emits (strings only).
@@ -492,7 +494,7 @@ def treescope_repr(obj: Any, path: str | None, subtree_renderer: Any) -> Any:
 
         facts = _trace_fact_lines(obj)
         children: list[Any] = [rp.text(line) for line in facts]
-        keys = [str(k) for k in (getattr(obj, "layer_logs", None) or ())][:64]
+        keys = [str(k) for k in ((obj._layer_logs if is_live_trace(obj) else None) or ())][:64]
         if keys:
             shown = keys[:_KEY_INDEX_BUDGET]
             index_children = [rp.text(f"['{key}']") for key in shown]
@@ -524,9 +526,11 @@ def _trace_fact_lines(obj: Any) -> list[str]:
     outcome_status = getattr(getattr(outcome, "status", None), "name", None)
     if outcome_status:
         lines.append(f"outcome: {outcome_status}")
-    num_ops = getattr(obj, "num_ops", None)
+    num_ops = obj._num_ops if is_live_trace(obj) else None
     if num_ops is not None:
-        lines.append(f"ops: {num_ops} (saved: {getattr(obj, 'num_saved_ops', '?')})")
+        lines.append(
+            f"ops: {num_ops} (saved: {len(obj.saved_ops) if hasattr(obj, 'saved_ops') else '?'})"
+        )
     return lines
 
 
@@ -576,6 +580,10 @@ def consume_repr_suppression(obj: Any) -> bool:
         return False
 
 
+# Cards sit below this bridge and never import it: they consult the slot.
+register_card_suppressor(consume_repr_suppression)
+
+
 # ---------------------------------------------------------------------------
 # The explicit bridge door (memo 3.7)
 
@@ -591,7 +599,7 @@ def display(obj: Any) -> None:
     renders through treescope's automatic array visualizer with OUR
     truncation budgets.
 
-    Spelling is [UI-SPRINT]; ``layer.show(method="treescope")`` is the
+    Spelling is [UI-SPRINT]; ``layer.show(kind="treescope")`` is the
     candidate method form.
     """
 
@@ -609,7 +617,7 @@ def display(obj: Any) -> None:
             tensor = None
     supported, _reason = probe_tensor_support()
     if tensor is not None and supported:
-        from ..notebook._truncation import (
+        from ..report._notebook._truncation import (
             CELL_BUDGET_DEFAULT,
             EDGE_ITEMS_DEFAULT,
             PER_AXIS_BUDGET_DEFAULT,

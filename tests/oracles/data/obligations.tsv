@@ -7,3 +7,104 @@ OBL-W0-CACHE-KEY-COMPLETE	every option/entry parameter is cache-keyed or witness
 OBL-W0-DEPRECATION-IFF	a call warns deprecation iff the registry says so	behavior root: observed CALLS through invocation templates, never metadata (D6); warning must name the registered replacement and the replacement must resolve (D21)	I1	PURE_OBSERVER	P02
 OBL-W0-SURFACE-DENOM	the public-surface denominator is multi-root anchored	counted set: len(__all__); roots: static AST parse, runtime length, PUBLIC_SURFACE_SIZE constant, TARGET_ALL ledger length, classification-baseline declared count; the reachable denominator publishes beside it with its counted set (D8)	I1	PURE_OBSERVER	P02
 OBL-W0-NUMERAL-PROVENANCE	published numerals are censused with a dated legacy baseline	counted set: NUMERAL_COUNTED_SET in tests/oracles/_censuses.py; stale baseline rows block; FactRef enforcement for NEW numerals lands Wave 2 (H5)	I1	PURE_OBSERVER	F36
+OBL-Q-ADDRESS-DEPTH	a module's address depth equals its dotted-address component count	dotted components of the module address below the root; the root address 'self' is 0; unit: levels	I2	PURE_OBSERVER	REAL
+OBL-Q-BRANCHING-FACTOR	the branching factor equals the hand-counted mean fan-out	mean number of children (consumers) per compute Op; unit: children per op (float)	I2	PURE_OBSERVER	REAL
+OBL-Q-BYTES-READ	an op's read traffic equals its read-once closed form	theoretical ideal read-once bytes: every input tensor and every parameter of the op read once; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-BYTES-WRITTEN	an op's write traffic equals its write-once closed form	theoretical ideal write-once bytes of the op's outputs; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-CALL-DEPTH	a module's call depth equals its hand-counted nesting depth	nesting depth of the module's call in the call tree, a top-level child at 1; unit: levels	I2	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-UNACCOUNTED-COUNT	the unaccounted-dispatch count equals the planted gap count	aten dispatch events the completeness witness observed that no captured op accounts for; unit: events	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-IN-DEGREE	the maximum in-degree equals the hand-counted parent maximum	maximum number of parents over compute Ops; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-OUT-DEGREE	the maximum out-degree equals the hand-counted child maximum	maximum number of children over compute Ops; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-COMPUTE-EDGES	the compute-edge count equals the hand count	distinct Op-graph edges whose endpoints are both compute Ops; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-OVERWRITES	a buffer's overwrite count equals the hand-counted writes	write events recorded for one buffer address; unit: writes	I2	PURE_OBSERVER	REAL
+OBL-Q-SAVED-ACTIVATION-MEMORY	retained activation bytes equal the physically retained storage	physical bytes of retained activation payloads (raw and transformed), each storage counted once; unit: bytes	I1	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS	the parameter count equals its closed form on every door	parameter elements in scope: a Trace or summary all declared parameters, a Module its own, a Layer or Op the parameters it consumes, a Param its own elements; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAM-TENSORS	the parameter-tensor count equals its closed form on every door	parameter tensors in scope (Trace, Layer, Op, Module, ModuleCall); unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-FROZEN	the frozen-parameter count equals its closed form on every door	elements of in-scope parameters with requires_grad False; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-TRAINABLE	the trainable-parameter count equals its closed form on every door	elements of in-scope parameters with requires_grad True; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-EXECUTED	the executed-parameter count equals its closed form on every door	elements of declared parameters consumed by a captured op; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-UNEXECUTED	the unexecuted-parameter count equals its closed form on every door	elements of declared parameters no captured op consumed; unit: elements	I2	PURE_OBSERVER	REAL
+OBL-Q-MACS-FORWARD	forward MACs equal their closed form on every door	true forward multiply-accumulates, never flops // 2; non-MAC ops count 0; unit: MACs	I2	PURE_OBSERVER	REAL
+OBL-Q-FLOPS-FORWARD	forward FLOPs equal their closed form on every door	forward floating-point operations, fma counted as 2 and bias adds counted; unit: FLOPs	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PASSES	the pass count equals the number of times the op ran	times a layer's op executed in the forward; unit: passes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-EDGES	the edge count equals the hand-counted graph edges on every door	distinct op-graph edges in scope, boundary edges included; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-ACTIVATION-MEMORY	a tensor's activation bytes equal elements times element size on every door	bytes of one observed tensor value (an op output, or a buffer's final observed value); a total sums the retained ones; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-PARAM-MEMORY	parameter bytes equal elements times element size over the unique parameters	storage bytes of the parameters in scope, each parameter tensor counted once however many names hold it; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-LAYER-EDGES	the layer-edge count equals the hand-counted rolled-graph edges	distinct (parent layer, child layer) pairs, a pass feeding the next pass of its own layer included; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INPUT-LAYERS	the input-layer count equals the number of model input tensors	input boundary layers, one per model input tensor; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-OUTPUT-LAYERS	the output-layer count equals the number of model output tensors	output boundary layers, one per model output tensor; unit: layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-EDGES	the buffer-edge count equals the hand-counted edges touching a buffer op	distinct op-graph edges with at least one buffer endpoint; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INPUTS	an op's input count equals its hand-counted graph parents	distinct graph-parent ops feeding an op; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INTERNAL-EDGES	a module scope's internal edges equal the hand-counted edges inside it	distinct op-graph edges whose both endpoints are ops of the module or call; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-INPUT-EDGES	a module scope's input edges equal the hand-counted edges entering it	distinct op-graph edges from an op outside the module or call to one inside; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-OUTPUT-EDGES	a module scope's output edges equal the hand-counted edges leaving it	distinct op-graph edges from an op inside the module or call to one outside; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-UNCALLED-MODULES	the uncalled-module count equals the hand-counted registered modules never called	registered modules of the source model with no call in the trace; unit: modules	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAM-TENSORS-FROZEN	the frozen parameter-tensor count equals the hand count	nn.Parameter tensors with requires_grad False consumed by an op/layer or owned by a module (the root owns all); unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAM-TENSORS-TRAINABLE	the trainable parameter-tensor count equals the hand count	nn.Parameter tensors with requires_grad True consumed by an op/layer or owned by a module (the root owns all); unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-MIN-DISTANCE-FROM-INPUT	the nearest-input hop count equals the hand count	fewest Op-graph edges from any model input; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-DISTANCE-FROM-INPUT	the farthest-input hop count equals the hand count	most Op-graph edges from any model input; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
+OBL-Q-MIN-DISTANCE-TO-OUTPUT	the nearest-output hop count equals the hand count	fewest Op-graph edges to any model output; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-DISTANCE-TO-OUTPUT	the farthest-output hop count equals the hand count	most Op-graph edges to any model output; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
+OBL-Q-MAX-LAYER-OP-COUNT	the largest Layer pass count equals the hand count	most Ops (passes) grouped into one Layer; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-POS-ARGS	the positional-argument count equals the call as written	positional arguments of the torch call; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-KWARGS	the keyword-argument count equals the call as written	keyword arguments of the torch call; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-ARGS-TOTAL	the argument total equals positional plus keyword	all arguments of the torch call; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-GRADIENT-MEMORY	gradient bytes equal element count times element size	bytes of the gradient tensors an op, layer, parameter, buffer or trace holds, each tensor once at trace level; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-PARAM-GRADIENT-MEMORY	parameter-gradient bytes equal the raw Tensor.grad recount	bytes of every parameter's .grad; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-SAVED-GRADIENT-MEMORY	saved gradient bytes equal the retained per-pass gradients	bytes of the output gradients save_grads retained, one record per op per backward pass; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-OUTPUT-GRADIENT-MEMORY	a call's output-gradient bytes equal the hand count	gradient bytes of the Ops forming a call's return value, summed over calls for a module; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-INTERNAL-GRADIENT-MEMORY	a call's internal-gradient bytes equal the hand count	gradient bytes of a call's non-output Ops, summed over calls for a module; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-OUTPUT-ACTIVATION-MEMORY	a call's output-activation bytes equal the hand count	activation bytes of the Ops forming a call's return value, summed over calls for a module; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-INTERNAL-ACTIVATION-MEMORY	a call's internal-activation bytes equal the hand count	activation bytes of a call's non-output Ops, summed over calls for a module; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-INTERNAL-PARAM-MEMORY	subtree parameter bytes equal the hand count	parameter bytes of every module under the address subtree, called or not; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-INPUT-MEMORY	an op's input bytes equal its saved parents' bytes	activation bytes of an Op's saved graph parents; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-BACKWARD-EDGES	the backward-edge count equals a raw autograd-graph recount	distinct (node, next node) pairs among reachable autograd nodes; unit: edges	I2	PURE_OBSERVER	REAL
+OBL-Q-FLOPS-BACKWARD	backward FLOPs equal the multiplier estimate where a backward node runs	documented multiplier on forward FLOPs (linear 2x, elementwise 1x) for ops whose output has an autograd node, zero otherwise, summed over passes and calls; unit: FLOPs	I2	PURE_OBSERVER	REAL
+OBL-Q-FLOPS-TOTAL	total FLOPs equal forward plus backward	forward plus backward FLOPs, summed over passes and calls; unit: FLOPs	I2	PURE_OBSERVER	REAL
+OBL-Q-ARITHMETIC-INTENSITY	arithmetic intensity equals FLOPs over read-once write-once bytes	forward FLOPs / (input + parameter + output bytes); unit: FLOPs per byte	I2	PURE_OBSERVER	REAL
+OBL-Q-UNKNOWN-FLOP-OPS	the summary's unknown-compute count equals the hand count	ops with no FLOP rule; unit: ops	I2	PURE_OBSERVER	REAL
+OBL-Q-AUTOGRAD-MEMORY	autograd-saved bytes equal a saved_tensors_hooks recount on every door	bytes the captured forward's autograd saved for each op (a storage once per op, views in full), summed per Layer, call, module and trace; unit: bytes	I1	PURE_OBSERVER	REAL
+OBL-Q-BACKWARD-DURATION	backward durations lie between a planted hook sleep and an outside clock	seconds of all backward passes; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-CAPTURE-DURATION	the capture duration lies between a planted sleep and an outside clock	seconds from capture start to end; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-CAPTURE-THREAD-COUNT-END	the end thread count equals a recount, one higher after a planted thread	live Python threads when the capture ended; unit: threads	I1	PURE_OBSERVER	REAL
+OBL-Q-CAPTURE-THREAD-COUNT-START	the start thread count equals threading.active_count()	live Python threads when the capture started; unit: threads	I1	PURE_OBSERVER	REAL
+OBL-Q-CLEANUP-DURATION	the cleanup duration is bounded by an outside clock	seconds of postprocess after the forward; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-ACCOUNTED-COUNT	the accounted count equals the dispatch recount on a fully wrapped forward	witness events attributed to a captured call; unit: events	I1	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-CALLBACK-NS	the witness callback time is bounded by an outside clock	nanoseconds spent in witness callbacks; unit: nanoseconds	I1	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-EVENT-COUNT	the witness event count equals a TorchDispatchMode recount	ATen dispatch events the completeness witness observed; unit: events	I1	PURE_OBSERVER	REAL
+OBL-Q-CONDITIONAL-BRANCH-DEPTH	the branch depth equals the hand-counted if nesting	arms enclosing the op in the source (len of conditional_branch_stack); unit: levels	I2	PURE_OBSERVER	REAL
+OBL-Q-CONDITIONAL-DEPTH	the conditional depth equals the hand-counted direct roles	distinct conditionals the record takes a direct role in (the consumed bool, or an arm-entry op); unit: conditionals	I2	PURE_OBSERVER	REAL
+OBL-Q-ESCAPE-DETECTOR-CALLBACK-NS	the detector callback time is bounded by an outside clock	nanoseconds spent in escape-detector callbacks; unit: nanoseconds	I1	PURE_OBSERVER	REAL
+OBL-Q-ESCAPE-DETECTOR-EVENT-COUNT	the detector event count equals a TorchFunctionMode recount	torch-function events the escape detector classified; unit: events	I1	PURE_OBSERVER	REAL
+OBL-Q-FORWARD-DURATION	forward durations lie between a planted sleep and an outside clock	wall seconds of the forward (trace) or of the call's forward(); unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-FUNC-CALLS-DURATION	function-call totals exclude a planted non-op sleep and fit an outside clock	seconds spent inside the ops' functions, summed over the scope; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-FUNC-DURATION	an op's function duration fits the forward minus a planted sleep	seconds inside the op's function (0 for boundary nodes); unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-LAST-BACKWARD-DURATION	the last backward duration lies between a planted hook sleep and an outside clock	seconds of the most recent backward pass; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-MAX-DESCENDANT-DEPTH	the deepest nested-call depth equals the hand-counted call tree	levels of nested ModuleCalls beneath the call (0 for a leaf); a Module takes the max over its calls; unit: levels	I2	PURE_OBSERVER	REAL
+OBL-Q-MODULE-CALL-DEPTH	an op's module-call depth equals the hand-counted non-root calls on the stack	non-root ModuleCalls active when the op ran (the root call excluded); a Layer reads its first pass; unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-AUTOGRAD-TENSORS	the autograd-saved tensor count equals a saved_tensors_hooks recount	distinct tensors the captured forward's autograd saved for the op; unit: tensors	I1	PURE_OBSERVER	REAL
+OBL-Q-NUM-BUFFER-LAYERS	the buffer-Layer count equals the hand-counted buffer Layers	distinct buffer Layers, not their passes; unit: Layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-CALLS	a module's call count and a parameter's use count equal the hand counts	Module: invocations of that module; Param: Ops that consumed the parameter (0 for a never-called module's); unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-DESCENDANT-CALLS	the nested-call count equals the hand-counted call tree	ModuleCalls made while the call is on the stack, recursively; a Module sums over its calls; unit: calls	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-LAYERS	the Layer count equals the hand-counted distinct Layers	distinct Layers (a Layer run twice counts once) in the trace, the module or the call; unit: Layers	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-PARAMS-BY-PATH	the per-path parameter total equals named_parameters(remove_duplicate=False)	parameter elements counted once per registration path, ties counted per path; unit: elements	I1	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAM-TENSORS	the address-recursive parameter-tensor count equals the hand count	parameter tensors in the address subtree; unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAM-TENSORS-FROZEN	the frozen address-recursive tensor count equals the hand count	frozen parameter tensors in the address subtree; unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAM-TENSORS-TRAINABLE	the trainable address-recursive tensor count equals the hand count	trainable parameter tensors in the address subtree; unit: tensors	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAMS	the address-recursive parameter-record count equals the hand count	nn.Parameter records owned by the module's address subtree, never-called descendants included; unit: records	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAMS-FROZEN	the frozen address-recursive record count equals the hand count	frozen nn.Parameter records in the address subtree; unit: records	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-RECURSIVE-PARAMS-TRAINABLE	the trainable address-recursive record count equals the hand count	trainable nn.Parameter records in the address subtree; unit: records	I2	PURE_OBSERVER	REAL
+OBL-Q-OVERHEAD-DURATION	the overhead lies between a planted non-op sleep and an outside clock	capture seconds outside function calls; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-PINNED-AUTOGRAD-MEMORY	pinned autograd bytes equal a whole-graph saved_tensors_hooks recount	bytes of distinct non-Parameter tensors autograd saved upstream of the attached payloads; unit: bytes	I1	PURE_OBSERVER	REAL
+OBL-Q-SETUP-DURATION	the setup duration is bounded by an outside clock	seconds before the forward starts; unit: seconds	I1	PURE_OBSERVER	REAL
+OBL-Q-NUM-FORWARD-POS-ARGS	the call's positional-argument count equals the hand count	positional arguments the call's forward received, the root call included; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-FORWARD-KWARGS	the call's keyword-argument count equals the hand count	keyword arguments the call's forward received, the root call included; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-NUM-FORWARD-ARGS-TOTAL	the call's argument total equals the hand count	positional plus keyword arguments of the call's forward, the root call included; unit: arguments	I2	PURE_OBSERVER	REAL
+OBL-Q-COMPLETENESS-WITNESS-EXPECTED-OPAQUE-COUNT	the expected-opaque count equals the recounted tensor-to-Python reads	witness events inside an audited opaque boundary (a tensor bool or scalar read); unit: events	I1	PURE_OBSERVER	REAL
+OBL-Q-AT-CAPTURE-BYTES	the at-capture payload bytes equal the saved activations' closed form	bytes of every activation the capture saved, whether or not its payload is still here; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-RETAINED-NOW-BYTES	the retained payload bytes equal the closed form, 0 on a payload-stripped artifact	bytes of saved activations whose payload is resident or lazily loadable now; unit: bytes	I2	PURE_OBSERVER	REAL
+OBL-Q-ADVISORIES	the advisory count equals the planted advisory kinds	capture-advisory records on the trace, one per advisory kind the capture raised (each row aggregates its instances); unit: records	I2	PURE_OBSERVER	REAL
+OBL-Q-COLLAPSE-SCORE	the collapse priority equals the hand-counted hidden-op ratio	a module's hidden ops (distinct subtree ops minus one) over the largest submodule's, rounded to 6 places; 0.0 for the root, a module of at most one Layer, or one whose single child hides the same ops; unit: ratio	I2	PURE_OBSERVER	REAL
+OBL-Q-FORWARD-PEAK-MEMORY	the forward peak is bounded by an outside resident-set measurement	largest memory growth over the forward's starting baseline, including memory freed before the forward returns (CPU: resident high-water; CUDA: device allocator peak); None with a reason when a CPU forward measured zero; unit: bytes	I1	PURE_OBSERVER	REAL
+OBL-Q-BACKWARD-PEAK-MEMORY	the backward peak is bounded by an outside resident-set measurement	largest peak above a backward pass's starting baseline over all passes (CPU: resident high-water, largest pass; CUDA: growth of the device high-water mark); unit: bytes	I1	PURE_OBSERVER	REAL
+OBL-Q-BACKWARD-MEMORY	the retained gradient bytes equal the unique-storage closed form	bytes of the gradient payloads the trace retains, once per storage (a view charges its whole base storage, an expanded view its smaller storage); unit: bytes	I2	PURE_OBSERVER	REAL

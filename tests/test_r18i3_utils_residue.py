@@ -1,4 +1,4 @@
-"""Regression tests for r18i3 utils/__init__.py residue findings M12/M13/M14.
+"""Regression tests for r18i3 _utils/__init__.py residue findings M12/M13/M14.
 
 Each finding is a diagnostic/state-hygiene bug that r18i-2 diagnosed but could
 not reach from its options.py lease:
@@ -23,7 +23,8 @@ import pytest
 import torch
 from torch import nn
 
-import torchlens.utils as tl_utils
+import torchlens._utils as tl_utils
+from torchlens.report import _environment as tl_environment
 
 
 # --------------------------------------------------------------------------- #
@@ -155,11 +156,11 @@ def test_m14_missing_capability_reports_warn_not_pass(monkeypatch: pytest.Monkey
     """A snapshot with any False flag must NOT stamp a green PASS row."""
 
     monkeypatch.setattr(
-        tl_utils,
-        "_runtime_capability_snapshot",
+        tl_environment,
+        "capability_snapshot",
         lambda: {"cap_a": True, "cap_b": False, "cap_c": False},
     )
-    row = tl_utils._probe_torch_capabilities()
+    row = tl_environment._probe_torch_capabilities()
     assert row.status == "WARN", f"missing caps stamped {row.status!r} (should be WARN)"
     # The detail must still enumerate exactly what is missing.
     assert "missing=cap_b,cap_c" in row.detail
@@ -169,11 +170,11 @@ def test_m14_all_capabilities_present_reports_pass(monkeypatch: pytest.MonkeyPat
     """An all-True snapshot is a genuine PASS with no missing suffix."""
 
     monkeypatch.setattr(
-        tl_utils,
-        "_runtime_capability_snapshot",
+        tl_environment,
+        "capability_snapshot",
         lambda: {"cap_a": True, "cap_b": True},
     )
-    row = tl_utils._probe_torch_capabilities()
+    row = tl_environment._probe_torch_capabilities()
     assert row.status == "PASS"
     assert "missing=" not in row.detail
 
@@ -181,7 +182,7 @@ def test_m14_all_capabilities_present_reports_pass(monkeypatch: pytest.MonkeyPat
 def test_m14_status_is_a_valid_doctorcheck_value() -> None:
     """WARN is part of the DoctorCheck status vocabulary (guards a typo regression)."""
 
-    valid = tl_utils.DoctorCheck.__annotations__["status"]
+    valid = tl_environment._EnvironmentCheck.__annotations__["status"]
     # Literal["PASS", "FAIL", "SKIP", "WARN"] -> the string must mention WARN.
     assert "WARN" in str(valid) and "PASS" in str(valid)
 
@@ -198,8 +199,8 @@ def test_user_stacklevel_points_at_the_first_non_torchlens_frame() -> None:
 
     import warnings
 
-    from torchlens.utils import display as display_module
-    from torchlens.utils.display import user_stacklevel
+    from torchlens._utils import display as display_module
+    from torchlens._utils.display import user_stacklevel
 
     # Stand in for the pipeline: three nested frames that all report a torchlens
     # filename, warning from the innermost. Compiling with display.py's own path
@@ -233,8 +234,8 @@ def test_user_stacklevel_points_at_the_first_non_torchlens_frame() -> None:
 def test_user_stacklevel_extra_offsets_for_warn_on_behalf_helpers() -> None:
     """``extra`` shifts the level for helpers that warn on someone else's behalf."""
 
-    from torchlens.utils import display as display_module
-    from torchlens.utils.display import user_stacklevel
+    from torchlens._utils import display as display_module
+    from torchlens._utils.display import user_stacklevel
 
     source = (
         "def outer(extra):\n"

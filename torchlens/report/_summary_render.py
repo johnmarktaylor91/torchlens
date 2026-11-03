@@ -17,13 +17,30 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import NamedTuple
 
-from ._summary_charset import assert_no_escape_bytes
+from ._summary_charset import assert_no_escape_bytes, degrade
+from ._summary_columns import ATTENTION_FULL_SQUARE_NOTE, OptimizerStateFacts
 from ._summary_config import ColumnSpec, SummaryConfig
 from ._summary_ladder import ResolvedView, ViewRow
 
 #: Micro-bar width in characters (%params emphasis; degrade-map covered).
 _BAR_WIDTH = 3
+
+#: Suffix on a FLOP cell whose count includes a full-square attention op.
+ATTENTION_MARK = "^"
+
+#: Width past which a shape-list cell is compacted: runs of identical shapes
+#: first (lossless, the fold row's ``×N``), then a counted elision.
+_SHAPE_CELL_BUDGET = 60
+
+
+class CellTotals(NamedTuple):
+    """Whole-model denominators the percent cells divide by."""
+
+    params: int
+    flops_fma2: int = 0
+    macs: int = 0
 
 
 @dataclass(frozen=True)
@@ -55,7 +72,7 @@ class SummaryFacts:
     coverage_unknown: int
     unknown_op_names: tuple[str, ...]
     # Pass-level peak facts arrive pre-gated through the ONE publication gate
-    # (torchlens.observe._peaks.pass_peak_facts); the basis is always named
+    # (torchlens._observe._peaks.pass_peak_facts); the basis is always named
     # and a CUDA 0 reads as a high-water fact, never "used 0 bytes".
     peak_value_bytes: int | None
     peak_meaning: str
@@ -67,6 +84,13 @@ class SummaryFacts:
     execution_note: str | None
     input_synthesis: str | None
     honesty_lines: tuple[str, ...] = ()
+    params_pruned: tuple[str, ...] = ()
+    params_pruned_raw: int = 0
+    params_masked: int | None = None
+    optimizer: OptimizerStateFacts | None = None
+    # a NOT-CHECKED verdict on a capture that did not record every
+    # op names the opt-in (track_nonfinite stays False by default).
+    health_hint: str | None = None
 
 
 def _human(value: int | None) -> str:
@@ -140,92 +164,201 @@ def _name_cell(row: ViewRow) -> str:
         label += f" ×{row.passes} passes"
     if row.kind == "unexecuted":
         label += " [never ran]"
+    if row.pruned:
+        label += " [pruned]"
     if row.tied:
         label += " *"
     return indent + label
 
 
-def _output_cell(row: ViewRow, config: SummaryConfig, params_total: int) -> str:
-    """The output-shape cell; '-' when the shape is unknown."""
+def _shape_text(shape: tuple[int, ...]) -> str:
+    """One shape tuple as ``(d0, d1, ...)``."""
 
-    del config, params_total
-    if row.output_shape is None:
+    return "(" + ", ".join(str(dim) for dim in shape) + ")"
+
+
+def _shapes_text(shapes: tuple[tuple[int, ...], ...]) -> str:
+    """Comma-joined shape tuples; '-' when none is known."""
+
+    if not shapes:
         return "-"
-    return "(" + ", ".join(str(dim) for dim in row.output_shape) + ")"
+    return ", ".join(_shape_text(shape) for shape in shapes)
 
 
-def _params_cell(row: ViewRow, config: SummaryConfig, params_total: int) -> str:
+def _shape_runs(shapes: tuple[tuple[int, ...], ...]) -> list[tuple[str, int]]:
+    """Consecutive identical shapes grouped as ``(text, count)`` in return order."""
+
+    runs: list[tuple[str, int]] = []
+    for shape in shapes:
+        text = _shape_text(shape)
+        if runs and runs[-1][0] == text:
+            runs[-1] = (text, runs[-1][1] + 1)
+        else:
+            runs.append((text, 1))
+    return runs
+
+
+def _compact_shapes_text(shapes: tuple[tuple[int, ...], ...]) -> str:
+    """A shape-list cell that stays every member shape while it fits the budget.
+
+    Within ``_SHAPE_CELL_BUDGET`` the cell is the plain comma-joined list.
+    Past it, runs of identical shapes print once with the fold row's ``×N``
+    (lossless: every member is still accounted for in return order). Only
+    when that still overflows does the tail elide, ending in a count of the
+    member shapes it hides, the way an elision row counts the rows it hides.
+    """
+
+    full = _shapes_text(shapes)
+    if len(full) <= _SHAPE_CELL_BUDGET:
+        return full
+    shape_runs = _shape_runs(shapes)
+    parts = [text if count == 1 else f"{text} ×{count}" for text, count in shape_runs]
+    runs = ", ".join(parts)
+    if len(runs) <= _SHAPE_CELL_BUDGET:
+        return runs
+    counts = [count for _, count in shape_runs]
+    kept: list[str] = []
+    for index, part in enumerate(parts):
+        hidden = sum(counts[index + 1 :])
+        candidate = ", ".join([*kept, part]) + f", ... +{hidden} more"
+        if kept and len(candidate) > _SHAPE_CELL_BUDGET:
+            break
+        kept.append(part)
+    hidden = len(shapes) - sum(counts[: len(kept)])
+    return ", ".join(kept) + (f", ... +{hidden} more" if hidden else "")
+
+
+def _output_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
+    """Every member shape of the row's output in return order; '-' when unknown.
+
+    A long list is compacted by ``_compact_shapes_text`` (identical runs as
+    ``×N``, then a counted elision past the cell budget).
+    """
+
+    del config, totals
+    if row.output_shapes:
+        return _compact_shapes_text(row.output_shapes)
+    return _shapes_text(() if row.output_shape is None else (row.output_shape,))
+
+
+def _params_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
     """The subtree-params cell; '-' when the row displays no params."""
 
-    del params_total
+    del totals
     if row.params_display is None:
         return "-"
     return _format_number(row.params_display, config.units)
 
 
-def _params_pct_cell(row: ViewRow, config: SummaryConfig, params_total: int) -> str:
-    """The %params micro-bar cell over the whole-model total."""
+def _percent_text(part: int, whole: int) -> str:
+    """The micro-bar percent text of one share of a whole-model total."""
 
-    del config
-    if row.params_display is None or not params_total:
-        return "-"
-    fraction = row.params_display / params_total
+    fraction = part / whole
     return f"{_micro_bar(fraction)} {fraction * 100:.1f}%"
 
 
-def _flops_cell(row: ViewRow, config: SummaryConfig, params_total: int) -> str:
+def _params_pct_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
+    """The %params micro-bar cell over the whole-model total."""
+
+    del config
+    if row.params_display is None or not totals.params:
+        return "-"
+    return _percent_text(row.params_display, totals.params)
+
+
+def _row_flops(row: ViewRow, config: SummaryConfig) -> int | None:
+    """The row's FLOPs under the configured convention (None when unknown)."""
+
+    if row.flops_display is None:
+        return None
+    if config.flop_convention == "fma1":
+        if row.macs_display is None:
+            return None
+        return row.flops_display - row.macs_display
+    return row.flops_display
+
+
+def _flops_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
     """The flops cell under the configured convention; honesty markers kept."""
 
-    del params_total
+    del totals
     if row.evidence == "unknown" and row.flops_display is None:
         return "?"
     if row.flops_display is None:
         return "-"
-    value = row.flops_display
-    if config.flop_convention == "fma1":
-        if row.macs_display is None:
-            return "?"
-        value = row.flops_display - row.macs_display
-    return _format_number(value, config.units)
+    value = _row_flops(row, config)
+    if value is None:
+        return "?"
+    mark = ATTENTION_MARK if row.attention_full_square else ""
+    return _format_number(value, config.units) + mark
+
+
+def _flops_pct_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
+    """The %FLOPs micro-bar cell over the whole-model known-FLOP total."""
+
+    whole = totals.flops_fma2 - (totals.macs if config.flop_convention == "fma1" else 0)
+    if row.flops_display is None:
+        return "?" if row.evidence == "unknown" else "-"
+    value = _row_flops(row, config)
+    if value is None:
+        return "?"
+    if not whole:
+        return "-"
+    mark = ATTENTION_MARK if row.attention_full_square else ""
+    return _percent_text(value, whole) + mark
+
+
+def _count_cell(value: int | None, config: SummaryConfig) -> str:
+    """A plain count cell: '-' when inapplicable."""
+
+    return "-" if value is None else _format_number(value, config.units)
 
 
 #: Per-column cell formatters (mirrors COLUMN_REGISTRY; closed dispatch).
-_CELL_FORMATTERS: dict[str, Callable[[ViewRow, SummaryConfig, int], str]] = {
-    "name": lambda row, config, params_total: _name_cell(row),
+_CELL_FORMATTERS: dict[str, Callable[[ViewRow, SummaryConfig, CellTotals], str]] = {
+    "name": lambda row, config, totals: _name_cell(row),
+    "input": lambda row, config, totals: _compact_shapes_text(row.input_shapes),
     "output": _output_cell,
+    "kernel_size": lambda row, config, totals: _shapes_text(
+        () if row.kernel_size is None else (row.kernel_size,)
+    ),
+    "groups": lambda row, config, totals: "-" if row.groups is None else str(row.groups),
     "params": _params_cell,
     "params_pct": _params_pct_cell,
+    "params_trainable": lambda row, config, totals: _count_cell(row.params_trainable, config),
     "flops": _flops_cell,
-    "macs": lambda row, config, params_total: _format_number(row.macs_owned, config.units),
-    "train": lambda row, config, params_total: {
+    "flops_pct": _flops_pct_cell,
+    "macs": lambda row, config, totals: _format_number(row.macs_owned, config.units),
+    "train": lambda row, config, totals: {
         "all": "yes",
         "none": "no",
         "some": "partial",
     }.get(row.trainable or "", "-"),
-    "passes": lambda row, config, params_total: str(row.passes),
-    "evidence": lambda row, config, params_total: row.evidence,
+    "mode": lambda row, config, totals: row.mode or "-",
+    "passes": lambda row, config, totals: str(row.passes),
+    "evidence": lambda row, config, totals: row.evidence,
 }
 
 
-def _cell(row: ViewRow, column: ColumnSpec, config: SummaryConfig, params_total: int) -> str:
+def _cell(row: ViewRow, column: ColumnSpec, config: SummaryConfig, totals: CellTotals) -> str:
     """One typed table cell: 0 is measured, '-' inapplicable, '?' unknown."""
 
     formatter = _CELL_FORMATTERS.get(column.name)
     if formatter is None:
         return "-"
-    return formatter(row, config, params_total)
+    return formatter(row, config, totals)
 
 
 def _render_table(
     rows: tuple[ViewRow, ...],
     columns: tuple[ColumnSpec, ...],
     config: SummaryConfig,
-    params_total: int,
+    totals: CellTotals,
 ) -> list[str]:
     """The hairline table: header row, one rule, aligned body rows."""
 
     header = [column.header for column in columns]
-    body = [[_cell(row, column, config, params_total) for column in columns] for row in rows]
+    body = [[_cell(row, column, config, totals) for column in columns] for row in rows]
     widths = [
         max(len(header[i]), *(len(line[i]) for line in body)) if body else len(header[i])
         for i in range(len(columns))
@@ -292,7 +425,39 @@ def _params_footer(facts: SummaryFacts) -> str:
     if facts.params_unexecuted:
         names = ", ".join(facts.unexecuted_names[:3]) or "unknown"
         parts.append(f"{_commas(facts.params_unexecuted)} never ran: {names}")
+    if facts.param_bytes is not None:
+        parts.append(f"size {_bytes_human(facts.param_bytes)}")
+    if facts.params_pruned:
+        parts.append(_pruned_part(facts))
+    if facts.optimizer is not None:
+        parts.append(_optimizer_part(facts.optimizer))
     return " | ".join(parts)
+
+
+def _pruned_part(facts: SummaryFacts) -> str:
+    """The pruned note: raw and effective nonzero counts, tensors named."""
+
+    names = ", ".join(facts.params_pruned[:3])
+    if len(facts.params_pruned) > 3:
+        names += f" +{len(facts.params_pruned) - 3} more"
+    if facts.params_masked is None or facts.params_total is None:
+        return f"pruned: {names} (mask values not retained; effective count unknown)"
+    effective = facts.params_total - facts.params_masked
+    return (
+        f"pruned: {_commas(effective)} effective nonzero of {_commas(facts.params_total)} raw "
+        f"({_commas(facts.params_masked)} masked in {names})"
+    )
+
+
+def _optimizer_part(optimizer: OptimizerStateFacts) -> str:
+    """The optimizer-state note ("optimizer state N params, X MB")."""
+
+    if not optimizer.state_params:
+        return "optimizer state 0 params (allocated at the first step())"
+    return (
+        f"optimizer state {_commas(optimizer.state_params)} params, "
+        f"{_bytes_human(optimizer.state_bytes)}"
+    )
 
 
 def _compute_footer(facts: SummaryFacts, flop_convention: str = "fma2") -> str:
@@ -313,9 +478,19 @@ def _compute_footer(facts: SummaryFacts, flop_convention: str = "fma2") -> str:
         suffix = f" +{more} more" if more else ""
         coverage += (
             f"; totals are lower bounds ({names}{suffix} unknown; "
-            "remedy: torchlens.capture.flops.register_op_rule)"
+            "remedy: torchlens._capture.flops.register_op_rule)"
         )
     return " | ".join([flops, macs, coverage])
+
+
+def cell_totals(facts: SummaryFacts) -> CellTotals:
+    """The percent-cell denominators of one summary's facts."""
+
+    return CellTotals(
+        params=facts.params_total or 0,
+        flops_fma2=facts.flops_forward_fma2 or 0,
+        macs=facts.macs_forward or 0,
+    )
 
 
 def render_summary_pair(
@@ -333,8 +508,6 @@ def render_summary_pair(
     drift by construction (the CI degrade-map check re-asserts it).
     """
 
-    from ._summary_charset import degrade
-
     rows = visible_rows if visible_rows is not None else view.rows
     lines: list[str] = []
     input_bits = ", ".join(
@@ -349,10 +522,8 @@ def render_summary_pair(
     lines.append(header)
     lines.extend(_banner_lines(facts))
     lines.append(view.disclosure + (f" | {filter_note}" if filter_note else ""))
-    params_total = facts.params_total or 0
-    lines.extend(
-        _render_table(rows, config.resolved_columns(view.mixed_trainability), config, params_total)
-    )
+    columns = config.resolved_columns(view.mixed_trainability)
+    lines.extend(_render_table(rows, columns, config, cell_totals(facts)))
     lines.append("─" * min(len(lines[-1]) if lines else 80, 100))
     lines.append(f"Params   {_params_footer(facts)}")
     lines.append(f"Compute  {_compute_footer(facts, config.flop_convention)}")
@@ -379,10 +550,14 @@ def render_summary_pair(
         capture_bits.append(facts.outcome_status)
     if facts.capture_verified is True:
         capture_bits.append("verified")
-    capture_bits.append(f"health {facts.health_verdict.upper().replace('_', '-')}")
+    health = f"health {facts.health_verdict.upper().replace('_', '-')}"
+    capture_bits.append(f"{health} ({facts.health_hint})" if facts.health_hint else health)
     lines.append(f"Capture  {' | '.join(capture_bits)}")
     if any(row.tied for row in rows):
         lines.append("*        tied parameters (identity counted once; see Params)")
+    flop_columns = {"flops", "flops_pct"} & {column.name for column in columns}
+    if flop_columns and any(row.attention_full_square for row in rows):
+        lines.append(f"{ATTENTION_MARK}        {ATTENTION_FULL_SQUARE_NOTE}")
     lines.append(
         "More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md"
     )

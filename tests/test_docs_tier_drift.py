@@ -17,7 +17,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_docs_lockstep_names import TIER_CLAIM_RE
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "checks"))
+from docs_lockstep_names import TIER_CLAIM_RE  # noqa: E402
 
 # slow, not heavy: the live collect-only subprocess pays the root conftest
 # torch import plus a full 12k-test collection -- 46s charged in the merged

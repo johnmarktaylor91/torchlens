@@ -62,7 +62,7 @@ def _fresh_capture() -> tuple[nn.Module, torch.Tensor, tl.Trace]:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     return model, x, trace
 
@@ -84,11 +84,11 @@ def test_demo_1_zero_ablation_via_do():
     assert torch.equal(trace["relu_1_2"].out, baseline_relu)
 
     # FireRecords + state + last_run honest
-    records = list(fork["relu_1_2"].interventions)
-    assert records and records[-1].helper_name == "zero_ablate"
+    records = list(fork["relu_1_2"].edits)
+    assert records and records[-1].edit_name == "zero_ablate"
     assert records[-1].replaced is True
     assert records[-1].engine == "replay"
-    assert fork["relu_1_2"].intervention_replaced
+    assert fork["relu_1_2"].is_edited
     assert fork.state is TraceState.REPLAY_PROPAGATED
     assert isinstance(fork.last_run, dict) and fork.last_run.get("engine") == "replay"
     # audit record present (Selection-targeted disclosure)
@@ -101,7 +101,9 @@ def test_demo_1_zero_ablation_via_do():
             return inputs / (inputs - inputs)
 
     with pytest.raises(Exception) as excinfo:
-        tl.trace(_NanNet(), torch.ones(2, 2), capture=tl.options.CaptureOptions(raise_on_nan=True))
+        tl.trace(
+            _NanNet(), torch.ones(2, 2), capture=tl.options.CaptureOptions(on_nonfinite="raise")
+        )
     assert "non-finite" in str(excinfo.value).lower()
 
 
@@ -111,17 +113,17 @@ def test_demo_2_same_run_patch_identity():
 
     model, x, trace = _fresh_capture()
     selection = tl.units("relu_1_2", IDX)
-    resolved = selection.resolve(trace)
+    resolved = trace[selection]
 
     patched = trace.fork()
     del resolved  # the resolve() spelling below is the memo's exact demo shape
-    patched.do(selection.resolve(patched), tl.patch_from(trace))
+    patched.do(patched[selection], tl.patch_from(trace))
 
     # exact-identity output under the deterministic demo model
     assert torch.equal(patched["output_1"].out, trace["output_1"].out)
     # provenance present: FireRecords at the patched site
-    records = list(patched["relu_1_2"].interventions)
-    assert records and records[-1].helper_name == "patch_from"
+    records = list(patched["relu_1_2"].edits)
+    assert records and records[-1].edit_name == "patch_from"
     assert patched.intervention_audit[-1]["patch_source"]["source_model_class"].endswith(
         "_CanaryNet"
     )
@@ -136,7 +138,7 @@ def test_demo_2_same_run_patch_discriminating_twin():
 
     model, x, trace = _fresh_capture()
     selection = tl.units("relu_1_2", IDX)
-    mask = selection.resolve(trace)[0].mask
+    mask = trace[selection][0].mask
 
     source = trace.fork()
     perturbed = source["relu_1_2"].out.clone()
@@ -144,7 +146,7 @@ def test_demo_2_same_run_patch_discriminating_twin():
     _replay_module._commit_replay_updates(source, {"relu_1_2": perturbed}, {})
 
     patched = trace.fork()
-    patched.do(selection.resolve(patched), tl.patch_from(source))
+    patched.do(patched[selection], tl.patch_from(source))
 
     # the patched element carries the perturbed value; the rest is intact
     assert torch.isclose(patched["relu_1_2"].out[0, 0, 1, 1], perturbed[0, 0, 1, 1])
@@ -167,9 +169,9 @@ def test_demo_2_same_run_patch_tamper_twin():
     forged = tampered["relu_1_2"].out.clone()
     forged[0, 0, 1, 1] += EPSILON
     # captured-native presentation: values written into the record with NO
-    # FireRecords, NO spec revision, NO intervention_replaced flag.
+    # FireRecords, NO spec revision, NO is_edited flag.
     _replay_module._commit_replay_updates(tampered, {"relu_1_2": forged}, {})
-    assert not tampered["relu_1_2"].intervention_replaced
+    assert not tampered["relu_1_2"].is_edited
 
     result = tampered.validate_forward_pass(model(x))
     assert result is False

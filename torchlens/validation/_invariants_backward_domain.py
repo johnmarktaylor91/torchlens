@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.layer import Layer
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
-    from .invariants import MetadataInvariantError
+    from .._data_classes.layer import Layer
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 __all__ = (
@@ -60,9 +59,9 @@ def _check_backward_pass_domain_invariants(
         "replay",
     }
     valid_statuses = {"error", "ok"}
-    global_root_ids = set(trace.backward_root_grad_fn_object_ids)
+    global_root_ids = set(trace._autograd_backward_root_grad_fn_object_ids)
     roots_seen_by_pass: set[int] = set()
-    backward_pass_logs = getattr(trace, "backward_pass_logs", {})
+    backward_pass_logs = trace._backward_pass_logs
 
     for pass_index, backward_pass in backward_pass_logs.items():
         if backward_pass.trigger not in valid_triggers:
@@ -111,7 +110,7 @@ def _check_backward_pass_domain_invariants(
         missing_root_ids = [
             root_id
             for root_id in backward_pass.root_grad_fn_ids
-            if root_id not in trace.grad_fn_logs
+            if root_id not in trace._grad_fn_logs
         ]
         if missing_root_ids:
             raise MetadataInvariantError(
@@ -203,8 +202,8 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
     # side — the fail-closed direction.
     ops_by_label: dict[str, list[Any]] = {}
     visited_labels: set[str] = set()
-    for trace_layer in getattr(trace, "layer_list", ()) or ():
-        for op in getattr(trace_layer, "ops", ()) or ():
+    for trace_layer in trace._layer_list or ():
+        for op in getattr(trace_layer, "ops", None) or (trace_layer,):
             spellings = [
                 spelling
                 for spelling in (getattr(op, "label", None), getattr(op, "layer_label", None))
@@ -221,7 +220,7 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
 
     start_labels = [
         op_label
-        for op in getattr(layer, "ops", ()) or ()
+        for op in getattr(layer, "ops", None) or (layer,)
         if isinstance(op_label := getattr(op, "label", None), str)
     ]
     if not start_labels:
@@ -267,7 +266,7 @@ def _backward_trigger_forward_positions(trace: Trace) -> list[int]:
         forward op is the last layer guaranteed to exist when graph walking ran.
     """
 
-    from ..ir.events import BackwardPassStart
+    from .._ir.events import BackwardPassStart
 
     event_positions = {
         event.pass_index: event.forward_op_count_at_trigger
@@ -308,7 +307,7 @@ def _backward_pass_root_forward_position(trace: Trace, pass_index: int) -> int |
         Highest root-paired forward ``step_index`` for the pass, when available.
     """
 
-    backward_pass = getattr(trace, "backward_pass_logs", {}).get(pass_index)
+    backward_pass = trace._backward_pass_logs.get(pass_index)
     if backward_pass is None:
         return None
     root_steps = [
@@ -317,7 +316,7 @@ def _backward_pass_root_forward_position(trace: Trace, pass_index: int) -> int |
         if isinstance(
             (
                 step_index := getattr(
-                    getattr(getattr(trace, "grad_fn_logs", {}).get(root_id), "op", None),
+                    getattr(trace._grad_fn_logs.get(root_id), "op", None),
                     "step_index",
                     None,
                 )
@@ -344,9 +343,9 @@ def _backward_pass_observed_forward_position(trace: Trace, pass_index: int) -> i
         Highest observed forward ``step_index`` for the pass, when available.
     """
 
-    from ..ir.events import OpGradObserved
+    from .._ir.events import OpGradObserved
 
-    layer_lookup = getattr(trace, "layer_dict_all_keys", {})
+    layer_lookup = trace._layer_dict_all_keys
     observed_steps = []
     for event in getattr(getattr(trace, "_capture_events", None), "backward_events", ()):
         if not isinstance(event, OpGradObserved) or event.pass_index != pass_index:
@@ -395,7 +394,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     obligation, not this one).
 
     The amendment lane rides its OWN counter and is checked in the same spirit,
-    but only for shape: ``copy_for_replay`` legitimately filters it to
+    but only for shape: ``_copy_for_replay`` legitimately filters it to
     ``seq > core_seal_watermark``, so a non-empty lane must be strictly
     increasing, counter-bounded, and CONTIGUOUS, starting at either 1 (the
     unfiltered source) or ``core_seal_watermark + 1`` (a filtered projection).
@@ -425,7 +424,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     # the canonical registry constant (satisfies the backend-literal gate).
     from ..backends.registry import TORCH_BACKEND_NAME
 
-    if getattr(trace, "backend", TORCH_BACKEND_NAME) != TORCH_BACKEND_NAME:
+    if trace._provenance_backend != TORCH_BACKEND_NAME:
         return
     capture_events = getattr(trace, "_capture_events", None)
     if capture_events is None:
@@ -490,7 +489,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     # legitimate (released, never amended, or fully folded at the seal).
     amendments = list(getattr(capture_events, "op_amendments", ()) or ())
     if not amendments:
-        # A released or never-amended lane; ``copy_for_replay`` may also filter
+        # A released or never-amended lane; ``_copy_for_replay`` may also filter
         # every carried amendment away when the seal folded all of them.
         return
     amendment_counter = int(getattr(capture_events, "amendment_seq", 0) or 0)
@@ -531,3 +530,10 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
             f"op_amendments is not contiguous over its retained range: seq {holes[:5]} "
             "missing -- an amendment was deleted from the lane",
         )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

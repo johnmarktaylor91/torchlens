@@ -105,22 +105,18 @@ def test_explain_selective_save_reports_without_crashing() -> None:
 
     saved = [
         layer.layer_label
-        for layer in log.layer_list
+        for layer in log._layer_list
         if getattr(layer, "has_saved_activation", False)
     ]
     unsaved = [
         layer.layer_label
-        for layer in log.layer_list
+        for layer in log._layer_list
         if not getattr(layer, "has_saved_activation", False)
     ]
     # Precondition: the input boundary is genuinely unsaved (the crash trigger).
     assert unsaved and saved
 
-    report_json = tl.report.explain(log, format="json")
-    assert isinstance(report_json, dict)
-    assert isinstance(report_json["first_nonfinite"], str)
-
-    report_text = tl.report.explain(log, format="text")
+    report_text = log.explain()
     assert isinstance(report_text, str)
     assert "Shared parameters" in report_text
 
@@ -132,9 +128,11 @@ def test_explain_selective_save_still_flags_saved_nonfinite() -> None:
     x[0, 0] = float("nan")
     log = tl.trace(_SelectiveTinyModel(), x, save=tl.func("relu"))
 
-    report_json = tl.report.explain(log, format="json")
-    # relu(nan) == nan and relu IS saved, so the scan must still detect it.
-    assert "non-finite" in report_json["first_nonfinite"].lower()
+    # D14 (F09): explain never scans; arm the evidence through the explicit
+    # door. relu(nan) == nan and relu IS saved, so the scan must detect it.
+    assert log.nonfinite_ops
+    report_text = log.explain()
+    assert "FOUND:" in report_text
 
 
 # --------------------------------------------------------------------------- H4
@@ -143,21 +141,21 @@ def test_explain_shared_parameters_true_set_not_co_parent() -> None:
 
     # Plain Linear (weight + bias, each used by ONE op) -> nothing shared.
     plain = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
-    assert "none reported" in _shared_line(tl.report.explain(plain))
+    assert "none reported" in _shared_line(plain.explain())
 
     # Bias-free single Linear (one param, one op) -> nothing shared.
     nobias = tl.trace(nn.Linear(4, 4, bias=False), torch.randn(2, 4))
-    assert "none reported" in _shared_line(tl.report.explain(nobias))
+    assert "none reported" in _shared_line(nobias.explain())
 
     # Two independent Linears -> two params, each used once -> nothing shared.
     indep = tl.trace(_TwoIndependentLinears(), torch.randn(2, 4))
-    assert "none reported" in _shared_line(tl.report.explain(indep))
+    assert "none reported" in _shared_line(indep.explain())
 
     # Genuinely tied weight (one tensor used by two ops) -> reported shared.
-    tied_line = _shared_line(tl.report.explain(tl.trace(_TiedModel(), torch.randn(2, 4))))
+    tied_line = _shared_line((tl.trace(_TiedModel(), torch.randn(2, 4))).explain())
     assert "none reported" not in tied_line
     assert "more than one operation" in tied_line
 
     # Recurrent reuse (one weight across three passes) is also true sharing.
-    recur_line = _shared_line(tl.report.explain(tl.trace(_RecurrentLinear(), torch.randn(2, 4))))
+    recur_line = _shared_line((tl.trace(_RecurrentLinear(), torch.randn(2, 4))).explain())
     assert "none reported" not in recur_line

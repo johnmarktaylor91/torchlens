@@ -3,29 +3,41 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import contextmanager
-from dataclasses import dataclass
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass, replace
 from typing import Any, TypeAlias
 
 import torch
 from torch import Tensor
 from torch.nn import Module
 
+from torchlens.attribution._entry import _detect_entry_route, _EntryRoute, _tensor_leaves
 from torchlens.attribution._result import (
+    Attribution,
     AttributionError,
-    AttributionResult,
     AttributionValueTree,
     _summarize_attribution_tree,
+)
+from torchlens.attribution._site import (
+    SiteTarget,
+    _input_dependent_site,
+    _resolve_site,
+    _select_unit,
+    _site_unsupported,
+    _SiteActivation,
+    _SiteRoute,
+    _target_spelling,
 )
 
 # Kept private and deliberately distinct from the selector-serialization
 # ``torchlens.intervention.types.TargetSpec``.
-_AttributionTarget: TypeAlias = int | Callable[[Any], Tensor]
+_AttributionTarget: TypeAlias = int | Callable[[Any], Tensor] | SiteTarget
+_DOCS_POINTER = "See docs/reference/attribution.md, section Integer inputs."
 InputKwargs: TypeAlias = dict[str, Any] | None
 
 __all__ = [
     "AttributionError",
-    "AttributionResult",
+    "Attribution",
     "AttributionValueTree",
     "InputKwargs",
     "_summarize_attribution_tree",
@@ -46,12 +58,44 @@ class _PreparedInputs:
         Floating-point or complex tensor leaves selected for attribution.
     is_single_tensor
         Whether the public ``inputs`` argument was a bare tensor.
+    entry
+        Integer-input route of a layer method whose inputs hold no
+        floating-point tensor; ``attributed_leaves`` are then the outputs of
+        its entry calls (embeddings), substituted by hooks.
+    site
+        Site-target route; the model call then returns the site activation.
     """
 
     positional: tuple[Any, ...]
     kwargs: dict[str, Any]
     attributed_leaves: tuple[Tensor, ...]
     is_single_tensor: bool
+    entry: _EntryRoute | None = None
+    site: _SiteRoute | None = None
+
+
+@dataclass(frozen=True)
+class _Caller:
+    """The public call normalizing its inputs.
+
+    Attributes
+    ----------
+    method
+        Public method name used in refusal messages.
+    model
+        The model, when the method supports site targets, integer inputs or a
+        concrete refusal remedy.
+    target
+        The public target; a :class:`SiteTarget` is resolved against ``model``.
+    integer_route
+        Whether integer-only inputs are accepted (layer methods): the input
+        path then starts at the modules that turn them into floats.
+    """
+
+    method: str = "input attribution"
+    model: Module | None = None
+    target: Any = None
+    integer_route: bool = False
 
 
 @contextmanager
@@ -112,7 +156,11 @@ def _is_attributed_tensor(value: Any) -> bool:
     return isinstance(value, Tensor) and (value.is_floating_point() or value.is_complex())
 
 
-def _normalize_model_inputs(inputs: Any, input_kwargs: InputKwargs) -> _PreparedInputs:
+def _normalize_model_inputs(
+    inputs: Any,
+    input_kwargs: InputKwargs,
+    caller: _Caller | None = None,
+) -> _PreparedInputs:
     """Normalize public attribution inputs into model-call args and kwargs.
 
     Parameters
@@ -121,6 +169,9 @@ def _normalize_model_inputs(inputs: Any, input_kwargs: InputKwargs) -> _Prepared
         Bare tensor or tuple/list of positional arguments.
     input_kwargs
         Optional keyword arguments for the model call.
+    caller
+        The public method, model and target; ``None`` for internal callers
+        that support neither site targets nor integer inputs.
 
     Returns
     -------
@@ -130,9 +181,12 @@ def _normalize_model_inputs(inputs: Any, input_kwargs: InputKwargs) -> _Prepared
     Raises
     ------
     AttributionError
-        If the input contract is invalid or no attributed leaves are present.
+        If the input contract is invalid, or no floating-point leaf is present
+        and the method attributes the input itself.
     """
 
+    caller = caller if caller is not None else _Caller()
+    model = caller.model
     if input_kwargs is None:
         kwargs: dict[str, Any] = {}
     elif isinstance(input_kwargs, dict):
@@ -150,16 +204,72 @@ def _normalize_model_inputs(inputs: Any, input_kwargs: InputKwargs) -> _Prepared
             "inputs must be a tensor or a tuple/list of positional model arguments"
         )
 
+    site: _SiteRoute | None = None
+    if isinstance(caller.target, SiteTarget):
+        if model is None:
+            raise _site_unsupported(
+                caller.method, caller.target, code="attribution_site_target_unsupported"
+            )
+        site = _resolve_site(model, caller.target)
     attributed_leaves = tuple(_iter_attributed_tensors((positional, kwargs)))
+    entry: _EntryRoute | None = None
     if not attributed_leaves:
-        raise AttributionError(
-            "input attribution requires at least one floating-point or complex tensor leaf"
-        )
+        if not (
+            caller.integer_route and model is not None and _tensor_leaves((positional, kwargs))
+        ):
+            raise _input_not_float(caller, positional, kwargs, code="attribution_input_not_float")
+        entry, _float_outputs = _detect_entry_route(model, positional, kwargs)
+        attributed_leaves = entry.values
     return _PreparedInputs(
         positional=positional,
         kwargs=kwargs,
         attributed_leaves=attributed_leaves,
         is_single_tensor=is_single_tensor,
+        entry=entry,
+        site=site,
+    )
+
+
+def _describe_tensors(positional: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
+    """Return a short description of the tensors a call received."""
+
+    tensors = _tensor_leaves((positional, kwargs))
+    if not tensors:
+        return "no tensor at all"
+    first = tensors[0]
+    more = f" and {len(tensors) - 1} more tensors" if len(tensors) > 1 else ""
+    return f"a {first.dtype} tensor of shape {tuple(first.shape)}{more}"
+
+
+def _input_not_float(
+    caller: _Caller,
+    positional: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    code: str,
+) -> AttributionError:
+    """Build the coded refusal for an input method given no floating-point input.
+
+    The remedy names a layer method on the module that turns the integers
+    into floats (found by one forward pass) when the caller's model is known.
+    """
+
+    layer = None
+    path_method = "layer_integrated_gradients"
+    if caller.model is not None and _tensor_leaves((positional, kwargs)):
+        route, float_outputs = _detect_entry_route(caller.model, positional, kwargs)
+        if route.sites:
+            layer = route.sites[0].layer
+        elif float_outputs:
+            layer, path_method = float_outputs[0], "layer_attribution"
+    layer_spelling = repr(layer) if layer is not None else "'<embedding layer name>'"
+    return AttributionError(
+        f"{caller.method} attributes the model's input, and the inputs hold no floating-point "
+        f"tensor (got {_describe_tensors(positional, kwargs)}). Integer values such as "
+        "token ids have no gradient. Remedy: attribute a layer's output instead, which "
+        f"accepts integer inputs, e.g. tl.attribution.{path_method}(model, inputs, "
+        f"{_target_spelling(caller.target)}, layer={layer_spelling}). {_DOCS_POINTER}",
+        code=code,
     )
 
 
@@ -413,6 +523,11 @@ def _call_model(
 ) -> Any:
     """Call ``model`` with attributed leaves substituted into their original positions.
 
+    With an integer-input route the replacements stand in for the entry
+    calls' outputs (substituted by hooks) and the integer inputs pass through.
+    With a site route the call returns the site activation, wrapped, in place
+    of the model output.
+
     Parameters
     ----------
     model
@@ -428,14 +543,33 @@ def _call_model(
     Returns
     -------
     Any
-        Model output.
+        Model output, or the ``_SiteActivation`` of a site target.
     """
 
-    positional, kwargs = _substitute_inputs(inputs, attributed_replacements)
+    if inputs.entry is None:
+        positional, kwargs = _substitute_inputs(inputs, attributed_replacements)
+    else:
+        positional, kwargs = inputs.positional, inputs.kwargs
     if n_rows > 1:
         positional = _tile_unattributed_leaves(positional, n_rows)
         kwargs = _tile_unattributed_leaves(kwargs, n_rows)
-    return model(*positional, **kwargs)
+    with ExitStack() as stack:
+        if inputs.entry is not None:
+            stack.enter_context(inputs.entry.substituted(attributed_replacements))
+        firings = stack.enter_context(inputs.site.capture()) if inputs.site is not None else None
+        output = model(*positional, **kwargs)
+    if inputs.site is None or firings is None:
+        return output
+    unsited = replace(inputs, site=None)
+    return inputs.site.activation(
+        firings,
+        attributed_replacements,
+        lambda: _input_dependent_site(
+            model,
+            lambda: _call_model(model, unsited, attributed_replacements, n_rows),
+            attributed_replacements,
+        ),
+    )
 
 
 def _value_tree_from_leaves(
@@ -458,7 +592,7 @@ def _value_tree_from_leaves(
     Returns
     -------
     AttributionValueTree
-        Public ``AttributionResult.values`` structure.
+        Public ``Attribution.values`` structure.
     """
 
     if len(values) == 1:
@@ -539,7 +673,8 @@ def _scalarize_output(output: Any, target: _AttributionTarget) -> Tensor:
     output
         Model output.
     target
-        Integer class index or callable scalarizer.
+        Integer class index, callable scalarizer, or :class:`SiteTarget`
+        (which requires ``output`` to be the site activation).
 
     Returns
     -------
@@ -552,6 +687,12 @@ def _scalarize_output(output: Any, target: _AttributionTarget) -> Tensor:
         If scalarization is unsupported or ambiguous.
     """
 
+    if isinstance(target, SiteTarget):
+        if not isinstance(output, _SiteActivation):
+            raise _site_unsupported(
+                "this method", target, code="attribution_site_target_unsupported"
+            )
+        return _select_unit(output.tensor, target)
     if callable(target):
         scalar = target(output)
         if not isinstance(scalar, Tensor):
@@ -833,8 +974,19 @@ def saliency(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-) -> AttributionResult:
+) -> Attribution:
     """Compute absolute input gradients for a scalar target.
+
+    Saliency is UNSIGNED: every value is ``|d target / d input|``, so it says
+    how strongly the target responds to a feature, never in which direction.
+    There is no ``signed=`` switch; for a signed reading use
+    :func:`input_x_grad`, :func:`integrated_gradients` or
+    ``guided_backprop(..., absolute=False)``. A raw gradient is a local
+    reading: it is noisy, and it reads near zero for a feature whose effect
+    has saturated (a ReLU in its flat region, a saturated sigmoid) even when
+    removing that feature would change the output. Average over input noise
+    with :func:`smoothgrad`, or integrate along a path with
+    :func:`integrated_gradients`, before reading a map as evidence.
 
     Parameters
     ----------
@@ -848,7 +1000,9 @@ def saliency(
         tensor leaves are attributed.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
 
     Returns
     -------
@@ -856,12 +1010,14 @@ def saliency(
         Bare tensor for one attributed leaf, otherwise a mirrored value tree.
     """
 
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
+    prepared_inputs = _normalize_model_inputs(
+        inputs, input_kwargs, _Caller("saliency", model, target)
+    )
     with _temporarily_eval(model):
         input_leaves = _make_input_leaves(prepared_inputs)
         gradients, _scalar = _gradient_for_inputs(model, prepared_inputs, input_leaves, target)
     values = tuple(gradient.detach().abs() for gradient in gradients)
-    return AttributionResult(
+    return Attribution(
         method="saliency",
         values=_value_tree_from_leaves(prepared_inputs, values),
         target_repr=_target_repr(target),
@@ -875,8 +1031,15 @@ def input_x_grad(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-) -> AttributionResult:
+) -> Attribution:
     """Compute gradient times input for a scalar target.
+
+    The result is SIGNED: under the local linear approximation, a positive
+    value means the feature pushes the target up. Its reference point is the
+    all-zeros input, so it carries an implicit zeros baseline; when zero is
+    not a neutral input (normalized images, token embeddings), use
+    :func:`integrated_gradients` with an explicit ``baseline=``, which also
+    reports how far the attributions fall short of the output change.
 
     Parameters
     ----------
@@ -890,7 +1053,9 @@ def input_x_grad(
         tensor leaves are attributed.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
 
     Returns
     -------
@@ -898,7 +1063,9 @@ def input_x_grad(
         Bare tensor for one attributed leaf, otherwise a mirrored value tree.
     """
 
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
+    prepared_inputs = _normalize_model_inputs(
+        inputs, input_kwargs, _Caller("input_x_grad", model, target)
+    )
     with _temporarily_eval(model):
         input_leaves = _make_input_leaves(prepared_inputs)
         gradients, _scalar = _gradient_for_inputs(model, prepared_inputs, input_leaves, target)
@@ -906,7 +1073,7 @@ def input_x_grad(
         (gradient * input_leaf).detach()
         for gradient, input_leaf in zip(gradients, input_leaves, strict=True)
     )
-    return AttributionResult(
+    return Attribution(
         method="input_x_grad",
         values=_value_tree_from_leaves(prepared_inputs, values),
         target_repr=_target_repr(target),
@@ -1061,17 +1228,31 @@ def integrated_gradients(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    n_steps: int = 50,
+    num_steps: int = 50,
     baseline: Any | None = None,
     step_batch_size: int | None = None,
     step_audit: str | None = None,
     step_audit_seed: int | None = None,
-) -> AttributionResult:
+) -> Attribution:
     """Compute Integrated Gradients along a straight baseline-to-input path.
 
     The default baseline is ``torch.zeros_like`` for each attributed leaf.
     Baseline choice changes the interpretation of the result, so callers should
-    pass domain-meaningful baselines when zeros are not appropriate.
+    pass domain-meaningful baselines when zeros are not appropriate. The
+    baseline actually used is returned in ``extra["baseline"]``; report it next
+    to any figure made from the values, because the same input attributed
+    against a different baseline answers a different question.
+
+    Quadrature: the path integral is approximated by the midpoint Riemann rule,
+    sampling the path at ``(k + 0.5) / n_steps`` for ``k`` in
+    ``range(n_steps)``. Captum's default is Gauss-Legendre, so the two
+    libraries give close but not identical values at the same ``num_steps``;
+    compare them through the completeness fields, not element by element.
+    ``extra["completeness_residual"]`` is ``attribution_sum - target_delta``
+    and ``extra["residual_rel"]`` is its size relative to
+    ``extra["target_delta_abs"]``: raise ``num_steps`` until ``residual_rel`` is
+    small. A small relative residual over a near-zero ``target_delta_abs``
+    certifies nothing, which is why the denominator is always reported.
 
     Parameters
     ----------
@@ -1085,8 +1266,10 @@ def integrated_gradients(
         tensor leaves are attributed.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
-    n_steps
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
+    num_steps
         Number of midpoint Riemann samples along the straight path.
     baseline
         Optional baseline tree matching attributed input leaves. A bare tensor is
@@ -1123,10 +1306,12 @@ def integrated_gradients(
         _validate_step_batch_size,
     )
 
-    _validate_positive_int("n_steps", n_steps)
+    _validate_positive_int("n_steps", num_steps)
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
+    prepared_inputs = _normalize_model_inputs(
+        inputs, input_kwargs, _Caller("integrated_gradients", model, target)
+    )
     baseline_tensors = _validate_baselines(prepared_inputs, baseline)
     deltas = tuple(
         input_leaf.detach() - baseline_tensor
@@ -1134,7 +1319,7 @@ def integrated_gradients(
             prepared_inputs.attributed_leaves, baseline_tensors, strict=True
         )
     )
-    alphas = _midpoint_alphas(n_steps)
+    alphas = _midpoint_alphas(num_steps)
     chunks = _chunk_steps(alphas, chunk_size)
     auditor = _StepAuditor(
         audit_mode, len(chunks), [len(chunk) for chunk in chunks], seed=step_audit_seed
@@ -1200,14 +1385,14 @@ def integrated_gradients(
     )
     attribution_sum = sum((value.sum() for value in values), start=torch.zeros_like(input_scalar))
     target_delta = input_scalar - baseline_scalar
-    return AttributionResult(
+    return Attribution(
         method="integrated_gradients",
         values=_value_tree_from_leaves(prepared_inputs, values),
         target_repr=_target_repr(target),
         extra={
-            "n_steps": n_steps,
+            "n_steps": num_steps,
             "baseline": _value_tree_from_leaves(prepared_inputs, baseline_tensors),
-            "path_evaluations_logical": n_steps,
+            "path_evaluations_logical": num_steps,
             "physical_forward_calls": physical_calls,
             "step_batch_size": chunk_size,
             "step_audit": auditor.record().to_extra(),
@@ -1222,11 +1407,15 @@ def smoothgrad(
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    n_samples: int = 25,
+    num_samples: int = 25,
     noise_level: float = 0.1,
     seed: int | None = None,
-) -> AttributionResult:
+) -> Attribution:
     """Average saliency over Gaussian-noised copies of an input.
+
+    Like :func:`saliency`, the result is unsigned: each sample is
+    absolute-valued before the mean. ``noise_level`` is an absolute standard
+    deviation in input units, so scale it to the input's range.
 
     Parameters
     ----------
@@ -1240,11 +1429,14 @@ def smoothgrad(
         tensor leaves are attributed.
     target
         Integer class index selecting ``output[..., target]`` and summing the
-        selected values, or callable ``output -> scalar tensor``.
-    n_samples
+        selected values, a callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output (and unit) to
+        attribute instead of the model output.
+    num_samples
         Number of noised saliency samples to average.
     noise_level
-        Standard deviation of Gaussian noise added to each input copy.
+        Standard deviation of Gaussian noise added to each input copy; must be
+        positive (zero noise refuses ``smoothgrad_noise_level_invalid``).
     seed
         Optional random seed for deterministic noise samples without mutating
         global torch RNG state.
@@ -1255,9 +1447,18 @@ def smoothgrad(
         Bare tensor for one attributed leaf, otherwise a mirrored value tree.
     """
 
-    _validate_positive_int("n_samples", n_samples)
-    if noise_level < 0:
-        raise AttributionError("noise_level must be non-negative")
+    _validate_positive_int("n_samples", num_samples)
+    if noise_level <= 0:
+        # zero noise averages n_samples identical saliency maps -- a
+        # pointless loop dressed as SmoothGrad -- so it refuses with negatives.
+        raise AttributionError(
+            f"smoothgrad noise_level must be positive; got {noise_level!r}. "
+            "Remedy: pass a positive Gaussian scale such as noise_level=0.1, or call "
+            "torchlens.attribution.saliency(model, inputs, target=...) for the "
+            "noise-free map.",
+            code="smoothgrad_noise_level_invalid",
+        )
+    _normalize_model_inputs(inputs, input_kwargs, _Caller("smoothgrad", model, target))
     # D7: SmoothGrad is the thin alias over the sampling substrate. The
     # per-sample ABSOLUTE VALUE happens before the mean because the child is
     # saliency, which absolute-values each sample's gradients itself; the
@@ -1272,14 +1473,14 @@ def smoothgrad(
         method=saliency,
         model=model,
         target=target,
-        n_samples=n_samples,
+        num_samples=num_samples,
         stdevs=noise_level,
         seed=seed,
-        aggregation="mean",
+        reduce="mean",
     )
-    return AttributionResult(
+    return Attribution(
         method="smoothgrad",
         values=tunneled.values,
         target_repr=tunneled.target_repr,
-        extra={"n_samples": n_samples, "noise_level": noise_level, "seed": seed},
+        extra={"n_samples": num_samples, "noise_level": noise_level, "seed": seed},
     )

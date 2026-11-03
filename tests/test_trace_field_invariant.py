@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import MODEL_LOG_FIELD_ORDER
+from torchlens._constants import MODEL_LOG_FIELD_ORDER
 
 
 def test_trace_field_set_subset_of_user_facing() -> None:
@@ -29,8 +29,10 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_layer_nums_to_save",
         "_grad_op_nums_to_save",
         "_source_model_ref",
+        "_uncalled_module_addresses",
         "_transform",
         "_output_transform",
+        "_output_slot",
         "_grad_transform",
         "_optimizer",
         "_visualizer_dir",
@@ -53,12 +55,12 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_capture_events",
         "_tl_backward_hooked_tensor_keys",
         # One-gradient-owner-per-label bookkeeping (FieldPolicy.DROP,
-        # trace.py PORTABLE_STATE_SPEC): session-only, stripped from pickle
+        # trace.py _PORTABLE_STATE_SPEC): session-only, stripped from pickle
         # state, reset by refresh rebind and replay resets.
         "_tl_grad_hook_owner_by_label",
         "_backward_gradfn_refs",
         # Backward projection guard trio: session-only fold watermark, all
-        # declared FieldPolicy.DROP in Trace.PORTABLE_STATE_SPEC and stripped
+        # declared FieldPolicy.DROP in Trace._PORTABLE_STATE_SPEC and stripped
         # by __getstate__/__setstate__ (never pickled, never portable).
         "_backward_projection_event_count",
         "_backward_projection_revision",
@@ -71,6 +73,7 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_phase_timings",
         "_postprocessing_active",
         "_raw_event_shape_hash",
+        "_raw_call_fingerprint",
         "_replay_arg_version_data_complete",
         "_capture_config",
         "_raw_transform_escape_detected",
@@ -103,7 +106,7 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         # deliberately absent from MODEL_LOG_FIELD_ORDER because they do not
         # survive save/load. ``_module_call_accessor`` is the exact sibling of
         # the allowlisted ``_buffer_accessor``; ``measure_python_peak_memory``
-        # is the documented tracemalloc opt-in read back by capture/trace.py;
+        # is the documented tracemalloc opt-in read back by _capture/trace.py;
         # ``save_budget`` and its live accountant are the honesty/safety
         # phase's per-device retained-bytes ceiling.
         "_module_call_accessor",
@@ -142,6 +145,11 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_autograd_seen_saved_storages",
         "track_device_memory",
         "_tl_injection_state",
+        # measure.2: the CPU-peak opt-in session knob (DROP, RUNTIME binding).
+        "measure_host_peak_memory",
+        # The aten_ops opt-in session knob (DROP, RUNTIME binding): read at
+        # capture entry to arm the ATen recorder; load restores the default.
+        "_options_aten_ops",
         # The capture's save request (FieldPolicy.DROP, RUNTIME binding,
         # session component): the backend reads its output-parent retention
         # flag during the forward and a legacy rerun replays it; popped in
@@ -187,12 +195,12 @@ def test_trace_field_set_subset_of_user_facing() -> None:
 
 
 def test_public_cached_property_read_does_not_poison_save(tmp_path) -> None:
-    """Assert reading ``Trace.intervention_spec`` never breaks ``tl.save``.
+    """Assert reading ``Trace.recipe`` never breaks ``Trace.save``.
 
-    ``intervention_spec`` is a ``functools.cached_property``, so a read caches
+    ``recipe`` is a ``functools.cached_property``, so a read caches
     its value under its own name in ``Trace.__dict__``. The tlspec scrub walks
     the live ``__dict__`` fail-closed, and before B3R4-R10-1 the undeclared
-    cache key made every later ``tl.save`` raise ``TorchLensIOError`` -- a
+    cache key made every later ``Trace.save`` raise ``ArtifactError`` -- a
     read-only public accessor permanently poisoning the artifact path.
 
     Parameters
@@ -209,15 +217,15 @@ def test_public_cached_property_read_does_not_poison_save(tmp_path) -> None:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
     trace = tl.trace(model, torch.randn(2, 4))
 
-    spec = trace.intervention_spec
+    spec = trace.recipe
     assert spec is not None
-    assert "intervention_spec" in trace.__dict__
+    assert "recipe" in trace.__dict__
 
     save_path = tmp_path / "after_read.tlspec"
-    tl.save(trace, str(save_path))
+    trace.save(str(save_path))
 
     loaded = tl.load(str(save_path))
     # The cache is derived state: it must rebuild on the loaded trace, not
     # round-trip as a portable field.
-    assert "intervention_spec" not in loaded.__dict__
-    assert loaded.intervention_spec is not None
+    assert "recipe" not in loaded.__dict__
+    assert loaded.recipe is not None

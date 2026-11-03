@@ -9,12 +9,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.events import BackwardPassEnd, BackwardPassStart, OpGradObserved
 from torchlens.backends.torch import backward as backward_mod
 from torchlens.backends.torch.backward import (
     _BACKWARD_GRAD_FN_REGISTRY,
     _close_implicit_backward_pass_if_open,
 )
-from torchlens.ir.events import BackwardPassEnd, BackwardPassStart, OpGradObserved
 
 
 class _PlainBackwardModel(nn.Module):
@@ -56,9 +56,7 @@ def _trace_for_plain_backward() -> tl.Trace:
     torch.manual_seed(0)
     model = _PlainBackwardModel()
     x = torch.randn(3, 4, requires_grad=True)
-    return tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
-    )
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
 
 
 def _backward_starts(trace: tl.Trace) -> list[BackwardPassStart]:
@@ -133,12 +131,12 @@ def test_plain_tensor_backward_triggers_capture() -> None:
     loss.backward()
 
     starts = _backward_starts(trace)
-    assert trace.has_backward_pass
-    assert trace.num_backward_passes == 1
+    assert trace.autograd.has_backward_pass
+    assert len(trace.autograd.backward_passes) == 1
     assert starts[-1].trigger == "autograd_backward"
     assert starts[-1].implicit is False
-    assert trace.grad_fn_logs
-    assert any(call for grad_fn in trace.grad_fn_logs.values() for call in grad_fn.calls)
+    assert trace._grad_fn_logs
+    assert any(call for grad_fn in trace._grad_fn_logs.values() for call in grad_fn.calls)
     trace.cleanup()
 
 
@@ -151,7 +149,7 @@ def test_disarm_triggers_suppresses_plain_backward_capture() -> None:
     trace.disarm_triggers()
     loss.backward()
 
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert _backward_starts(trace) == []
     trace.cleanup()
 
@@ -181,7 +179,8 @@ def test_fast_pass_refreshes_grad_fn_identity_and_hook_registry() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear_2"], save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save=["linear_2"],
     )
     grad_fn_object_id = trace["linear_2"].grad_fn_object_id
     assert grad_fn_object_id is not None
@@ -195,7 +194,7 @@ def test_fast_pass_refreshes_grad_fn_identity_and_hook_registry() -> None:
     assert id(trace["linear_2"].grad_fn_handle) == grad_fn_object_id
     trace[trace.output_layers[0]].out.sum().backward()
     _close_implicit_backward_pass_if_open(trace)
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
     assert any(event.op_label == trace["linear_2"].layer_label for event in _op_grad_events(trace))
     assert trace["linear_2"].grad is not None
     trace.cleanup()
@@ -223,9 +222,8 @@ def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads=False, capture_tensor_grad_hooks=False
-        ),
+        capture=tl.options.CaptureOptions(save_grads=False, capture_tensor_grad_hooks=False),
+        save="all",
     )
     registered_ids = {
         grad_fn_object_id
@@ -241,8 +239,8 @@ def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     assert register_hook_calls == []
-    assert trace.has_backward_pass
-    assert trace.grad_fn_logs
+    assert trace.autograd.has_backward_pass
+    assert trace._grad_fn_logs
     assert _op_grad_events(trace) == []
     trace.cleanup()
 

@@ -67,7 +67,7 @@ relu (ReLU)    (1, 4, 8, 8)       -          -        256
 flatten_1_3    (1, 256)           -          -          0
 fc (Linear)    (1, 5)         1.28K  ### 92.2%      2.56K
 ---------------------------------------------------------
-Params   1,388 declared | trainable 1,388 (100%)
+Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
 Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
@@ -84,7 +84,7 @@ relu (ReLU)    (1, 4, 8, 8)       -          -        256
 flatten_1_3    (1, 256)           -          -          0
 fc (Linear)    (1, 5)         1.28K  ███ 92.2%      2.56K
 ─────────────────────────────────────────────────────────
-Params   1,388 declared | trainable 1,388 (100%)
+Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
 Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows

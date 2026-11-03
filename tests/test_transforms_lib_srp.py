@@ -19,18 +19,17 @@ import random
 import pytest
 import torch
 
+from torchlens.errors import TransformContractError
 from torchlens.transforms import (
     TensorSpec,
     TransformContext,
-    TransformContractError,
     chain,
-    coerce_transform,
-    pipeline_from_record,
-    pipeline_record,
     srp,
     srp_realized_facts,
     srp_verify_matrix,
 )
+from torchlens.transforms._coerce import coerce_transform
+from torchlens.transforms._pipeline import pipeline_from_record, pipeline_record
 from torchlens.transforms._srp import (
     _matrix_entry,
     _MatrixCache,
@@ -385,14 +384,14 @@ def test_srp_params_are_validated_typed() -> None:
     """n_components required; closed vocabularies; density domain."""
 
     for bad_kwargs in (
-        {"n_components": None},
-        {"n_components": 0},
-        {"n_components": 16, "density": 1.5},
-        {"n_components": 16, "density": "high"},
-        {"n_components": 16, "construction": "gaussian"},
-        {"n_components": 16, "mode": "rows"},
-        {"n_components": 16, "share": "by_vibes"},
-        {"n_components": 16, "seed": 1.5},
+        {"num_components": None},
+        {"num_components": 0},
+        {"num_components": 16, "density": 1.5},
+        {"num_components": 16, "density": "high"},
+        {"num_components": 16, "construction": "gaussian"},
+        {"num_components": 16, "mode": "rows"},
+        {"num_components": 16, "share": "by_vibes"},
+        {"num_components": 16, "seed": 1.5},
     ):
         with pytest.raises(TransformContractError) as excinfo:
             srp(**bad_kwargs)  # type: ignore[arg-type]

@@ -12,8 +12,14 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._errors import AmbiguousOpLookupError
+from torchlens._visualization import show_model_graph
+from torchlens._visualization.themes import resolve_theme
 from torchlens.types import Param
-from torchlens.visualization import show_model_graph
+
+#: Parameter fills as the DEFAULT skin renders them.
+_TRAINABLE = resolve_theme("torchlens").semantic_palette["params_trainable"]
+_FROZEN = resolve_theme("torchlens").semantic_palette["params_frozen"]
+_MIXED = resolve_theme("torchlens").semantic_palette["params_gradient"]
 
 VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
 
@@ -139,8 +145,8 @@ class TestParamLogFields:
         assert isinstance(pl.num_calls, int)
         assert isinstance(pl.used_by_ops, list)
         assert isinstance(pl.used_by_layers, list)
-        assert isinstance(pl.num_uses_by_ops, int)
-        assert isinstance(pl.num_uses_by_layers, int)
+        assert isinstance(len(pl.used_by_ops), int)
+        assert isinstance(len(pl.used_by_layers), int)
         assert isinstance(pl.co_parent_params, list)
 
     def test_repr_contains_key_info(self):
@@ -215,7 +221,7 @@ class TestParamAccessorMH:
 
     def test_params_property_same_as_param_logs(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        assert mh.params is mh.param_logs
+        assert mh.params is mh._param_logs
 
 
 # ---------------------------------------------------------------------------
@@ -226,13 +232,13 @@ class TestParamAccessorMH:
 class TestParamAccessorTLE:
     def test_access_by_address(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         pl = entry.params[entry._param_logs[0].address]
         assert isinstance(pl, Param)
 
     def test_access_by_short_name(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         w = entry.params["weight"]
         b = entry.params["bias"]
         assert "weight" in w.name
@@ -240,17 +246,17 @@ class TestParamAccessorTLE:
 
     def test_access_by_index(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         assert isinstance(entry.params[0], Param)
 
     def test_len(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         assert len(entry.params) == 2  # weight + bias
 
     def test_iterable(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         params = list(entry.params)
         assert len(params) == 2
 
@@ -332,7 +338,7 @@ class TestTrainableFrozenTallies:
     def test_tle_tallies(self):
         mh = trace_fn(_make_frozen_first_layer(), _simple_input())
         for entry in mh:
-            if entry.uses_params:
+            if entry.has_params:
                 assert entry.num_params == entry.num_params_trainable + entry.num_params_frozen
         # First linear is frozen
         linear1 = [e for e in mh if "linear_1" in e.layer_label][0]
@@ -484,8 +490,8 @@ class TestGradientTracking:
             assert pl.has_grad is True
             assert pl.grad_shape == pl.shape
             assert pl.grad_dtype == pl.dtype
-            assert pl.gradient_memory > 0
-            assert len(str(pl.gradient_memory)) > 0
+            assert pl.grad_memory > 0
+            assert len(str(pl.grad_memory)) > 0
 
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
@@ -510,7 +516,7 @@ class TestGradientTracking:
 
         # TLEs with param layers should have saved grads
         for entry in mh:
-            if entry.uses_params:
+            if entry.has_params:
                 assert entry.has_grad is True
                 assert entry.grad is not None
                 assert entry.grad_shape is not None
@@ -579,15 +585,14 @@ class TestOptimizerSupport:
 
 
 class TestVisualizationParams:
-    def _get_dot_source(self, model, x, vis_mode="unrolled", vis_call_depth=1000):
+    def _get_dot_source(self, model, x, rolled=False, depth=1000):
         outpath = opj(VIS_OUTPUT_DIR, "toy-networks", "_test_param_vis")
         mh = trace_fn(model, x)
         dot_source = mh.draw(
-            vis_mode=vis_mode,
-            vis_outpath=outpath,
-            vis_save_only=True,
-            vis_call_depth=vis_call_depth,
-        )
+            rolled=rolled,
+            path=outpath,
+            depth=depth,
+        ).dot
         return dot_source, mh
 
     def test_param_label_shows_names(self):
@@ -619,11 +624,11 @@ class TestVisualizationParams:
 
     def test_trainable_bg_color(self):
         dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
-        assert "#D9D9D9" in dot  # TRAINABLE_PARAMS_BG_COLOR
+        assert _TRAINABLE in dot
 
     def test_frozen_bg_color(self):
         dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input())
-        assert "#B0B0B0" in dot  # FROZEN_PARAMS_BG_COLOR
+        assert _FROZEN in dot
 
     def test_mixed_grad_fill(self):
         """When a layer has both trainable and frozen params, use grad fill."""
@@ -633,7 +638,7 @@ class TestVisualizationParams:
         model[0].weight.requires_grad = False
         dot, mh = self._get_dot_source(model, _simple_input())
         # Gradient fill uses "color1:color2" syntax
-        assert "#D9D9D9:#B0B0B0" in dot
+        assert _MIXED in dot
         assert "gradangle" in dot
 
     def test_graph_caption_all_trainable(self):
@@ -652,29 +657,29 @@ class TestVisualizationParams:
 
     def test_collapsed_module_trainable_color(self):
         """Collapsed module with all trainable params should use trainable color."""
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), vis_call_depth=1)
-        assert "#D9D9D9" in dot
+        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), depth=1)
+        assert _TRAINABLE in dot
 
     def test_collapsed_module_frozen_color(self):
         """Collapsed module with all frozen params should use frozen color."""
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), vis_call_depth=1)
-        assert "#B0B0B0" in dot
+        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), depth=1)
+        assert _FROZEN in dot
 
     def test_collapsed_module_mixed_grad(self):
         """Collapsed module with mixed frozen/trainable should use grad fill."""
         model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
         model[0].weight.requires_grad = False
-        dot, mh = self._get_dot_source(model, _simple_input(), vis_call_depth=1)
+        dot, mh = self._get_dot_source(model, _simple_input(), depth=1)
         # The collapsed "0" module has mixed params
-        assert "#D9D9D9:#B0B0B0" in dot or "#D9D9D9" in dot  # at least one color appears
+        assert _MIXED in dot or _TRAINABLE in dot  # at least one color appears
 
     def test_collapsed_module_param_detail(self):
         """Collapsed module should show trainable/frozen param breakdown."""
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), vis_call_depth=1)
+        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), depth=1)
         assert "all trainable" in dot
 
     def test_collapsed_module_param_detail_frozen(self):
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), vis_call_depth=1)
+        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), depth=1)
         assert "all frozen" in dot
 
 
@@ -709,7 +714,7 @@ class TestIntegration:
         # Verify all entries point to real layers
         for pl in mh.params:
             for label in pl.used_by_ops:
-                assert label in mh.layer_dict_all_keys
+                assert label in mh._layer_dict_all_keys
 
     def test_grad_tracking_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
@@ -738,7 +743,7 @@ class TestIntegration:
             model,
             _simple_input(),
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(all_trainable.with_suffix(""))
+                container_path=str(all_trainable.with_suffix(""))
             ),
         )
         _assert_generated_pdf(all_trainable)
@@ -750,7 +755,7 @@ class TestIntegration:
             model,
             _simple_input(),
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(mixed.with_suffix(""))
+                container_path=str(mixed.with_suffix(""))
             ),
         )
         _assert_generated_pdf(mixed)
@@ -762,7 +767,7 @@ class TestIntegration:
             model,
             _simple_input(),
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(all_frozen.with_suffix(""))
+                container_path=str(all_frozen.with_suffix(""))
             ),
         )
         _assert_generated_pdf(all_frozen)
@@ -777,7 +782,7 @@ class TestIntegration:
             _simple_input(),
             depth=1,
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(collapsed_trainable.with_suffix(""))
+                container_path=str(collapsed_trainable.with_suffix(""))
             ),
         )
         _assert_generated_pdf(collapsed_trainable)
@@ -789,7 +794,7 @@ class TestIntegration:
             _simple_input(),
             depth=1,
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(collapsed_mixed.with_suffix(""))
+                container_path=str(collapsed_mixed.with_suffix(""))
             ),
         )
         _assert_generated_pdf(collapsed_mixed)
@@ -801,7 +806,7 @@ class TestIntegration:
             _simple_input(),
             depth=1,
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(collapsed_frozen.with_suffix(""))
+                container_path=str(collapsed_frozen.with_suffix(""))
             ),
         )
         _assert_generated_pdf(collapsed_frozen)
@@ -818,7 +823,7 @@ class TestParamContains:
     def test_int_contains(self):
         model = _SimpleLinear()
         mh = trace_fn(model, torch.randn(2, 10))
-        if mh.param_logs:
+        if mh._param_logs:
             assert 0 in mh.params
 
 
@@ -828,10 +833,10 @@ class TestParamRefCleared:
     def test_param_ref_cleared_after_cleanup(self):
         model = _SimpleLinear()
         mh = trace_fn(model, torch.randn(2, 10))
-        # Capture the ParamLog objects BEFORE cleanup: iterating ``mh.param_logs``
+        # Capture the ParamLog objects BEFORE cleanup: iterating ``mh._param_logs``
         # rehydrates ``_param_ref`` on access, so we must assert against the same
         # captured objects, not a fresh re-iteration (which would repopulate it).
-        param_logs = list(mh.param_logs)
+        param_logs = list(mh._param_logs)
         for pl in param_logs:
             assert pl._param_ref is not None
         mh.cleanup()
@@ -862,7 +867,7 @@ class TestDerivedGradRecordPathFieldOrder:
     def test_derived_grad_record_path_in_field_order(self) -> None:
         """The field must be a real member of PARAM_LOG_FIELD_ORDER."""
 
-        from torchlens.constants import PARAM_LOG_FIELD_ORDER
+        from torchlens._constants import PARAM_LOG_FIELD_ORDER
 
         assert "_derived_grad_record_path" in PARAM_LOG_FIELD_ORDER
 

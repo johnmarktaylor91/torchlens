@@ -2,19 +2,19 @@
 
 ```
 import torchlens
-  |- exposes 116 top-level public names in __all__
+  |- exposes 87 top-level public names in __all__
   |- eagerly imports ONLY the light spine: options, errors/_state, ir.*,
-  |  captured_run, observers, quantities, _deprecations, _errors, _io,
+  |  _captured_run, observers, quantities, _deprecations, _errors, _io,
   |  _literals, _save_budget, utils,
-  |  and visualization (hard-pinned by tests/test_import_hygiene.py
-  |  _EAGER_TORCHLENS_MODULES). capture, intervention, fastlog, autoroute,
+  |  and _visualization (hard-pinned by tests/test_import_hygiene.py
+  |  _EAGER_TORCHLENS_MODULES). _capture, intervention, recording, autoroute,
   |  bridge, compat, export, report, stats, validation, and viz-rendering
   |  internals are ALL lazy (_LAZY_ATTRS) — do not add eager imports
   |
 trace(model, input, save=..., intervene=..., lookback=..., storage=...)
   |- backends/registry.py      - resolve torch / MLX / JAX / tinygrad / Paddle / TensorFlow backend
   |- backends/torch/model_prep.py - ensure torch is wrapped, prepare modules/buffers/params
-  |- capture/trace.py          - run forward pass with active logging
+  |- _capture/trace.py          - run forward pass with active logging
   |- backends/torch/ops.py     - build raw torch op records during wrapper calls
   |- postprocess/              - current 26-step graph cleanup/finalization pipeline
                                  (contract keys 0..20 + 5 fractional inserts)
@@ -26,7 +26,7 @@ tl.record(model, input, save=...)
   +- returns Recording; Recording.to_trace() materializes full structure
 ```
 
-Selective `layers_to_save` uses a predicate-backed single pass when early labels are
+Selective `save=` uses a predicate-backed single pass when early labels are
 sufficient and falls back to the two-pass strategy for final-numbering selectors:
 negative indexes, integer ordinals, indexed label strings (`relu_1_2`, `relu_1` — any
 `_<digit>` component; orphan removal renumbers ordinals AND type indexes after capture),
@@ -52,8 +52,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -70,16 +69,15 @@ trace.draw(show_containers="nodes")
 Provisional semantic I/O surface (review-day names):
 
 ```python
-log = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
-)
-log.output_table(top_n=5)
+log = tl.trace(model, x)
+log.output_table(k=5)
+log.decode_output(style="classification", head="logits")  # read-time override
 log.to_pandas(include_decoded_output_summary=True)
 
 input_log = tl.trace(
     model,
     raw_text,
-    capture=tl.options.CaptureOptions(transform=text_to_tensor, save_raw_input="small"),
+    capture=tl.options.CaptureOptions(input_transform=text_to_tensor, save_raw_input="small"),
 )
 input_log.draw(show_input_transform_summary=True)
 
@@ -87,27 +85,26 @@ mds_layers = tl.in_module("block1") | tl.in_module("block2")
 image_log = tl.trace(
     model,
     image_list,
-    transform=image_batch_to_tensor,
+    capture=tl.options.CaptureOptions(input_transform=image_batch_to_tensor),
     save=mds_layers,
     save_raw_input=True,
-    output_style="classification",
 )
 image_log.model_profile
-image_log.output_table(top_n=5)
-tl.repgeom.mds_evolution(image_log, save=mds_layers, min_n=8)
+image_log.output_table(k=5)
+tl.repgeom.mds_evolution(image_log, save=mds_layers, min_stimuli=8)
 tl.repgeom.rdm_evolution(image_log, save=mds_layers)
-tl.viz.feature_map_evolution(image_log, save=mds_layers)
+tl.viz.feature_maps(image_log, save=mds_layers)
 tl.repgeom.scree_evolution(image_log, save=mds_layers)
-image_log.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
-image_log.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
-image_log.draw(node_spec_fn=tl.viz.feature_map_node_spec())
-image_log.draw(node_spec_fn=tl.repgeom.scree_node_spec())
+image_log.draw(node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8))
+image_log.draw(node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8))
+image_log.draw(node_spec_fn=tl.viz.nodes.feature_map())
+image_log.draw(node_spec_fn=tl.viz.nodes.scree())
 ```
 
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
 is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target batch
 activations to have been saved at capture time; use a curated `save=` subset, not exhaustive
-`layers_to_save="all"`,
+`save="all"`,
 for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
 annotation payloads and compatibility review.
 Sprint C RDM, feature-map, and scree node visuals are PIL-only render-time images composed

@@ -3,8 +3,8 @@
 Two BLOCKER-severity bugs found by the cert7 inspector, each a recurrence of a
 class a prior round fixed at a *different* site:
 
-* BLOCKER-1 -- ``Bundle._diff_members`` (backing ``Bundle.diff_pair(a, b)``) called
-  the scalar-only fallback ``relative_l1_scalar`` UNCONDITIONALLY, silently
+* BLOCKER-1 -- ``Bundle._diff_members`` (backing ``Bundle.compare(a, b)``) called
+  the scalar-only fallback ``relative_l1`` UNCONDITIONALLY, silently
   truncating every multi-element activation to its first element. This is the third
   sibling of the round-6 / cert7 scalar-vs-vector truncation class. The fix applies
   the same symmetric ``is_scalar_like(a) and is_scalar_like(b)`` guard used by every
@@ -13,7 +13,7 @@ class a prior round fixed at a *different* site:
 
 * BLOCKER-2 -- helper deserialization must stay on the full value codec. Builtin
   helper callable/opaque arguments must never round-trip as raw wrapper dicts:
-  ``tl.bwd_hook(fn)`` must load cleanly at the DEFAULT save level, and an
+  ``tl.replace_with(fn)`` must load cleanly at the DEFAULT save level, and an
   audit-level ``tl.splice_module(...)`` payload must load as an explicitly
   non-executable placeholder (raising ``NonExecutableSpecError`` at fire time)
   rather than a silently corrupted helper.
@@ -33,18 +33,18 @@ from torchlens.bundle import _distance_value
 from torchlens.intervention._metrics import (
     cosine_distance,
     is_scalar_like,
-    relative_l1_scalar,
+    relative_l1,
 )
-from torchlens.intervention.errors import NonExecutableSpecError, UntrustedCallableError
-from torchlens.intervention.helpers import HelperSpec, helper_from_serialized
-from torchlens.intervention.save import (
+from torchlens.intervention._spec_values import (
     LazyImportRef,
-    SaveLevel,
     _deserialize_value,
     _resolve_import_ref,
     _serialize_value,
     _SerializedState,
 )
+from torchlens.intervention.errors import NonExecutableSpecError, UntrustedCallableError
+from torchlens.intervention.helpers import Edit, helper_from_serialized
+from torchlens.intervention.save import SaveLevel
 
 
 def _new_state() -> _SerializedState:
@@ -53,42 +53,34 @@ def _new_state() -> _SerializedState:
     return _SerializedState(tensor_entries=[], tensor_refs={})
 
 
-def _top_level_bwd_hook(grad: torch.Tensor, *, hook: object) -> torch.Tensor:
-    """Import-resolvable backward hook used for the bwd_hook round-trip test.
-
-    Parameters
-    ----------
-    grad:
-        Incoming gradient tensor.
-    hook:
-        Hook context (unused).
+def _top_level_replacement() -> torch.Tensor:
+    """Import-resolvable zero-argument callable used for the callable-arg round-trip test.
 
     Returns
     -------
     torch.Tensor
-        A zeroed gradient.
+        A zero tensor shaped like the one-row, three-column test input.
     """
 
-    del hook
-    return torch.zeros_like(grad)
+    return torch.zeros(1, 3)
 
 
 # ---------------------------------------------------------------------------
-# BLOCKER-1: Bundle.diff_pair(member_a, member_b) must not truncate to element 0.
+# BLOCKER-1: Bundle.compare(member_a, member_b) must not truncate to element 0.
 # ---------------------------------------------------------------------------
 
 
-def test_diff_pair_members_multi_element_uses_vector_metric_no_truncation() -> None:
+def test_compare_members_multi_element_uses_vector_metric_no_truncation() -> None:
     """BLOCKER-1: per-site scores are a genuine vector metric, not first-element."""
 
     torch.manual_seed(0)
     x = torch.randn(2, 8)
-    log_a = tl.trace(nn.Linear(8, 8), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    log_b = tl.trace(nn.Linear(8, 8), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
+    log_a = tl.trace(nn.Linear(8, 8), x, capture=tl.options.CaptureOptions(replayable=True))
+    log_b = tl.trace(nn.Linear(8, 8), x, capture=tl.options.CaptureOptions(replayable=True))
+    bundle = tl.Bundle({"a": log_a, "b": log_b}, baseline="a")
 
-    rows = dict(bundle.diff_pair("a", "b"))
-    assert rows, "diff_pair returned no rows"
+    rows = dict(bundle.compare("a", "b"))
+    assert rows, "compare returned no rows"
 
     # The differing linear site: score must equal the real cosine distance over the
     # whole tensor, and must NOT equal the old first-element-only relative_l1 formula.
@@ -100,33 +92,33 @@ def test_diff_pair_members_multi_element_uses_vector_metric_no_truncation() -> N
     expected = float(cosine_distance(left_out, right_out).detach().item())
     assert abs(rows[linear_site] - expected) < 1e-5
 
-    first_element_only = float(relative_l1_scalar(left_out[:1], right_out[:1]).detach().item())
+    first_element_only = float(relative_l1(left_out[:1], right_out[:1]).detach().item())
     # For a non-degenerate site the aggregate and the first-element score differ;
     # the OLD bug returned the latter.
     assert abs(rows[linear_site] - first_element_only) > 1e-4
 
 
-def test_diff_pair_node_multi_element_uses_vector_metric() -> None:
+def test_compare_node_multi_element_uses_vector_metric() -> None:
     """BLOCKER-1 sibling coverage: the SuperOp node diff also stays a vector metric."""
 
     torch.manual_seed(1)
     x = torch.randn(2, 6)
-    log_a = tl.trace(nn.Linear(6, 6), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    log_b = tl.trace(nn.Linear(6, 6), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
+    log_a = tl.trace(nn.Linear(6, 6), x, capture=tl.options.CaptureOptions(replayable=True))
+    log_b = tl.trace(nn.Linear(6, 6), x, capture=tl.options.CaptureOptions(replayable=True))
+    bundle = tl.Bundle({"a": log_a, "b": log_b}, baseline="a")
 
-    linear_site = next(s.layer_label for s in log_a.layer_list if "linear" in str(s.layer_label))
-    matrix = bundle.node(linear_site).diff_pair()
+    linear_site = next(s.layer_label for s in log_a._layer_list if "linear" in str(s.layer_label))
+    matrix = bundle.at(linear_site).compare()
     # A 2x2 distance matrix with finite, non-truncated off-diagonal entries.
     assert matrix.shape == (2, 2)
     assert torch.isfinite(matrix).all()
 
 
 def test_no_unguarded_relative_l1_scalar_call_site_remains() -> None:
-    """BLOCKER-1: EVERY relative_l1_scalar call site is scalar-guarded.
+    """BLOCKER-1: EVERY relative_l1 call site is scalar-guarded.
 
     Source-level tripwire: catches a FUTURE un-swept sibling. Any call to
-    ``relative_l1_scalar(`` in the multi-trace scope must sit inside an
+    ``relative_l1(`` in the multi-trace scope must sit inside an
     ``is_scalar_like``-gated ternary (or be the definition/import itself).
     """
 
@@ -143,10 +135,10 @@ def test_no_unguarded_relative_l1_scalar_call_site_remains() -> None:
             if not call_re.search(line):
                 continue
             # The guard is on the same or an immediately adjacent line
-            # (``relative_l1_scalar(...)\n if is_scalar_like(a) and is_scalar_like(b)``).
+            # (``relative_l1(...)\n if is_scalar_like(a) and is_scalar_like(b)``).
             window = "\n".join(lines[idx : idx + 3])
             assert "is_scalar_like" in window, (
-                f"UNGUARDED relative_l1_scalar call at {source_path}:{idx + 1} -- "
+                f"UNGUARDED relative_l1 call at {source_path}:{idx + 1} -- "
                 "every call site must gate on is_scalar_like (scalar/vector truncation "
                 "class, 4th recurrence)"
             )
@@ -168,7 +160,7 @@ def test_distance_value_multi_element_matches_cosine() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_bwd_hook_callable_arg_roundtrips_at_default_save_level() -> None:
+def test_callable_helper_arg_roundtrips_at_default_save_level() -> None:
     """BLOCKER-2 case 1: a portable callable helper arg decodes to a callable.
 
     The narrow ``_decode_jsonish`` returned the raw ``{'__callable__': ...}`` wrapper
@@ -176,13 +168,13 @@ def test_bwd_hook_callable_arg_roundtrips_at_default_save_level() -> None:
     returns a callable ``LazyImportRef``.
     """
 
-    helper = tl.bwd_hook(_top_level_bwd_hook)
+    helper = tl.replace_with(_top_level_replacement)
     state = _new_state()
     serialized = _serialize_value(helper, SaveLevel.EXECUTABLE_WITH_CALLABLES, state)
     loaded = _deserialize_value(serialized, {})
 
-    assert isinstance(loaded, HelperSpec)
-    assert loaded.name == "bwd_hook"
+    assert isinstance(loaded, Edit)
+    assert loaded.name == "replace_with"
     (arg,) = loaded.args
     assert not isinstance(arg, dict), "callable arg decoded as a raw wrapper dict"
     assert isinstance(arg, LazyImportRef)
@@ -192,11 +184,13 @@ def test_bwd_hook_callable_arg_roundtrips_at_default_save_level() -> None:
     with pytest.raises(UntrustedCallableError):
         _resolve_import_ref(arg.import_path)
     # Under explicit trust, the import ref resolves back to the original function.
-    assert _resolve_import_ref(arg.import_path, trust_custom_callables=True) is _top_level_bwd_hook
+    assert (
+        _resolve_import_ref(arg.import_path, trust_custom_callables=True) is _top_level_replacement
+    )
 
 
-def test_bwd_hook_end_to_end_save_load_default_level(tmp_path: Path) -> None:
-    """BLOCKER-2 case 1: full save->load of a bwd_hook spec at the DEFAULT level."""
+def test_gradient_site_callable_end_to_end_save_load_default_level(tmp_path: Path) -> None:
+    """BLOCKER-2 case 1: full save->load of a gradient-site callable spec at the DEFAULT level."""
 
     x = torch.tensor([[1.0, 2.0, 3.0]], requires_grad=True)
 
@@ -208,9 +202,9 @@ def test_bwd_hook_end_to_end_save_load_default_level(tmp_path: Path) -> None:
         _IdentityRelu(),
         x,
         capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
-        intervene=tl.when(tl.func("relu"), tl.bwd_hook(_top_level_bwd_hook)),
+        intervene=tl.when(tl.grad(tl.func("relu")), tl.replace_with(_top_level_replacement)),
     )
-    path = tmp_path / "bwd_hook.tlspec"
+    path = tmp_path / "gradient_site_callable.tlspec"
     # Default level == executable_with_callables.
     trace.save_intervention(path)
 
@@ -235,12 +229,12 @@ def test_audit_opaque_helper_arg_fails_loudly_not_silent(tmp_path: Path) -> None
     serialized = _serialize_value(helper, SaveLevel.AUDIT, state)
     loaded = _deserialize_value(serialized, {})
 
-    assert isinstance(loaded, HelperSpec)
+    assert isinstance(loaded, Edit)
     assert loaded.portability == "opaque_audit"
     assert dict(loaded.metadata).get("executable") is False
     # Firing raises a clear, specific error -- NOT a masked TypeError downstream.
     try:
-        loaded()  # HelperSpec.__call__ -> factory()
+        loaded()  # Edit.__call__ -> factory()
     except NonExecutableSpecError as exc:
         assert "non-executable" in str(exc).lower()
         assert "splice_module" in str(exc)
@@ -265,7 +259,7 @@ def test_helper_from_serialized_uses_full_codec_for_opaque_args() -> None:
         import_resolver=_resolve_import_ref,
         value_decoder=lambda item: _deserialize_value(item, {}),
     )
-    assert isinstance(result, HelperSpec)
+    assert isinstance(result, Edit)
     assert result.portability == "opaque_audit"
     try:
         result()

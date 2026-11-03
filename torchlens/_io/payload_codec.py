@@ -19,6 +19,7 @@ import torch
 
 from . import JaxPayloadLoadHint, PayloadLoadHints, _json
 from ._artifact_strings import _resolve_portable_device
+from ._payload_codec_paddle import _resolve_paddle_place
 from .manifest import _json_ready_codec_metadata_value
 from .tensor_policy import FailReason, Ok, SkipReason, TensorPolicyDecision, is_supported_for_save
 
@@ -711,10 +712,11 @@ class PaddlePayloadCodec:
             )
             place = _resolve_paddle_place(paddle, safe_device)
         try:
+            host = _contiguous_keeping_shape(array)
             if logical_dtype == "paddle.bfloat16":
-                value = paddle.to_tensor(np.ascontiguousarray(array), place=place)
+                value = paddle.to_tensor(host, place=place)
                 return value if str(value.dtype) == logical_dtype else value.view(dtype)
-            return paddle.to_tensor(np.ascontiguousarray(array), dtype=dtype, place=place)
+            return paddle.to_tensor(host, dtype=dtype, place=place)
         except (TypeError, ValueError, RuntimeError) as exc:
             raise BackendRuntimeCompatibilityError(
                 f"Portable Paddle payload could not be materialized: {exc}"
@@ -840,13 +842,11 @@ class TFPayloadCodec:
 
         try:
             with _tf_device_context(tf, map_location):
+                host = _contiguous_keeping_shape(array)
                 if logical_dtype == "tf.bfloat16":
-                    transport = tf.convert_to_tensor(
-                        np.ascontiguousarray(array),
-                        dtype=tf.uint16,
-                    )
+                    transport = tf.convert_to_tensor(host, dtype=tf.uint16)
                     return tf.bitcast(transport, dtype)
-                return tf.convert_to_tensor(np.ascontiguousarray(array), dtype=dtype)
+                return tf.convert_to_tensor(host, dtype=dtype)
         except (TypeError, ValueError, RuntimeError) as exc:
             raise BackendRuntimeCompatibilityError(
                 f"Portable TensorFlow payload could not be materialized: {exc}"
@@ -1146,6 +1146,17 @@ def _restore_jax_scalar_semantics(jax_module: Any, value: Any, entry: Any) -> An
                 "Portable JAX payload could not restore committed=True."
             ) from exc
     return value
+
+
+def _contiguous_keeping_shape(array: np.ndarray) -> np.ndarray:
+    """Return a C-contiguous host copy with the array's own shape.
+
+    ``np.ascontiguousarray`` promotes a 0-d array to shape ``(1,)`` by its own
+    contract, so a saved scalar op output came back one-dimensional through the
+    Paddle and TensorFlow materializers.
+    """
+
+    return np.ascontiguousarray(array).reshape(array.shape)
 
 
 def _transport_tensor_to_numpy(tensor: torch.Tensor, entry: Any) -> np.ndarray:
@@ -1571,37 +1582,6 @@ def _resolve_paddle_dtype(paddle_module: Any, dtype_name: str) -> Any | None:
         dtype = getattr(paddle_module, candidate_name, None)
         if dtype is not None:
             return dtype
-    return None
-
-
-def _resolve_paddle_place(paddle_module: Any, place_name: Any) -> Any | None:
-    """Resolve a Paddle place object from manifest or map-location text."""
-
-    if place_name is None:
-        return None
-    base_place = getattr(paddle_module, "Place", None)
-    if base_place is not None and isinstance(place_name, base_place):
-        return place_name
-    if not isinstance(place_name, str):
-        return None
-    requested = place_name.lower()
-    if requested in {"", "unknown"}:
-        return None
-    if requested in {"cpu", "place(cpu)"}:
-        return paddle_module.CPUPlace()
-    if requested in {"gpu", "cuda", "place(gpu)", "place(cuda)"}:
-        cuda_place = getattr(paddle_module, "CUDAPlace", None)
-        if cuda_place is not None:
-            return cuda_place(0)
-    for prefix in ("gpu:", "cuda:"):
-        if requested.startswith(prefix):
-            cuda_place = getattr(paddle_module, "CUDAPlace", None)
-            if cuda_place is None:
-                return None
-            try:
-                return cuda_place(int(requested.split(":", maxsplit=1)[1]))
-            except ValueError:
-                return None
     return None
 
 

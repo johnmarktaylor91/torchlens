@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.composition_expectations._keyed_tsv import parse_keyed_tsv
+
 pytestmark = pytest.mark.compo
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -64,13 +66,11 @@ def harvest_counts() -> dict[str, int]:
 
 
 def _baseline_counts() -> dict[str, int]:
-    rows: dict[str, int] = {}
-    for line in (DATA_DIR / "harvest_counts.tsv").read_text(encoding="utf-8").splitlines():
-        if not line.strip() or line.startswith("#") or line.startswith("metric\t"):
-            continue
-        metric, _, count = line.partition("\t")
-        rows[metric.strip()] = int(count.strip())
-    return rows
+    path = DATA_DIR / "harvest_counts.tsv"
+    rows = parse_keyed_tsv(
+        path.read_text(encoding="utf-8"), filename=path.name, header_key="metric"
+    )
+    return {metric: int(count) for metric, count in rows.items()}
 
 
 def test_harvest_counts_print_and_lockstep() -> None:

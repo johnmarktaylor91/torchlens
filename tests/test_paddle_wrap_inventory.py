@@ -37,20 +37,27 @@ EXPECTED_WRAPPED = (
     "floor",
     "full",
     "full_like",
+    "functional.adaptive_avg_pool1d",
+    "functional.adaptive_avg_pool2d",
+    "functional.adaptive_avg_pool3d",
     "functional.avg_pool1d",
     "functional.avg_pool2d",
+    "functional.avg_pool3d",
     "functional.batch_norm",
     "functional.conv1d",
     "functional.conv2d",
     "functional.dropout",
     "functional.gelu",
+    "functional.hardsigmoid",
     "functional.hardswish",
     "functional.layer_norm",
     "functional.leaky_relu",
     "functional.linear",
     "functional.max_pool1d",
     "functional.max_pool2d",
+    "functional.max_pool3d",
     "functional.relu",
+    "functional.relu6",
     "functional.sigmoid",
     "functional.silu",
     "functional.softmax",
@@ -68,6 +75,9 @@ EXPECTED_WRAPPED = (
     "mm",
     "multiply",
     "negative",
+    "nn.Conv1D.forward",
+    "nn.Conv2D.forward",
+    "nn.Conv3D.forward",
     "ones",
     "ones_like",
     "pow",
@@ -497,6 +507,7 @@ def test_paddle_wrapper_inventory_load_bearing_membership() -> None:
     assert denied >= RNG_APIS
     assert denied >= TENSOR_ESCAPE_APIS
     assert wrapped >= COARSE_COMPOSITE_APIS
+    assert {"nn.Conv1D.forward", "nn.Conv2D.forward", "nn.Conv3D.forward"} <= wrapped
     assert wrapped >= STOCHASTIC_COMPOSITE_DENY_APIS
     for op_name in (
         "functional.dropout",

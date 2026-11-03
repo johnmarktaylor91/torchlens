@@ -41,8 +41,8 @@ def test_l2_merge_capture_flat_kwarg_still_applies() -> None:
 def test_l2_merge_save_flat_kwarg_still_applies() -> None:
     """A flat save kwarg still overrides its default after fields removal."""
 
-    merged = options.merge_save_options(save=None, save_raw_activations=False)
-    assert isinstance(merged, options.SaveOptions)
+    merged = options.merge_capture_options(capture=None, save_raw_activations=False)
+    assert isinstance(merged, options.CaptureOptions)
     assert merged.save_raw_activations is False
 
 
@@ -51,7 +51,7 @@ def test_l2_merge_default_when_none_unchanged() -> None:
 
     merged = options.merge_capture_options(capture=None)
     assert merged.verbose is False
-    assert merged.save_arg_values is False
+    assert merged.save_args is False
 
 
 def test_l2_merge_grouped_flat_conflict_still_raises() -> None:
@@ -65,10 +65,10 @@ def test_l2_all_merge_entrypoints_round_trip_defaults() -> None:
     """Every merge entrypoint still constructs its grouped type from ``None``."""
 
     assert isinstance(options.merge_capture_options(capture=None), options.CaptureOptions)
-    assert isinstance(options.merge_save_options(save=None), options.SaveOptions)
+    assert isinstance(options.merge_capture_options(capture=None), options.CaptureOptions)
     assert isinstance(options.merge_replay_options(replay=None), options.ReplayOptions)
     assert isinstance(
         options.merge_intervention_options(intervention=None),
         options.InterventionOptions,
     )
-    assert isinstance(options.merge_streaming_options(streaming=None), options.StreamingOptions)
+    assert isinstance(options.merge_streaming_options(streaming=None), options.StorageOptions)

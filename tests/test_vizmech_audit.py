@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._geometry_audit import (
+from torchlens._visualization._geometry_audit import (
     AuditResult,
     audit_layout,
     compute_usability_envelope,
@@ -44,10 +44,9 @@ def _audit(model: nn.Module, x: torch.Tensor, tmp_path: Path, name: str) -> Audi
 
     trace = tl.trace(model, x)
     dot = trace.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / name),
-    )
+        file_format="svg",
+        path=str(tmp_path / name),
+    ).dot
     parsed = parse_layout_json(run_layout_json(dot, "dot"), engine="dot", dot_source=dot)
     return audit_layout(parsed)
 
@@ -121,7 +120,7 @@ def test_inventory_multiset_carries_argument_labels(tmp_path: Path) -> None:
     """Plank 1: geometry pairs with a text inventory (deleted labels caught)."""
 
     trace = tl.trace(_FanStack(8), torch.randn(2, 3))
-    dot = trace.draw(vis_save_only=True, vis_fileformat="svg", vis_outpath=str(tmp_path / "fan8"))
+    dot = trace.draw(file_format="svg", path=str(tmp_path / "fan8")).dot
     parsed = parse_layout_json(run_layout_json(dot, "dot"), engine="dot", dot_source=dot)
     edge_texts = parsed.text_multiset(("edge-head", "edge-tail", "edge-midpoint"))
     arg_labels = [text for text in edge_texts if text.startswith("arg")]
@@ -132,7 +131,7 @@ def test_spatial_index_prunes_pairs(tmp_path: Path) -> None:
     """Item 18: the grid prefilter must beat brute-force pairing."""
 
     trace = tl.trace(_FanStack(12), torch.randn(2, 3))
-    dot = trace.draw(vis_save_only=True, vis_fileformat="svg", vis_outpath=str(tmp_path / "fan12b"))
+    dot = trace.draw(file_format="svg", path=str(tmp_path / "fan12b")).dot
     parsed = parse_layout_json(run_layout_json(dot, "dot"), engine="dot", dot_source=dot)
     result = audit_layout(parsed)
     text_count = len(parsed.textboxes)
@@ -172,17 +171,16 @@ def test_node_labels_and_captions_are_audited(tmp_path: Path) -> None:
 
     trace = tl.trace(Wrapped(), torch.randn(1, 4))
     dot = trace.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "classes"),
+        file_format="svg",
+        path=str(tmp_path / "classes"),
         show_legend=True,
-    )
+    ).dot
     parsed = parse_layout_json(run_layout_json(dot, "dot"), engine="dot", dot_source=dot)
     counts = parsed.class_counts()
     assert counts.get("node-label", 0) >= 3
     assert counts.get("cluster-caption", 0) >= 1
-    assert counts.get("legend-text", 0) >= 5
-    assert counts.get("graph-caption", 0) >= 1
+    # The key rides in the header label: three header lines plus its entries.
+    assert counts.get("graph-caption", 0) >= 6
     envelope = compute_usability_envelope(parsed)
     assert envelope.min_text_size > 0.0
 
@@ -195,7 +193,7 @@ def test_competing_label_channels_detected(tmp_path: Path) -> None:
     label (memo D11); the detector is the plan's tripwire until it lands.
     """
 
-    from torchlens.visualization._geometry_audit import edges_with_competing_labels
+    from torchlens._visualization._geometry_audit import edges_with_competing_labels
 
     class Reused(nn.Module):
         """A two-input op whose edges carry argument labels."""
@@ -204,7 +202,7 @@ def test_competing_label_channels_detected(tmp_path: Path) -> None:
             return torch.stack([x, x * 2.0], 0).sum(0)
 
     trace = tl.trace(Reused(), torch.randn(2, 3))
-    dot = trace.draw(vis_save_only=True, vis_fileformat="svg", vis_outpath=str(tmp_path / "cc"))
+    dot = trace.draw(file_format="svg", path=str(tmp_path / "cc")).dot
     parsed = parse_layout_json(run_layout_json(dot, "dot"), engine="dot", dot_source=dot)
     competing = edges_with_competing_labels(parsed)
     # The fixture may or may not compose channels on one edge; the CONTRACT

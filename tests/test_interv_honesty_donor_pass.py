@@ -30,15 +30,20 @@ R0_DIR = str(Path(__file__).resolve().parent / "real_model" / "r0")
 
 
 class _TwoPass(nn.Module):
-    """Minimal weight-reused module: one Linear called twice."""
+    """Minimal weight-reused module: one Linear and relu run twice from a loop.
+
+    grouping rule rows 1 and 26: the loop body is one place in the code, so
+    ``relu_1_2`` is one layer with 2 passes (two relu lines would be two
+    single-pass layers, row 14).
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self.lin = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = torch.relu(self.lin(x))
-        x = torch.relu(self.lin(x))
+        for _ in range(2):
+            x = torch.relu(self.lin(x))
         return x
 
 
@@ -46,7 +51,7 @@ def _pair() -> tuple[tl.Trace, tl.Trace]:
     torch.manual_seed(0)
     model = _TwoPass().eval()
     xa, xb = torch.randn(2, 4), torch.randn(2, 4)
-    capture = tl.options.CaptureOptions(intervention_ready=True)
+    capture = tl.options.CaptureOptions(replayable=True)
     donor = tl.trace(model, xa, capture=capture)
     base = tl.trace(model, xb, capture=capture)
     return donor, base
@@ -76,11 +81,11 @@ def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
     hook_callable = tl.patch_from(donor).factory()
     context = make_hook_context(
         name="patch_from",
-        layer_log={"layer_label": "relu_1_2", "label": "relu_1_2"},
-        run_ctx={},
+        op={"layer_label": "relu_1_2", "label": "relu_1_2"},
+        run_context={},
     )
     with pytest.raises(HookValueError) as excinfo:
-        hook_callable(base["relu_1_2:1"].out, hook=context)
+        hook_callable(base["relu_1_2:1"].out, ctx=context)
     message = str(excinfo.value)
     assert "multi-pass" in message
     assert "'relu_1_2:1'" in message
@@ -126,7 +131,7 @@ def test_recurrent_model_donor_pin_shared_transformer_encoder() -> None:
     torch.manual_seed(0)
     model = _SharedEncoder().eval()
     xa, xb = torch.randn(5, 2, 16), torch.randn(5, 2, 16)
-    capture = tl.options.CaptureOptions(intervention_ready=True)
+    capture = tl.options.CaptureOptions(replayable=True)
     donor = tl.trace(model, xa, capture=capture)
     base = tl.trace(model, xb, capture=capture)
 
@@ -169,7 +174,7 @@ def test_recurrent_model_donor_pin_albert_family() -> None:
     torch.manual_seed(1)
     other_ids = torch.randint_like(input_ids, low=5, high=int(input_ids.max()) + 1)
 
-    capture = tl.options.CaptureOptions(intervention_ready=True)
+    capture = tl.options.CaptureOptions(replayable=True)
     donor = tl.trace(model, input_ids, capture=capture)
     base = tl.trace(model, other_ids, capture=capture)
 

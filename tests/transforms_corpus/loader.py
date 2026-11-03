@@ -6,8 +6,11 @@ deterministically expanded to a 128-row fixture through seeded crops, flips,
 and channel gains. The precision path is the panel's exact 128-image COCO
 test2017 corpus as a download-on-demand pinned manifest
 (``coco_manifest.jsonl``: URL + sha256 per image) — COCO's Flickr-varied
-licensing is exactly why it cannot be vendored; the download runs in the
-release job, never in PR smoke.
+licensing is exactly why it cannot be vendored. :func:`fetch_coco` downloads
+it on request into a caller-named directory, verifying each image's byte
+count and sha256 against the manifest and refusing a mismatch with
+:class:`CocoChecksumMismatch`; it never runs in PR smoke (the real fetch is
+an opt-in ``rare`` test).
 
 O14 admissibility (transforms memo decision 19): pinned corr-RDM baselines
 are trusted only when the fixture ITSELF passes ``n_distinct >= 16``,
@@ -22,6 +25,9 @@ fails the gate by a wide margin, which is the point.
 from __future__ import annotations
 
 import hashlib
+import os
+import urllib.request
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +82,167 @@ def coco_manifest_rows() -> list[dict[str, Any]]:
         if line.strip():
             rows.append(loads_bounded(line))
     return rows
+
+
+#: URL prefix every pinned COCO manifest row carries.
+COCO_URL_PREFIX = "http://images.cocodataset.org/test2017/"
+
+
+class CocoChecksumMismatch(Exception):
+    """A fetched COCO image differs from its pinned manifest row.
+
+    Parameters
+    ----------
+    file:
+        Manifest file name.
+    expected_sha256, actual_sha256:
+        Pinned and observed digests (``actual_sha256`` is ``None`` when the
+        byte count already disagreed and the body was not hashed).
+    expected_bytes, actual_bytes:
+        Pinned and observed byte counts (``actual_bytes`` stops counting one
+        byte past the pin).
+    """
+
+    def __init__(
+        self,
+        file: str,
+        *,
+        expected_sha256: str,
+        actual_sha256: str | None,
+        expected_bytes: int,
+        actual_bytes: int,
+    ) -> None:
+        self.file = file
+        self.expected_sha256 = expected_sha256
+        self.actual_sha256 = actual_sha256
+        self.expected_bytes = expected_bytes
+        self.actual_bytes = actual_bytes
+        super().__init__(
+            f"COCO image {file} does not match the pinned manifest: expected "
+            f"{expected_bytes} bytes sha256 {expected_sha256}, got {actual_bytes} "
+            f"bytes sha256 {actual_sha256}; the file was not kept -- the source "
+            "changed or the download was corrupted, so the precision corpus "
+            "cannot be trusted"
+        )
+
+
+def _verified_body(row: dict[str, Any], body: bytes) -> bytes:
+    """Return ``body`` when it matches ``row``, else refuse typed.
+
+    Parameters
+    ----------
+    row:
+        Manifest row with ``file``, ``sha256`` and ``bytes``.
+    body:
+        Candidate image bytes (at most one byte past the pinned size).
+
+    Returns
+    -------
+    bytes
+        The verified body.
+
+    Raises
+    ------
+    CocoChecksumMismatch
+        On a byte-count or sha256 disagreement.
+    """
+
+    expected_bytes = int(row["bytes"])
+    digest = hashlib.sha256(body).hexdigest() if len(body) == expected_bytes else None
+    if digest != row["sha256"]:
+        raise CocoChecksumMismatch(
+            str(row["file"]),
+            expected_sha256=str(row["sha256"]),
+            actual_sha256=digest,
+            expected_bytes=expected_bytes,
+            actual_bytes=len(body),
+        )
+    return body
+
+
+def _cached_matches(path: Path, row: dict[str, Any]) -> bool:
+    """Return whether a cached file already matches its manifest row.
+
+    Parameters
+    ----------
+    path:
+        Cached image path.
+    row:
+        Manifest row.
+
+    Returns
+    -------
+    bool
+        True when the file exists with the pinned size and sha256.
+    """
+
+    if not path.is_file() or path.stat().st_size != int(row["bytes"]):
+        return False
+    return hashlib.sha256(path.read_bytes()).hexdigest() == row["sha256"]
+
+
+def fetch_coco(
+    dest: Path,
+    *,
+    rows: Iterable[dict[str, Any]] | None = None,
+    base_url: str | None = None,
+    timeout: float = 60.0,
+) -> list[Path]:
+    """Fetch the pinned COCO precision corpus on demand, checksum-verified.
+
+    Each image is downloaded only when ``dest`` lacks a verified copy, read
+    up to one byte past its pinned size, checked against the manifest's byte
+    count and sha256, and moved into place only after it verifies, so a
+    mismatch leaves no file behind. A cached copy that no longer verifies is
+    fetched again.
+
+    Parameters
+    ----------
+    dest:
+        Directory to hold the images (created if missing; never inside the
+        repository's vendored ``images/``).
+    rows:
+        Manifest rows to fetch; defaults to :func:`coco_manifest_rows`.
+    base_url:
+        Optional replacement for :data:`COCO_URL_PREFIX` (a mirror, or a
+        ``file://`` fixture directory in tests).
+    timeout:
+        Per-request timeout in seconds.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        Verified image paths in manifest order.
+
+    Raises
+    ------
+    CocoChecksumMismatch
+        When a downloaded image differs from its manifest row.
+    ValueError
+        When ``dest`` is the vendored images directory or a row's URL lacks
+        the pinned prefix.
+    """
+
+    dest = Path(dest)
+    if dest.resolve() == IMAGES_DIR.resolve():
+        raise ValueError("fetch_coco never writes into the vendored images directory")
+    dest.mkdir(parents=True, exist_ok=True)
+    fetched: list[Path] = []
+    for row in coco_manifest_rows() if rows is None else rows:
+        url = str(row["url"])
+        if not url.startswith(COCO_URL_PREFIX):
+            raise ValueError(f"manifest row {row['file']} has an unpinned URL: {url}")
+        if base_url is not None:
+            url = base_url + url[len(COCO_URL_PREFIX) :]
+        target = dest / str(row["file"])
+        if not _cached_matches(target, row):
+            with urllib.request.urlopen(url, timeout=timeout) as reply:
+                body = _verified_body(row, reply.read(int(row["bytes"]) + 1))
+            partial = target.with_name(target.name + ".part")
+            partial.write_bytes(body)
+            os.replace(partial, target)
+        fetched.append(target)
+    return fetched
 
 
 def verify_vendored_integrity() -> None:

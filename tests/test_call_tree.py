@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes import ModuleCall
+from torchlens._data_classes import ModuleCall
 
 
 class Leaf(nn.Module):
@@ -95,7 +95,7 @@ def _trace() -> tl.Trace:
     return tl.trace(
         CallTreeModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
 
@@ -130,7 +130,7 @@ def test_trace_call_tree_matches_show_call_tree_order() -> None:
 
     trace = _trace()
 
-    structured_labels = [call.call_label for call in trace.call_tree.walk_descendants()]
+    structured_labels = [call.label for call in trace.call_tree.walk_descendants()]
 
     assert structured_labels == _printed_call_labels(trace)
 
@@ -152,9 +152,9 @@ def test_call_tree_depth_is_nested() -> None:
 
     trace = _trace()
 
-    assert trace.call_tree.call_label == "self:1"
+    assert trace.call_tree.label == "self:1"
     assert trace.call_tree.max_descendant_depth >= 2
-    assert [child.call_label for child in trace.call_tree.walk_descendants()] == [
+    assert [child.label for child in trace.call_tree.walk_descendants()] == [
         "self:1",
         "branch:1",
         "branch.leaf:1",

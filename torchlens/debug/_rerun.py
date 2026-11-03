@@ -1,14 +1,13 @@
-"""Shared isolated-rerun harness for double-run diagnostics.
+"""Isolated reruns: run the same forward more than once under controlled state.
 
-One harness, several consumers (observe memo item 3): ``bisect_precision``,
-``check_determinism``, and any future tool that must run the SAME forward more
-than once under controlled state. Every run executes on a FRESH deep copy of
-the model that is explicitly released from TorchLens preparation first (a
-no-op on a never-traced copy; a capture leaves no forward wrapper behind, so
-the release only normalizes plain attributes holding torch functions). Caller-visible RNG state
-(Python, NumPy, torch CPU, initialized CUDA devices) is preserved around every
-run, so diagnostics never perturb the experiment that called them. Every
-spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
+``tl.debug.isolated_capture`` is the harness behind ``tl.debug.bisect_precision`` and
+``tl.debug.check_determinism``. Every run executes on a fresh deep copy of the model,
+released from any TorchLens preparation it inherited first (a no-op on a never-traced
+copy; a capture leaves no forward wrapper behind, so the release only normalizes plain
+attributes holding torch functions), with inputs cloned by ``tl.debug.clone_input_tree``.
+``tl.debug.preserved_rng_state`` saves and restores the caller's RNG streams (Python,
+NumPy, torch CPU and initialized CUDA devices) around every run, so a diagnostic never
+perturbs the experiment that called it. All three spellings are DOCUMENTED-UNSTABLE.
 """
 
 from __future__ import annotations
@@ -21,8 +20,10 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._capture_override import _with_capture_fields
+
 if TYPE_CHECKING:
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
 __all__ = ["clone_input_tree", "isolated_capture", "preserved_rng_state"]
 
@@ -39,7 +40,7 @@ def _initialized_cuda_devices() -> list[int]:
         Device ordinals with a live CUDA context, or an empty list.
     """
 
-    from ..utils.tensor_utils import _is_cuda_initialized
+    from .._utils._cuda_probe import _is_cuda_initialized
 
     if _is_cuda_initialized() and torch.cuda.is_available():
         return list(range(torch.cuda.device_count()))
@@ -51,9 +52,20 @@ def preserved_rng_state() -> Iterator[None]:
     """Preserve and restore every host RNG a diagnostic rerun may consume.
 
     Covers the Python ``random`` module, NumPy's legacy global generator when
-    NumPy is importable, the torch CPU generator, and every INITIALIZED CUDA
-    device generator. The caller's RNG streams observe no consumption from
-    anything executed inside the context.
+    NumPy is importable, the torch CPU generator, and every initialized CUDA
+    device generator. The states are restored when the block exits, normally or
+    by an exception, so the caller's RNG streams observe no consumption from
+    anything executed inside it.
+
+    Examples
+    --------
+    >>> import torch
+    >>> import torchlens as tl
+    >>> before = torch.get_rng_state()
+    >>> with tl.debug.preserved_rng_state():
+    ...     _ = torch.randn(4)
+    >>> torch.equal(torch.get_rng_state(), before)
+    True
 
     Yields
     ------
@@ -88,9 +100,20 @@ def preserved_rng_state() -> Iterator[None]:
 def clone_input_tree(value: Any) -> Any:
     """Return a detached clone of an input tree for one isolated run.
 
-    Tensors are detached and cloned so per-run in-place mutation by the model
-    cannot leak between runs or back to the caller; containers rebuild with
-    their own identity; other leaves pass through unchanged.
+    Tensors are detached and cloned (keeping ``requires_grad``) so in-place
+    mutation by the model during one run cannot leak into another run or back to
+    the caller. Dicts, lists and tuples are rebuilt recursively as new
+    containers; any other leaf passes through as the same object.
+
+    Examples
+    --------
+    >>> import torch
+    >>> import torchlens as tl
+    >>> inputs = {"x": torch.zeros(2), "scale": 2.0}
+    >>> copied = tl.debug.clone_input_tree(inputs)
+    >>> _ = copied["x"].add_(1.0)
+    >>> inputs["x"].tolist()
+    [0.0, 0.0]
 
     Parameters
     ----------
@@ -143,7 +166,7 @@ def isolated_capture(
     seed:
         Seed applied to Python, NumPy, and torch generators inside the
         preserved-RNG scope before the forward runs. It is also routed to
-        ``CaptureOptions(random_seed=...)`` (unless the caller's ``capture``
+        ``CaptureOptions(seed=...)`` (unless the caller's ``capture``
         options carry an explicit ``random_seed``), because unseeded captures
         pick a FRESH private seed per capture by design (R57) and would
         defeat same-seed reproduction.
@@ -166,8 +189,8 @@ def isolated_capture(
         runs.
     """
 
+    from .._user_funcs import release_model, trace
     from ..options import CaptureOptions
-    from ..user_funcs import release_model, trace
 
     run_model = copy.deepcopy(model)
     # Releasing the copy starts its preparation from scratch (a no-op on
@@ -182,15 +205,9 @@ def isolated_capture(
     run_trace_kwargs = dict(trace_kwargs)
     capture_options = run_trace_kwargs.get("capture")
     if capture_options is None:
-        run_trace_kwargs["capture"] = CaptureOptions(random_seed=seed)
-    elif not capture_options.is_field_explicit("random_seed"):
-        explicit_values = {
-            field_name: value
-            for field_name, value in capture_options.as_dict().items()
-            if capture_options.is_field_explicit(field_name)
-        }
-        explicit_values["random_seed"] = seed
-        run_trace_kwargs["capture"] = CaptureOptions(**explicit_values)
+        run_trace_kwargs["capture"] = CaptureOptions(seed=seed)
+    elif not capture_options._is_field_explicit("seed"):
+        run_trace_kwargs["capture"] = _with_capture_fields(capture_options, seed=seed)
     with preserved_rng_state():
         random.seed(seed)
         try:
@@ -200,4 +217,4 @@ def isolated_capture(
         except ImportError:
             pass
         torch.manual_seed(seed)
-        return trace(run_model, cloned_args, cloned_kwargs, **run_trace_kwargs)
+        return trace(run_model, cloned_args, input_kwargs=cloned_kwargs, **run_trace_kwargs)

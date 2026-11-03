@@ -17,21 +17,21 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.errors import TorchLensWarning
-from torchlens.visualization._collapse_disclosures import (
+from torchlens._visualization._collapse_disclosures import (
     NEAR_UNCOLLAPSED_FRACTION,
     _warn_undisclosed_floor,
 )
-from torchlens.visualization.collapse_optimizer import (
+from torchlens._visualization.collapse_optimizer import (
     OptimizerResult,
     _optimizer_total_units,
 )
-from torchlens.visualization.collapse_plan import (
+from torchlens._visualization.collapse_plan import (
     RenderContext,
     collapse_plan_for_trace,
     count,
 )
-from torchlens.visualization.render_execution import surface_layout_stderr
+from torchlens._visualization.render_execution import surface_layout_stderr
+from torchlens.errors import TorchLensWarning
 
 
 class _TwoBlockModel(torch.nn.Module):
@@ -155,7 +155,7 @@ def test_near_uncollapsed_plan_discloses_typed_warning(
     the band below this toy's universe.
     """
 
-    from torchlens.visualization import auto_collapse
+    from torchlens._visualization import auto_collapse
 
     monkeypatch.setattr(auto_collapse, "_readable_band_high", lambda trace: 1)
     context = RenderContext(vis_mode="unrolled")

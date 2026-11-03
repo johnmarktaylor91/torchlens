@@ -23,7 +23,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens.backends.torch.ops as torch_ops
+import torchlens.backends.torch._ops_containers
 from torchlens.validation import _output_walk
 
 
@@ -62,7 +62,7 @@ def test_planted_walker_leaf_drop_fails_validation(monkeypatch: pytest.MonkeyPat
     oracle agree on the truncated enumeration.
     """
 
-    real_walker = torch_ops._walk_output_tensors_with_paths
+    real_walker = torchlens.backends.torch._ops_containers._walk_output_tensors_with_paths
 
     def _dropping_walker(output):
         """Yield the real walk minus its final leaf.
@@ -81,7 +81,11 @@ def test_planted_walker_leaf_drop_fails_validation(monkeypatch: pytest.MonkeyPat
         rows = list(real_walker(output))
         return rows[:-1]
 
-    monkeypatch.setattr(torch_ops, "_walk_output_tensors_with_paths", _dropping_walker)
+    monkeypatch.setattr(
+        torchlens.backends.torch._ops_containers,
+        "_walk_output_tensors_with_paths",
+        _dropping_walker,
+    )
     with pytest.warns(RuntimeWarning, match="output-enumeration defect"):
         result = tl.validation.validate_forward_pass(_TupleOut(), [torch.randn(3)], input_kwargs={})
     assert result is False, (
@@ -99,7 +103,7 @@ def test_independent_walker_never_imports_the_capture_adapter():
     """
 
     assert _output_walk.independent_output_tensor_ids is not (
-        torch_ops._walk_output_tensors_with_paths
+        torchlens.backends.torch._ops_containers._walk_output_tensors_with_paths
     )
     tree = ast.parse(inspect.getsource(_output_walk))
     for node in ast.walk(tree):
@@ -167,7 +171,7 @@ def test_walker_ceiling_locksteps_capture_output_ceiling():
     this test is the lockstep.
     """
 
-    from torchlens.ir.container_registry import OUTPUT_TREE_MAX_DEPTH
+    from torchlens._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
 
     assert _output_walk._MAX_DEPTH >= OUTPUT_TREE_MAX_DEPTH
 
@@ -180,7 +184,7 @@ def test_planted_deep_leaf_drop_fails_validation(monkeypatch: pytest.MonkeyPatch
     could not reach the dropped leaf (live surviving mutant, grind-p3 T11).
     """
 
-    real_walker = torch_ops._walk_output_tensors_with_paths
+    real_walker = torchlens.backends.torch._ops_containers._walk_output_tensors_with_paths
 
     def _dropping_walker(output):
         """Yield the real walk minus its final leaf.
@@ -199,7 +203,11 @@ def test_planted_deep_leaf_drop_fails_validation(monkeypatch: pytest.MonkeyPatch
         rows = list(real_walker(output))
         return rows[:-1]
 
-    monkeypatch.setattr(torch_ops, "_walk_output_tensors_with_paths", _dropping_walker)
+    monkeypatch.setattr(
+        torchlens.backends.torch._ops_containers,
+        "_walk_output_tensors_with_paths",
+        _dropping_walker,
+    )
     with pytest.warns(RuntimeWarning, match="output-enumeration defect"):
         result = tl.validation.validate_forward_pass(
             _DeepNestOut(), [torch.randn(3)], input_kwargs={}

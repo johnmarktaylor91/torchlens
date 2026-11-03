@@ -12,9 +12,10 @@ loaded through the bounded reader); tensor-bearing tables refuse
 ``rescorable=False`` because the runtime autograd registry is not serialized.
 Dense tensors live on the carrier, not in scalar pandas rows.
 
-The EDGE kind is admitted with kind-specific addresses from day one (deferred
-EAP plumbing, section 8) even though v1 only produces ACT rows; ``sample_id``
-is nullable from day one (dataset-mean seam).
+The EDGE kind carries kind-specific addresses: ``read`` produces ACT rows,
+and ``torchlens.mechinterp.edge_scores`` produces EDGE rows addressed ``(edge
+name,)`` in the component-graph vocabulary (built by :func:`edge_read_table`);
+``sample_id`` is nullable from day one (dataset-mean seam).
 """
 
 from __future__ import annotations
@@ -140,13 +141,13 @@ class ReadRow:
     retention: str | None
     capture_status: str | None
     resolution: str
-    frozen_requested: bool
-    frozen_resolved: bool
+    is_frozen_requested: bool
+    is_frozen_resolved: bool
     frozen_reached: bool | None
     policy_digest: str | None
-    detached: bool
+    is_detached: bool
     sample_id: str | None
-    rescorable: bool
+    is_rescorable: bool
 
     def __post_init__(self) -> None:
         """Validate closed vocabularies at construction."""
@@ -271,7 +272,7 @@ class ReadTable(Mapping):
     """Immutable trace-bound mapping of read rows (D8).
 
     Keys are ``(target_id, kind, address)``; values are :class:`ReadRow`.
-    The table never mutates; every derivation (``for_target``,
+    The table never mutates; every derivation (``target``,
     ``aggregate_targets``, alias collapse) returns a new table.
     """
 
@@ -341,7 +342,7 @@ class ReadTable(Mapping):
             raise ReadError(
                 f"Label {key!r} matches {len(matches)} rows across targets. "
                 "Remedy: index with the full (target_id, kind, address) key "
-                "or narrow with for_target(target_id) first",
+                "or narrow with target(target_id) first",
                 code="read_table_key_ambiguous",
                 label=key,
                 n_matches=len(matches),
@@ -376,7 +377,7 @@ class ReadTable(Mapping):
         return self._trace_token
 
     @property
-    def rescorable(self) -> bool:
+    def is_rescorable(self) -> bool:
         """Whether the table can be re-scored against its live trace."""
 
         return self._provenance.rescorable and self.trace is not None
@@ -405,7 +406,7 @@ class ReadTable(Mapping):
             counts[row.status] = counts.get(row.status, 0) + 1
         return counts
 
-    def for_target(self, target_id: str) -> ReadTable:
+    def target(self, target_id: str) -> ReadTable:
         """Return the single-target slice, provenance preserved.
 
         Parameters
@@ -660,6 +661,87 @@ class ReadTable(Mapping):
         return destination
 
 
+def edge_read_table(  # noqa: PLR0913 -- one keyword per provenance field an EDGE table records
+    rows: list[dict[str, Any]],
+    *,
+    method: str,
+    reduction: str,
+    target_repr: str,
+    sample_count: int,
+    timing_s: float | None = None,
+    trace: Any = None,
+) -> ReadTable:
+    """Build an EDGE-kind table: one scalar row per component-graph edge.
+
+    Parameters
+    ----------
+    rows:
+        One mapping per edge, in graph order, with ``name`` (the edge's
+        vocabulary name, the row address), ``score`` (float, or ``None``
+        when not ``ok``), ``status`` (closed vocabulary), and the sender's
+        ``shape``, ``dtype`` and ``device``.
+    method:
+        The edge-scoring method (``'eap'`` or ``'eap_ig'``).
+    reduction:
+        The named reduction that produced each score.
+    target_repr:
+        Representation of the scored metric.
+    sample_count:
+        Number of examples folded into each score.
+    timing_s:
+        Wall-clock seconds of the whole scoring call.
+    trace:
+        The clean source trace (held weakly).
+
+    Returns
+    -------
+    ReadTable
+        Keys ``("t0", "EDGE", (name,))``; scalar rows, so the table saves.
+    """
+
+    built: dict[tuple[str | None, str, tuple[Any, ...]], ReadRow] = {}
+    for entry in rows:
+        status = str(entry["status"])
+        row = ReadRow(
+            target_id="t0",
+            kind="EDGE",
+            address=(str(entry["name"]),),
+            site_key=None,
+            alias_group=None,
+            method=method,
+            reduction=reduction,
+            grain="site",
+            score=entry["score"] if status == "ok" else None,
+            value=None,
+            shape=entry.get("shape"),
+            dtype=entry.get("dtype"),
+            device=entry.get("device"),
+            status=status,
+            status_reason=None if status == "ok" else "receiver_not_upstream_of_metric",
+            differentiable=True,
+            retention="saved",
+            capture_status=None,
+            resolution="exact",
+            is_frozen_requested=False,
+            is_frozen_resolved=False,
+            frozen_reached=None,
+            policy_digest=None,
+            is_detached=True,
+            sample_id=None,
+            is_rescorable=False,
+        )
+        built[row.key] = row
+    provenance = TableProvenance(
+        target_reprs=(target_repr,),
+        population_size=len(built),
+        frozen_policy="none",
+        timing_s=timing_s,
+        sample_count=sample_count,
+        rescorable=False,
+    )
+    return ReadTable(built, provenance, trace=trace)
+
+
 def _address_label(address: tuple[Any, ...]) -> str:
     """Render an ACT address ``(layer_label, pass_index)`` as ``label:pass``."""
 
@@ -741,7 +823,7 @@ def load_read_table(path: str | Path) -> ReadTable:
         shape = filtered.get("shape")
         filtered["shape"] = tuple(shape) if shape is not None else None
         filtered["value"] = None
-        filtered["rescorable"] = False
+        filtered["is_rescorable"] = False
         try:
             row = ReadRow(**filtered)
         except (TypeError, ReadError) as exc:

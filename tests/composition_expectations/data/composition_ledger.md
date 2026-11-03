@@ -7,7 +7,7 @@ render TOGETHER so SUPPORTED cannot hide an unusable cell.
 
 | Row | Family | State | Oracle | Risk tags | Axes | Owner/Evidence |
 |---|---|---|---|---|---|---|
-| CELL-FLAGSHIP-RERUN-NOOP | intervention | KNOWN-GAP | DIFFERENTIAL | silent_noop, lane_asymmetry | selector=postprocess-label; engine=rerun | A04 (due PB1) |
+| CELL-FLAGSHIP-RERUN-NOOP | intervention | REFUSES-TYPED-TEACHING | REFUSAL | silent_noop, lane_asymmetry | selector=postprocess-label; engine=rerun | tests/test_rerun_push_head_ablation_parity.py |
 | CELL-SAVE-ALL-REMEDY-CURRENCY | capture-options | KNOWN-GAP | REFUSAL | remedy_currency | save=all; remedy=currency | A06 (due PB1) |
 | CELL-REPLAY-PRECONDITION-CODELESS | diagnostics | KNOWN-GAP | REFUSAL | facade_teaching | error=ReplayPreconditionError; capture=default | compo(S-17) (due S-17 ratchet burn-down) |
 | CELL-SITE-RESOLUTION-ZERO-MATCH-CODELESS | diagnostics | KNOWN-GAP | REFUSAL | facade_teaching | error=SiteResolutionError; match=zero | compo(S-17) (due S-17 ratchet burn-down) |
@@ -22,4 +22,4 @@ render TOGETHER so SUPPORTED cannot hide an unusable cell.
 | CELL-FORK-RAW-WRITE-SHARED-STORAGE | product-surface | SUPPORTED-WITH-DISCLOSURE | DISCLOSURE | shared_storage | write=raw-inplace; payload=shared-storage | tests/composition_expectations/test_galleries.py::test_raw_fork_writes_reach_the_shared_storage |
 | CELL-SUMMARY-CHARSET-PASSCOUNT | report-surface | SUPPORTED | EXACT | pass_resolution | charset=ascii-vs-unicode; layer=multi-pass; view=ladder | F08: tests/test_summary_rebuild_charset.py::test_dual_charset_goldens + tests/test_summary_rebuild_ladder.py::test_multipass_one_row_at_module_grain (byte-exact dual-charset goldens; one row owns all pass events; ascii == degrade(unicode)) |
 
-KNOWN-GAP rows: 11 of 14 (transitional; each carries owner, issue, deadline, reproducer, auto-probe).
+KNOWN-GAP rows: 10 of 14 (transitional; each carries owner, issue, deadline, reproducer, auto-probe).

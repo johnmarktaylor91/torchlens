@@ -29,7 +29,7 @@ secC (LOW robustness) -- ``_io/runnable_load.py``: ``_parse_literal`` built
     the declared ``kind`` (a ``kind=int`` atom could carry a list/dict/str). The fix
     enforces value-type-per-kind at parse.
 
-fastlog (LOW defense-in-depth) -- ``fastlog/storage_disk.py``: ``_dtype_from_name``
+fastlog (LOW defense-in-depth) -- ``recording/storage_disk.py``: ``_dtype_from_name``
     did ``getattr(torch, name)`` with no ``isinstance(_, torch.dtype)`` guard (the
     sibling dtype resolvers have one). The fix adds the guard for parity.
 """
@@ -46,24 +46,24 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
-from torchlens._io.bundle import (
+from torchlens._io import ArtifactError
+from torchlens._io._small_raw import (
+    _RAW_IMAGE_SENTINEL,
+    _RAW_INPUT_IMAGE_BYTES_LIMIT,
+    _RAW_INPUT_IMAGE_MAX_EDGE,
+)
+from torchlens._io.bundle_container import (
     _MAX_BUNDLE_NESTING_DEPTH,
     _load_unified_bundle_directory,
     _resolve_bundle_member_path,
 )
 from torchlens._io.rehydrate import _rehydrate_small_raw_images
 from torchlens._io.runnable_load import _parse_literal
-from torchlens._io.scrub import (
-    _RAW_IMAGE_SENTINEL,
-    _RAW_INPUT_IMAGE_BYTES_LIMIT,
-    _RAW_INPUT_IMAGE_MAX_EDGE,
-)
-from torchlens.fastlog.storage_disk import _dtype_from_name
+from torchlens._runnable import LiteralAtom, LiteralAtomKind
+from torchlens._utils._callable_safety import is_pure_forward_callable
+from torchlens.intervention._resolver_registry import resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_import_ref
-from torchlens.runnable import LiteralAtom, LiteralAtomKind
-from torchlens.utils._callable_safety import is_pure_forward_callable
+from torchlens.recording.storage_disk import _dtype_from_name
 
 # --------------------------------------------------------------------------- #
 # secE-1 -- resolver torchlens-walk branch now applies the torch-purity gate.
@@ -228,7 +228,7 @@ def test_secF2_self_referential_bundle_member_rejected(tmp_path: Path) -> None:
 
     bundle = tmp_path / "loop.tlspec"
     _write_unified_bundle(bundle, [{"name": "loop", "path": "."}])
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         tl.load(str(bundle))
 
 
@@ -237,7 +237,7 @@ def test_secF2_self_referential_bundle_member_rejected(tmp_path: Path) -> None:
 def test_secF2_member_path_resolving_to_root_rejected(tmp_path: Path, selfref: str) -> None:
     """The member-path resolver rejects any path collapsing onto the bundle root."""
 
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _resolve_bundle_member_path(tmp_path, selfref)
 
 
@@ -249,7 +249,7 @@ def test_secF2_nesting_depth_cap_enforced(tmp_path: Path) -> None:
     saturated = frozenset(
         Path(f"/nonexistent/bundle/{index}") for index in range(_MAX_BUNDLE_NESTING_DEPTH)
     )
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _load_unified_bundle_directory(tmp_path, tmp_path / "bundle.json", bundle_visited=saturated)
 
 
@@ -328,5 +328,5 @@ def test_fastlog_dtype_from_name_resolves_real_dtypes() -> None:
 def test_fastlog_dtype_from_name_rejects_non_dtype(bad_name: str) -> None:
     """A non-dtype torch attribute name is refused instead of silently resolving."""
 
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _dtype_from_name(bad_name)

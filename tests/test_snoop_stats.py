@@ -12,15 +12,17 @@ from __future__ import annotations
 
 import io
 import warnings
+from types import SimpleNamespace
 
 import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.options import EchoOptions
-from torchlens.snoop import EchoStatsError
-from torchlens.snoop._stats import exact_stats, reuse_stats, sampled_stats
+from torchlens._snoop._stats import exact_stats, reuse_stats, sampled_stats
+from torchlens.errors import NarrationStatsError
+from torchlens.options import NarrationOptions
+from torchlens.stats import TensorStats
 
 
 def test_sampled_blindness_regression_t_a() -> None:
@@ -31,37 +33,38 @@ def test_sampled_blindness_regression_t_a() -> None:
     sampled = sampled_stats(tensor, identity="t_a")
     assert sampled is not None
     assert sampled.policy == "sampled"
-    assert sampled.nan_count is None
-    assert sampled.posinf_count is None
-    assert sampled.neginf_count is None
-    assert sampled.has_nonfinite is None
+    assert sampled.num_nan is None
+    assert sampled.num_posinf is None
+    assert sampled.num_neginf is None
+    assert sampled.nonfinite_evidence.policy == "unavailable"
+    assert sampled.nonfinite_evidence.reason
     exact = exact_stats(tensor, identity="t_a")
-    assert exact.nan_count == 1
-    assert exact.posinf_count == 0
+    assert exact.num_nan == 1
+    assert exact.num_posinf == 0
 
 
 def test_sampled_budget_is_bounded_and_marked() -> None:
     """The sampled rung strides to a fixed budget with mandatory evidence."""
 
-    from torchlens.snoop import SAMPLED_BUDGET
+    from torchlens._snoop import SAMPLED_BUDGET
 
     tensor = torch.randn(64, 1024)
     record = sampled_stats(tensor, identity="budget")
     assert record is not None
-    assert record.sample_size == SAMPLED_BUDGET
-    assert record.population == tensor.numel()
-    assert record.mean is not None and record.sd is not None
+    assert record.mean_evidence.sample_size == SAMPLED_BUDGET
+    assert record.mean_evidence.population == tensor.numel()
+    assert record.mean is not None and record.std is not None
 
 
 def test_exact_rung_refuses_above_numel_budget() -> None:
     """Memo test 13: exact-above-budget refuses typed, remedy names sampled."""
 
-    import torchlens.snoop._stats as stats_module
+    import torchlens._snoop._stats as stats_module
 
     original = stats_module.EXACT_NUMEL_BUDGET
     stats_module.EXACT_NUMEL_BUDGET = 8
     try:
-        with pytest.raises(EchoStatsError) as excinfo:
+        with pytest.raises(NarrationStatsError) as excinfo:
             exact_stats(torch.randn(4, 4), identity="budget_refusal")
         assert excinfo.value.fields["code"] == "echo_stats_numel_budget"
         assert "sampled" in excinfo.value.fields["remedy"]
@@ -72,18 +75,18 @@ def test_exact_rung_refuses_above_numel_budget() -> None:
 def test_exact_budget_refusal_fails_the_capture_typed() -> None:
     """The mid-forward exact refusal propagates typed, never degrades."""
 
-    import torchlens.snoop._stats as stats_module
+    import torchlens._snoop._stats as stats_module
 
     original = stats_module.EXACT_NUMEL_BUDGET
     stats_module.EXACT_NUMEL_BUDGET = 4
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            with pytest.raises(EchoStatsError):
+            with pytest.raises(NarrationStatsError):
                 tl.trace(
                     nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
                     torch.randn(2, 4),
-                    echo=EchoOptions(select=True, sink=io.StringIO(), stats="exact"),
+                    narrate=NarrationOptions(sites=True, sink=io.StringIO(), stats="exact"),
                 )
     finally:
         stats_module.EXACT_NUMEL_BUDGET = original
@@ -97,15 +100,15 @@ def test_reuse_rung_prints_only_paid_for_facts() -> None:
     tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink, stats="reuse"),
+        narrate=NarrationOptions(sites=True, sink=sink, stats="reuse"),
     )
     assert "|" not in sink.getvalue()
     sink_armed = io.StringIO()
     tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink_armed, stats="reuse"),
-        capture=tl.options.CaptureOptions(track_nonfinite=True),
+        narrate=NarrationOptions(sites=True, sink=sink_armed, stats="reuse"),
+        capture=tl.options.CaptureOptions(on_nonfinite="track"),
     )
     armed_lines = [line for line in sink_armed.getvalue().split("\n") if "relu" in line]
     assert armed_lines and "| finite" in armed_lines[0]
@@ -122,8 +125,8 @@ def test_reuse_rung_never_reads_deferred_evidence() -> None:
 
             self.__dict__["_nonfinite_capture"] = {"events": {"op_raw": torch.tensor(True)}}
 
-    assert reuse_stats(FakeTrace(), "op_raw", 10) is None
-    assert reuse_stats(FakeTrace(), "missing_raw", 10) is None
+    assert reuse_stats(FakeTrace(), "op_raw", shape=(10,), dtype="f32", device="cpu") is None
+    assert reuse_stats(FakeTrace(), "missing_raw", shape=(10,), dtype="f32", device="cpu") is None
 
 
 @pytest.mark.smoke_cells("test_two_stage_tripwire_verdict_identity[nan]")
@@ -201,13 +204,13 @@ def test_two_stage_tripwire_verdict_identity(case: str) -> None:
                 tl.trace(
                     Emitter(),
                     torch.randn(1),
-                    capture=tl.options.CaptureOptions(raise_on_nan=True),
+                    capture=tl.options.CaptureOptions(on_nonfinite="raise"),
                 )
         else:
             log = tl.trace(
                 Emitter(),
                 torch.randn(1),
-                capture=tl.options.CaptureOptions(raise_on_nan=True),
+                capture=tl.options.CaptureOptions(on_nonfinite="raise"),
             )
             assert log is not None
 
@@ -224,9 +227,77 @@ def test_metadata_echo_reads_no_payload() -> None:
     log = tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink, stats="off"),
+        narrate=NarrationOptions(sites=True, sink=sink, stats="off"),
     )
     del log, reads, SpyTensor
     transcript = sink.getvalue()
     assert "|" not in transcript  # no stats segment ever rendered
     assert "relu" in transcript
+
+
+@pytest.mark.parametrize("verdict", [True, False])
+def test_reused_verdict_is_tensor_stats_with_no_invented_families(verdict: bool) -> None:
+    """Presence has no census; absence is the exact zero census already paid for."""
+
+    trace = SimpleNamespace(_nonfinite_capture={"events": {"raw": verdict}})
+    record = reuse_stats(trace, "raw", shape=(3, 4), dtype="f32", device="cpu")
+    assert isinstance(record, TensorStats)
+    assert record.policy == "reuse"
+    assert record.shape == (3, 4) and record.numel == 12
+    assert record.nonfinite_evidence.policy == ("verdict" if verdict else "exact")
+    assert record.nonfinite_evidence.reason == "track_nonfinite"
+    assert record.num_nonfinite == (None if verdict else 0)
+    assert (record.num_nan, record.num_posinf, record.num_neginf) == (
+        (None, None, None) if verdict else (0, 0, 0)
+    )
+    assert record.mean is None and record.std is None
+    assert record.finite_min is None and record.finite_max is None
+    for family in (
+        record.extrema_evidence,
+        record.mean_evidence,
+        record.std_evidence,
+        record.histogram_evidence,
+    ):
+        assert family.policy == "unavailable" and family.reason
+
+
+def test_exact_snoop_path_returns_shared_record_with_exact_evidence() -> None:
+    """The exact rung preserves the kernel's record and per-family evidence."""
+
+    record = exact_stats(torch.tensor([1.0, 3.0, float("nan")]))
+    assert isinstance(record, TensorStats)
+    assert record.policy == "exact"
+    assert record.nonfinite_evidence.policy == "exact"
+    assert record.mean_evidence.policy == "exact"
+    assert record.std_evidence.policy == "exact"
+    assert record.num_nonfinite == 1
+    assert record.mean == 2.0 and record.std == 1.0
+
+
+def test_sampled_snoop_path_returns_shared_record_with_sample_evidence() -> None:
+    """Only sampled moments survive the bounded kernel call, never its census."""
+
+    record = sampled_stats(torch.arange(8192.0), identity="shared-record")
+    assert isinstance(record, TensorStats)
+    assert record.policy == "sampled"
+    assert record.mean_evidence.policy == "sampled"
+    assert record.std_evidence.policy == "sampled"
+    assert record.extrema_evidence.policy == "sampled"
+    assert record.mean_evidence.population == record.numel == 8192
+    assert record.mean_evidence.sample_size == 4096
+    assert record.nonfinite_evidence.policy == "unavailable"
+    assert record.nonfinite_evidence.reason
+    assert record.num_nonfinite is None and record.num_finite is None
+    assert record.num_zero is None and record.num_true is None
+    assert record.small_values is None
+
+
+@pytest.mark.parametrize("dtype", [torch.bool, torch.complex64])
+def test_sampled_non_orderable_families_keep_no_moment_claim(dtype: torch.dtype) -> None:
+    """Bool and complex live samples omit moments rather than mislabel them."""
+
+    record = sampled_stats(torch.ones(16, dtype=dtype))
+    assert isinstance(record, TensorStats)
+    assert record.mean is None and record.std is None
+    assert record.nonfinite_evidence.policy == "unavailable"
+    assert record.num_nonfinite is None

@@ -14,6 +14,15 @@ TorchLens is single-threaded by design. Capture depends on process-global loggin
 ordered operation counters, so running captures concurrently in multiple Python threads or child
 processes can corrupt ordering assumptions. Use TorchLens from the main process.
 
+## Remote Execution and Serving Engines
+
+TorchLens records the forward that runs in its own Python process. It has no remote-execution
+service, so a model running on another machine or behind a hosted-inference API is out of
+capture scope; run TorchLens where the model runs and move experiments as `.tlspec/` recipes.
+Serving engines such as vLLM and SGLang run fused kernels, paged KV caches and CUDA graphs outside
+eager PyTorch; trace the eager Hugging Face twin of the same checkpoint instead. The full list of
+jobs TorchLens leaves to other tools is [What TorchLens does not do](docs/non_goals.md).
+
 ## Dynamic Control Flow
 
 Eager dynamic control flow is a feature, not a limitation. TorchLens records the branch, loop, and
@@ -28,16 +37,16 @@ meaningless or fatal on them, so TorchLens cannot record real activations there.
 
 Compiled child `nn.Module`s are handled automatically: they are swapped for their eager source
 module for the duration of capture (with a one-time note), so their interiors *are* logged. A
-compiled **callable** cannot be unwrapped to eager in the same way. Reaching one during capture used
-to die with a raw
-`torch._dynamo.exc.InternalTorchDynamoError: AttributeError: 'FakeTensor' object has no attribute
-'fake_mode'`. It now degrades gracefully: operations inside the compiled region are not logged,
+compiled **callable** cannot be swapped that way. On torch 2.6 and newer, TorchLens runs the capture
+under `torch.compiler.set_stance("force_eager")`, so a compiled callable runs its original Python
+and its interior is logged with full verification. On older torch, where `set_stance` does not
+exist, reaching one degrades gracefully: operations inside the compiled region are not logged,
 a one-per-forward `UserWarning` names the gap and the remedy, and the returned `Trace` contains
 only what ran outside the region, marked `capture_verified=False` with
 `capture_verification_reason="dynamo_region_not_logged"`. Call the eager function during capture
-if you need its interior.
+if you need its interior there.
 
-For plain module attributes, TorchLens inventories Dynamo's original-callable marker before the
+On that older-torch path, for plain module attributes, TorchLens inventories Dynamo's original-callable marker before the
 forward and temporarily invokes the callable with TorchLens logging paused. This prevents both cold
 FakeTensor internals and warm-cache execution from entering capture wrappers, independently of
 `torch.compiler.is_compiling()` timing. The inventory is conservative: merely holding such a
@@ -108,7 +117,7 @@ forward, so a capture there is a fragment, not the model.
 
 Because all-pass-then-silently-wrong is worse than a clear failure, both surfaces now report it:
 
-- `tl.compat.report(model, x)` has `dtensor`, `device_mesh`, `tensor_parallel`, and
+- `tl.report.doctor(model, x)` has `dtensor`, `device_mesh`, `tensor_parallel`, and
   `pipeline_parallel` rows.
 - `tl.trace(...)` refuses at capture entry with
   `torchlens.errors.DistributedCaptureUnsupportedError`, naming the exact parameter, buffer, or
@@ -123,11 +132,12 @@ collectives below TorchLens' wrapped layer. Sharded tensor state (`dtensor`), ac
 
 **What to do instead:** trace the undistributed module. Build and trace the model before wrapping
 it with `parallelize_module` / `fully_shard` / pipeline stages, or materialize the logical tensors
-(`DTensor.full_tensor()`) into a plain module first. Cross-rank merging (`tl.merge_ranks()`) is not
-available in this release.
+(`DTensor.full_tensor()`) into a plain module first. Rank-local captures can be combined afterwards:
+`tl.merge_report(...)` reports conflicts and `tl.merge_ranks(...)` merges, refusing rather than
+inventing joins when ranks disagree (`docs/reference/merged_trace_contract.md`).
 
 Detection is capability-probed, never version-parsed, and every degradation point is visible as a
-named flag in `torchlens.utils.doctor()` / `tl.compat.report()`: `HAS_DTENSOR`, `HAS_DEVICE_MESH`,
+named flag in `tl.report.doctor()`: `HAS_DTENSOR`, `HAS_DEVICE_MESH`,
 and `HAS_PIPELINING`. When one is absent, detection falls back from an exact `isinstance` check to
 structural namespace matching, and the affected report row says so.
 
@@ -140,9 +150,9 @@ compatibility rows state this rather than issuing an unqualified clean bill of h
 
 ## Disk-backed reporting
 
-`repr`, `str`, notebook HTML, and `report.explain(..., format="json")` never materialize a saved
-activation solely to answer the NaN/Inf summary. An unmaterialized disk ref is counted as
-"disk-backed and not examined by reporting" in clean HTML/JSON answers. Call `op.materialize_out()`
+`repr`, `str`, notebook HTML, `report.explain(...)`, and `trace.to_agent_json()` never materialize
+a saved activation solely to answer the NaN/Inf summary. An unmaterialized disk ref is counted as
+"disk-backed and not examined by reporting" in clean text, HTML and JSON answers. Call `op.materialize_out()`
 explicitly before asking for a value-based answer when the I/O cost is intended.
 
 ## Bundle Diff Rendering
@@ -152,16 +162,16 @@ a future local inspection appliance.
 
 ## Compatibility Truth Table
 
-`tl.compat.report(model, x)` reports the following rows at runtime. Rows marked
+`tl.report.doctor(model, x)` reports the following rows at runtime. Rows marked
 `known_broken` or `scope` here should be included when filing issues so maintainers can
 separate unsupported contexts from new TorchLens bugs.
 
 | Row | Status | Notes |
 | --- | --- | --- |
-| `hf_transformers` | `pass` when detected alone | Eager Hugging Face modules are supported when not compiled, sharded, offloaded, or quantized with custom kernels. |
-| `accelerate_device_map_auto` | `known_broken` when detected | `device_map="auto"` can materialize parameters across devices during forward. |
-| `accelerate_cpu_disk_offload` | `known_broken` when detected | CPU/disk offload hooks mutate device placement lazily. |
-| `bitsandbytes_8bit_4bit` | `known_broken` when detected | bitsandbytes parameter wrappers and custom kernels are outside the dense eager tensor contract. |
+| `hf_transformers` | `pass` when detected alone | Eager Hugging Face modules are supported; compiled, sharded, offloaded and quantized models follow their own rows. |
+| `accelerate_device_map_auto` | `pass` on one execution device; `known_broken` across several | Single-device dispatch captures with hook infrastructure excluded from the op graph and offloaded weights re-attributed; maps across several execution devices are not yet capture-verified. |
+| `accelerate_cpu_disk_offload` | `pass` when detected | Offload hooks run outside the op graph and materialized weights re-attribute to their records; with `offload_buffers=True`, offloaded-buffer reads may stay unattributed (severity `warning`). |
+| `bitsandbytes_8bit_4bit` | `pass` when detected (severity `warning`) | Activation capture keeps value parity; quantization-state reads may appear unattributed, FLOPs are best-effort, and `tl.validate` metadata invariants may flag those reads. Log an unquantized reference when exact metadata is required. |
 | `tied_parameters` | `pass` | Shared parameter objects are detected and reported. |
 | `multi_gpu_rng` | `pass` | RNG snapshots now use all visible CUDA devices; include this row for multi-GPU bugs. |
 | `data_parallel` | `known_broken` when detected | `nn.DataParallel` uses threaded replicas and conflicts with process-global capture state. |

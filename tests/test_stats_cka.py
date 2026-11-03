@@ -70,13 +70,14 @@ def test_streaming_cka_matches_one_shot() -> None:
     for start, stop in zip(boundaries, boundaries[1:]):
         accumulator.update(a[start:stop], b[start:stop])
 
-    assert accumulator.result() == pytest.approx(cka(a, b), abs=1e-12)
+    assert accumulator.compute() == pytest.approx(cka(a, b), abs=1e-12)
 
 
 def test_cka_degenerate_input_returns_nan() -> None:
-    """A zero-variance representation has a documented NaN result."""
+    """A zero-variance representation has a documented NaN result, with a warning."""
 
-    assert math.isnan(cka(torch.ones(5, 3), torch.randn(5, 4)))
+    with pytest.warns(UserWarning, match="zero variance"):
+        assert math.isnan(cka(torch.ones(5, 3), torch.randn(5, 4)))
 
 
 def test_cross_covariance_matches_direct_computation() -> None:
@@ -90,7 +91,7 @@ def test_cross_covariance_matches_direct_computation() -> None:
     accumulator.update(a[4:], b[4:])
     expected = (a - a.mean(dim=0)).T @ (b - b.mean(dim=0)) / (a.shape[0] - 1)
 
-    torch.testing.assert_close(accumulator.result(), expected, atol=1e-12, rtol=1e-12)
+    torch.testing.assert_close(accumulator.compute(), expected, atol=1e-12, rtol=1e-12)
 
 
 def test_cross_covariance_refuses_mismatched_rows() -> None:
@@ -151,13 +152,40 @@ def _single_batch_loader() -> Iterable[torch.Tensor]:
 
 
 def test_aggregate_grad_output_metric_raises_clear_key_error() -> None:
-    """`aggregate(..., target="grad")` should fail clearly for unsaved output grads."""
+    """A `tl.grad("output")` metric key fails clearly: the model output has no saved grad."""
 
     with pytest.raises(KeyError, match="No saved grad matched metric 'output'"):
         tl.stats.aggregate(
             _AggregateModel(),
             _single_batch_loader(),
-            {"output": tl.stats.Mean()},
-            target="grad",
+            {tl.grad("output"): tl.stats.Mean()},
             loss_fn=lambda output: output.sum(),
         )
+
+
+def test_cka_results_name_the_measure_variant_they_compute() -> None:
+    """One-shot cka and CKA.compute carry the similarity-repository id (U56.3)."""
+
+    import json
+    import pickle
+
+    from torchlens.repgeom._similarity_ids import LINEAR_CKA_ID
+    from torchlens.stats import SimilarityScore
+
+    torch.manual_seed(0)
+    a, b = torch.randn(12, 5), torch.randn(12, 4)
+    one_shot = cka(a, b)
+    streaming = CKA()
+    streaming.update(a, b)
+    streamed = streaming.compute()
+    for score in (one_shot, streamed):
+        assert isinstance(score, SimilarityScore) and isinstance(score, float)
+        assert score.similarity_repository_id == LINEAR_CKA_ID == CKA.similarity_repository_id
+        assert score.to_dict() == {"score": float(score), "similarity_repository_id": LINEAR_CKA_ID}
+        assert json.loads(json.dumps(score)) == float(score)
+        restored = pickle.loads(pickle.dumps(score))
+        assert restored == score and restored.similarity_repository_id == LINEAR_CKA_ID
+    assert math.isclose(one_shot, streamed, rel_tol=1e-9)
+    with pytest.warns(Warning, match="zero variance"):
+        degenerate = cka(torch.ones(4, 2), torch.randn(4, 2))
+    assert math.isnan(degenerate) and degenerate.similarity_repository_id == LINEAR_CKA_ID

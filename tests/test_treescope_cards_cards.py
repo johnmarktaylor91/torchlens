@@ -7,16 +7,23 @@ CONTENT, never non-emptiness -- the historical ``_repr_html_`` returned a
 
 from __future__ import annotations
 
+import re
+
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.notebook._access import CopyRoot, resolve_copy_root
-from torchlens.notebook._axis_labels import axis_labels, decode_token_labels, sdpa_attention_hint
-from torchlens.notebook._grid import array_grid_html
-from torchlens.notebook._motifs import classify_value, resolve_signed_bounds
-from torchlens.notebook.cardtree import Card, CardText, render_card_html
+from torchlens.errors import TraceCaptureError
+from torchlens.report._notebook._access import CopyRoot, resolve_copy_root
+from torchlens.report._notebook._axis_labels import (
+    axis_labels,
+    decode_token_labels,
+    sdpa_attention_hint,
+)
+from torchlens.report._notebook._grid import array_grid_html
+from torchlens.report._notebook._motifs import classify_value, resolve_signed_bounds
+from torchlens.report._notebook.cardtree import Card, CardText, render_card_html
 
 
 class _Recurrent(nn.Module):
@@ -63,7 +70,7 @@ def test_trace_card_content_and_proof_row(recurrent_log) -> None:
 def test_layer_card_pass_rows_are_the_shape(recurrent_log) -> None:
     """A reused layer renders N pass rows via ops[k]; no pooled stats."""
 
-    html = recurrent_log.layer_logs["relu_1_2"]._repr_html_()
+    html = recurrent_log._layer_logs["relu_1_2"]._repr_html_()
     assert "3 passes" in html
     for pass_index in (1, 2, 3):
         assert f"pass {pass_index}/3: relu_1_2:{pass_index}" in html
@@ -73,7 +80,7 @@ def test_layer_card_pass_rows_are_the_shape(recurrent_log) -> None:
 def test_single_pass_layer_degenerates_to_op_card(recurrent_log) -> None:
     """ONE code path: a single-pass layer renders the Op card."""
 
-    html = recurrent_log.layer_logs["linear_2_3"]._repr_html_()
+    html = recurrent_log._layer_logs["linear_2_3"]._repr_html_()
     assert "TorchLens Op" in html
     assert "card unavailable" not in html
 
@@ -114,13 +121,15 @@ def test_partial_trace_card_failure_first() -> None:
             torch.relu(self.a(x))
             raise RuntimeError("<script>alert(1)</script> boom")
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TraceCaptureError) as _tce_info:
         tl.trace(Dies(), torch.randn(2, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     # Recover the partial through the documented door.
     try:
         tl.trace(Dies(), torch.randn(2, 4))
-    except RuntimeError as error:
-        partial = tl.partial.from_failed_capture(error)
+    except TraceCaptureError as error:
+        assert isinstance(error.__cause__, RuntimeError)
+        partial = error.partial_trace
     assert partial is not None
     html = partial._repr_html_()
     assert "FAILED CAPTURE" in html
@@ -141,19 +150,59 @@ def test_inference_mode_capture_renders_without_raise() -> None:
     assert "Traceback" not in html and "card unavailable" not in html
 
 
+def test_partial_trace_card_renders_under_inference_mode() -> None:
+    """The failure card renders inside ``torch.inference_mode`` too.
+
+    The failure card matters most when a forward has failed, and an
+    inference-mode forward is where the banner itself once raised. The
+    frontier names committed records by label; it never inlines a
+    record's tensor dump.
+    """
+
+    class DiesInInference(nn.Module):
+        """Fixture model that fails after two committed ops."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.a = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Raise after the linear and relu ops are committed."""
+            torch.relu(self.a(x))
+            raise RuntimeError("inference boom")
+
+    partial = None
+    with torch.inference_mode():
+        try:
+            tl.trace(DiesInInference(), torch.randn(2, 4))
+        except TraceCaptureError as error:
+            assert isinstance(error.__cause__, RuntimeError)
+            partial = error.partial_trace
+        assert partial is not None
+        html = partial._repr_html_()
+    assert "card unavailable" not in html and "Traceback" not in html
+    assert "FAILED CAPTURE" in html
+    assert "inference boom" in html
+    assert "committed prefix" in html
+    frontier = re.search(r"frontier \(last committed\): ([^<]*)<", html)
+    assert frontier is not None
+    assert "relu" in frontier.group(1)
+    assert "Tensor contents" not in html
+
+
 def test_render_side_effect_free(recurrent_log) -> None:
     """Pinned regression: rendering must not perturb the trace."""
 
     before = (
-        recurrent_log.num_ops,
+        len(recurrent_log.ops),
         tuple(recurrent_log.layer_labels),
         str(recurrent_log.outcome.status),
     )
     recurrent_log._repr_html_()
     recurrent_log["relu_1_2:2"]._repr_html_()
-    recurrent_log.layer_logs["relu_1_2"]._repr_html_()
+    recurrent_log._layer_logs["relu_1_2"]._repr_html_()
     after = (
-        recurrent_log.num_ops,
+        len(recurrent_log.ops),
         tuple(recurrent_log.layer_labels),
         str(recurrent_log.outcome.status),
     )

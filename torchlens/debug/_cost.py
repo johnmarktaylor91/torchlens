@@ -8,12 +8,11 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 if TYPE_CHECKING:
-    import pandas as pd
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.trace import Trace
 
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.trace import Trace
-
-from ..quantities import Bytes
+from .._debug_report import Report, table_report, trace_subject
+from .._quantities import Bytes
 from ._common import _ordered_ops, _require_pandas, _source_line
 
 CostMetric = Literal["flops", "memory", "duration", "device_time"]
@@ -217,19 +216,19 @@ def _device_time_lookup(trace: Trace) -> dict[str, int]:
     """Return the per-op joined device-time table, refusing typed when absent.
 
     The Kineto join is session-time (torchnative W2.2): it exists only on a
-    trace captured under ``torchlens.observability.native_profile`` (or an
+    trace captured under ``torchlens.report.kernel_profile`` (or an
     owned session joined via ``join_session``) whose join reached
     ``joined``. Asking for ``by="device_time"`` anywhere else raises the
     typed ladder refusal (``device_time_unavailable``) instead of returning
     silent zeros.
     """
 
-    from ..observability._join import require_availability
-    from ..observability._native_profile import join_result_for
+    from .._observability._join import require_availability
+    from .._observability._native_profile import join_result_for
 
     result = join_result_for(trace)
     if result is None:
-        from ..observability._errors import ProfilerSessionError
+        from .._observability._errors import ProfilerSessionError
 
         raise ProfilerSessionError(
             "device_time is unavailable: this trace carries no Kineto join. "
@@ -237,7 +236,7 @@ def _device_time_lookup(trace: Trace) -> dict[str, int]:
             "profiler session.",
             code="device_time_unavailable",
             remedy=(
-                "Capture through torchlens.observability.native_profile "
+                "Capture through torchlens.report.kernel_profile "
                 "(one execution, save-nothing tier) on a CUDA host, then "
                 "rank with by='device_time'."
             ),
@@ -305,7 +304,7 @@ def hot_path_rows(
     return [dict(row) for row in sorted_rows], attrs
 
 
-def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
+def hot_path(trace: Trace, by: CostMetric = "flops") -> Report:
     """Rank source lines by aggregate forward cost.
 
     Parameters
@@ -317,7 +316,9 @@ def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
 
     Returns
     -------
-    pandas.DataFrame
+    Report
+        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
+        DataFrame described here.
         Columns are ``source_file:line``, ``op_count``, ``total_cost``, and
         ``pct_total``. The number of ops excluded for missing metrics is stored
         in ``df.attrs["excluded_missing_metric_count"]``. The optional view
@@ -331,4 +332,9 @@ def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
         columns=["source_file:line", "op_count", "total_cost", "pct_total"],
     )
     frame.attrs.update(attrs)
-    return frame
+    return table_report(
+        "hot_path",
+        frame,
+        subject=trace_subject(trace),
+        finding_columns=("source_file:line", "total_cost", "pct_total"),
+    )

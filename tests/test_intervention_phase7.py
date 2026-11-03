@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import warnings
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -12,14 +13,16 @@ from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
 from torchlens._capture_state_helpers import reset_compiled_model_unwrap_warning_state
+from torchlens.errors import TraceCaptureError
 from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
 )
 from torchlens.intervention.rerun import run
-from torchlens.intervention.types import InterventionSpec, Relationship, TargetSpec
+from torchlens.intervention.types import InterventionSpec, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
+from torchlens.types import Relationship
 
 
 class BadModel(torch.nn.Module):
@@ -86,7 +89,7 @@ class InplaceVersionModel(torch.nn.Module):
         return y * 2
 
 
-def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return a zeroed out.
 
     Parameters
@@ -102,7 +105,7 @@ def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         Zeroed out.
     """
 
-    del hook
+    del ctx
     return out * 0
 
 
@@ -122,7 +125,7 @@ def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
         Captured log.
     """
 
-    return tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=CaptureOptions(replayable=True))
 
 
 def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
@@ -130,7 +133,7 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
     original_history_len = len(log.state_history)
 
@@ -138,7 +141,7 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
 
     assert result is log
     assert log.state is TraceState.RERUN_PROPAGATED
-    assert log.graph_shape_hash == original_hash
+    assert log.provenance.fingerprint == original_hash
     assert log._raw_event_shape_hash == original_raw_hash  # noqa: SLF001
     assert log.last_run["engine"] == "rerun"
     assert log.last_run["old_raw_event_shape_hash"] == original_raw_hash
@@ -160,11 +163,11 @@ def test_rerun_with_hook_updates_downstream_out() -> None:
 
     log.run(ReluAdd(), x)
 
-    relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
     assert torch.equal(relu_site.out, torch.zeros_like(relu_site.out))
     assert torch.equal(log[log.output_layers[0]].out, torch.ones_like(original_output))
     assert not torch.equal(log[log.output_layers[0]].out, original_output)
-    assert relu_site.interventions[-1].engine == "live"
+    assert relu_site.edits[-1].engine == "live"
     assert log.last_run["hooks_fired"] >= 1
     assert log.last_run["hooks_unfired"] == 0
 
@@ -216,18 +219,18 @@ def test_rerun_colliding_hook_identifiers_do_not_hide_misses() -> None:
 
     from types import SimpleNamespace
 
+    from torchlens._ir.intervention import FireResult
     from torchlens.intervention.hooks import NormalizedHookEntry
     from torchlens.intervention.rerun import (
         _assign_unique_plan_ids,
         _hook_plan_identifier,
         _reconcile_rerun_hook_fires,
     )
-    from torchlens.ir.intervention import FireResult
 
-    def same_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def same_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Shared callable planned under two different targets."""
 
-        del hook
+        del ctx
         return out
 
     entries = [
@@ -259,7 +262,7 @@ def test_rerun_colliding_hook_identifiers_do_not_hide_misses() -> None:
     # Entry 1 fires twice (two sites), entry 2 never fires: the audit must
     # report the miss instead of letting the shared string absorb it.
     stub_log = SimpleNamespace(
-        layer_list=[SimpleNamespace(fire_results=[_fire(plan_ids[0]), _fire(plan_ids[0])])]
+        _layer_list=[SimpleNamespace(fire_results=[_fire(plan_ids[0]), _fire(plan_ids[0])])]
     )
     with pytest.warns(UserWarning, match="fired at zero sites on the new inputs"):
         fired, unfired = _reconcile_rerun_hook_fires(stub_log, plan)
@@ -272,16 +275,17 @@ def test_rerun_failure_leaves_original_log_unchanged() -> None:
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_labels = tuple(log.layer_labels)
     log.run(ReluAdd(), x)
     history_after_success = list(log.state_history)
 
-    with pytest.raises(RuntimeError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
         log.run(BadModel(), x)
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert log.state is TraceState.RERUN_PROPAGATED
-    assert log.graph_shape_hash == original_hash
+    assert log.provenance.fingerprint == original_hash
     assert tuple(log.layer_labels) == original_labels
     assert log.state_history == history_after_success
 
@@ -295,7 +299,7 @@ def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_labels = tuple(log.layer_labels)
     original_ledger = list(log.state_history)
     original_output = log[log.output_layers[0]].out.clone()
@@ -312,7 +316,7 @@ def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
         log.run(ReluAdd(), x)
 
     assert log.state is original_run_state
-    assert log.graph_shape_hash == original_hash
+    assert log.provenance.fingerprint == original_hash
     assert tuple(log.layer_labels) == original_labels
     assert log.state_history == original_ledger
     assert torch.equal(log[log.output_layers[0]].out, original_output)
@@ -324,13 +328,13 @@ def test_rerun_strict_divergence_raises_before_swap() -> None:
     positive = torch.ones(2, 3)
     negative = -torch.ones(2, 3)
     log = _capture(BranchModel(), positive)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
 
     with pytest.raises(ControlFlowDivergenceError):
         log.run(BranchModel(), negative, replay=tl.options.ReplayOptions(strict=True))
 
-    assert log.graph_shape_hash == original_hash
+    assert log.provenance.fingerprint == original_hash
     assert log._raw_event_shape_hash == original_raw_hash  # noqa: SLF001
     assert log.state is TraceState.PRISTINE
 
@@ -341,13 +345,13 @@ def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
     positive = torch.ones(2, 3)
     negative = -torch.ones(2, 3)
     log = _capture(BranchModel(), positive)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
 
     with pytest.warns(ControlFlowDivergenceWarning):
         log.run(BranchModel(), negative)
 
-    assert log.graph_shape_hash != original_hash
+    assert log.provenance.fingerprint != original_hash
     assert log._raw_event_shape_hash != original_raw_hash  # noqa: SLF001
     assert log.state is TraceState.RERUN_PROPAGATED
     assert log.last_run["divergence_count"] == 1
@@ -359,11 +363,11 @@ def test_rerun_honors_metadata_only_save_scope() -> None:
     x = torch.randn(2, 3)
     log = tl.trace(ReluAdd(), x, save=lambda _ctx: False)
 
-    assert log.num_saved_ops == 0
+    assert len(log.saved_ops) == 0
 
     log.run(ReluAdd(), x + 1)
 
-    assert log.num_saved_ops == 0
+    assert len(log.saved_ops) == 0
     assert log.last_run["engine"] == "rerun"
 
 
@@ -377,15 +381,14 @@ def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None
     log = tl.trace(
         ReluAdd(),
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
-        save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
+        capture=tl.options.CaptureOptions(replayable=True, activation_transform=lambda t: t * 2),
     )
-    relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
     original_relu_site_id = id(relu_site)
     original_out = relu_site.out.clone()
 
     log.run(ReluAdd(), new_x)
-    refreshed_relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    refreshed_relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
 
     assert id(refreshed_relu_site) == original_relu_site_id
     assert log.last_run["fast_refresh"] is True
@@ -406,9 +409,7 @@ def test_rerun_fast_refresh_repopulates_child_versions() -> None:
 
     x = torch.tensor([-2.0, 3.0])
     new_x = torch.tensor([-5.0, 1.0])
-    log = tl.trace(
-        InplaceVersionModel(), x, capture=tl.options.CaptureOptions(save_arg_values=True)
-    )
+    log = tl.trace(InplaceVersionModel(), x, capture=tl.options.CaptureOptions(save_args=True))
     add_site = log["add_1_1"]
     original_add_site_id = id(add_site)
 
@@ -424,7 +425,11 @@ def test_rerun_fast_refresh_repopulates_child_versions() -> None:
 
 
 class MultiPassAddBlock(torch.nn.Module):
-    """Block whose two chained adds group into one two-pass layer."""
+    """Block whose one loop-body add is one two-pass layer.
+
+    Grouping rule row 52: an add written once in a loop over modules is one Layer
+    with a pass per iteration (two adds on one line would be two Layers, row 21).
+    """
 
     def __init__(self) -> None:
         """Initialize three summed projections plus an output projection."""
@@ -436,7 +441,7 @@ class MultiPassAddBlock(torch.nn.Module):
         self.out_proj = torch.nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Sum three projections through two structurally corresponding adds.
+        """Sum three projections through one add run twice from a loop.
 
         Parameters
         ----------
@@ -449,7 +454,10 @@ class MultiPassAddBlock(torch.nn.Module):
             Projected sum.
         """
 
-        return self.out_proj(self.first(x) + self.second(x) + self.third(x))
+        total = self.first(x)
+        for proj in (self.second, self.third):
+            total = total + proj(x)
+        return self.out_proj(total)
 
 
 class MultiPassAdd(torch.nn.Module):
@@ -494,9 +502,10 @@ def test_rerun_fast_refresh_keeps_every_pass_of_a_multi_pass_layer_distinct() ->
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
-    assert log.layer_logs["add_1_3"].num_passes == 2
+    assert log._layer_logs["add_1_3"].num_passes == 2
 
     log.run(model, new_x)
 
@@ -523,40 +532,40 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     new_log = _capture(ReluAdd(), x + 1)
     spec = InterventionSpec(targets=[TargetSpec("func", "relu")], hook=_zero_hook)
     history: list[Any] = [{"engine": "before"}]
-    log.trace_label = "kept"
-    log.parent_run = "parent-sentinel"  # type: ignore[assignment]
+    log.name = "kept"
+    log._parent_run = "parent-sentinel"  # type: ignore[assignment]
     log._intervention_spec = spec
     log.state_history = history
     log._warned_direct_write = True
     log._warned_mutate_in_place = True
-    log.model_object_id = 123
-    log.model_class_qualname = "kept.Model"
-    log.param_hash_quick = "weights-a"
-    log.param_hash_full = "weights-full"
-    log.input_object_id = 456
-    log.input_signature_hash = "input-hash"
-    log.is_appended = True
-    log.relationship_evidence = {"model": Relationship.SAME_OBJECT}
+    log._provenance_model_object_id = 123
+    log._source_class_qualname = "kept.Model"
+    log._provenance_param_hash_quick = "weights-a"
+    log._provenance_param_hash_full = "weights-full"
+    log._provenance_input_object_id = 456
+    log._provenance_input_signature_hash = "input-hash"
+    log._provenance_is_appended = True
+    log._graph_relationship_evidence = {"model": Relationship.SAME_OBJECT}
     log._spec_revision = 7
 
     log.replace_state_from(new_log)
 
-    assert log.trace_label == "kept"
-    assert log.parent_run == "parent-sentinel"
+    assert log.name == "kept"
+    assert log._parent_run == "parent-sentinel"
     assert log._intervention_spec is spec
     assert log.state_history is history
     assert log._warned_direct_write is True
     assert log._warned_mutate_in_place is True
-    assert log.model_object_id == 123
-    assert log.model_class_qualname == "kept.Model"
-    assert log.param_hash_quick == "weights-a"
-    assert log.param_hash_full == "weights-full"
-    assert log.input_object_id == 456
-    assert log.input_signature_hash == "input-hash"
-    assert log.is_appended is True
-    assert log.relationship_evidence == {"model": Relationship.SAME_OBJECT}
+    assert log.provenance.model_object_id == 123
+    assert log.source.class_qualname == "kept.Model"
+    assert log.provenance.param_hash_quick == "weights-a"
+    assert log.provenance.param_hash_full == "weights-full"
+    assert log.provenance.input_object_id == 456
+    assert log.provenance.input_signature_hash == "input-hash"
+    assert log.provenance.is_appended is True
+    assert log.graph.relationship_evidence == {"model": Relationship.SAME_OBJECT}
     assert log._spec_revision == 7
-    assert log.graph_shape_hash == new_log.graph_shape_hash
+    assert log.provenance.fingerprint == new_log.provenance.fingerprint
     assert log.layer_labels == new_log.layer_labels
 
 
@@ -605,23 +614,31 @@ def test_rerun_unwraps_compiled_model() -> None:
     assert result is log
 
 
-def test_rerun_rejects_fsdp_when_constructible() -> None:
-    """Rerun rejects FSDP wrappers when the local environment can build one."""
+@pytest.mark.skipif(
+    not torch.distributed.is_available(), reason="torch is built without torch.distributed"
+)
+def test_rerun_rejects_fsdp_when_constructible(tmp_path: Path) -> None:
+    """Rerun rejects a real FSDP wrapper.
 
-    try:
-        from torch.distributed.fsdp import FullyShardedDataParallel
-    except (ImportError, RuntimeError):
-        pytest.skip("FSDP unavailable")
+    FSDP needs a process group, so the test builds a single-process CPU (gloo)
+    group and constructs the wrapper on CPU; any construction failure fails the
+    test loudly instead of skipping it.
+    """
+
+    import torch.distributed as dist
+    from torch.distributed.fsdp import FullyShardedDataParallel
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
+    dist.init_process_group(
+        "gloo", init_method=f"file://{tmp_path / 'fsdp_pg'}", rank=0, world_size=1
+    )
     try:
-        fsdp_model = FullyShardedDataParallel(ReluAdd())
-    except Exception as exc:
-        pytest.skip(f"FSDP cannot be constructed in this environment: {exc}")
-
-    with pytest.raises(RuntimeError, match="FullyShardedDataParallel"):
-        log.run(fsdp_model, x)
+        fsdp_model = FullyShardedDataParallel(ReluAdd(), device_id=torch.device("cpu"))
+        with pytest.raises(RuntimeError, match="FullyShardedDataParallel"):
+            log.run(fsdp_model, x)
+    finally:
+        dist.destroy_process_group()
 
 
 def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
@@ -646,7 +663,7 @@ def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
         _reconcile_rerun_hook_fires,
     )
 
-    def shared_callable(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def shared_callable(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """One callable shared by two differently-targeted entries."""
 
         return out
@@ -674,7 +691,7 @@ def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
         fire_results=(SimpleNamespace(plan_id=ids[0]), SimpleNamespace(plan_id=ids[0])),
         interventions=(),
     )
-    log = SimpleNamespace(layer_list=[fired_twice])
+    log = SimpleNamespace(_layer_list=[fired_twice])
     with pytest.warns(UserWarning, match="fired at zero sites"):
         total, unfired = _reconcile_rerun_hook_fires(log, plan)
     assert total == 2

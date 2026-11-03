@@ -30,14 +30,14 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CaptureStatus,
     outcome_for,
     require_capture_capability,
 )
+from torchlens._runnable import PathFaithfulness, StateSource
 from torchlens.errors import RunCapabilityUnavailableError, TorchLensWarning
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, StateSource
 
 pytest.importorskip("transformers")
 
@@ -59,7 +59,7 @@ def gpt2_and_inputs():
 @pytest.fixture(scope="module")
 def runnable_trace(gpt2_and_inputs):
     model, input_ids = gpt2_and_inputs
-    trace = tl.trace(model, input_ids, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, input_ids, capture=CaptureOptions(replayable=True))
     try:
         yield trace
     finally:
@@ -73,7 +73,7 @@ def test_gpt2_weight_free_runnable_random_run_warns(tmp_path, gpt2_and_inputs, r
 
     _, input_ids = gpt2_and_inputs
     path = tmp_path / "gpt2_runnable"
-    tl.save(runnable_trace, path, level="runnable")
+    runnable_trace.save(path, level="runnable")
     loaded = tl.load(path)
     with pytest.warns(TorchLensWarning, match="RANDOM") as record:
         result = loaded.run(inputs=input_ids, seed=0)
@@ -97,7 +97,7 @@ def test_gpt2_embedded_weights_runnable_run_settles_verified(
 
     model, input_ids = gpt2_and_inputs
     path = tmp_path / "gpt2_runnable_weights"
-    tl.save(runnable_trace, path, level="runnable", include_weights=True)
+    runnable_trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -120,7 +120,7 @@ def test_structure_witness_classifies_model_output_as_hf_kind(gpt2_and_inputs):
     ``hf_model_output``, mirroring the capture-side spec builder's dispatch
     order -- the inverted order false-DIVERGED every honest run above."""
 
-    from torchlens._runnable_witness_contracts import _container_kind
+    from torchlens._runnable.witness_contracts import _container_kind
 
     model, input_ids = gpt2_and_inputs
     with torch.no_grad():
@@ -134,15 +134,15 @@ def test_gpt2_loaded_log_backward_refuses_before_mutation(tmp_path, gpt2_and_inp
 
     model, input_ids = gpt2_and_inputs
     trace = tl.trace(model, input_ids, capture=CaptureOptions(backward_ready=True))
-    tl.save(trace, tmp_path / "gpt2_bundle")
+    trace.save(tmp_path / "gpt2_bundle")
     loaded = tl.load(tmp_path / "gpt2_bundle")
     live_loss = model(input_ids=input_ids).logits.sum()
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
         loaded.log_backward(live_loss)
-    assert len(getattr(loaded, "backward_passes", []) or []) == 0
-    assert len(loaded.grad_fns) == 0
+    assert len(loaded.autograd.backward_passes or []) == 0
+    assert len(loaded.autograd.grad_fns) == 0
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
-        loaded.recording_backward()
+        loaded.capture_backward()
 
 
 def test_gpt2_recording_outcome_gate_reads_complete(gpt2_and_inputs):
@@ -164,9 +164,9 @@ def test_gpt2_recording_outcome_gate_reads_complete(gpt2_and_inputs):
 
 def test_gpt2_default_cache_config_live_run_reaches_verdict_or_typed_remedy(gpt2_and_inputs):
     """AUD-HONESTY H1 at the R0 roster tier: the rows above pin ``use_cache=False`` +
-    ``intervention_ready=True`` only, so the HF DEFAULT configuration (KV cache on) was
+    ``replayable=True`` only, so the HF DEFAULT configuration (KV cache on) was
     never exercised by a ``run()`` test. On both the default capture and the
-    ``intervention_ready`` capture a default-config GPT-2 ``run()`` must reach VERIFIED
+    ``replayable`` capture a default-config GPT-2 ``run()`` must reach VERIFIED
     or a TYPED remedy (never the bare "Not enough leaves" ValueError the audit hit),
     and the remedy must name ``use_cache=False``."""
 
@@ -174,7 +174,7 @@ def test_gpt2_default_cache_config_live_run_reaches_verdict_or_typed_remedy(gpt2
     torch.manual_seed(0)
     model = build_gpt2_default_cache("eager").eval()
     assert model.config.use_cache is True
-    for options in (CaptureOptions(), CaptureOptions(intervention_ready=True)):
+    for options in (CaptureOptions(), CaptureOptions(replayable=True)):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             trace = tl.trace(model, input_ids, capture=options)

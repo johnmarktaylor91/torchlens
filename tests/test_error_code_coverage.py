@@ -45,8 +45,8 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens.merged import MergedErrorCode
-from torchlens.runnable import RunnableErrorCode
+from torchlens._merged import MergedErrorCode
+from torchlens._runnable import RunnableErrorCode
 
 # Per-test smoke marks (the former module-level pytestmark was additive
 # with the census's heavy re-tier and tripped the marker-combination
@@ -81,18 +81,15 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         # F05 mechinterp rows needing a BROKEN substrate to provoke (each is a
         # fail-closed guard on evidence no healthy capture can lack): a spine
         # whose execution-order accumulation misses bitwise (mi_spine_open), an
-        # undecidable additive join (mi_spine_ambiguous), a fused QKV weight
-        # with no split evidence (mi_qkv_slicing_unprovable), and a derived
-        # head view failing payload verification (mi_weight_view_unverified).
+        # undecidable additive join (mi_spine_ambiguous), and a fused QKV weight
+        # with no split evidence (mi_qkv_slicing_unprovable).
         "mi_qkv_slicing_unprovable",
         "mi_spine_ambiguous",
         "mi_spine_open",
-        "mi_weight_view_unverified",
         "annotation_backend_unsupported",
         "annotation_namespace_invalid",
         "annotation_tensor_not_portable",
         "backend_capability_conformance",
-        "backend_error",
         "backward_capture_conflict",
         "backward_pass_filter_invalid",
         "batch_items_invalid",
@@ -106,15 +103,12 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "bundle_statistic_invalid",
         "code_panel_model_collected",
         "code_panel_side_invalid",
-        "compiled_callable_unsupported",
         "container_leaf_not_saved",
-        "container_not_reconstructable",
         "container_selector_requires_registry",
         "container_selector_unresolved",
         "container_value_source_invalid",
         "dagua_renderer_not_opted_in",
         "decoded_output_not_classification",
-        "decoded_output_unavailable",
         "fsdp_capture_unsupported",
         "gradient_not_saved",
         "gradient_pass_ambiguous",
@@ -127,19 +121,16 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         # accepts neither transient metadata nor a storage side table.
         "intervention_fire_results_cleanup_failed",
         "intervention_fire_results_unrecordable",
-        "intervention_helper_unknown",
         "intervention_tensor_unsupported",
         "layer_pass_ambiguous",
         "layers_not_logged",
         "link_format_invalid",
         "max_pairs_invalid",
         "metric_name_invalid",
-        "metric_shape_mismatch",
         "metric_tensor_type_invalid",
         "metric_type_invalid",
         "module_call_ambiguous",
         "module_focus_empty",
-        "op_lookup_pass_out_of_range",
         "op_lookup_pass_required",
         "option_group_type_invalid",
         "output_device_invalid",
@@ -150,7 +141,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "recording_failed_not_convertible",
         "recording_halt_frontier_missing",
         "recording_multipass_not_convertible",
-        "recording_option_duplicate",
         # run_fast_divergence_policy_invalid, run_fast_requires_inputs,
         # run_legacy_options_conflict, run_source_model_collected: rows
         # DELETED (shrink-only lock-in) -- the L4 S1-seam merge's compat pins
@@ -162,7 +152,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "stack_ordinals_duplicate",
         "stack_ordinals_unavailable",
         "stack_output_not_tensor",
-        "storage_argument_conflict",
         # summary_fields_invalid: row DELETED (shrink-only lock-in) -- the code
         # left the vocabulary with the removed legacy summary renderer.
         "sweep_intervention_conflict",
@@ -540,7 +529,7 @@ def test_every_enum_member_is_reachable_in_source() -> None:
     texts = _iter_python_texts(_PACKAGE_ROOT)
     dead: list[str] = []
     for enum_cls, declaring in (
-        (RunnableErrorCode, _PACKAGE_ROOT / "runnable.py"),
+        (RunnableErrorCode, _PACKAGE_ROOT / "_runnable/__init__.py"),
         (MergedErrorCode, _PACKAGE_ROOT / "merged" / "_enums.py"),
     ):
         for member in enum_cls:
@@ -692,14 +681,14 @@ def test_prose_names_and_inert_tables_never_count_as_provocation() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# R65/F9: codeless TorchLensIOError ratchet (shrink-only)                      #
+# R65/F9: codeless ArtifactError ratchet (shrink-only)                      #
 # --------------------------------------------------------------------------- #
 
 # Historical debt (b8-opus F9: 236/243 raise sites code-less). The number may
 # only SHRINK: give a site fields["code"] (and ideally a remedy) and lower the
 # ceiling in the same change. Raising it is a conscious public decision.
 _MAX_CODELESS_IO_RAISES = 237
-_IO_FAMILY_PATTERN = re.compile(r"^(TorchLensIOError|Artifact\w*Error)$")
+_IO_FAMILY_PATTERN = re.compile(r"^(ArtifactError|Artifact\w*Error)$")
 
 
 def _codeless_io_raises() -> list[str]:
@@ -738,7 +727,7 @@ def test_codeless_io_raise_count_only_shrinks() -> None:
     assert offenders, "scanner found no IO-family raises at all (vacuous scan)"
     assert len(offenders) <= _MAX_CODELESS_IO_RAISES, (
         f"{len(offenders)} codeless IO-family raises exceed the ratchet of "
-        f"{_MAX_CODELESS_IO_RAISES}. New TorchLensIOError/Artifact*Error raises "
+        f"{_MAX_CODELESS_IO_RAISES}. New ArtifactError/Artifact*Error raises "
         "must carry fields['code'] (branch-on-fields doctrine); first offenders: "
         + ", ".join(offenders[:10])
     )

@@ -1,44 +1,37 @@
 """Autograd saved-tensor statistics and container snapshots."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 import torch
 
 from ... import _state as _st
-from ..._state import pause_logging
-from ...ir.container import (
+from ..._ir.container import (
     ContainerSpec,
     OutputPathComponent,
 )
-from ...ir.container_registry import (
+from ..._ir.container_registry import (
     ContainerLeafOccurrence,
     FuncSite,
     Phase,
     Role,
     walk_container,
 )
-from ...utils.collections import ensure_iterable
-from ...utils.tensor_utils import (
+from ..._state import pause_logging
+from ..._utils.collections import ensure_iterable
+from ..._utils.tensor_utils import (
     is_functorch_wrapped_tensor,
 )
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     get_tensor_label,
 )
-from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
+    from .ops import _OutputTensorEntry  # annotations only; runtime binding at the bottom
 
-from .ops import (
-    _OutputTensorEntry,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _collect_tensor_values,
-        _iter_autograd_saved_candidates,
-        _walk_output_tensors_with_paths,
-    )
 
 __all__ = (
     "_add_autograd_saved_tensor",
@@ -280,7 +273,7 @@ def _partition_output_entries_with_autograd_stats(
 
 
 def _register_call_output_container_snapshot(
-    trace: "Trace",
+    trace: Trace,
     output: Any,
     *,
     output_entries: list[_OutputTensorEntry],
@@ -304,7 +297,7 @@ def _register_call_output_container_snapshot(
     """
 
     if not (
-        getattr(trace, "intervention_ready", False)
+        getattr(trace, "is_replayable", False)
         or getattr(trace, "_capture_container_structure", False)
     ):
         return
@@ -325,7 +318,7 @@ def _register_call_output_container_snapshot(
 
 
 def register_call_input_container_snapshots(
-    trace: "Trace",
+    trace: Trace,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     *,
@@ -433,3 +426,17 @@ def _get_autograd_saved_stats_for_tensor(
         return None, None
     stats_by_index = _get_autograd_saved_stats_by_output(tensor)
     return stats_by_index.get(0, (None, None))
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_containers import (  # noqa: E402
+    _walk_output_tensors_with_paths,
+)
+from ._ops_exhaustive import (  # noqa: E402
+    _collect_tensor_values,
+    _iter_autograd_saved_candidates,
+)
+from .ops import (  # noqa: E402
+    _OutputTensorEntry,
+)

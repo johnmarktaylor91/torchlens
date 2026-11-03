@@ -20,15 +20,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import MIN_TLSPEC_VERSION, TorchLensIOError
+from torchlens._io import MIN_TLSPEC_VERSION, ArtifactError
 from torchlens._io.manifest import Manifest
 from torchlens._io.payload_codec import get_payload_codec
+from torchlens._runnable import NumericAttestationStatus
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus
 from torchlens.validation import _validate_runnable_payload_entries, validate_tlspec
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -160,14 +160,14 @@ def test_archived_activation_digest_is_verified_against_the_loaded_tensor(
     members[0]["byte_digest"] = "0" * 64
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="byte-digest mismatch"):
+    with pytest.raises(ArtifactError, match="byte-digest mismatch"):
         tl.load(path)
 
     # The honest artifact still loads and publishes a digest that MATCHES its value.
     members[0]["byte_digest"] = honest_digest
     _write_manifest(path, manifest)
     loaded = tl.load(path)
-    from torchlens._runnable_state import runnable_tensor_byte_digest
+    from torchlens._runnable.state import runnable_tensor_byte_digest
 
     archived = loaded._runnable.archived_activations
     assert archived
@@ -372,21 +372,21 @@ def test_bfloat16_payload_round_trips_through_the_real_routing(tmp_path: Path) -
 def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
     """A sub-floor tlspec_version refuses typed instead of warning.
 
-    Since the v7 schema bump the current ``TLSPEC_VERSION`` sits above the 2.33
+    Since the v7 schema bump the current ``TLSPEC_VERSION`` sits above the tlspec-6
     rehydration floor (``MIN_TLSPEC_VERSION``), so the refusal boundary is the
     floor, not the current version: a between-floor-and-current artifact loads
     with the advisory ``DeprecationWarning``, while anything below the floor
     refuses. ``Manifest.from_dict`` refuses first with the floor named.
     """
 
-    from torchlens.errors import ArtifactVersionBelowFloorError
+    from torchlens.errors import ArtifactTooOldError
 
     path = tmp_path / "versioned.tlspec"
     tl.trace(ParamsOnlyModel().eval(), torch.ones(2, 3), capture=_CAP).save(path)
     manifest_dict = _manifest(path)
     manifest_dict["tlspec_version"] = MIN_TLSPEC_VERSION - 1
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.33"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         Manifest.from_dict(manifest_dict)
 
 
@@ -398,5 +398,5 @@ def test_from_dict_really_requires_every_non_provenance_field(tmp_path: Path) ->
     manifest_dict = _manifest(path)
     manifest_dict.pop("tensors")
 
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         Manifest.from_dict(manifest_dict)

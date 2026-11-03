@@ -10,32 +10,32 @@ historical spelling unchanged.
 
 from __future__ import annotations
 
-from ..errors._base import CompatibilityError, TorchLensWarning
+from typing import NoReturn
+
+from ..errors._base import CompatibilityError
 
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True
 
 
-class TorchLensIOError(CompatibilityError, RuntimeError):
+class ArtifactError(CompatibilityError, RuntimeError):
     """Raised when TorchLens portable bundle state is invalid or unsupported."""
 
 
-class ArtifactVersionBelowFloorError(TorchLensIOError):
-    """Raised when an artifact predates the supported rehydration floor.
+class ArtifactTooOldError(ArtifactError):
+    """Raised when an artifact was saved by torchlens 2.x, which this release does not read.
 
-    TorchLens loads artifacts stamped ``tlspec_version >= 6`` (the first
-    tlspec-6 writer was released torchlens ``2.31.0``; the floor is the stamp,
-    never a release name). Older artifacts refuse with this error rather than
-    being partially reconstructed; re-save them with a torchlens release the
-    compat ledger proves able to read them.
+    Any stamp older than the current ``tlspec_version``, any pickled 2.x module path and the
+    2.16 ModelLog format refuse with this error rather than being partially reconstructed;
+    the remedy is to load the file with torchlens 2.36.x or capture the model again.
     """
 
 
-class ArtifactVersionAboveRuntimeError(TorchLensIOError):
+class ArtifactTooNewError(ArtifactError):
     """Raised when an artifact declares a schema newer than this runtime's ceiling.
 
     The artifact is valid; the READER is too old. Distinct from
-    :class:`ArtifactVersionBelowFloorError` (artifact too old) and from
+    :class:`ArtifactTooOldError` (artifact too old) and from
     integrity refusals: the remedy is upgrading torchlens to the release that
     wrote the artifact (or newer), never editing the artifact. Every
     above-ceiling site routes through ``above_ceiling_error`` so the
@@ -45,18 +45,17 @@ class ArtifactVersionAboveRuntimeError(TorchLensIOError):
     """
 
 
-class ArtifactRuntimeIncompatibleError(TorchLensIOError):
+class ArtifactRuntimeIncompatibleError(ArtifactError):
     """Raised when the RUNTIME cannot serve an otherwise-valid artifact.
 
     A runtime-axis refusal (torch major-version mismatch, unparseable torch
     version), never a schema-calendar one: the artifact stays valid and loads
     under a runtime with the recorded major version. Distinct class so
-    callers and the compatibility ledger can tell runtime policy apart from
-    the version window (ecosystem MEMO 3.1/3.2).
+    callers can tell runtime policy apart from the version window.
     """
 
 
-class UnknownPersistedFieldError(TorchLensIOError):
+class UnknownPersistedFieldError(ArtifactError):
     """Raised when incoming persisted state carries fields this reader does not know.
 
     The persisted-state contract (ecosystem MEMO 3.3): unknown fields refuse
@@ -68,12 +67,10 @@ class UnknownPersistedFieldError(TorchLensIOError):
     alias is a reader regression. ``fields`` carries ``code``
     (``unknown_persisted_field``), ``record_type``, ``unknown_fields``,
     ``declared_tlspec_version``, ``runtime_tlspec_version``, and ``remedy``.
-    Inert inventory (see everything without loading anything):
-    ``torchlens.io.inspect_state_contract``.
     """
 
 
-class PreReleaseArtifactError(TorchLensIOError):
+class PreReleaseArtifactError(ArtifactError):
     """Raised when a pre-release-marked artifact loads without the switch.
 
     Sprint-gated fields persist only under the test-only activation switch
@@ -84,32 +81,48 @@ class PreReleaseArtifactError(TorchLensIOError):
     """
 
 
-class ArtifactSchemaAgeWarning(TorchLensWarning):
-    """Warning emitted when a loaded artifact predates the runtime schema.
-
-    The artifact is between the rehydration floor and the current
-    ``tlspec_version``: it loads at its own recorded schema, and fields
-    introduced by later schema versions are absent rather than default-filled.
-
-    This is deliberately a ``UserWarning`` subclass, not a
-    ``DeprecationWarning``. It deprecates no API -- it reports the AGE of one
-    artifact -- and ``DeprecationWarning`` is hidden from end users by default,
-    which made the advisory effectively invisible at the one moment it matters.
-    """
-
-
 # Pickle-visible identity stays the historical facade path: persisted bundle
 # metadata references these classes by (module, qualname), and the guarded
 # unpickler allowlists exactly those paths -- the physical split must not
 # change a single persisted byte (move-compat law, memo org rule 9).
 for _cls in (
-    TorchLensIOError,
-    ArtifactVersionBelowFloorError,
-    ArtifactVersionAboveRuntimeError,
+    ArtifactError,
+    ArtifactTooOldError,
+    ArtifactTooNewError,
     ArtifactRuntimeIncompatibleError,
     UnknownPersistedFieldError,
     PreReleaseArtifactError,
-    ArtifactSchemaAgeWarning,
 ):
     _cls.__module__ = "torchlens._io"
 del _cls
+
+
+def refuse_bundle_exists(path: object, *, overwritable: bool = False) -> NoReturn:
+    """Raise the ``bundle_path_exists`` refusal for a save or streaming target that exists.
+
+    Shared by the streaming writer (``to_disk``), ``Trace.save`` and ``Bundle.save``
+    (``overwritable=True``: those doors take ``overwrite=``), at the entry check and at
+    the publish-time TOCTOU recheck, so every existing-target refusal carries the same
+    code and message shape (behaviour-net IO-3 follow-up).
+    """
+
+    raise ArtifactError(
+        f"Bundle path already exists: {path}",
+        code="bundle_path_exists",
+        remedy=(
+            "pass overwrite=True to replace the existing bundle, or save to a path that "
+            "does not exist yet"
+            if overwritable
+            else "stream to a path that does not exist yet, or remove the old bundle first"
+        ),
+    )
+
+
+def refuse_missing_blobs(blob_ids: list[str]) -> NoReturn:
+    """Raise the ``bundle_blob_missing`` refusal for a manifest whose blob files are gone."""
+
+    raise ArtifactError(
+        f"Bundle manifest references missing blob files for blob_id(s): {', '.join(blob_ids)}.",
+        code="bundle_blob_missing",
+        remedy="restore the missing blob files, or re-save the bundle from its source capture",
+    )

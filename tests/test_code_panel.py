@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import code_panel
-from torchlens.visualization.code_panel import (
+from torchlens._visualization import code_panel
+from torchlens._visualization.code_panel import (
     MAX_CODE_PANEL_LINE_CHARS,
     _wrap_source_line,
     capture_model_source_code,
@@ -113,11 +113,10 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _render_svg_output(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
@@ -144,9 +143,8 @@ def _render_svg_output(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     out_path = tmp_path / "graph"
     log.draw(
-        vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(out_path),
+        file_format="svg",
+        path=str(out_path),
         **kwargs,
     )
     return (tmp_path / "graph.svg").read_text(encoding="utf-8")
@@ -276,7 +274,7 @@ def test_include_source_false_strips_source_text_and_host_paths(tmp_path: Path) 
 
     log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     bundle_path = tmp_path / "no_source.tlspec"
-    tl.save(log, bundle_path, include_source=False, overwrite=True)
+    log.save(bundle_path, include_source=False, overwrite=True)
 
     raw = _bundle_metadata_bytes(bundle_path)
     for marker in _SOURCE_BODY_MARKERS:
@@ -299,7 +297,7 @@ def test_default_save_keeps_source_but_relativizes_host_paths(tmp_path: Path) ->
 
     log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     bundle_path = tmp_path / "with_source.tlspec"
-    tl.save(log, bundle_path, overwrite=True)
+    log.save(bundle_path, overwrite=True)
 
     raw = _bundle_metadata_bytes(bundle_path)
     # Source is embedded by default...
@@ -320,7 +318,7 @@ def test_source_stripped_artifact_visualizes_without_crashing(tmp_path: Path) ->
 
     log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     bundle_path = tmp_path / "stripped.tlspec"
-    tl.save(log, bundle_path, include_source=False, overwrite=True)
+    log.save(bundle_path, include_source=False, overwrite=True)
     loaded = tl.load(bundle_path)
 
     # Requesting a source panel on the reloaded, source-stripped trace must not
@@ -550,8 +548,8 @@ def test_code_panel_svg_renders_through_bounded_runner(monkeypatch: Any) -> None
 
     import graphviz
 
-    from torchlens.visualization import _render_utils
-    from torchlens.visualization._render_utils import RENDER_TIMEOUT_SECONDS
+    from torchlens._visualization import _render_utils
+    from torchlens._visualization._render_utils import RENDER_TIMEOUT_SECONDS
 
     def _pipe_forbidden(self: Any, *args: Any, **kwargs: Any) -> bytes:
         raise AssertionError("graphviz.Digraph.pipe() is unbounded and must not be used")

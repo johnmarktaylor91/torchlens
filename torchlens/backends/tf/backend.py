@@ -6,25 +6,28 @@ import random
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Literal, cast
 
 from ... import _state
+from ..._capture.outcome import stamp_backend_finalized
+from ..._data_classes._trace_state_io import fill_unset_declared_fields
+from ..._data_classes.param import ParamAccessor
+from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
-from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendName
-from ...capture.outcome import stamp_backend_finalized
-from ...data_classes.param import ParamAccessor
-from ...data_classes.trace import Trace
-from ...intervention.selectors import BaseSelector
-from ...ir.capture_events import CaptureEvents
-from ...options import CaptureOptions, merge_capture_options
-from ...postprocess._materialize import materialize_from_events
-from ...postprocess._selective_save import (
+from ..._ir.capture_events import CaptureEvents
+from ..._output_slot import returned
+from ..._postprocess._materialize import materialize_from_events
+from ..._postprocess._selective_save import (
     _STATIC_SELECTOR_KINDS,
     reject_selector_outside_kinds,
     warn_zero_match_save_predicate,
 )
-from ...quantities import Duration
+from ..._quantities import Duration
+from ..._selection.selectors import BaseSelector
+from ..._trace_core.relation_views import freeze_trace_relation_views
+from ...backends import BackendName
+from ...options import CaptureOptions, merge_capture_options
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -144,39 +147,39 @@ class TFBackend:
         # see the matching comment in ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            layers_to_save=layers_to_save,
+            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             compute_input_output_distances=compute_input_output_distances,
             verbose=verbose,
             backward_ready=backward_ready,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
         )
-        layers_to_save = capture_options.layers_to_save
+        layers_to_save = capture_options._layers_to_save
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
-        save_arg_values = capture_options.save_arg_values
-        save_code_context = capture_options.save_code_context
-        save_rng_states = capture_options.save_rng_states
+        save_arg_values = capture_options.save_args
+        save_code_context = capture_options.save_source_context
+        save_rng_states = capture_options.save_rng
         recurrence_detection = capture_options.recurrence_detection
         compute_input_output_distances = capture_options.compute_input_output_distances
         verbose = capture_options.verbose
         backward_ready = capture_options.backward_ready
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_raw_output
+        save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = resolve_optional_capture_field(capture, "save_grads", save_grads)
-        random_seed = resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = resolve_optional_capture_field(capture, "seed", random_seed)
         name = resolve_optional_capture_field(capture, "name", name)
         module_filter = resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = resolve_optional_capture_field(capture, "transform", transform)
@@ -238,9 +241,9 @@ class TFBackend:
             activation_transform=activation_transform,
             detach_saved_activations=detach_saved_activations,
             save_grads=save_grads,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             backward_ready=backward_ready,
             module_filter=module_filter,
             transform=transform,
@@ -271,11 +274,11 @@ class TFBackend:
                 save_raw_activations=save_raw_activations,
                 detach_saved_activations=detach_saved_activations,
                 save_grads=save_grads,
-                random_seed=random_seed,
+                seed=random_seed,
                 num_context_lines=num_context_lines,
-                save_arg_values=save_arg_values,
-                save_code_context=save_code_context,
-                save_rng_states=save_rng_states,
+                save_args=save_arg_values,
+                save_source_context=save_code_context,
+                save_rng=save_rng_states,
                 recurrence_detection=recurrence_detection,
                 compute_input_output_distances=compute_input_output_distances,
                 verbose=verbose,
@@ -287,13 +290,13 @@ class TFBackend:
                 save_raw_input=save_raw_input,
                 batch_render=batch_render,
                 output_transform=output_transform,
-                save_raw_output=save_raw_output,
+                save_transformed_output=save_raw_output,
                 layer_visualizers=layer_visualizers,
                 save_visualizations=save_visualizations,
                 tf=tf,
             )
             trace.capture_events = CaptureEvents()
-            trace.capture_start_time = time.time()
+            trace._provenance_start_time = time.time()
             static_result = capture_static_funcgraph(
                 tf=tf,
                 model=model,
@@ -302,8 +305,8 @@ class TFBackend:
                 kwargs=plan.call_kwargs,
                 save_predicate=save_predicate,
             )
-            trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-            trace.raw_output = (
+            trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+            trace.transformed_output = (
                 output_transform(static_result.output) if callable(output_transform) else None
             )
             trace.capture_events = static_result.events
@@ -341,11 +344,11 @@ class TFBackend:
             save_raw_activations=save_raw_activations,
             detach_saved_activations=detach_saved_activations,
             save_grads=save_grads,
-            random_seed=random_seed,
+            seed=random_seed,
             num_context_lines=num_context_lines,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             compute_input_output_distances=compute_input_output_distances,
             verbose=verbose,
@@ -357,7 +360,7 @@ class TFBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
             tf=tf,
@@ -387,27 +390,13 @@ class TFBackend:
                     "conditions) require object-module attribution; this capture "
                     "entry discovered no Keras/tf.Module tree."
                 )
-            active_plan = intervention_plan
-
-            def _module_exit_hook(
-                frame: Any, module_type: str, output: Any, module_stack: Any
-            ) -> Any:
-                """Substitute matched module-boundary intervention outputs."""
-
-                return apply_tf_module_intervention(
-                    active_plan,
-                    session,
-                    tf,
-                    trace,
-                    frame,
-                    module_type,
-                    output,
-                    module_stack,
-                )
-
-            session.module_exit_hook = _module_exit_hook
+            # The session calls the hook as (frame, module_type, output,
+            # module_stack): the substitution's own trailing parameters.
+            session.module_exit_hook = partial(
+                apply_tf_module_intervention, intervention_plan, session, tf, trace
+            )
         trace.capture_events = CaptureEvents()
-        trace.capture_start_time = time.time()
+        trace._provenance_start_time = time.time()
         # Admission-locked publication: a raw save/restore swap here silently
         # rebound a concurrent torch capture's _active_trace (its wrapper hot
         # path reads the global raw) and could republish a finished trace on
@@ -426,8 +415,12 @@ class TFBackend:
             # capture entry: a typo'd save= must never complete COMPLETE
             # silently with zero payloads (R17 parity with sibling previews).
             warn_zero_match_save_predicate("tf")
-        trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(result.output) if callable(output_transform) else None
+        trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+
+        trace._output_slot = returned(result.output)
+        trace.transformed_output = (
+            output_transform(result.output) if callable(output_transform) else None
+        )
         trace.capture_events = result.events
         trace._tf_unresolved_producers = result.unresolved_producers
         trace._tf_init_op_labels = result.init_op_labels
@@ -438,9 +431,7 @@ class TFBackend:
         delattr(trace, "capture_events")
         self._attach_param_logs(trace, module_tree)
         self._finish_trace(
-            trace,
-            module_tree,
-            recurrence_detection=bool(getattr(trace, "recurrence_detection", False)),
+            trace, module_tree, recurrence_detection=bool(trace._options_recurrence_detection)
         )
         if grad_options is not None:
             from .derived_grads import GradOptions, attach_tf_derived_grads
@@ -503,7 +494,7 @@ class TFBackend:
 
         trace = args[0] if args else kwargs["trace"]
         status = trace.validation_replay_status
-        if not status.available:
+        if not status.is_available:
             setattr(trace, "_validation_replay_status", status)
             return status
         try:
@@ -516,14 +507,14 @@ class TFBackend:
                 validate_metadata=bool(kwargs.get("validate_metadata", True)),
             )
         except Exception:
-            from ...validation.status import ValidationReplayStatus
+            from ...validation.status import ValidationStatus
 
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend=self.name,
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                failed_node_count=1,
+                num_failed_ops=1,
             )
             setattr(trace, "_validation_replay_status", status_result)
         return status_result if status_result.state == "unverified" else status_result.passed
@@ -537,11 +528,11 @@ class TFBackend:
         save_raw_activations: bool,
         detach_saved_activations: bool,
         save_grads: object | None,
-        random_seed: int | None,
+        seed: int | None,
         num_context_lines: int,
-        save_arg_values: bool,
-        save_code_context: bool,
-        save_rng_states: bool,
+        save_args: bool,
+        save_source_context: bool,
+        save_rng: bool,
         recurrence_detection: bool,
         verbose: bool,
         backward_ready: bool,
@@ -553,7 +544,7 @@ class TFBackend:
         save_raw_input: str | bool,
         batch_render: str,
         output_transform: object | None,
-        save_raw_output: str | bool,
+        save_transformed_output: str | bool,
         layer_visualizers: dict[Any, Any] | None,
         save_visualizations: bool,
         tf: Any,
@@ -574,15 +565,15 @@ class TFBackend:
             Detach option, unsupported for TF.
         save_grads
             Gradient saving option.
-        random_seed
+        seed
             User random seed, if any.
         num_context_lines
             Source context line count.
-        save_arg_values
+        save_args
             Argument saving option.
-        save_code_context
+        save_source_context
             Code context option.
-        save_rng_states
+        save_rng
             RNG-state option.
         recurrence_detection
             Recurrence option.
@@ -604,7 +595,7 @@ class TFBackend:
             Batch rendering policy.
         output_transform
             Output transform.
-        save_raw_output
+        save_transformed_output
             Raw output save policy.
         layer_visualizers
             Visualization options.
@@ -623,47 +614,42 @@ class TFBackend:
             model_class_name=type(model).__name__,
             output_device=output_device,
             activation_transform=cast(Any, activation_transform),
-            grad_transform=None,
             save_raw_activations=save_raw_activations,
-            save_raw_gradients=True,
+            save_raw_grads=True,
             keep_orphans=False,
-            save_arg_values=save_arg_values,
+            save_args=save_args,
             save_grads=save_grads,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=compute_input_output_distances,
-            num_context_lines=num_context_lines,
-            optimizer=None,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            source_context_lines=num_context_lines,
+            save_source_context=save_source_context,
+            save_rng=save_rng,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
             module_filter=cast(Any, module_filter),
             emit_nvtx=False,
-            transform=cast(Any, transform),
-            raw_input=raw_input,
+            input_transform=cast(Any, transform),
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast(Any, output_transform),
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
-        trace.trace_label = name
-        trace.backend = cast(BackendName, self.name)
-        trace.model_class_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
+        fill_unset_declared_fields(trace)
+        trace.name = name
+        trace._provenance_backend = cast(BackendName, self.name)
+        trace._source_class_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
         # Root entry-point identity fact (C07X item (iv)): the TF entry
         # invokes the model object itself (Keras/tf.Module __call__).
-        trace.root_entry_point = f"module_call:{trace.model_class_qualname}.__call__"
-        trace.backend_runtime_version = str(getattr(tf, "__version__", ""))
-        trace.backend_runtime_config = {"version": trace.backend_runtime_version}
+        trace._provenance_root_entry_point = f"module_call:{trace._source_class_qualname}.__call__"
+        trace._provenance_backend_version = str(getattr(tf, "__version__", ""))
+        trace._provenance_backend_config = {"version": trace._provenance_backend_version}
         trace.backend_runtime_device_summary = _tf_device_summary(tf)
         trace._pre_forward_rng_states = None
-        setattr(
-            trace,
-            "random_seed",
-            cast(int, random_seed) if random_seed is not None else random.randint(1, 4294967294),
-        )
+        trace._options_seed = cast(int, seed) if seed is not None else random.randint(1, 4294967294)
         return trace
 
     def _attach_param_logs(self, trace: Trace, module_tree: TFModuleTree | None) -> None:
@@ -683,21 +669,21 @@ class TFBackend:
         """
 
         if module_tree is None:
-            trace.param_logs = ParamAccessor({})
-            trace.num_param_tensors = 0
+            trace._param_logs = ParamAccessor({})
+            trace._num_param_tensors = 0
             trace.num_params = 0
             trace.num_params_trainable = 0
             trace.num_params_frozen = 0
-            trace.param_source = "none"
+            trace._provenance_param_source = "none"
             return
-        trace.param_logs = ParamAccessor(tf_param_logs(module_tree, trace))
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace._param_logs = ParamAccessor(tf_param_logs(module_tree, trace))
+        trace._num_param_tensors = len(trace._param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.param_source = "native-module"
+        trace._provenance_param_source = "native-module"
 
     def _finish_trace(
         self,
@@ -962,7 +948,7 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
     """Refuse intervention-gated options the tf preview does not implement.
 
     The ``interventions`` capability flag admits ``intervene=``, ``halt=``, and
-    ``recipes=`` through the shared option gate, so the two unimplemented
+    ``facets=`` through the shared option gate, so the two unimplemented
     spellings keep their typed refusals here in the capture path instead of in
     the declarative policy tables (where a True flag would classify them as
     self-contradictory registrations).
@@ -985,10 +971,10 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
             "partial-forward finalization semantics the tf preview does not "
             "implement. Use the PyTorch backend for predicate-time halt."
         )
-    recipes_value = kwargs.pop("recipes", None)
+    recipes_value = kwargs.pop("facets", None)
     if recipes_value is not None and not is_missing(recipes_value):
         raise BackendUnsupportedError(
-            "tf backend interventions support intervene= only; trace(recipes=...) "
+            "tf backend interventions support intervene= only; trace(facets=...) "
             "replay recipes are torch-only. Use the PyTorch backend for recipes."
         )
 
@@ -1034,7 +1020,7 @@ def _pop_tf_save_predicate(kwargs: dict[str, Any]) -> BaseSelector | None:
     if not isinstance(save_value, BaseSelector):
         raise BackendUnsupportedError(
             "tf backend supports trace(save=...) for static selectors such as tl.func, "
-            "tl.label, tl.in_module, tl.contains, and boolean composites; use save='all' "
+            "tl.label, tl.in_module, tl.label_contains, and boolean composites; use save='all' "
             "or omit save to retain every payload."
         )
     reject_selector_outside_kinds(
@@ -1053,9 +1039,9 @@ def _reject_unsupported_options(
     activation_transform: object | None,
     detach_saved_activations: bool,
     save_grads: object | None,
-    save_arg_values: bool,
-    save_code_context: bool,
-    save_rng_states: bool,
+    save_args: bool,
+    save_source_context: bool,
+    save_rng: bool,
     backward_ready: bool,
     module_filter: object | None,
     transform: object | None,
@@ -1079,11 +1065,11 @@ def _reject_unsupported_options(
         Detach option.
     save_grads
         Gradient save option.
-    save_arg_values
+    save_args
         Argument save option.
-    save_code_context
+    save_source_context
         Code context option.
-    save_rng_states
+    save_rng
         RNG-state option.
     backward_ready
         Backward-ready option.
@@ -1111,9 +1097,9 @@ def _reject_unsupported_options(
             "activation_transform": activation_transform,
             "detach_saved_activations": detach_saved_activations,
             "save_grads": save_grads,
-            "save_arg_values": save_arg_values,
-            "save_code_context": save_code_context,
-            "save_rng_states": save_rng_states,
+            "save_args": save_args,
+            "save_source_context": save_source_context,
+            "save_rng": save_rng,
             "backward_ready": backward_ready,
             "module_filter": module_filter,
             "transform": transform,

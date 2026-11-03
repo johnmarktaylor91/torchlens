@@ -97,7 +97,7 @@ class GradFnSketch:
     truncated: bool
 
     @property
-    def n_nodes(self) -> int:
+    def num_nodes(self) -> int:
         """Number of walked nodes."""
 
         return len(self.nodes)
@@ -272,7 +272,7 @@ def _sketch_digraph(sketch: GradFnSketch) -> graphviz.Digraph:
 
     import graphviz
 
-    from ..visualization._render_common import (
+    from .._visualization._render_common import (
         BACKWARD_NODE_BORDER_COLOR,
         BACKWARD_NODE_COLOR,
         FROZEN_PARAMS_BG_COLOR,
@@ -282,7 +282,7 @@ def _sketch_digraph(sketch: GradFnSketch) -> graphviz.Digraph:
 
     legend = _STRUCTURE_ONLY_LEGEND
     if sketch.truncated:
-        legend += f"\\nWALK TRUNCATED at {sketch.n_nodes} nodes -- graph is incomplete"
+        legend += f"\\nWALK TRUNCATED at {sketch.num_nodes} nodes -- graph is incomplete"
     dot = graphviz.Digraph(
         graph_attr={
             "label": legend,
@@ -373,6 +373,6 @@ def sketch_grad_fn(  # noqa: PLR0913 - torchviz-parity public door: each keyword
     dot = _sketch_digraph(sketch)
     if path is None:
         return str(dot.source)
-    from ..visualization._render_utils import render_dot_to_file
+    from .._visualization._render_utils import render_dot_to_file
 
     return render_dot_to_file(dot, path, file_format, save_only=not view)

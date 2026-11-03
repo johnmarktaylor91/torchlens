@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from torchlens.visualization import _render_nodes
-from torchlens.visualization.render_ir import RenderIR, RenderIRDotStatement, RenderIRNode
-from torchlens.visualization.renderers import (
+from torchlens._visualization import _render_nodes
+from torchlens._visualization.render_ir import RenderIR, RenderIRDotStatement, RenderIRNode
+from torchlens._visualization.renderers import (
     GraphvizRenderer,
     RendererCapabilities,
     UnsupportedRendererCapabilityError,
 )
-from torchlens.visualization.request import RenderContext, RenderTarget
+from torchlens._visualization.request import RenderContext, RenderTarget
 
 
 def _raise_legacy_entrypoint(*args: object, **kwargs: object) -> None:
@@ -58,7 +58,6 @@ def test_graphviz_renderer_renders_ir_without_trace(
     target = RenderTarget(
         outpath=str(tmp_path / "trace_free"),
         fileformat="svg",
-        save_only=True,
         viewer=False,
     )
 
@@ -82,7 +81,7 @@ def test_missing_renderer_capability_fails_explicitly() -> None:
 def test_retired_forward_dot_entrypoints_are_absent() -> None:
     """Keep deleted recorder/replay entrypoints from silently returning."""
 
-    from torchlens.visualization import _render_common, _render_dot
+    from torchlens._visualization import _render_common, _render_dot
 
     assert not hasattr(_render_common, "ForwardDotIR")
     assert not hasattr(_render_common, "_ForwardDotRecorder")

@@ -48,7 +48,7 @@ def test_comparator_self_test_still_rejects_poisoned_band_under_float64_default(
 ) -> None:
     """Pinning the sentinel dtype must not blind the band tripwire."""
 
-    from torchlens.utils import tensor_utils as tensor_utils_mod
+    from torchlens._utils import tensor_utils as tensor_utils_mod
     from torchlens.validation.core import _comparator_self_test
 
     monkeypatch.setitem(tensor_utils_mod._DTYPE_FLOAT_TOLERANCES, torch.float32, (0.33, 1e-5))

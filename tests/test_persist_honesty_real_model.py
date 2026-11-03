@@ -14,8 +14,8 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._capture.outcome import CaptureStatus
 from torchlens._errors import InvalidArgumentError
-from torchlens.capture.outcome import CaptureStatus
 from torchlens.options import CaptureOptions
 
 pytest.importorskip("transformers")
@@ -37,11 +37,13 @@ def test_streamed_gpt2_capture_loads_complete(tmp_path, gpt2_and_inputs):
 
     model, input_ids = gpt2_and_inputs
     path = tmp_path / "gpt2_streamed.tlspec"
-    trace = tl.trace(model, [], {"input_ids": input_ids}, storage=tl.to_disk(str(path)))
+    trace = tl.trace(
+        model, [], input_kwargs={"input_ids": input_ids}, storage=tl.to_disk(str(path))
+    )
     assert trace.outcome.status is CaptureStatus.COMPLETE
     loaded = tl.load(path)
     assert loaded.outcome.status is CaptureStatus.COMPLETE
-    assert loaded.layer_list
+    assert loaded._layer_list
 
 
 def test_gpt2_executable_level_respects_explicit_opt_out(tmp_path, gpt2_and_inputs):
@@ -49,10 +51,9 @@ def test_gpt2_executable_level_respects_explicit_opt_out(tmp_path, gpt2_and_inpu
     that ships the real token ids as raw payloads."""
 
     model, input_ids = gpt2_and_inputs
-    trace = tl.trace(model, [], {"input_ids": input_ids})
+    trace = tl.trace(model, [], input_kwargs={"input_ids": input_ids})
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.save(
-            trace,
+        trace.save(
             tmp_path / "bundle",
             level="executable_with_callables",
             include_saved_args=False,
@@ -70,12 +71,12 @@ def test_bert_structure_only_save_round_trips(tmp_path):
     trace = tl.trace(
         model,
         [],
-        {"input_ids": _token_ids()},
+        input_kwargs={"input_ids": _token_ids()},
         capture=CaptureOptions(structure_only=True),
     )
     path = tmp_path / "bert_structure.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     assert list((path / "blobs").iterdir()) == []
     loaded = tl.load(path)
-    assert loaded.structure_only is True
-    assert loaded.layer_list
+    assert loaded.options.structure_only is True
+    assert loaded._layer_list

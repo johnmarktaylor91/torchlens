@@ -25,9 +25,10 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module
 
+from torchlens._selection.selection import Selection, Selector
 from torchlens.attribution._core import (
+    Attribution,
     AttributionError,
-    AttributionResult,
     InputKwargs,
     _AttributionTarget,
     _call_model,
@@ -36,8 +37,7 @@ from torchlens.attribution._core import (
     _target_repr,
     _temporarily_eval,
 )
-from torchlens.intervention import mean_ablate, zero_ablate
-from torchlens.selection import ResolvedSelection, Selection
+from torchlens.intervention.helpers import mean_ablate, zero_ablate
 
 # Deterministic per-engine pass budgets (attrib memo D9), sized by the
 # measured 16.6x direct-vs-replay per-pass ratio (13.4 ms direct vs 222 ms
@@ -97,10 +97,10 @@ def _blur_edit(kernel_size: int) -> Callable[..., Tensor]:
         scatters only selected elements from that replacement.
     """
 
-    def blur(out: Tensor, *, hook: Any) -> Tensor:
+    def blur(out: Tensor, *, ctx: Any) -> Tensor:
         """Return a same-shaped spatially blurred activation."""
 
-        del hook
+        del ctx
         if out.ndim != 4 or not (out.is_floating_point() or out.is_complex()):
             raise AttributionError(
                 "baseline='blur' requires a floating or complex N,C,H,W activation"
@@ -134,7 +134,7 @@ def _occlusion_edit(baseline: _OcclusionBaseline, blur_kernel_size: int) -> Any:
     if baseline == "zeros":
         return zero_ablate()
     if baseline == "mean":
-        return mean_ablate()
+        return mean_ablate(dim=None)
     if baseline == "blur":
         if isinstance(blur_kernel_size, bool) or blur_kernel_size < 3 or blur_kernel_size % 2 == 0:
             raise AttributionError("blur_kernel_size must be an odd integer of at least 3")
@@ -142,7 +142,7 @@ def _occlusion_edit(baseline: _OcclusionBaseline, blur_kernel_size: int) -> Any:
     raise AttributionError("baseline must be 'zeros', 'mean', or 'blur'")
 
 
-def _resolve_selection(trace: Any, selection: Any) -> ResolvedSelection:
+def _resolve_selection(trace: Any, selection: Any) -> Selection:
     """Resolve a Selection or region producer against ``trace``.
 
     Parameters
@@ -164,15 +164,15 @@ def _resolve_selection(trace: Any, selection: Any) -> ResolvedSelection:
     """
 
     lifted = selection
-    if not isinstance(lifted, (Selection, ResolvedSelection)):
+    if not isinstance(lifted, (Selector, Selection)):
         converter = getattr(lifted, "__selection__", None)
         if not callable(converter):
             raise AttributionError("occlusion selection must implement __selection__()")
         lifted = converter()
-    if isinstance(lifted, ResolvedSelection):
-        return lifted if lifted._trace is trace else lifted.align_to(trace)
     if isinstance(lifted, Selection):
-        return lifted.resolve(trace)
+        return lifted if lifted._trace is trace else lifted.align_to(trace)
+    if isinstance(lifted, Selector):
+        return lifted._resolve(trace)
     raise AttributionError("occlusion selection did not produce a Selection")
 
 
@@ -183,7 +183,7 @@ def occlusion(
     score: _OcclusionScore,
     baseline: _OcclusionBaseline = "zeros",
     blur_kernel_size: int = 3,
-) -> AttributionResult:
+) -> Attribution:
     """Score the effect of explicitly occluding one resolved activation region.
 
     The result is ``score(original) - score(occluded)``. ``baseline`` is
@@ -191,6 +191,17 @@ def occlusion(
     zeros, the selected site's global mean, and a spatial blur answer different
     counterfactual questions. Occlusion runs through ``Trace.fork().do(...)`` so
     it inherits Selection masking and the shipped edit-then-scatter contract.
+
+    Zero is the easiest baseline and often the least neutral one: an
+    activation of exactly zero may never occur on real inputs, so a large
+    delta can measure the model's reaction to an off-distribution value
+    rather than the region's contribution. ``"mean"`` stays closer to the
+    data. To ask "what if this region held another input's value", patch from
+    a donor trace instead: ``trace.fork().do(selection, tl.patch_from(donor))``
+    with the donor captured on that other input, or the population-based
+    replacements (``tl.mean_ablate(population, dim=None)``,
+    ``torchlens.intervention.sample_from``, ``resample_rows_from``). The baseline used is always
+    returned in ``extra["baseline"]``; report it with the score.
 
     Parameters
     ----------
@@ -216,6 +227,18 @@ def occlusion(
     resolved = _resolve_selection(trace, selection)
     if resolved._kind != "ACT":
         raise AttributionError("occlusion currently supports ACT selections only")
+    if resolved.is_empty:
+        # occluding nothing scores exactly zero, which reads as a
+        # confident "no effect"; the resolved selection already knows it.
+        raise AttributionError(
+            f"occlusion selection resolved to zero elements on this trace "
+            f"({len(resolved)} touched site(s), none with a selected element), so the "
+            "occluded score would equal the original and report a confident zero. "
+            "Remedy: select at least one element: pass the op itself (e.g. "
+            "trace[label]) to occlude the whole site, or tl.units(label, [index, ...]) "
+            "with at least one in-range index.",
+            code="occlusion_selection_empty",
+        )
     edit = _occlusion_edit(baseline, blur_kernel_size)
     original_score = _score_trace(trace, score)
     fork = trace.fork(name="attribution_occlusion")
@@ -226,7 +249,7 @@ def occlusion(
     finally:
         fork.cleanup()
     delta = original_score - occluded_score
-    return AttributionResult(
+    return Attribution(
         method="occlusion",
         values=delta,
         target_repr="trace score",
@@ -235,7 +258,7 @@ def occlusion(
             "blur_kernel_size": blur_kernel_size if baseline == "blur" else None,
             "original_score": original_score,
             "occluded_score": occluded_score,
-            "selection_digest": resolved.resolve_digest,
+            "selection_digest": resolved.digest,
         },
     )
 
@@ -478,7 +501,7 @@ def occlusion_map(
     overlap: Literal["average", "sum"] = "average",
     occlude_leaf: int = 0,
     max_passes: int = _DIRECT_MAX_PASSES,
-) -> AttributionResult:
+) -> Attribution:
     """Sweep an occlusion window over one input leaf and map the score deltas.
 
     The direct engine: eval/no-grad forwards, one per window, on copies of the
@@ -506,7 +529,10 @@ def occlusion_map(
         Strides over the same axes; defaults to the window (non-overlapping).
     baseline_value
         Replacement policy: ``"zeros"`` (default), ``"mean"``, a scalar, or a
-        broadcastable tensor.
+        broadcastable tensor. Zeros is rarely a neutral input (a normalized
+        image's zero is mean grey, a token embedding's zero is no token), so
+        choose the value whose absence you mean to measure and report it; the
+        policy rides ``extra["replacement_policy"]``.
     overlap
         ``"average"`` (default; per-element mean over covering windows) or
         ``"sum"``.
@@ -615,7 +641,7 @@ def occlusion_map(
             coverage[full_region] += 1
         total_seconds = time.perf_counter() - start
     values = accumulator / coverage.clamp(min=1) if overlap == "average" else accumulator
-    return AttributionResult(
+    return Attribution(
         method="occlusion_map",
         values=values,
         target_repr=_target_repr(target),

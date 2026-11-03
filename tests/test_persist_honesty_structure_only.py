@@ -50,7 +50,7 @@ def plain_structure_trace():
 
 def test_structure_only_executable_level_refuses_at_save(plain_structure_trace, tmp_path):
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.save(plain_structure_trace, tmp_path / "bundle", level="executable_with_callables")
+        plain_structure_trace.save(tmp_path / "bundle", level="executable_with_callables")
     assert excinfo.value.fields["code"] == "save_payload_level_conflict"
     assert not (tmp_path / "bundle").exists()
 
@@ -58,11 +58,11 @@ def test_structure_only_executable_level_refuses_at_save(plain_structure_trace, 
 def test_structure_only_buffer_model_round_trips(buffer_structure_trace, tmp_path):
     """The W3 headline: BN-holding structure-only saves load again (were poison)."""
 
-    tl.save(buffer_structure_trace, tmp_path / "bundle")
+    buffer_structure_trace.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
-    assert loaded.structure_only is True
+    assert loaded.options.structure_only is True
     # Declared geometry survives the payload strip.
-    buffer_ops = [op for layer in loaded.layer_list for op in layer.ops if op.is_buffer]
+    buffer_ops = [op for op in loaded._layer_list if op.is_buffer]
     assert buffer_ops, "expected buffer graph nodes on the loaded trace"
     for op in buffer_ops:
         assert op.out is None
@@ -70,23 +70,23 @@ def test_structure_only_buffer_model_round_trips(buffer_structure_trace, tmp_pat
 
 
 def test_structure_only_buffer_model_audit_round_trips(buffer_structure_trace, tmp_path):
-    tl.save(buffer_structure_trace, tmp_path / "bundle", level="audit")
+    buffer_structure_trace.save(tmp_path / "bundle", level="audit")
     loaded = tl.load(tmp_path / "bundle")
-    assert loaded.structure_only is True
+    assert loaded.options.structure_only is True
 
 
 def test_structure_only_save_ships_no_buffer_initial_values(buffer_structure_trace, tmp_path):
     """Pre-forward buffer VALUES are training-derived state; weights-free saves drop
     the whole channel and the manifest disclosure says so."""
 
-    tl.save(buffer_structure_trace, tmp_path / "bundle")
+    buffer_structure_trace.save(tmp_path / "bundle")
     manifest = json.loads((tmp_path / "bundle" / "manifest.json").read_text())
     disclosure = manifest.get("buffer_values_disclosure", {})
     assert disclosure.get("included") is False
 
 
 def test_structure_only_save_writes_no_value_blobs(buffer_structure_trace, tmp_path):
-    tl.save(buffer_structure_trace, tmp_path / "bundle")
+    buffer_structure_trace.save(tmp_path / "bundle")
     assert list((tmp_path / "bundle" / "blobs").iterdir()) == []
 
 
@@ -94,16 +94,10 @@ def test_live_structure_trace_untouched_by_save(buffer_structure_trace, tmp_path
     """The strip is save-side only: the LIVE trace keeps its session state."""
 
     before = {
-        op.label: op.out is not None
-        for layer in buffer_structure_trace.layer_list
-        for op in layer.ops
-        if op.is_buffer
+        op.label: op.out is not None for op in buffer_structure_trace._layer_list if op.is_buffer
     }
-    tl.save(buffer_structure_trace, tmp_path / "bundle")
+    buffer_structure_trace.save(tmp_path / "bundle")
     after = {
-        op.label: op.out is not None
-        for layer in buffer_structure_trace.layer_list
-        for op in layer.ops
-        if op.is_buffer
+        op.label: op.out is not None for op in buffer_structure_trace._layer_list if op.is_buffer
     }
     assert before == after

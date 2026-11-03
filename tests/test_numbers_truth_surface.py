@@ -33,7 +33,7 @@ def small_log() -> Generator[tl.Trace, None, None]:
     """Metadata-only capture of a tiny model."""
 
     model = nn.Sequential(nn.Linear(8, 16, bias=True), nn.ReLU())
-    log = tl.trace(model, torch.randn(2, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = tl.trace(model, torch.randn(2, 8), save=None)
     try:
         yield log
     finally:
@@ -52,14 +52,6 @@ def test_tl_summary_is_a_first_class_front_door() -> None:
     assert deprecations == []
     assert isinstance(text, str)
     assert "Linear" in text
-
-
-def test_visualization_summary_alias_resolves() -> None:
-    """The historically-taught torchlens.visualization.summary spelling resolves (A8)."""
-
-    import torchlens.visualization as visualization
-
-    assert callable(visualization.summary)
 
 
 @pytest.mark.heavy
@@ -99,10 +91,10 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
     log = tl.trace(
         _CondModel(),
         torch.randn(2, 3) + 1.0,
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     try:
-        for text in (str(log.summary(level="op")), log.provenance()):
+        for text in (str(log.summary(level="op")), log.provenance._summary()):
             assert "\x1b" not in text
     finally:
         log.cleanup()
@@ -111,14 +103,20 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
 def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
     """The memory footer prints the measured peak + backend, never 'not tracked' (A7)."""
 
-    from torchlens.observe import pass_peak_facts
+    from torchlens._observe._peaks import pass_peak_facts
 
     text = str(small_log.summary())
     assert "not tracked" not in text
-    backend = small_log.forward_memory_backend
+    backend = small_log.provenance.forward_memory_backend
     assert backend in {"cpu", "cuda", "mps"}
     facts = pass_peak_facts(small_log)
-    assert facts.value_bytes is not None
+    if facts.value_bytes is None:
+        # forks.13: a CPU RSS delta of 0 is recorded as None with its reason,
+        # which the footer prints verbatim (never "not tracked", never a 0).
+        assert backend == "cpu"
+        assert facts.meaning == small_log.cost.forward_peak_memory_reason
+        assert f"forward peak unavailable ({facts.meaning})" in text
+        return
     # The basis is always named; a measured value is never called unavailable.
     assert f"({facts.meaning})" in text
     assert "forward peak unavailable" not in text
@@ -127,6 +125,6 @@ def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
 def test_memory_footer_unavailable_is_distinct(small_log: tl.Trace) -> None:
     """A capture with no recorded backend reports unavailable, never a fake zero (A7)."""
 
-    small_log.forward_memory_backend = "unknown"
+    small_log._provenance_forward_memory_backend = "unknown"
     text = str(small_log.summary())
     assert "forward peak unavailable (not measured on this capture)" in text

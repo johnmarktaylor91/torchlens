@@ -21,10 +21,7 @@ import torch.nn.functional as F
 
 import torchlens as tl
 import torchlens._state as _state
-from torchlens.backends.torch.ops import (
-    _extract_arg_tensors_and_params,
-)
-from torchlens.capture.arg_positions import (
+from torchlens._capture.arg_positions import (
     DYNAMIC_SPEC_UNCACHEABLE,
     FUNC_ARG_SPECS,
     ArgSpec,
@@ -34,7 +31,8 @@ from torchlens.capture.arg_positions import (
     _schema_arg_is_parent_candidate,
     _schema_tensor_arg_kind,
 )
-from torchlens.constants import get_orig_torch_funcs
+from torchlens._constants import get_orig_torch_funcs
+from torchlens.backends.torch._ops_predicate_events import _extract_arg_tensors_and_params
 
 _PROVENANCE_MATCH = "no graph/source provenance"
 

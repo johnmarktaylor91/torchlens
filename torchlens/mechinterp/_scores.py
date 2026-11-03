@@ -9,6 +9,14 @@ conventions so numbers are comparable. Reads only, so FUSED attention is
 fully supported -- TLens needs an eager reload to find induction heads on a
 fused model. Empty-eligible rows are masked and reported, never scored zero.
 
+``kind=FixedPeriodInduction(period=n)`` swaps the induction kind's
+token-equality mask for the fixed repeat of a sequence with period ``n``: destination ``i`` is scored on the
+one source ``i - n + 1`` and counts only when its token equals the token at
+``i - n``. On ``[bos] + R + R`` with ``len(R) = n`` this is the usual
+repeated-random-token induction score, and a token that repeats inside
+``R`` adds no extra source. Patterns are scored in their own dtype when it
+is float32 or wider (float64 stays float64).
+
 The seeded repeated-random-token prompt is a diagnostic INPUT and test
 fixture, not part of these definitions. ``pattern_source=`` is the socket
 through which SSM pseudo-patterns arrive later.
@@ -23,17 +31,52 @@ from typing import Any
 
 import torch
 
+from .._errors import PayloadUnavailableError
 from ._errors import refuse
 from ._heads import _attention_modules
 
-__all__ = ["HeadScoreResult", "head_scores"]
+__all__ = ["FixedPeriodInduction", "HeadScores", "head_scores"]
 
 _KINDS = ("previous_token", "duplicate_token", "induction")
 _MEASURES = ("mul", "abs")
 
 
 @dataclass(frozen=True)
-class HeadScoreResult:
+class FixedPeriodInduction:
+    """The induction kind on a sequence repeated with a known period.
+
+    Pass it as ``head_scores(trace, kind=FixedPeriodInduction(period=n))``:
+    destination ``i`` is scored on the one source ``i - n + 1`` and counts
+    only when its token equals the token at ``i - n``. On ``[bos] + R + R``
+    with ``len(R) = n`` this is the repeated-random-token induction score.
+    The result reports ``kind="induction"`` and records the period in its
+    provenance.
+
+    Parameters
+    ----------
+    period:
+        The repeated sequence's length, a positive int.
+    """
+
+    period: int
+
+    def __post_init__(self) -> None:
+        """Refuse a period that is not a positive int."""
+
+        period = self.period
+        if isinstance(period, bool) or not isinstance(period, int) or period < 1:
+            refuse(
+                code="mi_head_score_period_invalid",
+                message=f"FixedPeriodInduction got period={period!r}; the period is a "
+                "positive int (the repeated sequence's length).",
+                remedy="pass FixedPeriodInduction(period=<the repeated sequence's length>), "
+                "or kind='induction' for the token-equality mask",
+                period=period,
+            )
+
+
+@dataclass(frozen=True)
+class HeadScores:
     """Per-head taxonomy scores.
 
     ``scores[layer_index][head]`` is the score; ``eligible_rows`` counts the
@@ -44,16 +87,16 @@ class HeadScoreResult:
 
     kind: str
     measure: str
-    layer_addresses: tuple[str, ...]
+    module_addresses: tuple[str, ...]
     scores: tuple[tuple[float | None, ...], ...]
     eligible_rows: tuple[int, ...]
     provenance: dict[str, Any]
 
-    def top(self, k: int = 5) -> tuple[tuple[str, float], ...]:
+    def topk(self, k: int = 5) -> tuple[tuple[str, float], ...]:
         """Return the ``k`` highest-scoring heads as ``(address.headN, score)``."""
 
         pairs = []
-        for address, layer_scores in zip(self.layer_addresses, self.scores, strict=True):
+        for address, layer_scores in zip(self.module_addresses, self.scores, strict=True):
             for head, score in enumerate(layer_scores):
                 if score is not None:
                     pairs.append((f"{address}.head{head}", score))
@@ -65,8 +108,12 @@ def _token_ids(trace: Any, seq_len: int) -> torch.Tensor:
     """Return the captured input token ids matching the pattern's length."""
 
     for label in getattr(trace, "input_ops", ()) or ():
-        op = label if hasattr(label, "out") else trace.ops[str(label)]
-        value = getattr(op, "out", None)
+        # ``hasattr(op, "out")`` raises, not False, when the payload was not saved.
+        op = trace.ops[label] if isinstance(label, str) else label
+        try:
+            value = getattr(op, "out", None)
+        except PayloadUnavailableError:  # an unsaved input is no token stream
+            continue
         if (
             isinstance(value, torch.Tensor)
             and not value.is_floating_point()
@@ -85,13 +132,20 @@ def _token_ids(trace: Any, seq_len: int) -> torch.Tensor:
     raise AssertionError("unreachable")
 
 
-def _mask_for(kind: str, tokens: torch.Tensor, size: int) -> torch.Tensor:
-    """Build the [batch, dst, src] token-equality mask for one kind."""
+def _mask_for(
+    kind: str, tokens: torch.Tensor, size: int, period: int | None = None
+) -> torch.Tensor:
+    """Build the [batch, dst, src] mask for one kind (token-equality, or a fixed period)."""
 
     batch = tokens.shape[0]
     dst = torch.arange(size).reshape(1, size, 1)
     src = torch.arange(size).reshape(1, 1, size)
     causal = src <= dst
+    if period is not None:
+        repeated = torch.zeros(batch, size, dtype=torch.bool)
+        if period < size:
+            repeated[:, period:] = tokens[:, period:] == tokens[:, : size - period]
+        return (src == dst - period + 1) & repeated.reshape(batch, size, 1)
     if kind == "previous_token":
         return ((src == dst - 1) & causal).expand(batch, size, size)
     equal = tokens.reshape(batch, size, 1) == tokens.reshape(batch, 1, size)
@@ -129,11 +183,11 @@ def _score_layer(
 def head_scores(
     trace: Any,
     *,
-    kind: str = "induction",
+    kind: str | FixedPeriodInduction = "induction",
     measure: str = "mul",
     layers: Any = None,
     pattern_source: Any = None,
-) -> HeadScoreResult:
+) -> HeadScores:
     """Score every head against one taxonomy mask (mikit section 8).
 
     Parameters
@@ -141,7 +195,11 @@ def head_scores(
     trace:
         A finished torchlens trace with attention patterns readable.
     kind:
-        ``previous_token`` / ``duplicate_token`` / ``induction``.
+        ``previous_token`` / ``duplicate_token`` / ``induction``, or
+        ``FixedPeriodInduction(period=n)`` to score the fixed repeat of a
+        sequence with period ``n`` (destination ``i`` on source
+        ``i - n + 1``, counted when its token equals the token at
+        ``i - n``) instead of the token-equality induction mask.
     measure:
         ``mul`` (attention mass on mask-eligible sources, TLens-compatible)
         or ``abs`` (1 - L1/2 distance between the pattern row and the mask
@@ -159,11 +217,13 @@ def head_scores(
         ``None`` scores, never zero.
     """
 
+    period = kind.period if isinstance(kind, FixedPeriodInduction) else None
+    kind = "induction" if isinstance(kind, FixedPeriodInduction) else kind
     if kind not in _KINDS:
         refuse(
             code="mi_head_score_kind_invalid",
             message=f"Unknown head-score kind {kind!r}.",
-            remedy=f"choose among {list(_KINDS)}",
+            remedy=f"choose among {list(_KINDS)}, or FixedPeriodInduction(period=n)",
         )
     if measure not in _MEASURES:
         refuse(
@@ -198,13 +258,13 @@ def head_scores(
                 code="mi_payload_missing",
                 message=f"The pattern at {getattr(module, 'address', '?')} is not readable.",
                 remedy="save the attention interior (retention_plan(analyses=['head_scores'])); "
-                "fused SDPA needs capture=CaptureOptions(save_arg_values=True)",
+                "fused SDPA needs capture=CaptureOptions(save_args=True)",
                 analysis="head_scores",
             )
-        pattern = pattern.detach().to(torch.float32)
+        pattern = pattern.detach().to(torch.promote_types(pattern.dtype, torch.float32))
         batch, n_heads, dst_len, src_len = pattern.shape
         tokens = _token_ids(trace, src_len)
-        mask = _mask_for(kind, tokens, src_len).to(torch.float32)  # [b, dst, src]
+        mask = _mask_for(kind, tokens, src_len, period).to(pattern.dtype)  # [b, dst, src]
         row_eligible = mask.sum(dim=-1) > 0  # [b, dst]
         n_eligible = int(row_eligible.sum())
         addresses.append(str(getattr(module, "address", "")))
@@ -214,14 +274,16 @@ def head_scores(
             continue
         all_scores.append(_score_layer(pattern, mask, row_eligible, n_heads, measure))
 
-    return HeadScoreResult(
+    return HeadScores(
         kind=kind,
         measure=measure,
-        layer_addresses=tuple(addresses),
+        module_addresses=tuple(addresses),
         scores=tuple(all_scores),
         eligible_rows=tuple(eligible_counts),
         provenance={
-            "mask_definition": "token-equality (TLens head_detector conventions, credited)",
+            "mask_definition": "token-equality (TLens head_detector conventions, credited)"
+            if period is None
+            else f"fixed period {period} (repeated-sequence induction)",
             "pattern_source": "facet/pattern" if pattern_source is None else "user_callable",
         },
     )

@@ -12,13 +12,10 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens.utils.tensor_utils import tensor_nanequal
+from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.validation import validate_forward_pass
-from torchlens.validation.core import (
-    _copy_validation_args,
-    _deep_clone_tensors,
-    _perturb_layer_outs,
-)
+from torchlens.validation._perturb import _perturb_layer_outs
+from torchlens.validation.core import _copy_validation_args, _deep_clone_tensors
 
 # =============================================================================
 # Perturbation unit tests
@@ -95,7 +92,7 @@ def test_validation_perturbs_zero_parent_at_large_float_scale() -> None:
             zero = x * 0.0
             return huge - zero
 
-    assert validate_forward_pass(HugeSubZero(), torch.ones(2, 3), random_seed=123)
+    assert validate_forward_pass(HugeSubZero(), torch.ones(2, 3), seed=123)
 
 
 def test_perturbation_changes_int_tensor() -> None:
@@ -180,7 +177,7 @@ def test_sagpooling_validates_end_to_end_without_perturb_overflow() -> None:
 
     # Returns True: the perturbation tripwire ran end-to-end with no overflow
     # crash and the replay/perturbation checks genuinely passed.
-    assert validate_forward_pass(SAGPoolNet(), (x, edge_index), random_seed=1)
+    assert validate_forward_pass(SAGPoolNet(), (x, edge_index), seed=1)
 
 
 def test_perturbation_changes_bool_tensor():

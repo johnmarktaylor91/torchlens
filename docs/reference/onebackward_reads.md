@@ -58,7 +58,7 @@ inside the context (documented boundary).
 - **Edge-seeded (primary)**: `attr.seed(site, index=...)` (one-hot from
   recorded shape metadata) or `attr.seed(site, cotangent=...)` (explicit
   projection). Needs the site's registry node only -- no payload, no
-  retention: a `layers_to_save=[]` capture serves full gradient tables.
+  retention: a `save=[]` capture serves full gradient tables.
   Wrong-shape cotangents refuse naming the site's RECORDED shape.
 - **Tensor-expression (power-user)**: a graph-connected finite real scalar
   Tensor, or a pure `Trace -> Tensor` callable (a 1-D result is a target
@@ -117,7 +117,7 @@ structural site key as a SEPARATE field. Table provenance carries the
 population counts, excluded-status counts, alias disclosure, the batching
 plan with its reason, exact `autograd_calls`, timing, and bytes.
 
-Operations: `to_pandas(values='omit'|'object'|'explode')`, `for_target`,
+Operations: `to_pandas(values='omit'|'object'|'explode')`, `target`,
 `column`, `aggregate_targets(reducer)` (no implicit mean/max/sum anywhere),
 `collapse_alias_groups()` (explicit opt-in; per-address rows are the
 default). Scalar tables persist as standalone `read_table_v1` JSON
@@ -129,7 +129,7 @@ tables refuse `read_table_not_portable` until sidecars exist.
 `tl.top_k`, `tl.top_fraction`, and `tl.threshold` accept a single-target
 `ReadTable`: site-grain tables rank SITES (`k` counts sites; a win selects
 the complete site mask), element-grain tables rank elements against exactly-
-matching index spaces. Multi-target tables refuse (narrow with `for_target`
+matching index spaces. Multi-target tables refuse (narrow with `target`
 or fold with `aggregate_targets`); foreign and stale tables refuse; NaN is
 unrankable; ties break canonical site order then flat index. Selection
 provenance carries the schema, method, reduction, target, frozen digest, and
@@ -157,17 +157,38 @@ leg disclosed). Do NOT claim orders of magnitude from target batching; the
 orders of magnitude live on the per-site and per-capture axes.
 Gradient-only reads retain NOTHING; `activation_x_grad` retains only the
 sites you multiply. Capture itself costs ~70x a bare forward with
-`layers_to_save='all'` -- selective retention is the natural spelling.
+`save='all'` -- selective retention is the natural spelling.
+
+## The EDGE row kind
+
+`ReadTable` rows have two kinds. `read` produces `ACT` rows, addressed
+`(layer_label, pass_index)`. `torchlens.mechinterp.edge_scores` produces `EDGE`
+rows: one per component-graph edge, keyed `("t0", "EDGE", (edge name,))`
+with the edge's graph-vocabulary name (`"a9.h9->logits"`,
+`"m0->a1.h0<q>"`). An EDGE row's `score` is the edge attribution patching
+score, `method` is `"eap"` or `"eap_ig"`, `reduction` names the reduction
+(`"sum_positions_mean_examples"`), `grain` is `"site"`, `resolution` is
+`"exact"` and `value` is `None`, so EDGE tables save and load like any
+scalar table; `provenance.sample_count` is the number of examples folded
+in. A receiver the metric does not reach gives its edges
+`status="unreachable"` and no score, never a fabricated zero.
+
+The scores come from this page's engine, one backward per evaluation point:
+the seed is the metric's cotangent at the unembedding output, the
+population is every receiver's own read (a pre-norm output, or an attention
+projection output whose head and role slice is kept), and a second
+edge-seeded read per receiver group pulls those gradients back to the
+receiver's pre-norm input with `frozen=None` (the total derivative). See
+[the mech-interp kit](mechinterp.md#edge-attribution-patching-and-circuit-faithfulness).
 
 ## Deferred, with the plumbing bought now
 
-- **EDGE-grain reads (EAP)**: `ReadTable` admits the EDGE kind;
-  `mint_grad_input_use_map` builds the fail-closed backward-slot ->
-  forward-consumption contract (`exact`/`ambiguous`/`unsupported`; the
-  unmated census kills positional zipping). EAP remains honestly blocked
-  until the correspondence map is trustworthy; the map is session-time only
-  (its persistence is the EDGE-MAP-SCHEMA coordination with the next
-  trace-schema bump).
+- **Backward-slot correspondence**: `mint_grad_input_use_map` builds the
+  fail-closed backward-slot -> forward-consumption contract
+  (`exact`/`ambiguous`/`unsupported`; the unmated census kills positional
+  zipping). The map is session-time only (its persistence is the
+  EDGE-MAP-SCHEMA coordination with the next trace-schema bump). Edge
+  attribution patching does not need it (see the EDGE row kind above).
 - **Dataset-mean attribution**: nullable `sample_id`, `sample_count`
   provenance, and the streaming-reduction seam ship now.
 - **Frozen-LN / full published linearization (R10)**: the frozen-policy

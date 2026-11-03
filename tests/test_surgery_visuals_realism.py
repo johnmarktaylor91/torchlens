@@ -17,11 +17,11 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.visualization.surgery_visuals import surgery_census
+from torchlens._visualization.surgery_visuals import surgery_census
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
 
 _REPLAY_WORDING = "exit values were substituted; the interior was not replayed"
 _LIVE_WORDING = "the original op ran; edited values replaced its output after execution"
@@ -48,14 +48,13 @@ def _assert_no_banned_verbs(text: str) -> None:
 def _render_with_sidecar(trace, tmp_path: Path, stem: str) -> tuple[str, str]:
     """Render the surgery lens focused on one block; return (svg, census)."""
 
-    from torchlens.visualization.surgery_visuals import render_surgery
+    from torchlens._visualization.surgery_visuals import render_surgery
 
     outpath = str(tmp_path / stem)
     render_surgery(
         trace,
-        vis_outpath=outpath,
-        vis_fileformat="svg",
-        vis_save_only=True,
+        path=outpath,
+        file_format="svg",
     )
     svg = (tmp_path / f"{stem}.svg").read_text()
     census = (tmp_path / f"{stem}.census.txt").read_text()
@@ -77,7 +76,7 @@ def test_distilgpt2_live_lane_census_and_splice_box(tmp_path) -> None:
         model,
         ids,
         intervene=tl.when(tl.in_module("transformer.h.0") & tl.func("tanh"), tl.scale(0.5)),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     census_text = surgery_census(log).to_text()
     assert "lane capture: 1 transaction(s)" in census_text
@@ -105,7 +104,7 @@ def test_distilgpt2_replay_fork_census_and_splice_box(tmp_path) -> None:
     log = tl.trace(model, ids, capture=_CAPTURE)
     fork = log.fork()
     tanh_label = next(label for label in fork.op_labels if label.startswith("tanh"))
-    fork.do(tl.units(tanh_label, [(0, 0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units(tanh_label, [(0, 0, 0)])], tl.zero_ablate())
     census_text = surgery_census(fork).to_text()
     assert "lane replay: 1 transaction(s)" in census_text
     assert _REPLAY_WORDING in census_text
@@ -132,11 +131,11 @@ def test_resnet50_block_splice_box_and_marks(tmp_path) -> None:
         x,
         intervene=tl.when(
             tl.in_module("layer1.0") & tl.func("relu"),
-            tl.splice_module(torch.nn.ReLU(), input="out"),
+            tl.splice_module(torch.nn.ReLU(), input_route="out"),
         ),
-        capture=tl.options.CaptureOptions(intervention_ready=True, log_injections=True),
+        capture=tl.options.CaptureOptions(replayable=True, log_injections=True),
     )
-    from torchlens.visualization.surgery_visuals import surgery_facts
+    from torchlens._visualization.surgery_visuals import surgery_facts
 
     facts = surgery_facts(log)
     splice_rows = [

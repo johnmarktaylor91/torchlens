@@ -18,10 +18,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._render_common import (
-    FROZEN_PARAMS_BG_COLOR,
-    TRAINABLE_PARAMS_BG_COLOR,
-)
+from torchlens._visualization.themes import resolve_theme
+
+#: Parameter fills as the DEFAULT skin renders them.
+TRAINABLE_PARAMS_BG_COLOR = resolve_theme("torchlens").semantic_palette["params_trainable"]
+FROZEN_PARAMS_BG_COLOR = resolve_theme("torchlens").semantic_palette["params_frozen"]
 
 pytest.importorskip("graphviz")
 
@@ -235,12 +236,11 @@ def _trace(model: nn.Module) -> tl.Trace:
 def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render ``trace`` and return the DOT source."""
 
-    kwargs.setdefault("vis_node_placement", "dot")
+    kwargs.setdefault("layout", "dot")
     return str(
         trace.draw(
-            vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / name),
+            file_format="svg",
+            path=str(tmp_path / name),
             **kwargs,
         )
     )
@@ -249,7 +249,7 @@ def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
 def _node_name(trace: tl.Trace, func_name: str, occurrence: int = 0) -> str:
     """Return the DOT name of the ``occurrence``-th op calling ``func_name``."""
 
-    ops = [op for op in trace.layer_list if op.func_name == func_name]
+    ops = [op for op in trace._layer_list if op.func_name == func_name]
     return str(ops[occurrence].label).replace(":", "pass")
 
 
@@ -363,10 +363,21 @@ def test_legend_lists_mutated_parameter_only_when_drawn(tmp_path: Path) -> None:
         mutated.cleanup()
         plain.cleanup()
 
-    assert "mutated parameter (cylinder)" in mutated_dot
-    assert "buffer (cylinder)" in mutated_dot
+    assert ">mutated parameter<" in mutated_dot
     assert "mutated parameter" not in plain_dot
-    assert "buffer (cylinder)" in plain_dot
+    # The buffer row is gated the same way: present exactly when a buffer is drawn.
+    for dot in (mutated_dot, plain_dot):
+        assert (">buffer<" in dot) == _draws_buffer_node(dot)
+
+
+def _draws_buffer_node(dot: str) -> bool:
+    """Whether the DOT draws a buffer: a cylinder in the default skin's buffer fill."""
+
+    return any(
+        "shape=cylinder" in line and '"#E69F00"' in line
+        for line in dot.splitlines()
+        if not line.strip().startswith("graph [")
+    )
 
 
 def test_frozen_mutated_parameter_uses_frozen_parameter_grey(tmp_path: Path) -> None:
@@ -388,8 +399,8 @@ def test_rolled_view_draws_the_parameter_node(tmp_path: Path) -> None:
 
     trace = _trace(_MixHicToy())
     try:
-        dot = _dot(trace, tmp_path, "rolled", vis_mode="rolled")
-        clamp_layer = next(op.layer_label for op in trace.layer_list if op.func_name == "clamp_")
+        dot = _dot(trace, tmp_path, "rolled", rolled=True)
+        clamp_layer = next(op.layer_label for op in trace._layer_list if op.func_name == "clamp_")
     finally:
         trace.cleanup()
 
@@ -402,7 +413,7 @@ def test_rolled_view_draws_the_parameter_node(tmp_path: Path) -> None:
 def test_only_the_receiver_parameter_gets_a_node(tmp_path: Path) -> None:
     """A Parameter read by an in-place op is not mutated; only the receiver is."""
 
-    from torchlens.visualization import _mutated_params
+    from torchlens._visualization import _mutated_params
 
     trace = _trace(_ParamReadByInplaceOp())
     try:
@@ -421,7 +432,7 @@ def test_never_mutated_parameters_get_no_node_and_unchanged_dot(
 ) -> None:
     """Without a mutation there is no node, and the DOT equals the feature-free render."""
 
-    from torchlens.visualization import _mutated_params
+    from torchlens._visualization import _mutated_params
 
     trace = _trace(_NeverMutated())
     try:
@@ -446,7 +457,7 @@ def _cluster_names(dot: str) -> list[str]:
 def _render_names(trace: tl.Trace, func_name: str) -> set[str]:
     """Return the DOT names the first ``func_name`` op may render under (plain or focus)."""
 
-    op = next(op for op in trace.layer_list if op.func_name == func_name)
+    op = next(op for op in trace._layer_list if op.func_name == func_name)
     return {str(op.layer_label), str(op.label).replace(":", "pass")}
 
 
@@ -493,18 +504,18 @@ def test_module_focus_excluding_the_owner_draws_no_node(tmp_path: Path) -> None:
 def test_dot_and_underscore_addresses_get_distinct_nodes(tmp_path: Path) -> None:
     """``a.b`` and ``a_b`` keep separate node declarations and separate edges."""
 
-    from torchlens.visualization._mutated_params import mutated_parameter_node_name
+    from torchlens._visualization._mutated_params import mutated_parameter_node_name
 
     trace = _trace(_DotUnderscoreCollision())
     try:
         dot = _dot(trace, tmp_path, "collision")
         clamps = [
             str(op.label).replace(":", "pass")
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.func_name == "clamp_"
         ]
         receivers = [
-            op._param_logs[0].address for op in trace.layer_list if op.func_name == "clamp_"
+            op._param_logs[0].address for op in trace._layer_list if op.func_name == "clamp_"
         ]
     finally:
         trace.cleanup()
@@ -522,7 +533,7 @@ def test_dot_and_underscore_addresses_get_distinct_nodes(tmp_path: Path) -> None
 def test_node_names_are_injective_and_port_free() -> None:
     """Distinct addresses never share a node name, and no name carries a DOT port colon."""
 
-    from torchlens.visualization._mutated_params import mutated_parameter_node_name
+    from torchlens._visualization._mutated_params import mutated_parameter_node_name
 
     addresses = ["a.b", "a_b", "a%2Eb", "a:b", "a-b", 'a"b', "a b", "a.b.c", "a_b.c"]
     names = [mutated_parameter_node_name(address) for address in addresses]
@@ -536,8 +547,8 @@ def test_rank_engine_draws_the_parameter_node_and_legend_row(tmp_path: Path) -> 
     trace = _trace(_MixHicToy())
     plain = _trace(_NeverMutated())
     try:
-        dot = _dot(trace, tmp_path, "rank", vis_node_placement="rank", show_legend=True)
-        plain_dot = _dot(plain, tmp_path, "rank_plain", vis_node_placement="rank", show_legend=True)
+        dot = _dot(trace, tmp_path, "rank", layout="rank", show_legend=True)
+        plain_dot = _dot(plain, tmp_path, "rank_plain", layout="rank", show_legend=True)
         clamp = _node_name(trace, "clamp_")
     finally:
         trace.cleanup()
@@ -550,7 +561,7 @@ def test_rank_engine_draws_the_parameter_node_and_legend_row(tmp_path: Path) -> 
     assert "pos=" in line  # positioned for neato -n like every rank node
     assert f"{param_node} [" in _cluster_body(dot, "cluster_inner_pass1")
     assert (param_node, clamp) in _edges(dot)
-    assert "mutated parameter (cylinder)" in dot
+    assert ">mutated parameter<" in dot
     assert "mutated parameter" not in plain_dot
     assert "mutatedparam_" not in plain_dot
 
@@ -564,7 +575,7 @@ def test_shared_parameter_mutated_outside_owner_sits_in_owner_cluster(tmp_path: 
         mul_ = _node_name(trace, "mul_")
         reads = [
             str(op.label).replace(":", "pass")
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.func_name == "__mul__"
         ]
     finally:

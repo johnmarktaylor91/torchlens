@@ -117,10 +117,6 @@
       "lookup_keys": [
         "-1",
         "4",
-        "child",
-        "child.proj",
-        "child.proj:1",
-        "child:1",
         "output",
         "output_1",
         "output_1:1",
@@ -144,17 +140,17 @@
     {
       "address": "self",
       "call_label": "self:1",
-      "forward_args_summary": "None",
-      "forward_kwargs_summary": "None",
+      "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
       "input_layers": [
         "input_1"
       ],
       "ops": [
-        "input_1",
-        "randn_1_1",
-        "add_1_2",
-        "linear_1_3",
-        "output_1"
+        "input_1:1",
+        "randn_1_1:1",
+        "add_1_2:1",
+        "linear_1_3:1",
+        "output_1:1"
       ],
       "output_layers": [
         "output_1"
@@ -285,7 +281,7 @@
       "input_to_modules": [
         "child:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -322,7 +318,7 @@
       "input_to_modules": [
         "child:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": true,
@@ -358,7 +354,7 @@
       "input_to_modules": [
         "child.proj:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -394,7 +390,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "child.proj.linear",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -437,7 +433,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -447,10 +443,6 @@
       "lookup_keys": [
         "-1",
         "4",
-        "child",
-        "child.proj",
-        "child.proj:1",
-        "child:1",
         "output",
         "output_1",
         "output_1",

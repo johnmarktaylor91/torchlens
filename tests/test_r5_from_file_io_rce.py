@@ -38,16 +38,16 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io._safe_unpickle import SafeBundleUnpickler, _safe_getattr
+from torchlens._runnable import PathFaithfulness
+from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.intervention._resolver_registry import resolve_function_registry_key
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
-from torchlens.utils._callable_safety import is_pure_forward_callable
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -249,7 +249,7 @@ def test_runnable_load_blocks_from_file_creation(tmp_path: Path) -> None:
     )  # retain: include_weights needs the live source model (survive full-suite GC)
     log = tl.trace(model, torch.ones(1, 4), capture=_CAP)
     clean = tmp_path / "clean.tlspec"
-    tl.save(log, clean, level="runnable", include_weights=True)
+    log.save(clean, level="runnable", include_weights=True)
     assert model is not None
 
     evil = tmp_path / "evil.tlspec"
@@ -335,16 +335,12 @@ def test_all_five_save_levels_still_load(tmp_path: Path) -> None:
     audit = tmp_path / "audit"
     cf_a = _ControlFlow()
     keep_alive.append(cf_a)
-    tl.trace(cf_a, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        audit, level="audit"
-    )
+    tl.trace(cf_a, x, save="all").save(audit, level="audit")
 
     portable = tmp_path / "portable"
     cf_p = _ControlFlow()
     keep_alive.append(cf_p)
-    tl.trace(cf_p, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        portable, level="portable"
-    )
+    tl.trace(cf_p, x, save="all").save(portable, level="portable")
 
     run = tmp_path / "runnable"
     lin = _StatefulLinear()
@@ -383,7 +379,7 @@ def test_genuine_cnn_runnable_still_verified(tmp_path: Path) -> None:
     model = _TinyCNN().eval()  # retain a strong ref: include_weights needs the live source model
     log = tl.trace(model, inputs, capture=_CAP)
     path = tmp_path / "cnn.tlspec"
-    tl.save(log, path, level="runnable", include_weights=True)
+    log.save(path, level="runnable", include_weights=True)
     assert (
         model is not None
     )  # keep the model alive across save (defeats weakref GC under full-suite pressure)

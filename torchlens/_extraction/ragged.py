@@ -73,7 +73,7 @@ class RaggedBatch:
     row_shapes: tuple[tuple[int, ...], ...]
 
     @property
-    def row_count(self) -> int:
+    def num_rows(self) -> int:
         """Number of logical rows in the carrier.
 
         Returns
@@ -385,7 +385,7 @@ def to_padded(
 
     rows: list[torch.Tensor] = []
     for batch in batches:
-        rows.extend(batch.row(i) for i in range(batch.row_count))
+        rows.extend(batch.row(i) for i in range(batch.num_rows))
     widths = [int(row.shape[0]) for row in rows]
     width = max(widths, default=0)
     if max_len is not None:

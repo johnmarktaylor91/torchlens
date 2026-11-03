@@ -4,7 +4,7 @@ torch 2.9 added per-backend ``torch.backends.*.fp32_precision`` knobs. The legac
 getters the v2 ambient record reads (``cudnn.allow_tf32``,
 ``cuda.matmul.allow_tf32``, ``get_float32_matmul_precision()``) RAISE when the
 per-backend state has no legacy equivalent, which used to crash every
-``intervention_ready`` capture and ``tl.debug.check_determinism``. Capture must
+``replayable`` capture and ``tl.debug.check_determinism``. Capture must
 succeed; a policy the record cannot represent must refuse runnable save typed
 (``execution_context_unavailable``), never persist a record that replays under a
 different TF32/bf16 policy; and a run transaction must restore the caller's
@@ -21,16 +21,16 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
+from torchlens._utils import _torch_compat as tc
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
-from torchlens.utils import _torch_compat as tc
 
 pytestmark = pytest.mark.skipif(
     not tc.HAS_FP32_PRECISION_CONTROLS,
     reason="per-backend fp32_precision API needs torch >= 2.9",
 )
 
-_CAPTURE = CaptureOptions(intervention_ready=True)
+_CAPTURE = CaptureOptions(replayable=True)
 
 
 def _set(path: str, value: str) -> None:
@@ -113,16 +113,15 @@ def test_unrepresentable_policy_captures_and_refuses_runnable_save(
             assert ambient[field] is None
     path = tmp_path / f"{scenario}.tlspec"
     with pytest.raises(RunnablePreflightError) as excinfo:
-        tl.save(trace, str(path), level="runnable")
+        trace.save(str(path), level="runnable")
     diagnostics = excinfo.value.fields["diagnostics"]
     codes = {diag.code for diag in diagnostics}
     assert RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE in codes
     assert not path.exists()
     # Analysis capture and an analysis save stay available.
-    tl.save(trace, str(tmp_path / f"{scenario}-analysis.tlspec"))
+    trace.save(str(tmp_path / f"{scenario}-analysis.tlspec"))
 
 
-@pytest.mark.smoke
 def test_legacy_set_policy_stays_representable_and_verified(tmp_path: Path) -> None:
     torch.backends.cudnn.allow_tf32 = False
     torch.set_float32_matmul_precision("high")
@@ -132,7 +131,7 @@ def test_legacy_set_policy_stays_representable_and_verified(tmp_path: Path) -> N
     trace = tl.trace(model, x, capture=_CAPTURE)
     assert tc.AMBIENT_FP32_UNREPRESENTABLE_KEY not in trace._runnable.capture_ambient
     path = tmp_path / "legacy.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
 
     report = tl.load(str(path)).run(inputs=x.clone(), seed=0).report
     assert report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -142,7 +141,7 @@ def test_legacy_set_policy_stays_representable_and_verified(tmp_path: Path) -> N
 def test_replay_restores_the_callers_exact_mixed_policy(tmp_path: Path) -> None:
     model, x = _model_and_input()
     path = tmp_path / "clean.tlspec"
-    tl.save(tl.trace(model, x, capture=_CAPTURE), str(path), level="runnable", include_weights=True)
+    tl.trace(model, x, capture=_CAPTURE).save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
 
     _set("cudnn.conv", "tf32")

@@ -48,13 +48,14 @@ from torchlens.attribution._core import (
     InputKwargs,
     _AttributionTarget,
     _call_model,
+    _Caller,
     _make_input_leaves,
     _normalize_model_inputs,
     _scalarize_output,
     _target_repr,
     _temporarily_eval,
 )
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 
 _RELU_NAMES = frozenset({"relu", "relu_"})
 
@@ -240,7 +241,7 @@ def _modified_backward_attribution(
     target: _AttributionTarget,
     sites: str,
     absolute: bool,
-) -> AttributionResult:
+) -> Attribution:
     """Shared engine for the two named modified-backward methods.
 
     Parameters
@@ -254,7 +255,8 @@ def _modified_backward_attribution(
     input_kwargs
         Optional keyword arguments for ``model``.
     target
-        Integer class index or callable ``output -> scalar tensor``.
+        Integer class index, callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output to attribute.
     sites
         ``"all"`` (every executed exact-ReLU op -- the op-level default) or
         ``"module"`` (only ``nn.ReLU``-dispatched firings -- the module-hook
@@ -282,7 +284,7 @@ def _modified_backward_attribution(
             "nn.ReLU-dispatched firings only.",
             code="guided_sites_invalid",
         )
-    prepared = _normalize_model_inputs(inputs, input_kwargs)
+    prepared = _normalize_model_inputs(inputs, input_kwargs, _Caller(rule_name, model, target))
     rule = _RULE_FUNCTIONS[rule_name]
     depth = [0]
     hook_handles: list[RemovableHandle] = []
@@ -336,7 +338,7 @@ def _modified_backward_attribution(
     values = tuple(gradient.abs() if absolute else gradient for gradient in gradients)
     from torchlens.attribution._core import _value_tree_from_leaves
 
-    return AttributionResult(
+    return Attribution(
         method=rule_name,
         values=_value_tree_from_leaves(prepared, values),
         target_repr=_target_repr(target),
@@ -419,13 +421,22 @@ def guided_backprop(
     target: _AttributionTarget,
     sites: str = "all",
     absolute: bool = False,
-) -> AttributionResult:
+) -> Attribution:
     """Guided backpropagation: positive gradients through exact-ReLU sites.
 
     Every executed exact-ReLU op is rewritten (module-dispatched, functional,
     in-place, and reused firings); the backward passes
     ``clamp(grad, min=0) * (input > 0)`` at each site. Results are SIGNED by
     default.
+
+    Read a guided map with care. Guided backpropagation and deconvolution
+    produce sharp, image-like maps that change little when the model's
+    upper-layer weights are randomized or the labels are scrambled (Adebayo
+    et al., 2018, "Sanity Checks for Saliency Maps"); Nie et al. (2018) show
+    both methods largely reconstruct the input. Much of what a map shows is
+    the input's own edges, not what the model uses. Before reading a map
+    as evidence about the model, run it again on a copy whose weights are
+    re-initialized and check that the map changes.
 
     Parameters
     ----------
@@ -436,7 +447,8 @@ def guided_backprop(
     input_kwargs
         Optional keyword arguments for ``model``.
     target
-        Integer class index or callable ``output -> scalar tensor``.
+        Integer class index, callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output to attribute.
     sites
         ``"all"`` (op-level coverage, default) or ``"module"``
         (``nn.ReLU``-dispatched firings only -- the module-hook coverage class
@@ -469,12 +481,15 @@ def deconvolution(
     target: _AttributionTarget,
     sites: str = "all",
     absolute: bool = False,
-) -> AttributionResult:
+) -> Attribution:
     """Deconvolution: positive gradients WITHOUT the forward-ReLU mask.
 
     Every executed exact-ReLU op is rewritten; the backward passes
     ``clamp(grad, min=0)`` at each site (no forward mask -- the defining
     difference from guided backpropagation). Results are SIGNED by default.
+    The same caution as :func:`guided_backprop` applies: deconvolution maps
+    largely reconstruct the input, so check that a map changes when the
+    model's weights are re-initialized before reading it as model evidence.
 
     Parameters
     ----------
@@ -485,7 +500,8 @@ def deconvolution(
     input_kwargs
         Optional keyword arguments for ``model``.
     target
-        Integer class index or callable ``output -> scalar tensor``.
+        Integer class index, callable ``output -> scalar tensor``, or a
+        :class:`SiteTarget` naming a hidden layer's output to attribute.
     sites
         ``"all"`` (op-level coverage, default) or ``"module"``
         (``nn.ReLU``-dispatched firings only).

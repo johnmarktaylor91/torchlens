@@ -112,6 +112,11 @@ def test_graph_change_error_names_live_state_mutation_and_isolation_hint() -> No
 
     model = _CounterBranch().eval()
     captured = tl.trace(model, torch.ones(2))
+    # A default capture is a pure observer (it restores ``calls``), so the live
+    # state changes the way it does in use: an ordinary forward between capture
+    # and run.
+    assert model.calls == 0
+    model(torch.ones(2))
 
     with pytest.raises(ValueError) as caught:
         captured.run(inputs=torch.ones(2))
@@ -133,11 +138,13 @@ def test_fast_live_run_handles_batchnorm_without_refresh_projection(training: bo
         warnings.simplefilter("ignore")
         result = captured.run(inputs=inputs, fast=True)
 
-    assert result.trace is captured
+    assert result.trace is not captured
     assert result.output.shape == (4, 3)
     assert result.report.path_faithfulness.value == "verified"
     selected = [
-        op for op in captured.layer_list if op.func_name == "batch_norm" and op.has_saved_activation
+        op
+        for op in result.trace._layer_list
+        if op.func_name == "batch_norm" and op.has_saved_activation
     ]
     assert selected
     assert torch.allclose(selected[-1].out, result.output)

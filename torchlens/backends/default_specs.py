@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator, Mapping
-from typing import Any, cast
+from collections.abc import Iterable, Iterator
+from typing import Any
 
 import torch
-from packaging.version import InvalidVersion, Version
 from torch import nn
 
+from ._default_specs_tf import (
+    _has_saved_model_signatures,
+    _is_keras_object,
+    _is_tf_concrete_function,
+    _tf_runtime_supported,
+)
 from ._protocol import CaptureBackend
 from .registry import (
     JAX_TRACE_OPTIONS,
@@ -434,100 +439,6 @@ def _tensor_backend_family(leaf: object) -> str | None:
     return None
 
 
-def _tf_runtime_supported(tf: object, keras: object) -> bool:
-    """Return whether installed TensorFlow/Keras versions are supported.
-
-    Parameters
-    ----------
-    tf:
-        Imported TensorFlow module.
-    keras:
-        Imported Keras module.
-
-    Returns
-    -------
-    bool
-        True for the Keras-3 multi-backend surface (TF >= 2.16 ships it).
-
-    Notes
-    -----
-    r-b4 R26-6b: feature-probed, not version-parsed. The historical
-    ``Version(...) >= 2.16 and >= 3`` gate returned ``False`` on
-    ``InvalidVersion``, so an odd/custom build string silently made
-    ``backend="tf"`` unavailable. ``keras.ops`` ships only in Keras 3 and the
-    multi-backend selector ``keras.backend.backend`` is the exact surface the
-    TF preview consumes; a parseable version pair is still honored as a
-    fallback signal when the structural probe is inconclusive.
-    """
-
-    if hasattr(keras, "ops") and callable(
-        getattr(getattr(keras, "backend", None), "backend", None)
-    ):
-        return True
-    try:
-        tf_version = Version(str(getattr(tf, "__version__", "0")))
-        keras_version = Version(str(getattr(keras, "__version__", "0")))
-    except InvalidVersion:
-        return False
-    return tf_version >= Version("2.16") and keras_version >= Version("3")
-
-
-def _is_keras_object(value: object) -> bool:
-    """Return whether ``value`` appears to come from standalone Keras.
-
-    Parameters
-    ----------
-    value:
-        Candidate object.
-
-    Returns
-    -------
-    bool
-        True when the type module is a Keras module.
-    """
-
-    return type(value).__module__.split(".", maxsplit=1)[0] == "keras"
-
-
-def _is_tf_concrete_function(value: object, tf: object) -> bool:
-    """Return whether ``value`` is a TensorFlow ``ConcreteFunction``.
-
-    Parameters
-    ----------
-    value:
-        Candidate object.
-    tf:
-        Imported ``tensorflow`` module.
-
-    Returns
-    -------
-    bool
-        True for TensorFlow concrete functions.
-    """
-
-    tf_runtime = cast(Any, tf)
-    concrete_function_type = getattr(tf_runtime.types.experimental, "ConcreteFunction", None)
-    return bool(concrete_function_type is not None and isinstance(value, concrete_function_type))
-
-
-def _has_saved_model_signatures(value: object) -> bool:
-    """Return whether ``value`` looks like a loaded SavedModel object.
-
-    Parameters
-    ----------
-    value:
-        Candidate object.
-
-    Returns
-    -------
-    bool
-        True when a non-empty ``signatures`` mapping is present.
-    """
-
-    signatures = getattr(value, "signatures", None)
-    return isinstance(signatures, Mapping) and bool(signatures)
-
-
 def _simple_leaves(
     value: object,
     _depth: int = 0,
@@ -616,7 +527,7 @@ def _torch_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from ..user_funcs import _trace_torch_model
+    from .._capture.prepare.door import _trace_torch_model
 
     return _trace_torch_model(*args, **kwargs)
 
@@ -631,7 +542,7 @@ def _torch_interventions_implementation() -> object:
         ``trace(intervene=...)`` sites.
     """
 
-    from .torch.ops import apply_live_hooks_to_outputs
+    from .torch._ops_emission import apply_live_hooks_to_outputs
 
     return apply_live_hooks_to_outputs
 
@@ -660,7 +571,7 @@ def _torch_fastlog_implementation() -> object:
         The ``Recorder`` class ``tl.record()`` actually runs.
     """
 
-    from ..fastlog._recorder import Recorder
+    from ..recording._recorder import Recorder
 
     return Recorder
 
@@ -689,7 +600,7 @@ def _torch_streaming_implementation() -> object:
         The disk storage backend behind ``storage=`` / ``streaming=`` saves.
     """
 
-    from ..fastlog.storage_disk import DiskStorageBackend
+    from ..recording.storage_disk import DiskStorageBackend
 
     return DiskStorageBackend
 
@@ -750,7 +661,7 @@ def _mlx_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from ..user_funcs import _trace_mlx_model_from_public_kwargs
+    from .._capture.prepare.dispatch import _trace_mlx_model_from_public_kwargs
 
     return _trace_mlx_model_from_public_kwargs(*args, **kwargs)
 
@@ -861,7 +772,7 @@ def _torch_validate_entry(*args: Any, **kwargs: Any) -> bool:
         Validation result.
     """
 
-    from ..user_funcs import _validate_forward_pass_torch
+    from .._user_funcs import _validate_forward_pass_torch
 
     return _validate_forward_pass_torch(*args, **kwargs)
 
@@ -1090,6 +1001,100 @@ def _tf_validate_trace(*args: Any, **kwargs: Any) -> Any:
     return TFBackend().validate_trace(*args, **kwargs)
 
 
+def _torch_protocol() -> Any:
+    """Build the torch ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.torch import protocol
+
+    return protocol()
+
+
+def _mlx_protocol() -> Any:
+    """Build the mlx ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.mlx import protocol
+
+    return protocol()
+
+
+def _jax_protocol() -> Any:
+    """Build the jax ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.jax import protocol
+
+    return protocol()
+
+
+def _tinygrad_protocol() -> Any:
+    """Build the tinygrad ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.tinygrad import protocol
+
+    return protocol()
+
+
+def _paddle_protocol() -> Any:
+    """Build the paddle ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.paddle import protocol
+
+    return protocol()
+
+
+def _tf_protocol() -> Any:
+    """Build the tf ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.tf import protocol
+
+    return protocol()
+
+
+def _torch_backend_spec() -> BackendSpec:
+    """Build the stable torch backend spec registered by default."""
+
+    return BackendSpec(
+        name="torch",
+        can_handle=_torch_can_handle,
+        capture_trace=_torch_capture_trace,
+        validate_entry=_torch_validate_entry,
+        validate_trace=_torch_validate_trace,
+        capabilities=BackendCapabilities(
+            backward_capture=True,
+            has_validation_replay=True,
+            fastlog=True,
+            can_intervene=True,
+            rng_replay=True,
+            payload_materialization=True,
+            has_streaming=True,
+            structure_only_capture=True,
+            intermediate_derived_grads=False,
+            input_container_structure="full_spec",
+            output_container_structure="full_spec",
+            module_identity_modes=("torch_module",),
+            save_levels=("audit", "executable_with_callables", "portable", "runnable"),
+            trace_options=TORCH_TRACE_OPTIONS,
+        ),
+        capture_backend=_torch_capture_backend,
+        capability_implementations={
+            "backward_capture": _torch_backward_capture_implementation,
+            "fastlog": _torch_fastlog_implementation,
+            "can_intervene": _torch_interventions_implementation,
+            "rng_replay": _torch_rng_replay_implementation,
+            "has_streaming": _torch_streaming_implementation,
+            "structure_only_capture": _torch_structure_only_implementation,
+        },
+        serialization_policy=SerializationPolicy(
+            payload_policy="full",
+            body_format="safetensors",
+            manifest_schema_versions=(1, 2),
+            runtime_name="torch",
+        ),
+        protocol=_torch_protocol,
+        maturity="stable",
+        priority=0,
+    )
+
+
 def register_default_backend_specs() -> None:
     """Register built-in backend specs.
 
@@ -1100,45 +1105,7 @@ def register_default_backend_specs() -> None:
     """
 
     register_backend_spec(
-        BackendSpec(
-            name="torch",
-            can_handle=_torch_can_handle,
-            capture_trace=_torch_capture_trace,
-            validate_entry=_torch_validate_entry,
-            validate_trace=_torch_validate_trace,
-            capabilities=BackendCapabilities(
-                backward_capture=True,
-                validation_replay=True,
-                fastlog=True,
-                interventions=True,
-                rng_replay=True,
-                payload_materialization=True,
-                streaming=True,
-                structure_only_capture=True,
-                intermediate_derived_grads=False,
-                input_container_structure="full_spec",
-                output_container_structure="full_spec",
-                module_identity_modes=("torch_module",),
-                save_levels=("audit", "executable_with_callables", "portable", "runnable"),
-                trace_options=TORCH_TRACE_OPTIONS,
-            ),
-            capture_backend=_torch_capture_backend,
-            capability_implementations={
-                "backward_capture": _torch_backward_capture_implementation,
-                "fastlog": _torch_fastlog_implementation,
-                "interventions": _torch_interventions_implementation,
-                "rng_replay": _torch_rng_replay_implementation,
-                "streaming": _torch_streaming_implementation,
-                "structure_only_capture": _torch_structure_only_implementation,
-            },
-            serialization_policy=SerializationPolicy(
-                payload_policy="full",
-                body_format="safetensors",
-                manifest_schema_versions=(1, 2),
-                runtime_name="torch",
-            ),
-            priority=0,
-        ),
+        _torch_backend_spec(),
         replace=True,
     )
     register_backend_spec(
@@ -1150,12 +1117,12 @@ def register_default_backend_specs() -> None:
             validate_trace=_mlx_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
-                interventions=True,
+                can_intervene=True,
                 rng_replay=False,
                 payload_materialization=True,
-                streaming=False,
+                has_streaming=False,
                 intermediate_derived_grads=True,
                 input_container_structure="none",
                 output_container_structure="none",
@@ -1163,7 +1130,7 @@ def register_default_backend_specs() -> None:
                 trace_options=MLX_TRACE_OPTIONS,
             ),
             capability_implementations={
-                "interventions": _mlx_interventions_implementation,
+                "can_intervene": _mlx_interventions_implementation,
             },
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
@@ -1171,6 +1138,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="mlx",
             ),
+            protocol=_mlx_protocol,
+            maturity="preview",
             priority=10,
         ),
         replace=True,
@@ -1184,12 +1153,12 @@ def register_default_backend_specs() -> None:
             validate_trace=_jax_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
-                interventions=False,
+                can_intervene=False,
                 rng_replay=False,
                 payload_materialization=True,
-                streaming=False,
+                has_streaming=False,
                 intermediate_derived_grads=True,
                 input_container_structure="paths_only",
                 output_container_structure="paths_only",
@@ -1202,6 +1171,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="jax",
             ),
+            protocol=_jax_protocol,
+            maturity="preview",
             priority=20,
         ),
         replace=True,
@@ -1215,12 +1186,12 @@ def register_default_backend_specs() -> None:
             validate_trace=_tinygrad_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
-                interventions=False,
+                can_intervene=False,
                 rng_replay=False,
                 payload_materialization=True,
-                streaming=False,
+                has_streaming=False,
                 intermediate_derived_grads=True,
                 input_container_structure="paths_only",
                 output_container_structure="paths_only",
@@ -1233,6 +1204,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="tinygrad",
             ),
+            protocol=_tinygrad_protocol,
+            maturity="preview",
             priority=30,
         ),
         replace=True,
@@ -1247,12 +1220,12 @@ def register_default_backend_specs() -> None:
             validate_trace=_paddle_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
-                interventions=True,
+                can_intervene=True,
                 rng_replay=False,
                 payload_materialization=True,
-                streaming=False,
+                has_streaming=False,
                 intermediate_derived_grads=True,
                 input_container_structure="paths_only",
                 output_container_structure="paths_only",
@@ -1260,7 +1233,7 @@ def register_default_backend_specs() -> None:
                 trace_options=PADDLE_TRACE_OPTIONS,
             ),
             capability_implementations={
-                "interventions": _paddle_interventions_implementation,
+                "can_intervene": _paddle_interventions_implementation,
             },
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
@@ -1268,6 +1241,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="paddle",
             ),
+            protocol=_paddle_protocol,
+            maturity="preview",
             priority=40,
             coercible=False,
         ),
@@ -1283,12 +1258,12 @@ def register_default_backend_specs() -> None:
             validate_trace=_tf_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
-                interventions=True,
+                can_intervene=True,
                 rng_replay=False,
                 payload_materialization=True,
-                streaming=False,
+                has_streaming=False,
                 intermediate_derived_grads=True,
                 input_container_structure="paths_only",
                 output_container_structure="paths_only",
@@ -1296,7 +1271,7 @@ def register_default_backend_specs() -> None:
                 trace_options=TF_TRACE_OPTIONS,
             ),
             capability_implementations={
-                "interventions": _tf_interventions_implementation,
+                "can_intervene": _tf_interventions_implementation,
             },
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
@@ -1304,6 +1279,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="tf",
             ),
+            protocol=_tf_protocol,
+            maturity="preview",
             priority=50,
             coercible=False,
         ),

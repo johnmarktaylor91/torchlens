@@ -6,7 +6,6 @@ import ast
 import importlib.util
 import linecache
 import re
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
@@ -85,14 +84,6 @@ def _skip_incompatible_optional_example(file_name: str, tool: str) -> None:
     tool:
         Tool key from the migration-test header.
     """
-    if file_name == "from_nnsight.md" and tool == "nnsight":
-        try:
-            installed = version("nnsight")
-        except PackageNotFoundError:
-            return
-        major, minor, *_ = installed.split(".")
-        if int(major) > 0 or int(minor) >= 7:
-            pytest.skip("nnsight>=0.7 changed LanguageModel trace input semantics")
     if file_name == "from_transformerlens.md" and tool == "transformer_lens":
         pytest.skip(
             "transformer_lens pretrained tiny-stories-1M cache values vary by installed weights/version"

@@ -1,10 +1,10 @@
 """F39 unhide gates: promoted surface pins + the unhide teaching ratchet.
 
 Lane F39 (WALKTHROUGH B-IV) promotes the shipped-but-hidden surfaces into the
-declared story: ``tl.stats``/``tl.aggregate`` enter ``__all__`` (conflict-ledger
+declared story: ``tl.stats``/``tl.stats.aggregate`` enter ``__all__`` (conflict-ledger
 row 8 -- the promotion five memos claimed), and README/docs surface
 ``trace.profile()``, ``emit_nvtx=True``, ``register_op_rule``,
-``fastlog.Recorder``, ``utils.list_modules``/``list_ops``, the
+``fastlog.Recorder``, ``torchlens.inventory.list_sites``, the
 verification-backed receptive-field story, and the already-interactive HTML
 export. These tests pin the promotion both directions (a rename or a quiet
 re-hide fails here, not in a launch review) and EXECUTE the new stats doc's
@@ -26,14 +26,13 @@ _REPO = Path(__file__).resolve().parents[1]
 
 
 def test_stats_and_aggregate_are_declared_surface() -> None:
-    """The five-memo promotion: both names in ``__all__`` and resolving."""
+    """The five-memo promotion: ``stats`` in ``__all__``; ``tl.stats.aggregate`` resolves."""
 
     assert "stats" in tl.__all__
-    assert "aggregate" in tl.__all__
     import torchlens.stats as stats_module
 
     assert tl.stats is stats_module
-    assert tl.aggregate is stats_module.aggregate
+    assert tl.stats.aggregate is stats_module.aggregate
 
 
 def test_stats_namespace_serves_the_advertised_accumulators() -> None:
@@ -51,7 +50,7 @@ def test_stats_namespace_serves_the_advertised_accumulators() -> None:
         "cka",
         "PCA",
         "Histogram",
-        "Spine",
+        "RunningStats",
         "Aggregator",
         "save_fitted",
         "load_fitted",
@@ -68,15 +67,15 @@ def test_readme_keeps_the_unhidden_surfaces_visible() -> None:
 
     readme = (_REPO / "README.md").read_text(encoding="utf-8")
     for claim in (
-        "tl.aggregate",
+        "tl.stats.aggregate",
         "tl.stats",
         ".profile(",
-        "honesty()",
+        "evidence_labels()",
         "emit_nvtx=True",
         "register_op_rule",
         "Recorder",
-        "list_modules",
-        "list_ops",
+        "torchlens.inventory",
+        "list_sites",
         "docs/reference/stats.md",
         "tl.export.html",
         "interactive",

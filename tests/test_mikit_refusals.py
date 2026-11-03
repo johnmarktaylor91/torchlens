@@ -171,7 +171,7 @@ def test_projection_unresolvable_refuses():
 def test_norm_reconstruction_refusals():
     """norm_eps_unavailable / norm_geometry_mismatch / norm_convention_unmatched."""
 
-    from torchlens.semantic._norm_reconstruction import (
+    from torchlens._semantic._norm_reconstruction import (
         NormReconstructionError,
         reconstruct_norm,
     )
@@ -223,9 +223,9 @@ def test_component_stack_records_smoke():
     values, labels = stack
     assert labels == ("w0", "w1", "w2") and values.shape == (3, 1, 2, 3)
     assert torch.equal(stack.sum(), target)
-    assert stack.top(1)[0][0] == "w2"
+    assert stack.topk(1)[0][0] == "w2"
     with pytest.raises(MechInterpError) as excinfo:
-        stack.top(1, by="max")
+        stack.topk(1, by="max")
     assert excinfo.value.fields["code"] == "mi_top_by_invalid"
 
 
@@ -235,5 +235,5 @@ def test_translation_table_rows_well_formed():
     rows = mi.translation_table()
     assert len(rows) >= 18
     for row in rows:
-        assert row["tlens"] and row["generation"] in ("2.x", "3.x-bridge")
+        assert row["tlens"] and row["generation"] in ("2.x", "3.x-bridge", "4.x")
         assert row["facet"]

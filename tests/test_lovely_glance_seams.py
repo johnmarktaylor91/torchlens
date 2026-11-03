@@ -13,14 +13,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.stats import (
-    degrade,
-    echo,
     glance,
-    render_core_line,
-    summary_cell,
+    narrate,
     tensor_stats,
-    treescope_card_fields,
 )
+from torchlens.stats._seams import summary_cell, treescope_card_fields
+from torchlens.stats._stats_render import degrade, render_core_line
 
 
 def test_glance_is_the_core_grammar() -> None:
@@ -63,7 +61,7 @@ def test_treescope_fields_carry_no_invented_numbers() -> None:
     stats = tensor_stats(torch.arange(1000, dtype=torch.float32))
     fields = treescope_card_fields(stats)
     assert fields["line_ascii"] == degrade(fields["line_unicode"])
-    assert fields["mean"] == stats.mean and fields["sd"] == stats.sd
+    assert fields["mean"] == stats.mean and fields["sd"] == stats.std
     assert fields["evidence"]["mean"] == "exact"
     if fields["sparkline_ascii"] is not None:
         assert fields["sparkline_ascii"] == degrade(fields["sparkline_unicode"])
@@ -86,21 +84,42 @@ def test_echo_mounts_and_stays_pure() -> None:
 
     x = torch.arange(16, dtype=torch.float32).reshape(2, 8)
     control = tl.trace(_EchoModel().eval(), x.clone())
-    control_ops = control.num_ops
+    control_ops = control._num_ops
     control.cleanup()
 
     sink_lines: list[str] = []
-    observer = echo(tl.func("relu"), sink=sink_lines.append)
+    observer = narrate(tl.func("relu"), sink=sink_lines.append)
     echoed = tl.trace(
         _EchoModel().eval(),
         x.clone(),
-        capture=tl.options.CaptureOptions(intervention_ready=True, hooks=observer),
+        capture=tl.options.CaptureOptions(replayable=True, hooks=observer),
     )
     assert observer.lines and sink_lines == observer.lines
     assert " -> " in observer.lines[0] and "mean=" in observer.lines[0]
     # Purity: the echo's own stats math never enters the captured graph.
-    assert echoed.num_ops == control_ops
+    assert echoed._num_ops == control_ops
     line = repr(observer)
     assert "EchoObserver(" in line and "lines echoed" in line
     assert "\n" not in line
     echoed.cleanup()
+
+
+def test_treescope_verdict_evidence_is_not_an_exact_census() -> None:
+    """The shared-record projection must preserve presence-only evidence."""
+
+    from dataclasses import replace
+
+    from torchlens.stats import FamilyEvidence
+
+    stats = replace(
+        tensor_stats(torch.arange(4.0)),
+        num_nan=None,
+        num_posinf=None,
+        num_neginf=None,
+        nonfinite_evidence=FamilyEvidence("verdict", 4, reason="track_nonfinite"),
+    )
+    fields = treescope_card_fields(stats)
+    assert fields["evidence"]["nonfinite"] == "verdict"
+    assert fields["nan_count"] is None and fields["posinf_count"] is None
+    assert fields["neginf_count"] is None
+    assert "nonfinite present" in fields["line_ascii"]

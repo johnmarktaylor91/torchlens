@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 import torch
 
-from ..utils._multipass_access import is_multipass_layer
+from .._utils._multipass_access import is_multipass_layer
 
 TensorShowMethod = Literal["auto", "heatmap", "channels", "rgb", "hist"]
 HeatmapSigns = Literal["positive", "negative", "absolute_value", "all"]

@@ -6,7 +6,7 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
-from ...ir.events import ModuleFrame
+from ..._ir.events import ModuleFrame
 from .._finalize import join_module_address as _join_module_address, nearest_metadata_parent
 
 

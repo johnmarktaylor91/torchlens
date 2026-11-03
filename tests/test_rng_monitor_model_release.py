@@ -23,11 +23,12 @@ import time
 
 import numpy as np
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils import rng as rng_utils
 from torchlens.options import CaptureOptions
-from torchlens.utils import rng as rng_utils
 
 _WAIT_SECONDS = 30.0
 
@@ -99,7 +100,7 @@ def _intervention_ready_trace(model: nn.Module) -> tl.Trace:
     return tl.trace(
         model,
         torch.ones(1, 3),
-        capture=CaptureOptions(intervention_ready=True, cache=False),
+        capture=CaptureOptions(replayable=True, cache=False),
     )
 
 
@@ -128,7 +129,7 @@ def test_in_window_started_thread_parked_after_capture_does_not_pin_the_model() 
     hold, outcome = threading.Event(), []
     model = _StartsParkedThread(hold, outcome)
     trace = _intervention_ready_trace(model)
-    helper = model.thread
+    helper = stashed(trace, "thread")
     assert helper is not None and helper.is_alive()
     del model
     try:

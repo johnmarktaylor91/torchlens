@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import pytest
 import torch
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.capture import projections
-from torchlens.capture.projections import (
+from torchlens._capture import projections
+from torchlens._capture.projections import (
     _LIVE_FIELD_GETTER_PAIRS,
     _LIVE_FIELD_GETTERS,
     _OPLOG_FIELDS_KNOWN_LATE,
@@ -25,7 +26,7 @@ from torchlens.capture.projections import (
     LiveOpView,
     LiveOpViewFieldNotYetWritten,
 )
-from torchlens.constants import OP_LOG_FIELD_ORDER
+from torchlens._constants import OP_LOG_FIELD_ORDER
 
 # The documented LiveOpView field surface: live getter-table keys plus the
 # known-late names. Any change here is a reviewed contract diff — declare a new
@@ -53,6 +54,7 @@ _DOCUMENTED_SURFACE = [
     "container_spec",
     "detach_saved_activations",
     "dtype",
+    "edits",
     "equivalence_class",
     "equivalent_ops",
     "final_out",
@@ -85,11 +87,10 @@ _DOCUMENTED_SURFACE = [
     "input_was_parameter",
     "internal_source_ancestors",
     "internal_source_parents",
-    "intervention_replaced",
-    "interventions",
     "io_role",
     "is_atomic_module",
     "is_buffer",
+    "is_edited",
     "is_final_output",
     "is_inplace",
     "is_input",
@@ -102,9 +103,7 @@ _DOCUMENTED_SURFACE = [
     "is_scalar_bool",
     "kwargs_template",
     "label",
-    "label_short",
     "layer_label",
-    "layer_label_short",
     "lookup_keys",
     "module",
     "module_call_stack",
@@ -131,13 +130,15 @@ _DOCUMENTED_SURFACE = [
     "parent_param_ops",
     "parent_params",
     "parents",
-    "pass_index",
+    "pass_number",
     "raw_index",
     "recurrent_ops",
     "root_ancestors",
     "saved_args",
     "saved_kwargs",
     "shape",
+    "short_label",
+    "short_layer_label",
     "source_trace",
     "step_index",
     "transformed_activation_memory",
@@ -221,7 +222,7 @@ def test_every_live_field_reads_mid_forward() -> None:
     """Functional smoke: all 111 live fields project on a real capture event."""
 
     model = _MidForwardReader()
-    tl.trace(model, torch.randn(2, 4))
-    assert set(model.read) == set(_LIVE_FIELD_GETTERS)
-    assert model.read["_tracing_finished"] is False
-    assert model.mutable_fresh is True
+    log = tl.trace(model, torch.randn(2, 4))
+    assert set(stashed(log, "read")) == set(_LIVE_FIELD_GETTERS)
+    assert stashed(log, "read")["_tracing_finished"] is False
+    assert stashed(log, "mutable_fresh") is True

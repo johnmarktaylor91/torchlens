@@ -15,10 +15,9 @@ from example_models import RandomGraphModel
 from torch import nn
 
 from torchlens import trace as trace_fn
-from torchlens.errors._base import TorchLensWarning
-from torchlens.user_funcs import validate_forward_pass
-from torchlens.visualization._rank_layout_internal import layout as rank_layout
-from torchlens.visualization._rank_layout_internal.layout import (
+from torchlens._user_funcs import validate_forward_pass
+from torchlens._visualization._rank_layout_internal import layout as rank_layout
+from torchlens._visualization._rank_layout_internal.layout import (
     RANK_LAYOUT_COST_THRESHOLD,
     SPAN_LOCAL,
     _choose_spline_mode,
@@ -28,6 +27,7 @@ from torchlens.visualization._rank_layout_internal.layout import (
     estimate_rank_layout_cost,
     get_node_placement_engine,
 )
+from torchlens.errors._base import TorchLensWarning
 
 # Session-private output root (conftest exports it before collection); the
 # repo-local fallback raced across parallel worktree lanes (b2p2 R77).
@@ -69,7 +69,7 @@ def _tolerate_op_count_disclosure() -> Iterator[None]:
 
     These tests deliberately build >=50k-op ``RandomGraphModel`` instances to
     exercise TorchLens at scale, so the capture-side op-count disclosure
-    (``torchlens/ir/capture_events.py``, fired once per journal at
+    (``torchlens/_ir/capture_events.py``, fired once per journal at
     ``OP_COUNT_DISCLOSURE_THRESHOLD``) is expected here, not a regression;
     the default ``error::UserWarning:torchlens`` filter would otherwise turn
     it into a test failure. ``tests/test_scaling_ladder.py`` owns the
@@ -90,7 +90,7 @@ def _count_nodes(model: nn.Module, x: torch.Tensor) -> int:
 
     with _tolerate_op_count_disclosure():
         trace = trace_fn(model, x)
-    count = len(trace.layer_list)
+    count = len(trace._layer_list)
     trace.cleanup()
     return count
 
@@ -100,7 +100,7 @@ def _draw_model(model: nn.Module, x: torch.Tensor, **kwargs: Any) -> str:
 
     trace = trace_fn(model, x)
     try:
-        return str(trace.draw(**kwargs))
+        return str(trace.draw(**kwargs).dot)
     finally:
         trace.cleanup()
 
@@ -439,10 +439,9 @@ class TestRankEngineRendering:
             source = _draw_model(
                 model,
                 torch.randn(2, 64),
-                vis_node_placement="auto",
-                vis_save_only=True,
-                vis_fileformat="svg",
-                vis_outpath=str(tmp_path / "auto_dot"),
+                layout="auto",
+                file_format="svg",
+                path=str(tmp_path / "auto_dot"),
             )
         assert "digraph" in source
         assert not any("auto-selected rank layout" in str(w.message) for w in caught)
@@ -473,10 +472,9 @@ class TestRankEngineRendering:
             source = _draw_model(
                 model,
                 torch.randn(2, 64),
-                vis_node_placement="auto",
-                vis_save_only=True,
-                vis_fileformat="svg",
-                vis_outpath=str(tmp_path / "auto_rank"),
+                layout="auto",
+                file_format="svg",
+                path=str(tmp_path / "auto_rank"),
             )
         assert calls == ["rank"]
         assert source == "digraph { rank_path }"
@@ -500,10 +498,9 @@ class TestRankEngineRendering:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 trace.draw(
-                    vis_node_placement="auto",
-                    vis_save_only=True,
-                    vis_fileformat="svg",
-                    vis_outpath=str(tmp_path / "rank_decision"),
+                    layout="auto",
+                    file_format="svg",
+                    path=str(tmp_path / "rank_decision"),
                 )
             decision = trace._last_sibling_ordering_decision
         finally:
@@ -532,10 +529,9 @@ class TestRankEngineRendering:
             source = _draw_model(
                 model,
                 torch.randn(2, 64),
-                vis_node_placement="dot",
-                vis_save_only=True,
-                vis_fileformat="svg",
-                vis_outpath=str(tmp_path / "manual_dot"),
+                layout="dot",
+                file_format="svg",
+                path=str(tmp_path / "manual_dot"),
             )
         assert "digraph" in source
 
@@ -561,10 +557,9 @@ class TestRankEngineRendering:
             source = _draw_model(
                 model,
                 torch.randn(2, 64),
-                vis_node_placement="rank",
-                vis_save_only=True,
-                vis_fileformat="svg",
-                vis_outpath=str(tmp_path / "manual_rank"),
+                layout="rank",
+                file_format="svg",
+                path=str(tmp_path / "manual_rank"),
             )
         assert calls == ["rank"]
         assert source == "digraph { manual_rank }"
@@ -579,10 +574,9 @@ class TestRankEngineRendering:
                 _draw_model(
                     model,
                     torch.randn(2, 64),
-                    vis_node_placement=removed,
-                    vis_save_only=True,
-                    vis_fileformat="svg",
-                    vis_outpath=str(tmp_path / f"removed_{removed}"),
+                    layout=removed,
+                    file_format="svg",
+                    path=str(tmp_path / f"removed_{removed}"),
                 )
 
     def test_rank_svg_contains_labels_and_module_boxes(self, tmp_path: Any) -> None:
@@ -593,10 +587,9 @@ class TestRankEngineRendering:
         source = _draw_model(
             model,
             torch.randn(2, 64),
-            vis_node_placement="rank",
-            vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(outpath),
+            layout="rank",
+            file_format="svg",
+            path=str(outpath),
         )
         svg = outpath.with_suffix(".svg").read_text(encoding="utf-8")
         assert "input" in svg
@@ -610,12 +603,11 @@ class TestRankEngineRendering:
         model = RandomGraphModel(target_nodes=80, seed=42)
         trace = trace_fn(model, torch.randn(2, 64))
         source = trace.draw(
-            vis_mode="unrolled",
-            vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / "placement_test"),
-            vis_node_placement="dot",
-        )
+            rolled=False,
+            file_format="svg",
+            path=str(tmp_path / "placement_test"),
+            layout="dot",
+        ).dot
         assert "digraph" in source
         trace.cleanup()
 
@@ -724,10 +716,9 @@ class TestDotThresholdBenchmark:
             start = time.time()
             try:
                 trace.draw(
-                    vis_mode="unrolled",
-                    vis_save_only=True,
-                    vis_outpath=str(tmp_path / f"bench_{target}"),
-                    vis_node_placement="dot",
+                    rolled=False,
+                    path=str(tmp_path / f"bench_{target}"),
+                    layout="dot",
                 )
                 elapsed = time.time() - start
                 print(f"  {target} target ({actual_nodes} actual): {elapsed:.1f}s")

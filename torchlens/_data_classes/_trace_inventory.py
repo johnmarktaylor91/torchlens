@@ -1,0 +1,246 @@
+"""Trace-level inventory builders: structural sites table and bill of materials.
+
+Both surfaces are read-only rollups of already-captured facts — they mint no
+new claims, and every number is derived from record fields the trace already
+carries. Spellings are DOCUMENTED-UNSTABLE pending the naming session.
+"""
+
+from __future__ import annotations
+
+from collections import OrderedDict
+from typing import TYPE_CHECKING, Any
+
+from .._errors import InvalidArgumentError
+from .._quantities import Bytes
+from ._site_key import parse_site_key
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    import pandas as pd
+
+    from .trace import Trace
+
+
+def _require_pandas() -> Any:
+    """Import pandas with the TorchLens tabular-extra error message.
+
+    Returns
+    -------
+    Any
+        Imported pandas module.
+    """
+
+    try:
+        import pandas as pd
+    except ImportError as e:
+        raise ImportError(
+            "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+        ) from e
+    return pd
+
+
+def build_sites_table(trace: Trace) -> pd.DataFrame:
+    """Build the tabular view of a trace's structural sites.
+
+    One row per distinct L1 ``site_key`` in first-occurrence execution order,
+    aggregating the ops that share the site (reused-module calls share keys
+    across instances by design).
+
+    Parameters
+    ----------
+    trace:
+        Completed trace.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns ``site_key``, ``module_site``, ``layer_type``,
+        ``output_slot``, ``call_ordinal``, ``n_ops``, ``labels``,
+        ``layer_labels``, ``passes``, and ``shapes``.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``site_key_unavailable`` when ops exist but none carries a site key
+        (legacy pre-site-key artifact) — consistent with the L1 accessors,
+        never a silently empty table.
+    """
+
+    pd = _require_pandas()
+    ops = list(trace._layer_list)
+    keyed = [(key, op) for op in ops if (key := getattr(op, "site_key", None)) is not None]
+    if ops and not keyed:
+        raise InvalidArgumentError(
+            "This trace's ops carry no site keys: it was captured/saved "
+            "before site_key_v1 existed, so a sites table would be "
+            "silently empty.",
+            code="site_key_unavailable",
+            remedy="re-capture with a current TorchLens to mint site keys",
+        )
+
+    sites: OrderedDict[str, dict[str, Any]] = OrderedDict()
+    for key, op in keyed:
+        entry = sites.get(key)
+        if entry is None:
+            module_site, layer_type, output_slot, call_ordinal = parse_site_key(key)
+            entry = sites[key] = {
+                "site_key": key,
+                "module_site": "/".join(module_site),
+                "layer_type": layer_type,
+                "output_slot": output_slot,
+                "call_ordinal": call_ordinal,
+                "n_ops": 0,
+                "labels": [],
+                "layer_labels": [],
+                "passes": [],
+                "shapes": [],
+            }
+        entry["n_ops"] += 1
+        entry["labels"].append(op.label)
+        layer_label = getattr(op, "layer_label", None)
+        if layer_label is not None and layer_label not in entry["layer_labels"]:
+            entry["layer_labels"].append(layer_label)
+        entry["passes"].append(getattr(op, "pass_number", 1))
+        shape = getattr(op, "shape", None)
+        if shape not in entry["shapes"]:
+            entry["shapes"].append(shape)
+
+    rows = []
+    for entry in sites.values():
+        rows.append(
+            {
+                **entry,
+                "labels": tuple(entry["labels"]),
+                "layer_labels": tuple(entry["layer_labels"]),
+                "passes": tuple(entry["passes"]),
+                "shapes": tuple(entry["shapes"]),
+            }
+        )
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "site_key",
+            "module_site",
+            "layer_type",
+            "output_slot",
+            "call_ordinal",
+            "n_ops",
+            "labels",
+            "layer_labels",
+            "passes",
+            "shapes",
+        ],
+    )
+
+
+def _capture_section(
+    trace: Trace, poison_facts: Mapping[str, Any], advisories: Any
+) -> dict[str, Any]:
+    """Return the ``capture`` section of the bill of materials."""
+
+    outcome = getattr(trace, "outcome", None)
+    return {
+        "backend": trace._provenance_backend,
+        "model_class_name": trace._source_class_name,
+        "outcome_status": getattr(getattr(outcome, "status", None), "value", None),
+        "capture_verified": trace._provenance_verified,
+        "structure_only": trace._options_structure_only,
+        "grouping": trace._options_grouping,
+        "save_mode": trace._options_save_mode,
+        "capture_duration": trace._provenance_duration,
+        **poison_facts,
+        "advisories": advisories,
+    }
+
+
+def build_bill_of_materials(
+    trace: Trace,
+    *,
+    core: Any,
+    poison_facts: Mapping[str, Any],
+    advisories: Any,
+) -> dict[str, Any]:
+    """Build the inventory of what one trace actually contains.
+
+    Every figure is read from fields the trace already carries; sections
+    report presence honestly (an empty backward section means no backward
+    facts were captured, not that none happened).
+
+    Parameters
+    ----------
+    trace:
+        Completed trace.
+    core:
+        The trace's FactCore (``report._factcore.factcore(trace)``).
+    poison_facts:
+        Capture-honesty poison facts for the ``capture`` section.
+    advisories:
+        Capture advisories for the ``capture`` section.
+
+    Returns
+    -------
+    dict[str, Any]
+        Nested sections: ``capture``, ``graph``, ``parameters``,
+        ``buffers``, ``activations``, ``backward``, and ``annotations``.
+    """
+
+    # BOM is a THIN PROJECTION of FactCore (sumfam item 14 / D16): its
+    # counts and parameter facts read the one numbers substrate; its
+    # payload figures keep the D8 retained_now scope. It mints nothing.
+    # ``core``, ``poison_facts`` and ``advisories`` arrive from the caller
+    # (``report._trace_facts``) so this L1 module imports nothing above itself.
+    memory_facts = core.memory
+
+    logged_values = (getattr(trace, "annotations", {}) or {}).get("logged_values", {})
+    return {
+        "capture": _capture_section(trace, poison_facts, advisories),
+        "graph": {
+            # The explicit counts vocabulary (sumfam D3): both grains print
+            # under their names, never a bare "operations".
+            "num_ops": core.counts.tracked_tensor_rows,
+            "num_compute_ops": core.counts.compute_ops,
+            "num_alias_rows": core.counts.alias_rows,
+            "num_layers": core.counts.layers,
+            "num_modules": core.counts.modules,
+            "num_module_calls": core.counts.module_calls,
+            "num_inputs": len(getattr(trace, "input_ops", ()) or ()),
+            "num_outputs": len(getattr(trace, "output_ops", ()) or ()),
+            "is_recurrent": getattr(getattr(trace, "graph", None), "is_recurrent", False),
+            "has_conditionals": getattr(getattr(trace, "graph", None), "has_conditionals", False),
+            "num_conditionals": len(trace._graph_conditionals),
+        },
+        "parameters": {
+            "num_params": core.params.total,
+            "num_params_trainable": core.params.trainable,
+            "num_params_frozen": core.params.frozen,
+            "tied_param_groups": core.params.tied_groups,
+            "num_param_tensors": len(getattr(trace, "params", {}) or {}),
+            "param_memory": trace._cost_total_param_memory,
+        },
+        "buffers": {
+            "num_buffer_tensors": len(getattr(trace, "buffers", {}) or {}),
+        },
+        # Payload-scope law (C02; sumfam D8): BOM answers "what does THIS
+        # object retain?", so its byte figures are retained_now -- the
+        # at_capture facts print beside them, never under the same name.
+        # (Before-pin: three surfaces claimed 64 MB of data an artifact did
+        # not contain.)
+        "activations": {
+            "payload_scope": "retained_now",
+            "num_saved_at_capture": memory_facts.captured_saved_ops,
+            "at_capture_memory": Bytes(memory_facts.captured_bytes),
+            "retained_now_memory": Bytes(memory_facts.retained_bytes),
+            "num_present_now": memory_facts.retained_present_ops,
+            "num_lazy_now": memory_facts.retained_lazy_ops,
+            "total_activation_memory": trace._cost_total_activation_memory,
+        },
+        "backward": {
+            "num_grad_fn_records": len(trace._grad_fn_logs or {}),
+            "num_backward_passes": len(trace._backward_pass_logs or {}),
+        },
+        "annotations": tuple(sorted(getattr(trace, "annotations", {}) or {})),
+        # log_value read-back (sumfam D20): logged values are inventory, not
+        # just an opaque annotations key name.
+        "logged_values": dict(logged_values) if isinstance(logged_values, dict) else {},
+    }

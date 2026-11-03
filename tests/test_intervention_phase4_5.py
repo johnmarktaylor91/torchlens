@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import pytest
 import torch
+from _forward_stash import stashed
 from example_models import TinyReluAdd as _TinyShiftModel
 
 import torchlens as tl
 from torchlens import _state
 from torchlens._trace_state import TraceState
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
 
@@ -39,7 +41,7 @@ class _TinyReluModel(torch.nn.Module):
         return self.latest
 
 
-def _bad_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+def _bad_hook(out: torch.Tensor, *, ctx: tl.HookContext) -> torch.Tensor:
     """Raise from a live hook.
 
     Parameters
@@ -68,28 +70,28 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
 
     log = tl.trace(_TinyShiftModel(), torch.randn(2, 3))
 
-    assert log.intervention_ready is False
+    assert log.is_replayable is False
     assert log.state is TraceState.PRISTINE
-    assert log.num_ops == 2
-    assert log.layer_list
-    assert log.layer_dict_main_keys
-    assert log.layer_dict_all_keys
+    assert log._num_ops == 2
+    assert log._layer_list
+    assert log._layer_dict_main_keys
+    assert log._layer_dict_all_keys
     assert log.layer_labels
     assert log.layer_labels
     assert log.op_labels
-    assert log.layer_num_calls
+    assert log._layer_num_calls
     assert log.input_layers == ["input_1"]
     assert log.output_layers == ["output_1"]
     assert log.saved_ops
-    assert all(layer.out is not None for layer in log.layer_list)
-    assert all(layer.args_template is None for layer in log.layer_list)
-    assert all(layer.kwargs_template is None for layer in log.layer_list)
-    edge_layers = [layer for layer in log.layer_list if layer._edge_uses]
+    assert all(layer.out is not None for layer in log._layer_list)
+    assert all(layer.args_template is None for layer in log._layer_list)
+    assert all(layer.kwargs_template is None for layer in log._layer_list)
+    edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:
         assert {edge.parent_label for edge in layer._edge_uses} == set(layer.parents)
         assert {edge.edge_use for edge in layer._edge_uses} <= {"arg", "kwarg"}
-    assert all(layer.container_path == () for layer in log.layer_list)
+    assert all(layer.container_path == () for layer in log._layer_list)
 
 
 def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
@@ -102,17 +104,17 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     baseline_log = tl.trace(
         baseline_model,
         x,
-        capture=CaptureOptions(intervention_ready=False),
+        capture=CaptureOptions(replayable=False),
     )
     ready_log = tl.trace(
         ready_model,
         x,
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
-    assert baseline_model.latest is not None
-    assert ready_model.latest is not None
-    assert torch.equal(ready_model.latest, baseline_model.latest)
+    assert stashed(baseline_log, "latest") is not None
+    assert stashed(ready_log, "latest") is not None
+    assert torch.equal(stashed(ready_log, "latest"), stashed(baseline_log, "latest"))
     assert torch.equal(
         ready_log[ready_log.output_layers[0]].out,
         baseline_log[baseline_log.output_layers[0]].out,
@@ -124,15 +126,16 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
 
     model = _TinyReluModel()
 
-    with pytest.raises(ValueError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
         tl.trace(
             model,
             torch.randn(2, 3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.func("relu"): _bad_hook},
             ),
         )
+    assert isinstance(_tce_info.value.__cause__, ValueError)
 
     assert _state._logging_enabled is False
     assert _state._active_trace is None
@@ -140,22 +143,23 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
 
     followup_log = tl.trace(model, torch.randn(2, 3))
 
-    assert followup_log.intervention_ready is False
+    assert followup_log.is_replayable is False
     assert followup_log.state is TraceState.PRISTINE
-    assert followup_log.layer_list
+    assert followup_log._layer_list
 
 
 def test_live_hook_exception_resets_reentrancy_depth() -> None:
     """Hook-raised exceptions reset the hook reentrancy guard."""
 
-    with pytest.raises(ValueError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info2:
         tl.trace(
             _TinyReluModel(),
             torch.randn(2, 3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.func("relu"): _bad_hook},
             ),
         )
+    assert isinstance(_tce_info2.value.__cause__, ValueError)
 
     assert _state._hook_reentrancy_depth == 0

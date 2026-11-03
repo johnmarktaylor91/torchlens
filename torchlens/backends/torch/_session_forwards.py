@@ -15,16 +15,19 @@ import copy
 import functools
 import inspect
 import operator
+import sys
 from collections.abc import Callable
 from types import MethodType
 from typing import TYPE_CHECKING, Any
 
 from torch import nn
 
-from ._tl import is_forward_call_decorated, mark_forward_call_decorated
+from ... import _state
+from ..._utils._module_call_dispatch import forward_entered_through_module_call
+from ._tl import get_module_meta, is_forward_call_decorated, mark_forward_call_decorated
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 def restore_undecorated_forward(module: nn.Module) -> None:
@@ -135,6 +138,8 @@ class _SessionForward:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run the module forward through the session wrapper."""
 
+        if _state._logging_enabled:
+            _note_direct_forward_call(self._module, sys._getframe(1))
         return self._delegate(*args, **kwargs)
 
     def __copy__(self) -> _SessionForward:
@@ -173,6 +178,25 @@ class _SessionForward:
         return (operator.getitem, ((self._prior,), 0))
 
 
+def _note_direct_forward_call(module: nn.Module, caller: Any) -> None:
+    """Mark ``module`` when the active capture reached it by ``module.forward(x)``.
+
+    Such a call skips ``Module.__call__`` and so every torch hook; the capture
+    still records it (its ``forward`` is decorated), and the mark on the
+    module's metadata tells the fast live run which modules to route around
+    its hooks. The mark is kept across captures: routing a module the model
+    calls through ``__call__`` costs nothing, since the route passes such a
+    call straight through.
+    """
+
+    trace = _state._active_trace
+    if trace is None or forward_entered_through_module_call(caller):
+        return
+    meta = get_module_meta(module)
+    if meta is not None and id(module) in trace._module_capture_ws.mod_call_index:
+        meta.direct_forward_called = True
+
+
 def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
     """Wrap every non-root submodule's ``forward`` for one capture session.
 
@@ -202,8 +226,10 @@ def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
         Submodule ``forward`` attributes are replaced in place.
     """
 
+    from ..._utils._call_site import register_module_boundary_wrapper
     from .model_prep import module_forward_decorator
 
+    register_module_boundary_wrapper(module_forward_decorator, "decorated_forward")
     installed = trace._module_capture_ws.session_forward_wrappers
     for module in model.modules():
         if module is model:

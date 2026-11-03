@@ -15,8 +15,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.utils._torch_compat import get_cpu_half_kernels_support
-from torchlens.utils.tensor_utils import (
+from torchlens._utils._torch_compat import get_cpu_half_kernels_support
+from torchlens._utils.tensor_utils import (
     LAYER_GRAD_VALIDATION_ATOL,
     LAYER_GRAD_VALIDATION_RTOL,
     PARAM_GRAD_VALIDATION_ATOL,
@@ -182,7 +182,7 @@ def test_fp64_param_grad_corruption_fails_the_backward_verdict(
     assert not backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float64),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
         validate_layer_grads=False,
     )
@@ -197,7 +197,7 @@ def test_fp64_param_grad_clean_run_still_passes() -> None:
     assert backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float64),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
         validate_layer_grads=False,
     )
@@ -222,7 +222,7 @@ def test_fp16_few_ulp_param_grad_agreement_is_not_a_false_fail(
     assert backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float16),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
         validate_layer_grads=False,
     )
@@ -242,7 +242,7 @@ def test_explicit_tolerances_still_override_every_dtype(
     assert backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float64),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
         validate_layer_grads=False,
         atol=PARAM_GRAD_VALIDATION_ATOL,
@@ -267,10 +267,11 @@ def test_fp64_layer_grad_corruption_fails_the_backward_verdict(
     real_stock_layer_grads = stock_module._stock_layer_grads
 
     def _perturbed(*args: object, **kwargs: object) -> object:
-        stock_grads, identity_addresses = real_stock_layer_grads(*args, **kwargs)
+        stock_grads, identity_addresses, reached_keys = real_stock_layer_grads(*args, **kwargs)
         return (
             {key: grad * (1.0 + 1e-6) for key, grad in stock_grads.items()},
             identity_addresses,
+            reached_keys,
         )
 
     monkeypatch.setattr(stock_module, "_stock_layer_grads", _perturbed)
@@ -278,7 +279,7 @@ def test_fp64_layer_grad_corruption_fails_the_backward_verdict(
     assert not backward_validation.validate_backward_pass(
         model,
         torch.randn(2, 4, dtype=torch.float64),
-        random_seed=11,
+        seed=11,
         validate_metadata=False,
     )
 
@@ -326,8 +327,8 @@ def test_fp64_corruption_fails_through_every_legacy_spelling(
     import warnings
 
     import torchlens
+    import torchlens._user_funcs as user_funcs
     import torchlens._user_public_impls as user_public_impls
-    import torchlens.user_funcs as user_funcs
 
     fns = {
         "top_level": torchlens.validation.validate_backward_pass,
@@ -341,7 +342,7 @@ def test_fp64_corruption_fails_through_every_legacy_spelling(
         passed = fns[spelling](
             model,
             torch.randn(2, 4, dtype=torch.float64),
-            random_seed=11,
+            seed=11,
             validate_metadata=False,
             validate_layer_grads=False,
         )

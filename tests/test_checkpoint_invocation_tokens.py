@@ -22,9 +22,8 @@ from torch.utils.checkpoint import checkpoint
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._ir.events import CheckpointInvocationObserved
 from torchlens.backends.torch import backward as backward_mod
-from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
-from torchlens.ir.events import CheckpointInvocationObserved
 
 
 class _OneCheckpoint(nn.Module):
@@ -60,8 +59,7 @@ def _captured(model: nn.Module, x: torch.Tensor, *, backward: bool = True) -> tl
     trace = tl.trace(
         model,
         x,
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     if backward:
         trace.log_backward(trace.output_ops[0].out.sum())
@@ -111,14 +109,14 @@ def test_forward_only_capture_has_token_with_zero_unpack_evidence() -> None:
 @pytest.mark.smoke
 def test_backward_derived_site_candidates_resolve_under_armed_brackets() -> None:
     torch.manual_seed(0)
-    with _activate_aten_recording_for_tests():
-        trace = tl.trace(
-            _OneCheckpoint(),
-            torch.randn(3, 4),
-            save_mode="reference",
-            capture=tl.options.CaptureOptions(backward_ready=True),
-        )
-        trace.log_backward(trace.output_ops[0].out.sum())
+    trace = tl.trace(
+        _OneCheckpoint(),
+        torch.randn(3, 4),
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, save_mode="reference", aten_ops=True
+        ),
+    )
+    trace.log_backward(trace.output_ops[0].out.sum())
     witness = trace.checkpoint_invocation_witness
     (record,) = witness["tokens"].values()
     # Unpack evidence inside witnessed fire brackets resolves through the
@@ -198,8 +196,7 @@ def test_unwitnessed_enter_sets_d6_instead_of_staying_silent() -> None:
         trace = tl.trace(
             _PausedCheckpoint(),
             torch.randn(3, 4),
-            save_mode="reference",
-            capture=tl.options.CaptureOptions(backward_ready=True),
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
     trace.log_backward(trace.output_ops[0].out.sum())
     witness = trace.checkpoint_invocation_witness
@@ -228,7 +225,7 @@ def test_unmatched_backward_warn_sets_d4_and_warn_once_preserved() -> None:
     foreign = torch.randn(3, requires_grad=True)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with trace.recording_backward():
+        with trace.capture_backward():
             (foreign * 2).sum().backward()
     unmatched = [w for w in caught if "did not" in str(w.message)]
     assert len(unmatched) == 1
@@ -362,7 +359,7 @@ def test_witness_rides_ordinary_save_at_v8(tmp_path) -> None:
     trace = _captured(_OneCheckpoint(), torch.randn(3, 4))
     assert trace.checkpoint_invocation_witness["token_count"] == 1
     path = tmp_path / "ckpt_plain.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.checkpoint_invocation_witness is not None
     assert loaded.checkpoint_invocation_witness["token_count"] == 1

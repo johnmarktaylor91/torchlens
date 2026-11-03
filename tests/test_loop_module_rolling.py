@@ -11,8 +11,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.visualization._render_nodes import compute_default_node_lines
+from torchlens._utils import _call_site
+from torchlens._visualization._render_nodes import compute_default_node_lines
 
 # Session-private output root (conftest exports it before collection); the
 # repo-local fallback raced across parallel worktree lanes (b2p2 R77).
@@ -319,7 +319,7 @@ class TwoDistinctLoops(nn.Module):
 
 
 class BufferRewriteLoops(nn.Module):
-    """Buffer rewritten across repeated loop bodies."""
+    """Buffer read and rewritten on every pass of one loop body."""
 
     def __init__(self) -> None:
         """Initialize the state buffer."""
@@ -328,13 +328,14 @@ class BufferRewriteLoops(nn.Module):
         self.register_buffer("state", torch.zeros(4))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Read and rewrite the buffer across two loops."""
+        """Read and rewrite the buffer five times from one loop body.
+
+        One loop, so the read and the rewrite are each one layer with five passes
+        (two loops would be two places in the code, so two layers each).
+        """
 
         y = x
-        for _ in range(2):
-            y = y + self.state
-            self.state = self.state + 1
-        for _ in range(3):
+        for _ in range(5):
             y = y + self.state
             self.state = self.state + 1
         return y
@@ -572,13 +573,13 @@ def _trace(model: nn.Module) -> tl.Trace:
     """Trace a demo model deterministically."""
 
     torch.manual_seed(0)
-    return tl.trace(model, torch.randn(1, 4), capture=CaptureOptions(layers_to_save="none"))
+    return tl.trace(model, torch.randn(1, 4), save="none")
 
 
 def _first_layer(trace: tl.Trace, layer_type: str) -> tl.Layer:
     """Return the first rendered layer of a given type."""
 
-    for layer in trace.layer_logs.values():
+    for layer in trace._layer_logs.values():
         if layer.layer_type == layer_type:
             return layer
     raise AssertionError(f"No layer of type {layer_type!r}.")
@@ -608,12 +609,11 @@ def _render_source(
     """Render a graph format and return the emitted Graphviz source."""
 
     return trace.draw(
-        vis_mode="rolled",
-        vis_save_only=True,
-        vis_fileformat=file_format,
-        vis_outpath=str(tmp_path / name),
+        rolled=True,
+        file_format=file_format,
+        path=str(tmp_path / name),
         **kwargs,
-    )
+    ).dot
 
 
 def _dot_self_edge_attrs(dot: str) -> list[str]:
@@ -676,8 +676,8 @@ def test_reused_single_op_module_count_is_depth_invariant(tmp_path: Path) -> Non
     trace = _trace(ReusedReluLoop())
     assert _normalized_title(trace, "relu", "relu") == "relu (x4)"
 
-    shallow_dot = _render_dot(trace, tmp_path, "relu_shallow", vis_call_depth=1)
-    deep_dot = _render_dot(trace, tmp_path, "relu_deep", vis_call_depth=1000)
+    shallow_dot = _render_dot(trace, tmp_path, "relu_shallow", depth=1)
+    deep_dot = _render_dot(trace, tmp_path, "relu_deep", depth=1000)
 
     assert "relu_1_1 (x4)" in shallow_dot
     assert "relu_1_1 (x4)" in deep_dot
@@ -690,7 +690,7 @@ def test_multi_op_loop_body_keeps_plain_counts(tmp_path: Path) -> None:
     assert _normalized_title(trace, "linear", "lin") == "lin (x3)"
     assert _normalized_title(trace, "relu", "relu") == "relu (x3)"
 
-    dot = _render_dot(trace, tmp_path, "multiop_loop", vis_call_depth=1000)
+    dot = _render_dot(trace, tmp_path, "multiop_loop", depth=1000)
     assert "sites" not in dot
     assert "×" not in dot
     assert 'label="↻"' not in dot
@@ -701,7 +701,7 @@ def test_colon_call_ranges_disambiguate_split_regions(tmp_path: Path) -> None:
 
     distinct_trace = _trace(TwoDistinctLoops())
     assert _normalized_title(distinct_trace, "linear", "lin") == "lin:1-2,3-5"
-    distinct_dot = _render_dot(distinct_trace, tmp_path, "two_loops", vis_call_depth=1)
+    distinct_dot = _render_dot(distinct_trace, tmp_path, "two_loops", depth=1)
     assert "@shared:1-2,3-5" in distinct_dot
     assert "calls" not in distinct_dot
 
@@ -720,7 +720,7 @@ def test_inside_outside_relu_continuous_chain_is_one_atomic_rectangle(tmp_path: 
     trace = _trace(InsideOutsideRelu())
     assert _normalized_title(trace, "relu", "relu") == "relu (x5)"
 
-    dot = _render_dot(trace, tmp_path, "inside_outside_relu", vis_call_depth=1)
+    dot = _render_dot(trace, tmp_path, "inside_outside_relu", depth=1)
     assert "relu_1_1 (x5)" in dot
     # Atomic single-op module is marked as a module and rendered as a rectangle.
     assert "@relu" in dot
@@ -729,7 +729,9 @@ def test_inside_outside_relu_continuous_chain_is_one_atomic_rectangle(tmp_path: 
     assert "@relu:" not in dot
 
 
-def test_separable_atomic_module_marks_distinct_calls(tmp_path: Path) -> None:
+def test_separable_atomic_module_marks_distinct_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An atomic module reused at separable outside+inside sites labels its calls.
 
     Unlike the continuous chain, ``InsideOutsideReluSeparable`` uses the relu at an
@@ -739,9 +741,13 @@ def test_separable_atomic_module_marks_distinct_calls(tmp_path: Path) -> None:
     already maximally collapsed.
     """
 
+    # Separable calls of one module instance are distinct layers only under pure
+    # call-site grouping; with MODULE_CALL_IS_PASS (the default) the reused relu
+    # is one 4-pass layer, the case test_grouping_call_sites row 28 pins.
+    monkeypatch.setattr(_call_site, "MODULE_CALL_IS_PASS", False)
     trace = _trace(InsideOutsideReluSeparable())
-    shallow_dot = _render_dot(trace, tmp_path, "relu_sep_shallow", vis_call_depth=1)
-    deep_dot = _render_dot(trace, tmp_path, "relu_sep_deep", vis_call_depth=1000)
+    shallow_dot = _render_dot(trace, tmp_path, "relu_sep_shallow", depth=1)
+    deep_dot = _render_dot(trace, tmp_path, "relu_sep_deep", depth=1000)
 
     for dot in (shallow_dot, deep_dot):
         shapes = _dot_node_shapes(dot)
@@ -759,10 +765,8 @@ def test_inside_outside_block_module_uses_plain_count(tmp_path: Path) -> None:
     """A collapsed multi-op block used outside and inside one loop shows plain counts."""
 
     trace = _trace(InsideOutsideBlock())
-    expanded_dot = _render_dot(
-        trace, tmp_path, "inside_outside_block_expanded", vis_call_depth=1000
-    )
-    collapsed_dot = _render_dot(trace, tmp_path, "inside_outside_block_collapsed", vis_call_depth=1)
+    expanded_dot = _render_dot(trace, tmp_path, "inside_outside_block_expanded", depth=1000)
+    collapsed_dot = _render_dot(trace, tmp_path, "inside_outside_block_collapsed", depth=1)
 
     assert "linear_1_1 (x5)" in expanded_dot
     assert "relu_1_2 (x5)" in expanded_dot
@@ -774,8 +778,8 @@ def test_clean_reused_block_keeps_plain_counts(tmp_path: Path) -> None:
     """A reused multi-op block in one loop keeps plain module and op counts."""
 
     trace = _trace(CollapsedBlockRecurrence())
-    expanded_dot = _render_dot(trace, tmp_path, "block_expanded", vis_call_depth=1000)
-    collapsed_dot = _render_dot(trace, tmp_path, "block_collapsed", vis_call_depth=1)
+    expanded_dot = _render_dot(trace, tmp_path, "block_expanded", depth=1000)
+    collapsed_dot = _render_dot(trace, tmp_path, "block_collapsed", depth=1)
 
     assert "linear_1_1 (x3)" in expanded_dot
     assert "relu_1_2 (x3)" in expanded_dot
@@ -788,7 +792,7 @@ def test_buffer_versions_use_colon_ranges(tmp_path: Path) -> None:
     """Rolled buffer nodes use the module-address colon range form."""
 
     trace = _trace(BufferRewriteLoops())
-    dot = _render_dot(trace, tmp_path, "buffers", show_buffer_layers="always")
+    dot = _render_dot(trace, tmp_path, "buffers", show_buffers="always")
     assert "@state:1-6" in dot
     assert "@state v1-6" not in dot
     assert "buffer_versions" not in dot
@@ -805,7 +809,7 @@ def test_recurrent_self_loop_combines_in_out_into_one_midpoint_label(tmp_path: P
     """
 
     recurrent_trace = _trace(ReusedReluLoop())
-    recurrent_dot = _render_dot(recurrent_trace, tmp_path, "relu_self_edge", vis_call_depth=1000)
+    recurrent_dot = _render_dot(recurrent_trace, tmp_path, "relu_self_edge", depth=1000)
     recurrent_self_edges = _dot_self_edge_attrs(recurrent_dot)
     assert len(recurrent_self_edges) == 1
     recurrent_attrs = recurrent_self_edges[0]
@@ -817,7 +821,7 @@ def test_recurrent_self_loop_combines_in_out_into_one_midpoint_label(tmp_path: P
     assert "↻" not in recurrent_attrs
 
     fanout_trace = _trace(ParallelFanout())
-    fanout_dot = _render_dot(fanout_trace, tmp_path, "parallel_fanout", vis_call_depth=1000)
+    fanout_dot = _render_dot(fanout_trace, tmp_path, "parallel_fanout", depth=1000)
     assert _dot_self_edge_attrs(fanout_dot) == []
 
 
@@ -825,9 +829,7 @@ def test_self_loop_label_order_flips_with_layout_direction(tmp_path: Path) -> No
     """The self-loop's In/Out order follows flow: In above Out only bottom-up."""
 
     trace = _trace(ReusedReluLoop())
-    topdown_dot = _render_dot(
-        trace, tmp_path, "relu_topdown", vis_call_depth=1000, direction="topdown"
-    )
+    topdown_dot = _render_dot(trace, tmp_path, "relu_topdown", depth=1000, direction="topdown")
     self_edges = _dot_self_edge_attrs(topdown_dot)
     assert len(self_edges) == 1
     # Top-down flow points down, so Out (tail) is placed above In (head).
@@ -842,11 +844,11 @@ def test_recurrence_back_edge_merges_in_out_into_one_midpoint_label(tmp_path: Pa
     the same two nodes; four head/tail labels would fight for that narrow band,
     so the back-edge's annotations merge into one midpoint ``label`` (graphviz
     reserves dummy-node space for it, pushing the anti-parallel curves apart).
-    The forward edge keeps its separate head/tail labels: a forward edge may
-    also carry argument or conditional midpoint labels.
+    Under forks.11 FK5 (midpoint-compose the rolled channel) the forward edge,
+    which carries no argument or conditional label, composes the same way.
     """
 
-    dot = _render_dot(_trace(TanhRNNCellLoop()), tmp_path, "rnn_back_edge", vis_call_depth=1000)
+    dot = _render_dot(_trace(TanhRNNCellLoop()), tmp_path, "rnn_back_edge", depth=1000)
 
     back_edges = _dot_edge_attrs(dot, "tanh_1_2", "linear_1_1")
     assert len(back_edges) == 1
@@ -858,9 +860,9 @@ def test_recurrence_back_edge_merges_in_out_into_one_midpoint_label(tmp_path: Pa
     forward_edges = _dot_edge_attrs(dot, "linear_1_1", "tanh_1_2")
     assert len(forward_edges) == 1
     forward_attrs = forward_edges[0]
-    assert _html_label_lines(forward_attrs, "headlabel") == ["In 1-4"]
-    assert _html_label_lines(forward_attrs, "taillabel") == ["Out 1-4"]
-    assert _html_label_lines(forward_attrs, "label") is None
+    assert "headlabel" not in forward_attrs
+    assert "taillabel" not in forward_attrs
+    assert _html_label_lines(forward_attrs, "label") == ["In 1-4", "Out 1-4"]
 
 
 def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> None:
@@ -874,9 +876,7 @@ def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> 
     instead of a head/tail label.
     """
 
-    dot = _render_dot(
-        _trace(BufferRewriteLoops()), tmp_path, "buffer_edges", show_buffer_layers="always"
-    )
+    dot = _render_dot(_trace(BufferRewriteLoops()), tmp_path, "buffer_edges", show_buffers="always")
 
     read_edges = _dot_edge_attrs(dot, "buffer_1", "add_1_1")
     assert len(read_edges) == 1
@@ -895,40 +895,36 @@ def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> 
         assert "taillabel" not in attrs
 
 
-def test_varying_forward_edges_keep_html_head_tail_labels(tmp_path: Path) -> None:
-    """Forward edges that vary across passes keep HTML head/tail In/Out labels.
+def test_varying_forward_edges_compose_midpoint_labels(tmp_path: Path) -> None:
+    """Forward edges that vary across passes compose In/Out into midpoint labels.
 
-    ``DeepLoopBody`` is a three-op cycle: its body edges stay forward edges with
-    separate head/tail labels, emitted as borderless one-cell HTML tables so the
-    text keeps an even transparent margin from the node and arrowhead (graphviz
-    allocates no layout space for plain head/tail labels). Body edges of a
-    >=3-op cycle bow near the merged back-edge midpoint label, so they carry
-    audit-derived per-edge ``labeldistance``/``labelangle`` placement attrs;
-    straight edges (e.g. the input edge) keep graphviz's default placement.
+    ``DeepLoopBody`` is a three-op cycle. forks.11 FK5 (lean B, decided on the
+    post-sink-fix GPT-2 numbers) composes every vouched rolled annotation into
+    one midpoint ``label``, which Graphviz reserves layout space for: the body
+    edges that used to need tuned ``labeldistance``/``labelangle`` endpoint
+    placement now carry one-line midpoint labels, and no edge carries
+    placement attrs.
     """
 
-    dot = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_forward", vis_call_depth=1000)
+    dot = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_forward", depth=1000)
 
     body_out = _dot_edge_attrs(dot, "linear_1_1", "relu_1_2")
     assert len(body_out) == 1
-    assert _html_label_lines(body_out[0], "taillabel") == ["Out 1-3"]
+    assert _html_label_lines(body_out[0], "label") == ["Out 1-3"]
 
     body_in = _dot_edge_attrs(dot, "relu_1_2", "layernorm_1_3")
     assert len(body_in) == 1
-    assert _html_label_lines(body_in[0], "headlabel") == ["In 1-3"]
+    assert _html_label_lines(body_in[0], "label") == ["In 1-3"]
 
-    # Cycle body edges carry tuned tangent-relative placement (values are
-    # tunable constants -- assert presence, not numbers).
-    for attrs in (body_out[0], body_in[0]):
-        assert "labeldistance=" in attrs
-        assert "labelangle=" in attrs
-
-    # The straight input edge keeps default placement and its head label.
     input_edge = _dot_edge_attrs(dot, "input_1", "linear_1_1")
     assert len(input_edge) == 1
-    assert _html_label_lines(input_edge[0], "headlabel") == ["In 1"]
-    assert "labeldistance=" not in input_edge[0]
-    assert "labelangle=" not in input_edge[0]
+    assert _html_label_lines(input_edge[0], "label") == ["In 1"]
+
+    for attrs in (body_out[0], body_in[0], input_edge[0]):
+        assert "headlabel" not in attrs
+        assert "taillabel" not in attrs
+        assert "labeldistance=" not in attrs
+        assert "labelangle=" not in attrs
 
     # The cycle's back-edge merges to a midpoint label like any recurrence.
     back_edge = _dot_edge_attrs(dot, "layernorm_1_3", "linear_1_1")
@@ -945,8 +941,8 @@ def test_atomic_single_op_module_collapse_preserves_op_render(tmp_path: Path) ->
     """
 
     trace = _trace(ReusedReluLoop())
-    expanded_dot = _render_dot(trace, tmp_path, "relu_expanded", vis_call_depth=1000)
-    collapsed_dot = _render_dot(trace, tmp_path, "relu_collapsed", vis_call_depth=1)
+    expanded_dot = _render_dot(trace, tmp_path, "relu_expanded", depth=1000)
+    collapsed_dot = _render_dot(trace, tmp_path, "relu_collapsed", depth=1)
 
     for dot in (expanded_dot, collapsed_dot):
         assert "cluster_relu" not in dot
@@ -964,48 +960,48 @@ def test_render_loop_module_rolling_demos() -> None:
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     demos: list[tuple[str, nn.Module, dict[str, object], str]] = [
-        ("inside_outside_relu", InsideOutsideRelu(), {"vis_call_depth": 1}, "init+forward"),
+        ("inside_outside_relu", InsideOutsideRelu(), {"depth": 1}, "init+forward"),
         (
             "inside_outside_relu_separable",
             InsideOutsideReluSeparable(),
-            {"vis_call_depth": 1},
+            {"depth": 1},
             "init+forward",
         ),
         (
             "inside_outside_block_collapsed",
             InsideOutsideBlock(),
-            {"vis_call_depth": 1},
+            {"depth": 1},
             "init+forward",
         ),
         (
             "inside_outside_block_expanded",
             InsideOutsideBlock(),
-            {"vis_call_depth": 1000},
+            {"depth": 1000},
             "init+forward",
         ),
-        ("deep_loop_body", DeepLoopBody(), {"vis_call_depth": 1000}, "init+forward"),
-        ("rnn_cell", TanhRNNCellLoop(), {"vis_call_depth": 1000}, "init+forward"),
+        ("deep_loop_body", DeepLoopBody(), {"depth": 1000}, "init+forward"),
+        ("rnn_cell", TanhRNNCellLoop(), {"depth": 1000}, "init+forward"),
         (
             "repeated_block_stack_collapsed",
             RepeatedBlockStack(),
-            {"vis_call_depth": 1},
+            {"depth": 1},
             "init+forward",
         ),
         (
             "repeated_block_stack_expanded",
             RepeatedBlockStack(),
-            {"vis_call_depth": 1000},
+            {"depth": 1000},
             "init+forward",
         ),
-        ("two_distinct_loops", TwoDistinctLoops(), {"vis_call_depth": 1}, "init+forward"),
+        ("two_distinct_loops", TwoDistinctLoops(), {"depth": 1}, "init+forward"),
         (
             "buffer_loop",
             BufferRewriteLoops(),
-            {"show_buffer_layers": "always"},
+            {"show_buffers": "always"},
             "init+forward",
         ),
-        ("nested_loop", NestedLoopBlock(), {"vis_call_depth": 1}, "init+forward"),
-        ("parallel_fanout", ParallelFanout(), {"vis_call_depth": 1}, "init+forward"),
+        ("nested_loop", NestedLoopBlock(), {"depth": 1}, "init+forward"),
+        ("parallel_fanout", ParallelFanout(), {"depth": 1}, "init+forward"),
     ]
     # Magic-byte / markup signatures so a no-op renderer (no file, or an empty
     # one) cannot pass: PDF starts with %PDF, PNG with the 8-byte PNG header,
@@ -1017,13 +1013,12 @@ def test_render_loop_module_rolling_demos() -> None:
             artifact = OUTPUT_DIR / f"{name}.{file_format}"
             artifact.unlink(missing_ok=True)
             dot = trace.draw(
-                vis_mode="rolled",
-                vis_save_only=True,
-                vis_fileformat=file_format,
-                vis_outpath=str(OUTPUT_DIR / name),
+                rolled=True,
+                file_format=file_format,
+                path=str(OUTPUT_DIR / name),
                 code_panel=code_panel,
                 **kwargs,
-            )
+            ).dot
             assert isinstance(dot, str) and "digraph" in dot, (
                 f"expected non-empty DOT source for {name} ({file_format})"
             )

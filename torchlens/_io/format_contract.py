@@ -15,13 +15,14 @@ from __future__ import annotations
 import copy
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, NamedTuple
 
+from ._field_policy import FieldPolicy as FieldPolicy
+from ._pre3_module_paths import PRE_3_MAJOR, pre_3_artifact_error
 from .format_errors import (
-    ArtifactVersionAboveRuntimeError,
-    ArtifactVersionBelowFloorError,
-    TorchLensIOError,
+    ArtifactError,
+    ArtifactTooNewError,
+    ArtifactTooOldError,
 )
 from .prerelease import validate_prerelease_state
 
@@ -44,8 +45,8 @@ __tl_layer__ = "L1"
 # load validation; the "health_facts" and "capture_advisories" annotation
 # families are admitted as reserved keys; and the entry-dark field slots for
 # injection provenance (Op.injection_provenance), source snapshots
-# (Trace.source_snapshots + FuncCallLocation.source_file_digest), and the
-# structure-only evidence envelope (Trace.structure_evidence) are declared
+# (Trace.source.snapshots + FuncCallLocation.source_file_digest), and the
+# structure-only evidence envelope (Trace.graph.structure_evidence) are declared
 # with fail-closed load validation so their Phase-3 writers (F01/F30/F33)
 # need no further version bump.
 # The C07X amendment rides the SAME v9 window (TLSPEC_VERSION stays 9;
@@ -58,69 +59,86 @@ __tl_layer__ = "L1"
 # rows, arithmetic cache_len DELETED for the measured carried-state witness
 # slots entry_state_digest/exit_state_digest, capture_digest +
 # perturbed/intervention_digest/fire_count coupling slots, optional
-# step_join); the Trace.root_entry_point identity fact (written
+# step_join); the Trace.provenance.root_entry_point identity fact (written
 # unconditionally) with the Op.tl_authored_root marker and Op.episode_step
 # stamp -- all with fail-closed load validation so the F40b/F40c/F41/F42/
 # F-EPISODE/F-WITNESS writers need no further version bump.
-TLSPEC_VERSION = 9
+# v10 is the batch-2 coordinated schema write: ONE bump for every new saved
+# field of the window (each addition is admitted by the v10 field registry
+# before its writer lands, so no further version bump follows), the corrected
+# floor text in the writer contract (2.31.0, the first tlspec-6 writer; v9
+# froze the false "2.33"), and the reserved generation step-score vocabulary
+# credited to inseq (``RESERVED_STEP_SCORE_NAMES``). The v10 window also admits
+# the ``fed_by`` bundle relation kind (harness bundles: the later member's
+# prompt contains the earlier member's output; optional ``token_spans`` /
+# ``basis`` / ``coverage`` / ``label`` params) and the ``token_boundary_v1``
+# member binding in the reserved ``torchlens.boundary_facts`` sidecar family,
+# and the ``selected_by`` control kind (a router's or judge's decision selected
+# the later member; optional ``chosen`` / ``candidates`` / ``evidence``);
+# a v9 reader refuses both bare kinds, as the loader doctrine requires. The v9
+# contract of record stays frozen byte-for-byte beside the v10 one.
+# v11 (3.0 persisted record shape): every stored key follows its decided
+# public name (renames, removals and private stored fields in one bump); the
+# v10 contract of record stays frozen byte-for-byte beside the v11 one.
+TLSPEC_VERSION = 11
 
-# Rehydration floor: artifacts older than tlspec_version 6 refuse to load
-# instead of being resurrected through legacy field-alias ladders. The FIRST
-# tlspec-6 writer was released v2.31.0 (measured on genuine wheels, ecosystem
-# panel r3 -- the historical "first shipped in torchlens 2.33" comment here
-# was false and backed the producer inequality that orphaned lawful
-# v2.31.0/v2.32.4 artifacts; producer pair-consistency now lives in the
-# governed ledger, ``torchlens._io.compat_ledger``, gate G5).
-# ``MIN_TORCHLENS_VERSION_TEXT`` remains the release-family text stamped into
-# the writer contract; its VALUE is frozen with the committed v9 contract
-# golden (C07 territory) and is no longer matched against any manifest.
-MIN_TLSPEC_VERSION = 6
-MIN_TORCHLENS_VERSION_TEXT = "2.33"
+# Rehydration floor: this release reads only its own format. Every stamp below
+# the current one was written by torchlens 2.x and refuses with the one error in
+# ``_pre3_module_paths``. ``MIN_TORCHLENS_VERSION_TEXT`` is the floor release
+# text stamped into the writer contract (the first tlspec-11 writer); it is never
+# matched against a manifest. The frozen v9 and v10 contracts keep their texts.
+MIN_TLSPEC_VERSION = 11
+MIN_TORCHLENS_VERSION_TEXT = "3.0.0"
 
-
-# Ledger-derived honesty (gate G6): a below-floor remedy must never NAME a
-# release without verified read evidence -- the shipped ">= 2.33" remedy told
-# genuine v2.16 ModelLog holders to use releases proven unable to read their
-# artifacts. Callers with ledger context pass a derived ``remedy=``; this
-# default stays honest for unknown pre-floor eras by pointing at the ledger
-# instead of asserting a reader.
-_BELOW_FLOOR_REMEDY = (
-    "Re-save the artifact with a torchlens release verified to read it; "
-    "torchlens.ecosystem.compat_window() lists the governed rows and their "
-    "verified readers."
+# Reserved generation step-score vocabulary, credited to inseq: the
+# keys of inseq's ``STEP_SCORES_MAP`` (``inseq/attr/step_functions.py``,
+# inseq 0.7.1), verbatim and in inseq's order. A name registration, not a
+# field slot: a future TorchLens generation read surface persists its
+# per-step scores under exactly these names, and the v10 writer contract
+# records them so the names freeze with the contract of record.
+RESERVED_STEP_SCORE_NAMES: tuple[str, ...] = (
+    "logit",
+    "probability",
+    "entropy",
+    "crossentropy",
+    "perplexity",
+    "contrast_logits",
+    "contrast_prob",
+    "contrast_logits_diff",
+    "contrast_prob_diff",
+    "pcxmi",
+    "kl_divergence",
+    "in_context_pvi",
+    "mc_dropout_prob_avg",
+    "top_p_size",
+)
+RESERVED_STEP_SCORE_CREDIT = (
+    "Step-score names from inseq (Sarti et al., ACL 2023 demo; "
+    "https://github.com/inseq-team/inseq), the STEP_SCORES_MAP keys of inseq 0.7.1."
 )
 
 
 def below_floor_error(
     *,
     observed: str,
-    subject: str = "Artifact",
     path: str | None = None,
-    remedy: str | None = None,
     code: str = "artifact_version_below_floor",
-) -> ArtifactVersionBelowFloorError:
-    """Build the typed rehydration-floor refusal with structured fields.
+) -> ArtifactTooOldError:
+    """Build the typed refusal for an artifact older than the supported format.
 
-    Every below-floor refusal was hand-copied at its raise site with an empty
-    ``fields`` payload, and four of the six omitted the artifact path they held
-    in scope (R65). This one constructor gives all of them a stable
-    ``fields["code"]``, the ``observed`` version, the floor, a ``remedy``, and
-    the ``path`` when the caller has one.
+    This release reads only the current format; anything older was saved by
+    torchlens 2.x, so every below-floor site raises the one 2.x refusal
+    (:func:`torchlens._io._pre3_module_paths.pre_3_artifact_error`) with a stable
+    ``fields["code"]``, the ``observed`` version, the floor, a ``remedy`` and the ``path``
+    when the caller has one.
 
     Parameters
     ----------
     observed:
         Rendered source version (``"tlspec_version=N"`` or a description of an
         unversioned state).
-    subject:
-        Human-readable subject named in the message (e.g. ``"Bundle manifest"``).
     path:
         Artifact path, when the caller has it in scope.
-    remedy:
-        Ledger-derived remedy override (gate G6). Callers that can classify
-        the artifact pass the verified-reader remedy from
-        ``torchlens._io.compat_ledger.bridge_reader_remedy``; the default
-        stays honest by pointing at the ledger instead of naming a reader.
     code:
         Always ``"artifact_version_below_floor"``; raise sites pass it
         explicitly so the S-17 census sees the code where the raise happens,
@@ -128,25 +146,11 @@ def below_floor_error(
 
     Returns
     -------
-    ArtifactVersionBelowFloorError
+    ArtifactTooOldError
         The typed refusal, ready to raise.
     """
 
-    effective_remedy = _BELOW_FLOOR_REMEDY if remedy is None else remedy
-    message = (
-        f"{subject} has {observed}, below the supported rehydration floor "
-        f"tlspec_version={MIN_TLSPEC_VERSION} (torchlens "
-        f"{MIN_TORCHLENS_VERSION_TEXT}). Remedy: {effective_remedy}"
-    )
-    return ArtifactVersionBelowFloorError(
-        message,
-        code=code,
-        observed=observed,
-        floor_tlspec_version=MIN_TLSPEC_VERSION,
-        floor_torchlens_version=MIN_TORCHLENS_VERSION_TEXT,
-        path=path,
-        remedy=effective_remedy,
-    )
+    return pre_3_artifact_error(observed, path=path)
 
 
 def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
@@ -166,17 +170,80 @@ def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
 
     Raises
     ------
-    ArtifactVersionBelowFloorError
+    ArtifactTooOldError
         When ``raw_version`` is an int below ``MIN_TLSPEC_VERSION``.
     """
 
     if isinstance(raw_version, int) and raw_version < MIN_TLSPEC_VERSION:
         raise below_floor_error(
             observed=f"tlspec_version={raw_version}",
-            subject="Bundle manifest",
             path=path,
             code="artifact_version_below_floor",
         )
+
+
+def _major_version(version: Any) -> int | None:
+    """Return the leading integer of a ``MAJOR.MINOR...`` version string, else ``None``."""
+
+    if not isinstance(version, str):
+        return None
+    head = version.strip().split(".", 1)[0]
+    return int(head) if head.isdigit() else None
+
+
+def raise_if_saved_by_older_major(saved_version: Any, path: str, *, running_version: str) -> None:
+    """Refuse an artifact that an earlier major release of torchlens saved.
+
+    A major release does not read the files an earlier major release wrote: the
+    saved field names and package paths changed between them, and no compatibility
+    reader is carried. A file torchlens 2.x saved raises the one 2.x refusal
+    (:func:`torchlens._io._pre3_module_paths.pre_3_artifact_error`), worded like
+    every other 2.x door; an older major raises the same error class naming the
+    saving release and the two ways out (the earlier major release reads the
+    file, or capture again with this one). Artifacts without a parseable
+    ``torchlens_version`` stamp return untouched; their own typed checks own
+    that case.
+
+    Parameters
+    ----------
+    saved_version:
+        The manifest's raw ``torchlens_version`` value.
+    path:
+        Artifact path for the structured fields.
+    running_version:
+        The running release's ``torchlens.__version__``; passed in so this
+        contract module never imports the package that imports it.
+
+    Raises
+    ------
+    ArtifactTooOldError
+        When the saving release's major version is below the running one.
+    """
+
+    running = _major_version(running_version)
+    saved = _major_version(saved_version)
+    if running is None or saved is None or saved >= running:
+        return
+    if saved == PRE_3_MAJOR:
+        raise pre_3_artifact_error(
+            f"torchlens_version={saved_version}",
+            path=path,
+            code="artifact_version_below_floor",
+        )
+    remedy = (
+        f"load it with torchlens {saved}.x (pip install 'torchlens<{running}'), or "
+        f"capture the model again with torchlens {running_version} and save that."
+    )
+    raise ArtifactTooOldError(
+        f"This artifact was saved by torchlens {saved_version}; torchlens {running}.x "
+        f"does not read files saved by torchlens {saved}.x. Remedy: {remedy}",
+        code="artifact_version_below_floor",
+        observed=f"torchlens_version={saved_version}",
+        floor_tlspec_version=MIN_TLSPEC_VERSION,
+        floor_torchlens_version=f"{running}.0.0",
+        path=path,
+        remedy=remedy,
+    )
 
 
 _ABOVE_CEILING_REMEDY = "Upgrade torchlens to the release that wrote this artifact (or newer)."
@@ -188,7 +255,7 @@ def above_ceiling_error(
     subject: str = "Artifact",
     path: str | None = None,
     code: str = "artifact_version_above_runtime",
-) -> ArtifactVersionAboveRuntimeError:
+) -> ArtifactTooNewError:
     """Build the typed above-runtime-ceiling refusal with structured fields.
 
     The single constructor for every "artifact is newer than this runtime"
@@ -212,7 +279,7 @@ def above_ceiling_error(
 
     Returns
     -------
-    ArtifactVersionAboveRuntimeError
+    ArtifactTooNewError
         The typed refusal, ready to raise.
     """
 
@@ -220,7 +287,7 @@ def above_ceiling_error(
         f"{subject} uses tlspec_version={observed}, but this runtime only supports "
         f"up to {TLSPEC_VERSION}. {_ABOVE_CEILING_REMEDY}"
     )
-    return ArtifactVersionAboveRuntimeError(
+    return ArtifactTooNewError(
         message,
         code=code,
         observed=observed,
@@ -244,7 +311,6 @@ def _raise_below_floor(cls_name: str, version_text: str) -> None:
 
     raise below_floor_error(
         observed=version_text,
-        subject=f"{cls_name} state",
         code="artifact_version_below_floor",
     )
 
@@ -299,26 +365,13 @@ class BlobRef(NamedTuple):
     kind: str
 
 
-class FieldPolicy(str, Enum):
-    """Portable scrub policy for one serialized field."""
-
-    KEEP = "keep"
-    BLOB = "blob"
-    BLOB_RECURSIVE = "blob_recursive"
-    DROP = "drop"
-    STRINGIFY = "stringify"
-    WEAKREF_STRIP = "weakref_strip"
-
-
 # Pickle-visible identity stays the historical facade path: bundle metadata
 # pickles reference these types by (module, qualname), and the guarded
 # unpickler allowlists exactly those paths -- the physical split must not
 # change a single persisted byte (move-compat law, memo org rule 9). The
 # load-hint classes are runtime options, never persisted, so they keep their
 # real defining module (the class-member license oracle reads it).
-for _cls in (BlobRef, FieldPolicy):
-    _cls.__module__ = "torchlens._io"
-del _cls
+BlobRef.__module__ = "torchlens._io"
 
 
 def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | None = None) -> int:
@@ -344,18 +397,18 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | Non
     Returns
     -------
     int
-        The decoded version, always ``MIN_TLSPEC_VERSION`` or newer.
+        The decoded version, always the current ``TLSPEC_VERSION``.
 
     Raises
     ------
-    ArtifactVersionBelowFloorError
-        If the state predates the ``tlspec_version >= MIN_TLSPEC_VERSION``
-        rehydration floor (including unversioned pre-sprint states).
+    ArtifactTooOldError
+        If the state predates the current ``tlspec_version`` (a torchlens 2.x file,
+        including unversioned pre-sprint states).
     UnknownPersistedFieldError
         If ``cls`` is provided, a governed artifact load is in progress, and
         the state carries fields outside the class's declared contract
         (fields + defaults + declared aliases).
-    TorchLensIOError
+    ArtifactError
         If the serialized version is newer than this runtime understands or
         is not an integer.
     """
@@ -365,14 +418,14 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | Non
     if version is None:
         _raise_below_floor(cls_name, "no tlspec_version (predates portable I/O versioning)")
     if not isinstance(version, int):
-        raise TorchLensIOError(f"{cls_name} pickle state has invalid tlspec_version={version!r}.")
+        raise ArtifactError(f"{cls_name} pickle state has invalid tlspec_version={version!r}.")
     if version > TLSPEC_VERSION:
         raise above_ceiling_error(
             observed=version,
             subject=f"{cls_name} pickle state",
             code="artifact_version_above_runtime",
         )
-    if version < MIN_TLSPEC_VERSION:
+    if version < TLSPEC_VERSION:
         _raise_below_floor(cls_name, f"tlspec_version={version}")
     if cls is not None:
         from .state_contract import enforce_known_state, governed_load_active
@@ -441,7 +494,7 @@ def coerce_container_typed_state(
     crash into silent, undetectable data loss (e.g. a corrupted
     ``layer_dict_main_keys`` quietly coming back as an empty dict instead of
     surfacing the corruption). Such a field is left in its original,
-    detectably-wrong state and this function raises ``TorchLensIOError`` so
+    detectably-wrong state and this function raises ``ArtifactError`` so
     the caller learns about the corruption immediately, instead of shipping a
     Trace that looks valid but silently lost data.
 
@@ -461,7 +514,7 @@ def coerce_container_typed_state(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If a field is present with a value that cannot be converted to its
         declared container type (e.g. an ``int`` where a ``dict`` is
         declared). This is corruption, not a legacy-format field -- the
@@ -485,7 +538,7 @@ def coerce_container_typed_state(
         try:
             state[field_name] = declared_type(current_value)
         except (TypeError, ValueError) as exc:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"State field {field_name!r} is present with value of type "
                 f"{type(current_value).__name__!r} that cannot be converted to the "
                 f"declared container type {declared_type.__name__!r}. This is not a "

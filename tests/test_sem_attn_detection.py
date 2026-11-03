@@ -16,13 +16,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import facets as facets_mod
-from torchlens.semantic.recipes._helpers import (
+from torchlens._semantic import facets as facets_mod
+from torchlens._semantic.recipes._helpers import (
     attention_implementation,
     config_object_value,
     module_output_spec,
 )
-from torchlens.semantic.recipes.attention import (
+from torchlens._semantic.recipes.attention import (
     _no_attention_evidence,
     _projection_orientation,
 )
@@ -73,7 +73,7 @@ def test_value_beats_equal_tier_absence():
     missing: dict = {}
     menu: dict = {}
     tiers = {"foo": (2, 0)}
-    recipe = SimpleNamespace(public=SimpleNamespace(recipe_name="unit_recipe"))
+    recipe = SimpleNamespace(public=SimpleNamespace(name="unit_recipe"))
     reason = facets_mod.AbsenceReason(status="structurally_absent", detail="claimed absent")
     facets_mod._merge_missing(
         "foo",

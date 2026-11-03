@@ -71,7 +71,8 @@ def _traced_buf_loop() -> tuple[BufLoop, torch.Tensor, tl.Trace]:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
+        save="all",
     )
     return model, x, log
 
@@ -85,21 +86,21 @@ def test_inplace_buffer_edit_threads_through_every_pass() -> None:
     model, x, log = _traced_buf_loop()
     assert not torch.equal(model.cell.bias.detach(), torch.zeros(4)), "bias confound guard"
     for key, expected in zip(BUF_KEYS, (0.0, 1.0, 2.0, 3.0)):
-        assert torch.equal(log.layer_dict_all_keys[key].out, torch.full((4,), expected))
+        assert torch.equal(log._layer_dict_all_keys[key].out, torch.full((4,), expected))
 
     fork = log.fork()
     edit = torch.full((4,), 7.0)
     with warnings.catch_warnings():
         warnings.simplefilter("error", BufferThreadGapWarning)
         fork.do(
-            tl.units("buffer_1:1", [(i,) for i in range(4)]).resolve(fork),
+            fork[tl.units("buffer_1:1", [(i,) for i in range(4)])],
             tl.replace_with(edit),
         )
 
     # The origin keeps the substituted value (honest readback, no +1 from the
     # downstream in-place add), and each later version is the threaded state.
     for key, expected in zip(BUF_KEYS, (7.0, 8.0, 9.0, 10.0)):
-        got = fork.layer_dict_all_keys[key].out
+        got = fork._layer_dict_all_keys[key].out
         assert torch.equal(got, torch.full((4,), expected)), (key, got)
 
     # Downstream per-pass fidelity against a hand-computed forward with b0=7.
@@ -109,7 +110,7 @@ def test_inplace_buffer_edit_threads_through_every_pass() -> None:
         for pass_num in range(1, 4):
             b = b + 1.0
             h = torch.relu(model.cell(h) + b)
-            got = fork.layer_dict_all_keys[f"relu_1_4:{pass_num}"].out
+            got = fork._layer_dict_all_keys[f"relu_1_4:{pass_num}"].out
             assert torch.allclose(got, h, atol=ATOL), f"relu_1_4:{pass_num}"
 
     assert torch.equal(edit, torch.full((4,), 7.0)), "user edit tensor was mutated"
@@ -121,18 +122,18 @@ def test_replay_leaves_source_trace_capture_untouched() -> None:
     _model, _x, log = _traced_buf_loop()
     snapshot = {
         key: record.out.clone()
-        for key, record in log.layer_dict_all_keys.items()
+        for key, record in log._layer_dict_all_keys.items()
         if isinstance(key, str) and isinstance(record.out, torch.Tensor)
     }
 
     fork = log.fork()
     fork.do(
-        tl.units("buffer_1:1", [(i,) for i in range(4)]).resolve(fork),
+        fork[tl.units("buffer_1:1", [(i,) for i in range(4)])],
         tl.replace_with(torch.full((4,), 7.0)),
     )
 
     for key, saved in snapshot.items():
-        assert torch.equal(log.layer_dict_all_keys[key].out, saved), (
+        assert torch.equal(log._layer_dict_all_keys[key].out, saved), (
             f"source trace record {key!r} mutated by a fork's replay"
         )
 
@@ -163,22 +164,23 @@ def test_inplace_activation_op_does_not_corrupt_origin_readback() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
+        save="all",
     )
     fork = log.fork()
     edit = torch.full((2, 4), 5.0)
     fork.do(
-        tl.units("relu_1_2:1", [(i, j) for i in range(2) for j in range(4)]).resolve(fork),
+        fork[tl.units("relu_1_2:1", [(i, j) for i in range(2) for j in range(4)])],
         tl.replace_with(edit),
     )
 
-    relu_out = fork.layer_dict_all_keys["relu_1_2:1"].out
+    relu_out = fork._layer_dict_all_keys["relu_1_2:1"].out
     assert torch.equal(relu_out, torch.full((2, 4), 5.0)), (
         "origin readback corrupted by downstream in-place add_"
     )
-    add_out = fork.layer_dict_all_keys["add_1_3:1"].out
+    add_out = fork._layer_dict_all_keys["add_1_3:1"].out
     assert torch.equal(add_out, torch.full((2, 4), 6.0))
-    final = fork.layer_dict_all_keys["mul_1_4:1"].out
+    final = fork._layer_dict_all_keys["mul_1_4:1"].out
     assert torch.equal(final, torch.full((2, 4), 12.0))
 
 
@@ -190,15 +192,70 @@ def test_unprovable_buffer_thread_warns_and_keeps_captured_value() -> None:
     fork = log.fork()
     # Simulate a write the engine cannot certify (e.g. a fused mutator whose
     # op output is not the post-write buffer state).
-    fork.layer_dict_all_keys["buffer_1:2"]._internal_set("buffer_write_kind", "fused")
+    fork._layer_dict_all_keys["buffer_1:2"]._internal_set("buffer_write_kind", "fused")
 
     with pytest.warns(BufferThreadGapWarning, match="buffer_1:2"):
         fork.do(
-            tl.units("buffer_1:1", [(i,) for i in range(4)]).resolve(fork),
+            fork[tl.units("buffer_1:1", [(i,) for i in range(4)])],
             tl.replace_with(torch.full((4,), 7.0)),
         )
 
     # The uncertified version keeps its captured value; later versions thread
     # from the stale-but-honest state (add_ re-executes from 1s -> 2s -> 3s).
-    assert torch.equal(fork.layer_dict_all_keys["buffer_1:1"].out, torch.full((4,), 7.0))
-    assert torch.equal(fork.layer_dict_all_keys["buffer_1:2"].out, torch.full((4,), 1.0))
+    assert torch.equal(fork._layer_dict_all_keys["buffer_1:1"].out, torch.full((4,), 7.0))
+    assert torch.equal(fork._layer_dict_all_keys["buffer_1:2"].out, torch.full((4,), 1.0))
+
+
+class BufRead(nn.Module):
+    """Reads a buffer it never writes: the initial version is the only version."""
+
+    def __init__(self, registered: bool) -> None:
+        """Hold the mask as a registered buffer or as a plain tensor attribute."""
+
+        super().__init__()
+        self.cell = nn.Linear(4, 4, bias=True)
+        mask = torch.tensor([1.0, 2.0, 3.0, 4.0])
+        if registered:
+            self.register_buffer("mask", mask)
+        else:
+            self.mask = mask
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Scale the cell's output by the (never written) mask."""
+
+        return torch.relu(self.cell(x) * self.mask)
+
+
+@pytest.mark.parametrize("registered", [True, False], ids=["registered", "attribute"])
+def test_hook_edit_on_initial_buffer_read_applies_and_records(registered: bool) -> None:
+    """A hook-style edit on an unwritten buffer read fires at that site and threads.
+
+    The behaviour net's ``fork.do(tl.label("buffer_1:1"), tl.scale(0.5))``
+    (finding F4) neither applied nor refused: the buffer-only group has no
+    producer to thread, and the engine skipped the site's hooks with it.
+    """
+
+    torch.manual_seed(0)
+    model = BufRead(registered)
+    x = torch.randn(2, 4)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(replayable=True),
+        save="all",
+    )
+    site = log._layer_dict_all_keys["buffer_1:1"]
+    assert site.is_buffer and not tuple(site.parents or ())
+    original = site.out.detach().clone()
+
+    fork = log.fork()
+    fork.do(tl.label("buffer_1:1"), tl.scale(0.5))
+
+    edited = fork._layer_dict_all_keys["buffer_1:1"]
+    assert torch.equal(edited.out, original * 0.5), edited.out
+    assert edited.is_edited is True
+    assert len(fork.ops) == len(log.ops)
+    with torch.no_grad():
+        expected = torch.relu(model.cell(x) * (original * 0.5))
+    assert torch.allclose(fork.output_ops[0].out, expected, atol=ATOL)
+    assert torch.equal(log._layer_dict_all_keys["buffer_1:1"].out, original), "source mutated"

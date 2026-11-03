@@ -329,7 +329,7 @@ def journal_snapshot(snapshot: Snapshot, events: Any) -> None:
 def store_snapshot(snapshot: Snapshot, trace: Any) -> None:
     """Canonicalize per-op store cells in layout order."""
 
-    from torchlens.data_classes.op import _OP_SLOT_NAMES
+    from torchlens._data_classes.op import _OP_SLOT_NAMES
 
     canonizer = _Canonicalizer(snapshot, "store")
     for op in trace.ops:
@@ -418,7 +418,7 @@ ARTIFACT_TOKEN_KEYS: dict[str, str] = {"op_kind": "tl_barcode_derived"}
 # Metadata keys whose dict KEYS are volatile tokens.
 ARTIFACT_TOKEN_KEYED_DICTS: dict[str, str] = {
     "op_equivalence_classes": "tl_barcode_derived",
-    "grad_fn_logs": "grad_fn_object_id",
+    "_grad_fn_logs": "grad_fn_object_id",
 }
 
 # Field/key segments that hold a single token value wherever they appear.
@@ -465,10 +465,8 @@ _ARTIFACT_TIMING_KEYS = frozenset(
 def artifact_snapshot(snapshot: Snapshot, trace: Any, tmp_path: Path) -> None:
     """Save a .tlspec and canonicalize manifest + blob digests."""
 
-    import torchlens as tl
-
     target = tmp_path / "parity_artifact.tlspec"
-    tl.save(trace, str(target))
+    trace.save(str(target))
     canonizer = _Canonicalizer(snapshot, "artifact")
     canonizer.anchor = "<artifact>"
     result: dict[str, Any] = {}
@@ -499,7 +497,7 @@ def _canon_manifest(canonizer: _Canonicalizer, value: Any, path: str) -> Any:
             rendered = _stable_key(key)
             if rendered in ARTIFACT_VOLATILE_KEYS or rendered in _ARTIFACT_TIMING_KEYS:
                 out[rendered] = _presence_marker(value[key])
-            elif rendered == "trace_label" and isinstance(value[key], str):
+            elif rendered == "name" and isinstance(value[key], str):
                 # per-process model-instance counter suffix; the semantic stem
                 # still compares strictly
                 out[rendered] = re.sub(r"_\d+$", "_<n>", value[key])
@@ -546,8 +544,8 @@ def _journal_interception(
     post-commit" plant the a1 proof requires.
     """
 
-    postprocess_module = importlib.import_module("torchlens.postprocess")
-    materialize_module = importlib.import_module("torchlens.postprocess._materialize")
+    postprocess_module = importlib.import_module("torchlens._postprocess")
+    materialize_module = importlib.import_module("torchlens._postprocess._materialize")
     original_public = postprocess_module.materialize_from_events
     original_direct = materialize_module.materialize_from_events
 

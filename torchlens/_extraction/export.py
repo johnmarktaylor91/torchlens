@@ -39,6 +39,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_dir, fsync_file
+from .._utils.hashing import sha256_file
 from .context import sanitize_key
 from .ragged import RaggedBatch
 
@@ -64,29 +65,6 @@ _MAT_V5_LIMIT = 2**31 - 1
 
 #: Dtypes NumPy cannot represent: widened to fp32 with disclosure.
 _WIDEN_DTYPES = (torch.bfloat16, torch.float8_e4m3fn, torch.float8_e5m2)
-
-
-def _sha256_file(path: Path) -> str:
-    """Stream one file's sha256 (computed AT EXPORT TIME, always).
-
-    Parameters
-    ----------
-    path:
-        File to hash.
-
-    Returns
-    -------
-    str
-        ``"sha256:..."`` digest.
-    """
-
-    hasher = hashlib.sha256()
-    with open(path, "rb") as handle:
-        while True:
-            chunk = handle.read(1 << 20)
-            if not chunk:
-                return f"sha256:{hasher.hexdigest()}"
-            hasher.update(chunk)
 
 
 def _widen_for_export(
@@ -260,7 +238,7 @@ class _ExportJob:
 
 
 def export_extraction(
-    output_dir: str | Path,
+    path: str | Path,
     dest: str | Path,
     *,
     format: str = "npy",
@@ -271,7 +249,7 @@ def export_extraction(
 
     Parameters
     ----------
-    output_dir:
+    path:
         Source artifact directory.
     dest:
         Destination directory (created; published atomically by rename).
@@ -311,7 +289,7 @@ def export_extraction(
     # Complete-only by construction: open_extraction refuses non-complete
     # artifacts typed unless explicitly opened in_progress (which this
     # exporter never does).
-    reader = open_extraction(output_dir)
+    reader = open_extraction(path)
     selected = keys if keys is not None else reader.keys
     for key in selected:
         reader.logical_shape(key)
@@ -654,7 +632,7 @@ def _member_rows(
             "source_key": key,
             "role": role,
             "byte_size": path.stat().st_size,
-            "sha256": _sha256_file(path),
+            "sha256": "sha256:" + sha256_file(path),
         }
         ledger.append(row)
         rows.append(row)
@@ -707,19 +685,11 @@ def _write_contract(
 
     manifest = reader.manifest
     source = Path(reader._container)
-    ledger_path = source / LEDGER_FILENAME
     ids = reader.stimulus_ids()
     contract = {
         "schema": "tl_extraction_export_v1",
         "format": export_format,
-        "source": {
-            "manifest_sha256": _sha256_file(source / "manifest.json"),
-            "ledger_sha256": _sha256_file(ledger_path) if ledger_path.exists() else None,
-            "stimulus_ids_digest": (manifest.get("signature") or {}).get("stimulus_ids_digest"),
-            "n_stimuli": reader.n_stimuli,
-            "n_shards": reader.n_shards,
-            "unknown_v1_prefix_semantics": bool(manifest.get("unknown_v1_prefix_semantics", False)),
-        },
+        "source": _contract_source_section(reader, source / LEDGER_FILENAME),
         "row_order": (
             "row i of every exported member is stimulus i in the source "
             "artifact's iteration order; stimulus_ids (when recorded) map "
@@ -745,3 +715,30 @@ def _write_contract(
     (temp / EXPORT_CONTRACT_FILENAME).write_text(
         json.dumps(contract, indent=1, sort_keys=False), encoding="utf-8"
     )
+
+
+def _contract_source_section(reader: Any, ledger_path: Path) -> dict[str, Any]:
+    """Build the ``source`` block of the export contract (digests and counts).
+
+    Parameters
+    ----------
+    reader:
+        The source artifact reader.
+    ledger_path:
+        Expected ledger path beside the manifest (digested when present).
+
+    Returns
+    -------
+    dict[str, Any]
+        The contract's ``source`` section.
+    """
+
+    manifest = reader.manifest
+    source = Path(reader._container)
+    return {
+        "manifest_sha256": "sha256:" + sha256_file(source / "manifest.json"),
+        "ledger_sha256": ("sha256:" + sha256_file(ledger_path) if ledger_path.exists() else None),
+        "stimulus_ids_digest": (manifest.get("signature") or {}).get("stimulus_ids_digest"),
+        "n_stimuli": reader.n_stimuli,
+        "n_shards": reader.n_shards,
+    }

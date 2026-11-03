@@ -45,7 +45,7 @@ def test_edited_rerun_does_not_trip_divergence_detector() -> None:
     torch.manual_seed(0)
     model = _ConvBN().eval()
     x = torch.randn(2, 3, 8, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
     fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
     with warnings.catch_warnings(record=True) as caught:
@@ -66,7 +66,7 @@ def test_edited_rerun_strict_does_not_raise() -> None:
     torch.manual_seed(0)
     model = _ConvBN().eval()
     x = torch.randn(2, 3, 8, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
     fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
     fork.run(model, x, replay=tl.options.ReplayOptions(strict=True))
@@ -81,9 +81,7 @@ def test_bundle_retained_bytes_lower_bound_aggregation() -> None:
     torch.manual_seed(1)
     x = torch.randn(4, 3, 8, 8)
     members = {
-        name: tl.trace(
-            _ConvBN().eval(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
-        )
+        name: tl.trace(_ConvBN().eval(), x, capture=tl.options.CaptureOptions(replayable=True))
         for name in ("a", "b")
     }
     bundle = tl.Bundle(members)

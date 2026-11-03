@@ -35,10 +35,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import RunnablePreflightError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    VERDICT_STEERING_WITNESS_FAMILIES,
+from torchlens._runnable import (
+    _VERDICT_STEERING_WITNESS_FAMILIES,
     WITNESS_FAMILY_REGISTRY,
     WITNESS_GAP_REGISTRY,
     ControlWitnessKind,
@@ -48,8 +46,10 @@ from torchlens.runnable import (
     WitnessGapKind,
     derive_required_witness_members,
 )
+from torchlens.errors import RunnablePreflightError
+from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, inputs: Any) -> tl.Trace:
@@ -73,14 +73,12 @@ def _mutate(path: Path, mutate: Callable[[dict], None]) -> None:
 def _verdict(path: Path, inputs: Any) -> tuple[str, Any]:
     """Load + run one artifact; classify the outcome without ever masking VERIFIED."""
 
-    from torchlens.runnable import DivergencePolicy
-
     loaded = tl.load(path)
     readiness = loaded._runnable.readiness
     if readiness is not None and readiness.status is ReadinessStatus.UNAVAILABLE:
         return ("refused", {d.code.value for d in readiness.diagnostics})
     try:
-        result = loaded.run(inputs=inputs, on_divergence=DivergencePolicy.RETURN_DIVERGED)
+        result = loaded.run(inputs=inputs, on_divergence="return")
         return ("ran", result.report.path_faithfulness)
     except Exception as exc:  # noqa: BLE001 -- typed refusal classification
         return ("raised", type(exc).__name__)
@@ -299,7 +297,7 @@ def test_r71_registry_closure_meta() -> None:
         "a direct ControlWitnessKind has no registry-v2 row -- register it with an "
         "independent anchor before shipping"
     )
-    assert direct_kinds | shape_families == VERDICT_STEERING_WITNESS_FAMILIES
+    assert direct_kinds | shape_families == _VERDICT_STEERING_WITNESS_FAMILIES
     assert claim_families == {"inert_sink", "unbound_state_inert"}
     assert set(WITNESS_FAMILY_REGISTRY) == direct_kinds | shape_families | claim_families
     for family, spec in WITNESS_FAMILY_REGISTRY.items():
@@ -309,16 +307,37 @@ def test_r71_registry_closure_meta() -> None:
             assert spec.site_prefix == f"{family}:", family
         else:
             assert spec.site_prefix is None, family
-    # Named runtime consumers must exist (replay-consumed, never decorative).
-    import torchlens._runnable_execution as execution
-    import torchlens._runnable_state as state
+    # Named runtime consumers must exist (replay-consumed, never decorative):
+    # each is defined in exactly one runnable module (its home), never only as
+    # a from-import copy on a hub.
+    import importlib
+    import pkgutil
+
+    import torchlens
+    import torchlens._runnable.execution  # noqa: F401  (loads every runnable split)
+
+    runnable_modules = [
+        importlib.import_module(f"torchlens.{info.name}")
+        for info in pkgutil.iter_modules(torchlens.__path__)
+        if info.name.startswith("_runnable")
+    ] + [
+        importlib.import_module(f"torchlens._runnable.{info.name}")
+        for info in pkgutil.iter_modules(torchlens._runnable.__path__)
+    ]
 
     symbolic = {"terminal_slot_accounting", "strict_state_preparation"}
     for family, spec in WITNESS_FAMILY_REGISTRY.items():
         if spec.runtime_consumer in symbolic:
             continue
-        assert hasattr(execution, spec.runtime_consumer) or hasattr(state, spec.runtime_consumer), (
-            f"{family}: runtime consumer {spec.runtime_consumer!r} does not exist"
+        homes = [
+            module.__name__
+            for module in runnable_modules
+            if getattr(module.__dict__.get(spec.runtime_consumer), "__module__", None)
+            == module.__name__
+        ]
+        assert len(homes) == 1, (
+            f"{family}: runtime consumer {spec.runtime_consumer!r} must be defined in "
+            f"exactly one runnable module, found {homes}"
         )
     # Closed gap registry: every kind registered, every source family resolvable.
     assert set(WitnessGapKind) == set(WITNESS_GAP_REGISTRY)
@@ -339,7 +358,7 @@ def test_r71_registry_closure_meta() -> None:
 def test_r71_derivation_independence(tmp_path: Path) -> None:
     from dataclasses import fields, replace
 
-    from torchlens.runnable import RequiredWitnessInventory, WitnessCompleteness
+    from torchlens._runnable import RequiredWitnessInventory, WitnessCompleteness
 
     structure_fields = {field.name for field in fields(ReplayWitnessStructure)}
     assert structure_fields == {
@@ -441,7 +460,7 @@ _THIRD_LEG_FAMILIES = frozenset(
 )
 
 
-@pytest.mark.parametrize("family", sorted(VERDICT_STEERING_WITNESS_FAMILIES))
+@pytest.mark.parametrize("family", sorted(_VERDICT_STEERING_WITNESS_FAMILIES))
 def test_r71_strip_matrix_never_verified(family: str, tmp_path: Path) -> None:
     """(a) single witness strip, (b) lockstep witness+member, (c) 3-way lockstep with
     the owner-record leg, (d) all of those with witness_completeness left "complete"
@@ -844,17 +863,20 @@ def test_r71_floor_source_scan_tripwire() -> None:
     the single derivation function + the parse-time equality/re-assert belts."""
 
     import torchlens._io.runnable_load as runnable_load
-    import torchlens._runnable_execution as execution
-    import torchlens._runnable_state as state
+    import torchlens._runnable.execution as execution
+    import torchlens._runnable.path_faithfulness
+    import torchlens._runnable.state as state
 
     # The verdict gate consults ONLY the derived floor.
-    verdict_source = inspect.getsource(execution._path_faithfulness)
+    verdict_source = inspect.getsource(torchlens._runnable.path_faithfulness._path_faithfulness)
     assert "derived_witness_completeness" in verdict_source
     assert "descriptor.witness_completeness" not in verdict_source
     # The ONLY raw read left in the executor is the run-preparation equality
     # re-assert (defense in depth), and staging never reads it at all.
     execution_source = "\n".join(
-        path.read_text() for path in sorted(Path(execution.__file__).parent.glob("_runnable_*.py"))
+        path.read_text()
+        for path in sorted(Path(execution.__file__).parent.glob("*.py"))
+        if path.name != "__init__.py"
     )
     assert execution_source.count("descriptor.witness_completeness") == 1
     assert "witness_completeness" not in inspect.getsource(state._apply_state_metadata_facts)

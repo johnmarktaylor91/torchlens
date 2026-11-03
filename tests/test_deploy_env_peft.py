@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.compat import report
+from torchlens.report import doctor as report
 
 transformers = pytest.importorskip("transformers")
 peft = pytest.importorskip("peft")
@@ -39,7 +39,7 @@ def test_lora_capture_parity_params_and_hierarchy() -> None:
     with torch.no_grad():
         reference = model(input_ids=input_ids).logits
     trace = tl.trace(model, input_ids)
-    assert trace.capture_verified is None
+    assert trace.provenance.verified is None
     logits_ops = [
         op
         for op in trace.ops.values()
@@ -66,12 +66,12 @@ def test_lora_capture_passes_forward_replay_validation() -> None:
 def test_peft_compat_row_detects_adapters() -> None:
     """The peft_lora_adapters row reads pass/info on a wrapped model."""
 
-    row = report(_lora_gpt2(), torch.randint(0, 128, (1, 8))).row("peft_lora_adapters")
-    assert (row.detected, row.status, row.severity) == (True, "pass", "info")
+    row = report(_lora_gpt2(), torch.randint(0, 128, (1, 8))).check("peft_lora_adapters")
+    assert (row.is_detected, row.status, row.severity) == (True, "pass", "info")
 
 
 def test_peft_compat_row_absent_reads_pass_ok() -> None:
     """No adapters: undetected pass/ok."""
 
-    row = report(nn.Linear(4, 2), torch.randn(1, 4)).row("peft_lora_adapters")
-    assert (row.detected, row.status, row.severity) == (False, "pass", "ok")
+    row = report(nn.Linear(4, 2), torch.randn(1, 4)).check("peft_lora_adapters")
+    assert (row.is_detected, row.status, row.severity) == (False, "pass", "ok")

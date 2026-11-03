@@ -32,8 +32,13 @@ evidence canonical-JSON byte budget applies
 DIRECTION PIN (item 8): on a ``successor_of`` row, ``from`` is ALWAYS the
 LATER member (the successor) and ``to`` the earlier member it succeeds —
 "B succeeds A" persists as ``{"kind": "successor_of", "from": "B",
-"to": "A"}``. Version-axis relation rows ORDER members; they never license
-cross-member parameter VALUE reads (``checkpoint_series_live_params``).
+"to": "A"}``. The tlspec-v10 ``fed_by`` kind (:mod:`._fed_by`) pins the same
+direction: "critique fed_by draft" persists as ``{"kind": "fed_by", "from":
+"critique", "to": "draft"}``, and so does the tlspec-v10 ``selected_by``
+control kind (:mod:`._selected_by`): "writer selected_by router" persists as
+``{"kind": "selected_by", "from": "writer", "to": "router"}``. Version-axis
+relation rows ORDER members; they never license cross-member parameter VALUE
+reads (``checkpoint_series_live_params``).
 
 UNKNOWN-KIND LOADING (loader doctrine leg (a), D5): builtin kinds are BARE
 names; extension kinds are NAMESPACED (``"<ns>.<name>"``, at least one dot —
@@ -72,6 +77,13 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ..errors.episode import BundleRelationError
+from ._fed_by import FED_BY_KIND, check_fed_by_params, validate_fed_by_param
+from ._selected_by import (
+    SELECTED_BY_DECISION_PARAMS,
+    SELECTED_BY_KIND,
+    check_selected_by_params,
+    validate_selected_by_param,
+)
 
 __all__ = [
     "MEMBER_ROW_KINDS",
@@ -186,7 +198,25 @@ PAIR_ROW_KINDS: dict[str, RelationKindSpec] = {
         frozenset({"evidence", "carry_mode", "state_source"}),
     ),
     "escalates": RelationKindSpec(frozenset({"at_step"})),
+    # tlspec v10 (harness bundles): "B fed_by A" -- B's prompt contains A's
+    # output. Content provenance only; from = the LATER member (the reader).
+    FED_BY_KIND: RelationKindSpec(
+        frozenset(),
+        frozenset({"token_spans", "basis", "coverage", "label"}),
+    ),
+    # tlspec v10 (harness bundles): "B selected_by A" -- A's decision (a
+    # route, a verdict) selected B. Control only; from = the LATER member.
+    SELECTED_BY_KIND: RelationKindSpec(
+        frozenset(),
+        frozenset({"chosen", "candidates", "evidence"}),
+    ),
 }
+
+#: Relation kinds admitted after the first relation-carrying tlspec: kind ->
+#: the first stamped ``tlspec_version`` whose grammar has it. A loaded
+#: artifact stamped earlier carrying the kind refuses (its writer could not
+#: have produced the row, so the row was forged or hand-built).
+RELATION_KIND_ADMITTED_FROM: dict[str, int] = {FED_BY_KIND: 10, SELECTED_BY_KIND: 10}
 
 #: MEMBER-row kinds -> required/optional param-key split (closed, v2).
 MEMBER_ROW_KINDS: dict[str, RelationKindSpec] = {
@@ -244,14 +274,36 @@ def _validated_params(kind: str, params: Any) -> dict[str, Any]:
         raise ValueError(
             f"bundle-relation row of kind {kind!r} is missing required param keys {sorted(missing)}"
         )
-    validated: dict[str, Any] = {}
-    for key in sorted(spec.declared):
-        if key not in params:
-            continue
-        value = params[key]
-        _validate_param_value(kind, key, value)
-        validated[key] = _clamp_evidence_grades(value) if key == "evidence" else value
+    validated = {
+        key: _validated_param_value(kind, key, params[key])
+        for key in sorted(spec.declared)
+        if key in params
+    }
+    _check_cross_params(kind, validated)
     return validated
+
+
+def _validated_param_value(kind: str, key: str, value: Any) -> Any:
+    """Validate one declared param value and return its persisted normal form."""
+
+    if kind == FED_BY_KIND:
+        return validate_fed_by_param(key, value)
+    if kind == SELECTED_BY_KIND and key in SELECTED_BY_DECISION_PARAMS:
+        return validate_selected_by_param(key, value)
+    _validate_param_value(kind, key, value)
+    return _clamp_evidence_grades(value) if key == "evidence" else value
+
+
+def _check_cross_params(kind: str, validated: Mapping[str, Any]) -> None:
+    """Run a kind's cross-param rules over its validated params."""
+
+    if kind == FED_BY_KIND:
+        check_fed_by_params(validated)
+        if "token_spans" in validated:
+            spans = {"token_spans": validated["token_spans"]}
+            _enforce_evidence_budget(kind, spans, param="token_spans")
+    if kind == SELECTED_BY_KIND:
+        check_selected_by_params(validated)
 
 
 def _clamp_evidence_grades(envelope: Mapping[str, Any]) -> dict[str, Any]:
@@ -373,21 +425,23 @@ def _validate_evidence_item(index: int, item: Any) -> None:
             )
 
 
-def _enforce_evidence_budget(kind: str, envelope: Mapping[str, Any]) -> None:
-    """Refuse an evidence envelope crossing the canonical-JSON byte budget."""
+def _enforce_evidence_budget(
+    kind: str, envelope: Mapping[str, Any], *, param: str = "evidence"
+) -> None:
+    """Refuse an evidence envelope (or ``fed_by`` span list) crossing the byte budget."""
 
     try:
         encoded = json.dumps(dict(envelope), sort_keys=True, separators=(",", ":"))
     except (TypeError, ValueError) as exc:
         raise ValueError(
-            f"bundle-relation 'evidence' on kind {kind!r} is not JSON-portable: {exc}. "
+            f"bundle-relation {param!r} on kind {kind!r} is not JSON-portable: {exc}. "
             "Evidence envelopes persist inside bundle.json, so payloads are JSON "
             "data (store digests, never tensors)."
         ) from exc
     size = len(encoded.encode("utf-8"))
     if size > RELATION_EVIDENCE_BUDGET_BYTES:
         raise BundleRelationError(
-            f"bundle-relation 'evidence' on kind {kind!r} is {size} canonical-JSON "
+            f"bundle-relation {param!r} on kind {kind!r} is {size} canonical-JSON "
             f"bytes, above the {RELATION_EVIDENCE_BUDGET_BYTES}-byte per-row budget. "
             "Evidence envelopes are metadata-sized graded claims; move bulk "
             "payloads to a sidecar family and cite them by digest.",
@@ -403,7 +457,7 @@ class MemberRelationRow:
     """One frozen S6 relation row; ``kind`` selects one of TWO closed shapes.
 
     PAIR rows (kinds ``alternative_of`` / ``forked_from`` / ``successor_of``
-    / ``escalates``) carry ``from_member``/``to_member`` (persisted as the
+    / ``escalates`` / ``fed_by`` / ``selected_by``) carry ``from_member``/``to_member`` (persisted as the
     S6 ``from``/``to`` keys) and leave ``member`` unset. MEMBER rows (kind
     ``episode_member``) carry ``member`` and leave the endpoints unset.
     ``params`` holds only keys the kind declares — per-kind closed

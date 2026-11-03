@@ -26,9 +26,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import DivergencePolicy, NumericAttestationStatus, PathFaithfulness
 
 
 def _save(model: nn.Module, x: torch.Tensor, path: Path) -> Path:
@@ -37,9 +37,7 @@ def _save(model: nn.Module, x: torch.Tensor, path: Path) -> Path:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_activations=True)
     return path
@@ -105,7 +103,7 @@ def test_r29_storage_offset_twin_diverges(tmp_path: Path) -> None:
 
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=xn)
-    diverged = tl.load(path).run(inputs=xn, on_divergence=DivergencePolicy.RETURN_DIVERGED)
+    diverged = tl.load(path).run(inputs=xn, on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 

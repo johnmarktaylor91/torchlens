@@ -9,8 +9,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
-from torchlens.intervention.errors import MultiMatchWarning
+from torchlens.errors import BackendUnsupportedError
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
 
@@ -171,14 +170,13 @@ def test_tinygrad_simple_linear_uses_object_module_hierarchy() -> None:
     model = TinyLinearModel()
     trace = tl.trace(model, Tensor.ones(1, 3), backend="tinygrad")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert [module.address for module in trace.modules] == ["self", "fc"]
     assert trace.modules["self"].address_children == ["fc"]
     assert trace.modules["fc"].address_parent == "self"
     assert trace.modules["fc"].params
     assert {param.module_address for param in trace.modules["fc"].params} == {"fc"}
-    with pytest.warns(MultiMatchWarning, match="will fan out"):
-        fc_labels = trace.resolve_sites(tl.in_module("fc"), max_fanout=16).labels()
+    fc_labels = trace[tl.in_module("fc")].labels
     assert fc_labels
     assert all("fc:1" in trace[label].modules for label in fc_labels)
     assert check_metadata_invariants(trace) is True
@@ -191,7 +189,7 @@ def test_tinygrad_nested_modules_preserve_address_tree_and_selectors() -> None:
     model = TinyNestedModel()
     trace = tl.trace(model, Tensor.ones(1, 3), backend="tinygrad")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert {module.address for module in trace.modules} == {
         "self",
         "encoder",
@@ -202,10 +200,8 @@ def test_tinygrad_nested_modules_preserve_address_tree_and_selectors() -> None:
     assert trace.modules["encoder"].address_parent == "self"
     assert trace.modules["encoder"].address_children == ["encoder.proj"]
     assert trace.modules["encoder.proj"].address_parent == "encoder"
-    with pytest.warns(MultiMatchWarning, match="will fan out"):
-        proj_labels = trace.resolve_sites(tl.in_module("encoder.proj"), max_fanout=16).labels()
-    with pytest.warns(MultiMatchWarning, match="will fan out"):
-        encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=32).labels()
+    proj_labels = trace[tl.in_module("encoder.proj")].labels
+    encoder_labels = trace[tl.in_module("encoder")].labels
     assert set(proj_labels) < set(encoder_labels)
     assert all("encoder.proj:1" in trace[label].modules for label in proj_labels)
     assert check_metadata_invariants(trace) is True
@@ -228,8 +224,7 @@ def test_tinygrad_shared_submodule_aliases_and_multicall() -> None:
     assert trace.modules["self"].address_children == ["left"]
     assert {param.module_address for param in shared.params} == {"left"}
     assert {tuple(param.all_module_addresses) for param in shared.params} == {("left", "right")}
-    with pytest.warns(MultiMatchWarning, match="will fan out"):
-        left_labels = trace.resolve_sites(tl.in_module("left"), max_fanout=32).labels()
+    left_labels = trace[tl.in_module("left")].labels
     assert any("left:1" in trace[label].modules for label in left_labels)
     assert any("left:2" in trace[label].modules for label in left_labels)
     assert check_metadata_invariants(trace) is True
@@ -242,15 +237,14 @@ def test_tinygrad_reused_uop_keeps_first_construction_attribution() -> None:
     model = TinyReusedTensorModel()
     trace = tl.trace(model, Tensor.ones(1, 3), backend="tinygrad")
 
-    with pytest.warns(MultiMatchWarning, match="will fan out"):
-        fc_labels = trace.resolve_sites(tl.in_module("fc"), max_fanout=16).labels()
+    fc_labels = trace[tl.in_module("fc")].labels
     assert fc_labels
     assert trace.modules["fc"].num_calls == 1
     assert all("fc:1" in trace[label].modules for label in fc_labels)
     root_only = [
         op.label
-        for op in trace.layer_list
-        if op.module == "self:1" and op.layer_type == "add" and not op.is_input
+        for op in trace._layer_list
+        if op.module == "self:1" and op.type == "add" and not op.is_input
     ]
     assert root_only
     assert check_metadata_invariants(trace) is True
@@ -277,7 +271,7 @@ def test_tinygrad_raw_function_traces_remain_function_root() -> None:
 
     trace = tl.trace(raw_fn, Tensor.ones(3), backend="tinygrad")
 
-    assert trace.module_identity_mode == "function_root"
+    assert trace.options.module_identity_mode == "function_root"
     assert [module.address for module in trace.modules] == ["self"]
     assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
@@ -293,9 +287,9 @@ def test_tinygrad_object_model_can_force_function_root() -> None:
         capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
     )
 
-    assert trace.module_identity_mode == "function_root"
+    assert trace.options.module_identity_mode == "function_root"
     assert [module.address for module in trace.modules] == ["self"]
-    assert trace.param_source == "none"
+    assert trace.provenance.param_source == "none"
     assert check_metadata_invariants(trace) is True
 
 
@@ -332,26 +326,25 @@ def test_tinygrad_object_module_public_surface_matrix(tmp_path: Path) -> None:
 
     trace = tl.trace(TinyLinearModel(), Tensor.ones(1, 3), backend="tinygrad")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert trace.modules["fc"].params
     assert trace.modules["fc"].forward_args is not None
     assert trace.module_calls["fc:1"].forward_kwargs == {}
     assert isinstance(trace.summary(), str)
-    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert len(trace.to_pandas()) == len(trace._layer_list)
     assert len(trace.modules.to_pandas()) == len(trace.modules)
     assert len(trace.module_calls["fc:1"].to_pandas()) == 1
     dot = trace.draw(
-        vis_outpath=str(tmp_path / "tinygrad_object_graph"),
-        vis_save_only=True,
-        vis_fileformat="dot",
-    )
+        path=str(tmp_path / "tinygrad_object_graph"),
+        file_format="dot",
+    ).dot
     assert isinstance(dot, str)
     audit_path = tmp_path / "tinygrad_object_audit.tlspec"
     trace.save(audit_path, level="audit")
     loaded = tl.load(audit_path)
-    assert loaded.backend == "tinygrad"
-    assert loaded.module_identity_mode == "object_module"
-    assert all(op.out is None for op in loaded.layer_list)
+    assert loaded.provenance.backend == "tinygrad"
+    assert loaded.options.module_identity_mode == "object_module"
+    assert all(op.out is None for op in loaded._layer_list)
 
     portable_path = tmp_path / "tinygrad_object_portable.tlspec"
     source_out = trace[trace.output_layers[0]].out
@@ -359,8 +352,8 @@ def test_tinygrad_object_module_public_surface_matrix(tmp_path: Path) -> None:
     trace.save(portable_path)
     loaded_portable = tl.load(portable_path)
     loaded_out = loaded_portable[loaded_portable.output_layers[0]].out
-    assert loaded_portable.backend == "tinygrad"
-    assert loaded_portable.module_identity_mode == "object_module"
+    assert loaded_portable.provenance.backend == "tinygrad"
+    assert loaded_portable.options.module_identity_mode == "object_module"
     assert getattr(loaded_portable, "payload_load_status") == "loaded_device_best_effort"
     assert isinstance(loaded_out, Tensor)
     assert loaded_out.shape == expected.shape
@@ -376,7 +369,7 @@ def test_tinygrad_object_module_corruption_invariant_fails() -> None:
     """Dropping object-module op attribution should fail metadata invariants."""
 
     trace = tl.trace(TinyLinearModel(), Tensor.ones(1, 3), backend="tinygrad")
-    victim = next(layer for layer in trace.layer_list if layer.module and not layer.is_input)
+    victim = next(layer for layer in trace._layer_list if layer.module and not layer.is_input)
     victim.module = None
     victim.modules = []
     victim.module_call_stack = []

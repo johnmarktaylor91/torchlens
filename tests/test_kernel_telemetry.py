@@ -13,14 +13,14 @@ from _source_corpus import module_ast
 from torch import nn
 
 import torchlens as tl
-from torchlens import kernel_telemetry as telemetry
+from torchlens import _kernel_telemetry as telemetry
 from torchlens._io import FieldPolicy
 from torchlens._io.prerelease import registered_prerelease_fields
-from torchlens.kernel_telemetry import KernelLaunch
-from torchlens.observability._kineto import NormalizedEvent
+from torchlens._kernel_telemetry import KernelLaunch
+from torchlens._observability._kineto import NormalizedEvent
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_TELEMETRY_MODULE = "torchlens.kernel_telemetry"
+_TELEMETRY_MODULE = "torchlens._kernel_telemetry"
 _REAL_CUDA_ROWS = (
     "one ATen call to many kernels",
     "several ATen calls to one fused launch",
@@ -54,6 +54,17 @@ class _CudaTelemetryModel(nn.Module):
         """Run matrix multiplication followed by a pointwise operation."""
 
         return torch.relu(value @ value)
+
+
+def test_factory_that_recorded_no_aten_rows_refuses_typed() -> None:
+    """The seam refuses typed when its factory captured without ``aten_ops``."""
+
+    with pytest.raises(tl.errors.AtenOpsUnavailableError) as excinfo:
+        telemetry._profile_trace_with_cuda_kernels(
+            lambda: tl.trace(_CudaTelemetryModel(), torch.ones(2, 2))
+        )
+    assert excinfo.value.fields["code"] == "aten_ops_unavailable"
+    assert "CaptureOptions(aten_ops=True)" in str(excinfo.value)
 
 
 def test_documented_unstable_kernel_surface_matches_glossary_index() -> None:
@@ -242,7 +253,11 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
         pytest.skip("CPU-only NOT-RUN disclosure row applies only without CUDA")
 
     trace = telemetry._profile_trace_with_cuda_kernels(
-        lambda: tl.trace(_CudaTelemetryModel(), torch.ones(2, 2))
+        lambda: tl.trace(
+            _CudaTelemetryModel(),
+            torch.ones(2, 2),
+            capture=tl.options.CaptureOptions(aten_ops=True),
+        )
     )
     primitive_rows = trace._primitive_op_profile.primitive_ops
     assert primitive_rows
@@ -259,7 +274,7 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
     }
 
     default_path = tmp_path / "default.tlspec"
-    tl.save(trace, default_path)
+    trace.save(default_path)
     loaded = tl.load(default_path)
     # tlspec v8: the telemetry annotation section persists on a plain save.
     assert "_kernel_telemetry" in loaded.annotations
@@ -275,8 +290,8 @@ def test_kernel_rows_persist_and_registrations_are_retired() -> None:
     assert "_TelemetryPayload" not in inventory
     # v8 telemetry keys retired; the standing row is C01's gated sidecar key.
     assert inventory.get("Trace.annotations", ()) in ((), ("sidecar",))
-    assert set(KernelLaunch.PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
-    assert set(telemetry._TelemetryPayload.PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
+    assert set(KernelLaunch._PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
+    assert set(telemetry._TelemetryPayload._PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
 
 
 def _imported_modules(path: Path) -> set[str]:
@@ -319,7 +334,6 @@ def test_kernel_telemetry_lane_is_detachable_from_package_and_other_tests() -> N
         if path.name
         not in {
             Path(__file__).name,
-            "test_legacy_artifact.py",
             "test_prebump_roundtrip_acceptance.py",
             "test_prerelease_registrar.py",
         }
@@ -332,13 +346,18 @@ def test_kernel_telemetry_lane_is_detachable_from_package_and_other_tests() -> N
 
 @pytest.mark.heavy
 @pytest.mark.optional
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA/CUPTI matrix NOT-RUN-DISCLOSED")
 def test_real_cuda_cupti_correlation_matrix() -> None:
     """Run the real CUDA/CUPTI correlation gate when a device leg exists."""
 
     device = torch.device("cuda")
     trace = telemetry._profile_trace_with_cuda_kernels(
-        lambda: tl.trace(_CudaTelemetryModel().to(device), torch.ones(32, 32, device=device))
+        lambda: tl.trace(
+            _CudaTelemetryModel().to(device),
+            torch.ones(32, 32, device=device),
+            capture=tl.options.CaptureOptions(aten_ops=True),
+        )
     )
     launches = [
         launch
