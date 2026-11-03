@@ -119,7 +119,11 @@ def _assert_same(left: Any, right: Any) -> None:
 
 
 def _assert_same_payloads(full: Any, fast: Any) -> None:
-    """Assert the fast run refreshed every payload the full rerun saved, exactly."""
+    """Assert the fast run refreshed every non-buffer payload the full rerun saved, exactly.
+
+    Buffer ops have no live event; the fast run clears their payloads rather
+    than keep stale ones, so they are the only saved ops it may leave out.
+    """
 
     def saved(trace: Any) -> dict[str, torch.Tensor]:
         return {
@@ -129,9 +133,11 @@ def _assert_same_payloads(full: Any, fast: Any) -> None:
         }
 
     want, have = saved(full), saved(fast)
-    assert want and want.keys() == have.keys()
-    for label, value in want.items():
-        assert torch.equal(value, have[label]), label
+    buffers = {op.label for op in full._layer_list if op.is_buffer}
+    assert want and have.keys() <= want.keys()
+    assert want.keys() - have.keys() <= buffers
+    for label, value in have.items():
+        assert torch.equal(want[label], value), label
 
 
 def test_caller_frame_tells_a_direct_forward_call_apart() -> None:
