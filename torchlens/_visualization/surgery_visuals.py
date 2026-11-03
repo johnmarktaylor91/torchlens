@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR, NodeSpec, NodeSpecFn
 from ._render_names import _SPEC_SLOT_RENDERED_NODE, DEFAULT_DRAW_STEM
 from .theme_registry import GRAPHVIZ_DRAW_SURFACE, LensPreset, register_lens
@@ -287,7 +288,9 @@ def _fire_marks(trace: Any) -> list[SurgeryMark]:
                 SurgeryMark(
                     layer_label=str(getattr(record, "target_label", None) or op.layer_label),
                     call_label=str(getattr(record, "call_label", None) or label),
-                    site_key=(str(op.site_key) if getattr(op, "site_key", None) else None),
+                    site_key=(
+                        str(op.graph.site_key) if record_member(op, "site_key", None) else None
+                    ),
                     kind="fire",
                     basis="fact",
                     row=f"{verb}: {helper} ({engine} engine)",
@@ -351,7 +354,7 @@ def _mark_for_recorded_label(trace: Any, label: str, *, kind: str, row: str) -> 
         op = None
     if op is not None:
         layer_label = str(getattr(op, "layer_label", layer_label))
-        raw_key = getattr(op, "site_key", None)
+        raw_key = record_member(op, "site_key", None)
         site_key = str(raw_key) if raw_key else None
     return SurgeryMark(
         layer_label=layer_label,
@@ -383,7 +386,7 @@ def _declared_target_marks(
     by_site_key: dict[str, list[Any]] = {}
     for label in getattr(trace, "op_labels", ()) or ():
         op = trace.ops[label]
-        raw_key = getattr(op, "site_key", None)
+        raw_key = record_member(op, "site_key", None)
         if raw_key:
             by_site_key.setdefault(str(raw_key), []).append(op)
     marks: list[SurgeryMark] = []

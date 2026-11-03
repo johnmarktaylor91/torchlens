@@ -30,7 +30,7 @@ class _Tied(nn.Module):
 
 
 def _keys(trace: tl.Trace) -> dict[str, str | None]:
-    return {label: trace.ops[label].site_key for label in trace.op_labels}
+    return {label: trace.ops[label].graph.site_key for label in trace.op_labels}
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ def test_g2_loaded_recompute_byte_parity(tmp_path) -> None:
             op.type,
             getattr(op, "multi_output_index", None),
         )
-        assert recomputed == op.site_key, (label, recomputed, op.site_key)
+        assert recomputed == op.graph.site_key, (label, recomputed, op.graph.site_key)
 
 
 # ---------------------------------------------------------------------------
@@ -96,14 +96,14 @@ def test_g3_forged_key_fails_is1_and_is2(tmp_path) -> None:
         loaded = tl.load(str(path))
     assert check_metadata_invariants(loaded)
     # Malformed forgery -> I-S1.
-    loaded.ops["relu_1_2:1"].site_key = "not-a-site-key"
+    loaded.ops["relu_1_2:1"]._graph_site_key = "not-a-site-key"
     with pytest.raises(MetadataInvariantError, match="I-S1"):
         check_metadata_invariants(loaded)
     # Colliding forgery (duplicate key within one call instance -- input and
     # output both live in the root pseudo-instance) -> I-S2.
     with activate_prerelease_fields():
         collided = tl.load(str(path))
-    collided.ops["output_1:1"].site_key = collided.ops["input_1:1"].site_key
+    collided.ops["output_1:1"]._graph_site_key = collided.ops["input_1:1"].graph.site_key
     with pytest.raises(MetadataInvariantError, match="I-S2"):
         check_metadata_invariants(collided)
 
@@ -114,7 +114,7 @@ def test_g3_label_bearing_forged_key_fails_sweep(tmp_path) -> None:
     with activate_prerelease_fields():
         trace.save(str(path))
         loaded = tl.load(str(path))
-    loaded.ops["relu_1_2:1"].site_key = "s1|act_raw|relu||9"
+    loaded.ops["relu_1_2:1"]._graph_site_key = "s1|act_raw|relu||9"
     with pytest.raises(MetadataInvariantError, match="survived postprocessing"):
         check_metadata_invariants(loaded)
 

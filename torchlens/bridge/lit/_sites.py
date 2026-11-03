@@ -228,7 +228,7 @@ def pin_blocks(trace: Any) -> list[SiteSpec]:
             SiteSpec(
                 field_name=f"tl_block_{index}",
                 module_address=address,
-                site_key=str(last.site_key),
+                site_key=str(last.graph.site_key),
                 pass_index=int(last.pass_number),
             )
         )
@@ -273,7 +273,7 @@ def pin_explicit(trace: Any, sites: tuple[str, ...]) -> list[SiteSpec]:
             SiteSpec(
                 field_name="tl_" + address.replace(".", "_") + suffix,
                 module_address=address,
-                site_key=str(chosen.site_key),
+                site_key=str(chosen.graph.site_key),
                 pass_index=int(chosen.pass_number),
             )
         )
@@ -360,7 +360,7 @@ def resolve_pinned(trace: Any, specs: list[SiteSpec]) -> dict[str, Any]:
 
     index: dict[tuple[str, int], list[Any]] = {}
     for op in trace._layer_list:
-        key = (str(op.site_key), int(op.pass_number))
+        key = (str(op.graph.site_key), int(op.pass_number))
         index.setdefault(key, []).append(op)
 
     resolved: dict[str, Any] = {}

@@ -285,7 +285,7 @@ def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) 
     keys: list[str] = []
     for label in labels:
         op = baseline.ops[label]
-        key = getattr(op, "site_key", None)
+        key = op.graph.site_key
         if not key:
             raise BundleExperimentError(
                 f"candidate {candidate_id!r} site {label!r} carries no "

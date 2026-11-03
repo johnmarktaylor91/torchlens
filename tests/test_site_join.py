@@ -256,7 +256,7 @@ def test_io_boundary_ops_join_positional() -> None:
 def test_site_profile_refuses_typed_on_keyless_trace() -> None:
     log = tl.trace(_SameLineLoop(), torch.randn(2, 4))
     for label in log.op_labels:
-        log.ops[label].site_key = None
+        log.ops[label]._graph_site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
         site_profile(log)
     assert excinfo.value.fields["code"] == "site_key_unavailable"

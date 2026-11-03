@@ -22,6 +22,7 @@ from typing import Any
 import torch
 
 from .._semantic._hops import VALUE_GRAMMAR, HopRefusal, walk_upstream
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._records import ComponentRow, ComponentStack, Coordinate, StackGrading
 from ._walk import SpineNode, SpineWalk, walk_spine
@@ -131,7 +132,7 @@ def _require_payloads(trace: Any, labels: list[str], *, analysis: str) -> dict[s
             continue
         value = _saved_out(op)
         if value is None:
-            missing.append({"op_label": label, "site_key": getattr(op, "site_key", None)})
+            missing.append({"op_label": label, "site_key": record_member(op, "site_key", None)})
         else:
             payloads[str(getattr(op, "label", label))] = value
     if missing:
@@ -223,7 +224,7 @@ def residual_accumulation(
                 coordinate=Coordinate(
                     label=_innermost_module(op) or label,
                     op_label=label,
-                    site_key=getattr(op, "site_key", None),
+                    site_key=record_member(op, "site_key", None),
                     pass_index=getattr(op, "pass_number", None),
                     kind="residual",
                     module_address=_innermost_module(op),
@@ -239,7 +240,7 @@ def residual_accumulation(
         target_coordinate=Coordinate(
             label=str(getattr(target_op, "label", "target")),
             op_label=str(getattr(target_op, "label", "")),
-            site_key=getattr(target_op, "site_key", None),
+            site_key=record_member(target_op, "site_key", None),
             pass_index=getattr(target_op, "pass_number", None),
             kind="residual",
         ),
@@ -271,7 +272,7 @@ def _writer_row(
         coordinate=Coordinate(
             label=label,
             op_label=str(getattr(writer_op, "label", writer_label)),
-            site_key=getattr(writer_op, "site_key", None),
+            site_key=record_member(writer_op, "site_key", None),
             pass_index=getattr(writer_op, "pass_number", None),
             kind=_writer_kind(trace, ancestor),
             module_address=_innermost_module(ancestor),
@@ -406,7 +407,7 @@ def residual_decomposition(
         target_coordinate=Coordinate(
             label=str(getattr(target_op, "label", "target")),
             op_label=str(getattr(target_op, "label", "")),
-            site_key=getattr(target_op, "site_key", None),
+            site_key=record_member(target_op, "site_key", None),
             pass_index=getattr(target_op, "pass_number", None),
             kind="residual",
         ),

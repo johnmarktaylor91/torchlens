@@ -24,7 +24,7 @@ Design constraints honored:
   consume no ordinals, SF-63). On a model whose pruned dead ops share a
   cohort with later live ops the two numberings diverge -- the parity test
   pins agreement on orphan-free models, and the divergence is detectable
-  post hoc by comparing ``op.site_key`` against the live-minted key.
+  post hoc by comparing ``op.graph.site_key`` against the live-minted key.
 
 Every spelling DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -128,7 +128,7 @@ def mint_keys_in_execution_order(trace: Any) -> dict[str, str]:
     """Re-mint keys over the trace's retained ops in execution order (pure).
 
     The parity harness: feeding the SAME streaming minter the retained ops
-    in raw execution order must reproduce ``op.site_key`` byte-identically
+    in raw execution order must reproduce ``op.graph.site_key`` byte-identically
     (property P4 sibling). Used by the C03 parity pin; also the reference
     implementation the F01 bind runtime can consume.
 

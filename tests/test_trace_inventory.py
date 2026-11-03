@@ -84,7 +84,7 @@ def test_sites_table_refuses_keyless_legacy_artifacts() -> None:
     torch.manual_seed(1)
     trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
     for op in trace._layer_list:
-        op.site_key = None
+        op._graph_site_key = None
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         trace.sites()

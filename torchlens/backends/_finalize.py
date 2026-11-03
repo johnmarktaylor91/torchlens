@@ -568,7 +568,7 @@ def _mint_preview_site_keys(trace: Trace) -> None:
     for op_log in trace._raw_graph_ws.raw_layer_dict.values():
         if record_member(op_log, "is_orphan", False):
             continue
-        op_log.site_key = minter.mint(
+        op_log._graph_site_key = minter.mint(
             getattr(op_log, "modules", None) or (),
             str(getattr(op_log, "type", "") or ""),
             (

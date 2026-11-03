@@ -282,7 +282,7 @@ def _counts(trace: Any) -> CountsRecord:
         or record_member(op, "is_buffer", False)
     )
     compute_ops = len(ops) - alias_rows
-    site_keys = {site for op in ops if (site := getattr(op, "site_key", None)) is not None}
+    site_keys = {site for op in ops if (site := record_member(op, "site_key", None)) is not None}
     return CountsRecord(
         compute_ops=compute_ops,
         tracked_tensor_rows=len(ops),
@@ -300,7 +300,7 @@ def _identity(trace: Any) -> IdentityIndex:
     ops = list((trace._layer_list if is_live_trace(trace) else None) or ())
     op_labels = tuple(str(getattr(op, "label", getattr(op, "layer_label", "?"))) for op in ops)
     op_layers = tuple(str(getattr(op, "layer_label", "?")) for op in ops)
-    op_sites = tuple(getattr(op, "site_key", None) for op in ops)
+    op_sites = tuple(record_member(op, "site_key", None) for op in ops)
     modules = getattr(trace, "modules", {}) or {}
     module_calls = getattr(trace, "module_calls", {}) or {}
     return IdentityIndex(

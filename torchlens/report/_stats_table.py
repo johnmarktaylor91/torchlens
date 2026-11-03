@@ -345,7 +345,7 @@ def build_stats_table(
             StatsTableRow(
                 row_id=f"op:{label}",
                 label=label,
-                site_key=getattr(op, "site_key", None),
+                site_key=record_member(op, "site_key", None),
                 state=state,
                 stats=stats,
                 reason=reason,

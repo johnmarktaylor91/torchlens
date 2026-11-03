@@ -998,7 +998,7 @@ def _act_entry(op: Any, mask: _Mask, relation: str, source: str) -> Site:
         # The L1 structural-position identity lives on Op as ``site_key``
         # (site_key_v1 strings); Site's field keeps the qualified name
         # because Site.key is already the (label, pass) address.
-        structural_site_key=getattr(op, "site_key", None),
+        structural_site_key=record_member(op, "site_key", None),
     )
 
 

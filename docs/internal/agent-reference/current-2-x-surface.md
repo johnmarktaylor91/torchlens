@@ -777,14 +777,14 @@
   unresolved pre-F03 and must not hold the amendment past V9-FREEZE.
 - SITE KEYS + GROUPING SURFACE (L1 wave 0; every spelling DOCUMENTED-UNSTABLE
   pending naming-session/S2 ratification): every retained op carries
-  `op.site_key` (`site_key_v1`) — a portable, policy-independent
+  `op.graph.site_key` (`site_key_v1`) — a portable, policy-independent
   STRUCTURAL-POSITION identity minted at grouping time on every backend
   (`"s1|" + module-site/type/slot/ordinal`, percent-escaped; ordinals restart
   per pass-qualified innermost call instance, so reused-module calls share
   keys across instances). It is a BRIDGING relation (cross-capture joins on
   position, never proven source identity: per-call-instance cardinality guard
   + source-location witness + corroborated/positional/refused verdict tiers,
-  internal until S2). Per-pass keys read as `layer.ops[k].site_key`
+  internal until S2). Per-pass keys read as `layer.ops[k].graph.site_key`
   (within-call recurrence groups span sites); `Layer.graph.site_peers` indexes same-site layers live; keyless legacy
   artifacts refuse `site_key_unavailable`. `Layer.shape_summary` is the
   derived across-pass shape string ("2->4" monotone / "2-4" min-max /

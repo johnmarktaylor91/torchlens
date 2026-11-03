@@ -342,7 +342,7 @@ def _locate_expansion(  # noqa: PLR0913 -- the module's identity plus its head c
         for row in corrupted_log._layer_list
         if str(row.label) == str(op.label)
         and str(row.raw_label) == str(op.raw_label)
-        and row.site_key == op.site_key
+        and row.graph.site_key == op.graph.site_key
     ]
     if len(twins) != 1:
         refuse(

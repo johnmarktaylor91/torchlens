@@ -163,8 +163,8 @@ single-pass layers. Inputs and outputs are always single-pass layers.
 
 ## How this relates to `site_key`
 
-`op.site_key` names an op's position within one module call (module address, op type, output
+`op.graph.site_key` names an op's position within one module call (module address, op type, output
 slot and an ordinal), and it is the same whichever grouping ran. Grouping uses the call site, not
 the position. Most layers have one site key; a loop inside one module call gives a layer whose
 passes sit at different positions and carry different keys.
-Read per-pass keys with `layer.ops[k].site_key`.
+Read per-pass keys with `layer.ops[k].graph.site_key`.

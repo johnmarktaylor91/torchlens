@@ -279,7 +279,7 @@ def test_reanchored_rows_refuse_at_load(tmp_path) -> None:
         for row in _injected_rows(state):
             envelope = row.annotations["injection_codec_v1"]
             suffix = row.layer_label[len(envelope["host_label"]) :]
-            row.call.injection_provenance["host_site_key"] = tanh.site_key
+            row.call.injection_provenance["host_site_key"] = tanh.graph.site_key
             row.call.injection_provenance["host_pass"] = 7
             row.call.injection_provenance["spec_rule_id"] = "r-forged"
             envelope["host_label"] = f"{tanh.layer_label}:{tanh.pass_number}"
@@ -299,7 +299,7 @@ def test_site_key_label_disagreement_refuses_at_load(tmp_path) -> None:
     def inconsistent(state) -> None:
         tanh = next(op for op in _model_rows(state) if op.layer_label.startswith("tanh"))
         for row in _injected_rows(state):
-            row.call.injection_provenance["host_site_key"] = tanh.site_key
+            row.call.injection_provenance["host_site_key"] = tanh.graph.site_key
 
     with pytest.raises(Exception) as excinfo:
         _save_tamper_load(tmp_path, logged, inconsistent)
@@ -359,7 +359,7 @@ def test_bind_site_keys_match_capture_for_submodule_ops() -> None:
     trace = tl.trace(model, x)
     capture_keys: dict[str, list[str]] = {}
     for op in trace.ops:
-        capture_keys.setdefault(op.type, []).append(op.site_key)
+        capture_keys.setdefault(op.type, []).append(op.graph.site_key)
     for func_name in ("linear", "relu"):
         bound = tl.when(tl.func(func_name), tl.scale(1.0)).bind(model, on_zero_fire="disclose")
         bound(x)
@@ -533,7 +533,7 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
     assert "fc1:1" in host.module_context.output_of_module_calls
     for record in records:
         assert record.host_label == host.label
-        assert record.provenance.host_site_key == host.site_key
+        assert record.provenance.host_site_key == host.graph.site_key
         assert record.provenance.host_pass == host.pass_number
     path = tmp_path / "module_boundary.tlspec"
     logged.save(str(path))

@@ -40,6 +40,7 @@ from .._semantic.patching import (
     _facet_tensor,
     _run_patch,
 )
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._params import head_weight_views
 
@@ -253,7 +254,7 @@ def patch_head(  # noqa: PLR0913 -- the memo-normative D11 signature
             },
             "lowered_at_real_site": {
                 "op_label": str(real_op.label),
-                "site_key": getattr(real_op, "site_key", None),
+                "site_key": record_member(real_op, "site_key", None),
                 "module_address": views.sources["o"].module_address,
             },
             "source_sites": {

@@ -58,10 +58,10 @@ def layer_site_key(layer: Layer) -> str:
         ``site_key_unavailable`` when no op carries a key (legacy artifact
         written before site keys existed); ``layer_site_ambiguous`` when the
         layer's ops span multiple sites -- read the exact per-pass key via
-        ``.ops[k].site_key``.
+        ``.ops[k].graph.site_key``.
     """
 
-    keys = {op.site_key for op in _pass_ordered_ops(layer)}
+    keys = {op.graph.site_key for op in _pass_ordered_ops(layer)}
     if keys == {None}:
         raise InvalidArgumentError(
             f"Layer '{layer.layer_label}' carries no site keys: this artifact "
@@ -83,7 +83,7 @@ def layer_site_key(layer: Layer) -> str:
             "(within-call-instance recurrence or a root-context loop); a "
             "single site_key read would be silently wrong.",
             code="layer_site_ambiguous",
-            remedy="read the per-pass key via .ops[k].site_key",
+            remedy="read the per-pass key via .ops[k].graph.site_key",
             layer_label=layer.layer_label,
         )
     return next(iter(keys))
@@ -103,7 +103,7 @@ def layer_site_peers(layer: Layer) -> tuple[Layer, ...]:
         the owning trace is unavailable.
     """
 
-    own_keys = {op.site_key for op in _pass_ordered_ops(layer)}
+    own_keys = {op.graph.site_key for op in _pass_ordered_ops(layer)}
     own_keys.discard(None)
     trace = getattr(layer, "source_trace", None)
     if not own_keys or trace is None:
@@ -126,7 +126,7 @@ def layer_site_peers(layer: Layer) -> tuple[Layer, ...]:
         candidate = trace._layer_logs.get(candidate_label)
         if candidate is None or candidate is layer:
             continue
-        candidate_keys = {op.site_key for op in candidate.ops.values()}
+        candidate_keys = {op.graph.site_key for op in candidate.ops.values()}
         candidate_keys.discard(None)
         if candidate_keys & own_keys:
             peers.append(candidate)

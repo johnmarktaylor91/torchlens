@@ -98,7 +98,7 @@ def curated_attrs(entry: Any, context: AttrContext) -> list[dict[str, str]]:
         ("saved", _saved_string(entry)),
         ("nonfinite", _nonfinite_string(entry, context)),
         ("torchlens_label", str(getattr(entry, "label", "") or "") or None),
-        ("site_key", str(getattr(entry, "site_key", "") or "") or None),
+        ("site_key", str(record_member(entry, "site_key", "") or "") or None),
     ]
     if context.include_source and not context.public:
         rows.append(("source", _source_string(entry)))
@@ -128,7 +128,7 @@ def curated_rolled_attrs(layer: Any, ops: list[Any], context: AttrContext) -> li
         ("total_time", _duration_string(_sum_quantity(ops, "func_duration"))),
         ("torchlens_label", str(getattr(layer, "layer_label", "") or "") or None),
     ]
-    site_keys = {str(getattr(op, "site_key", "") or "") for op in ops}
+    site_keys = {str(record_member(op, "site_key", "") or "") for op in ops}
     if len(site_keys) == 1 and next(iter(site_keys)):
         rows.append(("site_key", next(iter(site_keys))))
     return [{"key": key, "value": value} for key, value in rows if value is not None]

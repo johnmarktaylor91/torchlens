@@ -363,7 +363,7 @@ class SiteSelector(BaseSelector):
     """Structural-position selector over ``site_key_v1`` components (C03).
 
     The site-key-primary WHERE spelling (surgery memo Build 0a/0c): valid in
-    EVERY lane under the address law -- post hoc against ``op.site_key``,
+    EVERY lane under the address law -- post hoc against ``op.graph.site_key``,
     and during a live capture against the streaming live minter
     (``intervention/_site_keys.py``). Every spelling DOCUMENTED-UNSTABLE
     pending naming-session ratification.
@@ -406,7 +406,7 @@ class SiteSelector(BaseSelector):
                 "tl.site() needs a rendered site key or at least one "
                 "component (module_path=, op_type=, slot=, ordinal=)",
                 code="site_selector_empty",
-                remedy="pass op.site_key, or components such as "
+                remedy="pass op.graph.site_key, or components such as "
                 "tl.site(module_path='encoder.0', func='linear')",
                 argument="key",
             )
@@ -432,7 +432,7 @@ class SiteSelector(BaseSelector):
                 raise ArgumentTypeError(
                     f"tl.site(key) received a malformed site key: {exc}",
                     code="site_selector_key_invalid",
-                    remedy="pass a rendered op.site_key string (site_key_v1)",
+                    remedy="pass a rendered op.graph.site_key string (site_key_v1)",
                     argument="key",
                 ) from exc
         object.__setattr__(self, "selector_kind", "site")
@@ -510,7 +510,7 @@ def site(
     Parameters
     ----------
     key:
-        A rendered ``op.site_key`` string (exact match).
+        A rendered ``op.graph.site_key`` string (exact match).
     module_path:
         Module-site match: the full ``/``-joined site axis or any one
         module address on it.

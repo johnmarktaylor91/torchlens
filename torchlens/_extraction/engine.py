@@ -1125,9 +1125,9 @@ def _site_identity(
         site_key: str | None
         site_key_unavailable: str | None
         try:
-            # A Layer view reads its single site key (typed refusal on
-            # spanning or keyless layers); an Op view carries its own key.
-            site_key = str(layer_site_key(layer) if isinstance(layer, Layer) else layer.site_key)
+            # A Layer view reads its single site key (typed refusal when spanning or keyless).
+            key = layer_site_key(layer) if isinstance(layer, Layer) else layer.graph.site_key
+            site_key = str(key)
             site_key_unavailable = None
         except TorchLensError as exc:
             site_key = None

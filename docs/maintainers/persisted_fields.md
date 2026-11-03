@@ -732,7 +732,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `shape` | interned | required: every level | keep | fact | `Op.shape` (field) |
 | `short_label` | interned | required: every level | keep | derived | `Op.short_label` (field) |
 | `short_layer_label` | interned | required: every level | keep | derived | `Op.short_layer_label` (field) |
-| `site_key` | interned | required: every level | keep | fact | `Op.site_key` (field) |
+| `site_key` | interned | required: every level | keep | fact | `Op.graph.site_key` (field) |
 | `step_index` | interned | required: every level | keep | fact | `Op.step_index` (field) |
 | `terminal_bool_for` | interned | required: every level | keep | fact | `Op.control_flow.terminal_bool_for` (field) |
 | `terminal_conditional_id` | interned | required: every level | keep | fact | `Op.terminal_conditional_id` (field) |

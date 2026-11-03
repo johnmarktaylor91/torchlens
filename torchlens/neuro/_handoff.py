@@ -25,7 +25,8 @@ import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import _actionable_message, _ActionableErrorMixin
-from ..errors._base import ConfigurationError
+from .._utils._record_group_table import record_member
+from ..errors._base import ConfigurationError, TorchLensError
 
 #: Observation-descriptor key of the ALWAYS-written original-row-index
 #: descriptor (neuro memo D10): rsatoolbox's ``calc_rdm(descriptor=...)``
@@ -470,10 +471,8 @@ def _record_site_key(record: Any) -> str:
         fabricating an identity.
     """
 
-    from ..errors._base import TorchLensError
-
     try:
-        value = getattr(record, "site_key", None)
+        value = record_member(record, "site_key", None)
     except (TorchLensError, AttributeError, ValueError) as exc:
         return f"unavailable({getattr(exc, 'fields', {}).get('code', type(exc).__name__)})"
     return str(value) if value else "unavailable(site_key_missing)"

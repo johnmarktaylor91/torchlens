@@ -29,6 +29,7 @@ import uuid
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils._record_group_table import record_member
 from ._types import Edit, FireRecord, SamplingRecord
 from .hooks import _UNIVERSE_SIGNAL, NormalizedHookEntry, split_site_branches
 
@@ -467,7 +468,7 @@ def site_keys_for_labels(trace: Any, labels: tuple[str, ...]) -> tuple[str, ...]
             # a trace-like without .ops, or a husked/None accessor.
             keys.append(label)
             continue
-        key = getattr(op, "site_key", None)
+        key = record_member(op, "site_key", None)
         keys.append(str(key) if key else label)
     return tuple(keys)
 

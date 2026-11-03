@@ -332,7 +332,7 @@ class _GroupingWorkspace:
                 recurrence_anchored=node.recurrence_anchored,
                 module_site=node.module_site,
                 arg_signature=node.arg_signature,
-                site_key=node.site_key,
+                site_key=node.graph.site_key,
             )
             for label, node in graph.nodes.items()
             if label in eligible and node.retain and not node.pruned
@@ -397,7 +397,7 @@ class _GroupingWorkspace:
                 pass_index=index + 1,
                 num_passes=len(members),
                 equivalence_key=node.equivalence_key,
-                site_key=node.site_key,
+                site_key=node.graph.site_key,
             )
         return assignments
 

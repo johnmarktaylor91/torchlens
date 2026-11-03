@@ -187,7 +187,7 @@ def _build_preview_recurrence_graph(
                 bool(getattr(op_log, "modules", None))
                 or bool(record_member(op_log, "is_buffer", False))
             ),
-            site_key=getattr(op_log, "site_key", None),
+            site_key=record_member(op_log, "site_key", None),
         )
 
     return RecurrenceGroupingGraph(

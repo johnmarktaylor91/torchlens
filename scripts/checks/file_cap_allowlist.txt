@@ -199,7 +199,7 @@ torchlens/_io/bundle_container.py::_load_unified_bundle	81
 torchlens/_io/bundle_container.py::_load_unified_bundle_directory	98
 torchlens/_io/bundle_metadata.py::_load_gated_member_relations	88
 torchlens/_io/bundle_metadata.py::_load_lineage_sections	61
-torchlens/_io/forgery_validation.py	1997
+torchlens/_io/forgery_validation.py	1995
 torchlens/_io/forgery_validation.py::_validate_site_keys	90
 torchlens/_io/format_contract.py::coerce_container_typed_state	92
 torchlens/_io/injection_codec.py::append_injected_op_rows	63
@@ -1250,7 +1250,7 @@ torchlens/neuro/_compare.py::compare	116
 torchlens/neuro/_datasets.py::_build_dataset	67
 torchlens/neuro/_datasets.py::datasets	86
 torchlens/neuro/_datasets.py::single_dataset	94
-torchlens/neuro/_handoff.py	888
+torchlens/neuro/_handoff.py	887
 torchlens/neuro/_handoff.py::enumerate_extraction_sites	97
 torchlens/neuro/_handoff.py::enumerate_trace_sites	86
 torchlens/neuro/_handoff.py::resolve_stimulus_ids	76

@@ -204,7 +204,7 @@ def _identity_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
     nodes: list[CardNode] = [CardText(identity)]
     if module:
         nodes.append(CardText(f"module: {module}"))
-    site_key = getattr(op, "site_key", None)
+    site_key = record_member(op, "site_key", None)
     if site_key:
         nodes.append(CardText(f"site: {site_key}", role="muted"))
     nodes.append(CardKey(root.key_expression(label)))

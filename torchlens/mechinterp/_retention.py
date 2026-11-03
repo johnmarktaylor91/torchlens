@@ -157,7 +157,7 @@ def _site(trace: Any, label: str, analysis: str) -> PlanSite:
         address = base if sep and tail.isdigit() else str(modules[-1])
     return PlanSite(
         op_label=str(getattr(op, "label", label)),
-        site_key=getattr(op, "site_key", None),
+        site_key=record_member(op, "site_key", None),
         func_name=str(getattr(op, "func_name", "")),
         module_address=address,
         estimated_bytes=_estimated_bytes(op),

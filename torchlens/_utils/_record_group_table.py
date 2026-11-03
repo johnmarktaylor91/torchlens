@@ -36,9 +36,8 @@ ACTIVE_GROUPS: frozenset[str] = frozenset(
 )
 
 #: ``(record, former flat name)`` rows of an active group that stay flat for
-#: now. ``Op.site_key`` is the selector address the public selector text tells
-#: users to pass; removing it waits on the replacement spelling for that text.
-PENDING_REMOVALS: frozenset[tuple[str, str]] = frozenset({("Op", "site_key")})
+#: now (empty: every row of an active group is applied).
+PENDING_REMOVALS: frozenset[tuple[str, str]] = frozenset()
 
 #: ``(former flat name, group | "rename" | "removed", new leaf name)``.
 OP_MEMBER_MOVES: tuple[tuple[str, str, str], ...] = (
@@ -169,7 +168,7 @@ OP_MEMBER_MOVES: tuple[tuple[str, str, str], ...] = (
     ("saved_args", "call", "saved_args"),
     ("saved_kwargs", "call", "saved_kwargs"),
     ("siblings", "graph", "siblings"),
-    ("site_key", "removed", ""),
+    ("site_key", "graph", "site_key"),
     ("terminal_bool_for", "control_flow", "terminal_bool_for"),
     ("tl_authored_root", "call", "tl_authored_root"),
     ("transform_chain", "call", "func_transform_chain"),

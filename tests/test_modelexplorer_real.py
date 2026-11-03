@@ -19,6 +19,7 @@ import torch
 from test_modelexplorer_assets import harness
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 
 torchvision = pytest.importorskip("torchvision")
 
@@ -46,7 +47,9 @@ def _bare_site_key_collisions(model: Any, inputs: torch.Tensor) -> int:
     """
 
     log = tl.trace(model, inputs)
-    counts = collections.Counter(getattr(entry, "site_key", None) for entry in log._layer_list)
+    counts = collections.Counter(
+        record_member(entry, "site_key", None) for entry in log._layer_list
+    )
     return sum(count - 1 for key, count in counts.items() if key and count > 1)
 
 

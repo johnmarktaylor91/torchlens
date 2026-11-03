@@ -25,7 +25,7 @@ TorchLens gives every captured op two kinds of address:
 
 - a **recorded label** like `linear_1_121` -- readable, but its numbering is
   minted per capture. Insert one op anywhere upstream and labels renumber.
-- a **structural site key** like `s1|lm_head|linear||1` (`op.site_key`) -- the
+- a **structural site key** like `s1|lm_head|linear||1` (`op.graph.site_key`) -- the
   op's structural position: which module site it ran in, its op type, and its
   occurrence ordinal within that call. Site keys do not move unless the site
   itself moves.
@@ -223,8 +223,8 @@ def all_site_keys(log):
     keys = set()
     for label in log.layer_labels:
         for op in log.layers[label].ops:
-            if isinstance(op.site_key, str):
-                keys.add(op.site_key)
+            if isinstance(op.graph.site_key, str):
+                keys.add(op.graph.site_key)
     return keys
 
 
@@ -294,7 +294,7 @@ EXACT
   intervention workflow; see [intervention_api.md](intervention_api.md) and
   the save-level table in
   [intervention_explainers.md](intervention_explainers.md).
-- **Spelling stability.** `op.site_key`, `tl.site(...)`, and the
+- **Spelling stability.** `op.graph.site_key`, `tl.site(...)`, and the
   compatibility checker's field spellings are DOCUMENTED-UNSTABLE pending
   naming-session ratification; the workflow itself is the supported path.
 - **This page is executable.** The realism test

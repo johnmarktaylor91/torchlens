@@ -360,7 +360,7 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
             ComputeRow(
                 row_id=f"op:{label}",
                 label=label,
-                site_key=getattr(op, "site_key", None),
+                site_key=record_member(op, "site_key", None),
                 kind=kind,
                 phase="forward",
                 func_name=getattr(op, "func_name", None),

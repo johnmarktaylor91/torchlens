@@ -1,7 +1,7 @@
 """Cross-run selection alignment (L6 stage 4a).
 
 ``Selection.align_to(target)`` re-binds a selection resolved on
-trace A onto trace B, keyed on the L1 STRUCTURAL SITE KEYS (``op.site_key``,
+trace A onto trace B, keyed on the L1 STRUCTURAL SITE KEYS (``op.graph.site_key``,
 ``site_key_v1``) that every ACT :class:`~torchlens._selection.selection.Site`
 records as its bridging relation. This is the sanctioned cross-run door:
 ``do()`` keeps refusing foreign resolved selections typed
@@ -35,6 +35,8 @@ index_space_mismatch``.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .selection import Selection
@@ -155,12 +157,12 @@ def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> A
         for op in _find_act_ops(target, layer_label)
         if (getattr(op, "pass_number", 1) or 1) == pass_index
     ]
-    if candidates and getattr(candidates[0], "site_key", None) == structural_key:
+    if candidates and record_member(candidates[0], "site_key", None) == structural_key:
         return candidates[0]
     key_family = [
         target.ops[label]
         for label in target.op_labels
-        if getattr(target.ops[label], "site_key", None) == structural_key
+        if record_member(target.ops[label], "site_key", None) == structural_key
     ]
     if len(key_family) == 1:
         verdict = _join_verdict_for_key(source_trace, target, structural_key)

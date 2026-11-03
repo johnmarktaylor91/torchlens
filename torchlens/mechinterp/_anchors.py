@@ -82,7 +82,7 @@ class LMHeadAnchor:
                 missing_sites=[
                     {
                         "op_label": str(getattr(self.target_op, "label", "")),
-                        "site_key": getattr(self.target_op, "site_key", None),
+                        "site_key": record_member(self.target_op, "site_key", None),
                     }
                 ],
             )

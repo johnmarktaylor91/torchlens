@@ -1276,7 +1276,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _graph_equivalence_class: Any
         _graph_equivalent_ops: Any
         _graph_recurrent_ops: Any
-        site_key: str | None
+        _graph_site_key: str | None
         injection_provenance: dict[str, Any] | None
         episode_step: int | None
         tl_authored_root: bool | None

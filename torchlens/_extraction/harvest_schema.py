@@ -128,7 +128,7 @@ class HarvestSpec:
                 "site keys before writing a record (labels renumber; site "
                 "keys are the persisted identity).",
                 code="harvest_schema_invalid",
-                remedy="resolve targets to op.site_key values",
+                remedy="resolve targets to op.graph.site_key values",
             )
         if not self.receipt_digest:
             raise InvalidArgumentError(

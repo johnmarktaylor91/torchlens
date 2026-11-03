@@ -237,6 +237,12 @@ class OpGraph(_RecordGroup):
 
         return self._record._graph_siblings
 
+    @property
+    def site_key(self) -> str | None:
+        """Portable structural-position identity of this Op (`site_key_v1`, `"s1|"`-prefixed), or `None` on a keyless artifact."""
+
+        return self._record._graph_site_key
+
 
 class LayerGraph(_LayerGroup):
     """Graph position of one Layer: relations, ancestry, per-pass edges and equivalence.

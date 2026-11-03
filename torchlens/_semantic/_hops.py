@@ -204,7 +204,7 @@ def _propose(op: Any, grammar: GrammarName) -> HopRecord | None:
         return None
     kind, detail = classified
     label = str(getattr(op, "label", "<unknown>"))
-    return HopRecord(label, getattr(op, "site_key", None), func_name, kind, detail)
+    return HopRecord(label, record_member(op, "site_key", None), func_name, kind, detail)
 
 
 HopKind = Literal["identity", "cast", "index", "dropout"]

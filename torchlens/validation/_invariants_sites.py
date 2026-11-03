@@ -38,7 +38,7 @@ def _check_site_key_invariants(ml: Trace) -> None:
 
     name = "site_key_invariants"
     ops = list(ml._layer_list)
-    if not any(getattr(op, "site_key", None) is not None for op in ops):
+    if not any(record_member(op, "site_key", None) is not None for op in ops):
         return  # legacy artifact: out of the invariant's declared domain
     _check_site_key_totality(ops, name)
     _check_site_key_uniqueness(ops, name)
@@ -51,7 +51,7 @@ def _check_site_key_totality(ops: list, name: str) -> None:
     from ._invariants import MetadataInvariantError
 
     for op in ops:
-        key = getattr(op, "site_key", None)
+        key = record_member(op, "site_key", None)
         if not isinstance(key, str) or not key.startswith(SITE_KEY_PREFIX + "|"):
             raise MetadataInvariantError(
                 name,
@@ -72,7 +72,7 @@ def _check_site_key_totality(ops: list, name: str) -> None:
                 raise MetadataInvariantError(
                     name,
                     f"Raw label {component!r} survived postprocessing inside "
-                    f"{op.label}.site_key ({key!r})",
+                    f"{op.label}.graph.site_key ({key!r})",
                 )
 
 
@@ -129,12 +129,12 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
                 # site_key with anything else, so keep the strict coarse
                 # identity that catches a forged collision.
                 call_instance = ROOT_CALL_INSTANCE
-        identity = (str(op.site_key), call_instance)
+        identity = (str(op.graph.site_key), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
                 name,
                 f"I-S2: ops '{seen[identity]}' and '{op.label}' share site_key "
-                f"{op.site_key!r} within call instance {call_instance!r}",
+                f"{op.graph.site_key!r} within call instance {call_instance!r}",
             )
         seen[identity] = op.label
 
@@ -153,7 +153,7 @@ def _check_layer_site_coherence(ml: Trace, name: str) -> None:
         layer = ml._layer_logs.get(layer_label)
         if layer is None:
             continue
-        member_keys = {op.site_key for _, op in layer.ops.items()}
+        member_keys = {op.graph.site_key for _, op in layer.ops.items()}
         member_keys.discard(None)
         if len(member_keys) == 1:
             accessor_value = layer_site_key(layer)

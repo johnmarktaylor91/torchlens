@@ -189,7 +189,7 @@ def _selection_sites(log: Any, selection: Any) -> list[tuple[str, str]]:
         # carry the L1 structural string -- match either spelling.
         base, _, pass_text = label.rpartition(":")
         pair = (base, int(pass_text)) if base and pass_text.isdigit() else None
-        if getattr(op, "site_key", None) in site_keys or pair in site_keys:
+        if record_member(op, "site_key", None) in site_keys or pair in site_keys:
             sites.append((label, "selection"))
     return sites
 

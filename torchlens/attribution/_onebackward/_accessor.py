@@ -309,7 +309,7 @@ def _build_index(trace: Any, token: tuple[Any, ...]) -> ReadEdgeIndex:
             label=label,
             pass_index=int(getattr(op, "pass_number", 1) or 1),
             layer_label=getattr(op, "layer_label", label.rsplit(":", 1)[0]),
-            site_key=getattr(op, "site_key", None),
+            site_key=record_member(op, "site_key", None),
             node=node,
             slot=slot,
             via_rejoin=via_rejoin,

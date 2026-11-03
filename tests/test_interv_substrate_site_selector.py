@@ -1,7 +1,7 @@
 """C03: tl.site() structural selector + live site-key minting (Build 0a/0c).
 
 The address law's structural lane: a ``site`` WHERE term is valid in EVERY
-lane -- post hoc against ``op.site_key``, and during a live capture against
+lane -- post hoc against ``op.graph.site_key``, and during a live capture against
 the streaming minter armed by the ``tl.trace`` entry. The parity pin is the
 verification surgery risk 1 demands: the SAME streaming minter, fed retained
 ops in execution order, reproduces the postprocess keys byte-identically.
@@ -126,7 +126,7 @@ def test_reused_module_calls_share_one_site_key_family() -> None:
         assert len({log[label].layer_label for label in table.labels}) == 1
         labels = list(table.labels)
         assert len(labels) == 2
-        keys = {log.ops[label].site_key for label in labels}
+        keys = {log.ops[label].graph.site_key for label in labels}
         assert len(keys) == 1, "reused-module calls share ONE structural position key"
         (shared_key,) = keys
         assert set(log[site(shared_key)].labels) == set(labels)
@@ -175,9 +175,9 @@ def test_streaming_minter_reproduces_postprocess_keys(model_cls: type[nn.Module]
     log = _ready(model_cls())
     reminted = mint_keys_in_execution_order(log)
     mismatches = {
-        label: (reminted[label], log.ops[label].site_key)
+        label: (reminted[label], log.ops[label].graph.site_key)
         for label in reminted
-        if log.ops[label].site_key != reminted[label]
+        if log.ops[label].graph.site_key != reminted[label]
     }
     assert not mismatches, f"streaming/postprocess key drift: {mismatches}"
 
@@ -188,7 +188,7 @@ def test_recurrent_pass_qualified_ordinals_stay_distinct() -> None:
 
     log = _ready(_Recurrent())
     relu_labels = [label for label in log.op_labels if log.ops[label].type == "relu"]
-    keys = [log.ops[label].site_key for label in relu_labels]
+    keys = [log.ops[label].graph.site_key for label in relu_labels]
     assert len(set(keys)) == len(keys) == 3
 
 

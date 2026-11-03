@@ -119,7 +119,7 @@ def site_profile(trace: Any) -> SiteProfile:
     witnesses: dict[str, set[_Witness | None]] = {}
     for label in trace.op_labels:
         op = trace.ops[label]
-        key = getattr(op, "site_key", None)
+        key = record_member(op, "site_key", None)
         if key is None:
             continue
         keys[label] = key
@@ -228,7 +228,7 @@ def fold_rows_from_trace(trace: Any) -> list[FoldRow]:
     return [
         FoldRow(
             label=label,
-            site_key=getattr(trace.ops[label], "site_key", None),
+            site_key=record_member(trace.ops[label], "site_key", None),
             equivalence_class=str(trace.ops[label].graph.equivalence_class),
             recurrent_labels=tuple(trace.ops[label].graph.recurrent_ops or ()),
         )

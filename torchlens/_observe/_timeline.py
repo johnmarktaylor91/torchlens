@@ -365,7 +365,7 @@ def _forward_events(
         label = _public_label(op)
         owner, stack = _owner_and_stack(op)
         try:
-            site = getattr(op, "site_key", None)
+            site = record_member(op, "site_key", None)
         except Exception:  # noqa: BLE001 - site keys are optional identity.
             site = None
         events.append(

@@ -483,7 +483,7 @@ def _probe_once(
             continue
         entry: dict[str, Any] = {
             "label": label,
-            "site_key": getattr(op, "site_key", None),
+            "site_key": op.graph.site_key,
             "shape": tuple(payload.shape),
             "dtype": str(payload.dtype).removeprefix("torch."),
             "bytes": int(payload.numel() * payload.element_size()),

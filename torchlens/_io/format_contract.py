@@ -31,7 +31,7 @@ __tl_layer__ = "L1"
 # v6 adds persisted ModuleCall forward-pre-hook provenance value objects.
 # v7 adds the persisted capture outcome (`_capture_outcome`, string-only payload).
 # v8 is the coordinated feature-sprint activation: every S3 pre-release-gated
-# family flips to its persisting policy together (Op.site_key, the L6 edge/
+# family flips to its persisting policy together (Op.graph.site_key, the L6 edge/
 # audit families, L1 grouping + grouping_policy, L8 distributed_scope, L9
 # grad_fn_timing_provenance + checkpoint_invocation_witness, the L7a
 # structure_only marker, the L3 primitive-op profile + kernel telemetry, the

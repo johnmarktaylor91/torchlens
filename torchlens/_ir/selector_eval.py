@@ -61,6 +61,7 @@ from .._selection.selectors import (
     PrecededBySelector,
 )
 from .._selection.target import FrozenTargetSpec, TargetSpec
+from .._utils._record_group_table import record_member
 from ._selector_nodes import (
     _compile_backward_pass_capture,
     _compile_contains,
@@ -686,10 +687,9 @@ def _match_not(subject: Any, *, matcher: _Matcher) -> bool:
 def _compile_site(selector: BaseSelector, lane: str) -> _Matcher:
     """Compile ``site`` (C03 structural position; address law: valid in every lane).
 
-    Post hoc it reads the persisted ``op.site_key``; on the capture lane it
-    reads the streaming live minter armed by the ``tl.trace`` entry; the live
-    hook-proxy lane refuses (mid-attach proxies carry no structural key, see
-    :data:`_UPFRONT_UNSUPPORTED_KINDS`).
+    Post hoc it reads the persisted ``op.graph.site_key``; on the capture lane it reads the
+    streaming live minter armed by the ``tl.trace`` entry; the live hook-proxy lane refuses
+    (mid-attach proxies carry no structural key, see :data:`_UPFRONT_UNSUPPORTED_KINDS`).
     """
 
     if lane == "site":
@@ -702,7 +702,7 @@ def _compile_site(selector: BaseSelector, lane: str) -> _Matcher:
 def _match_site_key(subject: Any, *, selector: BaseSelector) -> bool:
     """Match the persisted ``site_key`` of a finalized site."""
 
-    return _site_key_matches(selector, getattr(subject, "site_key", None))
+    return _site_key_matches(selector, record_member(subject, "site_key", None))
 
 
 def _match_site_capture(subject: Any, *, selector: BaseSelector) -> bool:

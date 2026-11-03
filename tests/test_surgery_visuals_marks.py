@@ -131,7 +131,7 @@ def test_fire_mark_is_fact_and_solid(chain_capture) -> None:
     assert len(fire_marks) == 1
     assert fire_marks[0].basis == "fact"
     assert fire_marks[0].call_label == "relu_1_2:1"
-    assert fire_marks[0].site_key == fork.ops["relu_1_2:1"].site_key
+    assert fire_marks[0].site_key == fork.ops["relu_1_2:1"].graph.site_key
     spec_fn = make_surgery_mark_spec_fn(fork, facts)
     spec = spec_fn(fork.ops["relu_1_2:1"], NodeSpec(["relu_1_2"]))
     assert spec is not None

@@ -146,7 +146,7 @@ def _first_op_site_key(log: Any) -> str | None:
     """Return the first op's site key, or ``None`` on keyless artifacts."""
 
     for op in (log._layer_list if is_live_trace(log) else None) or []:
-        return getattr(op, "site_key", None)
+        return record_member(op, "site_key", None)
     return None
 
 
@@ -292,7 +292,7 @@ def _health_summary(log: Any) -> dict[str, Any]:
 def _site_key_or_none(op: Any) -> str | None:
     """Return the op's structural site key, or ``None`` when unavailable.
 
-    ``Op.site_key`` is a plain persisted field (``str | None``); legacy
+    ``Op.graph.site_key`` is a plain persisted field (``str | None``); legacy
     keyless artifacts carry ``None``, which the dump discloses as ``null``.
 
     Parameters
@@ -306,7 +306,7 @@ def _site_key_or_none(op: Any) -> str | None:
         ``site_key_v1`` string, or ``None`` on keyless artifacts.
     """
 
-    key = getattr(op, "site_key", None)
+    key = record_member(op, "site_key", None)
     return str(key) if key is not None else None
 
 

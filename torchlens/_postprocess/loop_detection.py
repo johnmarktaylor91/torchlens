@@ -283,7 +283,7 @@ def _mint_site_keys(self: "Trace") -> None:
         node = self[label]
         if record_member(node, "is_orphan", False):
             continue
-        node.site_key = minter.mint(
+        node._graph_site_key = minter.mint(
             getattr(node, "modules", None) or (),
             record_type(node),
             getattr(node, "multi_output_index", None),
@@ -413,7 +413,7 @@ def _call_site_group_key(node: Any, classes: dict[str, str]) -> tuple[Any, ...]:
         return ("call_site", site_class)
     if node.is_input or node.is_output:
         return ("single", node._label_raw)
-    return ("position", node.site_key, node.func_name, node.graph.equivalence_class)
+    return ("position", node.graph.site_key, node.func_name, node.graph.equivalence_class)
 
 
 def _buffer_group_keys(
@@ -607,7 +607,7 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
             ),
             module_site=_module_site(node),
             arg_signature=_structural_arg_signature(node) if node.has_params else None,
-            site_key=getattr(node, "site_key", None),
+            site_key=record_member(node, "site_key", None),
         )
 
     return RecurrenceGroupingGraph(

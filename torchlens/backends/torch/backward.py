@@ -3689,7 +3689,7 @@ def _checkpoint_token_summary(
         window_refs.append((bracket_pass_index, label, bracket_call_index))
         if grad_fn_record is not None and getattr(grad_fn_record, "has_op", False):
             op = _paired_pass_op(trace, grad_fn_record.op_label, bracket_object_id)
-            site_key = getattr(op, "site_key", None)
+            site_key = record_member(op, "site_key", None)
             if site_key is not None:
                 site_candidates.add(site_key)
     return {

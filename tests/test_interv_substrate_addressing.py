@@ -71,7 +71,7 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     # POSITIVE CONTROL that must FAIL to detect: naive key-set membership
     # claims the relu position is preserved (the same rendered key exists on
     # both sides -- but on the inserted side it names the INSERTED op).
-    inserted_keys = {inserted.ops[label].site_key for label in inserted.op_labels}
+    inserted_keys = {inserted.ops[label].graph.site_key for label in inserted.op_labels}
     assert relu_key in inserted_keys, "naive membership passes (that is the trap)"
 
     # POSITIVE CONTROL that must FAIL to detect: payload equality. The
@@ -98,7 +98,9 @@ def test_parent_site_key_signature_change_is_visible() -> None:
 
     def parent_keys(trace: tl.Trace, label: str) -> set[str | None]:
         op = trace.ops[label]
-        return {trace.ops[parent].site_key for parent in (op.parents or ()) if parent in trace.ops}
+        return {
+            trace.ops[parent].graph.site_key for parent in (op.parents or ()) if parent in trace.ops
+        }
 
     base_fc2_parents = parent_keys(base, "linear_2_3")
     inserted_fc2_parents = parent_keys(inserted, "linear_2_4")

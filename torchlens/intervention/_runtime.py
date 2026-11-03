@@ -1367,7 +1367,7 @@ def _coerce_hook_entry(entry: Any) -> NormalizedHookEntry:
 class _LiveSiteMinter:
     """Incremental ``site_key_v1`` minter for the LIVE door (F02 D6 coordinate).
 
-    The replay door reads the postprocess-minted ``Op.site_key``; the live
+    The replay door reads the postprocess-minted ``Op.graph.site_key``; the live
     door fires BEFORE its op is journaled, so it PEEKS the key the postprocess
     minter will assign: consume every op already journaled on the capture's
     ``capture_events.op_events`` in execution order under the same cohort rule as
@@ -1467,7 +1467,7 @@ def _stamp_live_site_identity(site: Any) -> None:
     Idempotent (a proxy stamped once is left alone).
     """
 
-    if getattr(site, "site_key", None) or getattr(site, "_tl_module_boundary", False):
+    if record_member(site, "site_key", None) or getattr(site, "_tl_module_boundary", False):
         return
     trace = _state._active_trace
     if trace is None or trace._options_mode != "exhaustive":

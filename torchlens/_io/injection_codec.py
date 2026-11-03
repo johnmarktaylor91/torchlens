@@ -369,7 +369,7 @@ def _validate_split_rows(
 
     hosts_by_site_key: dict[str, list[Any]] = {}
     for op in remaining:
-        key = getattr(op, "site_key", None)
+        key = record_member(op, "site_key", None)
         if isinstance(key, str):
             hosts_by_site_key.setdefault(key, []).append(op)
     injected_labels: set[str] = set()

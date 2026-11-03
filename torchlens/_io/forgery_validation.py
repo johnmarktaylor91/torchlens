@@ -233,7 +233,7 @@ def _trace_ops(trace: Trace) -> tuple[Any, ...]:
 
 
 def _validate_site_keys(trace: Trace) -> None:
-    """Validate ``Op.site_key`` by parsing and byte-exact recomputation.
+    """Validate ``Op.graph.site_key`` by parsing and byte-exact recomputation.
 
     Parameters
     ----------
@@ -245,7 +245,7 @@ def _validate_site_keys(trace: Trace) -> None:
     from ..backends.registry import JAX_BACKEND_NAME
 
     ops = _trace_ops(trace)
-    keys = tuple(getattr(op, "site_key", None) for op in ops)
+    keys = tuple(op.graph.site_key for op in ops)
     if not any(key is not None for key in keys):
         return
     if any(key is None for key in keys):
@@ -423,9 +423,7 @@ def _validate_checkpoint_witness(trace: Trace) -> None:
         )
     _validate_checkpoint_verdict(token_count, witness["degrade_flags"], witness["verdict"])
 
-    site_keys = {
-        key for op in _trace_ops(trace) if isinstance((key := getattr(op, "site_key", None)), str)
-    }
+    site_keys = {key for op in _trace_ops(trace) if isinstance((key := op.graph.site_key), str)}
     for token, record in tokens.items():
         _validate_checkpoint_token_record(token, record, site_keys)
 

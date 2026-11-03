@@ -208,7 +208,7 @@ def _structural_join(trace: Trace, structural: set[str], labels: set[str]) -> No
     """Add labels for ops whose L1 site key matches a cross-run aligned entry."""
 
     for op in trace._layer_list:
-        if str(getattr(op, "site_key", "")) in structural:
+        if str(record_member(op, "site_key", "")) in structural:
             labels.add(op.layer_label)
             label = getattr(op, "label", None)
             if label:
@@ -222,7 +222,7 @@ def _selection_labels(trace: Trace, selection: Any) -> frozenset[str]:
     labels: set[str] = set()
     structural: set[str] = set()
     for entry in entries:  # Site rows (family level: zero-mask sites count)
-        site_key = getattr(entry, "site_key", None)
+        site_key = record_member(entry, "site_key", None)
         if isinstance(site_key, tuple) and site_key:
             layer_label = str(site_key[0])
             labels.add(layer_label)

@@ -183,7 +183,7 @@ def op_repr_line(op: Any) -> str:
 
     from ..stats._envelope import envelope_line
 
-    core = payload_core(op, identity=getattr(op, "site_key", None) or op.layer_label)
+    core = payload_core(op, identity=record_member(op, "site_key", None) or op.layer_label)
     edited = _edited_token(op)
     if edited:
         core = f"{core} {edited}"
@@ -299,7 +299,9 @@ def layer_repr_line(layer: Any) -> str:
     if num_passes > 1:
         core = f"(x{num_passes} passes) (per-pass cores in str())"
     elif first is not None:
-        core = payload_core(first, identity=getattr(first, "site_key", None) or layer.layer_label)
+        core = payload_core(
+            first, identity=record_member(first, "site_key", None) or layer.layer_label
+        )
         edited = _edited_token(first)
         if edited:
             core = f"{core} {edited}"
@@ -330,7 +332,7 @@ def layer_card(layer: Any) -> str:
     num_passes = getattr(layer, "num_passes", 1)
     if num_passes > 1:
         for op in ops[:3]:
-            core = payload_core(op, identity=getattr(op, "site_key", None) or op.label)
+            core = payload_core(op, identity=record_member(op, "site_key", None) or op.label)
             body.append(f"pass {_pass_token(op)}: {core}")
         if len(ops) > 3:
             body.append(f"... {len(ops) - 3} more passes (.ops)")

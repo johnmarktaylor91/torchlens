@@ -45,7 +45,7 @@ def _site_index(log: Any) -> tuple[dict[str, Any], str]:
     """
 
     ops = list(log._layer_list or [])
-    keys = [getattr(op, "site_key", None) for op in ops]
+    keys = [record_member(op, "site_key", None) for op in ops]
     if ops and all(key is not None for key in keys):
         index: dict[str, Any] = {}
         for op, key in zip(ops, keys, strict=True):

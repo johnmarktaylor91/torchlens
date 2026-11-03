@@ -255,7 +255,7 @@ def test_deep_recurrence_site_key_stable_across_passes(deep_capture) -> None:
     """Every pass carries the same structural site key; the Layer serves it."""
 
     log = deep_capture
-    keys = {log[f"linear_1_1:{p}"].site_key for p in range(1, N_PASSES + 1)}
+    keys = {log[f"linear_1_1:{p}"].graph.site_key for p in range(1, N_PASSES + 1)}
     assert len(keys) == 1
     assert layer_site_key(log.layers["linear_1_1"]) == keys.pop()
 

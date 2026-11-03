@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
+from .._utils._record_group_table import record_member
 from ._spec_codec import _target_spec_from_json
 from ._types import InterventionSpec
 from .errors import GraphShapeMismatchError, SiteResolutionError
@@ -73,7 +74,7 @@ def _site_key_for_label(log: Any, label: str) -> str | None:
         # The honest lookup-failure set: missing label (accessor KeyError),
         # a trace-like without .ops, or a husked/None accessor.
         return None
-    key = getattr(op, "site_key", None)
+    key = record_member(op, "site_key", None)
     return key if isinstance(key, str) else None
 
 

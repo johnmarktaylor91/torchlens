@@ -112,12 +112,12 @@ def test_site_key_refuses_typed_on_spanning_layer() -> None:
     # failure this tripwire exists to catch.
     log = tl.trace(_ResModel(), torch.randn(2, 8))
     layer = log.layers["tanh_1_1"]
-    member_keys = [op.site_key for _, op in sorted(layer.ops.items())]
+    member_keys = [op.graph.site_key for _, op in sorted(layer.ops.items())]
     assert member_keys == ["s1|blk|tanh||1", "s1|blk|tanh||2"]
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = layer_site_key(layer)
     assert excinfo.value.fields["code"] == "layer_site_ambiguous"
-    assert ".ops[k].site_key" in str(excinfo.value)
+    assert ".ops[k].graph.site_key" in str(excinfo.value)
 
 
 def test_site_key_refuses_typed_when_keys_absent() -> None:
@@ -126,7 +126,7 @@ def test_site_key_refuses_typed_when_keys_absent() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     layer = log.layers["linear_1_1"]
     for _, op in layer.ops.items():
-        op.site_key = None
+        op._graph_site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = layer_site_key(layer)
     assert excinfo.value.fields["code"] == "site_key_unavailable"
@@ -160,7 +160,7 @@ def test_site_peers_refuses_typed_without_keys() -> None:
     relu_labels = [label for label in log.layer_labels if "relu" in label]
     layer = log.layers[relu_labels[0]]
     for _, op in layer.ops.items():
-        op.site_key = None
+        op._graph_site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = layer.graph.site_peers
     assert excinfo.value.fields["code"] == "site_key_unavailable"

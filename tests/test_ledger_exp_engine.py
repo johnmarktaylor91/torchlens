@@ -371,7 +371,7 @@ def test_site_sweep_keyless_baseline_refuses_typed() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    baseline.ops["relu_1_2"].site_key = None  # simulate a legacy keyless capture
+    baseline.ops["relu_1_2"]._graph_site_key = None  # simulate a legacy keyless capture
     with pytest.raises(BundleExperimentError) as excinfo:
         sweep_sites(
             baseline,

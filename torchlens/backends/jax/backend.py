@@ -2189,7 +2189,7 @@ class JAXBackend:
             op_log.pass_number = assignment.pass_index
             op_log.num_passes = assignment.num_passes
             op_log._graph_equivalence_class = assignment.equivalence_key
-            op_log.site_key = assignment.site_key
+            op_log._graph_site_key = assignment.site_key
             op_log.dtype_ref = DtypeRef.from_value(op_log.dtype)
             op_log.device_ref = DeviceRef.from_value(getattr(op_log.out, "device", None))
             op_log.backend_address = f"jaxpr:{label}"

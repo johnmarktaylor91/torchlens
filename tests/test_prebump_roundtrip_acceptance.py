@@ -468,12 +468,12 @@ def test_l1_grouping_family_roundtrip(tmp_path) -> None:
 
 def test_l1_site_key_family_roundtrip(tmp_path) -> None:
     trace = _tiny_trace()
-    live_keys = [op.site_key for op in trace.ops]
+    live_keys = [op.graph.site_key for op in trace.ops]
     assert any(key and key.startswith("s1|") for key in live_keys)
     loaded = _plain_roundtrip(trace, tmp_path, "site_key")
-    assert [op.site_key for op in loaded.ops] == live_keys
+    assert [op.graph.site_key for op in loaded.ops] == live_keys
     gen2 = _second_generation(loaded, tmp_path, "site_key")
-    assert [op.site_key for op in gen2.ops] == live_keys
+    assert [op.graph.site_key for op in gen2.ops] == live_keys
 
 
 def test_l2_episode_family_roundtrip(tmp_path) -> None:
@@ -971,7 +971,7 @@ def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
     trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.tlspec_version == 11
-    assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
+    assert [op.graph.site_key for op in loaded.ops] == [op.graph.site_key for op in trace.ops]
 
 
 def test_newer_than_runtime_version_refuses_typed() -> None:

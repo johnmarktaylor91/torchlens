@@ -68,7 +68,7 @@ def _ops(log: tl.Trace) -> dict[str, object]:
 
 
 def _key_multiset(log: tl.Trace) -> Counter:
-    return Counter(op.site_key for op in _ops(log).values())
+    return Counter(op.graph.site_key for op in _ops(log).values())
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +134,7 @@ def test_tied_loop_exact_key_pins() -> None:
     # Ground-truth pin: reused-module ops share ONE key across call
     # instances (P2) and the ordinal counter restarts per call instance.
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    keys = {label: log.ops[label].site_key for label in log.op_labels}
+    keys = {label: log.ops[label].graph.site_key for label in log.op_labels}
     assert keys["input_1:1"] == "s1||input||1"
     assert keys["output_1:1"] == "s1||output||1"
     for pass_index in (1, 2, 3):
@@ -147,7 +147,7 @@ def test_multi_output_slots_split_sites() -> None:
     # Co-outputs of one call occupy distinct output slots => distinct keys;
     # both slots stay call-instance-stable across the two cell calls.
     log = tl.trace(_CellLoop(), torch.randn(2, 4))
-    keys = {label: log.ops[label].site_key for label in log.op_labels}
+    keys = {label: log.ops[label].graph.site_key for label in log.op_labels}
     slot_keys = {key for key in keys.values() if key is not None and "lstmcell" in key}
     assert slot_keys == {"s1|cell|lstmcell|0|1", "s1|cell|lstmcell|1|1"}
 
@@ -157,7 +157,7 @@ def test_every_retained_op_has_prefixed_key() -> None:
     for model, x in ((_Tied(), torch.randn(2, 8)), (_CellLoop(), torch.randn(2, 4))):
         log = tl.trace(model, x)
         for label in log.op_labels:
-            key = log.ops[label].site_key
+            key = log.ops[label].graph.site_key
             assert isinstance(key, str) and key.startswith(SITE_KEY_PREFIX + "|"), (
                 label,
                 key,
@@ -170,7 +170,7 @@ def test_uniqueness_per_key_and_call_instance() -> None:
     for label in log.op_labels:
         op = log.ops[label]
         stack = tuple(op.module_context.call_stack or ())
-        seen[(op.site_key, stack[-1] if stack else ROOT_CALL_INSTANCE)] += 1
+        seen[(op.graph.site_key, stack[-1] if stack else ROOT_CALL_INSTANCE)] += 1
     assert all(count == 1 for count in seen.values())
 
 
@@ -230,7 +230,9 @@ def test_hostile_module_names_roundtrip_through_capture() -> None:
 
     log = tl.trace(Hostile(), torch.randn(2, 3))
     relu_keys = [
-        log.ops[label].site_key for label in log.op_labels if "relu" in (log.ops[label].type or "")
+        log.ops[label].graph.site_key
+        for label in log.op_labels
+        if "relu" in (log.ops[label].type or "")
     ]
     assert len(relu_keys) == len(hostile_names)
     expected_sites = [(f"mods.{name}", f"mods.{name}.r") for name in hostile_names]
@@ -264,7 +266,7 @@ def _site_spanning_recurrent_groups(log: tl.Trace) -> tuple[int, int]:
     spanning = sum(
         1
         for group in groups
-        if len({ops[member].site_key for member in group if member in ops}) > 1
+        if len({ops[member].graph.site_key for member in group if member in ops}) > 1
     )
     return spanning, len(groups)
 
@@ -290,7 +292,7 @@ def test_gpt2_4l_structural_facts() -> None:
         log = tl.trace(model, torch.randint(0, 512, (1, 16)))
     assert len(log.op_labels) == 199
     assert _site_spanning_recurrent_groups(log) == (0, 0)
-    keys = [log.ops[label].site_key for label in log.op_labels]
+    keys = [log.ops[label].graph.site_key for label in log.op_labels]
     assert len(set(keys)) == 199
 
 
@@ -305,10 +307,10 @@ def test_bare_label_lookup_referents_pinned_by_site() -> None:
     # Pin today's referents BY SITE so a silent referent change fails here
     # instead of shipping.
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert log.layers["linear_1_1"].ops[1].site_key == "s1|lin|linear||1"
-    assert log.layers["relu_1_2"].ops[1].site_key == "s1|act|relu||1"
-    assert log["linear_1_1:2"].site_key == "s1|lin|linear||1"
-    assert log["relu_1_2:3"].site_key == "s1|act|relu||1"
+    assert log.layers["linear_1_1"].ops[1].graph.site_key == "s1|lin|linear||1"
+    assert log.layers["relu_1_2"].ops[1].graph.site_key == "s1|act|relu||1"
+    assert log["linear_1_1:2"].graph.site_key == "s1|lin|linear||1"
+    assert log["relu_1_2:3"].graph.site_key == "s1|act|relu||1"
 
 
 # ---------------------------------------------------------------------------
