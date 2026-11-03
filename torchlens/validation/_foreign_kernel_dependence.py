@@ -102,4 +102,6 @@ def _label_is_declared_independent(row: OutputDependence, layer: Op, label: str)
     """Return whether every positional key ``label`` occupies is declared independent."""
 
     keys = _positions_of(layer, label)
-    return bool(keys) and all(isinstance(key, int) and row.independent_of(key) for key in keys)
+    if not keys:
+        return False
+    return all(isinstance(key, int) and row.independent_of(key) for key in keys)
