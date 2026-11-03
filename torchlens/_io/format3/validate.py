@@ -16,7 +16,6 @@ import hashlib
 import json
 import os
 import re
-import warnings
 from collections.abc import Mapping, Sequence
 from importlib import import_module
 from pathlib import Path
@@ -24,8 +23,8 @@ from typing import Any, Final
 
 from ..._data_classes._schema_bindings import STORAGE_BINDINGS
 from ..._data_classes.field_policy import StorageKind
-from ...errors._base import TorchLensWarning
 from .._artifact_anchors import check_manifest_metadata_anchors
+from .._extra_files import _warn_extra_files
 from .._json import loads_bounded, read_bytes_bounded
 from .._runtime_identity import check_runtime_identity
 from ..field_registry import RECORD_CONTRACT_CLASSES
@@ -292,11 +291,7 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
             errors.append(f"{key} must be a string matching the identity grammar {pattern!r}")
     if manifest["kind"] not in contract.ARTIFACT_KINDS:
         errors.append(f"kind {manifest['kind']!r} is not one of {contract.ARTIFACT_KINDS}")
-    backend = manifest.get("backend", contract.DEFAULT_BACKEND)
-    if not isinstance(backend, str) or not backend:
-        errors.append(
-            "backend, when present, must be a non-empty string naming the artifact's backend"
-        )
+    errors.extend(_backend_errors(manifest))
     policy = manifest["payload_policy"]
     if not isinstance(policy, dict) or not all(
         isinstance(key, str) and isinstance(value, bool) for key, value in policy.items()
@@ -326,6 +321,28 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
         errors.append("disclosures must be {count: positive int, first: [<=16 strings]}")
     errors.extend(summary_schema_errors(manifest))
     return errors
+
+
+def _backend_errors(manifest: Mapping[str, Any]) -> list[str]:
+    """The artifact backend (absent means torch) and its ``backend_runtime`` stamp, which an
+    array artifact carries and which must name the same backend wherever it appears."""
+
+    backend = manifest.get("backend", contract.DEFAULT_BACKEND)
+    if not isinstance(backend, str) or backend not in contract.BACKENDS:
+        return [f"unknown backend {backend!r}; the artifact backend is one of {contract.BACKENDS}"]
+    runtime = manifest.get("backend_runtime")
+    if runtime is None and backend == contract.DEFAULT_BACKEND:
+        return []
+    if not (
+        isinstance(runtime, dict)
+        and runtime.get("name") == backend
+        and isinstance(runtime.get("version"), str)
+    ):
+        return [
+            f"backend_runtime must be an object whose name is the artifact backend {backend!r} "
+            "with a version string"
+        ]
+    return []
 
 
 def check_runtime_policy(manifest: Mapping[str, Any]) -> None:
@@ -364,10 +381,9 @@ def verify_listed_files(root: Path, manifest: Mapping[str, Any]) -> None:
         shown = ", ".join(unlisted[:8]) + (
             f" (+{len(unlisted) - 8} more)" if len(unlisted) > 8 else ""
         )
-        warnings.warn(
+        _warn_extra_files(
             f"Artifact {root} contains unreferenced extra files the manifest does not list; "
             f"they were not read: {shown}.",
-            TorchLensWarning,
             stacklevel=4,
         )
 

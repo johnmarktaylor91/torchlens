@@ -36,6 +36,8 @@ from .decode import (
     _element_size,
     build_component,
     cell_error,
+    settle_mapping,
+    settle_tuple,
 )
 from .restore import restore_record
 from .validate import (
@@ -442,12 +444,10 @@ class DecodedArtifact:
     def _check_prerelease_marker(self, fields: dict[str, Any]) -> None:
         """Pop the pre-release marker of a switch-on write; refuse typed unless the switch is on."""
 
-        if PRERELEASE_STATE_KEY not in fields:
-            return
-        marker = self.decoder.decode(
-            fields.pop(PRERELEASE_STATE_KEY), at=f"trace.{PRERELEASE_STATE_KEY}"
-        )
-        validate_prerelease_state({PRERELEASE_STATE_KEY: marker}, cls_name="Trace")
+        if PRERELEASE_STATE_KEY in fields:
+            at = f"trace.{PRERELEASE_STATE_KEY}"
+            marker = self.decoder.decode(fields.pop(PRERELEASE_STATE_KEY), at=at)
+            validate_prerelease_state({PRERELEASE_STATE_KEY: marker}, cls_name="Trace")
 
     def _index_identities(self, kind: str) -> None:
         """Index a decoded table's rows by their identity column."""
@@ -497,12 +497,12 @@ class DecodedArtifact:
             return value
         if isinstance(value, tuple):
             items = [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
-            maker = getattr(type(value), "_make", None)  # a named tuple keeps its type
-            return maker(items) if callable(maker) else tuple(items)
+            return settle_tuple(value, items, at)
         if isinstance(value, (set, frozenset)):
             return type(value)(self._settle(item, at) for item in value)
         if isinstance(value, dict):
-            return {key: self._settle(item, f"{at}.{key}") for key, item in value.items()}
+            items = {key: self._settle(item, f"{at}.{key}") for key, item in value.items()}
+            return settle_mapping(value, items)
         return value
 
     def _lookup(self, reference: RowRef, at: str) -> Any:
