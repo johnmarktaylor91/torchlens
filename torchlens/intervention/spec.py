@@ -422,7 +422,7 @@ class Rule:
         return self._identity()[0]
 
     def __repr__(self) -> str:
-        """Render the clause with its current rule identity."""
+        """Render clause metadata without computing a content-derived identity."""
 
         return rule_repr(self)
 

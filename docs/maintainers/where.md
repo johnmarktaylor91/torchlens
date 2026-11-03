@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1451 modules, 648268 lines, 0 modules without a docstring.
+83 packages, 1451 modules, 648286 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 46 | 25254 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1459 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4655 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38099 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38090 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10636 |
@@ -38,7 +38,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4188 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 48 | 16900 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 48 | 16931 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 76 | 44402 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
@@ -82,7 +82,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 9066 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4150 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2597 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 23 | 12876 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 23 | 12872 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 20 | 6142 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
@@ -288,7 +288,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (90 modules, 38099 lines)
+Core data structures for representing a logged forward pass. (90 modules, 38090 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -366,7 +366,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38099 
 | `aten_op` | Primitive-operation records for the ATen profile (persisted, tlspec v8). | 200 |
 | `attribute_write` | The record of one plain module attribute a traced forward wrote. | 66 |
 | `backward_pass` | Per-invocation backward pass records and accessors. | 372 |
-| `buffer` | Persistent buffer entities and dict-like accessors. | 486 |
+| `buffer` | Persistent buffer entities and dict-like accessors. | 485 |
 | `cleanup` | Trace cleanup helpers and post-session teardown. | 1081 |
 | `container` | Runtime views over captured TorchLens output containers. | 1187 |
 | `derived_grad` | Backend-neutral derived gradient records. | 151 |
@@ -377,9 +377,9 @@ Core data structures for representing a logged forward pass. (90 modules, 38099 
 | `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 662 |
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 57 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1819 |
-| `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2642 |
+| `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2635 |
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3512 |
-| `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1089 |
+| `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1088 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 216 |
 | `trace` | Trace: the top-level container for a fully logged forward pass. | 3486 |
 
@@ -793,7 +793,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (13 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (48 modules, 16900 lines)
+Shared helpers used by two or more TorchLens packages. (48 modules, 16931 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -804,7 +804,7 @@ Shared helpers used by two or more TorchLens packages. (48 modules, 16900 lines)
 | `_display_bounded` | Bounded printouts for collections and private records (house style v1). | 115 |
 | `_display_card` | Card and one-line layout shared by every printout (house style v1). | 118 |
 | `_display_constructor` | Bounded, metadata-only arguments for constructor-style displays. | 79 |
-| `_display_errors` | Consistent, bounded candidate rows for lookup error messages. | 27 |
+| `_display_errors` | Consistent, bounded candidate rows for lookup error messages. | 58 |
 | `_display_keys` | Display keys for ops and layers (house style v1, rule A5). | 55 |
 | `_display_numbers` | Number and unit spellings shared by every printout (house style v1). | 94 |
 | `_display_options` | Constructor-style displays for grouped options, without default-field noise. | 74 |
@@ -1805,12 +1805,12 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (8 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (23 modules, 12876 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (23 modules, 12872 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Lazy public namespace for TorchLens receptive-field analysis. | 453 |
-| `_display` | Bounded choices for receptive-field endpoint refusals. | 38 |
+| `_display` | Bounded choices for receptive-field endpoint refusals. | 34 |
 | `_engine` | Whole-graph geometric receptive-field solver. | 1652 |
 | `_engine_descriptor` | Public descriptor materialization for geometric receptive-field states. | 182 |
 | `_engine_forward` | Target-anchored projective-field descriptor solver. | 816 |

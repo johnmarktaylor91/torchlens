@@ -39,7 +39,7 @@ def _site_key(site: Site) -> str:
 
     if site.kind == "ACT" and len(site.key) == 2:
         trace = site._trace_ref() if site._trace_ref is not None else None
-        index = getattr(trace, "_layer_dict_all_keys", {})
+        index = trace._layer_dict_all_keys if trace is not None else {}
         label, pass_number = site.key
         record = index.get(f"{label}:{pass_number}")
         if record is None:

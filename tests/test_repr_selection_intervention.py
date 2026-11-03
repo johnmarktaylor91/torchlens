@@ -165,3 +165,22 @@ def test_candidate_rows_preserve_the_structured_remedy(candidates: list[str]) ->
     assert explicit.fields["remedy"] == "use another trace"
     legacy = tl.errors.TorchLensError("Layer not found. Remedy: choose a key.")
     assert legacy.fields["remedy"] == error.fields["remedy"]
+
+
+@pytest.mark.parametrize("accessor, key", [("params", "weight"), ("buffers", "running_mean")])
+def test_address_ambiguities_bound_text_and_preserve_candidate_payload(
+    accessor: str, key: str
+) -> None:
+    """Address suggestions display five entries while structured data retains all."""
+
+    model = nn.Sequential(*(nn.BatchNorm1d(4) for _ in range(7))).eval()
+    trace = tl.trace(model, torch.ones(2, 4))
+    with pytest.raises(tl.errors.AmbiguousOpLookupError) as caught:
+        getattr(trace, accessor)[key]
+    message = str(caught.value)
+    assert message.startswith(f"Ambiguous short name {key!r}.")
+    assert f"'0.{key}'" in message and f"'4.{key}'" in message
+    assert f"'5.{key}'" not in message and f"'6.{key}'" not in message
+    assert "; and 2 more" in message
+    assert "\n  remedy    use a full address" in message
+    assert caught.value.fields["candidates"] == tuple(f"{index}.{key}" for index in range(7))

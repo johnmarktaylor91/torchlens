@@ -37,6 +37,7 @@ from .._io import (
 )
 from .._ir.refs import DeviceRef, DtypeRef
 from .._quantities import Bytes
+from .._utils._display_errors import short_name_message
 from ._accessor_base import Accessor
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -1032,11 +1033,9 @@ class ParamAccessor(Accessor["Param"]):
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            # Name the bounded candidate set (R65) like the merged-presenter
-            # sibling, instead of telling the user to guess the full address.
             candidates = tuple(address for match in matches for address in match.all_addresses)
             raise AmbiguousOpLookupError(
-                f"Ambiguous short name '{key}' -- use a full address: {', '.join(candidates)}",
+                short_name_message(key, candidates),
                 candidates=candidates,
             )
         return None
