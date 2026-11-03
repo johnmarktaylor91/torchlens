@@ -68,7 +68,7 @@ def _gate_value_channels(trace: Any, draw_kwargs: dict[str, Any]) -> None:
 
 def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input ladder plus the render dials ARE the spec'd surface
     model: nn.Module,
-    input_args: Any = None,
+    inputs: Any = None,
     *,
     input_kwargs: dict[str, Any] | None = None,
     input_shape: Any = None,
@@ -94,7 +94,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
     ----------
     model:
         The model to picture.
-    input_args:
+    inputs:
         Real input (tensor, tuple of tensors, or an HF string prompt).
     input_kwargs:
         Keyword inputs forwarded to the model.
@@ -125,7 +125,9 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
         The detached picture (memo D13). Never ``None``.
     """
 
-    return _capture_and_render(**locals())
+    values = dict(locals())
+    values["input_args"] = values.pop("inputs")
+    return _capture_and_render(**values)
 
 
 def _capture_and_render(
