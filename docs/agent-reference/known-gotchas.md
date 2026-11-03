@@ -36,11 +36,13 @@
   rows read `None`), count against `save_budget`, and are not retained when activations stream to
   disk or an out sink is active. Values are compared only through `aten_values_consistent` under
   `save_mode="copy"`; a `"reference"` capture still keeps them but skips the owner comparison.
-  Value retention runs inside the owning wrapper call under `pause_logging()`: a wrapped tensor
-  method reached from the dispatch hook with logging on resets the wrapper's bottom-level barcode
-  and silently drops an in-place owner's op (`test_values_leave_the_op_graph_unchanged` pins the
-  op list and raw-event hash equal across `aten_ops` spellings). A `run()` refresh re-records the
-  profile; `run(..., fast=True)` refuses a values capture.
+  Both recorder hooks run inside the owning wrapper call under `pause_logging()`
+  (`_recorder_paused`): a wrapped tensor method (`stride`, `untyped_storage`, `numel`, the clone)
+  reached from the dispatch hook with logging on resets the wrapper's bottom-level barcode (an
+  in-place owner's op silently dropped) and counts in the ordered call fingerprint (a rows capture
+  then refused the fast tier). `test_values_leave_the_op_graph_unchanged` pins the op list, the
+  raw-event hash and the call fingerprint equal across `aten_ops` spellings. A `run()` refresh
+  re-records the profile; `run(..., fast=True)` refuses a values capture.
 - Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
   `tensor_parallel` / `pipeline_parallel` rows of `tl.report.doctor`, so the two cannot drift.

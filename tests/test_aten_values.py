@@ -390,6 +390,11 @@ def test_values_leave_the_op_graph_unchanged() -> None:
     assert any(label.startswith("add_") for label in labels[0])
     assert plain._raw_event_shape_hash == rows_only._raw_event_shape_hash
     assert plain._raw_event_shape_hash == valued._raw_event_shape_hash
+    # The recorder's own tensor reads never count as calls: the ordered call
+    # fingerprint (the fast tier's structure guard) matches a plain capture.
+    assert plain._raw_call_fingerprint is not None
+    assert plain._raw_call_fingerprint == rows_only._raw_call_fingerprint
+    assert plain._raw_call_fingerprint == valued._raw_call_fingerprint
     inplace = _rows(valued, "add_")[0]
     assert inplace.owner_status == "forward_op"
     assert inplace.parent_op_refs[0].op_label.startswith("add_")
@@ -420,11 +425,24 @@ def test_fast_run_refuses_a_values_capture() -> None:
 
     torch.manual_seed(0)
     model = _BlockModel().eval()
-    trace = tl.trace(model, torch.randn(2, 16), capture=_VALUES)
+    x = torch.randn(2, 16)
+    trace = tl.trace(model, x, capture=_VALUES)
     with pytest.raises(RunCapabilityUnavailableError) as refused:
         trace.run(inputs=torch.randn(2, 16), fast=True)
     assert refused.value.fields["detection_stage"] == "fast_run_aten_values_unsupported"
-    assert torch.equal(_rows(trace, "gelu")[0].out, _recompute(model, trace.input)["gelu"])
+    assert torch.equal(_rows(trace, "gelu")[0].out, _recompute(model, x)["gelu"])
+
+
+def test_rows_capture_admits_the_fast_tier() -> None:
+    """A rows-only capture keeps the fast tier: its fingerprint is a plain capture's."""
+
+    torch.manual_seed(0)
+    model = _BlockModel().eval()
+    trace = tl.trace(model, torch.randn(2, 16), capture=_ROWS_ONLY)
+    fast = trace.run(inputs=torch.randn(2, 16), fast=True)
+    assert fast.trace is not trace
+    assert fast.trace.has_aten_ops is True
+    assert len(fast.trace.ops) == len(trace.ops)
 
 
 @pytest.mark.smoke

@@ -9,6 +9,7 @@ tensor as ``AtenOp.out`` under the owner Op's save rules (``save=`` selection,
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import threading
 from collections.abc import Iterator, Mapping
@@ -326,6 +327,28 @@ def _execution_context(
     )
 
 
+def _recorder_paused(hook: Any) -> Any:
+    """Run an ATen recorder hook with logging paused.
+
+    The hooks execute inside the owning wrapper call with logging on, and their
+    own tensor reads (``stride``, ``untyped_storage``, ``numel``, the value
+    clone) are wrapped torch methods: unpaused they would be logged as ops,
+    reset the wrapper's bottom-level barcode (an in-place owner's labelled
+    return then vanished from the op log while its ATen row stayed) and count
+    in the ordered call fingerprint (a rows capture then refused the fast tier
+    against a clean native forward). Paused, the recorder leaves the torch-level
+    capture, its barcode and its fingerprint exactly as a plain capture has them.
+    """
+
+    @functools.wraps(hook)
+    def paused(*args: Any, **kwargs: Any) -> Any:
+        with _state.pause_logging():
+            return hook(*args, **kwargs)
+
+    return paused
+
+
+@_recorder_paused
 def _prepare_aten_call(
     state: Any,
     func: Any,
@@ -418,6 +441,7 @@ def _view_copy_kind(
     return "unknown"
 
 
+@_recorder_paused
 def _finish_aten_call(
     state: Any,
     pending: _PendingAtenCall,
@@ -519,17 +543,13 @@ def _retain_aten_values(
         trace, "_keep_outs_in_memory", True
     ):
         return None
-    # Every tensor read below runs with logging paused: this hook executes INSIDE
-    # the owning wrapper call, and a wrapped tensor method (``numel``,
-    # ``element_size``, the clone) that reaches the wrapper resets its bottom-level
-    # barcode, after which an in-place owner's already-labelled return is never
-    # logged (the torch-level ``add_`` op vanished while its ATen row stayed).
-    with _state.pause_logging():
-        leaves = tuple(_iter_tensors(result))
-        if not leaves:
-            return None
-        copies = _copy_aten_leaves(trace, pending, leaves)
-        cell = _AtenValueCell(copies[0] if isinstance(result, torch.Tensor) else tuple(copies))
+    # Logging is paused here (``_recorder_paused`` on the finish hook): the
+    # reads and the clone below never reach the op log or the call fingerprint.
+    leaves = tuple(_iter_tensors(result))
+    if not leaves:
+        return None
+    copies = _copy_aten_leaves(trace, pending, leaves)
+    cell = _AtenValueCell(copies[0] if isinstance(result, torch.Tensor) else tuple(copies))
     owner = pending.owner_func_call_id
     if pending.capture_phase == "forward" and owner is not None:
         if state.aten_owner_verdicts.get(owner) == "drop":
