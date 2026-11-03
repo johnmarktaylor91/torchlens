@@ -171,13 +171,17 @@ def measure(
     if arch == "vit_b_16" and len(adds) != 25:
         raise ValueError(f"expected 24 ViT residual adds and the positional add, found {len(adds)}")
     keys = stages + [f"residual_{i}" for i in range(len(adds))]
+    # The handoff deduplicates aliases; canonical keys retain pass qualification
+    # for reused layers and use the bare layer label only for single-pass sites.
+    records = [trace[site] for site in sites]
+    labels = [op.label if op.num_passes > 1 else op.layer_label for op in records]
     rdm = tl.neuro.rdms(
         trace, sites=sites, metric="correlation", pattern_descriptors={"stimulus_id": ids}
     )
-    rdm_labels = list(rdm.rdm_descriptors["requested"])
+    rdm_labels = list(rdm.rdm_descriptors["site"])
     measured = {
         key: rdm.dissimilarities[rdm_labels.index(label)]
-        for key, label in zip(keys, sites, strict=True)
+        for key, label in zip(keys, labels, strict=True)
     }
     reference = {key: reference_rdm(value) for key, value in plain.items()}
     correlations = {key: pearson(measured[key], reference[key]) for key in keys}
