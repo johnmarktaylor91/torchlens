@@ -20,6 +20,9 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import torch
 
+from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
+from .._runnable.input_aliases import build_input_attestation_fingerprint
+from .._runnable.state import runnable_tensor_byte_digest
 from ..errors._base import TorchLensWarning
 from ..errors.runnable import RunnablePreflightError
 from .format_errors import ArtifactError
@@ -27,12 +30,7 @@ from .scrub import BlobSpec
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .._runnable import (
-        ActivationPayloadMember,
-        SlotByteDigest,
-        SparseRunDescriptor,
-        StateByteDigest,
-    )
+    from .._runnable import SparseRunDescriptor
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
@@ -410,7 +408,19 @@ def _capture_nonpersistent_buffer_blob_specs(
     ]
 
 
-# Complexity: preserve the cohesive activation archive preflight moved from bundle unchanged.
+def _captured_input_attestation(slot_id: str, out: torch.Tensor) -> tuple[SlotByteDigest, Any]:
+    """Build the original-input digest and physical fingerprint from the retained value."""
+
+    digest = runnable_tensor_byte_digest(out)
+    # The live retained input seeded the forward; serialized payloads lose strides.
+    # The run side fingerprints its executed clone on this same basis.
+    return (
+        SlotByteDigest(slot_id=slot_id, byte_digest=digest),
+        build_input_attestation_fingerprint(slot_id, out, byte_digest=digest),
+    )
+
+
+# Complexity: keep activation archive membership and slot witnesses in one preflight.
 def _capture_activation_blob_specs(
     trace: Trace,
     descriptor: SparseRunDescriptor,
@@ -442,10 +452,6 @@ def _capture_activation_blob_specs(
         If a selected payload is unavailable or is not a dense torch tensor.
     """
 
-    from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
-    from .._runnable.input_aliases import build_input_attestation_fingerprint
-    from .._runnable.state import runnable_tensor_byte_digest
-
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
     call_id_by_label = {
         op_label: call.call_id for call in descriptor.calls for op_label in call.op_labels
@@ -461,15 +467,9 @@ def _capture_activation_blob_specs(
             continue
         out = _physical_op_payload(op, "out")
         if bool(getattr(op, "is_input", False)) and isinstance(out, torch.Tensor):
-            digest = runnable_tensor_byte_digest(out)
-            input_digests.append(SlotByteDigest(slot_id=slot_id, byte_digest=digest))
-            # hon1_3 (H-a): the physical fingerprint is built from the LIVE retained
-            # in-memory input value that seeded the captured forward (never from the
-            # serialized payload, which contiguifies strides). The run side
-            # fingerprints the executed clone on the same basis.
-            input_fingerprints.append(
-                build_input_attestation_fingerprint(slot_id, out, byte_digest=digest)
-            )
+            evidence, fingerprint = _captured_input_attestation(slot_id, out)
+            input_digests.append(evidence)
+            input_fingerprints.append(fingerprint)
         if not bool(getattr(op, "has_saved_activation", False)):
             continue
         found_payload = False
