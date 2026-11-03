@@ -689,7 +689,7 @@ class TestUnwrapSafety:
             assert _state._decorated_to_orig[id(torch.cos)] is foreign, "re-wrap adopts the drift"
             assert "cos" in [op.func_name for op in trace]
             adopted_wrapper = torch.cos
-            assert tl.validate(model, x, validate_metadata=False)
+            assert tl.validate(model, x, scope="forward", validate_metadata=False)
             assert torch.cos is adopted_wrapper, "validate's unwrap/re-wrap cycle is stable"
         finally:
             unwrap_torch()

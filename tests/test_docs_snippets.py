@@ -462,10 +462,10 @@ assert bare[1:-1] == ["linear", "relu", "linear"], bare
 importlib.import_module(sys.argv[1])
 
 # backends/torch.md fence 1: validate unwraps to pristine torch and re-wraps.
-assert tl.validate(model, x, validate_metadata=False) is True
+assert tl.validate(model, x, scope="forward", validate_metadata=False) is True
 after = [op.func_name for op in tl.trace(model, x)]
 assert after == bare, (bare, after)
-assert tl.validate(model, x, validate_metadata=False) is True
+assert tl.validate(model, x, scope="forward", validate_metadata=False) is True
 # The peer's own patch (if any) still runs outside a capture.
 model(x).sum().backward()
 print("PARITY_OK")
