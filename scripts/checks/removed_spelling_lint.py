@@ -36,7 +36,7 @@ from _harness import REPO_ROOT, run_checks
 
 _REPO_ROOT = REPO_ROOT
 
-_SCAN_SUFFIXES = (".py", ".md", ".ipynb", ".rst", ".txt")
+_SCAN_SUFFIXES = (".py", ".md", ".ipynb", ".rst", ".txt", ".yml", ".yaml")
 
 #: Forbidden-spelling groups. Every pattern targets a spelling the shim
 #: removal DELETED, written to miss the surviving canonical spellings
@@ -85,6 +85,14 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
         r"|replayable|backward_ready|output_style|output_head|random_seed"
         r"|save_grads|structure_only|save_outs_to|out_sink|keep_outs_in_memory"
         r"|activation_transform|save_arg_values|capture_container_structure)\s*="
+    ),
+    # Removed capture options spelled as CaptureOptions fields on one line. The
+    # grouped-bundle exemption of ``trace_flat`` assumes the field survives in
+    # the bundle; these four left ``CaptureOptions`` with their flat spellings
+    # (the ``trace_forward_kwargs_unrouted`` row names each replacement).
+    "options_flat": re.compile(
+        r"\bCaptureOptions\s*\([^)\n]*\b(?:layers_to_save|output_style|output_head"
+        r"|save_preview)\s*="
     ),
     # Removed record()/dry_run()/Recorder() predicate aliases.
     "keep_op": re.compile(r"\b(?:record|dry_run|Recorder)\s*\([^)\n]*\bkeep_(?:op|module)\s*="),
@@ -229,6 +237,7 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
         ".by_module",
     ),
     "trace_flat": ("tl.trace", "torchlens.trace"),
+    "options_flat": ("CaptureOptions",),
     "keep_op": ("keep_op", "keep_module"),
     "patch": ("patch_detached_references", "patch_policy", "patch_modules"),
     "perturb": ("perturb_saved_grads",),
@@ -269,10 +278,6 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         "release history; records the old spellings as history by design",
     ),
     "benchmarks/perf_results_2026-05-14.md": (
-        frozenset({"ALL"}),
-        "dated benchmark results record (history exemption, S02-fix C3b)",
-    ),
-    "benchmarks/perf_results_provisional.md": (
         frozenset({"ALL"}),
         "dated benchmark results record (history exemption, S02-fix C3b)",
     ),
@@ -383,9 +388,24 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         "old spellings (tl.StreamingOptions needle) is its job",
     ),
     "tests/test_options_codemod.py": (
-        frozenset({"trace_flat"}),
+        frozenset({"trace_flat", "options_flat"}),
         "migration codemod fixtures: the removed CaptureOptions(layers_to_save=...) "
         "spelling is the input the codemod rewrites; rewriting it is its job",
+    ),
+    "tools/codemods/r2_options.py": (
+        frozenset({"options_flat"}),
+        "the codemod's own docstring names the CaptureOptions(layers_to_save=...) "
+        "spelling it rewrites",
+    ),
+    "torchlens/_utils/facade.py": (
+        frozenset({"options_flat"}),
+        "docstring of the typed removed-keyword redirect names the "
+        "CaptureOptions(output_style=...) spelling it refuses",
+    ),
+    "docs/reference/glossary.md": (
+        frozenset({"options_flat"}),
+        "removal-record prose: the glossary names the removed CaptureOptions "
+        "fields beside their facade_redirect replacements",
     ),
 }
 
@@ -489,6 +509,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         "tl_moved": "spec = tl.load_intervention_spec(path)\n",
         "methods": "trace.replay(strict=True)\n",
         "trace_flat": 'log = tl.trace(model, x, layers_to_save="all")\n',
+        "options_flat": "capture = tl.options.CaptureOptions(layers_to_save='none')\n",
         "keep_op": "rec = tl.record(model, x, keep_op=tl.func('relu'))\n",
         "patch": "tl.wrap_torch(patch_policy='detached')\n",
         "perturb": "validate_backward_pass(model, x, perturb_saved_grads=True)\n",
@@ -565,6 +586,14 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
     ):
         assert not _scan_file(tmp_path / "canonical_root_doors.py", canonical), canonical
 
+    for rel in (".github/workflows/nightly.yml", ".pre-commit-config.yaml", "docs/_site_map.yaml"):
+        assert _in_scan_scope(rel), f"workflow and config files are in scan scope: {rel}"
+    for rel in ("pyproject.toml", "docs/images/x.png", ".github/CODEOWNERS"):
+        assert not _in_scan_scope(rel), f"not a text surface the lint sweeps: {rel}"
+    grouped = "capture = tl.options.CaptureOptions(save_args=True)\n"
+    assert not _scan_file(tmp_path / "grouped.py", grouped), (
+        "a surviving CaptureOptions field must not match options_flat"
+    )
     clean = 'log = tl.trace(model, x, save="all")\n'
     assert not _scan_file(tmp_path / "clean.py", clean), (
         "grouped-option spelling must not false-positive"

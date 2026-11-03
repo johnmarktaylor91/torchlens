@@ -61,7 +61,7 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
   `.._finalize.finalize_single_pass_trace` neutral grouper
   (`recurrence_detection` default True).
 - Restricted option surface (each documented in the `capture_trace` docstring):
-  `layers_to_save` must be `"all"` (full-save only for live traces),
+  `save` must be `"all"` (full-save only for live traces),
   `output_device` must be `"same"`, `save_args` / `save_source_context` /
   `save_rng` must be false, and `save_grads` / `backward_ready` /
   `transform` / `activation_transform` are unsupported.

@@ -1410,7 +1410,7 @@ jobs:
       - name: Round-trip packaged tlspec
         working-directory: ${{ runner.temp }}
         run: |
-          wheel-venv/bin/python -c "import torch, torchlens as tl; from torch import nn; from torchlens.validation import validate_tlspec; path='wheel-smoke.tlspec'; trace=tl.trace(nn.Linear(2, 1), torch.randn(1, 2), capture=tl.options.CaptureOptions(layers_to_save='none')); trace.save(path); validate_tlspec(path); loaded=tl.load(path); assert loaded.num_ops == trace.num_ops"
+          wheel-venv/bin/python -c "import torch, torchlens as tl; from torch import nn; from torchlens.validation import validate_tlspec; path='wheel-smoke.tlspec'; trace=tl.trace(nn.Linear(2, 1), torch.randn(1, 2), save='none'); trace.save(path); validate_tlspec(path); loaded=tl.load(path); assert loaded.num_ops == trace.num_ops"
 
       - name: PEP 561 consumer smoke (installed wheel exposes its types)
         # Red-capable in BOTH directions (grind r3, R84 LOW: py.typed shipped

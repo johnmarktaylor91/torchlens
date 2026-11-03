@@ -21,6 +21,7 @@ import file_cap  # noqa: E402
 import file_size_ratchet  # noqa: E402
 import id_lint  # noqa: E402
 import layering  # noqa: E402
+import removed_spelling_lint  # noqa: E402
 import run_all  # noqa: E402
 import tier_durations  # noqa: E402
 
@@ -253,3 +254,14 @@ def test_size_caps_count_prose_after_an_examples_section() -> None:
     assert lines[13].strip() == "Notes" and 14 not in excluded
     assert lines[15].strip() == "Counted prose too." and 16 not in excluded
     assert lines[16].strip() == '"""' and 17 not in excluded
+
+
+def test_removed_spelling_lint_sweeps_workflow_and_config_files() -> None:
+    """The lint scans ``.yml``/``.yaml`` (a workflow kept a removed spelling invisible to it)."""
+
+    for rel in (".github/workflows/nightly.yml", ".pre-commit-config.yaml", "mkdocs.yml"):
+        assert removed_spelling_lint._in_scan_scope(rel), rel
+    removed = "layers_to_save"  # kept apart from the call so this file does not trip the lint
+    planted = f"run: python -c \"capture=tl.options.CaptureOptions({removed}='none')\"\n"
+    hits = removed_spelling_lint._scan_file(Path("planted.yml"), planted)
+    assert [group for group, _, _ in hits] == ["options_flat"]
