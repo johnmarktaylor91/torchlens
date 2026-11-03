@@ -72,6 +72,20 @@ def test_running_var_edge_is_exempted_by_the_value_proof(make, shape) -> None:
     assert result.decision == "exempted", (result.decision, result.reason)
 
 
+@pytest.mark.parametrize(("make", "shape"), CASES)
+def test_dead_running_var_edge_off_the_mean_still_fails(make, shape) -> None:
+    """A plain-capture bug of the same shape: input one ulp-scale step off the mean."""
+
+    x = torch.zeros(shape)
+    x.view(-1)[0] = 1e-6
+    trace = _capture(make().eval(), x)
+    op = _bn_op(trace)
+    _freeze(op)
+    result = _edge(trace, op, 4)
+    assert result.decision == "failed", (result.decision, result.reason)
+    assert result.reason == "perturbation_insensitive"
+
+
 @pytest.mark.parametrize("slot", [3])
 def test_dead_input_or_running_mean_edge_at_the_mean_still_fails(slot) -> None:
     trace = _capture(nn.BatchNorm2d(4).eval(), torch.zeros(2, 4, 3, 3))
