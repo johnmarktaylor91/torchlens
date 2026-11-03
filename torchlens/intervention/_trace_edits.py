@@ -633,7 +633,10 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             engine=engine,
             strict=strict,
         )
-    if value_or_hook is not None and (engine == "set_only" or not callable(value_or_hook)):
+    # A value (tensor) is set; a callable is a hook. ``engine="set_only"`` only
+    # decides whether the staged edit propagates now, so a hook stays a sticky
+    # hook under it (the staging door that replaced the removed attach_hooks).
+    if value_or_hook is not None and not callable(value_or_hook):
         set_site(
             trace,
             hooks_or_site,

@@ -164,6 +164,22 @@ def test_recipe_with_set_only_stages_one_sticky_hook_without_running(log: Any) -
     torch.testing.assert_close(log[_relu_label(log)].out, before)
 
 
+def test_do_with_a_hook_and_set_only_stages_it_sticky(log: Any) -> None:
+    """``do(site, hook, engine="set_only")`` stages a sticky hook, not a set value."""
+
+    before = log[_relu_label(log)].out.clone()
+    log.do(
+        tl.func("relu"),
+        tl.scale(2.0),
+        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
+    assert len(log._intervention_spec.hook_specs) == 1
+    assert not log._intervention_spec.target_value_specs
+    torch.testing.assert_close(log[_relu_label(log)].out, before)
+    log.push()
+    torch.testing.assert_close(log[_relu_label(log)].out, before * 2)
+
+
 def test_do_with_a_hook_propagates_at_once(log: Any) -> None:
     """``do(site, hook)`` attaches the sticky hook and replays in the same call."""
 

@@ -22,10 +22,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._visualization._trace_collapse import (
-    collapse_plan as _collapse_plan,
-    collapse_schedule as _collapse_schedule,
-)
 
 pydot = pytest.importorskip("pydot")
 
@@ -827,6 +823,12 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
     dict[str, Any]
         Bytes, structural, plan, schedule, and callback records.
     """
+    # Imported here, below the oracle models: a module-level import would shift
+    # their source lines, which the profiling node labels freeze.
+    from torchlens._visualization._trace_collapse import (
+        collapse_plan as _collapse_plan,
+        collapse_schedule as _collapse_schedule,
+    )
 
     torch.manual_seed(271828)
     model = case.model()
