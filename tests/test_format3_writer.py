@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import warnings
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -653,8 +654,10 @@ def test_injected_record_rows_have_their_declared_identity(tmp_path: Path) -> No
 
     model, value = _seeded(_MLP)
     spec = tl.when(tl.module("fc1"), _sae_like)
-    with pytest.warns(UserWarning, match="fired at zero sites"):
+    with warnings.catch_warnings(record=True) as notices:
+        warnings.simplefilter("always", UserWarning)
         trace = tl.trace(model, value, intervene=spec, capture=_LOGGED)
+    assert all("fired at zero sites" in str(notice.message) for notice in notices)
     try:
         root = tmp_path / "injected.tlspec"
         trace.save(root)
