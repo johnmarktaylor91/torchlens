@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source_commit": "11eba06d9",
+  "source_commit": "07fa6420c",
   "environment": "pinned smoke row: python 3.10, torch 2.13.0+cpu",
   "durations_source": "tests/tiers/durations.csv",
   "estimate_workers": 4,
@@ -32,27 +32,27 @@
       }
     },
     "not_slow": {
-      "count": 16272,
+      "count": 16273,
       "files": 1646,
-      "id_digest": 279499496294976,
+      "id_digest": 147269233979265,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not rare and not slow\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
         "tests_with_duration": 13689,
-        "tests_without_duration": 2583,
+        "tests_without_duration": 2584,
         "serial_seconds": 7976.7,
         "n4_seconds": 1994.2
       }
     },
     "all": {
-      "count": 18841,
+      "count": 18842,
       "files": 1683,
-      "id_digest": 231347372939191,
+      "id_digest": 278257269767164,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider tests/",
       "wall_estimate": {
         "method": "per_file_mean",
         "tests_with_duration": 14170,
-        "tests_without_duration": 4671,
+        "tests_without_duration": 4672,
         "serial_seconds": 9115.4,
         "n4_seconds": 2278.8
       }
