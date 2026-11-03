@@ -31,7 +31,7 @@ from ._errors import NarrationStatsError
 if TYPE_CHECKING:
     import torch
 
-    from ...stats._tensor_stats import TensorStats
+    from ..stats._tensor_stats import TensorStats
 
 __tl_layer__ = "L5"
 
@@ -70,8 +70,8 @@ def sampled_stats(tensor: torch.Tensor, *, identity: str | None = None) -> Tenso
 
     import torch
 
-    from ...stats._stats_kernel import identity_seed, seeded_sample
-    from ...stats._tensor_stats import FamilyEvidence, _dtype_token, _tensor_version, tensor_stats
+    from ..stats._stats_kernel import identity_seed, seeded_sample
+    from ..stats._tensor_stats import FamilyEvidence, _dtype_token, _tensor_version, tensor_stats
 
     numel = tensor.numel()
     if numel == 0:
@@ -158,7 +158,7 @@ def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> TensorS
     # ``_aggregate``, whose function-level ``from .. import trace`` would put
     # this module in one import SCC with the capture entries and defer mypy's
     # resolution of the whole cycle.
-    from ...stats._tensor_stats import tensor_stats
+    from ..stats._tensor_stats import tensor_stats
 
     return tensor_stats(tensor.detach(), identity=identity)
 
@@ -200,7 +200,7 @@ def reuse_stats(
     verdict = store.get("events", {}).get(raw_label)
     if not isinstance(verdict, bool):
         return None
-    from ...stats._tensor_stats import TENSOR_STATS_SCHEMA_VERSION, FamilyEvidence, TensorStats
+    from ..stats._tensor_stats import TENSOR_STATS_SCHEMA_VERSION, FamilyEvidence, TensorStats
 
     unavailable = FamilyEvidence("unavailable", numel, reason="not recorded by track_nonfinite")
     return TensorStats(

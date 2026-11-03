@@ -32,9 +32,9 @@ from collections import deque
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from ..._errors import original_exception
-from ..._state import pause_logging
-from ...errors._base import TorchLensWarning
+from .._errors import original_exception
+from .._state import pause_logging
+from ..errors._base import TorchLensWarning
 from ._errors import NarrationStatsError
 from ._event import NarrationEvent
 from ._format import compact_device, compact_dtype, format_shape, render_line
@@ -44,9 +44,9 @@ from ._stats import exact_stats, reuse_stats, sampled_stats
 if TYPE_CHECKING:
     import torch
 
-    from ..._ir.predicate import RecordContext
-    from ...options import NarrationOptions
-    from ...stats._tensor_stats import TensorStats
+    from .._ir.predicate import RecordContext
+    from ..options import NarrationOptions
+    from ..stats._tensor_stats import TensorStats
 
 __tl_layer__ = "L5"
 
@@ -138,8 +138,8 @@ class EchoSession:
     def __init__(self, options: NarrationOptions, tier: str) -> None:
         """Resolve the sink, the scope, and the per-pass counters."""
 
-        from ..._ir.selector_eval import split_followed_by_conjunction
-        from ..._selection.selectors import BaseSelector
+        from .._ir.selector_eval import split_followed_by_conjunction
+        from .._selection.selectors import BaseSelector
 
         self.options = options
         self.tier = tier

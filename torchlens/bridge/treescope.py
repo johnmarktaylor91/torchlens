@@ -57,6 +57,7 @@ from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, MissingDependencyError
+from ..report._notebook._card_suppression import register_card_suppressor
 
 __all__ = [
     "BRIDGE_LEDGER",
@@ -577,6 +578,10 @@ def consume_repr_suppression(obj: Any) -> bool:
         return True
     except Exception:  # noqa: BLE001 - fail safe, never suppress on a fault
         return False
+
+
+# Cards sit below this bridge and never import it: they consult the slot.
+register_card_suppressor(consume_repr_suppression)
 
 
 # ---------------------------------------------------------------------------

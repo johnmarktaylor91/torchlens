@@ -19,8 +19,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._snoop._format import render_line, render_stats_segment
 from torchlens._source_links import terminal_file_line_link
-from torchlens.debug._snoop._format import render_line, render_stats_segment
 from torchlens.options import NarrationOptions
 from torchlens.stats import FamilyEvidence, tensor_stats
 from torchlens.types import NarrationEvent
@@ -215,7 +215,7 @@ def test_reuse_verdict_grammar_has_no_invented_count(verdict: bool) -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.debug._snoop._stats import reuse_stats
+    from torchlens._snoop._stats import reuse_stats
 
     trace = SimpleNamespace(_nonfinite_capture={"events": {"raw": verdict}})
     record = reuse_stats(trace, "raw", shape=(10,), dtype="f32", device="cpu")

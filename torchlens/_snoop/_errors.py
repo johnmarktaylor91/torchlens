@@ -1,6 +1,6 @@
 """Typed refusal classes for live narration (lane F28, snoop memo D1-D5).
 
-Every raise site in ``torchlens.debug._snoop`` (and every echo refusal raised from
+Every raise site in ``torchlens._snoop`` (and every echo refusal raised from
 the entry layers) carries a stable ``fields["code"]`` plus a non-empty
 ``fields["remedy"]`` and is ledgered in
 ``docs/reference/error_refusal_contract.md``. Callers branch on the code,
@@ -9,7 +9,7 @@ never on message text.
 
 from __future__ import annotations
 
-from ...errors._base import CaptureError, ConfigurationError
+from ..errors._base import CaptureError, ConfigurationError
 
 __tl_layer__ = "L5"
 

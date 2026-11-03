@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...stats._tensor_stats import TensorStats
+    from ..stats._tensor_stats import TensorStats
 
 __tl_layer__ = "L5"
 

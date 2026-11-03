@@ -679,6 +679,10 @@ _PUBLIC_REGISTRATION_STATE = frozenset(
         # Facet-snapshot provider slot: the capture door registers a lazy loader and
         # _semantic.facets registers snapshot() when it loads; the engine reads it.
         ("torchlens/_registry/_facet_snapshot.py", "_PROVIDER"),
+        # Card-suppression slot: the treescope bridge registers its one-shot
+        # predicate at import; notebook cards consult it instead of importing the
+        # bridge (report sits below bridge). Last registration wins.
+        ("torchlens/report/_notebook/_card_suppression.py", "_SUPPRESSOR"),
         ("torchlens/attribution/onebackward/_facet_bridge.py", "_FROZEN_POLICIES"),
         ("torchlens/attribution/onebackward/_facet_bridge.py", "FROZEN_POLICY_NAMES"),
         ("torchlens/backends/registry.py", "_REGISTRY"),
@@ -1341,6 +1345,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/report/_notebook/__init__.py", "__all__"),
         ("torchlens/report/_notebook/_access.py", "__all__"),
         ("torchlens/report/_notebook/_axis_labels.py", "__all__"),
+        ("torchlens/report/_notebook/_card_suppression.py", "__all__"),
         ("torchlens/report/_notebook/_grid.py", "__all__"),
         ("torchlens/report/_notebook/_motifs.py", "__all__"),
         ("torchlens/report/_notebook/_truncation.py", "__all__"),
@@ -1422,15 +1427,15 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_semantic/logit_lens.py", "__all__"),
         ("torchlens/_semantic/recipes/__init__.py", "__all__"),
         ("torchlens/_semantic/tolerances.py", "__all__"),
-        ("torchlens/debug/_snoop/__init__.py", "__all__"),
-        ("torchlens/debug/_snoop/_errors.py", "__all__"),
-        ("torchlens/debug/_snoop/_event.py", "__all__"),
-        ("torchlens/debug/_snoop/_format.py", "__all__"),
-        ("torchlens/debug/_snoop/_narrate.py", "__all__"),
-        ("torchlens/debug/_snoop/_normalize.py", "__all__"),
-        ("torchlens/debug/_snoop/_session.py", "__all__"),
-        ("torchlens/debug/_snoop/_sink.py", "__all__"),
-        ("torchlens/debug/_snoop/_stats.py", "__all__"),
+        ("torchlens/_snoop/__init__.py", "__all__"),
+        ("torchlens/_snoop/_errors.py", "__all__"),
+        ("torchlens/_snoop/_event.py", "__all__"),
+        ("torchlens/_snoop/_format.py", "__all__"),
+        ("torchlens/_snoop/_narrate.py", "__all__"),
+        ("torchlens/_snoop/_normalize.py", "__all__"),
+        ("torchlens/_snoop/_session.py", "__all__"),
+        ("torchlens/_snoop/_sink.py", "__all__"),
+        ("torchlens/_snoop/_stats.py", "__all__"),
         ("torchlens/stats/__init__.py", "__all__"),
         ("torchlens/stats/_capture_stats.py", "__all__"),
         ("torchlens/stats/_fitted.py", "__all__"),
