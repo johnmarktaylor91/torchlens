@@ -197,7 +197,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # post-features debloat pass keeps it as the target.
     # 4500 -> 4300: the GradFn order-resolution helpers moved to
     # _grad_fn_orders.py (4297 measured); the ceiling follows the file down.
-    "torchlens/backends/torch/backward.py": 4300,
+    # 4300 -> 4200: the GradFn pairing helpers moved to _grad_fn_pairing.py
+    # (4191 measured).
+    "torchlens/backends/torch/backward.py": 4200,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields
