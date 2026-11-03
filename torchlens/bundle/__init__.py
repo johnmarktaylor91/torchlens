@@ -64,7 +64,6 @@ from ._deltas import (
 from ._draw import bundle_draw as _bundle_draw
 from ._labels import AmbiguousLabelError, label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
-from ._measure import measure_members as _measure_members
 from ._members import coerce_member_name, parse_members
 from ._outcome_fold import _fold_member_outcomes as _fold_member_outcomes  # re-export
 from ._provenance import (
@@ -1018,12 +1017,6 @@ class Bundle:
         """
 
         return _operations.bundle_map(self, fn)
-
-    def measure_members(
-        self, *, metric: Callable[[Trace], Any], order: str = "member"
-    ) -> dict[str, Any]:
-        """Recompute a NEW metric over surviving members; released ones are ``unmeasured``."""
-        return _measure_members(self, metric=metric, order=order)
 
     @staticmethod
     def _accepts_member_name(fn: Callable[..., Any]) -> bool:

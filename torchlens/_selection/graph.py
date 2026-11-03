@@ -6,8 +6,10 @@ that compose with the full ``| & - ~`` algebra and resolve explicitly
 against one trace:
 
 - ``neighborhood(of, hops, direction)`` — every op within N dataflow hops
-  of a seed region (S3): the seed's touched sites plus everything reachable
-  through at most ``hops`` parent/child edges in the requested direction.
+  of a seed region (S3): the seed's sites that carry at least one selected
+  element, plus everything reachable through at most ``hops`` parent/child
+  edges in the requested direction. A seed site whose mask is empty (as
+  ``-`` or ``~`` can leave it) seeds nothing.
 
 - ``between(sources, sinks)`` — the executed sub-DAG carrying influence
   from the source region to the sink region (S4): exactly the ops lying on
@@ -32,7 +34,7 @@ Membership claims are STRUCTURAL facts about THIS capture's executed DAG,
 so every resolved entry is a whole-site mask with
 ``provenance.relation="exact"``. When a seed region was itself produced
 inexactly (an upper-bound receptive-field hull), the hop claim stays exact
-RELATIVE TO the seed's touched-site family; the seed's own inexactness is
+RELATIVE TO the seed's element-carrying sites; the seed's own inexactness is
 disclosed on the seed, not silently re-graded here.
 
 Every spelling here ships DOCUMENTED-UNSTABLE pending naming-session
@@ -280,15 +282,22 @@ def _resolve_region(operand: Any, trace: Any) -> Selection:
 
 
 def _region_labels(graph: _TraceGraph, resolved: Selection, producer: str) -> frozenset[str]:
-    """Map a resolved region's touched-site family to graph node labels.
+    """Map a resolved region's element-carrying sites to graph node labels.
 
-    Family semantics: element masks never shrink a graph region — a
-    touched site is a touched node. Zero-mask entries therefore still
-    seed/bound the traversal (two-level denotation, family level).
+    A site that carries at least one selected element is a whole graph
+    node: a partial mask never shrinks the node to its elements. A site
+    whose mask is EMPTY seeds nothing. Subtraction and complement keep a
+    site touched after removing every element of it (``x - y`` keeps all of
+    ``x``'s sites), and seeding from those empty rows would grow the region
+    from sites the selection no longer contains. Seeding from the sites
+    with a nonempty mask makes a closure of ``U - X`` the closure of the
+    sites outside ``X``, as the query means.
     """
 
     labels: set[str] = set()
     for entry in resolved:
+        if entry.num_selected == 0:
+            continue
         label = graph.by_site.get(entry.key)
         if label is None:
             raise RuntimeError(
@@ -446,8 +455,10 @@ def neighborhood(
     of ``'both'`` (default), ``'upstream'`` (parent edges, toward the
     inputs), or ``'downstream'`` (child edges, toward the outputs). ``of``
     accepts a site label string (bare layer labels on multi-pass layers
-    mean all passes), an ``Op``/``Layer``, or any ACT selection — element
-    masks never shrink the seed (a touched site is a touched node).
+    mean all passes), an ``Op``/``Layer``, or any ACT selection. Every
+    seed site that carries at least one selected element seeds its whole
+    node (a partial mask never shrinks the seed); a site whose mask is
+    empty, as ``x - y`` leaves where ``y`` removed all of it, seeds nothing.
     Membership is a structural fact about this capture, so entries are
     whole-site masks with ``provenance.relation="exact"``. Resolution
     refuses typed on unknown seed sites (``site_not_in_trace``) and on
@@ -477,7 +488,10 @@ def between(sources: Any, sinks: Any) -> Selector:
     circuit-slice primitive. ``sources`` and ``sinks`` each accept one
     region or a list of regions (site label strings, ``Op``/``Layer``
     handles, or any ACT selection); the region is
-    (descendants of any source) ∩ (ancestors of any sink). No directed
+    (descendants of any source) ∩ (ancestors of any sink). An endpoint
+    contributes the sites where it carries at least one selected element,
+    each as a whole node; a site whose mask is empty (left by ``-`` or
+    ``~``) is not an endpoint. No directed
     path resolves to the EMPTY selection — emptiness is disclosure, never
     an error (the raising flavor is the influence-geometry
     ``require_path``). Entries are whole-site masks with
