@@ -91,19 +91,37 @@ def test_backfill_extends_existing_rows_and_adds_sorted_new_ones() -> None:
         _row("tl.top_changed", "k"),
         _row("EffectsView.rank_changes", "k", kind="positional_or_keyword", default="None"),
         _row("Bundle.rank_changes", "baseline", default=None, meaning="Baseline ``name``."),
-        _row("tl.errors.Base", "seed", constructor=True),
-        _row("tl.errors.Child", "seed", aliases=["tl.errors.Child"], defined_by="tl.errors.Base"),
+        _row("tl.errors.Root", "code", constructor=True),
+        _row(
+            "tl.errors.Leaf",
+            "code",
+            aliases=["tl.errors.Leaf", "tl.errors.Root"],
+            defined_by="tl.errors.Root",
+        ),
     ]
     text, extended, added = glossary_backfill.backfill(TABLE, rows)
-    assert (extended, added) == (2, 1)
+    assert (extended, added) == (1, 2)
     assert glossary_params.missing(rows, text) == []
     lines = text.splitlines()
     assert lines[3] == (
         "| `baseline=` | keyword of `Bundle.rank_changes` (keyword-only; required): "
         "Baseline `name` |"
     )
-    assert lines[4].endswith("; keyword of `EffectsView.rank_changes` (default `None`) |")
-    assert "constructor keyword of `tl.errors.Base` and the classes that inherit" in lines[6]
+    assert lines[4] == (
+        "| `code=` | constructor keyword of `tl.errors.Root` and the classes that inherit "
+        "that constructor (keyword-only; default `10`) |"
+    )
+    assert lines[5].endswith("; keyword of `EffectsView.rank_changes` (default `None`) |")
+
+
+def test_backfill_meanings_drop_internal_planning_ids() -> None:
+    """Docstring citations of private planning ids never reach the public glossary."""
+
+    strip = glossary_backfill.strip_internal_ids
+    assert strip("Gates derived claims (memo D7)") == "Gates derived claims"
+    assert strip("Device (F20 brainpipe D-25; e.g. `cuda`).") == "Device (e.g. `cuda`)."
+    assert strip("The D7 integrity level: fast") == "The integrity level: fast"
+    assert strip("merged :class:`RaggedBatch` keys") == "merged :class:`RaggedBatch` keys"
 
 
 @pytest.mark.heavy

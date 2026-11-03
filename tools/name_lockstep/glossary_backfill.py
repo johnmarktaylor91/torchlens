@@ -15,6 +15,8 @@ Usage: ``PYTHONPATH=tools python -m name_lockstep.glossary_backfill DUMP.json [-
 from __future__ import annotations
 
 import argparse
+import functools
+import importlib.util
 import json
 import re
 import sys
@@ -26,12 +28,49 @@ from name_lockstep.glossary_params import _KEYWORD_ROW, missing
 
 _RST_LITERAL = re.compile(r"``([^`]+)``")
 _INHERITED = " and the classes that inherit that constructor"
+_PARENTHETICAL = re.compile(r"\s*\(([^()]*)\)")
+_ID_LINT = Path(__file__).resolve().parents[2] / "scripts" / "checks" / "id_lint.py"
+
+
+@functools.cache
+def _internal_id() -> re.Pattern[str]:
+    """Return one pattern for every id family ``scripts/checks/id_lint.py`` counts."""
+
+    spec = importlib.util.spec_from_file_location("_glossary_id_lint", _ID_LINT)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {_ID_LINT}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return re.compile("|".join(f"(?:{pattern})" for pattern in module.FAMILIES.values()))
+
+
+def _without_ids_in_parentheses(match: re.Match[str]) -> str:
+    """Drop the ``;`` parts of a parenthetical that cite an internal id."""
+
+    kept = [part.strip() for part in match.group(1).split(";")]
+    kept = [part for part in kept if part and not _internal_id().search(part)]
+    return f" ({'; '.join(kept)})" if kept else ""
+
+
+def strip_internal_ids(text: str) -> str:
+    """Return docstring prose without internal planning ids (memo items, findings, lanes).
+
+    The public glossary must not cite private planning ids; ``id-lint`` ratchets them down.
+    A parenthetical loses its id-citing parts; a bare id elsewhere is removed.
+    """
+
+    if not _internal_id().search(text):
+        return text
+    text = _PARENTHETICAL.sub(_without_ids_in_parentheses, text)
+    text = _internal_id().sub("\0", text)  # mark each removed id to tidy only around it
+    text = re.sub(r"\s*\0[\0/,\s]*(?=[,;)]|\.(?!\.))", "", text)
+    return re.sub(r"\s*\0[\0/,\s]*", " ", text).strip()
 
 
 def _clean(meaning: str) -> str:
-    """Return a docstring meaning as one markdown table cell."""
+    """Return a docstring meaning as one markdown table cell, without internal ids."""
 
-    text = _RST_LITERAL.sub(r"`\1`", " ".join(meaning.split()))
+    text = strip_internal_ids(_RST_LITERAL.sub(r"`\1`", " ".join(meaning.split())))
     return text.replace("|", "\\|").strip().removesuffix(".")
 
 
