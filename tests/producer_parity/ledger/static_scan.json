@@ -8,6 +8,54 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/_capture/_cook_facts.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "equivalence_class",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_capture/_episode_join.py",
@@ -72,6 +120,150 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "equivalence_class",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 11,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "function",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 14,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_label_raw",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 7,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 10,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "record_context",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "seq",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "seq",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "step_index",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 8,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/_capture/_multipass_cook.py",
+  "has_default": false,
+  "sites": 16,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_capture/_nonfinite_prefix.py",
@@ -83,6 +275,22 @@
   "ambiguous": true,
   "field": "label_raw",
   "file": "torchlens/_capture/_nonfinite_prefix.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "is_output_parent",
+  "file": "torchlens/_capture/_sparse_refs.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/_capture/_sparse_refs.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -268,7 +476,7 @@
   "field": "equivalence_class",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -372,7 +580,7 @@
   "field": "is_output_parent",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -420,7 +628,7 @@
   "field": "module_stack",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -452,7 +660,7 @@
   "field": "params",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -628,7 +836,7 @@
   "field": "raw_index",
   "file": "torchlens/_capture/projectors.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -686,14 +894,6 @@
   "has_default": false,
   "sites": 5,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "pass_index",
-  "file": "torchlens/_capture/session.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -1361,6 +1561,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_io/_save_subject.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_io/bundle.py",
   "has_default": false,
@@ -1372,7 +1580,7 @@
   "field": "modules",
   "file": "torchlens/_io/bundle.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -6337,6 +6545,14 @@
  },
  {
   "ambiguous": false,
+  "field": "equivalence_class",
+  "file": "torchlens/backends/torch/_ops_predicate_events.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "has_internal_source_ancestor",
   "file": "torchlens/backends/torch/_ops_predicate_events.py",
   "has_default": false,
@@ -6350,6 +6566,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/torch/_ops_predicate_events.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -7510,6 +7734,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/export/_common.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -8849,6 +9081,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/recording/_dry_run.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "output",
   "file": "torchlens/recording/_generation.py",
   "has_default": false,
@@ -8988,7 +9228,7 @@
   "field": "kind",
   "file": "torchlens/recording/types.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {

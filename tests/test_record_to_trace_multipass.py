@@ -66,6 +66,12 @@ def _op(trace: Any, layer_type: str, pass_number: int) -> Any:
     return op
 
 
+def _output_parent_passes(trace: Any) -> list[int]:
+    """Pass number of the op feeding each output layer, in output order."""
+
+    return [trace[trace[label].parents[0]].pass_number for label in trace.output_layers]
+
+
 def test_three_pass_recording_cooks_like_trace() -> None:
     """Pass numbering, pass counts and per-pass values agree with an exhaustive capture."""
 
@@ -88,13 +94,12 @@ def test_three_pass_recording_cooks_like_trace() -> None:
         ("tanh", 3, 3),
     ]
     for layer_type in ("linear", "tanh"):
-        labels = sorted(op.layer_label for op in cooked.ops if op.type == layer_type)
-        bases = {label.rsplit(":", 1)[0] for label in labels}
-        assert len(bases) == 1, labels
-        assert [label.rsplit(":", 1)[1] for label in labels] == ["1", "2", "3"]
+        labels = sorted(op.label for op in cooked.ops if op.type == layer_type)
+        assert len({op.layer_label for op in cooked.ops if op.type == layer_type}) == 1, labels
+        assert [label.rsplit(":", 1)[1] for label in labels] == ["1", "2", "3"], labels
         for pass_number in (1, 2, 3):
             cooked_op = _op(cooked, layer_type, pass_number)
-            assert cooked[cooked_op.layer_label] is cooked_op
+            assert cooked[cooked_op.label] is cooked_op
             assert torch.equal(cooked_op.out, _op(exhaustive, layer_type, pass_number).out)
 
 
@@ -116,7 +121,7 @@ def test_three_pass_cooked_values_come_from_their_own_pass() -> None:
 
 
 def test_three_pass_recording_keeps_one_output_layer_per_pass() -> None:
-    """The cooked Trace ends in three output layers, one per recorded pass, in pass order."""
+    """The cooked Trace ends in three output layers fed by passes 1, 2 and 3 in order."""
 
     inputs = _inputs(3)
     torch.manual_seed(0)
@@ -125,8 +130,8 @@ def test_three_pass_recording_keeps_one_output_layer_per_pass() -> None:
     cooked = _record_passes(_Cell(), inputs).to_trace()
 
     assert len(cooked.output_layers) == len(exhaustive.output_layers) == 3
-    assert [cooked[label].pass_number for label in cooked.output_layers] == [1, 2, 3]
-    assert [cooked[label].type for label in cooked.output_layers] == ["tanh"] * 3
+    assert _output_parent_passes(cooked) == _output_parent_passes(exhaustive) == [1, 2, 3]
+    assert [cooked[label].type for label in cooked.output_layers] == ["output"] * 3
     assert len(cooked.input_layers) == len(exhaustive.input_layers) == 3
 
 
