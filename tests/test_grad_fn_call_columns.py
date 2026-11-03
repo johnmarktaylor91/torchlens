@@ -110,7 +110,7 @@ def _payload_equal(live: Any, loaded: Any) -> bool:
         return (
             type(live) is type(loaded)
             and len(live) == len(loaded)
-            and all(_payload_equal(a, b) for a, b in zip(live, loaded))
+            and all(_payload_equal(a, b) for a, b in zip(live, loaded, strict=True))
         )
     return live == loaded
 
