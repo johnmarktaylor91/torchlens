@@ -79,22 +79,27 @@ def _run_hooked(
     """Run ``model(x)``; read (and optionally replace) one tensor at ``module``'s ``call``-th call.
 
     ``where`` is ``"input"`` (the call's first positional input) or ``"output"``.
+    Returns the model output and the tensor read (or the replacement), which
+    the rest of the forward consumed through a clone.
     """
 
     state: dict[str, Any] = {"n": 0, "tensor": None}
 
+    # The module downstream of the read tensor gets a clone: resnet's basic
+    # block applies ``nn.ReLU(inplace=True)`` to the residual add, which would
+    # otherwise overwrite the tensor read here before it is used.
     def pre(_mod: nn.Module, args: tuple[Any, ...]) -> tuple[Any, ...] | None:
         state["n"] += 1
         if state["n"] != call or where != "input":
             return None
-        state["tensor"] = args[0]
-        return None if replacement is None else (replacement, *args[1:])
+        state["tensor"] = args[0] if replacement is None else replacement
+        return (state["tensor"].clone(), *args[1:])
 
     def post(_mod: nn.Module, _args: tuple[Any, ...], out: torch.Tensor) -> torch.Tensor | None:
         if state["n"] != call or where != "output":
             return None
-        state["tensor"] = out
-        return replacement
+        state["tensor"] = out if replacement is None else replacement
+        return state["tensor"].clone()
 
     handles = [module.register_forward_pre_hook(pre), module.register_forward_hook(post)]
     try:

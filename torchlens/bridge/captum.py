@@ -7,6 +7,7 @@ import weakref
 from collections.abc import Iterator
 from typing import Any
 
+import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
@@ -356,10 +357,18 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
     seen = {"count": 0}
 
     def splice(out: Any, *, hook: Any) -> Any:
-        """Route the ``probe.ordinal``-th firing of the site through the probe."""
+        """Route the ``probe.ordinal``-th firing of the site through the probe.
+
+        The downstream forward gets a clone of what the probe returned: an
+        in-place consumer (``nn.ReLU(inplace=True)`` after a residual add)
+        would otherwise overwrite the tensor Captum's hook saved or injected.
+        """
 
         seen["count"] += 1
-        return probe(out) if seen["count"] == probe.ordinal else out
+        if seen["count"] != probe.ordinal:
+            return out
+        result = probe(out)
+        return result.clone() if isinstance(result, torch.Tensor) else result
 
     spec = tl.when(site_selector(probe.site_key), splice)
 
