@@ -35,6 +35,7 @@ from .._data_classes._trace_intervention_records import (
 from .._errors import InvalidArgumentError
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
 from ._edit_guards import select_do_engine, warn_if_root_mutation
+from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_selection_edits import (
     apply_selection_batch_do,
     apply_selection_do,
@@ -267,16 +268,17 @@ def clear_edits(
     handle_values = (
         tuple(getattr(handle, "handle_ids", (str(handle),))) if handle is not None else (None,)
     )
+    spec = ensure_intervention_spec(trace)
+    handles_before = sticky_handle_ids(spec)
     removed = 0
     for handle_value in handle_values:
-        removed += ensure_intervention_spec(trace).remove_hook(
-            site_target=target_spec,
-            handle=handle_value,
-        )
+        removed += spec.remove_hook(site_target=target_spec, handle=handle_value)
     if removed == 0 and strict:
         raise SpecMutationError("clear_edits did not match any sticky hooks.")
     if removed > 0:
         mark_intervention_spec_mutated(trace)
+        # Removal takes effect at once, in a rerun or backward pass in progress.
+        retire_live_hook_handles(handles_before - sticky_handle_ids(spec))
     record_operation(
         trace,
         "detach_hooks",

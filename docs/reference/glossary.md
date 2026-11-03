@@ -677,6 +677,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
   sticky edits attached with `attach_hooks` by site or by handle, marks the recipe stale and
   returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
+  Removal (also through the handle's `remove()`) takes effect at once, like a torch hook handle: a
+  rerun or backward pass in progress skips the removed hooks from the next hook site it reaches,
+  while the site firing at that moment finishes its queued hooks; afterwards the recipe and the
+  handle are the same as after a removal between runs.
 
 **Region instances** *(spellings documented-unstable)*
 : A region edit's admissible region is partitioned into pass instances. `RegionTarget.labels`

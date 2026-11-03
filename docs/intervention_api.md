@@ -223,7 +223,7 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 | Method | Use |
 | --- | --- |
 | `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
-| `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
+| `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. The returned handle's `remove()` (and `log.clear_edits(handle=...)`) takes effect at once, like a torch hook handle: a rerun or backward pass in progress skips the removed hooks from the next hook site it reaches, and the site firing at that moment finishes its queued hooks first. |
 | `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
 | `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
