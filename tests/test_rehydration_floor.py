@@ -139,17 +139,14 @@ def test_current_version_object_state_still_restores() -> None:
 
 
 @pytest.mark.smoke
-def test_manifest_missing_kind_still_loads_as_trace(tmp_path: Path) -> None:
-    """A manifest with ``kind`` deleted is NOT the legacy pre-tlspec format.
+def test_manifest_missing_kind_refuses_as_schema_invalid_not_as_2x(tmp_path: Path) -> None:
+    """A manifest with ``kind`` deleted is a schema error, never a file saved by 2.x.
 
-    ``tlspec_version`` is itself a tlspec-schema-only marker (the genuine
-    v2.16 ModelLog format never carried it); a manifest that has it but lost
-    its ``kind`` key is an older-but-still-modern unified manifest, and
-    ``kind`` defaults to ``"trace"`` (the only kind that existed before the
-    discriminator). Fixes a fast-tier fuzz finding (2026-10,
-    ``test_tlspec_parse_fuzz.py::test_every_toplevel_key_deletion_is_adjudicated``):
-    this exact shape used to misclassify as ``v2.16_modellog_portable`` and
-    raise a false "pre-tlspec ModelLog format" ``ArtifactTooOldError``.
+    ``kind`` is a required key of the 3.0 manifest, so losing it refuses with the typed
+    ``manifest_schema_invalid`` error that names the missing key. It must not misclassify
+    as a 2.x artifact (``ArtifactTooOldError``): the same fast-tier fuzz finding that once
+    made this shape raise a false "pre-tlspec ModelLog format" refusal
+    (``test_tlspec_parse_fuzz.py::test_every_toplevel_key_deletion_is_adjudicated``).
     """
 
     trace = _build_trace()
@@ -161,9 +158,11 @@ def test_manifest_missing_kind_still_loads_as_trace(tmp_path: Path) -> None:
     del manifest["kind"]
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    loaded = tl.load(path)
-    assert isinstance(loaded, tl.Trace)
-    loaded.cleanup()
+    with pytest.raises(ArtifactError) as excinfo:
+        tl.load(path)
+    assert not isinstance(excinfo.value, ArtifactTooOldError)
+    assert excinfo.value.fields["code"] == "manifest_schema_invalid"
+    assert "missing required field 'kind'" in excinfo.value.fields["errors"]
     trace.cleanup()
 
 
