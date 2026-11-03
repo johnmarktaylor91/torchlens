@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import weakref
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any, ClassVar, Generic, TypeVar
 
 import torch
@@ -38,13 +38,27 @@ def attach_source_honesty(frame: Any, records: list[Any]) -> Any:
     Any
         ``frame``, for call-site chaining.
     """
+    source_trace = first_source_trace(records)
+    if source_trace is not None:
+        source_trace._attach_dataframe_honesty(frame)
+    return frame
+
+
+def first_source_trace(records: Iterable[Any]) -> Any:
+    """The first owning trace still reachable from ``records``, else ``None``.
+
+    Walks ``records`` for the first one whose ``_source_trace_ref`` weakref
+    still resolves (a ``_slot``-backed record exposes the same name through
+    ``getattr``). Collections use it to reach the Trace-level filters without
+    holding a trace reference of their own.
+    """
+
     for record in records:
         source_ref = getattr(record, "_source_trace_ref", None)
         source_trace = source_ref() if callable(source_ref) else None
         if source_trace is not None:
-            source_trace._attach_dataframe_honesty(frame)
-            break
-    return frame
+            return source_trace
+    return None
 
 
 class Accessor(Generic[T]):
@@ -149,6 +163,17 @@ class Accessor(Generic[T]):
     def keys(self) -> list[Any]:
         """Return primary lookup keys."""
         return list(self._dict.keys())
+
+    @property
+    def labels(self) -> tuple[str, ...]:
+        """The lookup label of every record this collection lists, in order.
+
+        Layer labels on a Layer collection, Op labels on an Op collection,
+        module addresses on a Module collection: the strings ``keys()`` lists,
+        so ``accessor[accessor.labels[i]]`` is the ``i``-th record.
+        """
+
+        return tuple(str(key) for key in self.keys())
 
     def values(self) -> list[T]:
         """Return primary values."""

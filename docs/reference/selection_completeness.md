@@ -459,7 +459,7 @@ repository root).
   `torchlens/_selection/selection.py`; the `__selection__` protocol). This is the hypothesis of
   Theorem B, not a fact to verify.
 - **A1 (universe).** `V` is the trace's full record list (computed ops plus input and output
-  records) restricted to records with a string label (`_graph_indexes` in `torchlens/receptive_field/_path.py`; `_TraceGraph.from_trace` in
+  records) restricted to records with a string label (`_graph_indexes` in `torchlens/receptive_field/_path.py`; `_ExecutedDag.from_trace` in
   `torchlens/_selection/graph.py`); sites are those with a tuple-of-ints `shape` (`_site_shape`
   in `torchlens/_selection/selection.py`). Multi-output functions are recorded per slot with a
   shape each (`torch.max(x, dim)` gives one record per output). Caveat 1 holds exactly when no

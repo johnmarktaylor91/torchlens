@@ -213,7 +213,7 @@ def test_show_on_recurrent_aggregate_layer_requires_pass_selection() -> None:
 
     torch.manual_seed(4)
     log = tl.trace(_Recurrent(), torch.randn(2, 3))
-    aggregate = log["linear_1_1"]
+    aggregate = log.layers["linear_1_1"]
     assert aggregate.num_passes == 2
 
     with pytest.raises(ValueError, match="recurrent"):
