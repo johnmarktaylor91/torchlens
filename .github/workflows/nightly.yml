@@ -2010,9 +2010,10 @@ jobs:
         # A skip counts as a failure on this leg (maximum skipped fraction 0):
         # every page's and snippet's peer is installed, so a skip means a page
         # or snippet went unrun. The floor is the measured executed count of
-        # both files in this environment.
+        # both files in this environment: 88 recipe-page tests and 125 docs
+        # snippet tests, 0 skipped (2026-11-03, torch 2.13.0, python 3.10).
         run: |
-          echo "peer-recipes.junit.xml 53 0" >> "$RUNNER_TEMP/junit/legs.floor"
+          echo "peer-recipes.junit.xml 213 0" >> "$RUNNER_TEMP/junit/legs.floor"
 
       # The SAE export consumers install last and run in their own step: one
       # of them ships a top-level ``tests`` package that shadows the repo's,
