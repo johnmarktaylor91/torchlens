@@ -27,6 +27,7 @@ from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, S
 from dataclasses import dataclass
 from typing import Any, cast
 
+from .._protocols.tinygrad import TinygradProtocol
 from ._derived_grads import _tree_leaves_with_paths
 from ._rules import (
     CONSTANT_UNREALIZABLE_CODE,
@@ -236,8 +237,6 @@ def realize_recorded_values(
         (``NotImplementedError``); the message names the first recorded
         ``BUFFER`` source, else the first recorded op.
     """
-
-    from .._protocols.tinygrad import TinygradProtocol
 
     realized, owned = _realization_targets(plan, source_uops)
     try:

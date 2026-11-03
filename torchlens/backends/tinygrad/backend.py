@@ -510,14 +510,14 @@ class TinygradBackend:
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
 
         trace._output_slot = returned(output)
-        capture = realize_capture(args, outputs, preexisting_uops, self.is_tensor)
+        realized = realize_capture(args, outputs, preexisting_uops, self.is_tensor)
         trace.transformed_output = output_transform(output) if callable(output_transform) else None
-        uop_labels = self._emit_input_sources(trace, capture)
+        uop_labels = self._emit_input_sources(trace, realized)
         tree = module_tree if use_object_module else None
         captures = self._emit_uop_graph(
-            trace, capture, uop_labels, (observed_ops, observed_module_stacks, tree)
+            trace, realized, uop_labels, (observed_ops, observed_module_stacks, tree)
         )
-        self._mark_output_events(trace, outputs, uop_labels, captures, capture.output_uops)
+        self._mark_output_events(trace, outputs, uop_labels, captures, realized.output_uops)
         _stamp_param_logs(trace, module_tree if use_object_module else None)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
