@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ._focus_scope import scope_caption_head
 from ._label_format import format_memory
 from ._render_utils import html_escape
 
@@ -224,8 +225,6 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
 
 def _caption_head(trace: Trace, count_line: str, module: Any) -> str:
     """Return the header's first lines: model (or focus scope), drawn count, parameters."""
-
-    from ._focus_scope import scope_caption_head
 
     return scope_caption_head(trace, module, count_line, params_caption_detail(trace))
 

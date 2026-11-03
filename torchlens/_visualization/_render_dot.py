@@ -19,6 +19,7 @@ from ._edit_highlighter import (
     highlight_svg,
     render_highlighted,
 )
+from ._focus_scope import focus_address, reading_notes, strip_focus_ancestors
 from ._render_common import *
 from ._render_edges import *
 from ._render_flow import *
@@ -743,7 +744,6 @@ def _finalize_forward_ir(
 ) -> "RenderIR":
     """Resolve sibling constraints, nested regions and statements into the final forward IR."""
 
-    from ._focus_scope import strip_focus_ancestors
     from ._rank_layout_internal.layout import RANK_LAYOUT_COST_THRESHOLD
 
     request = context.request
@@ -844,7 +844,6 @@ def _forward_header_label(
     label (or a lens caption) stays the header.
     """
 
-    from ._focus_scope import focus_address, reading_notes
     from ._header_block import (
         caption_from_label,
         header_block_label,
