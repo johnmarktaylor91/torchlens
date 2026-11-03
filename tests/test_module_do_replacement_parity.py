@@ -80,7 +80,8 @@ def _forked_module_edit(
 
 
 def _module_outputs(trace: tl.Trace) -> dict[str, torch.Tensor]:
-    outs = {str(m.address): m.calls[0].outs[0] for m in trace.modules}
+    # The root module (address "self") has no plain-hook twin: its output is the model output.
+    outs = {str(m.address): m.calls[0].outs[0] for m in trace.modules if str(m.address) != "self"}
     outs["__output__"] = trace[trace.output_layers[0]].out
     return outs
 

@@ -43,13 +43,13 @@ def test_forward_hook_removed_before_its_site_never_fires_on_that_run() -> None:
     model, x, trace = _ready_trace()
     events: list[str] = []
 
-    def victim(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def victim(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         events.append("victim")
         return out * 0.5
 
     relu_handle = trace.attach_hooks(tl.func("relu"), victim, confirm_mutation=True)
 
-    def remover(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def remover(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         if "removed" not in events:
             relu_handle.remove()
             events.append("removed")
@@ -80,7 +80,7 @@ def test_forward_hook_removing_itself_fires_once() -> None:
     fired: list[int] = []
     handle_box: list[Any] = []
 
-    def once(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def once(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         fired.append(1)
         handle_box[0].remove()
         return out
@@ -102,13 +102,13 @@ def test_forward_hook_on_a_passed_site_is_gone_at_its_next_site() -> None:
     model, x, trace = _ready_trace()
     events: list[str] = []
 
-    def linear_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def linear_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         events.append("linear")
         return out
 
     linear_handle = trace.attach_hooks(tl.func("linear"), linear_hook, confirm_mutation=True)
 
-    def relu_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def relu_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         if "removed" not in events:
             linear_handle.remove()
             events.append("removed")
@@ -131,13 +131,13 @@ def test_hooks_later_at_the_firing_site_still_finish_that_site() -> None:
     model, x, trace = _ready_trace()
     events: list[str] = []
 
-    def second(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def second(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         events.append("second")
         return out
 
     second_handle = trace.attach_hooks(tl.func("relu"), second, confirm_mutation=True)
 
-    def first(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def first(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         if "removed" not in events:
             second_handle.remove()
             events.append("removed")
@@ -154,7 +154,7 @@ def test_nothing_removed_keeps_the_rerun_unchanged() -> None:
     model, x, trace = _ready_trace()
     fired: list[int] = []
 
-    def count(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def count(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         fired.append(1)
         return out
 
@@ -189,6 +189,7 @@ def test_backward_hook_removed_mid_pass_skips_the_remaining_grad_fns() -> None:
         events.append("addmm")
 
     addmm_handle = trace.attach_hooks(tl.grad_fn(name="addmm"), victim, confirm_mutation=True)
+    removed: list[bool] = []
 
     def remover(
         grad_input: tuple[torch.Tensor | None, ...],
@@ -198,8 +199,9 @@ def test_backward_hook_removed_mid_pass_skips_the_remaining_grad_fns() -> None:
         call_index: int,
         run_ctx: dict[str, Any],
     ) -> None:
-        if "removed" not in events:
+        if not removed:
             addmm_handle.remove()
+            removed.append(True)
             events.append("removed")
         events.append("relu")
 
