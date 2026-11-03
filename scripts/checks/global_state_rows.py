@@ -778,6 +778,14 @@ _PROCESS_CACHES = frozenset(
         # deterministic derivation (base powers mod 2^64) re-computable at
         # any time; keyed by device string, never behavior-changing.
         ("torchlens/_data_substrate/digests.py", "_WEIGHTS_BY_DEVICE"),
+        # Record-overhead memos: lazily filled strong dicts, not immutable tables.
+        # The field-name tuple per frozen record class (bounded by the record
+        # classes) and the name-only shell function facet per function name (a
+        # frozen, tuple-valued FunctionCallRef with func=None, bounded by the
+        # distinct function names); both re-derivable at any time and never
+        # behavior-changing.
+        ("torchlens/_ir/refs.py", "_FROZEN_RECORD_FIELD_NAMES"),
+        ("torchlens/_capture/_sparse_refs.py", "_SHELL_FUNCTION_REFS"),
         ("torchlens/stats/_tensor_stats.py", "_STATS_CACHE"),
         ("torchlens/_io/bundle.py", "_NESTED_BLOB_KINDS"),
         ("torchlens/_io/payload_codec.py", "_CODECS"),
