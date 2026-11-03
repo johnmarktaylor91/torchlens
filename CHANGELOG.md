@@ -154,6 +154,9 @@
   starts from the pristine model and reports `retrace_mismatch` for its one-time first forward. Run
   one plain forward first, or trace with `CaptureOptions(carry_state=True)`, to validate the
   steady-state model.
+- **names**: one public word for the one-based pass counter, `pass_number` (walk names.1). The
+  keyword of `for_pass` on `trace.autograd.backward_passes`, `grad_fn.calls` and `op.grads` is
+  `pass_number` (was `pass_index`); the value it takes is unchanged.
 
 ### Features
 

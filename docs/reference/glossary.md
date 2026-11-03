@@ -3821,7 +3821,7 @@ describe each surface in depth.
 | `num_stimuli=` | keyword of `tl.neuro.ExtractionPlan`, `tl.neuro.plan_extraction` |
 | `num_true=` | keyword of `tl.stats.TensorStats` |
 | `num_zero=` | keyword of `tl.stats.TensorStats` |
-| `pass_number=` | field and constructor keyword of `BackwardPass`, `DiffRow`, `GradRecordContext`, `ModuleStackFrame`, `RecordContext`, `SiteRow` |
+| `pass_number=` | field and constructor keyword of `BackwardPass`, `DiffRow`, `GradRecordContext`, `ModuleStackFrame`, `RecordContext`, `SiteRow`; the one-based backward pass number taken by `for_pass` on `trace.autograd.backward_passes`, `grad_fn.calls` and `op.grads` (was `pass_index=`; JMT 1 Nov 2026 3:00 PM PT, walk names.1 a) |
 | `python_object_id=` | keyword of `TensorInputObservation` |
 | `query_slice=` | keyword of `AttentionView.crop_to`: which query positions to keep, as a slice |
 | `rank_handles=` | keyword of `tl.types.MergedTrace`: mapping from rank to its handle |

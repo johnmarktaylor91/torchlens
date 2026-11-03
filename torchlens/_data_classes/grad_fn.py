@@ -66,35 +66,35 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
             return resolved
         raise KeyError(f"GradFn call '{key}' not found in scoped calls.")
 
-    def for_pass(self, pass_index: int) -> GradFnCall:
+    def for_pass(self, pass_number: int) -> GradFnCall:
         """Return this GradFn's call for a one-based backward pass number.
 
         Parameters
         ----------
-        pass_index:
+        pass_number:
             Global one-based backward pass number.
 
         Returns
         -------
         GradFnCall
-            Call that fired during ``pass_index``.
+            Call that fired during ``pass_number``.
         """
 
         matches = [
             call
             for call in self._dict.values()
-            if getattr(call, "backward_pass_index", None) == pass_index
+            if getattr(call, "backward_pass_index", None) == pass_number
         ]
         if len(matches) == 1:
             return matches[0]
         if matches:
             raise InvalidArgumentError(
                 f"GradFn '{self._label}' fired {len(matches)} times in backward pass "
-                f"{pass_index}; use 0-based positional access",
+                f"{pass_number}; use 0-based positional access",
                 code="gradient_pass_ambiguous",
                 remedy="use 0-based positional access to pick one firing",
                 label=self._label,
-                pass_index=pass_index,
+                pass_number=pass_number,
             )
         available = [
             getattr(call, "backward_pass_index", None)
@@ -102,7 +102,7 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
             if getattr(call, "backward_pass_index", None) is not None
         ]
         raise KeyError(
-            f"GradFn '{self._label}' did not participate in backward pass {pass_index}; "
+            f"GradFn '{self._label}' did not participate in backward pass {pass_number}; "
             f"participated in passes {available}."
         )
 

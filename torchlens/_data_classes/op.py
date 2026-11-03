@@ -1043,23 +1043,23 @@ class GradientRecordAccessor(Accessor[GradientRecord]):
 
         super().__init__({str(record.ordinal): record for record in records}, item_list=records)
 
-    def for_pass(self, pass_index: int) -> GradientRecord:
+    def for_pass(self, pass_number: int) -> GradientRecord:
         """Return the gradient record for a one-based backward pass number."""
 
-        matches = [record for record in self._list if record.backward_pass_index == pass_index]
+        matches = [record for record in self._list if record.backward_pass_index == pass_number]
         if len(matches) == 1:
             return matches[0]
         if matches:
             raise InvalidArgumentError(
-                f"Multiple gradient records participated in pass {pass_index}; "
+                f"Multiple gradient records participated in pass {pass_number}; "
                 "use positional indexing on .grads",
                 code="gradient_pass_ambiguous",
                 remedy="use positional indexing on .grads to pick one record",
-                pass_index=pass_index,
+                pass_number=pass_number,
             )
         available = [record.backward_pass_index for record in self._list]
         raise KeyError(
-            f"Gradient record for backward pass {pass_index} not found; participated in "
+            f"Gradient record for backward pass {pass_number} not found; participated in "
             f"passes {available}."
         )
 

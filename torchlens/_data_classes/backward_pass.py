@@ -352,11 +352,11 @@ class BackwardPassAccessor(Accessor[BackwardPass]):
             item_list=items,
         )
 
-    def for_pass(self, pass_index: int) -> BackwardPass:
+    def for_pass(self, pass_number: int) -> BackwardPass:
         """Return a pass by its one-based global pass number."""
 
-        key = str(pass_index)
+        key = str(pass_number)
         if key not in self._dict:
             available = [pass_record.pass_number for pass_record in self._list]
-            raise KeyError(f"Backward pass {pass_index} not found. Available passes: {available}.")
+            raise KeyError(f"Backward pass {pass_number} not found. Available passes: {available}.")
         return self._dict[key]
