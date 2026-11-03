@@ -6,7 +6,7 @@ who want to know what carries over to TorchLens. Status: the penzai repository i
 of it, is idle (last release v0.1.10 on 2025-08-08, last push 2026-06-18, checked 2026-11-03).
 Existing penzai code keeps working; new work needs another home. Other tools' status:
 [comparable tools](landscape.md). TorchLens does not run penzai, so the penzai side of the
-example is shown as text and the TorchLens side is executed. Checked 2026-11-03.
+example is described in prose and the TorchLens side is executed. Checked 2026-11-03.
 
 ## The same task in both
 
@@ -14,16 +14,12 @@ Select a subtree, swap its value, and look at the result.
 
 ### In penzai
 
-Penzai selects a subtree of a model tree with `pz.select` and rewrites it functionally. Check
-the call against the penzai version you have (the repository is archived); this block is not
-executed here:
-
-```text
-from penzai import pz
-
-# `rewrite` is your own function from one matched layer to its replacement.
-edited_model = pz.select(model).at_instances_of(pz.nn.Linear).apply(rewrite)
-```
+Penzai selects a subtree of a model tree with `pz.select` and rewrites it functionally: you
+select the model, narrow the selection to the layer type you want with
+`.at_instances_of(pz.nn.Linear)`, and pass your own function from one matched layer to its
+replacement to `.apply(...)`, which returns the edited model. Penzai is a JAX library and its
+repository is archived, so this is described here rather than run; check the calls against the
+penzai version you have.
 
 ### In TorchLens
 

@@ -153,6 +153,12 @@ class EpisodeOptions:
         escalated product is still a valid capture of what it ran, it just
         is not an escalation of the original episode, and says so. Never a
         settlement input.
+
+    Examples
+    --------
+    >>> opts = EpisodeOptions(stepped_module=model[0], num_steps=3, step_output_kind="none")
+    >>> opts.num_steps, opts.step_output_kind
+    (3, 'none')
     """
 
     stepped_module: Any = None

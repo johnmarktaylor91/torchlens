@@ -271,6 +271,18 @@ def attention_head_contributions(
         Head rows (+ per-layer verified bias constants) in execution order.
         GQA metadata rides each coordinate's ``expert``-adjacent fields:
         the kv group index is ``head // (n_q_heads // n_kv_heads)``.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> heads = tl.mechinterp.attention_head_contributions(trace)
+    >>> tuple(heads[0].value.shape)
+    (1, 6, 8)
     """
 
     modules = _attention_modules(trace)

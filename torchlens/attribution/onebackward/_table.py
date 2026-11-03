@@ -120,6 +120,24 @@ class ReadRow:
         Nullable sample identity (dataset-mean seam; always ``None`` in v1).
     rescorable:
         ``False`` on loaded tables (the runtime registry is not serialized).
+
+    Examples
+    --------
+    >>> mlp = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 3)).eval()
+    >>> trace = tl.trace(mlp, torch.randn(2, 4))
+    >>> table = tl.attribution.read(
+    ...     trace,
+    ...     target=tl.attribution.seed("output_1", index=(0, 0)),
+    ...     method="grad",
+    ...     reduce="sum",
+    ... )
+    >>> row = table.rows()[0]
+    >>> type(row).__name__
+    'ReadRow'
+    >>> row.kind
+    'ACT'
+    >>> row.grain
+    'site'
     """
 
     target_id: str | None
@@ -274,6 +292,23 @@ class ReadTable(Mapping):
     Keys are ``(target_id, kind, address)``; values are :class:`ReadRow`.
     The table never mutates; every derivation (``target``,
     ``aggregate_targets``, alias collapse) returns a new table.
+
+    Examples
+    --------
+    >>> mlp = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 3)).eval()
+    >>> trace = tl.trace(mlp, torch.randn(2, 4))
+    >>> table = tl.attribution.read(
+    ...     trace,
+    ...     target=tl.attribution.seed("output_1", index=(0, 0)),
+    ...     method="grad",
+    ...     reduce="sum",
+    ... )
+    >>> type(table).__name__
+    'ReadTable'
+    >>> len(table) == len(table.rows())
+    True
+    >>> table.target_ids() == (table.rows()[0].target_id,)
+    True
     """
 
     __slots__ = ("_rows", "_provenance", "_trace_ref", "_trace_token")
@@ -767,6 +802,25 @@ def load_read_table(path: str | Path) -> ReadTable:
     ------
     ReadError
         Code ``read_table_artifact_invalid`` on any structural violation.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> mlp = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 3)).eval()
+    >>> trace = tl.trace(mlp, torch.randn(2, 4))
+    >>> table = tl.attribution.read(
+    ...     trace,
+    ...     target=tl.attribution.seed("output_1", index=(0, 0)),
+    ...     method="grad",
+    ...     reduce="sum",
+    ... )
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = table.save(pathlib.Path(tmp) / "table.json")
+    ...     loaded = tl.attribution.load_read_table(path)
+    >>> len(loaded) == len(table)
+    True
+    >>> loaded.is_rescorable
+    False
     """
 
     source = Path(path)

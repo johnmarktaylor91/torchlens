@@ -268,6 +268,14 @@ class FuncCallLocation:
     its current lines, but only while the file still has the size and
     modification time it had at capture; when it changed or is gone they
     return the no-source values and the repr says why.
+    Examples
+    --------
+    >>> where = FuncCallLocation(file="model.py", line_number=12, func_name="forward")
+    >>> where.func_name, where.line_number
+    ('forward', 12)
+    >>> location = tl.trace(model, x).ops[1].code_context[0]
+    >>> isinstance(location, FuncCallLocation), isinstance(location.line_number, int)
+    (True, True)
     """
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {

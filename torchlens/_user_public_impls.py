@@ -800,6 +800,12 @@ def validate_forward_pass(
     ------
     BackendUnsupportedError
         If a non-default save option is requested for a non-torch backend.
+
+    Examples
+    --------
+    >>> ok = tl.validation.validate_forward_pass(model, x)
+    >>> type(ok).__name__, ok
+    ('bool', True)
     """
 
     from ._options_validation import _validate_output_device
@@ -1725,6 +1731,12 @@ def validate_backward_pass(
     -------
     bool
         True if backward capture matches stock autograd.
+
+    Examples
+    --------
+    >>> ok = tl.validation.validate_backward_pass(model, x)
+    >>> type(ok).__name__, ok
+    ('bool', True)
     """
     from .validation.backward import validate_backward_pass as _impl
 
@@ -1772,6 +1784,18 @@ def validate_batch_of_models_and_inputs(
 
     -------
         DataFrame with columns: model_category, model_class_name, input_name, validation_success.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> import os, tempfile
+    >>> models = {"TinyNet": {"model_category": "demo", "model_loading_func": lambda: model,
+    ...                       "model_sample_inputs": {"x": x}}}
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     table = validate_batch_of_models_and_inputs(models, os.path.join(tmp, "out.csv"),
+    ...                                                 show_progress=False)
+    >>> [bool(ok) for ok in table["validation_success"]]
+    [True]
     """
     try:
         import pandas as pd

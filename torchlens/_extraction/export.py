@@ -275,6 +275,19 @@ def export_extraction(
         ``extraction_export_space_insufficient`` on the preflight;
         ``extraction_export_dtype_unsupported`` on refused widening;
         ``extraction_export_mat_v5_limit`` for MAT members over 2 GB.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> stimuli = [torch.randn(3, 8, 8) for _ in range(2)]
+    >>> with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as out:
+    ...     _ = tl.dataset_extraction.extract_dataset(
+    ...         model, stimuli, {"relu": "1"}, batch_size=2, path=src, progress=False
+    ...     )
+    ...     dest = export_extraction(src, Path(out) / "npy", format="npy")
+    ...     print(dest.name, dest.is_dir())
+    npy True
     """
 
     if format not in EXPORT_FORMATS:

@@ -33,6 +33,13 @@ class FamilyEvidence:
     ``verdict``. A nonfinite ``verdict`` proves presence without counts; the
     ``~`` display mark belongs to the sampled family ONLY, and
     ``unavailable`` always carries a reason -- never a silent absence.
+
+    Examples
+    --------
+    >>> stats = tl.stats.tensor_stats(torch.tensor([1.0, -2.0, float("nan")]))
+    >>> evidence = stats.nonfinite_evidence
+    >>> isinstance(evidence, FamilyEvidence), evidence.policy, evidence.is_sampled
+    (True, 'exact', False)
     """
 
     policy: str
@@ -53,6 +60,14 @@ class TensorStats:
 
     Every numeric field is a plain int/float/None (the raw-numbers pin);
     formatters never touch tensors and this record never holds one.
+
+    Examples
+    --------
+    >>> stats = tl.stats.tensor_stats(torch.tensor([1.0, -2.0, float("nan")]))
+    >>> isinstance(stats, TensorStats)
+    True
+    >>> stats.shape, stats.numel, stats.num_nan, stats.finite_min
+    ((3,), 3, 1, -2.0)
     """
 
     schema_version: int
@@ -339,6 +354,12 @@ def tensor_stats(
     -------
     TensorStats
         Frozen record; cached per tensor keyed on geometry + ``_version``.
+
+    Examples
+    --------
+    >>> stats = tl.stats.tensor_stats(torch.zeros(2, 5))
+    >>> stats.shape, stats.num_zero, stats.num_nan
+    ((2, 5), 10, 0)
     """
 
     version = _tensor_version(tensor)

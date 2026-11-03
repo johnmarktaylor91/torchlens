@@ -118,6 +118,13 @@ class TensorSpec:
         batch-composition-independent, T-C10).
     dtype:
         ``str(torch.dtype)`` spelling, e.g. ``"torch.float32"``.
+
+    Examples
+    --------
+    >>> TensorSpec.from_tensor(x)
+    TensorSpec(shape=(None, 3, 8, 8), dtype='torch.float32')
+    >>> TensorSpec.from_tensor(x, generalize_batch=False).shape
+    (1, 3, 8, 8)
     """
 
     shape: tuple[int | None, ...]
@@ -173,6 +180,12 @@ class PlannedStep:
         the O(D*k) ``iid_bernoulli`` generation cost, so a multi-second
         generation inside a harvest cannot surprise anyone). Additive field;
         empty for most steps.
+
+    Examples
+    --------
+    >>> step = tl.transforms.flatten().plan(tl.transforms.TensorSpec.from_tensor(x))
+    >>> isinstance(step, PlannedStep), step.name, step.output.shape
+    (True, 'flatten', (None, 192))
     """
 
     name: str
@@ -215,6 +228,16 @@ class TransformDefinition:
     stochastic:
         Whether the transform draws randomness; stochastic transforms must
         record an explicit realized seed + seed_source (T-C4).
+
+    Examples
+    --------
+    >>> def plan_same(spec, input_spec, ctx):
+    ...     return tl.transforms.PlannedStep(spec.name, 1, input_spec, True, False, False)
+    >>> negate = TransformDefinition(
+    ...     name="demo_negate", version=1, normalize_params=dict, plan_fn=plan_same,
+    ...     apply_fn=lambda spec, tensor, ctx: -tensor, zero_param_preset=True)
+    >>> negate.name, negate.version, negate.stream_safe
+    ('demo_negate', 1, True)
     """
 
     name: str
@@ -246,6 +269,14 @@ class TransformSpec:
     seed_source:
         ``"explicit" | "library_default"`` for stochastic transforms;
         ``None`` for deterministic (T-C4: always recorded, never implied).
+
+    Examples
+    --------
+    >>> step = tl.transforms.reduce("mean", axis=(2, 3))
+    >>> isinstance(step, TransformSpec), step.name, step.seed
+    (True, 'reduce', None)
+    >>> step.apply(x).shape
+    torch.Size([1, 3])
     """
 
     name: str

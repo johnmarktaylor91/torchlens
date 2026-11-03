@@ -301,6 +301,15 @@ def model(
     torchlens._errors.InvalidArgumentError
         The construction-refusal family (task, tokenizer, sites, pooling,
         labels, salience, attention codes; see the error-refusal contract).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.bridge.lit.model(trace, None, sites=())
+    ... except tl.errors.ArgumentTypeError as err:
+    ...     print(type(err).__name__)
+    ArgumentTypeError
     """
 
     if attention is not None:
@@ -370,6 +379,13 @@ def dataset(
     ------
     torchlens._errors.MissingDependencyError
         Code ``lit_dependency_missing`` when ``lit_nlp`` is absent.
+
+    Examples
+    --------
+    >>> # requires: lit_nlp
+    >>> ds = tl.bridge.lit.dataset(["a good film", "a bad film"], labels=["neg", "pos"])
+    >>> len(ds.examples)
+    2
     """
 
     _require_lit_nlp()
@@ -391,6 +407,12 @@ def layout() -> Any:
     ------
     torchlens._errors.MissingDependencyError
         Code ``lit_dependency_missing`` when ``lit_nlp`` is absent.
+
+    Examples
+    --------
+    >>> # requires: lit_nlp
+    >>> type(tl.bridge.lit.layout()).__name__
+    'LitCanonicalLayout'
     """
 
     _require_lit_nlp()

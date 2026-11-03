@@ -64,6 +64,13 @@ class DoctorCheck:
         Explanation of the finding.
     suggestion:
         Suggested workaround or next action.
+
+    Examples
+    --------
+    >>> report = tl.report.doctor()
+    >>> row = report.checks[0]
+    >>> isinstance(row, DoctorCheck), row.status in ("pass", "known_broken", "scope", "not_tested")
+    (True, True)
     """
 
     key: str
@@ -94,6 +101,16 @@ class DoctorReport:
         Truth-table rows: environment checks, one ``backend_scorecard:<name>``
         row per registered backend (its shipped conformance record), then the
         model/input findings when a model was supplied.
+
+    Examples
+    --------
+    >>> report = tl.report.doctor(model, x)
+    >>> isinstance(report, DoctorReport)
+    True
+    >>> report.model_type
+    'torch.nn.modules.container.Sequential'
+    >>> len(report.checks) > 0
+    True
     """
 
     model_type: str | None

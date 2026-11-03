@@ -469,6 +469,14 @@ def pool_tokens(op: str, assume_no_padding: bool = False) -> TransformSpec:
     -------
     TransformSpec
         The frozen pool_tokens step.
+
+    Examples
+    --------
+    >>> tokens = torch.randn(2, 3, 8)
+    >>> mask = torch.tensor([[True, True, False], [True, True, True]])
+    >>> ctx = tl.transforms.TransformContext(roles=tl.transforms.BTD, mask=mask)
+    >>> tl.transforms.pool_tokens("mean").apply(tokens, ctx).shape
+    torch.Size([2, 8])
     """
 
     params = _pool_tokens_normalize({"op": op, "assume_no_padding": assume_no_padding})
@@ -573,6 +581,16 @@ def cls_token(assume_no_padding: bool = False) -> TransformSpec:
     -------
     TransformSpec
         The frozen cls_token step.
+
+    Examples
+    --------
+    >>> tokens = torch.randn(2, 5, 8)
+    >>> ctx = tl.transforms.TransformContext(roles=tl.transforms.BTD)
+    >>> try:
+    ...     tl.transforms.cls_token(assume_no_padding=True).apply(tokens, ctx)
+    ... except tl.errors.TransformContractError as error:
+    ...     print(error.fields["code"])
+    transform_special_tokens_unavailable
     """
 
     params = _cls_token_normalize({"assume_no_padding": assume_no_padding})
@@ -718,6 +736,12 @@ def pool_spatial(op: str = "mean") -> TransformSpec:
     -------
     TransformSpec
         The frozen pool_spatial step.
+
+    Examples
+    --------
+    >>> ctx = tl.transforms.TransformContext(roles=tl.transforms.NCHW)
+    >>> tl.transforms.pool_spatial("max").apply(x, ctx).shape
+    torch.Size([1, 3])
     """
 
     params = _pool_spatial_normalize({"op": op})
@@ -845,6 +869,12 @@ def channel_mean() -> TransformSpec:
     -------
     TransformSpec
         The frozen channel_mean step.
+
+    Examples
+    --------
+    >>> ctx = tl.transforms.TransformContext(roles=tl.transforms.NCHW)
+    >>> tl.transforms.channel_mean().apply(x, ctx).shape
+    torch.Size([1, 8, 8])
     """
 
     return TransformSpec(name="channel_mean", version=1, params=())

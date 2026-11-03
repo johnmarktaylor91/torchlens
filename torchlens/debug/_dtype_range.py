@@ -34,6 +34,14 @@ class DTypeRangeReport(Report):
         Operations with one saved native tensor payload that was inspected.
     num_ops:
         Compute and output operations present in the trace.
+
+    Examples
+    --------
+    >>> report = tl.debug.dtype_range(tl.trace(model, x))
+    >>> isinstance(report, DTypeRangeReport), report.num_audited_ops > 0
+    (True, True)
+    >>> 0.0 < report.coverage <= 1.0
+    True
     """
 
     findings: tuple[AuditFinding, ...]
@@ -296,6 +304,17 @@ def dtype_range(
     ------
     ValueError
         If either threshold is outside ``[0, 1]``.
+
+    Examples
+    --------
+    >>> report = dtype_range(tl.trace(model, x))
+    >>> report.num_audited_ops > 0, 0.0 < report.coverage <= 1.0
+    (True, True)
+    >>> try:
+    ...     dtype_range(tl.trace(model, x), max_fraction=2.0)
+    ... except ValueError:
+    ...     print("refused")
+    refused
     """
 
     if not 0.0 <= max_fraction <= 1.0:

@@ -69,6 +69,14 @@ class FirstBadThing(FoundReport):
         Reserved so the future live/anomaly tier joins the same shape.
     message:
         Human-readable summary.
+
+    Examples
+    --------
+    >>> finding = tl.debug.find_nan(model, x).first_bad_thing
+    >>> isinstance(finding, FirstBadThing), finding.found
+    (True, False)
+    >>> finding.tool, finding.kind
+    ('find_nan', 'none')
     """
 
     found: bool
@@ -117,6 +125,13 @@ def amp_scaled_grads_hint(*, all_nonfinite: bool = False) -> str:
     str
         Disclosure naming the GradScaler possibility and the remedy; it never
         edits the caller's rows or verdicts.
+
+    Examples
+    --------
+    >>> "GradScaler" in amp_scaled_grads_hint()
+    True
+    >>> "overflow" in amp_scaled_grads_hint(all_nonfinite=True)
+    True
     """
 
     if all_nonfinite:

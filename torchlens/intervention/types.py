@@ -38,7 +38,15 @@ HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 
 @dataclass(frozen=True)
 class Edit:
-    """Portable identity and hook factory for helper-built interventions."""
+    """Portable identity and hook factory for helper-built interventions.
+
+    Examples
+    --------
+    >>> edit = tl.scale(2.0)
+    >>> isinstance(edit, tl.Edit), edit.name
+    (True, 'scale')
+    >>> len(tl.when(tl.func("relu"), edit).rules)
+    1"""
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "name": FieldPolicy.KEEP,
@@ -301,6 +309,15 @@ class SamplingRecord:
     sampled or resampled draw, the row permutation for ``permute_batch``, empty for
     an averaging verb that draws nothing and records only its population facts.
     ``FireRecord.determinism_note`` keeps the readable one-line rendering.
+
+    Examples
+    --------
+    >>> donors = tl.intervention.population(torch.randn(5, 1, 4, 8, 8), origin="doc")
+    >>> plan = tl.intervention.sample_from(donors, seed=3)
+    >>> patched = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.patch_from(plan)))
+    >>> record = patched["relu_1_2"].edits[-1].sampling[0]
+    >>> isinstance(record, tl.intervention.SamplingRecord), record.population_count
+    (True, 5)
     """
 
     verb: str
@@ -322,6 +339,13 @@ class FireRecord:
 
     ``sampling`` holds the realized draws of the stochastic verbs that fired here, one
     :class:`SamplingRecord` per draw, saved with the record as of tlspec 11.
+
+    Examples
+    --------
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+    >>> record = edited["relu_1_2"].edits[-1]
+    >>> isinstance(record, tl.intervention.FireRecord), record.replaced
+    (True, True)
     """
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -655,7 +679,14 @@ class FrozenInterventionSpec:
 
 
 class Relationship(str, Enum):
-    """Evidence level for relationships between bundle members."""
+    """Evidence level for relationships between bundle members.
+
+    Examples
+    --------
+    >>> tl.types.Relationship.SAME_OBJECT.value
+    'same_object'
+    >>> tl.types.Relationship("unknown") is tl.types.Relationship.UNKNOWN
+    True"""
 
     SAME_OBJECT = "same_object"
     SAME_MODEL_OBJECT_AT_CAPTURE = "same_model_at_capture"

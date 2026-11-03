@@ -87,6 +87,14 @@ class RegionEdge:
     nested:
         Whether any occurrence address has a nested (container) argument
         path -- disclosed because the splice must extend into the container.
+
+    Examples
+    --------
+    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, save_args=True)).fork()
+    >>> target = fork.between(fork["conv2d_1_1"], fork["relu_1_2"]).as_region()
+    >>> edge = target.boundary.exits[0]
+    >>> edge.role, edge.parent, edge.child
+    ('exit', 'relu_1_2:1', 'conv2d_2_3:1')
     """
 
     role: str
@@ -103,6 +111,14 @@ class RegionBoundary:
     ``entries`` and ``exits`` are ordered by (consuming-op execution order,
     occurrence order), so module-call inputs and arbitrary dataflow entries
     are named individually, never silently conflated.
+
+    Examples
+    --------
+    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, save_args=True)).fork()
+    >>> target = fork.between(fork["conv2d_1_1"], fork["relu_1_2"]).as_region()
+    >>> boundary = target.boundary
+    >>> isinstance(boundary, tl.intervention.RegionBoundary), len(boundary.exits)
+    (True, 1)
     """
 
     entries: tuple[RegionEdge, ...]
@@ -115,6 +131,14 @@ class RegionInstance:
 
     The replacement function is evaluated ONCE per instance and all of the
     instance's exits commit atomically.
+
+    Examples
+    --------
+    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, save_args=True)).fork()
+    >>> target = fork.between(fork["conv2d_1_1"], fork["relu_1_2"]).as_region()
+    >>> instance = target.instances[0]
+    >>> instance.index, instance.labels
+    (1, ('conv2d_1_1:1', 'relu_1_2:1'))
     """
 
     index: int
@@ -131,6 +155,13 @@ class RegionTarget:
     admissibility fact was DERIVED at construction -- complete exits,
     convexity, pass-instance partition. Effect closure is checked at
     ``do()`` time on the replay lane (live lanes carry no effect gate).
+
+    Examples
+    --------
+    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, save_args=True)).fork()
+    >>> target = fork.between(fork["conv2d_1_1"], fork["relu_1_2"]).as_region()
+    >>> isinstance(target, RegionTarget), target.labels
+    (True, ('conv2d_1_1:1', 'relu_1_2:1'))
     """
 
     __slots__ = ("_boundary", "_digest", "_instances", "_slice")

@@ -187,6 +187,19 @@ class ChecksSession:
     Construction is SILENT and does no device work (memo D20): no hooks, no
     syncs, no stdout. ``estimated_snapshot_bytes`` is pure metadata;
     ``profile()`` runs the measured scan on demand.
+
+    Examples
+    --------
+    >>> net = nn.Linear(4, 2)
+    >>> opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> session = ChecksSession(net, opt)
+    >>> session.register_nonfinite_grad_check(action="collect")
+    >>> with session:
+    ...     opt.zero_grad()
+    ...     net(torch.randn(3, 4)).sum().backward()
+    ...     opt.step()
+    >>> (session.final_report.counters["accepted_steps"], session.final_report.finalized_reason)
+    (1, 'scope_exit')
     """
 
     def __init__(  # noqa: PLR0913 -- the memo-4.2 chassis constructor: model + optimizer + the four declared loop facts (scaler/clip_norm/accumulation/event_stream); bundling them would hide the disclosure contract

@@ -554,6 +554,14 @@ class Trace(TraceOutputMixin, TraceLike):
 
     Supports ``len()``, iteration, and flexible ``__getitem__`` lookup by
     integer index, layer label, module address, or substring.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace.layer_labels
+    ['input_1', 'conv2d_1_1', 'relu_1_2', 'conv2d_2_3', 'output_1']
+    >>> tuple(trace["relu_1_2"].out.shape)
+    (1, 4, 8, 8)
     """
 
     @property

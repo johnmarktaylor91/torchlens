@@ -95,6 +95,14 @@ class BasisProvenance:
     and ``tol`` are the axis binding and support threshold the producer was
     built with. ``source_dtype`` is the dtype the caller's basis had before
     the float64 canonicalisation (a learned rotation's training precision).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> direction = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    >>> region = trace[tl.subspace("relu_1_2", direction, origin="hand-picked", dim=1)]
+    >>> region[0].provenance.source.startswith("subspace(origin='hand-picked'")
+    True
     """
 
     origin: str
@@ -281,6 +289,14 @@ def subspace(
     is vacuous). Resolution reads geometry only (unsaved sites resolve);
     ``provenance.relation`` is ``exact``. PARAM/EDGE populations refuse
     ``selection_kind_incompatible``. DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> direction = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    >>> region = tl.subspace("relu_1_2", direction, origin="hand-picked", dim=1)
+    >>> trace[region][0].num_selected
+    64
     """
 
     if within is None:

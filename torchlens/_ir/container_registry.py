@@ -91,7 +91,15 @@ Site = FuncSite | ModuleSite | ModelSite
 
 @dataclass(frozen=True, slots=True)
 class ContainerLeafOccurrence:
-    """One tensor occurrence at one container path."""
+    """One tensor occurrence at one container path.
+
+    Examples
+    --------
+    >>> leaf = tl.types.ContainerLeafOccurrence(
+    ...     path=(), producer_op_label="relu_1_2", tensor_identity=None, occ_index=0
+    ... )
+    >>> leaf.producer_op_label, leaf.occ_index
+    ('relu_1_2', 0)"""
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "path": FieldPolicy.BLOB_RECURSIVE,

@@ -25,6 +25,17 @@ class ModelExplorerExportError(_ActionableErrorMixin, CaptureError, RuntimeError
     TorchLens bugs or capture-integrity gaps rather than user errors, where
     silently continuing would ship a silently lossy artifact into a viewer
     that also drops bad rows silently.
+
+    Examples
+    --------
+    >>> issubclass(ModelExplorerExportError, tl.errors.TorchLensError)
+    True
+    >>> try:
+    ...     tl.export.validate_model_explorer_payload({"graphs": [{"id": "g"}, {"id": "g"}]}, strict=True)
+    ... except ModelExplorerExportError as err:
+    ...     refused = type(err).__name__
+    >>> refused
+    'ModelExplorerExportError'
     """
 
     def __init__(

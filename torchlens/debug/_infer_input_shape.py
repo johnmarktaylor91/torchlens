@@ -70,6 +70,15 @@ class GuessInputShapeReport(FoundReport):
         Final verification trace when ``return_trace=True``.
     message:
         Actionable human-readable summary.
+
+    Examples
+    --------
+    >>> mlp = nn.Sequential(nn.Linear(8, 4), nn.ReLU())
+    >>> report = tl.debug.guess_input_shape(mlp)
+    >>> isinstance(report, GuessInputShapeReport), report.found
+    (True, True)
+    >>> report.shape[-1]
+    8
     """
 
     found: bool
@@ -2142,6 +2151,15 @@ def _infer_input_shape_impl(
     or ``past_key_values``, tokenizer/image-processor preprocessing, stateful or buffer-mutating
     forwards, opaque C++/CUDA errors, non-square exact spatial sizes without an aspect hint, or
     ``torch.compile``/scripted/exported artifacts.
+
+    Examples
+    --------
+    >>> mlp = nn.Sequential(nn.Linear(8, 4), nn.ReLU())
+    >>> report = guess_input_shape(mlp)
+    >>> report.found, report.shape[-1]
+    (True, 8)
+    >>> mlp(report.example_input).shape[-1]
+    4
     """
 
     if not isinstance(model, nn.Module):
@@ -2227,6 +2245,15 @@ def guess_input_shape(model: nn.Module, **kwargs: Any) -> GuessInputShapeReport:
     run in ``eval()`` mode, and lazy modules are never materialized. All
     keyword-only arguments and the full signature/docstring of
     :func:`_infer_input_shape_impl` are preserved via :func:`functools.wraps`.
+
+    Examples
+    --------
+    >>> mlp = nn.Sequential(nn.Linear(8, 4), nn.ReLU())
+    >>> report = guess_input_shape(mlp)
+    >>> report.found, report.shape[-1]
+    (True, 8)
+    >>> mlp(report.example_input).shape[-1]
+    4
     """
 
     cpu_rng_state = torch.get_rng_state()
