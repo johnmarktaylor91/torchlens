@@ -91,7 +91,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Eager capture | `tl.trace` | `user_funcs.py`, `capture/`, `backends/torch/` | `test_toy_models.py`, `test_capture_*.py`, `capture_oracle/`, `classics_corpus/` |
 | Backend registry and previews | `tl.trace(backend=...)`, `tl.backends` | `backends/` and `backends/<name>/` | `backends/`, `backend_conformance/`, `backend_parity/` |
 | Sparse recording | `tl.record`, `Recording` | `recording/`, `_capture/projections.py`, `_ir/events.py` | `test_fastlog/`, `test_record_*.py` |
-| Capture options and predicates | `tl.options.CaptureOptions`, `tl.func`, `tl.when`, `tl.in_module` | `options.py`, `intervention/` (selectors), `_ir/predicate_registry.py` | `test_selection_*.py`, `test_capture_*.py` |
+| Capture options and predicates | `tl.options.CaptureOptions`, `tl.func`, `tl.when`, `tl.in_module` | `options.py`, `intervention/` (selectors) | `test_selection_*.py`, `test_capture_*.py` |
 | Capture outcomes and partial captures | `Trace.outcome`, `tl.partial` | `_capture/outcome.py`, `_partial/` | `test_capture_outcomes*.py`, `test_postprocess_*.py` |
 | Graph postprocess | (internal, runs inside `tl.trace`) | `_postprocess/` | `test_postprocess_*.py`, `test_loop_*.py`, `test_conditional_*.py` |
 | Product types and lookup | `tl.Trace`, `tl.Op`, `tl.Layer`, `trace[label]` | `_data_classes/`, `_trace_core/`, `appliances/` | `test_metadata*.py`, `test_layer_log.py`, `godobject_oracle/` |
@@ -121,7 +121,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Quickstart ladder | `torchlens._user_funcs.render`, `tl.summary(model, input_size=...)`, `torchlens._quickstart.InputSpec` | `_quickstart/` | `test_quickstart*.py` |
 | Agent surface | `trace.to_agent_json`, `tl.report.explain`, `tl.bridge.mcp` | `agent/`, `report/`, `bridge/` | `test_agent*.py`, `agent_surface_goldens/` |
 | External tool bridges | `tl.bridge.<tool>`, `tl.callbacks` | `bridge/`, `bridge/lit/`, `callbacks/` | `test_bridges_*.py` |
-| Environment report | `tl.utils.doctor()`, `tl.compat.report()` | `report/_environment.py`, `compat/` | `test_doctor*.py`, `test_compat*.py` |
+| Environment and model report | `tl.report.doctor()` | `report/_doctor.py`, `report/_environment.py`, `compat/_report.py` | `test_doctor*.py`, `test_compat*.py` |
 | Episode capture | `tl.options.EpisodeSpec` | `_episode_spec.py`, `capture/`, `bundle/` | `test_episode*.py` |
 | Kernel telemetry | `torchlens._kernel_telemetry` | `_kernel_telemetry.py` | `test_kernel_telemetry*.py` |
 

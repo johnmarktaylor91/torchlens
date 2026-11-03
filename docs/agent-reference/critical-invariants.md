@@ -28,8 +28,8 @@
 9a. Rehydration floor: this release reads only its own format. An artifact stamped
     `tlspec_version` < 11 was saved by torchlens 2.x and refuses to load with the one typed
     `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`); no alias list,
-    retired-key pop or legacy spelling adapter remains on any record class. Legacy 2.16
-    intervention specs remain loadable (the floor covers Trace rehydration only). Save dry-runs `metadata.pkl`
+    retired-key pop or legacy spelling adapter remains on any record class. The 2.16
+    intervention spec format (`format_version` 1) refuses with the same error. Save dry-runs `metadata.pkl`
     through the loader's default-deny unpickler and refuses unportable values typed
     (`annotation_value_unportable` / `metadata_value_unportable`); load anchors manifest facts
     to the pickled state (`bundle_manifest_metadata_mismatch`) and validates graph structure,

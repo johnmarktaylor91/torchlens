@@ -36,9 +36,9 @@ SEAM_DISPOSITIONS: dict[str, tuple[str, str]] = {
         "inspectable capability-declared registry promotion is unbuilt",
     ),
     "predicate_registry": (
-        "PARTIAL",
-        "register_predicate/coerce_predicate live under a lock; the "
-        "inspection/snapshot/persistence obligations of 6.2 are open",
+        "OPEN",
+        "the unimported registry module was removed (no consumer ever adopted name "
+        "acceptance); capture-lifecycle slots take raw callables only",
     ),
     "facet_recipes": (
         "MET",

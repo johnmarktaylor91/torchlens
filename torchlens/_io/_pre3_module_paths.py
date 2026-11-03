@@ -11,6 +11,9 @@ from __future__ import annotations
 
 from .format_errors import ArtifactTooOldError
 
+#: The major release line whose saved files this release refuses with the one 2.x error.
+PRE_3_MAJOR = 2
+
 #: Top-level torchlens packages the 3.0 rename made private, renamed or folded away. A
 #: pickled module path under one of them was written by torchlens 2.x, and this release
 #: carries no reader for 2.x files: such a path refuses with the one load-boundary error.
@@ -75,8 +78,15 @@ _PRE_3_GLOBALS = frozenset(
 )
 
 _REMEDY = (
-    "save it again with torchlens 2.36.x, which can read it (pip install "
-    "'torchlens>=2.36,<3'), or capture the model again with this release and save that."
+    "load it with torchlens 2.36.x, which reads it (pip install 'torchlens>=2.36,<3'), or "
+    "capture the model again with this release and save that."
+)
+
+#: Extra remedy sentence for a format_version-1 intervention spec: unlike a saved trace,
+#: an intervention spec saved again by torchlens 2.36.x is in the format this release reads.
+INTERVENTION_V1_NOTE = (
+    "An intervention spec saved again with torchlens 2.36.x is written as format_version 2, "
+    "which this release reads."
 )
 
 
