@@ -212,6 +212,7 @@ class Decoder:
             Current nesting depth.
         """
 
+        # Essential complexity: one branch per JSON value kind; the typed-tag vocabulary is closed.
         if depth > MAX_CELL_DEPTH:
             raise cell_error(at, f"nesting deeper than {MAX_CELL_DEPTH}", code=CELL_CODE)
         if data is None or isinstance(data, (bool, str)):
