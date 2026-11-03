@@ -96,6 +96,8 @@ record, by record; a rename appears as one removed and one added row.
 | `buffer` | `gradient_memory` | removed |
 | `buffer` | `overwrite_index` | added |
 | `buffer` | `writer_label` | added |
+| `grad_fn_call` | `backward_pass_index` | removed |
+| `grad_fn_call` | `backward_pass_number` | added |
 | `grad_fn_call` | `call_label` | removed |
 | `grad_fn_call` | `fire_record` | added |
 | `grad_fn_call` | `grad_fn_label` | added |
