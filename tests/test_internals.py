@@ -761,7 +761,7 @@ class TestDisplayLargeTensor:
         torch.Tensor.clone = _tracking_clone
         try:
             for label in log.layer_labels:
-                entry = log[label]
+                entry = log.layers[label]
                 op = entry.ops[0]
                 if op.out is None:
                     continue

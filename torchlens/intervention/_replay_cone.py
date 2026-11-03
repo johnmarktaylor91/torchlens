@@ -89,19 +89,19 @@ def _validated_cone_origins(origins: Iterable[Op]) -> list[Op]:
             f"cone_of_effect origins must be op records, not the string "
             f"{origins!r}: iterating a string walks its CHARACTERS and would "
             "silently return an empty cone. Resolve the label first — "
-            "trace[label].ops, or trace.find_sites(label).",
+            "trace.layers[label].ops, or trace.find_sites(label).",
             code="cone_origin_invalid",
-            remedy="pass op records (e.g. trace[label].ops)",
+            remedy="pass op records (e.g. trace.layers[label].ops)",
         )
     listed = list(origins)
     for origin in listed:
         if isinstance(origin, str) or not hasattr(origin, "layer_label"):
             raise InvalidArgumentError(
                 f"cone_of_effect origin {origin!r} is not an op record; "
-                "resolve string addresses first (trace[label].ops, or "
+                "resolve string addresses first (trace.layers[label].ops, or "
                 "trace.find_sites(label)).",
                 code="cone_origin_invalid",
-                remedy="pass op records (e.g. trace[label].ops)",
+                remedy="pass op records (e.g. trace.layers[label].ops)",
             )
     return listed
 

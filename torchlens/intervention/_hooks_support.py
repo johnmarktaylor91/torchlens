@@ -99,7 +99,8 @@ def _display_label(log: Any, home_label: str) -> str:
     """Return the final layer label behind a raw home-op hook label, for messages."""
 
     try:
-        return str(log[home_label].layer_label)
+        layer = log._layer_logs.get(home_label)
+        return str((layer if layer is not None else log[home_label]).layer_label)
     except (AttributeError, KeyError, TypeError, ValueError):
         return home_label
 

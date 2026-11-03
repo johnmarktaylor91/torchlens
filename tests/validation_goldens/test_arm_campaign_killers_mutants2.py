@@ -74,6 +74,12 @@ class _FakeTrace(SimpleNamespace):
                 return candidate
         raise KeyError(label)
 
+    @property
+    def layers(self) -> _FakeTrace:
+        """Mirror ``Trace.layers``: checkers read Layer records through it."""
+
+        return self
+
 
 class _AddrIndexed(list):
     """List of module-like fakes also indexable by ``.address`` (mirrors ``ml.modules``)."""

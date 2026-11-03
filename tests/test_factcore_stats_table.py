@@ -159,3 +159,23 @@ def test_stats_view_module_grain_and_columns() -> None:
     assert excinfo.value.fields["code"] == "summary_option_invalid"
     assert "| name | state |" in narrow.to_markdown()
     assert narrow.to_dict()["rows"][0]["state"]
+
+
+def test_stats_report_table_is_the_typed_stats_table() -> None:
+    """``report.table`` hands back the StatsTable the stats view rendered (walk surface.1)."""
+
+    from torchlens.errors import InvalidArgumentError
+    from torchlens.report._stats_table import StatsTable
+
+    trace = tl.trace(_model(), torch.randn(2, 4))
+    report = trace.summary(view="stats")
+    table = report.table
+    assert isinstance(table, StatsTable)
+    assert table.rows == report.rows
+    assert table.ok_rows
+    assert isinstance(table.sort_rows("numel"), StatsTable)
+    assert isinstance(table.fold_same_as_parent(), StatsTable)
+    plain = trace.summary()
+    with pytest.raises(InvalidArgumentError) as info:
+        _ = plain.table
+    assert info.value.fields["code"] == "summary_table_unavailable"

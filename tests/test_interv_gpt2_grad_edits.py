@@ -232,7 +232,7 @@ def _apply_door(trace: Any, door: str, selector: Any, helper: Any) -> None:
         # A Layer record addresses its gradient through tl.grad(record) on the trace;
         # Layer.attach_hooks itself edits the activation.
         layer_label = trace.find_sites(selector).first().layer_label
-        trace.attach_hooks(tl.grad(trace[layer_label]), helper, confirm_mutation=True)
+        trace.attach_hooks(tl.grad(trace.layers[layer_label]), helper, confirm_mutation=True)
     else:
         raise AssertionError(door)
 

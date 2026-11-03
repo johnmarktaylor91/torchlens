@@ -5291,7 +5291,7 @@ def test_where_branch_selectedness_uses_saved_condition_not_parent_out() -> None
         true_parent = where_layer.call.parent_arg_positions["args"][1]
         # Layer.out is read-only under cert10 strict accessors; simulate the
         # mutated parent out through the per-pass Op record instead.
-        condition_op = trace[condition_parent].ops[0]
+        condition_op = trace.layers[condition_parent].ops[0]
         condition_op.out = torch.ones_like(condition_op.out)
 
         assert CUSTOM_EXEMPTION_CHECKS["where"](trace, where_layer, [true_parent]) is True
@@ -5316,7 +5316,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
         # Mutate the per-pass Op record: assigning on the Layer aggregate only
         # shadows the delegated attribute and never reaches the op the
         # invariant inspects.
-        placeholder = trace[unselected_parent].ops[0]
+        placeholder = trace.layers[unselected_parent].ops[0]
         placeholder.func = None
         placeholder.func_name = "plain_placeholder"
         placeholder.is_edited = False

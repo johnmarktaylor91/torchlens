@@ -153,7 +153,7 @@ def test_multipass_layer_owns_all_its_pass_events() -> None:
         save=None,
     )
     try:
-        layer = log["linear_1_2"]  # the reused mix layer (3 passes)
+        layer = log.layers["linear_1_2"]  # the reused mix layer (3 passes)
         per_pass = [int(op.cost.flops_forward or 0) for op in layer.ops.values()]
         assert len(per_pass) == 3
         assert int(layer.cost.total_flops_forward) == sum(per_pass)

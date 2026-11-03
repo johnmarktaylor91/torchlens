@@ -1407,9 +1407,9 @@ def _build_collapsed_module_node(
         graph_node_label = "pass".join(module_tuple)
         module_call = ml.ops[int(call_index) - 1]
         module_num_tensors = module_call.num_layers
-        module_num_buffers = sum(self[layer].graph.is_buffer for layer in module_call.ops)
+        module_num_buffers = sum(self.layers[o].graph.is_buffer for o in module_call.ops)
         module_has_input_ancestor = any(
-            self[layer].graph.has_input_ancestor for layer in module_call.ops
+            self.layers[o].graph.has_input_ancestor for o in module_call.ops
         )
         if (
             _collapsed_module_should_show_remainder(
@@ -1436,10 +1436,8 @@ def _build_collapsed_module_node(
     else:
         graph_node_label = module_tuple[0]
         module_num_tensors = len(ml.layer_labels)
-        module_num_buffers = sum(self[layer].graph.is_buffer for layer in ml.layer_labels)
-        module_has_input_ancestor = any(
-            self[layer].graph.has_input_ancestor for layer in ml.layer_labels
-        )
+        module_num_buffers = sum(layer.graph.is_buffer for layer in ml)
+        module_has_input_ancestor = any(layer.graph.has_input_ancestor for layer in ml)
         # Rolled boxes need the same surfaced-exit remainder belt as the
         # unrolled branch (round-25): the atomic-exit drop in
         # ``_collapse_address_for_node`` is vis_mode-independent, so the exit

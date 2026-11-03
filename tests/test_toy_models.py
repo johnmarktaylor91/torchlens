@@ -1223,7 +1223,7 @@ def test_nested_param_free_loops(default_input1):
     # All sin ops should be in one layer group with 12 ops
     sin_pass_counts = set()
     for label in mh.layer_labels:
-        entry = mh[label]
+        entry = mh.layers[label]
         if entry.func_name == "sin":
             sin_pass_counts.add(entry.num_passes)
     assert sin_pass_counts == {12}, (
@@ -1477,7 +1477,7 @@ def test_sequential_param_free_loops(default_input1):
     # Verify the two sequential loops produce SEPARATE groups (not merged)
     sin_groups = set()
     for label in mh.layer_labels:
-        entry = mh[label]
+        entry = mh.layers[label]
         if entry.func_name == "sin":
             sin_groups.add(entry.num_passes)
     assert sin_groups == {3}, f"Sequential sin loops should each have 3 ops, got {sin_groups}"

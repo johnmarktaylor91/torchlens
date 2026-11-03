@@ -65,7 +65,7 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     base, inserted = _capture_pair()
     rows = join_site_profiles(site_profile(base), site_profile(inserted))
 
-    relu_key = layer_site_key(base["relu_1_2"])
+    relu_key = layer_site_key(base.layers["relu_1_2"])
     assert relu_key is not None
 
     # POSITIVE CONTROL that must FAIL to detect: naive key-set membership
@@ -85,7 +85,7 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     assert row.verdict.value == "refused_cardinality"
 
     # Unaffected structural positions stay joined.
-    fc1_key = layer_site_key(base["linear_1_1"])
+    fc1_key = layer_site_key(base.layers["linear_1_1"])
     assert rows[fc1_key].joined
 
 
@@ -131,7 +131,7 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     manifest = spec.metadata["target_manifest"]
     assert manifest, "manifest missing"
     assert all("resolved_site_keys" in entry for entry in manifest)
-    assert manifest[0]["resolved_site_keys"] == [layer_site_key(base["relu_1_2"])]
+    assert manifest[0]["resolved_site_keys"] == [layer_site_key(base.layers["relu_1_2"])]
 
     # Same trace: EXACT, empty drift.
     same = check_spec_compat(spec, base)

@@ -45,7 +45,7 @@ def _graph_entries(trace: Any, graph: Any, graph_value: str, reduce: str) -> dic
     known: set[str] = set()
     for label in trace.layer_labels:
         known.add(label)
-        known.update(trace[label].module_context.output_of_modules)
+        known.update(trace.layers[label].module_context.output_of_modules)
     by_site = _graph_site_values(graph, graph_value)
     unknown = sorted(site for site in by_site if site not in known)
     if unknown:

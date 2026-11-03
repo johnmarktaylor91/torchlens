@@ -75,7 +75,7 @@ def test_demo_1_zero_ablation_via_do():
     baseline_relu = trace["relu_1_2"].out.clone()
 
     fork = trace.fork()
-    fork.do(trace["relu_1_2"].__selection__(), tl.zero_ablate())
+    fork.do(trace.layers["relu_1_2"].__selection__(), tl.zero_ablate())
 
     # downstream deltas real
     assert bool((fork["relu_1_2"].out == 0).all())

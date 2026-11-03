@@ -492,7 +492,7 @@ def _finish_run_entry(trace: Trace, r: SimpleNamespace, echo_session: Any) -> No
         # DAG -- coherent only beside the bound_method entry-point fact
         # (fail-closed load validation in _io/_forgery_identity_facts.py).
         for output_label in trace.output_layers:
-            for output_op in trace[output_label].ops:
+            for output_op in trace.ops.resolve_all(output_label):
                 output_op._call_tl_authored_root = True
     from .._snoop._entry import finish_echo
 

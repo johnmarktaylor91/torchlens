@@ -305,8 +305,8 @@ def test_bare_label_lookup_referents_pinned_by_site() -> None:
     # Pin today's referents BY SITE so a silent referent change fails here
     # instead of shipping.
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert log["linear_1_1"].ops[1].site_key == "s1|lin|linear||1"
-    assert log["relu_1_2"].ops[1].site_key == "s1|act|relu||1"
+    assert log.layers["linear_1_1"].ops[1].site_key == "s1|lin|linear||1"
+    assert log.layers["relu_1_2"].ops[1].site_key == "s1|act|relu||1"
     assert log["linear_1_1:2"].site_key == "s1|lin|linear||1"
     assert log["relu_1_2:3"].site_key == "s1|act|relu||1"
 

@@ -148,7 +148,7 @@ def test_whole_layer_selection_edits_every_pass(recurrent):
 
     model, x, trace = recurrent
     fork = trace.fork()
-    fork.do(fork["relu_1_2"].__selection__(), tl.zero_ablate())
+    fork.do(fork.layers["relu_1_2"].__selection__(), tl.zero_ablate())
 
     zero_input = torch.zeros(2, 4)
     with torch.no_grad():

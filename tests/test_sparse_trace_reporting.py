@@ -344,9 +344,9 @@ def test_recurrence_detection_off_matches_its_documented_tradeoff() -> None:
     rolled = tl.trace(_LoopModel(), x, capture=CaptureOptions(recurrence_detection=True))
     unrolled = tl.trace(_LoopModel(), x, capture=CaptureOptions(recurrence_detection=False))
 
-    assert rolled["relu_1_2"].num_passes == 6
+    assert rolled.layers["relu_1_2"].num_passes == 6
     assert len(unrolled.layer_labels) > len(rolled.layer_labels)
-    assert unrolled["relu_1_2"].num_passes == 1
+    assert unrolled.layers["relu_1_2"].num_passes == 1
     assert "relu_6_7" in unrolled.layer_labels
 
     assert unrolled.graph.is_recurrent is True

@@ -33,7 +33,7 @@ def test_biased_linear_true_macs_not_flops_over_two() -> None:
 
     log = _capture(nn.Linear(8, 16, bias=True), torch.randn(2, 8))
     try:
-        op = log["linear_1_1"]
+        op = log.layers["linear_1_1"]
         assert int(op.cost.macs_forward) == 256
         record = next(iter(op.ops.values())).cost.compute_record
         assert record.fma_macs == 256
@@ -50,8 +50,8 @@ def test_relu_has_zero_macs_non_mac() -> None:
 
     log = _capture(nn.Sequential(nn.Linear(4, 4, bias=False), nn.ReLU()), torch.randn(2, 4))
     try:
-        relu = log["relu_1_2"]
-        assert int(relu.cost.macs_forward) == 0
+        relu = log.layers["relu_1_2"]
+        assert int(relu.macs_forward) == 0
         record = next(iter(relu.ops.values())).cost.compute_record
         assert record.mac_applicability == "non_mac"
         assert record.fma_macs == 0
@@ -181,7 +181,7 @@ def test_backward_macs_are_none_never_half_flops() -> None:
 
     log = _capture(nn.Linear(8, 16, bias=True), torch.randn(2, 8))
     try:
-        op = log["linear_1_1"]
+        op = log.layers["linear_1_1"]
         first_op = next(iter(op.ops.values()))
         assert first_op.macs_backward is None
         assert first_op.macs_total is None

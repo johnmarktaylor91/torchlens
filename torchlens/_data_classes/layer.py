@@ -1005,12 +1005,12 @@ class Layer(_SelectionOperand):
         the attribute as missing and falls through to __getattr__.
         """
         if self.num_passes > 1:
+            spelled, label = op_spelling(field_name), self.layer_label
             raise InvalidArgumentError(
-                f"Layer '{self.layer_label}' has {self.num_passes} ops. "
-                f"Access '{field_name}' on a specific pass: "
-                f"log['{self.layer_label}'].ops[0].{op_spelling(field_name)}",
+                f"Layer '{label}' has {self.num_passes} ops. Access '{field_name}' on one pass: "
+                f"trace['{label}:1'].{spelled} or trace.layers['{label}'].ops[0].{spelled}",
                 code="layer_pass_ambiguous",
-                remedy=f"access {op_spelling(field_name)!r} on one pass via .ops[k]",
+                remedy=f"access {spelled!r} on one pass via .ops[k]",
                 layer_label=self.layer_label,
                 field_name=field_name,
             )

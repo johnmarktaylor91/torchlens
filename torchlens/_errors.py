@@ -762,5 +762,6 @@ class SelectionError(ConfigurationError, ValueError):
     Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
     ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
     ``selection_unresolvable`` / ``selection_apply_invalid`` /
-    ``selection_alignment_invalid``), never on message text.
+    ``selection_alignment_invalid`` / ``selection_trace_released``), never
+    on message text.
     """

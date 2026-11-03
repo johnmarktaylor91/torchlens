@@ -101,7 +101,7 @@ def test_post_hoc_resolution_by_components_and_key() -> None:
     log = _ready(_TinyModel())
     by_type = log[site(func="relu")]
     assert by_type.labels == ("relu_1_2:1",)
-    key = layer_site_key(log["relu_1_2"])
+    key = layer_site_key(log.layers["relu_1_2"])
     assert log[site(key)].labels == ("relu_1_2:1",)
     by_module = log[site(module_path="fc1")]
     assert "linear_1_1:1" in by_module.labels
@@ -146,7 +146,7 @@ def test_live_site_intervention_fires_at_the_right_site() -> None:
         for row in log.state_history
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
-    assert events[-1]["site_keys"] == [layer_site_key(log["relu_1_2"])]
+    assert events[-1]["site_keys"] == [layer_site_key(log.layers["relu_1_2"])]
 
 
 @pytest.mark.smoke
@@ -164,7 +164,7 @@ def test_live_minted_keys_match_posthoc_keys() -> None:
         for row in log.state_history
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
-    assert events[-1]["site_keys"] == [layer_site_key(log["relu_1_2"])]
+    assert events[-1]["site_keys"] == [layer_site_key(log.layers["relu_1_2"])]
 
 
 @pytest.mark.parametrize("model_cls", [_TinyModel, _ReusedModule, _Recurrent])

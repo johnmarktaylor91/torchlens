@@ -305,8 +305,10 @@ def test_effects_selection_tier_c_conversion_in_session() -> None:
     )
     selection = bundle.effects().top(1).to_selection()
     assert selection is not None
-    resolved = selection if isinstance(selection, tl.Selection) else baseline[selection]
-    assert len(resolved) >= 1
+    if isinstance(selection, tl.Selection):
+        assert len(selection) >= 1
+    else:
+        assert baseline[selection] is not None  # the door gives the single-pass Op
 
 
 def test_site_sweep_engine_vocabulary_closed() -> None:

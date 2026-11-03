@@ -96,8 +96,6 @@ record, by record; a rename appears as one removed and one added row.
 | `buffer` | `gradient_memory` | removed |
 | `buffer` | `overwrite_index` | added |
 | `buffer` | `writer_label` | added |
-| `grad_fn_call` | `backward_pass_index` | removed |
-| `grad_fn_call` | `backward_pass_number` | added |
 | `grad_fn_call` | `call_label` | removed |
 | `grad_fn_call` | `fire_record` | added |
 | `grad_fn_call` | `grad_fn_label` | added |
@@ -442,8 +440,8 @@ record, by record; a rename appears as one removed and one added row.
 | `_layer_dict_all_keys` | scalar | required: every level | keep | fact | `Trace.grad_fn_site_summary` |
 | `_layer_dict_main_keys` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layer_list` | scalar | required: every level | keep | fact | `Trace.buffer_read_ops`, `Trace.buffer_write_ops`, `Trace.compute_ops`, `Trace.model_ops` and 16 more |
-| `_layer_logs` | scalar | required: every level | keep | fact | `Trace.layers`, `Trace.saved_layers` |
-| `_layer_num_calls` | scalar | required: every level | keep | fact | `Trace.compute_ops`, `Trace.input_ops`, `Trace.ops`, `Trace.ops_with_params` and 5 more |
+| `_layer_logs` | scalar | required: every level | keep | fact | `Trace.input_ops`, `Trace.layers`, `Trace.output_ops`, `Trace.saved_layers` |
+| `_layer_num_calls` | scalar | required: every level | keep | fact | `Trace.compute_ops`, `Trace.input_ops`, `Trace.ops`, `Trace.ops_with_params` and 7 more |
 | `_layer_num_to_lookup_keys_dict` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layer_nums_to_save` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layers_logged` | scalar | required: every level | keep | fact | none (storage only) |
@@ -539,7 +537,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_source_init_signature` | computed | required: every level | keep | fact | `Trace.source.init_signature` |
 | `_source_snapshots` | scalar | required: every level | keep | fact | `Trace.source.snapshots` |
 | `_spec_revision` | scalar | required: every level | keep | fact | none (storage only) |
-| `_tracing_finished` | scalar | required: every level | keep | fact | `Trace.input_ops`, `Trace.output_ops` |
+| `_tracing_finished` | scalar | required: every level | keep | fact | none (storage only) |
 | `annotations` | scalar: `dict[str, Any]` | required: every level | keep | fact | `Trace.annotations` (field) |
 | `backend_runtime_device_summary` | scalar: `dict[str, Any] | None` | required: every level | keep | fact | `Trace.backend_runtime_device_summary` (field) |
 | `backward_peak_memory_reason` | scalar | required: every level | keep | fact | `Trace.backward_peak_memory_reason` (field) |
@@ -576,7 +574,7 @@ record, by record; a rename appears as one removed and one added row.
 | `tlspec_version` | scalar: `int` | required: every level | keep | fact | `Trace.tlspec_version` (field) |
 | `transformed_output` | scalar | required: every level | keep | fact | `Trace.transformed_output` (field) |
 
-Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detector_backward_coverage`, `_autograd_saved_bands`, `_autograd_seen_saved_storages`, `_backward_gradfn_refs`, `_backward_projection_event_count`, `_backward_projection_fold_state`, `_backward_projection_revision`, `_backward_roots_by_pass`, `_buffer_accessor`, `_buffer_storage_addresses`, `_buffer_write_tracker`, `_capture_config`, `_capture_events`, `_capture_parent_edge_truth`, `_capture_phase`, `_capture_session`, `_code_context_cache`, `_cooked_from`, `_cost_pinned_autograd_memory`, `_defer_streaming_bundle_finalization`, `_device_memory_samples`, `_distributed_plane_p`, `_fast_run_session`, `_forward_peak_memory_pair`, `_grad_fn_param_refs_by_object_id`, `_grad_stream_retain_in_memory`, `_halt_returns_partial_trace`, `_health_completeness_callback_ns`, `_health_completeness_decompositions`, `_health_completeness_mode`, `_health_completeness_verified`, `_health_escape_detector_callback_ns`, `_health_escape_detector_mode`, `_health_escape_detector_verified`, `_health_num_accounted_witness_events`, `_health_num_escape_detector_events`, `_health_num_expected_opaque_witness_events`, `_health_num_unaccounted_witness_events`, `_health_num_witness_events`, `_implicit_backward_pass_open`, `_intervention_spec`, `_keep_outs_in_memory`, `_last_hook_handle_ids`, `_last_validation_failure`, `_layer_accessor_cache`, `_mlx_capture_depth`, `_mlx_saved_payloads`, `_module_call_accessor`, `_module_capture_ws`, `_module_logs`, `_nonfinite_capture`, `_nonfinite_frontier_out`, `_nonfinite_prefix_finalize_error`, `_nonfinite_prefix_finalized`, `_op_accessor_cache`, `_optimizer`, `_options_activation_transform`, `_options_aten_ops`, `_options_backward_ready`, `_options_grad_transform`, `_options_jax_static_argnums`, `_orphan_pruned_func_call_ids`, `_out_dedup_mode`, `_out_hash_cache`, `_out_identity_cache`, `_out_sink`, `_out_writer`, `_output_container_specs_by_raw_label`, `_output_slot`, `_output_tokenizer`, `_output_transform`, `_paddle_alias_annotations`, `_paddle_capture_depth`, `_paddle_capture_gap_markers`, `_paddle_op_captures`, `_param_log_by_pid`, `_param_logs_by_module`, `_param_storage_addresses`, `_parent_run`, `_pending_live_fire_records`, `_postprocessing_active`, `_pre_forward_rng_states`, `_predicate_current_contexts`, `_predicate_history`, `_predicate_history_size`, `_predicate_lookback`, `_predicate_lookback_candidates`, `_predicate_lookback_payload_policy`, `_predicate_save_decisions`, `_predicate_save_options`, `_provenance_jax_closed_jaxpr`, `_provenance_jax_inlined_call_primitives`, `_provenance_owner_thread_id`, `_provenance_owner_thread_qualified`, `_provenance_thread_activity_detected`, `_provenance_thread_count_end`, `_provenance_thread_count_start`, `_raw_call_fingerprint`, `_raw_dynamo_region_detected`, `_raw_event_shape_hash`, `_raw_graph_ws`, `_raw_transform_escape_detected`, `_receptive_field_solution`, `_replay_frontier`, `_rerun_save_request`, `_rescue_rerun`, `_rf_directional_solutions`, `_runnable`, `_save_budget_accountant`, `_saved_grad_labels`, `_semantic_output_metadata`, `_session_buffer_identity`, `_session_buffer_inventory`, `_session_param_inventory`, `_settlement_ops_committed`, `_source_bundle_manifest_sha256`, `_source_bundle_path`, `_source_model_ref`, `_stop_directive`, `_stop_requested`, `_tf_init_op_labels`, `_tf_op_captures`, `_tf_unresolved_producers`, `_tf_validation_result`, `_tl_backward_hooked_tensor_keys`, `_tl_backward_triggers_disarmed`, `_tl_cleaned_up`, `_tl_grad_hook_owner_by_label`, `_tl_injection_state`, `_tl_intervene_selector_fire_count`, `_tl_predicate_intervention_spec_keys`, `_tl_predicate_intervention_target_keys`, `_tl_rf_probe_active`, `_tl_save_selector_fire_count`, `_trace_core`, `_transform`, `_uncalled_module_addresses`, `_validation_diagnostics`, `_visualizer_dir`, `_warned_direct_write`, `_warned_mutate_in_place`, `_warned_once`, `_wrapper_runtime_ws`, `capture_guard_passes`, `completeness_diagnostics`, `distributed_witness`, `escape_diagnostics`, `facet_functions`, `last_run`, `layer_visualizers`, `measure_host_peak_memory`, `measure_python_peak_memory`, `ops_with_params`, `save_budget`, `track_device_memory`, `track_nonfinite`.
+Session-only (`drop`): `_active_backward_pass_index`, `_autograd_escape_detector_backward_coverage`, `_autograd_saved_bands`, `_autograd_seen_saved_storages`, `_backward_gradfn_refs`, `_backward_projection_event_count`, `_backward_projection_fold_state`, `_backward_projection_revision`, `_backward_roots_by_pass`, `_buffer_accessor`, `_buffer_storage_addresses`, `_buffer_write_tracker`, `_capture_config`, `_capture_events`, `_capture_parent_edge_truth`, `_capture_phase`, `_capture_session`, `_code_context_cache`, `_cooked_from`, `_cost_pinned_autograd_memory`, `_defer_streaming_bundle_finalization`, `_device_memory_samples`, `_distributed_plane_p`, `_fast_run_session`, `_forward_peak_memory_pair`, `_grad_fn_param_refs_by_object_id`, `_grad_stream_retain_in_memory`, `_halt_returns_partial_trace`, `_health_completeness_callback_ns`, `_health_completeness_decompositions`, `_health_completeness_mode`, `_health_completeness_verified`, `_health_escape_detector_callback_ns`, `_health_escape_detector_mode`, `_health_escape_detector_verified`, `_health_num_accounted_witness_events`, `_health_num_escape_detector_events`, `_health_num_expected_opaque_witness_events`, `_health_num_unaccounted_witness_events`, `_health_num_witness_events`, `_implicit_backward_pass_open`, `_intervention_spec`, `_keep_outs_in_memory`, `_last_hook_handle_ids`, `_last_validation_failure`, `_layer_accessor_cache`, `_mlx_capture_depth`, `_mlx_saved_payloads`, `_module_call_accessor`, `_module_capture_ws`, `_module_logs`, `_nonfinite_capture`, `_nonfinite_frontier_out`, `_nonfinite_prefix_finalize_error`, `_nonfinite_prefix_finalized`, `_op_accessor_cache`, `_optimizer`, `_options_activation_transform`, `_options_aten_ops`, `_options_backward_ready`, `_options_grad_transform`, `_options_jax_static_argnums`, `_orphan_pruned_func_call_ids`, `_out_dedup_mode`, `_out_hash_cache`, `_out_identity_cache`, `_out_sink`, `_out_writer`, `_output_container_specs_by_raw_label`, `_output_slot`, `_output_tokenizer`, `_output_transform`, `_paddle_alias_annotations`, `_paddle_capture_depth`, `_paddle_capture_gap_markers`, `_paddle_op_captures`, `_param_log_by_pid`, `_param_logs_by_module`, `_param_storage_addresses`, `_parent_run`, `_pending_live_fire_records`, `_postprocessing_active`, `_pre_forward_rng_states`, `_predicate_current_contexts`, `_predicate_history`, `_predicate_history_size`, `_predicate_lookback`, `_predicate_lookback_candidates`, `_predicate_lookback_payload_policy`, `_predicate_save_decisions`, `_predicate_save_options`, `_provenance_jax_closed_jaxpr`, `_provenance_jax_inlined_call_primitives`, `_provenance_owner_thread_id`, `_provenance_owner_thread_qualified`, `_provenance_thread_activity_detected`, `_provenance_thread_count_end`, `_provenance_thread_count_start`, `_raw_call_fingerprint`, `_raw_dynamo_region_detected`, `_raw_event_shape_hash`, `_raw_graph_ws`, `_raw_transform_escape_detected`, `_receptive_field_solution`, `_replay_frontier`, `_rerun_save_request`, `_rescue_rerun`, `_rf_directional_solutions`, `_runnable`, `_save_budget_accountant`, `_saved_grad_labels`, `_semantic_output_metadata`, `_session_buffer_identity`, `_session_buffer_inventory`, `_session_param_inventory`, `_settlement_ops_committed`, `_source_bundle_manifest_sha256`, `_source_bundle_path`, `_source_model_ref`, `_stop_directive`, `_stop_requested`, `_tf_init_op_labels`, `_tf_op_captures`, `_tf_unresolved_producers`, `_tf_validation_result`, `_tl_backward_hooked_tensor_keys`, `_tl_backward_triggers_disarmed`, `_tl_cleaned_up`, `_tl_grad_hook_owner_by_label`, `_tl_injection_state`, `_tl_intervene_selector_fire_count`, `_tl_predicate_intervention_spec_keys`, `_tl_predicate_intervention_target_keys`, `_tl_rf_probe_active`, `_tl_save_selector_fire_count`, `_trace_core`, `_transform`, `_uncalled_module_addresses`, `_validation_diagnostics`, `_visualizer_dir`, `_warned_direct_write`, `_warned_mutate_in_place`, `_warned_once`, `_wrapper_runtime_ws`, `capture_guard_passes`, `completeness_diagnostics`, `distributed_witness`, `escape_diagnostics`, `facet_functions`, `last_run`, `layer_visualizers`, `measure_host_peak_memory`, `measure_python_peak_memory`, `ops_with_params`, `save_budget`, `track_device_memory`, `track_nonfinite`.
 
 ## `op` (Op, 174 persisted keys)
 
@@ -590,8 +588,8 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `_layer_label_raw` | interned | required: every level | keep | fact | none (storage only) |
 | `_param_barcodes` | interned | required: every level | keep | fact | `Op.has_params`, `Layer.has_params` |
 | `_param_logs` | scalar | required: every level | keep | fact | `Op.num_param_tensors_frozen`, `Op.num_param_tensors_trainable`, `Op.param_dtypes`, `Op.param_names` and 8 more |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Op.gradient_transform`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace` and 40 more |
-| `_tracing_finished` | interned | required: every level | keep | fact | `Trace.input_ops`, `Trace.output_ops` |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Op.gradient_transform`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace` and 38 more |
+| `_tracing_finished` | interned | required: every level | keep | fact | none (storage only) |
 | `activation_memory` | interned | required: every level | keep | fact | `Op.cost.activation_memory` (field) |
 | `address` | interned | required: every level | keep | fact | `Op.buffer_address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Op.annotations` (field) |
@@ -621,7 +619,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `conditional_wrapper_kind` | interned | required: every level | keep | fact | `Op.control_flow.wrapper_kind` (field) |
 | `container_path` | interned | required: every level | keep | fact | `Op.container_path` (field) |
 | `container_spec` | interned | required: every level | keep | fact | `Op.container_spec` (field) |
-| `detach_saved_activations` | interned | required: every level | keep | fact | none (`Op.detach_saved_activations` removed) |
+| `detach_saved_activations` | interned | required: every level | keep | fact | `Op.detach_saved_activations` (field) |
 | `device_ref` | interned | required: every level | keep | fact | `Op.device_ref` (field) |
 | `dropped_edge_tensor_args` | interned | required: every level | keep | fact | `Op.call.dropped_edge_tensor_args` (field) |
 | `dtype` | interned | required: every level | keep | fact | `Op.dtype` (field) |
@@ -649,7 +647,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `grad_dtype` | interned | required: every level | keep | fact | `Op.autograd.grad_dtype` (field) |
 | `grad_fn_class_name` | interned | required: every level | keep | fact | `Op.autograd.grad_fn_class_name` (field) |
 | `grad_fn_class_qualname` | interned | required: every level | keep | fact | `Op.autograd.grad_fn_class_qualname` (field) |
-| `grad_fn_object_id` | interned | required: every level | keep | fact | none (`Op.grad_fn_object_id` removed) |
+| `grad_fn_object_id` | interned | required: every level | keep | fact | `Op.grad_fn_object_id` (field) |
 | `grad_shape` | interned | required: every level | keep | fact | `Op.autograd.grad_shape` (field) |
 | `gradient_memory` | interned | required: every level | keep | fact | `Op.gradient_memory` (field) |
 | `has_children` | interned | required: every level | keep | fact | `Op.graph.has_children` (field) |
@@ -712,7 +710,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `out` | payload | optional: `include_outs` (executable_with_callables, portable) | blob | fact | `Op.out` (field) |
 | `out_versions_by_child` | payload | optional: `include_saved_args` (executable_with_callables) | blob_recursive | fact | `Op.out_versions_by_child` (field) |
 | `output_descendants` | edge | required: every level | keep | derived | `Op.output_descendants` (field) |
-| `output_device` | interned | required: every level | keep | fact | none (`Op.output_device` removed) |
+| `output_device` | interned | required: every level | keep | fact | `Op.output_device` (field) |
 | `output_of_module_calls` | edge | required: every level | keep | fact | `Op.module_context.output_of_module_calls` (field) |
 | `output_of_modules` | edge | required: every level | keep | fact | `Op.module_context.output_of_modules` (field) |
 | `param_memory` | interned | required: every level | keep | fact | `Op.cost.param_memory` (field) |
@@ -766,7 +764,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `_is_in_conditional_body` | scalar | required: every level | keep | fact | none (storage only) |
 | `_param_barcodes` | scalar | required: every level | keep | fact | `Layer.has_params`, `Op.has_params` |
 | `_param_logs` | scalar | required: every level | keep | fact | `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable`, `Layer.param_dtypes`, `Layer.param_names` and 8 more |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 40 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 38 more |
 | `activation_memory` | scalar | required: every level | keep | fact | `Layer.cost.activation_memory` (field) |
 | `address` | scalar | required: every level | keep | fact | `Layer.buffer_address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Layer.annotations` (field) |
@@ -788,7 +786,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `conditional_entry_children` | scalar | required: every level | keep | fact | `Layer.control_flow.entry_children` (field) |
 | `conditional_role_stacks` | scalar | required: every level | keep | fact | `Layer.control_flow.role_stacks` (field) |
 | `conditional_then_children` | scalar | required: every level | keep | fact | `Layer.control_flow.then_children` (field) |
-| `detach_saved_activations` | scalar | required: every level | keep | fact | none (`Layer.detach_saved_activations` removed) |
+| `detach_saved_activations` | scalar | required: every level | keep | fact | `Layer.detach_saved_activations` (field) |
 | `device_ref` | scalar | required: every level | keep | fact | `Layer.device_ref` (field) |
 | `dtype` | scalar | required: every level | keep | fact | `Layer.dtype` (field) |
 | `dtype_ref` | scalar | required: every level | keep | fact | `Layer.dtype_ref` (field) |
@@ -801,7 +799,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `func_qualname` | scalar | required: every level | keep | fact | `Layer.func_qualname` (field) |
 | `grad_fn_class_name` | scalar | required: every level | keep | fact | `Layer.autograd.grad_fn_class_name` (field) |
 | `grad_fn_class_qualname` | scalar | required: every level | keep | fact | `Layer.autograd.grad_fn_class_qualname` (field) |
-| `grad_fn_object_id` | scalar | required: every level | keep | fact | none (`Layer.grad_fn_object_id` removed) |
+| `grad_fn_object_id` | scalar | required: every level | keep | fact | `Layer.grad_fn_object_id` (field) |
 | `has_input_ancestor` | scalar | required: every level | keep | fact | `Layer.graph.has_input_ancestor` (field) |
 | `in_conditionals` | scalar | required: every level | keep | fact | `Layer.control_flow.in_conditionals` (field) |
 | `in_multi_output` | scalar | required: every level | keep | fact | `Layer.in_multi_output` (field) |
@@ -834,7 +832,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `num_pos_args` | scalar | required: every level | keep | fact | `Layer.call.num_pos_args` (field) |
 | `ops` | edge | required: every level | keep | fact | `Layer.ops` (field) |
 | `ordinal_index` | scalar | required: every level | keep | fact | `Layer.ordinal_index` (field) |
-| `output_device` | scalar | required: every level | keep | fact | none (`Layer.output_device` removed) |
+| `output_device` | scalar | required: every level | keep | fact | `Layer.output_device` (field) |
 | `output_of_module_calls` | edge | required: every level | keep | fact | `Layer.module_context.output_of_module_calls` (field) |
 | `output_of_modules` | edge | required: every level | keep | fact | `Layer.module_context.output_of_modules` (field) |
 | `param_shapes` | scalar | required: every level | keep | fact | `Layer.param_shapes` (field) |
@@ -900,7 +898,7 @@ Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handl
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
 | `_executed_flops_record` | scalar: `dict[str, Any] | None` | required: every level | keep | fact | `BackwardPass.flops_attribution` |
-| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 40 more |
+| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 38 more |
 | `backward_call_context` | scalar: `object | None` | required: every level | keep | fact | `BackwardPass.backward_call_context` (field) |
 | `duration` | scalar: `Duration | None` | required: every level | keep | fact | `BackwardPass.duration` (field) |
 | `engine_flags` | scalar: `dict[str, object] | None` | required: every level | keep | fact | `BackwardPass.engine_flags` (field) |
@@ -980,7 +978,7 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFn.trace`, `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops` and 40 more |
+| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFn.trace`, `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops` and 38 more |
 | `backward_docstring` | scalar: `str | None` | required: every level | keep | fact | `GradFn.backward_docstring` (field) |
 | `backward_duration` | computed | required: every level | keep | fact | `GradFn.backward_duration` (field) |
 | `backward_signature` | scalar: `str | None` | required: every level | keep | fact | `GradFn.backward_signature` (field) |
@@ -1038,11 +1036,11 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution` and 40 more |
+| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution` and 38 more |
 | `_time_finished` | scalar: `float | None` | required: every level | keep | fact | `GradFnCall.backward_duration` |
 | `_time_started` | scalar: `float | None` | required: every level | keep | fact | `GradFnCall.backward_duration` |
 | `backward_duration` | computed | required: every level | keep | fact | `GradFnCall.backward_duration` (field) |
-| `backward_pass_number` | scalar: `int | None` | required: every level | keep | fact | `GradFnCall.backward_pass_number` (field) |
+| `backward_pass_index` | scalar: `int | None` | required: every level | keep | fact | `GradFnCall.backward_pass_index` (field) |
 | `call_index` | scalar: `int` | required: every level | keep | fact | `GradFnCall.call_index` (field) |
 | `fire_record` | scalar: `object | None` | required: every level | keep | fact | `GradFnCall.fire_record` (field) |
 | `grad_fn_label` | scalar: `str` | required: every level | keep | fact | `GradFnCall.grad_fn_label` (field) |
@@ -1057,7 +1055,7 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Module.buffers`, `Module.handle`, `Module.layers`, `Module.num_input_edges` and 40 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Module.buffers`, `Module.handle`, `Module.layers`, `Module.num_input_edges` and 38 more |
 | `address` | scalar: `str` | required: every level | keep | fact | `Module.address` (field) |
 | `address_children` | scalar: `list[str]` | required: every level | keep | fact | `Module.address_children` (field) |
 | `address_depth` | scalar: `int` | required: every level | keep | fact | `Module.address_depth` (field) |
@@ -1146,7 +1144,7 @@ Session-only (`drop`): `_attribute_writes`, `_buffer_accessor`, `_facets_cache`,
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `ModuleCall.autograd_memory`, `ModuleCall.func_calls_duration`, `ModuleCall.grad`, `ModuleCall.grads` and 40 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `ModuleCall.autograd_memory`, `ModuleCall.func_calls_duration`, `ModuleCall.grad`, `ModuleCall.grads` and 38 more |
 | `address` | scalar: `str` | required: every level | keep | fact | `ModuleCall.address` (field) |
 | `all_addresses` | scalar: `list[str]` | required: every level | keep | fact | `ModuleCall.all_addresses` (field) |
 | `autograd_memory` | computed | required: every level | keep | fact | `ModuleCall.autograd_memory` (field) |
@@ -1243,7 +1241,7 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 
 ## Private keys with no public accessor
 
-50 keys: `trace._activation_transform_repr`, `trace._ambiguous_lookup_keys`, `trace._annotation_blobs`, `trace._append_history`, `trace._append_sequence_id`, `trace._buffer_initial_values`, `trace._buffer_num_calls`, `trace._buffer_persistence`, `trace._by_pass`, `trace._capture_outcome`, `trace._containers`, `trace._decoded_output`, `trace._final_to_raw_layer_labels`, `trace._grad_fn_param_refs`, `trace._grad_op_nums_to_save`, `trace._has_direct_writes`, `trace._layer_dict_main_keys`, `trace._layer_num_to_lookup_keys_dict`, `trace._layer_nums_to_save`, `trace._layers_logged`, `trace._layers_saved`, `trace._lookup_keys_to_layer_num_dict`, `trace._num_backward_passes`, `trace._num_layers_with_params`, `trace._num_ops`, `trace._num_param_tensors`, `trace._num_saved_ops`, `trace._orphan_labels`, `trace._orphan_records`, `trace._out_recipe_revision`, `trace._phase_timings`, `trace._primitive_op_profile`, `trace._raw_to_final_layer_labels`, `trace._raw_to_final_op_labels`, `trace._raw_to_final_parent_layer_labels`, `trace._replay_arg_version_data_complete`, `trace._source_code_blob`, `trace._spec_revision`, `op._address_normalized`, `op._edge_uses`, `op._is_in_conditional_body`, `op._layer_label_raw`, `op.detach_saved_activations`, `op.grad_fn_object_id`, `op.output_device`, `layer._is_in_conditional_body`, `layer.detach_saved_activations`, `layer.grad_fn_object_id`, `layer.output_device`, `param._derived_grad_record_path`.
+46 keys: `trace._activation_transform_repr`, `trace._ambiguous_lookup_keys`, `trace._annotation_blobs`, `trace._append_history`, `trace._append_sequence_id`, `trace._buffer_initial_values`, `trace._buffer_num_calls`, `trace._buffer_persistence`, `trace._by_pass`, `trace._capture_outcome`, `trace._containers`, `trace._decoded_output`, `trace._final_to_raw_layer_labels`, `trace._grad_fn_param_refs`, `trace._grad_op_nums_to_save`, `trace._has_direct_writes`, `trace._layer_dict_main_keys`, `trace._layer_num_to_lookup_keys_dict`, `trace._layer_nums_to_save`, `trace._layers_logged`, `trace._layers_saved`, `trace._lookup_keys_to_layer_num_dict`, `trace._num_backward_passes`, `trace._num_layers_with_params`, `trace._num_ops`, `trace._num_param_tensors`, `trace._num_saved_ops`, `trace._orphan_labels`, `trace._orphan_records`, `trace._out_recipe_revision`, `trace._phase_timings`, `trace._primitive_op_profile`, `trace._raw_to_final_layer_labels`, `trace._raw_to_final_op_labels`, `trace._raw_to_final_parent_layer_labels`, `trace._replay_arg_version_data_complete`, `trace._source_code_blob`, `trace._spec_revision`, `trace._tracing_finished`, `op._address_normalized`, `op._edge_uses`, `op._is_in_conditional_body`, `op._layer_label_raw`, `op._tracing_finished`, `layer._is_in_conditional_body`, `param._derived_grad_record_path`.
 
 ## Group view members with no stored key
 

@@ -7,9 +7,11 @@ from typing import Any
 
 from .._constants import _is_suffixed_raw_label
 from .._errors import AmbiguousOpLookupError
+from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .._utils._record_group_table import record_member
-from ._accessor_base import Accessor, attach_source_honesty
+from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
+from ._nonfinite import nonfinite_op_labels
 from .op import Op
 
 
@@ -378,6 +380,37 @@ class TraceOpAccessor(Accessor[Op]):
             return pd.DataFrame()
         return attach_source_honesty(pd.concat(frames, ignore_index=True), counted)
 
+    def _derived(self, ops: list[Op]) -> "TraceOpAccessor":
+        """A collection listing exactly ``ops``, sharing this accessor's pass counts."""
+
+        return TraceOpAccessor(ops, self._layer_num_calls)
+
+    @property
+    def compute(self) -> "TraceOpAccessor":
+        """Access the compute ops: every member that is not an input, output or buffer row.
+
+        The Op spelling of ``trace.layers.compute``; on ``trace.ops`` it lists the
+        counted ops, on a derived collection (``trace.saved_ops.compute``) the
+        members that pass the same filter.
+        """
+
+        return self._derived([op for op in self._list if _is_counted_op(op)])
+
+    @property
+    def nonfinite(self) -> "TraceOpAccessor":
+        """Access the members whose output held NaN or Inf.
+
+        The Op spelling of ``Trace.nonfinite_ops`` restricted to this collection;
+        ``Trace.nonfinite_coverage`` names what the answer could not examine.
+        Empty when no member still reaches its trace.
+        """
+
+        trace = first_source_trace(self._list)
+        if trace is None:
+            return self._derived([])
+        flagged = set(nonfinite_op_labels(trace))
+        return self._derived([op for op in self._list if op.label in flagged])
+
     def by_raw_index(self, raw_index: int) -> Op:
         """Return an Op by its realtime raw capture index.
 
@@ -403,7 +436,19 @@ class TraceOpAccessor(Accessor[Op]):
         _refuse_colliding_label(key, getattr(self, "_duplicate_labels", {}).get(key))
         if key in self._dict:
             return self._dict[key]
-        return None
+        token = split_pass_token(key)
+        if token is None:
+            return None
+        passes = [op for op in self._list if token[0] in {op.layer_label, op.short_layer_label}]
+        if not passes:
+            return None
+        if token[1] == PASS_TOKEN_ALL:
+            raise KeyError(
+                f"{key!r} names every pass of {token[0]!r}, which an Op collection cannot "
+                f"return as one record; trace[{key!r}] gives the Selection and "
+                f"trace.ops.resolve_all({token[0]!r}) the list of Ops."
+            )
+        return max(passes, key=lambda op: int(getattr(op, "pass_number", 1) or 1))
 
     def resolve_all(self, key: str) -> list[Op]:
         """Resolve a label to every Op it denotes.
