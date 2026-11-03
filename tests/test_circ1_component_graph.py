@@ -113,7 +113,7 @@ def _closed_form_gpt2(model: nn.Module, ids: torch.Tensor) -> tuple[dict, dict]:
 
 
 def _trace(model: nn.Module, ids: torch.Tensor):
-    return tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return tl.trace(model, ids, save="all")
 
 
 @pytest.fixture(scope="module")

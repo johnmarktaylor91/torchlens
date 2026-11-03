@@ -59,7 +59,7 @@ def stack() -> Iterator[dict[str, Any]]:
 
     def trace(prompts: list[str]) -> Any:
         ids = tok(prompts, return_tensors="pt").input_ids
-        return tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        return tl.trace(model, ids, save="all")
 
     stack = {
         "steering_model": steering_model,

@@ -89,8 +89,7 @@ def run_cell(cell: str) -> dict[str, Any]:
             trace = tl.trace(
                 model,
                 inputs,
-                capture=tl.options.CaptureOptions(backward_ready=True),
-                save_mode="reference",
+                capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
             )
             output = trace.output_ops[0].out
             loss = (output.logits if hasattr(output, "logits") else output).float().sum()

@@ -20,7 +20,7 @@ def test_train_mode_save_outs_to_path_errors(tmp_path: Path) -> None:
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             capture=tl.options.CaptureOptions(backward_ready=True),
-            streaming=tl.options.StorageOptions(path=tmp_path / "bundle.tl"),
+            storage=tl.options.StorageOptions(path=tmp_path / "bundle.tl"),
         )
 
 
@@ -31,7 +31,7 @@ def test_train_mode_streaming_bundle_path_errors(tmp_path: Path) -> None:
         tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
-            streaming=tl.options.StorageOptions(path=tmp_path / "bundle.tl"),
+            storage=tl.options.StorageOptions(path=tmp_path / "bundle.tl"),
             capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
@@ -43,11 +43,11 @@ def test_train_mode_disk_only_fastlog_errors(tmp_path: Path) -> None:
         tl.record(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
-            backward_ready=True,
-            streaming=tl.options.StorageOptions(
+            storage=tl.options.StorageOptions(
                 path=tmp_path / "bundle.tlfast",
                 retain_in_memory=False,
             ),
+            capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
 
@@ -84,6 +84,7 @@ def test_train_mode_integer_activation_transform_rejected() -> None:
         tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save=tl.options.SaveOptions(activation_transform=lambda tensor: tensor.to(torch.int64)),
+            capture=tl.options.CaptureOptions(
+                backward_ready=True, activation_transform=lambda tensor: tensor.to(torch.int64)
+            ),
         )

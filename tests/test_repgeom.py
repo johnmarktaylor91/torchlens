@@ -705,7 +705,6 @@ def test_mds_scatter_draw_uses_one_contained_image_per_annotated_node(tmp_path: 
 
     trace.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
     )
@@ -741,7 +740,6 @@ def test_mds_scatter_draw_embeds_data_uri_and_survives_save_load(tmp_path: Path)
 
     loaded.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
     )
@@ -768,7 +766,6 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
 
     loaded.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8),
     )
@@ -807,7 +804,6 @@ def test_scree_node_spec_draw_uses_one_contained_image_and_survives_save_load(
 
     loaded.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=tl.viz.nodes.scree(max_components=8),
     )
@@ -856,7 +852,6 @@ def test_mds_scatter_cap_overlap_and_more_indicator(tmp_path: Path) -> None:
     output_path = tmp_path / "scatter_cap.svg"
     trace.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=hook,
     )
@@ -892,8 +887,8 @@ def test_mds_scatter_off_keeps_default_render_byte_identical(tmp_path: Path) -> 
     first_path = tmp_path / "default_first.svg"
     second_path = tmp_path / "default_second.svg"
 
-    trace.draw(path=str(first_path), vis_save_only=True, file_format="svg")
-    trace.draw(path=str(second_path), vis_save_only=True, file_format="svg")
+    trace.draw(path=str(first_path), file_format="svg")
+    trace.draw(path=str(second_path), file_format="svg")
 
     assert first_path.read_bytes() == second_path.read_bytes()
 
@@ -908,8 +903,8 @@ def test_plain_trace_draw_without_rdm_hook_does_not_create_annotation_blobs(
     second_path = tmp_path / "plain_default_second.svg"
 
     assert trace._annotation_blobs is None
-    trace.draw(path=str(first_path), vis_save_only=True, file_format="svg")
-    trace.draw(path=str(second_path), vis_save_only=True, file_format="svg")
+    trace.draw(path=str(first_path), file_format="svg")
+    trace.draw(path=str(second_path), file_format="svg")
 
     assert trace._annotation_blobs is None
     assert first_path.read_bytes() == second_path.read_bytes()

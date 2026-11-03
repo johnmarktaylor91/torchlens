@@ -10,7 +10,7 @@ stays with the dataclasses in ``options.py``; this module never imports it.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ._errors import ArgumentTypeError, InvalidArgumentError
 from ._literals import (
@@ -21,6 +21,9 @@ from ._literals import (
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
 )
+
+if TYPE_CHECKING:
+    from .options import VisualizationOptions
 
 
 def _validate_node_style(node_style: VisNodeModeLiteral) -> None:
@@ -185,10 +188,9 @@ def _validate_fold_repeats(value: FoldRepeatsLiteral) -> None:
 # ``'yes'`` or ``'no'`` used to be accepted silently, and ``'no'``/``'false'``
 # truthily meant ON (R64-F3).
 _VISUALIZATION_BOOL_FIELDS = (
-    "save_only",
+    "rolled",
+    "open_viewer",
     "show_cone",
-    "for_paper",
-    "return_graph",
     "order_siblings",
 )
 
@@ -265,12 +267,16 @@ def _validate_output_device(output_device: Any) -> None:
         )
 
 
+#: The closed ``on_nonfinite`` vocabulary (``"ignore"`` is the default).
+ON_NONFINITE_MODES: tuple[str, ...] = ("ignore", "track", "warn", "raise")
+
+
 def _validate_capture_values(values: Mapping[str, Any]) -> None:
     """Validate resolved capture field values.
 
     Single source of truth for the invariants enforced on
-    :class:`CaptureOptions`, shared by ``__init__`` and ``from_values`` so the
-    flat-kwarg / ``from_values`` construction path can never accept values the
+    :class:`CaptureOptions`, shared by ``__init__`` and ``_from_values`` so the
+    flat-kwarg / ``_from_values`` construction path can never accept values the
     grouped constructor rejects (the asymmetry that let bad ``jax_control_flow``
     and non-positive ``jax_max_control_flow_unroll`` slip through).
 
@@ -325,16 +331,16 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
             remedy="set distributed_witness to 'digest' for byte-exact witness digests",
             argument="distributed_witness",
         )
-    if not isinstance(values["raise_on_nan"], bool):
-        # a falsy non-bool (0.0, None, "") silently disabled the NaN
-        # tripwire; only a real boolean selects the behaviour.
-        raise ArgumentTypeError(
-            f"Capture option raise_on_nan must be a bool, got "
-            f"{type(values['raise_on_nan']).__name__} {values['raise_on_nan']!r}",
-            code="raise_on_nan_type_invalid",
-            remedy="pass raise_on_nan=True or raise_on_nan=False",
-            argument="raise_on_nan",
-            received_type=type(values["raise_on_nan"]).__name__,
+    if values["on_nonfinite"] not in ON_NONFINITE_MODES:
+        # One closed vocabulary selects the NaN/Inf policy; a bool or a
+        # misspelling never silently falls back to "ignore".
+        raise InvalidArgumentError(
+            f"Capture option on_nonfinite must be one of "
+            f"{', '.join(repr(mode) for mode in ON_NONFINITE_MODES)}, got "
+            f"{values['on_nonfinite']!r}",
+            code="on_nonfinite_invalid",
+            remedy="pass on_nonfinite='ignore', 'track', 'warn' or 'raise'",
+            argument="on_nonfinite",
         )
     if not isinstance(values["structure_only"], bool):
         raise ArgumentTypeError(
@@ -344,3 +350,65 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
             argument="structure_only",
             received_type=type(values["structure_only"]).__name__,
         )
+
+
+def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[str, Any]:
+    """Translate grouped visualization options into ``Trace.draw`` kwargs.
+
+    Parameters
+    ----------
+    visualization:
+        Resolved grouped visualization options.
+
+    Returns
+    -------
+    dict[str, Any]
+        Keyword arguments expected by ``Trace.draw``: the field names, with
+        ``container_path`` as ``path``; ``fold_repeats`` only when set or
+        explicit; the tri-state and optional channels only when set.
+    """
+
+    kwargs: dict[str, Any] = {
+        "path": visualization.container_path,
+        "graph": visualization.graph,
+        "rolled": visualization.rolled,
+        "depth": visualization.depth,
+        "graph_overrides": visualization.graph_overrides,
+        "node_style": visualization.node_style,
+        "node_spec_fn": visualization.node_spec_fn,
+        "collapsed_node_spec_fn": visualization.collapsed_node_spec_fn,
+        "collapse_fn": visualization.collapse_fn,
+        "collapse": visualization.collapse,
+        "skip_fn": visualization.skip_fn,
+        "edge_overrides": visualization.edge_overrides,
+        "grad_edge_overrides": visualization.grad_edge_overrides,
+        "module_overrides": visualization.module_overrides,
+        "open_viewer": visualization.open_viewer,
+        "file_format": visualization.file_format,
+        "show_buffers": visualization.show_buffers,
+        "direction": visualization.direction,
+        "layout": visualization.layout,
+        "renderer": visualization.renderer,
+        "theme": visualization.theme,
+        "intervention_mode": visualization.intervention_mode,
+        "show_cone": visualization.show_cone,
+    }
+    if visualization.fold_repeats is not None or visualization.is_field_explicit("fold_repeats"):
+        kwargs["fold_repeats"] = visualization.fold_repeats
+    optional_kwargs = {
+        "node_overlay": visualization.node_overlay,
+        "node_label_fields": visualization.node_label_fields,
+        "show_legend": visualization.show_legend,
+        "color_by": visualization.color_by,
+        "size_by": visualization.size_by,
+        "size_scale": visualization.size_scale,
+        "stack_by": visualization.stack_by,
+        "show_redundant_args": visualization.show_redundant_args,
+        "font_size": visualization.font_size,
+        "dpi": visualization.dpi,
+        "order_siblings": visualization.order_siblings,
+    }
+    for field_name, value in optional_kwargs.items():
+        if value is not None and value is not False or visualization.is_field_explicit(field_name):
+            kwargs[field_name] = value
+    return kwargs

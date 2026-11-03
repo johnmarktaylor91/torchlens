@@ -40,7 +40,6 @@ class _Outer(nn.Module):
 def _dot_source(tmp_path: Path, trace: tl.Trace, **draw_kwargs) -> str:
     outpath = tmp_path / "cluster_honesty"
     trace.draw(
-        vis_save_only=True,
         file_format="dot",
         path=str(outpath),
         **draw_kwargs,
@@ -77,7 +76,7 @@ def test_nested_module_without_interior_edge_renders_solid(tmp_path: Path) -> No
 
     trace = tl.trace(_Outer(), torch.randn(1, 4))
     for view in ("unrolled", "rolled"):
-        source = _dot_source(tmp_path / view, trace, vis_mode=view)
+        source = _dot_source(tmp_path / view, trace, rolled=view == "rolled")
         styles = _cluster_styles(source)
         dashed = {name for name, style in styles.items() if "dashed" in style}
         assert not dashed, (
@@ -90,8 +89,8 @@ def test_unrolled_and_rolled_cluster_styles_agree(tmp_path: Path) -> None:
     """The two views never make contradictory connectivity claims (R19-4)."""
 
     trace = tl.trace(_Outer(), torch.randn(1, 4))
-    unrolled = _cluster_styles(_dot_source(tmp_path / "u", trace, vis_mode="unrolled"))
-    rolled = _cluster_styles(_dot_source(tmp_path / "r", trace, vis_mode="rolled"))
+    unrolled = _cluster_styles(_dot_source(tmp_path / "u", trace, rolled=False))
+    rolled = _cluster_styles(_dot_source(tmp_path / "r", trace, rolled=True))
 
     def _solidity(styles: dict[str, str]) -> dict[str, bool]:
         result: dict[str, bool] = {}
@@ -169,7 +168,7 @@ def test_condensed_away_clusters_are_not_emitted_empty(tmp_path: Path) -> None:
     # dashed, four solid — style noise on top of the misplacement).
     blocks = nn.Sequential(*[nn.Sequential(nn.Linear(4, 4), nn.ReLU()) for _ in range(8)])
     trace = tl.trace(blocks, torch.randn(1, 4))
-    source = _dot_source(tmp_path, trace, vis_mode="unrolled", collapse="max")
+    source = _dot_source(tmp_path, trace, rolled=False, collapse="max")
     dashed = {name for name, style in _cluster_styles(source).items() if "dashed" in style}
     assert not dashed, (
         f"fully input-connected model rendered dashed clusters at collapse='max': {sorted(dashed)}"
@@ -231,7 +230,6 @@ def test_image_node_attrs_are_visualizer_relative(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(input_transform=_to_batch, save_raw_input=True),
     )
     trace.draw(
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "img"),
     )

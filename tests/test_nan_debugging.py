@@ -99,7 +99,7 @@ def test_raise_on_nan_raises_capture_error_with_partial_graph() -> None:
         tl.trace(
             NonFiniteFixture(),
             _input_tensor(),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
     error = exc_info.value
     assert "op='__truediv__'" in str(error)
@@ -108,7 +108,7 @@ def test_raise_on_nan_raises_capture_error_with_partial_graph() -> None:
     assert error.fields["shape"] == (1, 2)
 
     partial = error.partial_trace
-    graph = partial.draw()
+    graph = partial.draw().dot
     assert "digraph torchlens_partial" in graph
     assert "__truediv__" in graph
     assert "shape=(1, 2)" in graph
@@ -121,7 +121,7 @@ def test_partial_trace_constructible_after_failed_capture() -> None:
         tl.trace(
             NonFiniteFixture(),
             _input_tensor(),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
     partial = exc_info.value.partial_trace
     assert isinstance(partial, PartialTrace)
@@ -138,7 +138,7 @@ def test_partial_trace_attached_to_generic_forward_exception() -> None:
     assert isinstance(exc_info.value.__cause__, RuntimeError)
     partial = exc_info.value.partial_trace
     assert isinstance(partial, PartialTrace)
-    graph = partial.draw()
+    graph = partial.draw().dot
     assert "__add__" in graph
     assert "fixture failure" in graph
 

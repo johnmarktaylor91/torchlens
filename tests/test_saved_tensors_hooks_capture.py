@@ -97,7 +97,7 @@ def test_pack_hook_op_does_not_delete_producer(pack_name: str) -> None:
     x = torch.randn(2, 4)
     with torch.no_grad():
         real = model(x)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     _assert_clean_offload_graph(trace)
     assert torch.equal(trace["output_1"].out, real)
     with warnings.catch_warnings():
@@ -112,7 +112,7 @@ def test_save_on_cpu_subclass_is_covered() -> None:
     x = torch.randn(2, 4)
     with torch.no_grad():
         real = model(x)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     _assert_clean_offload_graph(trace)
     assert torch.equal(trace["output_1"].out, real)
 
@@ -122,7 +122,7 @@ def test_pack_hook_still_functions_after_capture() -> None:
     torch.manual_seed(0)
     model = OffloadModel(lambda t: t.cpu())
     x = torch.randn(2, 4, requires_grad=True)
-    tl.trace(model, x.detach(), capture=tl.options.CaptureOptions(layers_to_save="all"))
+    tl.trace(model, x.detach(), save="all")
     y = model(x).sum()
     y.backward()
     assert x.grad is not None
@@ -196,7 +196,7 @@ def test_prebuilt_hook_context_is_scoped_at_use_time() -> None:
     with torch.no_grad():
         real = model(x)
     # The next capture auto-rewraps torch and must scope the pre-built hooks.
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     _assert_clean_offload_graph(trace)
     assert torch.equal(trace["output_1"].out, real)
     with warnings.catch_warnings():
@@ -220,7 +220,7 @@ def test_checkpoint_still_validates_with_hook_scope() -> None:
     torch.manual_seed(0)
     model = CkptModel()
     x = torch.randn(2, 4, requires_grad=True)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     func_names = [getattr(layer, "func_name", None) for layer in trace._layer_list]
     assert "linear" in func_names and "relu" in func_names
     assert func_names.count("linear") == 1, "phantom checkpoint recompute op"

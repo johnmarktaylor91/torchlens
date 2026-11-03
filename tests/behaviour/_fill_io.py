@@ -397,7 +397,9 @@ def _check_chunked_capture(cell: Cell, plain: Any) -> None:
     if pieces is None:
         return  # the model's forward is not row-wise over the batch; chunking is not defined
     torch.manual_seed(SEED)
-    chunked = tl.trace(cell.model, stimuli.clone(), chunk_size=size)
+    chunked = tl.trace(
+        cell.model, stimuli.clone(), capture=tl.options.CaptureOptions(chunk_size=size)
+    )
     same_labels = [op.label for op in chunked.ops] == list(cell.facts.labels)
     if not same_labels and cell.case.has("inplace"):
         return  # state carried in mutated buffers changes the graph between forwards
@@ -439,7 +441,7 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
         op.label for op in trace.saved_ops if op.out_ref is None and not _is_output(op)
     )
     cell.expect(not unstreamed, f"saved ops without a blob on disk: {unstreamed[:8]}")
-    # Reading ``op.out`` on a capture with predicate keywords (save=, halt=, intervene=)
+    # Reading ``op.out`` on a capture with predicate keywords (save=, stop_after=, intervene=)
     # materializes the blob by design (the lazy-payload honesty gate in ``Op``), so the pinned
     # ``None`` is asserted only on plain streamed captures.
     if not _predicate_capture(cell):
@@ -472,7 +474,7 @@ def _expect_streamed_payloads(cell: Cell, trace: Any, plain: Any, got: Any, what
     """Expect ``got`` to carry the plain payload of every op the streamed capture saved.
 
     The streamed capture, not the plain one, defines the saved set: a ``save=`` partner
-    narrows it, and a ``halt=`` partner's output op is the halt frontier.
+    narrows it, and a ``stop_after=`` partner's output op is the halt frontier.
     """
 
     # The streamed capture is its own reference when the plain capture cannot be: a stochastic

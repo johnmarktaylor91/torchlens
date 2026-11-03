@@ -14,6 +14,7 @@ documenting the intentional fastlog divergence:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -71,8 +72,8 @@ def test_transform_replaces_transformed_payload_with_raw_kept() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        activation_transform=lambda t: t.float() * 2,
+        recording=tl.options.RecordingOptions(default_op=True),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 2),
     )
 
     records = _out_records(recording)
@@ -96,8 +97,8 @@ def test_activation_transform_canonical_name_matches_transform_alias() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        activation_transform=lambda t: t.float() * 2,
+        recording=tl.options.RecordingOptions(default_op=True),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 2),
     )
 
     records = _out_records(recording)
@@ -117,9 +118,10 @@ def test_save_raw_outs_false_drops_raw_payload() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        activation_transform=lambda t: t.float() * 0.5,
-        save_raw_activations=False,
+        recording=tl.options.RecordingOptions(default_op=True),
+        capture=tl.options.CaptureOptions(
+            activation_transform=lambda t: t.float() * 0.5, save_raw_activations=False
+        ),
     )
 
     records = _out_records(recording)
@@ -138,10 +140,10 @@ def test_no_transform_leaves_transformed_payload_unset() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
     )
 
-    assert recording._activation_transform_repr is None
+    assert recording.options.activation_transform is None
     for record in recording.records:
         assert record.transformed_ram_payload is None
         assert record.transformed_disk_payload is None
@@ -154,9 +156,9 @@ def test_disk_only_mode_persists_transformed_blob(tmp_path: Path) -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        activation_transform=lambda t: t.float() * 2,
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        recording=tl.options.RecordingOptions(default_op=True),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 2),
     )
 
     records = _disk_out_records(recording)
@@ -192,9 +194,9 @@ def test_ram_disk_mirror_populates_both_transformed_payloads(tmp_path: Path) -> 
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        activation_transform=lambda t: t.float() * 3,
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
+        recording=tl.options.RecordingOptions(default_op=True),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 3),
     )
 
     records = _out_records(recording)
@@ -229,10 +231,10 @@ def test_ram_disk_mirror_invokes_transform_once_per_selected_event(tmp_path: Pat
         _PostfuncModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op" and ctx.func_name == "relu",
-        activation_transform=counting_transform,
-        streaming=tl.options.StorageOptions(
+        storage=tl.options.StorageOptions(
             path=tmp_path / "mirror_once.tlfast", retain_in_memory=True
         ),
+        capture=tl.options.CaptureOptions(activation_transform=counting_transform),
     )
 
     records = _out_records(recording)
@@ -252,8 +254,8 @@ def test_train_mode_well_behaved_transform_keeps_graph_connected_payload() -> No
     recording = tl.record(
         model,
         torch.ones(1, 3),
-        default_op=CaptureSpec(save_grad=True),
-        activation_transform=lambda t: t * 2,
+        recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t * 2),
     )
 
     records = _out_records(recording)
@@ -274,8 +276,8 @@ def test_train_mode_detaching_transform_rejected() -> None:
         tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(save_grad=True),
-            activation_transform=lambda t: t.detach(),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
+            capture=tl.options.CaptureOptions(activation_transform=lambda t: t.detach()),
         )
 
 
@@ -286,8 +288,8 @@ def test_train_mode_integer_transform_rejected() -> None:
         tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(save_grad=True),
-            activation_transform=lambda t: t.to(torch.int64),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
+            capture=tl.options.CaptureOptions(activation_transform=lambda t: t.to(torch.int64)),
         )
 
 
@@ -297,9 +299,8 @@ def test_source_events_receive_transform_outputs() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        include_source_events=True,
-        activation_transform=lambda t: t.float() * 4,
+        recording=tl.options.RecordingOptions(default_op=True, include_source_events=True),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 4),
     )
 
     source_records = [record for record in recording.records if record.ctx.kind == "input"]
@@ -333,7 +334,7 @@ def test_predicate_transform_invocation_count_matches_kept_events() -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         save=keep_op,
-        activation_transform=counting_transform,
+        capture=tl.options.CaptureOptions(activation_transform=counting_transform),
     )
 
     selected = _out_records(recording)
@@ -377,8 +378,8 @@ def test_transform_error_wrapped_with_event_context() -> None:
         tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),
-            default_op=True,
-            activation_transform=boom,
+            recording=tl.options.RecordingOptions(default_op=True),
+            capture=tl.options.CaptureOptions(activation_transform=boom),
         )
 
     message = str(exc_info.value)
@@ -391,8 +392,13 @@ def test_transform_error_wrapped_with_event_context() -> None:
     assert "custom failure" in str(exc_info.value.__cause__)
 
 
-def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> None:
-    """Recording exposes ``_activation_transform_repr`` and persists it on disk."""
+def test_activation_transform_readback_and_persisted_audit(tmp_path: Path) -> None:
+    """``Recording.options`` returns the live transform; a bundle keeps a scrubbed repr.
+
+    A recovered recording cannot hold the callable: its record reads ``None``
+    for the transform while the bundle metadata keeps the audit repr and the
+    plain settings.
+    """
 
     def named_transform(t: torch.Tensor) -> torch.Tensor:
         """Doubling transform with a stable repr."""
@@ -402,25 +408,29 @@ def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> Non
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        activation_transform=named_transform,
+        recording=tl.options.RecordingOptions(default_op=True),
+        capture=tl.options.CaptureOptions(activation_transform=named_transform),
     )
-    assert recording._activation_transform_repr is not None
-    assert "named_transform" in recording._activation_transform_repr
+    assert recording.options.activation_transform is named_transform
+    assert recording.options.default_op is True
 
     bundle_path = tmp_path / "metadata.tlfast"
-    persisted = tl.record(
+    tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        activation_transform=named_transform,
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        recording=tl.options.RecordingOptions(default_op=True, history_size=3),
+        capture=tl.options.CaptureOptions(activation_transform=named_transform),
     )
     metadata = json.loads((bundle_path / "metadata.json").read_text(encoding="utf-8"))
-    assert metadata.get("_activation_transform_repr") is not None
-    assert "named_transform" in metadata["_activation_transform_repr"]
+    assert "named_transform" in metadata["_settings_reprs"]["activation_transform"]
+    assert re.search(r"0x[0-9a-fA-F]", metadata["_settings_reprs"]["activation_transform"]) is None
+    assert metadata["settings"]["history_size"] == 3
+    assert "activation_transform" not in metadata["settings"]
     loaded = tl.load(bundle_path)
-    assert loaded._activation_transform_repr == persisted._activation_transform_repr
+    assert loaded.options.activation_transform is None
+    assert loaded.options.history_size == 3
+    assert loaded.options.default_op is True
 
 
 def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
@@ -430,9 +440,9 @@ def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
     original = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        activation_transform=lambda t: t.float() * 2,
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        recording=tl.options.RecordingOptions(default_op=True),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 2),
     )
 
     loaded = tl.load(bundle_path)
