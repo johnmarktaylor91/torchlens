@@ -1371,8 +1371,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   it writes (a `TorchLensWarning` coded `facet_selector_fanout`, with `fields["site_count"]`;
   36 on a 12-layer GPT-2: q, k and v in each layer); `.in_module(address)` scopes it to one
   module, and so does composition: `tl.module(address) & tl.head(i)` (either order) is that
-  same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`,
-  `attach_hooks`); a facet already scoped to another module refuses
+  same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`);
+  a facet already scoped to another module refuses
   `selector_module_facet_scope_conflict`;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
@@ -4746,12 +4746,15 @@ alphabetical order.
 
 | Spelling | Meaning |
 | --- | --- |
+| `Trace.__enter__` | Context-manager entry; returns the Trace itself so `with trace:` binds the same object |
+| `Trace.__exit__` | Context-manager exit; calls `Trace.remove`, detaching the most recent single-hook `do` attachment |
 | `Trace.annotate` | Attach user-owned annotation data or an image to the graph nodes picked by a selector |
 | `Trace.archived_activations` | Mapping of label to inspection-only activation payloads from a runnable archive |
 | `Trace.attention_blocks` | Yield the Modules that have an available query-projection facet |
 | `Trace.backend_runtime_config` | Backend runtime configuration recorded at capture, or `None` |
 | `Trace.backend_runtime_device_summary` | Summary of the backend devices in use at trace time, or `None` |
 | `Trace.backend_runtime_version` | Version string of the backend runtime that ran the capture, or `None` |
+| `Trace.backward` | Run backward from `loss` and populate this Trace with backward metadata (extra keywords pass to `Trace.log_backward`); returns the Trace |
 | `Trace.batch_render` | Policy for rendering a batch of raw input in visualizations; defaults to `"auto"` |
 | `Trace.buffer_layers` | Labels of the Layers that represent buffers as graph boundary values |
 | `Trace.buffer_read_ops` | Labels of buffer Ops that read registered-buffer values into the graph |
