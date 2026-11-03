@@ -75,6 +75,7 @@ class _TypedStorageDataPtrRead(nn.Module):
         return h + val
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_storage.py; a sole mutation kill; the catch of its regression fault.
 def test_r16_c1_untyped_storage_data_ptr_read_is_unverifiable(tmp_path: Path) -> None:
     """A ctypes READ through ``untyped_storage().data_ptr()`` bakes a stale literal -> UNVERIFIABLE."""
     cap_x, new_x = torch.tensor([1.0, 2.0]), torch.tensor([-5.0, 7.0])
@@ -86,17 +87,6 @@ def test_r16_c1_untyped_storage_data_ptr_read_is_unverifiable(tmp_path: Path) ->
     assert (
         _status(_UntypedStorageDataPtrRead(), cap_x, cap_x, tmp_path)
         is not PathFaithfulness.VERIFIED
-    )
-
-
-def test_r16_c1_typed_storage_data_ptr_read_is_unverifiable(tmp_path: Path) -> None:
-    """A ctypes READ through ``storage().data_ptr()`` (TypedStorage) is likewise fail-closed."""
-    cap_x, new_x = torch.tensor([1.0, 2.0]), torch.tensor([-5.0, 7.0])
-    assert (
-        _status(_TypedStorageDataPtrRead(), cap_x, new_x, tmp_path) is not PathFaithfulness.VERIFIED
-    )
-    assert (
-        _status(_TypedStorageDataPtrRead(), cap_x, cap_x, tmp_path) is not PathFaithfulness.VERIFIED
     )
 
 
@@ -135,6 +125,7 @@ class _BufferToctouRestore(nn.Module):
         return z
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_dispatch.py; a sole mutation kill.
 def test_r16_h1_activation_toctou_restore_is_unverifiable(tmp_path: Path) -> None:
     """A transient numpy write consumed by a traced op then restored -> UNVERIFIABLE, not VERIFIED."""
     torch.manual_seed(0)
@@ -143,6 +134,7 @@ def test_r16_h1_activation_toctou_restore_is_unverifiable(tmp_path: Path) -> Non
     assert _status(model, x, x, tmp_path) is not PathFaithfulness.VERIFIED
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_metadata.py; a sole mutation kill.
 def test_r16_h1_buffer_toctou_restore_is_unverifiable(tmp_path: Path) -> None:
     """A transient buffer numpy write consumed by a traced op then restored -> UNVERIFIABLE."""
     torch.manual_seed(0)
@@ -178,30 +170,6 @@ class _StorageNbytesThenConsume(nn.Module):
         return y * 2.0
 
 
-def test_r16_no_over_trigger_readonly_numpy_then_consume_stays_verified(tmp_path: Path) -> None:
-    """A read-only ``.numpy().sum()`` whose source is later consumed stays VERIFIED + value-correct.
-
-    The per-consumption byte sample must NOT trip a read-only exposure: the bytes are identical at
-    every consumption. VERIFIED is asserted on the ORIGINAL input (a ``.numpy()`` exposure is
-    witnessed conservatively on a CHANGED input, matching the r15 read-only contract).
-    """
-    torch.manual_seed(0)
-    x = torch.randn(2, 4)
-    model = _ReadonlyNumpyThenConsume().eval()
-    loaded = _save_load(model, x, tmp_path)
-    result = loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    with torch.no_grad():
-        assert torch.allclose(model(x.clone()), result.output)
-
-
-def test_r16_no_over_trigger_storage_nbytes_then_consume_stays_verified(tmp_path: Path) -> None:
-    """A read-only ``untyped_storage().nbytes()`` metadata read never trips the pointer fail-close."""
-    torch.manual_seed(0)
-    x = torch.randn(2, 4)
-    assert _status(_StorageNbytesThenConsume().eval(), x, x, tmp_path) is PathFaithfulness.VERIFIED
-
-
 class _PlainMlp(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -210,16 +178,3 @@ class _PlainMlp(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.fc2(torch.relu(self.fc1(x)))
-
-
-def test_r16_no_over_trigger_plain_model_stays_verified(tmp_path: Path) -> None:
-    """A plain escape-free model stays VERIFIED on any input (no false trip from the new checks)."""
-    torch.manual_seed(0)
-    x = torch.randn(3, 4)
-    for run_x in (x, x + 7.0):
-        model = _PlainMlp().eval()
-        loaded = _save_load(model, x, tmp_path)
-        result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return")
-        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-        with torch.no_grad():
-            assert torch.allclose(model(run_x.clone()), result.output)

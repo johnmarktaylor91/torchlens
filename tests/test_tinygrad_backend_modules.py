@@ -18,7 +18,7 @@ Tensor = pytest.importorskip("tinygrad").Tensor
 nn = pytest.importorskip("tinygrad.nn")
 
 
-pytestmark = pytest.mark.backend_tinygrad
+pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.rare]
 
 
 class TinyLinearModel:

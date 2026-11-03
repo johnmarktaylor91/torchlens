@@ -108,6 +108,18 @@ def render_timeline_svg(
     str
         Complete SVG document. Identical artifacts render byte-identically
         (fixed band order, fixed number formatting, no unordered iteration).
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> from torchlens._io._json import read_bounded
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = tl.export.memory_timeline_v2(trace, pathlib.Path(tmp) / "timeline.json")
+    ...     artifact = read_bounded(path)
+    >>> svg = tl.viz.timeline(artifact)
+    >>> svg.startswith("<svg"), svg.rstrip().endswith("</svg>")
+    (True, True)
     """
 
     columns, bin_size, n_ordinals = _cumulative_columns(artifact, column_budget)

@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-pytestmark = pytest.mark.backend_mlx
+pytestmark = [pytest.mark.backend_mlx, pytest.mark.rare]
 
 mlx = pytest.importorskip("mlx")
 import mlx.core as mx  # noqa: E402
@@ -25,7 +25,7 @@ import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends.mlx import MLXBackend  # noqa: E402
-from torchlens.errors import BackendUnsupportedError  # noqa: E402
+from torchlens.errors import BackendUnsupportedError, InvalidArgumentError  # noqa: E402
 
 
 class _TwoLayerMLP(nn.Module):
@@ -129,6 +129,14 @@ def test_mlx_halt_returns_partial_trace_at_frontier() -> None:
     assert any(label.startswith("relu") for label in labels)
     assert sum(label.startswith("linear") for label in labels) == 1
     assert MLXBackend().validate_trace(trace).passed is True
+
+
+def test_mlx_unfired_stop_after_refuses_like_torch() -> None:
+    """A stop_after selector that never fires refuses typed, with torch's code."""
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", stop_after=tl.func("nosuchopzzz"))
+    assert excinfo.value.fields["code"] == "stop_after_never_fired"
 
 
 def test_mlx_intervened_record_stripped_of_declaration_fails_validation() -> None:

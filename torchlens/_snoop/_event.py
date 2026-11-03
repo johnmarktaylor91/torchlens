@@ -37,6 +37,14 @@ class NarrationEvent:
     will accept for lookup (the raw in-flight label on both live tiers;
     post-hoc rendering re-derives final labels natively). ``signal`` is
     reserved for backward narration and is always ``"forward"`` in V1.
+
+    Examples
+    --------
+    >>> event = NarrationEvent(kind="op", ordinal=3, label="relu_1_2_raw", shape=(1, 4))
+    >>> event.kind, event.label, event.shape
+    ('op', 'relu_1_2_raw', (1, 4))
+    >>> event.signal
+    'forward'
     """
 
     kind: str
@@ -57,7 +65,7 @@ class NarrationEvent:
     has_intervention: bool = False
     #: Ordinal distance disclosed on buffered ``followed_by`` releases.
     late: int | None = None
-    stats: TensorStats | None = None
+    value_stats: TensorStats | None = None
     #: Free-form single-line body for ``attempted`` / ``note`` kinds.
     text: str | None = None
     signal: str = "forward"

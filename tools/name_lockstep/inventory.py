@@ -14,7 +14,15 @@ sweep's name table, line up row for row:
   table count, and carry ``field_tables``, the module constants that list the field
   order (``torchlens._constants:MODEL_LOG_FIELD_ORDER``);
 - ``param:<name>``: a keyword name, grouped over every reached signature (variadic and
-  underscore names included, so their renames and removals are seen).
+  underscore names included, so their renames and removals are seen);
+- ``code:<code>``: a refusal code declared anywhere in the package source (the
+  ``code="..."`` keyword or ``code = "..."`` assignment; see ``static_surface``);
+- ``receipt:<attribute>.<key>``: a literal key stored into a result record such as
+  ``trace.last_run`` (``static_surface.RECEIPT_ATTRIBUTES``).
+
+Public members include the protocol dunders in ``PROTOCOL_DUNDERS`` (``__enter__``,
+``__iter__``, ``__getitem__``, ...): users call them through ``with``, ``for`` and ``[]``,
+so adding or removing one changes the public surface. Other underscore names stay private.
 
 ``<module>`` and ``module`` name the module whose source defines the object, not a
 re-export shim that reassigns ``__module__`` for pickling.
@@ -34,12 +42,30 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
-from name_lockstep import definitions, docsections, fields
+from name_lockstep import definitions, docsections, fields, static_surface
 
 PACKAGE = "torchlens"
 ALIAS = "tl"
 #: Bump when the row shape changes; ``load_inventory`` refuses other versions.
-SCHEMA = "name-lockstep-inventory/2"
+SCHEMA = "name-lockstep-inventory/3"
+#: Dunders that are part of a class's public protocol: inventoried, their keywords not.
+PROTOCOL_DUNDERS: frozenset[str] = frozenset(
+    {
+        "__enter__",
+        "__exit__",
+        "__aenter__",
+        "__aexit__",
+        "__iter__",
+        "__next__",
+        "__len__",
+        "__getitem__",
+        "__setitem__",
+        "__delitem__",
+        "__contains__",
+        "__call__",
+        "__bool__",
+    }
+)
 _SKIPPED_PARAMS = frozenset({"self", "cls"})
 #: Values a namespace without ``__all__`` exports as constants when its source assigns them.
 _DATA_TYPES = (str, bytes, int, float, bool, tuple, list, dict, set, frozenset, type(None))
@@ -446,7 +472,11 @@ def _class_member_names(cls: type) -> dict[str, object]:
     members.update(dict.fromkeys(fields.policy_fields(cls)))
     for name, raw in vars(cls).items():
         members[name] = raw
-    return {name: raw for name, raw in members.items() if not name.startswith("_")}
+    return {
+        name: raw
+        for name, raw in members.items()
+        if not name.startswith("_") or name in PROTOCOL_DUNDERS
+    }
 
 
 def _member_rows(classes: Iterable[type], package: str) -> dict[str, dict[str, Any]]:
@@ -561,7 +591,7 @@ def _callables(objects: list[tuple[dict[str, Any], object]], members: list[dict[
         if row["subkind"] in ("function", "class"):
             yield row["path"], value
     for row in members:
-        if row["subkind"].endswith("method"):
+        if row["subkind"].endswith("method") and not row["name"].startswith("_"):
             module = importlib.import_module(row["module"])
             owner: object = module
             for part in row["owner"].split(":", 1)[1].split("."):
@@ -665,7 +695,8 @@ def build_inventory(package_name: str = PACKAGE) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        ``{"schema", "package_file", "rows"}``, rows sorted by id.
+        ``{"schema", "package_file", "rows"}``, rows sorted by id. ``code`` and
+        ``receipt`` rows come from an AST pass over the package directory.
     """
 
     package = importlib.import_module(package_name)
@@ -679,6 +710,9 @@ def build_inventory(package_name: str = PACKAGE) -> dict[str, Any]:
     members = _member_rows(classes.values(), package_name)
     rows.update(members)
     rows.update(_param_rows(_callables(objects, list(members.values()))))
+    package_dir = Path(package.__file__ or "").resolve().parent
+    rows.update(static_surface.code_rows(package_dir, package_name))
+    rows.update(static_surface.receipt_rows(package_dir, package_name))
     return {
         "schema": SCHEMA,
         "package_file": str(Path(package.__file__ or "").resolve()),

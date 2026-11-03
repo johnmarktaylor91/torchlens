@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import torch
 
-import torchlens as tl
 import torchlens._utils as utils
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/_onramp.py.
 def test_trace_streaming_on_iterable_inputs() -> None:
     """Capture iterable inputs into one stacked root log."""
 
@@ -18,23 +18,3 @@ def test_trace_streaming_on_iterable_inputs() -> None:
         save="none",
     )
     assert len(traces) == 2
-
-
-def test_multi_output_module_smoke() -> None:
-    """Modules returning multiple outputs retain output-path metadata."""
-
-    class MultiOut(torch.nn.Module):
-        """Tiny multi-output module."""
-
-        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-            """Return two outputs."""
-
-            return x + 1, x * 2
-
-    log = tl.trace(
-        MultiOut(),
-        torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    container_paths = [layer.container_path for layer in log._layer_list if layer.is_output]
-    assert container_paths

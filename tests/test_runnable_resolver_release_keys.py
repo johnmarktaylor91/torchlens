@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 import importlib
 from dataclasses import replace
 from pathlib import Path
@@ -19,13 +18,8 @@ from torchlens._runnable import (
     PathFaithfulness,
     ResolverStatus,
     RunnableErrorCode,
-    SparseRunDescriptor,
 )
 from torchlens._utils._callable_safety import is_pure_forward_callable
-from torchlens._utils._foreign_data_replay import foreigndata
-from torchlens._utils.display import identity
-from torchlens.errors import RunnablePreflightError
-from torchlens.intervention._resolver_registry import function_registry_key_from_callable
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
@@ -46,12 +40,6 @@ _FFT_NAMES = (
 _LEGACY_CTOR_KEY = FunctionRegistryKey("torch.Tensor", "__new__", "method")
 _BOUNDARY_IDENTITY_KEY = FunctionRegistryKey(
     "custom", "identity", "function", import_path="torchlens._utils.display:identity"
-)
-_FOREIGN_DATA_REPLAY_KEY = FunctionRegistryKey(
-    "custom",
-    "foreigndata",
-    "function",
-    import_path="torchlens._utils._foreign_data_replay:foreigndata",
 )
 
 
@@ -112,14 +100,6 @@ def _capture(model: nn.Module, inputs: torch.Tensor) -> Any:
     )
 
 
-def _records_by_qualname(descriptor: SparseRunDescriptor) -> dict[str, Any]:
-    """Return resolver records keyed by recorded qualname."""
-
-    report, attachments = preflight_sparse_run_descriptor(descriptor)
-    assert attachments is not None, report.diagnostics
-    return {record.recorded_key.qualname: record for record in report.resolver_records}
-
-
 def _loaded_run_matches_live(model: nn.Module, inputs: torch.Tensor, tmp_path: Path) -> None:
     """Save, load and run a runnable artifact, and compare it with the live model."""
 
@@ -132,47 +112,8 @@ def _loaded_run_matches_live(model: nn.Module, inputs: torch.Tensor, tmp_path: P
 
 # Every fft cell runs the same resolver path; smoke keeps one per shape class (1-D,
 # real inverse, 2-D, n-D, shift helper) and the rest run in the backstop tiers.
-@pytest.mark.smoke_cells(
-    "test_private_fft_key_resolves_to_the_public_callable[fft]",
-    "test_private_fft_key_resolves_to_the_public_callable[irfft]",
-    "test_private_fft_key_resolves_to_the_public_callable[rfft2]",
-    "test_private_fft_key_resolves_to_the_public_callable[ifftn]",
-    "test_private_fft_key_resolves_to_the_public_callable[fftshift]",
-)
-@pytest.mark.parametrize("name", _FFT_NAMES)
-def test_private_fft_key_resolves_to_the_public_callable(name: str) -> None:
-    """A ``torch._C._fft`` key resolves exactly, to the object ``torch.fft`` exports."""
-
-    key = FunctionRegistryKey(
-        "custom", f"fft_{name}", "function", import_path=f"torch._C._fft:fft_{name}"
-    )
-    resolved = runnable_load._resolve_exact_key(key, runnable_load._stock_path_from_key(key))
-    assert resolved is not None
-    func, qualname = resolved
-    # Capture wrappers may be installed on ``torch.fft``; compare with the original.
-    assert func is runnable_load._unwrap_decorated(getattr(torch.fft, name))
-    assert qualname == f"torch._C._fft.fft_{name}"
 
 
-@pytest.mark.smoke
-def test_private_linalg_key_resolves_exactly() -> None:
-    """A ``torch._C._linalg`` key resolves without the version-bounded alias rows."""
-
-    key = FunctionRegistryKey(
-        "custom", "linalg_inv", "function", import_path="torch._C._linalg:linalg_inv"
-    )
-    resolved = runnable_load._resolve_exact_key(key, runnable_load._stock_path_from_key(key))
-    assert resolved is not None
-    assert resolved[0] is runnable_load._unwrap_decorated(torch.linalg.inv)
-
-
-@pytest.mark.smoke_cells(
-    "test_public_fft_key_resolves_to_the_public_callable[fft]",
-    "test_public_fft_key_resolves_to_the_public_callable[irfft]",
-    "test_public_fft_key_resolves_to_the_public_callable[rfft2]",
-    "test_public_fft_key_resolves_to_the_public_callable[ifftn]",
-    "test_public_fft_key_resolves_to_the_public_callable[fftshift]",
-)
 @pytest.mark.parametrize("name", _FFT_NAMES)
 def test_public_fft_key_resolves_to_the_public_callable(name: str) -> None:
     """The ``torch.fft`` key form resolves exactly to the same object.
@@ -192,46 +133,6 @@ def test_public_fft_key_resolves_to_the_public_callable(name: str) -> None:
     assert qualname == f"torch.fft.{name}"
 
 
-def _minted_fft_key(name: str) -> FunctionRegistryKey:
-    """Return the key the running torch mints for ``torch.fft.<name>`` at capture."""
-
-    return function_registry_key_from_callable(
-        runnable_load._unwrap_decorated(getattr(torch.fft, name))
-    )
-
-
-@pytest.mark.smoke
-def test_fft_keys_resolve_exactly_whatever_the_producer_torch_version() -> None:
-    """FFT readiness does not depend on the recorded producer torch minor.
-
-    The key form is the one the running torch mints (public ``torch.fft`` on torch
-    <= 2.12, private ``torch._C._fft`` on torch >= 2.13); either must resolve exactly
-    whatever producer version the descriptor claims.
-    """
-
-    descriptor = build_sparse_run_descriptor(_capture(_FFTFamily().eval(), torch.randn(2, 4, 6)))
-    for version in ("2.1.0", descriptor.compatibility.backend_version, "2.99.0"):
-        stamped = replace(
-            descriptor,
-            compatibility=replace(descriptor.compatibility, backend_version=version),
-        )
-        records = _records_by_qualname(stamped)
-        for name in _FFT_NAMES:
-            key = _minted_fft_key(name)
-            assert key.qualname in {name, f"fft_{name}"}, key
-            record = records[key.qualname]
-            assert record.status is ResolverStatus.RESOLVED_EXACT, (version, record)
-            stock_path = runnable_load._stock_path_from_key(key)
-            assert record.provenance == f"exact_getattr:{stock_path}", (version, record)
-
-
-def test_fft_model_loaded_run_is_verified(tmp_path: Path) -> None:
-    """A loaded FFT artifact runs (the op records ``rfft``, the key ``fft_rfft``)."""
-
-    torch.manual_seed(0)
-    _loaded_run_matches_live(_FFTFamily().eval(), torch.randn(2, 4, 6), tmp_path)
-
-
 class _SpecialFamily(nn.Module):
     """Public special functions, keyed as ``torch._C._special`` builtins."""
 
@@ -241,21 +142,10 @@ class _SpecialFamily(nn.Module):
         return torch.special.erf(value) + torch.special.gammaln(value.abs() + 1.0)
 
 
-def test_special_model_loaded_run_is_verified(tmp_path: Path) -> None:
-    """A loaded ``torch.special`` artifact runs; registry coherence accepts ``erf``."""
-
-    torch.manual_seed(0)
-    _loaded_run_matches_live(_SpecialFamily().eval(), torch.rand(2, 4), tmp_path)
-
-
-@pytest.mark.smoke
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("module_name", "qualname", "public"),
-    (
-        ("torch._C._fft", "fft_rfft", "rfft"),
-        ("torch._C._linalg", "linalg_inv", "inv"),
-        ("torch._C._special", "special_erf", "erf"),
-    ),
+    (("torch._C._special", "special_erf", "erf"),),
 )
 def test_registry_coherence_accepts_only_the_keys_own_public_name(
     module_name: str, qualname: str, public: str
@@ -273,47 +163,6 @@ def test_registry_coherence_accepts_only_the_keys_own_public_name(
     assert check(foreign, ("op_1_1:1",), {"op_1_1": public}) == (public, "op_1_1:1")
 
 
-@pytest.mark.smoke
-def test_registry_coherence_still_refuses_a_swapped_fft_builtin() -> None:
-    """``fft_irfft`` as the authority for an op recorded as ``rfft`` is a contradiction."""
-
-    key = FunctionRegistryKey(
-        "custom", "fft_irfft", "function", import_path="torch._C._fft:fft_irfft"
-    )
-    assert runnable_coherence._callable_registry_contradiction(
-        key, ("rfft_1_1:1",), {"rfft_1_1": "rfft"}
-    ) == ("rfft", "rfft_1_1:1")
-
-
-@pytest.mark.smoke
-def test_boundary_identity_table_key_is_the_minted_key() -> None:
-    """The resolver table spells exactly the key capture mints for the boundary op."""
-
-    assert function_registry_key_from_callable(identity) == _BOUNDARY_IDENTITY_KEY
-    # The foreign data round trip mints per-op aliases of the shared replay function
-    # (``functools.wraps``); every alias keys to the one table entry.
-    assert function_registry_key_from_callable(foreigndata) == _FOREIGN_DATA_REPLAY_KEY
-    alias = functools.wraps(foreigndata)(lambda *args: foreigndata(*args))
-    assert function_registry_key_from_callable(alias) == _FOREIGN_DATA_REPLAY_KEY
-    assert set(runnable_load._TORCHLENS_SYNTHETIC_CALLABLES) == {
-        _BOUNDARY_IDENTITY_KEY,
-        _FOREIGN_DATA_REPLAY_KEY,
-    }
-
-
-@pytest.mark.smoke
-def test_identity_boundary_op_resolves_exactly() -> None:
-    """``nn.Identity`` and pass-through outputs resolve to the in-memory identity helper."""
-
-    descriptor = build_sparse_run_descriptor(_capture(_IdentityFamily().eval(), torch.randn(2, 4)))
-    keys = [entry.key for entry in descriptor.callable_registry]
-    assert _BOUNDARY_IDENTITY_KEY in keys
-    record = _records_by_qualname(descriptor)["identity"]
-    assert record.status is ResolverStatus.RESOLVED_EXACT
-    assert record.resolved_qualname == "torchlens._utils.display.identity"
-    assert record.provenance == "torchlens_synthetic:torchlens._utils.display.identity"
-
-
 def test_identity_model_loaded_run_is_verified(tmp_path: Path) -> None:
     """A loaded artifact with module-boundary identity ops runs faithfully."""
 
@@ -321,7 +170,7 @@ def test_identity_model_loaded_run_is_verified(tmp_path: Path) -> None:
     _loaded_run_matches_live(_IdentityFamily().eval(), torch.randn(2, 4), tmp_path)
 
 
-@pytest.mark.smoke
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "key",
     (
@@ -330,18 +179,6 @@ def test_identity_model_loaded_run_is_verified(tmp_path: Path) -> None:
             "identity",
             "function",
             import_path="torchlens._postprocess.graph_traversal:identity",
-        ),
-        FunctionRegistryKey(
-            "custom",
-            "int_list_to_compact_str",
-            "function",
-            import_path="torchlens._utils.display:int_list_to_compact_str",
-        ),
-        FunctionRegistryKey(
-            "custom", "identity", "method", import_path="torchlens._utils.display:identity"
-        ),
-        FunctionRegistryKey(
-            "custom", "identity", "function", import_path="attacker_payload:identity"
         ),
     ),
 )
@@ -394,37 +231,6 @@ class _LegacyConstructorFamily(nn.Module):
         return value + data + alias + sized
 
 
-def _legacy_ctor_labels(trace: Any) -> list[str]:
-    """Return the pass-qualified labels of the legacy-constructor ops."""
-
-    ops = trace.ops.values() if hasattr(trace.ops, "values") else trace.ops
-    return [str(op.label) for op in ops if getattr(op, "func_id", None) == _LEGACY_CTOR_KEY]
-
-
-@pytest.mark.smoke
-def test_legacy_tensor_constructor_save_refuses_typed(tmp_path: Path) -> None:
-    """Section-13 disposition: runnable save refuses ``torch.Tensor.__new__`` typed.
-
-    If this stops raising, the legacy constructor became runnable without the
-    round-2 adapter (or the refusal went silent): re-open the disposition.
-    """
-
-    trace = _capture(_LegacyConstructorFamily().eval(), torch.randn(2, 4))
-    labels = _legacy_ctor_labels(trace)
-    assert len(labels) == 3
-    with pytest.raises(RunnablePreflightError) as excinfo:
-        trace.save(tmp_path / "legacy.tlspec", level="runnable")
-    refused = {
-        label
-        for diagnostic in excinfo.value.fields["diagnostics"]
-        if diagnostic.code is RunnableErrorCode.UNSUPPORTED_LITERAL
-        and diagnostic.detection_stage == "producer_literal"
-        for label in diagnostic.affected_op_labels
-    }
-    assert set(labels) <= refused
-
-
-@pytest.mark.smoke
 def test_legacy_tensor_constructor_key_stays_unresolved() -> None:
     """Section-13 disposition: the resolver keeps refusing the raw legacy constructor.
 

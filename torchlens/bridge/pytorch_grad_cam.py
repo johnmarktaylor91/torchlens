@@ -59,6 +59,18 @@ def cam(  # noqa: PLR0913 -- bridge door mirroring pytorch-grad-cam's constructo
     KeywordConflictError
         ``bridge_gradcam_call_option_conflict`` when one option is given both
         in ``call_kwargs`` and as a keyword.
+
+    Examples
+    --------
+    >>> # requires: pytorch_grad_cam
+    >>> clf = nn.Sequential(
+    ...     nn.Conv2d(3, 4, 3, padding=1), nn.ReLU(), nn.AdaptiveAvgPool2d(1),
+    ...     nn.Flatten(), nn.Linear(4, 3),
+    ... ).eval()
+    >>> trace = tl.trace(clf, x)
+    >>> result = tl.bridge.pytorch_grad_cam.cam(trace, "0")
+    >>> result["cam"].shape
+    (1, 8, 8)
     """
 
     try:
@@ -171,6 +183,12 @@ def layer(trace: Any, site: Any) -> nn.Module:
     InvalidArgumentError
         If the site maps to no module, to sibling modules, or to a module that
         runs more than once (see :func:`torchlens.bridge._utils.module_for_site`).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> tl.bridge.pytorch_grad_cam.layer(trace, "0") is model[0]
+    True
     """
 
     return module_for_site(trace, site, bridge="Grad-CAM")

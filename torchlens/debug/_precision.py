@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from .._debug_report import FoundReport, rows_of
+from .._debug_report import FoundReport, at_source, rows_of
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ._common import _compute_ops, _op_label, _safe_out, _source_line, _tensor_unavailable_reason
 
@@ -93,6 +93,14 @@ class BisectPrecisionReport(FoundReport):
         region cannot be excluded.
     message:
         Human-readable summary.
+
+    Examples
+    --------
+    >>> report = tl.debug.bisect_precision(model, x)
+    >>> isinstance(report, BisectPrecisionReport), report.found
+    (True, False)
+    >>> len(report.rows) > 0
+    True
     """
 
     found: bool
@@ -110,7 +118,9 @@ class BisectPrecisionReport(FoundReport):
 
         findings = [self.message] if self.message else []
         findings.extend(
-            f"{row.label}: max_abs_err={row.max_abs_err:.4g}" for row in self.rows if row.diverged
+            f"{row.label}: max_abs_err={row.max_abs_err:.4g}{at_source(row.source_line)}"
+            for row in self.rows
+            if row.diverged
         )
         return findings
 
@@ -166,6 +176,14 @@ def bisect_precision(
     -------
     BisectPrecisionReport
         First divergence plus the full per-op comparison table.
+
+    Examples
+    --------
+    >>> report = bisect_precision(model, x)
+    >>> report.found, len(report.rows) > 0
+    (False, True)
+    >>> report.max_abs_err is None
+    True
     """
 
     from ..options import CaptureOptions

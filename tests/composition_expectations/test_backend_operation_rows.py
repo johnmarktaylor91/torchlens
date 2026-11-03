@@ -61,7 +61,6 @@ def test_rows_agree_with_the_coarse_authority() -> None:
             )
 
 
-@pytest.mark.smoke
 def test_torch_backend_supports_the_gated_options() -> None:
     """The stable torch backend's rows read supported on the core gates."""
 

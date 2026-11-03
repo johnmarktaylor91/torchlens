@@ -163,12 +163,6 @@ def test_import_inert_without_lit_nlp(monkeypatch: pytest.MonkeyPatch) -> None:
     assert leaked == [], f"importing torchlens.bridge.lit imported {leaked}"
 
 
-def test_stub_surface_is_gone() -> None:
-    """The mock-tested Trace-wrapping stub surface is deleted (M(lit) item 2)."""
-
-    assert not hasattr(tl.bridge.lit, "TorchLensLitModel")
-
-
 def test_attention_argument_refuses_before_anything() -> None:
     """``attention=`` refuses citing the upstream panel deletion (memo D12)."""
 
@@ -176,14 +170,6 @@ def test_attention_argument_refuses_before_anything() -> None:
         tl.bridge.lit.model(object(), object(), attention="heads")
     assert excinfo.value.fields["code"] == "lit_attention_unsupported"
     assert "2024-06-20" in str(excinfo.value)
-
-
-def test_non_module_net_refuses_typed() -> None:
-    """A non-module ``net`` refuses with the live-model teaching message."""
-
-    with pytest.raises(ArgumentTypeError) as excinfo:
-        tl.bridge.lit.model(object(), object())
-    assert excinfo.value.fields["code"] == "lit_trace_not_executable"
 
 
 def test_finished_trace_refuses_typed() -> None:
@@ -196,7 +182,6 @@ def test_finished_trace_refuses_typed() -> None:
     assert "edited text" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_missing_dependency_refuses_typed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Without lit-nlp the factory refuses with the install command."""
 
@@ -211,7 +196,6 @@ def test_missing_dependency_refuses_typed(monkeypatch: pytest.MonkeyPatch) -> No
         tl.bridge.lit.layout()
 
 
-@pytest.mark.smoke
 def test_pooling_validation_refuses_unknown_names() -> None:
     """Unknown pooling spellings refuse with the closed vocabulary."""
 
@@ -221,7 +205,6 @@ def test_pooling_validation_refuses_unknown_names() -> None:
     assert _pooling.validate_pooling("mean_masked") == "mean_masked"
 
 
-@pytest.mark.smoke
 def test_pooling_rank3_mask_awareness_exact() -> None:
     """Mask-aware pooling never averages PAD positions in (memo D10).
 
@@ -250,7 +233,6 @@ def test_pooling_rank3_mask_awareness_exact() -> None:
     assert not torch.equal(last[0], naive_last[0])
 
 
-@pytest.mark.smoke
 def test_pooling_shape_matrix_refusals() -> None:
     """Rank 0/1/5, non-tensors, and geometry mismatches refuse typed."""
 
@@ -267,7 +249,6 @@ def test_pooling_shape_matrix_refusals() -> None:
     assert _pooling.pool("f", torch.ones(2, 3, 4, 4), mask, "mean_masked").shape == (2, 3)
 
 
-@pytest.mark.smoke
 def test_pooling_custom_callable_validated() -> None:
     """A custom pooling callable's result geometry is validated."""
 
@@ -318,17 +299,6 @@ def test_pooling_custom_callable_validated() -> None:
     assert excinfo.value.fields["code"] == "lit_pooling_unsupported"
 
 
-def test_blocks_preset_discovers_stack_and_last_pass() -> None:
-    """Discovery finds ``h.0``-``h.3`` from module-call metadata (memo D7)."""
-
-    log = tl.trace(_StackModel().eval(), torch.randn(2, 8))
-    assert _sites.discover_block_stack(log) == ("h.0", "h.1", "h.2", "h.3")
-    specs = _sites.pin_blocks(log)
-    assert [spec.field_name for spec in specs] == [f"tl_block_{i}" for i in range(4)]
-    assert all(spec.site_key.startswith("s1|") for spec in specs)
-
-
-@pytest.mark.smoke
 def test_blocks_preset_refuses_without_stack() -> None:
     """A model with no repeated stack refuses, naming candidates."""
 
@@ -375,7 +345,6 @@ def test_explicit_site_unresolvable_names_candidates() -> None:
     assert "h.0" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_multipass_site_requires_pass_qualification() -> None:
     """An unqualified multipass site refuses; ``:N`` selects one pass."""
 
@@ -389,7 +358,6 @@ def test_multipass_site_requires_pass_qualification() -> None:
     assert specs[0].field_name == "tl_block_pass2"
 
 
-@pytest.mark.smoke
 def test_resolver_refuses_cross_architecture_drift() -> None:
     """Pins from one wrapper class refuse on another's trace (memo D4).
 
@@ -410,7 +378,6 @@ def test_resolver_refuses_cross_architecture_drift() -> None:
     assert excinfo.value.fields["site_key"] == specs[0].site_key
 
 
-@pytest.mark.smoke
 def test_tokenizer_contract_refuses_typed() -> None:
     """Both tokenizer-contract failures land ``lit_tokenizer_invalid``."""
 
@@ -445,7 +412,6 @@ def test_tokenizer_contract_refuses_typed() -> None:
     assert "pad" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_model_output_extraction_refuses_typed() -> None:
     """Non-tensor and wrong-rank logits land ``lit_model_output_unsupported``."""
 
@@ -476,7 +442,6 @@ def test_capture_incomplete_refusal_is_typed() -> None:
     assert "not be" in str(excinfo.value) and "fabricated" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_salience_unresolvable_embedding_refuses_typed() -> None:
     """A model without ``get_input_embeddings`` lands ``lit_salience_unavailable``."""
 

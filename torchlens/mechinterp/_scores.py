@@ -33,7 +33,7 @@ import torch
 
 from .._errors import PayloadUnavailableError
 from ._errors import refuse
-from ._heads import _attention_modules
+from ._heads import _attention_modules, _select_layers
 
 __all__ = ["FixedPeriodInduction", "HeadScores", "head_scores"]
 
@@ -56,6 +56,12 @@ class FixedPeriodInduction:
     ----------
     period:
         The repeated sequence's length, a positive int.
+
+    Examples
+    --------
+    >>> kind = FixedPeriodInduction(period=3)
+    >>> kind.period
+    3
     """
 
     period: int
@@ -83,6 +89,18 @@ class HeadScores:
     (batch, destination) rows carrying at least one mask-eligible source per
     layer -- a zero count means the score is reported ``None`` (masked),
     never a silent 0.0.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> scores = tl.mechinterp.head_scores(trace, kind="previous_token")
+    >>> isinstance(scores, HeadScores), scores.kind
+    (True, 'previous_token')
     """
 
     kind: str
@@ -185,7 +203,7 @@ def head_scores(
     *,
     kind: str | FixedPeriodInduction = "induction",
     measure: str = "mul",
-    layers: Any = None,
+    modules: Any = None,
     pattern_source: Any = None,
 ) -> HeadScores:
     """Score every head against one taxonomy mask (mikit section 8).
@@ -204,8 +222,8 @@ def head_scores(
         ``mul`` (attention mass on mask-eligible sources, TLens-compatible)
         or ``abs`` (1 - L1/2 distance between the pattern row and the mask
         row distribution).
-    layers:
-        Optional layer selector (indices/addresses, as in head contributions).
+    modules:
+        Optional attention-module selector (indices/addresses, as in head contributions).
     pattern_source:
         Optional callable ``module -> [b, head, dst, src]`` pattern override
         (the SSM pseudo-pattern socket); default reads the ``pattern`` facet.
@@ -215,6 +233,18 @@ def head_scores(
     HeadScoreResult
         Scores with eligible-row disclosure; empty-eligible layers report
         ``None`` scores, never zero.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> scores = tl.mechinterp.head_scores(trace)
+    >>> scores.kind, len(scores.scores)
+    ('induction', 2)
     """
 
     period = kind.period if isinstance(kind, FixedPeriodInduction) else None
@@ -231,11 +261,10 @@ def head_scores(
             message=f"Unknown head-score measure {measure!r}.",
             remedy=f"choose among {list(_MEASURES)}",
         )
-    modules = _attention_modules(trace)
-    if layers is not None:
-        from ._heads import _select_layers
-
-        modules = _select_layers(modules, layers)
+    candidates = _attention_modules(trace)
+    if modules is not None:
+        candidates = _select_layers(candidates, modules)
+    modules = candidates
     if not modules:
         refuse(
             code="mi_head_geometry_unavailable",

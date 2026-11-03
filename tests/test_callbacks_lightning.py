@@ -175,7 +175,7 @@ def test_maybe_profile_restores_every_submodule_training_flag(
     assert after == before
 
 
-# --- SummaryCallback (walk U03.4) -------------------------------------------
+# --- SummaryCallback -------------------------------------------
 
 
 class _SummaryTrainer:

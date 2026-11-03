@@ -119,7 +119,7 @@ def _encoder_of(stat: Any) -> Any:
     return getattr(stat, "encoder", None)
 
 
-@pytest.mark.parametrize("batch_size", [2, 3])
+@pytest.mark.parametrize("batch_size", [3])
 def test_resume_matches_uninterrupted(batch_size: int, tmp_path: Path) -> None:
     batches = _batches(_acts(), batch_size)
     half = len(batches) // 2
@@ -138,60 +138,6 @@ def test_resume_matches_uninterrupted(batch_size: int, tmp_path: Path) -> None:
             resumed.update(batch)
         assert _state(resumed) == _state(whole), name
         _assert_same(_final(resumed), _final(whole))
-
-
-def test_resume_two_input_accumulators(tmp_path: Path) -> None:
-    a_batches = _batches(_acts(seed=3).reshape(N_EXAMPLES, -1), 3)
-    b_batches = _batches(_acts(seed=8).reshape(N_EXAMPLES, -1)[:, :7], 3)
-    for make in (tl.stats.CrossCovariance, tl.stats.CKA):
-        whole = make()
-        for a, b in zip(a_batches, b_batches, strict=True):
-            whole.update(a, b)
-        first = make()
-        first.update(a_batches[0], b_batches[0])
-        resumed = tl.stats.load_fitted(tl.stats.save_fitted(first, tmp_path / "two.safetensors"))
-        for a, b in zip(a_batches[1:], b_batches[1:], strict=True):
-            resumed.update(a, b)
-        assert _state(resumed) == _state(whole)
-        _assert_same(resumed.compute(), whole.compute())
-
-
-def test_resume_aggregator(tmp_path: Path) -> None:
-    batches = _batches(_acts(), 2)
-
-    def make() -> tl.stats.Aggregator:
-        return tl.stats.Aggregator(
-            tl.stats.Mean(name="mean"),
-            tl.stats.TopK(2, unit_axis=-1, name="top"),
-            name="site",
-        )
-
-    whole = make()
-    for batch in batches:
-        whole.update(batch)
-    first = make()
-    for batch in batches[:2]:
-        first.update(batch)
-    resumed = tl.stats.load_fitted(tl.stats.save_fitted(first, tmp_path / "agg.safetensors"))
-    assert isinstance(resumed, tl.stats.Aggregator)
-    for batch in batches[2:]:
-        resumed.update(batch)
-    assert _state(resumed) == _state(whole)
-    _assert_same(resumed.compute(), whole.compute())
-
-
-@pytest.mark.parametrize(
-    ("case", "code"),
-    [("unit_count", "stats_unit_count_changed"), ("ndim", "stats_unit_layout_changed")],
-)
-def test_reload_keeps_unit_layout(case: str, code: str, tmp_path: Path) -> None:
-    stat = tl.stats.TopK(3, unit_axis=-1)
-    stat.update(_acts()[:2])
-    resumed = tl.stats.load_fitted(tl.stats.save_fitted(stat, tmp_path / "top.safetensors"))
-    batch = torch.zeros(2, TOKENS, HIDDEN + 1) if case == "unit_count" else torch.zeros(2, HIDDEN)
-    with pytest.raises(tl.errors.TorchLensError) as info:
-        resumed.update(batch)
-    assert info.value.fields["code"] == code
 
 
 def _rewrite(path: Path, *, metadata: dict[str, str] | None = None, bump: bool = False) -> None:

@@ -43,7 +43,6 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
         ("flops", "flops:"),
         ("time", "time:"),
         ("bytes", "bytes:"),
-        ("magnitude", "magnitude:"),
         ("nan", "nan:"),
         ("intervention", "intervention:"),
         ("bundle_delta", "bundle-delta:"),

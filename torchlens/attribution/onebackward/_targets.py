@@ -65,6 +65,14 @@ def seed(site: Any, *, index: Any = None, cotangent: Any = None) -> SeedTarget:
     -------
     SeedTarget
         Frozen request; validation happens at read time against the trace.
+
+    Examples
+    --------
+    >>> target = tl.attribution.seed("output_1", index=(0, 0))
+    >>> type(target).__name__
+    'SeedTarget'
+    >>> target.index
+    (0, 0)
     """
 
     normalized_index = tuple(int(part) for part in index) if index is not None else None

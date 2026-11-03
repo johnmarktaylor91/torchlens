@@ -46,14 +46,6 @@ class _BudgetTrace:
         self._save_budget_accountant = SaveBudget.from_option(budget_bytes)
 
 
-def _same_guard(model: nn.Module) -> Any:
-    """The guard of validation's first attempt on its copy under ``output_device="same"``."""
-
-    references = arg_references.ParameterArgumentReferences(arg_references._parameter_owners(model))
-    assert not references.offloads
-    return references
-
-
 def _admit(references: Any, *t_args: Any) -> Any:
     token = arg_references._ACTIVE.set(references)
     try:
@@ -111,51 +103,14 @@ def _validate(model: nn.Module, x: torch.Tensor, **options: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def test_same_guard_admission_charges_nothing_for_a_parameter_alias() -> None:
-    model = nn.Linear(16, 16)
-    same = _same_guard(model)
-    alias = model.weight.detach()
-    assert same.shares_parameter_storage(alias)
-    assert _admit(same, alias) == []
-    assert _admit(same, model.weight, model.bias) == []
-
-
-def test_same_guard_still_charges_non_alias_arguments_in_full() -> None:
-    model = nn.Linear(16, 16)
-    same = _same_guard(model)
-    for value in (torch.zeros_like(model.weight), model.weight.detach().clone(), torch.ones(17)):
-        assert not same.shares_parameter_storage(value)
-        with pytest.raises(SaveBudgetExceededError):
-            _admit(same, value)
-    with pytest.raises(SaveBudgetExceededError):
-        _admit(same, model.weight, torch.ones(17))
-
-
-def test_same_guard_commit_charges_a_saved_alias_nothing_and_a_clone_in_full() -> None:
-    model = nn.Linear(16, 16)
-    same = _same_guard(model)
-    _admit_and_commit(same, model.weight.detach())
-    with pytest.raises(SaveBudgetExceededError):
-        _admit_and_commit(same, model.weight.detach().clone())
-
-
-def test_a_rebound_parameter_storage_is_charged_again_under_same() -> None:
-    model = nn.Linear(16, 16)
-    same = _same_guard(model)
-    stale = model.weight.detach()
-    model.weight.data = torch.zeros(16, 16)
-    assert not same.shares_parameter_storage(stale)
-    with pytest.raises(SaveBudgetExceededError):
-        _admit(same, stale)
-
-
 def _admit_under_the_active_guard(model: nn.Module) -> Any:
     return _ops_retention._admit_saved_args_budget(
         _BudgetTrace(_TIGHT), {"_label_raw": "op"}, (model.weight,), {}
     )
 
 
-@pytest.mark.parametrize("output_device", ["same", "cpu"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("output_device", ["cpu"])
 def test_clone_path_rerun_and_live_model_guards_charge_parameters(output_device: str) -> None:
     model = nn.Linear(16, 16)
     sessions = [
@@ -173,14 +128,6 @@ def test_clone_path_rerun_and_live_model_guards_charge_parameters(output_device:
             arg_references._SESSION.reset(token)
 
 
-def test_outside_validation_parameters_are_charged() -> None:
-    model = nn.Linear(16, 16)
-    assert arg_references.active_argument_references() is None
-    assert _ops_arguments._uncharged_parameter_aliases((model.weight,)) == set()
-    with pytest.raises(SaveBudgetExceededError):
-        _admit_under_the_active_guard(model)
-
-
 # ---------------------------------------------------------------------------
 # End to end on the CPU (output_device="same")
 # ---------------------------------------------------------------------------
@@ -190,13 +137,6 @@ def test_parameter_aliases_alone_do_not_trip_the_budget_on_same() -> None:
     torch.manual_seed(0)
     model, x = nn.Linear(256, 256), torch.randn(2, 256)
     assert _validate(model, x, output_device="same", save_budget=_BELOW_WEIGHTS)
-
-
-def test_a_tight_budget_still_refuses_real_copies_on_same() -> None:
-    torch.manual_seed(0)
-    model, x = _Offsets(), torch.randn(64, 6)
-    with pytest.raises(SaveBudgetExceededError):
-        _validate(model, x, output_device="same", save_budget=256)
 
 
 def test_a_cloned_parameter_is_still_charged_on_same() -> None:
@@ -266,9 +206,3 @@ def _validate_corrupted(corrupt: Any) -> tuple[bool, list[str]]:
 def test_a_corrupted_saved_argument_still_fails_on_same() -> None:
     verdict, _ = _validate_corrupted(_corrupt_relu_input)
     assert verdict is False
-
-
-def test_a_changed_live_parameter_still_fails_on_same() -> None:
-    verdict, checks = _validate_corrupted(_corrupt_saved_weight)
-    assert verdict is False
-    assert arg_references.FALLBACK_CHECK in checks

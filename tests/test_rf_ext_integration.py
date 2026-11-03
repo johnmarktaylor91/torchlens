@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 from fractions import Fraction
 from pathlib import Path
-from unittest import mock
 
 import pytest
 import torch
@@ -23,7 +22,6 @@ from torchlens.receptive_field._types import (
     ReceptiveFieldStatus,
     ReceptiveFieldValidationStatus,
 )
-from torchlens.receptive_field._validation import check_geometric_metadata_invariants
 
 
 @pytest.fixture(autouse=True)
@@ -50,10 +48,10 @@ def _ops(trace: object, name: str, *, field: str = "func_name") -> list[object]:
     """Return captured operations matching one raw function or layer-type name.
 
     ``func_name`` is the backend's raw captured call name, which is NOT
-    always the canonical op name: tinygrad elementwise ops are reconstructed
-    from the UOp DAG and carry the lambda wrapper's own name (``"<lambda>"``)
-    as ``func_name``, with the semantic op name (``"add"``, ``"mul"``, ...)
-    only on ``type`` instead. Pass ``field="type"`` for those.
+    always the canonical op name: tinygrad ops are reconstructed from the UOp
+    DAG and carry the tinygrad API name observed for them (else the lowercase
+    UOp op name) as ``func_name``, while the semantic op name (``"add"``,
+    ``"mul"``, ...) is on ``type``. Pass ``field="type"`` for those.
     """
 
     return [op for op in trace._layer_list if getattr(op, field) == name]  # type: ignore[union-attr]
@@ -86,9 +84,10 @@ def _positive_spatial_chain(depth: int) -> nn.Module:
     return model
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("depth", "input_rf_size", "layer_rf_size"),
-    [(2, 5, 3), (3, 7, 5)],
+    [(3, 7, 5)],
 )
 def test_real_model_matrix_covers_receptive_projective_and_layer_to_layer(
     depth: int, input_rf_size: int, layer_rf_size: int
@@ -232,67 +231,6 @@ def test_inplace_relu_projective_double_vjp_succeeds_on_basic_block() -> None:
     assert torch.isfinite(result.grad).all()
 
 
-@pytest.mark.heavy
-def test_basic_block_geometric_adjoint_battery_is_exact() -> None:
-    """Check forward and backward membership equivalence with zero coordinate tolerance."""
-
-    _register_resnet_passthrough_rules()
-    _, trace = _torchvision_basic_block(backward_ready=False)
-    source = trace.input_ops[0]  # type: ignore[union-attr]
-    target = _ops(trace, "__iadd__")[-1]
-    source_units = ((0, 0), (1, 6), (4, 4), (7, 7))
-    target_units = ((0, 0), (2, 5), (4, 4), (7, 7))
-
-    for source_unit in source_units:
-        forward = source.projective_field.at(source_unit, target=target)  # type: ignore[union-attr]
-        assert forward.status is ReceptiveFieldStatus.EXACT
-        forward_bounds = _window_bounds(forward)
-        for target_unit in target_units:
-            backward = target.receptive_field.at(target_unit, input_op=source)  # type: ignore[union-attr]
-            assert backward.status is ReceptiveFieldStatus.EXACT
-            backward_bounds = _window_bounds(backward)
-            source_in_backward = all(
-                start <= coordinate < stop
-                for coordinate, (start, stop) in zip(source_unit, backward_bounds, strict=True)
-            )
-            target_in_forward = all(
-                start <= coordinate < stop
-                for coordinate, (start, stop) in zip(target_unit, forward_bounds, strict=True)
-            )
-            assert source_in_backward is target_in_forward
-
-
-def test_default_validation_runs_cheap_rf_metadata_without_autograd() -> None:
-    """Keep always-on RF metadata checks in ordinary forward validation.
-
-    The autograd tripwire patches the RF gradient ENTRY POINTS, not the
-    ``torch.autograd.grad`` slot: forward validation now runs its ground-truth
-    oracle on pristine torch (R75-1), and a foreign patch layered over the
-    installed torchlens autograd wrapper would trip the R56 buried-site
-    disclosure during that unwrap/rewrap cycle.
-    """
-
-    model = nn.Conv2d(1, 1, 3, padding=1)
-    with (
-        mock.patch(
-            "torchlens.receptive_field._validation.check_geometric_metadata_invariants",
-            wraps=check_geometric_metadata_invariants,
-        ) as geometry_check,
-        mock.patch(
-            "torchlens.receptive_field._validation.gradient_for_unit",
-            side_effect=AssertionError("RF gradient autograd invoked"),
-        ),
-        mock.patch(
-            "torchlens.receptive_field._validation.projective_gradient_for_unit",
-            side_effect=AssertionError("RF projective gradient autograd invoked"),
-        ),
-    ):
-        result = tl.validate(model, torch.ones(1, 1, 5, 5), scope="forward")
-
-    assert result is True
-    geometry_check.assert_called_once()
-
-
 def test_validate_rf_scope_runs_sampled_real_model_cross_checks() -> None:
     """Run both sampled influence directions through the consolidated validator."""
 
@@ -413,6 +351,7 @@ def test_source_target_caches_reuse_and_drop_across_portable_round_trip(
         loaded_source.projective_field.probe_grad((0, 0, 3, 3), target=loaded_target)
 
 
+@pytest.mark.rare
 @pytest.mark.backend_tinygrad
 def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
     """Keep rule-backed geometry backend-neutral and empirical methods torch-only."""

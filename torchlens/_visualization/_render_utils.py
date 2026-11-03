@@ -24,10 +24,14 @@ import warnings
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
-import graphviz
-
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
+from ._frame_penwidth import (  # noqa: F401  (spellings kept for importers)
+    MAX_MODULE_PENWIDTH,
+    MIN_MODULE_PENWIDTH,
+    PENWIDTH_RANGE,
+    compute_module_penwidth,
+)
 from ._render_names import DEFAULT_DRAW_STEM  # noqa: F401  (spelling kept for importers)
 
 #: Live viewer child handles (r-b6 R40-1). Retained so every launch can reap
@@ -147,7 +151,7 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
 
 
 if TYPE_CHECKING:
-    pass
+    import graphviz
 
 
 # Recognised file extensions that callers may include on ``vis_outpath``.
@@ -222,15 +226,6 @@ def run_bounded_subprocess(
         ) from exc
 
 
-# -- Module subgraph border widths (shared between Trace and bundle paths)
-# Outermost modules get the thickest border; deeper modules thin out by depth
-# fraction so visual hierarchy reads at a glance.  These constants are the
-# canonical source for both ``_render_dot.py`` and the bundle renderer.
-MAX_MODULE_PENWIDTH = 5
-MIN_MODULE_PENWIDTH = 2
-PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
-
-
 _VISUALIZER_DIR_MARKER = "torchlens_visualizers_"
 
 
@@ -255,6 +250,38 @@ def relativize_visualizer_image(path: str) -> str:
     if separator_index == -1:
         return path
     return path[separator_index + 1 :]
+
+
+def resolve_draw_outpath(
+    vis_outpath: str | None, fileformat: str, announce_path: bool | None
+) -> tuple[str, bool]:
+    """Return the stem a draw writes under and whether it announces the path.
+
+    Parameters
+    ----------
+    vis_outpath:
+        User-provided render output path, or ``None`` for a bare draw.
+    fileformat:
+        Rendered file format.
+    announce_path:
+        Explicit announce choice, or ``None`` to announce exactly for a bare draw.
+
+    Returns
+    -------
+    tuple[str, bool]
+        Output stem without a render extension, and the announce flag.
+    """
+    # a bare draw (no vis_outpath) writes a collision-safe file and
+    # always prints where; an explicit path is written exactly, as before.
+    # ``Trace.draw`` resolves the collision-safe path itself and says so.
+    if announce_path is None:
+        announce_path = vis_outpath is None
+    resolved_outpath = (
+        collision_safe_outpath(DEFAULT_DRAW_STEM, fileformat)
+        if vis_outpath is None
+        else strip_known_extension(vis_outpath)
+    )
+    return resolved_outpath, announce_path
 
 
 def collision_safe_outpath(stem: str, fileformat: str) -> str:
@@ -342,23 +369,6 @@ def direction_to_rankdir(direction: str) -> str:
         remedy="pass direction='bottomup', 'topdown', 'leftright', or 'rightleft'",
         argument="direction",
     )
-
-
-def compute_module_penwidth(call_depth: int, max_call_depth: int) -> float:
-    """Return the cluster border width for a module at ``call_depth``.
-
-    ``call_depth`` is 0-based (outermost is depth 0).  Outermost modules
-    get the maximum penwidth; deepest modules get the minimum.  When the
-    overall hierarchy has only one level (``max_call_depth == 0`` or
-    ``1``) we still return a sensible value so callers don't have to
-    special-case shallow models.
-    """
-
-    if max_call_depth <= 0:
-        return float(MIN_MODULE_PENWIDTH + PENWIDTH_RANGE)
-    nesting_fraction = (max_call_depth - call_depth) / max_call_depth
-    nesting_fraction = max(0.0, min(1.0, nesting_fraction))
-    return MIN_MODULE_PENWIDTH + nesting_fraction * PENWIDTH_RANGE
 
 
 def html_escape(value: str) -> str:

@@ -101,6 +101,7 @@ def _rewrite_manifest(artifact: Path, mutate) -> None:
     manifest_path.write_text(json.dumps(data), encoding="utf-8")
 
 
+# Kept: sole branch coverage of _io/bundle.py, _io/manifest.py, validation/__init__.py; a sole mutation kill.
 def test_every_toplevel_key_deletion_is_adjudicated(seed_artifact: Path, tmp_path: Path) -> None:
     """Deleting each discovered key: typed refusal or ledgered tolerance.
 
@@ -133,6 +134,7 @@ def test_every_toplevel_key_deletion_is_adjudicated(seed_artifact: Path, tmp_pat
     )
 
 
+# Kept: sole branch coverage of _io/bundle.py, _io/manifest.py, validation/__init__.py; a sole mutation kill.
 def test_every_toplevel_key_type_swap_is_typed_refusal(seed_artifact: Path, tmp_path: Path) -> None:
     """Swapping each discovered key's type must raise ArtifactError."""
 
@@ -155,6 +157,7 @@ def test_every_toplevel_key_type_swap_is_typed_refusal(seed_artifact: Path, tmp_
     assert not survivors, f"type-swapped manifest keys escaped the typed refusal: {survivors}"
 
 
+# Kept: sole branch coverage of _io/manifest.py, _io/paths.py, _io/rehydrate.py; a sole mutation kill.
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -176,6 +179,7 @@ def test_tensor_entry_mutations_are_typed_refusals(
         tl.load(str(artifact))
 
 
+# Kept: sole branch coverage of _io/_json.py, _io/_pickle_prescan.py, _io/_safe_unpickle.py and more; a sole mutation kill.
 def test_seeded_truncations_are_typed_refusals(seed_artifact: Path, tmp_path: Path) -> None:
     """Seeded truncations of manifest and metadata must refuse typed."""
 
@@ -206,39 +210,7 @@ def test_seeded_truncations_are_typed_refusals(seed_artifact: Path, tmp_path: Pa
         )
 
 
-def test_seeded_manifest_byte_flips_never_escape_untyped(
-    seed_artifact: Path, tmp_path: Path
-) -> None:
-    """Random byte flips: typed refusal or clean load, never stack soup.
-
-    A flip landing in an insignificant JSON position can legitimately load;
-    the tripwire is the third outcome — an UNTYPED exception leaking from the
-    parse path.
-    """
-
-    rng = random.Random(_BYTE_FLIP_SEED)
-    manifest_bytes = (seed_artifact / "manifest.json").read_bytes()
-    escapes: list[str] = []
-    for index in range(12):
-        artifact = _corrupt_copy(seed_artifact, tmp_path)
-        flipped = bytearray(manifest_bytes)
-        offset = rng.randrange(len(flipped))
-        flipped[offset] ^= 0xFF
-        (artifact / "manifest.json").write_bytes(bytes(flipped))
-        try:
-            loaded = tl.load(str(artifact))
-        except ArtifactError:
-            continue
-        except Exception as exc:  # noqa: BLE001 - adjudicating the full surface
-            escapes.append(f"case {index} offset {offset}: {type(exc).__name__}: {exc}")
-        else:
-            loaded.cleanup()
-    assert not escapes, (
-        f"manifest byte flips escaped the typed surface (seed {_BYTE_FLIP_SEED}; reproduce "
-        f"with TORCHLENS_FUZZ_SEED): {escapes}"
-    )
-
-
+# Kept: sole branch coverage of _io/_json.py; a sole mutation kill; the catch of its regression fault.
 def test_non_utf8_manifest_byte_is_typed_refusal(seed_artifact: Path, tmp_path: Path) -> None:
     """R73: a non-UTF8 manifest byte refuses typed, never a raw decode error.
 
@@ -256,6 +228,7 @@ def test_non_utf8_manifest_byte_is_typed_refusal(seed_artifact: Path, tmp_path: 
         tl.load(str(artifact))
 
 
+# Kept: sole branch coverage of _io/bundle.py, _io/format_errors.py; a sole mutation kill.
 def test_blob_corruption_is_typed_refusal(seed_artifact: Path, tmp_path: Path) -> None:
     """Blob deletion, truncation, and byte flips must all refuse typed."""
 

@@ -14,14 +14,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes.trace import Trace
 from torchlens._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
     StructureOnlyOptionConflictError,
 )
-from torchlens._io import FieldPolicy
-from torchlens._io.prerelease import registered_prerelease_fields
 from torchlens.backends.registry import get_backend_spec
 from torchlens.options import CaptureOptions
 
@@ -58,14 +55,6 @@ def test_structure_only_defaults_false_and_validates_bool() -> None:
     assert excinfo.value.fields["code"] == "structure_only_type_invalid"
 
 
-def test_grouped_structure_only_reaches_the_field() -> None:
-    from torchlens.options import CaptureOptions
-
-    merged = CaptureOptions(structure_only=True)
-    assert merged.structure_only is True
-    assert merged._is_field_explicit("structure_only")
-
-
 def test_non_torch_backend_refuses_explicit_structure_only_typed() -> None:
     """The capability-gate row: a backend without structure_only_capture
     refuses the explicit option instead of silently ignoring it."""
@@ -90,24 +79,6 @@ def test_torch_declares_and_binds_the_structure_only_capability() -> None:
 # ---------------------------------------------------------------------------
 # Entry matrix: E-1 (all-real degenerate form (b)) and E-6 (flag off)
 # ---------------------------------------------------------------------------
-
-
-def test_e1_all_real_flag_on_capture_is_marked_gated_and_payload_free() -> None:
-    log = _structure_capture()
-    assert log.options.structure_only is True
-    # No value payloads are retained anywhere: the contract records structure
-    # and shape/dtype hypotheses only.
-    for layer in log._layer_list:
-        assert getattr(layer, "out", None) is None
-    # The structural record itself is intact.
-    assert len(log._layer_list) >= 3  # input + linear + relu
-    assert tuple(log["relu_1_2"].shape) == (2, 4)
-
-
-def test_e6_flag_off_default_capture_is_zero_diff() -> None:
-    log = tl.trace(TwoLayer(), torch.randn(2, 4))
-    assert log.options.structure_only is False
-    assert log["relu_1_2"].out is not None
 
 
 # ---------------------------------------------------------------------------
@@ -194,31 +165,6 @@ def test_streaming_sink_refuses_typed(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "structure_only_values_unsupported"
 
 
-def test_explicit_metadata_only_save_stays_legal() -> None:
-    log = tl.trace(
-        TwoLayer(),
-        torch.randn(2, 4),
-        capture=CaptureOptions(structure_only=True),
-        save="none",
-    )
-    assert log.options.structure_only is True
-
-
 # ---------------------------------------------------------------------------
 # Mode marker: ACTIVE since the coordinated tlspec v8 bump
 # ---------------------------------------------------------------------------
-
-
-def test_mode_marker_persists_and_left_the_prerelease_registrar() -> None:
-    """The marker is a live persisted field now, not a DROP-gated one.
-
-    Pre-bump this test asserted the inverse (DROP + prerelease-registered), which
-    was the correct invariant while the S3 registrar held the field. The
-    coordinated v8 bump flipped every gated family to its intended policy and
-    retired the registrar to empty, so the honest invariant is the opposite one:
-    the marker persists, and nothing still gates it.
-    """
-
-    assert Trace._PORTABLE_STATE_SPEC["_options_structure_only"] is FieldPolicy.KEEP
-    inventory = registered_prerelease_fields()
-    assert "_options_structure_only" not in inventory.get("Trace", ())

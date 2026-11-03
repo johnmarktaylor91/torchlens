@@ -17,7 +17,7 @@ import pytest
 
 from tests.conformance._graduation import GraduationItem
 from tests.conformance._scorecard import PreviewScorecard, shipped_scorecard
-from torchlens.backends.registry import get_backend_spec, registered_backend_specs
+from torchlens.backends.registry import registered_backend_specs
 
 #: The graduation item ids (SPEC section 5), in report order.
 GRADUATION_ITEM_IDS: tuple[str, ...] = ("G1", "G2", "G3", "G4", "G5", "G6")
@@ -58,15 +58,6 @@ def stable_label_problems(backend: str, card: PreviewScorecard | None) -> list[s
         elif item.met is not True:
             problems.append(f"graduation item {item_id} is not met: {item.detail}")
     return problems
-
-
-def test_spec_and_protocol_carry_one_maturity() -> None:
-    """The spec's label and its protocol object's label are the same value."""
-
-    specs = _registered_specs()
-    assert specs, "no backend registers a protocol"
-    for spec in specs:
-        assert spec.maturity == spec.protocol().maturity, spec.name
 
 
 def test_torch_is_the_registered_stable_reference() -> None:
@@ -130,10 +121,3 @@ def test_missing_items_and_missing_records_break_the_stable_label() -> None:
     assert stable_label_problems("torch", record) == ["graduation item G6 is missing"]
     assert stable_label_problems("torch", None) == ["torch is stable but ships no scorecard.json"]
     assert len(stable_label_problems("torch", replace(_record(), maturity="preview"))) == 1
-
-
-def test_a_well_formed_stable_record_passes() -> None:
-    """The checker accepts a record with every item met."""
-
-    assert stable_label_problems("torch", _record()) == []
-    assert get_backend_spec("torch").protocol().maturity == "stable"

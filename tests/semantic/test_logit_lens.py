@@ -92,35 +92,6 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, save="all")
 
 
-def test_lm_head_recipe_exposes_unembedding_facets() -> None:
-    """The language_model_head recipe anchors head and final-norm facets."""
-
-    torch.manual_seed(0)
-    model = TinyLM().eval()
-    log = _capture(model, torch.randn(2, 3, 8))
-    view = log.modules["self"].facets
-
-    assert view.final_norm_kind == "layer_norm"
-    assert view.final_norm_eps == pytest.approx(1e-5)
-    assert view.unembed_weight.value.shape == (11, 8)
-    assert view.final_norm_gamma.value.shape == (8,)
-    assert view.logits.value.shape == (2, 3, 11)
-    assert view.declared()["unembed_bias"].status == "structurally_absent"
-
-
-@_requires_rmsnorm
-def test_lm_head_recipe_classifies_rms_norm_without_beta() -> None:
-    """RMSNorm-family final norms classify as rms_norm with beta absent."""
-
-    torch.manual_seed(0)
-    model = TinyLM(norm=nn.RMSNorm(8)).eval()
-    log = _capture(model, torch.randn(2, 3, 8))
-    view = log.modules["self"].facets
-
-    assert view.final_norm_kind == "rms_norm"
-    assert view.declared()["final_norm_beta"].status == "structurally_absent"
-
-
 def test_logit_lens_validates_and_matches_real_logits_layer_norm() -> None:
     """The reconstructed LayerNorm lens validates and reproduces final logits."""
 
@@ -184,10 +155,10 @@ def test_logit_lens_user_lens_and_layer_selection() -> None:
     assert result.is_validated is False
     assert torch.equal(result.entries[0].logits, torch.zeros(2, 3, 11))
 
-    subset = logit_lens(log, layers=["transformer.h.0"])
+    subset = logit_lens(log, modules=["transformer.h.0"])
     assert [entry.address for entry in subset.entries] == ["transformer.h.0"]
     with pytest.raises(LogitLensError, match="do not expose facet"):
-        logit_lens(log, layers=["transformer.ln_f"])
+        logit_lens(log, modules=["transformer.ln_f"])
     with pytest.raises(LogitLensError, match="missing entries"):
         logit_lens(log, lens={"transformer.h.0": lambda hidden: hidden})
 
@@ -218,7 +189,6 @@ def test_logit_lens_refuses_without_head_facets() -> None:
     assert head_exc.value.fields["code"] == "logit_lens_head_unavailable"
 
 
-@pytest.mark.smoke
 def test_logit_lens_top_tokens_and_summary_shapes() -> None:
     """Result accessors decode top tokens and format the per-layer table."""
 

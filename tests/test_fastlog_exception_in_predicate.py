@@ -24,7 +24,7 @@ def test_predicate_exception_propagates() -> None:
             nn.Sequential(nn.Linear(3, 3), nn.ReLU()),
             torch.ones(1, 3),
             save=keep_op,
-            on_predicate_error="fail-fast",
+            recording=tl.options.RecordingOptions(on_predicate_error="fail-fast"),
         )
     assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
