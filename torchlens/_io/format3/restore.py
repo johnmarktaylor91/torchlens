@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import inspect
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import cache
+from pathlib import Path
 from typing import Any, Final
 
 from ..._data_classes._state_adapter import state_restore
 from ..._data_classes.field_policy import StorageKind
+from . import contract
 from .decode import CELL_CODE, cell_error
 from .schema import record_schema
 from .values import tuple_subtypes
@@ -159,3 +161,23 @@ def loaded_persistent_buffer_universe(descriptor: Any) -> dict[str, dict[str, An
             "device": device,
         }
     return universe
+
+
+def _stamp_loaded_context(
+    trace: Any,
+    manifest: Mapping[str, Any],
+    root: Path,
+    parse_provenance: Callable[[dict[str, Any]], Any],
+    file_digest: Callable[[Path], str],
+) -> None:
+    """Retain validated artifact origin and capture-time provenance on the loaded trace."""
+
+    trace._loaded_from_bundle = True
+    trace._source_bundle_manifest_sha256 = file_digest(root / contract.MANIFEST_FILE)
+    trace._source_bundle_path = root
+    trace._source_bundle_created_at = manifest["created_at"]
+    # Keep the original certificate rather than re-deriving weaker capture facts.
+    raw_provenance = manifest.get("provenance")
+    trace._source_bundle_provenance = (
+        parse_provenance(raw_provenance) if isinstance(raw_provenance, dict) else None
+    )
