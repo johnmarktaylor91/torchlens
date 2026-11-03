@@ -171,6 +171,7 @@ def _execution_forbidden(*args: Any, **kwargs: Any) -> None:
     ("mutation", "expected_code"),
     [
         ("missing", RunnableErrorCode.STATE_MISSING_KEY),
+        ("unexpected", RunnableErrorCode.STATE_UNEXPECTED_KEY),
         ("dtype", RunnableErrorCode.STATE_DTYPE_MISMATCH),
     ],
 )

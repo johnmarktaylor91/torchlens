@@ -155,7 +155,7 @@ def test_runnable_preflight_rejects_unregistered_tensor_constant(tmp_path: Path)
 
 
 # shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
-@pytest.mark.parametrize("operand_count", (5))
+@pytest.mark.parametrize("operand_count", (5,))
 def test_runnable_internal_einsum_identity_save_load_and_run_verified(
     tmp_path: Path, operand_count: int
 ) -> None:

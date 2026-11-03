@@ -8514,6 +8514,7 @@ test-docstrings	tests/test_quickstart_realmodel.py	18,
 test-docstrings	tests/test_quickstart_realmodel.py	64
 test-docstrings	tests/test_quickstart_resolver_matrix.py	12
 test-docstrings	tests/test_quickstart_resolver_matrix.py	14
+test-docstrings	tests/test_r10_container_rce.py	64
 test-docstrings	tests/test_r12_import_ref_rce.py	10
 test-docstrings	tests/test_r12_import_ref_rce.py	12
 test-docstrings	tests/test_r18a_compat_report.py	37

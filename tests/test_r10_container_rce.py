@@ -173,6 +173,38 @@ def test_tampered_container_type_denies_code_execution(
 # --------------------------------------------------------------------------- #
 
 
+def test_container_tripwire_is_a_registered_typed_refusal() -> None:
+    """The default-deny tripwire is public, typed, and structured (R64-3).
+
+    It escapes users raw from the documented ``Op.multi_output_type``
+    property, so it must resolve from ``torchlens.errors``, carry the
+    contract code ``container_spec_inadmissible`` plus a remedy, and keep
+    its ``ValueError`` lineage for the runnable run wrapper. Pickle and
+    deepcopy round-trips keep the structured payload (the R64 pickle-family
+    defect class).
+    """
+
+    import copy
+
+    from torchlens import errors as tl_errors
+
+    assert tl_errors.ContainerReconstructionError is ContainerReconstructionError
+
+    spec = ContainerSpec(
+        kind="namedtuple",
+        fields=("args",),
+        type_module="subprocess",
+        type_qualname="Popen",
+    )
+    with pytest.raises(tl_errors.ContainerReconstructionError) as captured:
+        _resolve_container_type(spec)
+    assert isinstance(captured.value, ValueError)
+    assert captured.value.fields["code"] == "container_spec_inadmissible"
+    assert captured.value.fields["remedy"]
+    for clone in (pickle.loads(pickle.dumps(captured.value)), copy.deepcopy(captured.value)):
+        assert clone.fields == captured.value.fields
+
+
 def test_resolver_never_imports_an_unloaded_attacker_module() -> None:
     """A container type naming an unloaded module is refused WITHOUT importing it."""
 
