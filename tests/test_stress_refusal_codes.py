@@ -13,6 +13,7 @@ production raise site and pin the sparse capture.
 
 from __future__ import annotations
 
+import contextlib
 from types import SimpleNamespace
 from typing import Any
 
@@ -328,10 +329,10 @@ def test_spsolve_arg_spec_extracts_both_operands() -> None:
     assert extract_tensors_and_params(spec, (a, b), {}) == ([a, b], [])
     assert extract_tensors_and_params(spec, (), {"A": a, "B": b, "left": True}) == ([a, b], [])
     if hasattr(torch.sparse, "spsolve"):
-        try:  # a wrong keyword name raises TypeError before any backend dispatch
+        # A wrong keyword name raises TypeError before dispatch; a build with no CPU
+        # kernel raises after the keywords parsed.
+        with contextlib.suppress(NotImplementedError, RuntimeError):
             torch.sparse.spsolve(A=a, B=b)
-        except (NotImplementedError, RuntimeError):
-            pass  # no CPU kernel on this build; the keywords parsed
 
 
 def test_sampled_addmm_and_spdiags_bind_their_spec_keywords() -> None:
