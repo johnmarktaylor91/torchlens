@@ -157,7 +157,15 @@ def map_causal_to_child(
     query_min, query_max = query_bounds
     exact = exact and key_max <= query_min + spec.offset
     upper = min(query_max + spec.offset, child_shape[spec.key_axis] - 1)
-    mapped[spec.query_axis] = parent_sets[spec.query_axis]
+    # A query row reads keys up to ``row + offset``, so a row below the lowest
+    # affected key sees none of them: the mask narrows the query axis too.
+    floor = max(key_min - spec.offset, 0)
+    parent_query = parent_sets[spec.query_axis]
+    if floor > query_min:
+        mapped[spec.query_axis] = _IndexSet.interval(floor, query_max)
+        exact = False
+    else:
+        mapped[spec.query_axis] = parent_query
     mapped[spec.key_axis] = _IndexSet.interval(0, upper)
     return tuple(mapped), exact and _uniform_windows(spec, query_min, query_max)
 
