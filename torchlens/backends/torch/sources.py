@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture._lazy_contexts import LazyContextHistory, lazy_history_of, tensor_fields
 from ..._capture.predicates import _evaluate_halt, _evaluate_keep_op, _is_halt_only_capture
 from ..._capture.projections import (
     _build_record_context,
@@ -116,7 +117,11 @@ def log_source_tensor(
     if self._options_mode == "exhaustive":
         log_source_tensor_exhaustive(self, t, source, extra_address)
     elif self._options_mode == "predicate":
-        log_source_tensor_predicate(self, t, source, extra_address)
+        history = lazy_history_of(get_active_recording_state())
+        if history is None:
+            log_source_tensor_predicate(self, t, source, extra_address)
+        else:
+            _log_source_tensor_lazy(self, history, t, source, extra_address)
 
 
 def log_closure_constant_if_known(self: "Trace", t: torch.Tensor) -> bool:
@@ -162,6 +167,57 @@ def _emit_source_echo(trace: "Trace", ctx: Any) -> None:
     echo_session = trace.__dict__.get("_echo_session")
     if echo_session is not None:
         echo_session.emit_source(ctx)
+
+
+def _log_source_tensor_lazy(
+    self: "Trace",
+    history: LazyContextHistory,
+    t: torch.Tensor,
+    source: str,
+    extra_addr: str | None,
+) -> None:
+    """Label an input or buffer of a lean module read and defer its context.
+
+    Matches ``log_source_tensor_predicate`` on a pass with deferred contexts:
+    source events are not selected there (no ``include_source_events``), halt
+    is off and a lean journal appends no shell event for an unkept source, so
+    the lasting effects are the counters, the label, the input/buffer lists,
+    the buffer version key and the context, which is deferred with the same
+    inputs.
+    """
+
+    if source not in {"input", "buffer"}:
+        raise ValueError("source must be either 'input' or 'buffer'")
+    state = history.state
+    graph_ws = self._raw_graph_ws
+    graph_ws.layer_counter += 1
+    graph_ws.raw_layer_type_counter[source] += 1
+    state.event_index += 1
+    type_index = graph_ws.raw_layer_type_counter[source]
+    tensor_label = f"{source}_{type_index}_raw"
+    set_tensor_label(t, tensor_label)
+    (self.input_layers if source == "input" else self.buffer_layers).append(tensor_label)
+    if source == "buffer":
+        graph_ws.buffer_version_keys[tensor_label] = buffer_version_key(t)
+    module_frame = state.module_stack[-1] if state.module_stack else None
+    data = {
+        "label": tensor_label,
+        "raw_label": tensor_label,
+        "_label_raw": tensor_label,
+        "raw_index": graph_ws.layer_counter,
+        "type": source,
+        "type_index": type_index,
+        "func_name": None,
+        "input_output_address": extra_addr,
+        "address": module_frame.address if module_frame else None,
+        "module_type": module_frame.module_type if module_frame else None,
+        "module_pass_number": module_frame.pass_number if module_frame else None,
+        **tensor_fields(t),
+    }
+    elapsed = time.time() - self._provenance_start_time
+    history.defer(
+        "input" if source == "input" else "buffer", data, state.event_index, None, elapsed
+    )
 
 
 def log_source_tensor_predicate(
@@ -250,15 +306,19 @@ def log_source_tensor_predicate(
                             transformed_disk_payload=transformed_disk_payload,
                         )
                     )
-        append_projected_event(
-            self,
-            ctx,
-            spec,
-            tensor=t,
-            ram_payload=ram_payload,
-            transformed_ram_payload=transformed_ram_payload,
-            predicate_matched=spec.save_out or spec.save_metadata,
-        )
+        source_kept = spec.save_out or spec.save_metadata
+        if (
+            source_kept or not state.options.lean
+        ):  # lean journal: no shell event for an unkept source
+            append_projected_event(
+                self,
+                ctx,
+                spec,
+                tensor=t,
+                ram_payload=ram_payload,
+                transformed_ram_payload=transformed_ram_payload,
+                predicate_matched=source_kept,
+            )
         # Echo narrator slot (snoop D1, source seam): once per committed
         # input/buffer event, after the append.
         _emit_source_echo(self, ctx)
@@ -275,7 +335,8 @@ def log_source_tensor_predicate(
     except Exception as exc:
         state.handle_predicate_exception(ctx, exc)
     finally:
-        if not halt_only and not _predicate_event_was_appended(self, ctx.raw_label or ctx.label):
+        fallback = not halt_only and not state.options.lean
+        if fallback and not _predicate_event_was_appended(self, ctx.raw_label or ctx.label):
             append_projected_event(
                 self,
                 ctx,
