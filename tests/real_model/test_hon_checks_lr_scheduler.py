@@ -17,7 +17,7 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens.checks import ChecksSession
+from torchlens.debug._checks import ChecksSession
 
 pytestmark = [pytest.mark.real_model, pytest.mark.real_class]
 torchvision = pytest.importorskip("torchvision")

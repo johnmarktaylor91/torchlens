@@ -11,7 +11,6 @@ from __future__ import annotations
 import copy
 import sys
 import time
-import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -35,7 +34,13 @@ from .._data_classes._trace_intervention_records import (
 )
 from .._errors import InvalidArgumentError
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
-from ._trace_selection_edits import apply_selection_batch_do, apply_selection_do, is_selection_batch
+from ._edit_guards import select_do_engine, warn_if_root_mutation
+from ._trace_selection_edits import (
+    apply_selection_batch_do,
+    apply_selection_do,
+    is_selection_batch,
+    push_from_handles,
+)
 from .types import InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
@@ -48,7 +53,7 @@ from .._capture_state_helpers import _fingerprint_model_weights, _qualname_for_m
 from .._ir.selector_eval import normalize_selector_like
 from .._runnable import refuse_poisoned_trace
 from .._selection.selection import Selection, Selector, _trace_edge_records
-from ..options import suppress_mutate_warnings
+from .._selection.selectors import BaseSelector
 from ._param_fingerprint import changed_param_scope
 from .audit import (
     fire_records_since,
@@ -56,8 +61,8 @@ from .audit import (
     rules_payload,
     site_keys_for_labels,
 )
-from .errors import EngineDispatchError, ModelMismatchError, SpecMutationError, TraceMutationWarning
-from .hooks import is_facet_target, lower_record_site_target
+from .errors import EngineDispatchError, ModelMismatchError, SpecMutationError
+from .hooks import _validate_live_site_target, is_facet_target, lower_record_site_target
 from .injection import injected_ops as _injected_op_records
 from .save import save_intervention as _save_intervention_recipe
 from .spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_autograd_nodes
@@ -228,45 +233,6 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
         direction="forward",
     )
     return trace
-
-
-def refuse_chunked_batch_coupling(trace: Trace, entries: list[Any]) -> None:
-    """Refuse batch-coherent edits on a chunked-forward capture (D34).
-
-    The capture door already refuses ``chunk_size`` with ``hooks=`` /
-    ``intervene=``; the surviving hole is a batch-coherent helper applied
-    in REPLAY to a trace whose capture ran in forward chunks: the hook
-    would see one CHUNK and permute or average it as if it were the whole
-    batch -- a silently wrong experiment. Whole-batch visibility is not
-    provable from the chunk metadata in v1, so the guard refuses typed.
-    An ordinary (unchunked) minibatch is a real batch and stays legal.
-
-    Parameters
-    ----------
-    trace:
-        The trace whose capture metadata says whether the batch ran in chunks.
-    entries:
-        Normalized hook entries about to attach.
-    """
-
-    if not trace._options_chunk_size:
-        return
-    for entry in entries:
-        helper = getattr(entry, "helper_spec", None)
-        if helper is None:
-            continue
-        if dict(helper.metadata).get("batch_coherent"):
-            raise InvalidArgumentError(
-                f"edit {helper.name!r} reads or exchanges the WHOLE "
-                "batch at fire time, but this trace was captured in forward "
-                "chunks (chunked_forward=True): each fire would see one "
-                "chunk and treat it as the full batch",
-                code="chunked_replay_batch_coupling",
-                remedy="re-capture without chunk_size for whole-batch "
-                "edits, or apply a per-row edit (resample_rows_from) whose "
-                "value never couples rows",
-                argument="hooks_or_site",
-            )
 
 
 def remove(trace: Trace) -> None:
@@ -471,14 +437,13 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         return trace
     try:
         if selected_engine == "replay":
-            result = trace.push(replay=ReplayOptions(strict=strict_value))
+            result = push_from_handles(trace, attached_handles, strict=strict_value)
         else:
             assert model is not None
             result = cast("Trace", trace.run(model, x, replay=ReplayOptions(strict=strict_value)))
     except BaseException as exc:
-        # A failed do() must not leave its sticky hooks attached: the
-        # next push would silently re-fire them (contamination). Detach
-        # exactly the hooks THIS call attached, then re-raise.
+        # A failed do() must not leave its sticky hooks attached (the next push
+        # would silently re-fire them): detach exactly this call's hooks, re-raise.
         for handle_id in attached_handles:
             clear_edits(trace, handle=handle_id, confirm_mutation=True)
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))
@@ -570,70 +535,6 @@ def record_do_intervention_event(  # noqa: PLR0913 - trace stands in for self on
     )
 
 
-def warn_if_root_mutation(trace: Trace, *, confirm_mutation: bool) -> None:
-    """Emit the once-per-root mutate-in-place warning, attributed past the thin method.
-
-    Parameters
-    ----------
-    trace:
-        The root trace about to be mutated in place.
-    confirm_mutation:
-        Whether the caller explicitly accepted in-place mutation.
-    """
-
-    if confirm_mutation or trace._parent_run is not None or trace._warned_mutate_in_place:
-        return
-    if suppress_mutate_warnings.is_suppressed:
-        return
-    warnings.warn(
-        "TraceMutationWarning: Trace mutators modify root logs in place. "
-        "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
-        TraceMutationWarning,
-        stacklevel=4,
-    )
-    trace._warned_mutate_in_place = True
-
-
-def select_do_engine(trace: Trace, engine: str, *, model: nn.Module | None, x: Any) -> str:
-    """Resolve the concrete ``do`` engine from caller arguments.
-
-    Parameters
-    ----------
-    trace:
-        The trace the engine will act on.
-    engine:
-        Requested engine name.
-    model:
-        Optional model supplied for rerun.
-    x:
-        Optional input supplied for rerun.
-
-    Returns
-    -------
-    str
-        Concrete engine name.
-
-    Raises
-    ------
-    EngineDispatchError
-        If the engine cannot be inferred from an incomplete model/input pair.
-    """
-
-    if engine != "auto":
-        if engine == "rerun" and (model is None or x is None):
-            raise EngineDispatchError(
-                "do(..., engine='rerun') requires both model= and inputs=. "
-                "Pass both, or use engine='replay' if full rerun is not intended."
-            )
-        return engine
-    if (model is None) != (x is None):
-        raise EngineDispatchError(
-            "do(engine='auto') needs both model= and inputs= for rerun, or neither for "
-            "replay. Pass both, or use engine='replay' if rerun is not intended."
-        )
-    return "rerun" if model is not None else "replay"
-
-
 def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     hooks_or_site: Any,
@@ -654,7 +555,7 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
     value_or_hook:
         Optional value or hook.
     engine:
-        Concrete engine selected by ``_select_do_engine``.
+        Concrete engine selected by ``_edit_guards.select_do_engine``.
     strict:
         Whether selector checks should be strict.
     confirm_mutation:
@@ -687,11 +588,10 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
         )
         return "attach_hooks", tuple(handle.handle_ids)
 
-    # A RegionTarget (F01) is the region-as-a-unit door: the replay
-    # lowering substitutes the region's derived exit values without
-    # replaying the interior. Distinct from the TraceSlice lift below,
-    # which keeps its shipped member-site family semantics. sys.modules
-    # gate keeps ordinary do() free of the regions import.
+    # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering
+    # substitutes the region's derived exit values without replaying the
+    # interior. Distinct from the TraceSlice lift below, which keeps its shipped
+    # member-site family semantics. sys.modules gate keeps do() free of the regions import.
     regions_module = sys.modules.get("torchlens.intervention.regions")
     if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
         warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
@@ -702,9 +602,8 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             (),
         )
     # A TraceSlice targets its member family: lift it to the whole-site
-    # QUERY (re-resolved on THIS trace by site name, so a slice built on
-    # the source log addresses the same sites on a fork). sys.modules
-    # gate keeps ordinary do() free of any slice import.
+    # QUERY (re-resolved on THIS trace by site name, so a slice built on the
+    # source log addresses the same sites on a fork). sys.modules gate keeps do() slice-free.
     slice_module = sys.modules.get("torchlens._trace_slice")
     if slice_module is not None and isinstance(hooks_or_site, slice_module.TraceSlice):
         hooks_or_site = hooks_or_site.__selection__()
@@ -763,13 +662,12 @@ def validate_supplied_model_matches_capture(trace: Trace, model: nn.Module) -> N
         Fail-closed on the root entry-point fact (absent fact or a non-``module_call`` root,
         F41), then if available class or weight-fingerprint evidence differs.
     """
-    # The root entry-point fact joins this gate FAIL-CLOSED: it is written
-    # unconditionally on every capture, so absence (a legacy artifact)
-    # refuses, and a non-module_call root refuses rather than re-running
-    # ``forward`` under a capture of another entry point (``owner`` for a
-    # capture of ``owner.generate`` would pass the class+weights checks and
-    # run ``__call__`` under a report that can say verified). Bound-method
-    # captures refuse rerun/append; never widened past the ruling.
+    # The root entry-point fact joins this gate FAIL-CLOSED: written on every
+    # capture, so absence (a legacy artifact) refuses; a non-module_call root
+    # refuses rather than re-running ``forward`` under another entry point's
+    # capture (``owner`` for ``owner.generate`` would pass the class+weights
+    # checks and run ``__call__`` under a report that can say verified).
+    # Bound-method captures refuse rerun/append; never widened past the ruling.
     root_fact = trace._provenance_root_entry_point
     if root_fact is None:
         raise ModelMismatchError(
@@ -851,6 +749,11 @@ def validate_intervention_site(trace: Trace, site: Any, *, strict: bool) -> None
     # inner selector against the forward ops like any activation site.
     if addresses_autograd_nodes(site):
         return
+    # A staged edit runs as a live hook on the rerun, so a selector kind that can
+    # never be a live hook site (tl.model_input) refuses by its condition, as
+    # attach_hooks does, instead of reporting "matched 0 sites".
+    if isinstance(site, BaseSelector):
+        _validate_live_site_target(site, allow_replay_only=True)
     max_fanout = max(1, len(trace._layer_list))
     trace._resolve_sites(site, strict=strict, max_fanout=max_fanout)
 
@@ -877,12 +780,11 @@ def target_spec_from_site(trace: Trace, site: Any, *, strict: bool) -> TargetSpe
         target = copy.copy(site)
         target.strict = strict or target.strict
         return target
-    # An ``Op``/``Layer`` RECORD lowers to its PASS-QUALIFIED label
-    # selector(s) first (AUD-CODE 4.10, W051-REPLAY out-of-fence item 2):
-    # an ``Op`` is exactly its own pass (``site.label``, never the bare
-    # ``layer_label`` = the LAST pass of a multi-pass layer); a multi-pass
-    # ``Layer`` is the explicit all-passes composite. Selector-likes pass
-    # through unchanged.
+    # An ``Op``/``Layer`` RECORD lowers to its PASS-QUALIFIED label selector(s)
+    # first (AUD-CODE 4.10, W051-REPLAY out-of-fence item 2): an ``Op`` is
+    # exactly its own pass (``site.label``, never the bare ``layer_label`` =
+    # the LAST pass of a multi-pass layer); a multi-pass ``Layer`` is the
+    # explicit all-passes composite. Selector-likes pass through unchanged.
     site = lower_record_site_target(site)
     if hasattr(site, "to_target_spec"):
         target = site.to_target_spec()

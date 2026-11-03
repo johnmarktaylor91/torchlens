@@ -3790,19 +3790,51 @@ recorded: 2026-11-03T02:24:43.171703+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: foreign-data-roundtrip: static scan rows for the foreign data departure journal and replay
+reason: stress-codes: helper groups moved to sibling private modules (pure extraction), reviewed static-scan diff
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 625191998a698e2b03d50b4761f5a8f31288e9e1 (dirty)
-recorded: 2026-11-03T02:55:18.148220+00:00
+source: bf57f90ac64994e3a641c605a7a27ecc13d29f3b (dirty)
+recorded: 2026-11-03T02:01:47.385844+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: module-focus render: a third modules write site in the render flow
+reason: queue family irq2f10 on c99a80ee19fddc65c296dbe8617d661e22c037d5
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 6c1c6d2d52a371113e84911ffcf69c3068c8e03b (dirty)
-recorded: 2026-11-03T05:35:52.753151+00:00
+source: c99a80ee19fddc65c296dbe8617d661e22c037d5 (dirty)
+recorded: 2026-11-03T02:33:16.321732+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family irq2f10 on c99a80ee19fddc65c296dbe8617d661e22c037d5
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c99a80ee19fddc65c296dbe8617d661e22c037d5 (dirty)
+recorded: 2026-11-03T02:33:19.920367+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: walk2-rerun interventions.1: both rerun doors read spec_plan.capture_spec once into a translated local (8 read sites in rerun.py become 2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 31da523b9ff4fc9188a99fd4bc8f8c88572284d1 (dirty)
+recorded: 2026-11-03T01:58:44.940939+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: stress-bfs on the train: the replay live-parameter reads (parent_arg_positions, transform_kind) moved from validation/core.py into validation/_replay_live_params.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 76370aa46d671ded47b568efb5232dad746d88ae (dirty)
+recorded: 2026-11-03T02:27:42.824430+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: stress-bfs on the train: the replay live-parameter reads (parent_arg_positions, transform_kind) moved from validation/core.py into validation/_replay_live_params.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 76370aa46d671ded47b568efb5232dad746d88ae (dirty)
+recorded: 2026-11-03T02:27:46.336843+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
@@ -3819,3 +3851,59 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 9802fad238dfe8961c16c6beae69fac60951ba37 (dirty)
 recorded: 2026-11-03T01:50:22.989822+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family dlq2-2 on e5a0372bd4ee9e0ad6dc55351353fc35545d5be3
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e5a0372bd4ee9e0ad6dc55351353fc35545d5be3 (dirty)
+recorded: 2026-11-03T01:15:37.138648+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family dlq2-2 on e5a0372bd4ee9e0ad6dc55351353fc35545d5be3
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e5a0372bd4ee9e0ad6dc55351353fc35545d5be3 (dirty)
+recorded: 2026-11-03T01:15:40.575549+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: mp-oneoff-packages: fold checks/snoop into debug, conformance to tests
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e799c312a131a7d9c96e76f30823a61ea11ec61a (dirty)
+recorded: 2026-11-02T10:10:43.028256+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: mp-oneoff-packages: fold checks/snoop into debug, conformance to tests
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e799c312a131a7d9c96e76f30823a61ea11ec61a (dirty)
+recorded: 2026-11-02T10:10:49.866450+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: foreign-data-roundtrip: static scan rows for the foreign data departure journal and replay
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 625191998a698e2b03d50b4761f5a8f31288e9e1 (dirty)
+recorded: 2026-11-03T02:55:18.148220+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: module-focus render: a third modules write site in the render flow
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6c1c6d2d52a371113e84911ffcf69c3068c8e03b (dirty)
+recorded: 2026-11-03T05:35:52.753151+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: merge of two branches that each moved one getattr read of parent_arg_positions out of validation/core.py (5 to 3 sites); value taken from the regenerated ledger diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b3b94c255c04d2d04fd028c8f5d88b3bf1766019 (dirty)
+recorded: 2026-11-03T06:40:00+00:00

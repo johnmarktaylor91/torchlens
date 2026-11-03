@@ -26,6 +26,7 @@ from typing import TypeGuard
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
+from ._torchvision_ops import _get_torchvision_funcs as _get_torchvision_funcs
 from ._utils._torch_compat import get_torch_vf_namespace, get_variable_function_names
 
 # ---------------------------------------------------------------------------
@@ -1039,14 +1040,11 @@ PRIMITIVE_OP_FIELD_ORDER = [
 # ---------------------------------------------------------------------------
 # Function discovery for decoration
 # ---------------------------------------------------------------------------
-# IMPORTANT: The name "IGNORED_FUNCS" is a historical misnomer.  These are
-# functions that PyTorch's __torch_function__ override mechanism *ignores*
-# (i.e., they cannot be intercepted via __torch_function__), but TorchLens
-# still decorates most of them.  They are listed separately because
-# _get_torch_overridable_functions() intentionally skips them, so we must
-# add them back into ORIG_TORCH_FUNCS explicitly.
-#
-# Source: https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
+# IMPORTANT: The name "IGNORED_FUNCS" is a historical misnomer. These are functions that
+# PyTorch's __torch_function__ override mechanism *ignores* (they cannot be intercepted via
+# __torch_function__), but TorchLens still decorates most of them. They are listed separately
+# because _get_torch_overridable_functions() intentionally skips them, so we must add them back
+# into ORIG_TORCH_FUNCS explicitly. Source: torch.overrides.get_ignored_functions().
 IGNORED_FUNCS = [
     ("torch", "load"),
     ("torch", "empty"),
@@ -1127,6 +1125,26 @@ IGNORED_FUNCS = [
     ("torch", "sparse_bsc_tensor"),
     ("torch", "sparse_compressed_tensor"),
     ("torch", "_sparse_csr_tensor"),
+    # The ``torch.sparse`` tensor ops. torch re-exports these C builtins
+    # (``torch._C._sparse._sparse_mm`` and kin) into a namespace the overridable
+    # crawl never visits, so ``torch.sparse.mm(adjacency, features)`` ran
+    # unrecorded and its dense result could not be attributed to any op (the
+    # capture refused with ``output_attribution_failed``). Feature-detected:
+    # ``spsolve`` is newer than the 2.1 floor.
+    *(
+        ("torch.sparse", _sparse_op_name)
+        for _sparse_op_name in (
+            "addmm",
+            "log_softmax",
+            "mm",
+            "sampled_addmm",
+            "softmax",
+            "spdiags",
+            "spsolve",
+            "sum",
+        )
+        if hasattr(torch.sparse, _sparse_op_name)
+    ),
     # The MODERN documented window-factory namespace. Only the legacy top-level twins
     # (``hann_window``, ``bartlett_window``, ...) were re-added, so a model using
     # ``torch.signal.windows.hann`` silently recorded its window as an unattributed
@@ -1221,6 +1239,9 @@ IGNORED_FUNCS = [
     # result as an unattributed literal and the runnable artifact cannot save/run (the r44
     # corr1_1 / secF_1 finding: ``.mH`` "not modeled as a property op at all").
     ("torch.Tensor", "mH"),
+    # Compressed sparse conversions (``to_sparse`` is overridable; ``to_sparse_coo`` is a Python
+    # wrapper over it): unwrapped, ``x.to_sparse_csr()`` reached its consumer with no provenance.
+    *(("torch.Tensor", f"to_sparse_{layout}") for layout in ("csr", "csc", "bsr", "bsc")),
 ]
 
 
@@ -1331,18 +1352,6 @@ def _get_torch_overridable_functions() -> list[tuple[str, str]]:
     return func_names
 
 
-# Torchvision ops accessed via torch.ops — decorated only if torchvision is installed.
-TORCHVISION_FUNCS = [
-    ("torch.ops.torchvision.nms", "_op"),
-    ("torch.ops.torchvision.deform_conv2d", "_op"),
-    ("torch.ops.torchvision.ps_roi_align", "_op"),
-    ("torch.ops.torchvision.ps_roi_pool", "_op"),
-    ("torch.ops.torchvision.roi_align", "_op"),
-    ("torch.ops.torchvision.roi_pool", "_op"),
-]
-
-_TORCHVISION_FUNCS_CACHE: list[tuple[str, str]] | None = None
-
 # Build the master function list at module load time.  Warnings are suppressed
 # because some torch namespaces emit deprecation warnings during introspection.
 # ORIG_TORCH_FUNCS = overridable functions + "ignored" functions (which we still
@@ -1352,37 +1361,6 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     OVERRIDABLE_FUNCS = _get_torch_overridable_functions()
 ORIG_TORCH_FUNCS = OVERRIDABLE_FUNCS + IGNORED_FUNCS
-
-
-def _get_torchvision_funcs() -> list[tuple[str, str]]:
-    """Return torchvision torch.ops targets if torchvision is already imported.
-
-    TorchLens never imports torchvision itself: importing it costs ~2 s and
-    ~150 MB RSS, and a model cannot call a torchvision custom op unless the
-    user's process has already imported torchvision (the ops only register
-    with the torch dispatcher during ``import torchvision``). The
-    not-yet-imported answer is deliberately uncached so a later user import
-    is picked up by ``wrap_torch()`` on the next capture.
-
-    Returns
-    -------
-    list[tuple[str, str]]
-        Torchvision operation targets for wrapper decoration, or an empty list
-        while torchvision has not (finished) being imported.
-    """
-
-    global _TORCHVISION_FUNCS_CACHE
-    if _TORCHVISION_FUNCS_CACHE is not None:
-        return _TORCHVISION_FUNCS_CACHE
-    torchvision_module = sys.modules.get("torchvision")
-    if torchvision_module is None:
-        return []
-    spec = getattr(torchvision_module, "__spec__", None)
-    if spec is not None and getattr(spec, "_initializing", False):
-        # Mid-import (circular import): the C ops may not be registered yet.
-        return []
-    _TORCHVISION_FUNCS_CACHE = list(TORCHVISION_FUNCS)
-    return _TORCHVISION_FUNCS_CACHE
 
 
 # Submodules that re-export (``from torch import X as Y``) a plain torch
@@ -1465,34 +1443,3 @@ def get_orig_torch_funcs(*, include_torchvision: bool = True) -> list[tuple[str,
     if not include_torchvision:
         return [*ORIG_TORCH_FUNCS, *_get_torch_submodule_alias_funcs()]
     return [*ORIG_TORCH_FUNCS, *_get_torchvision_funcs(), *_get_torch_submodule_alias_funcs()]
-
-
-# Legacy tensor constructors (2017-2019 idioms): ``torch.FloatTensor(size)``,
-# ``torch.LongTensor(data)``, a module attribute bound to the class at init
-# (``self.FloatTensor = torch.FloatTensor``), and ``torch.autograd.Variable(t)``.
-# Their C ``tp_new`` dispatches ``aten.empty`` / ``aten.detach`` with no Python
-# wrapper on the stack, so a forward that uses them left an unowned dispatch and
-# failed validation completeness. The CLASS OBJECTS are patched in place (their
-# ``__new__``), never the namespace attributes: identity, ``isinstance`` and
-# ``x.type(torch.FloatTensor)`` keep working, and an alias bound before the
-# first capture reaches the same patched class. Rows are (namespace, class
-# name); ``backends/torch/legacy_ctors.py`` installs and restores them.
-# ``torch.Tensor`` itself is not listed: ``torch.Tensor.__new__`` is already an
-# ``IGNORED_FUNCS`` roster row.
-LEGACY_TENSOR_DTYPE_CLASS_NAMES: tuple[str, ...] = (
-    "FloatTensor",
-    "DoubleTensor",
-    "HalfTensor",
-    "BFloat16Tensor",
-    "LongTensor",
-    "IntTensor",
-    "ShortTensor",
-    "CharTensor",
-    "ByteTensor",
-    "BoolTensor",
-)
-LEGACY_TENSOR_CONSTRUCTOR_SITES: tuple[tuple[str, str], ...] = (
-    *(("torch", name) for name in LEGACY_TENSOR_DTYPE_CLASS_NAMES),
-    *(("torch.cuda", name) for name in LEGACY_TENSOR_DTYPE_CLASS_NAMES),
-    ("torch.autograd", "Variable"),
-)

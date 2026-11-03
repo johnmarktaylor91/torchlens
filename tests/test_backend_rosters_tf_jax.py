@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from torchlens.conformance._rosters import jax, tf
+from tests.conformance._rosters import jax, tf
 
 _BACKENDS = {"tf": tf, "jax": jax}
 
@@ -65,7 +65,7 @@ def test_ecosystem_rows_join_only_behind_the_switch(
     backend_name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ecosystem rows are scored only when switched on; parked families never run."""
-    from torchlens.conformance._rosters import ECOSYSTEM_ENV
+    from tests.conformance._rosters import ECOSYSTEM_ENV
 
     backend = _BACKENDS[backend_name]
     monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
@@ -85,8 +85,8 @@ def test_preview_adapter_scores_the_backend_roster_module(
     backend_name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The preview adapter's default roster is the backend's ``_rosters`` module."""
-    from torchlens.conformance._preview_adapters import PreviewBackendAdapter
-    from torchlens.conformance._rosters import ECOSYSTEM_ENV
+    from tests.conformance._preview_adapters import PreviewBackendAdapter
+    from tests.conformance._rosters import ECOSYSTEM_ENV
 
     monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
     adapter_rows = PreviewBackendAdapter(backend_name).default_roster()

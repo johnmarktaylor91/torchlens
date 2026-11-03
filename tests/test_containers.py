@@ -11,9 +11,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir._output_path_assign import assign_into_container_by_path
 from torchlens._ir.container import HFKey, NamedField, TupleIndex
 from torchlens._selection.selectors import output_at
-from torchlens._utils.collections import assign_into_container_by_path
 
 
 class DemoModelOutput(dict):

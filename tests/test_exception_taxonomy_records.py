@@ -226,10 +226,10 @@ def test_intervention_doors_carry_codes_and_remedies() -> None:
 
     from torchlens.intervention._resolver_registry import resolve_import_ref
     from torchlens.intervention._spec_codec import _validate_format_version
-    from torchlens.intervention.errors import ReplayPreconditionError
+    from torchlens.intervention.errors import TorchLensInterventionError
 
     with pytest.raises(errors.TorchLensError) as exc_info:
-        ReplayPreconditionError("message", selector="both")  # args + fields conflict
+        TorchLensInterventionError("message", selector="both")  # args + fields conflict
     _assert_contract(exc_info.value, "error_constructor_args_conflict", TypeError)
 
     with pytest.raises(errors.TorchLensError) as exc_info:
