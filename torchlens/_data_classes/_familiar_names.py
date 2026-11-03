@@ -37,7 +37,7 @@ _ENTRY_HINTS: dict[str, str] = {
     "func": "use .func_name (the function's name, e.g. 'linear' or 'softmax')",
     "op_name": "use .func_name for the function or .label for the op's own name",
     "name": "use .label for the op's name or .func_name for the function",
-    "shape": "use .out.shape (the saved tensor) or .tensor_shape",
+    "shape": "use .out.shape (the saved output tensor)",
 }
 
 #: Hints for the whole-capture object.

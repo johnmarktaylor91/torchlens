@@ -616,7 +616,10 @@ def _refuse_predicate_shapes(args: _DoorArgs) -> None:
         raise ArgumentTypeError(
             f"intervene received non-callable type {type(args.intervene).__name__}",
             code="intervention_predicate_type_invalid",
-            remedy="pass a predicate callable such as tl.when(...) or None",
+            remedy=(
+                "pass a predicate callable such as tl.when(...) or None; combine several "
+                "edits into one with &: tl.when(site_a, edit_a) & tl.when(site_b, edit_b)"
+            ),
             argument="intervene",
             received_type=type(args.intervene).__name__,
         )

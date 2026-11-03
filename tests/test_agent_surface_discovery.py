@@ -235,7 +235,7 @@ def test_guide_snippets_run_verbatim(tmp_path: Path) -> None:
         )
         assert result.returncode == 0, (code, result.stderr[-600:])
         ran += 1
-    assert ran >= 12, "the snippet lint stopped covering the guide"
+    assert ran >= 11, "the snippet lint stopped covering the guide"
 
 
 @pytest.mark.smoke

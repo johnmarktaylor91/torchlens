@@ -98,9 +98,13 @@ function, tl.in_module(name) narrows any site to ops inside one module
         return t * 0
     tr = tl.trace(model, x, intervene=tl.when(tl.module("blocks.0.mlp"), zero))
     edited = tr.output
+    both = tl.when(tl.module("blocks.0.mlp"), zero) & tl.when(
+        tl.module("blocks.1.mlp"), tl.scale(0.5))
+    edited_twice = tl.trace(model, x, intervene=both).output
 
-Built-in edits: tl.zero_ablate(), tl.scale(f), tl.add(v), tl.replace_with(t),
-tl.mean_ablate(). Several edits at once: intervene=[tl.when(...), tl.when(...)].
+Built-in edits: tl.zero_ablate(), tl.scale(f), tl.add(v), tl.replace_with(t).
+Several edits in one pass combine with &:
+intervene=tl.when(site_a, edit_a) & tl.when(site_b, edit_b).
 
 ## Patch activations from one run into another
 
