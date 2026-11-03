@@ -38,6 +38,7 @@ from .._io import (
 from .._ir.refs import DeviceRef, DtypeRef
 from .._quantities import Bytes
 from ._accessor_base import Accessor
+from ._lookup_kinds import converted, param_for_key
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .op import GradientRecord, GradientRecordAccessor
@@ -1032,14 +1033,13 @@ class ParamAccessor(Accessor["Param"]):
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            # Name the bounded candidate set (R65) like the merged-presenter
-            # sibling, instead of telling the user to guess the full address.
+            # Name the bounded candidate set (R65) instead of asking for a guess.
             candidates = tuple(address for match in matches for address in match.all_addresses)
             raise AmbiguousOpLookupError(
                 f"Ambiguous short name '{key}' -- use a full address: {', '.join(candidates)}",
                 candidates=candidates,
             )
-        return None
+        return converted(self, key, param_for_key)  # a module address or op label names one Param
 
     def _resolve_pass_qualified(self, key: str) -> "Param | None":
         """Resolve pass-qualified notation to the parent Param."""

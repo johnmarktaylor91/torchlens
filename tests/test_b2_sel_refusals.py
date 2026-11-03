@@ -72,7 +72,7 @@ def test_save_type_refusal_remedies_all_run(net) -> None:
 def test_save_selection_composes_with_other_capture_options(net) -> None:
     model, x = net
     trace = tl.trace(model, x, save=["fc"], capture=tl.options.CaptureOptions(save_args=True))
-    assert trace["fc"].has_saved_activation
+    assert trace.ops["fc"].has_saved_activation
     relu_ops = [op for op in trace.ops if op.type == "relu"]
     assert relu_ops
     assert all(op.has_saved_activation is False for op in relu_ops)
@@ -81,7 +81,7 @@ def test_save_selection_composes_with_other_capture_options(net) -> None:
 def test_activations_by_address_lists_existing_addresses(net) -> None:
     model, x = net
     trace = tl.trace(model, x)
-    assert [op.label for op in trace.activations_by_address("fc")] == [trace["fc"].label]
+    assert [op.label for op in trace.activations_by_address("fc")] == [trace.ops["fc"].label]
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
         trace.activations_by_address("fc2")
     fields = exc_info.value.fields

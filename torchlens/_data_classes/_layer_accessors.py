@@ -19,6 +19,7 @@ from .._io import FieldPolicy
 from .._pass_tokens import split_pass_token
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_views import _layer_log_to_row
+from ._lookup_kinds import converted, layer_for_key, scoped_op_by_lookup_key
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -180,7 +181,7 @@ class OpAccessor(Accessor["Op"]):
                 op_log.raw_label,
             }:
                 return op_log
-        return None
+        return scoped_op_by_lookup_key(self._dict.values(), key)  # module-call or buffer key
 
 
 class LayerAccessor(Accessor["Layer"]):
@@ -235,6 +236,11 @@ class LayerAccessor(Accessor["Layer"]):
 
         Passes are 1-based: a zero or negative pass number names nothing.
         """
+        record = converted(
+            self, key, layer_for_key
+        )  # a call label or buffer version names its Layer
+        if record is not None:
+            return record
         base, _, pass_str = key.rpartition(":")
         if split_pass_token(key) is None:
             try:
@@ -259,7 +265,7 @@ class LayerAccessor(Accessor["Layer"]):
                 f"Layer lookup '{key}' is ambiguous across {len(matches)} Layers: {listed}. "
                 f"Use the full Layer label, e.g. {matches[0].layer_label!r}."
             )
-        return None
+        return converted(self, key, layer_for_key)  # a module or buffer key names its Layer
 
     def _suggest(self, key: str) -> list[str]:
         """Return similar layer labels from the source Trace."""

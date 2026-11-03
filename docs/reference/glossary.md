@@ -1350,6 +1350,26 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.label` refusal) naming these spellings and `trace.layers[label]`; `trace[...]` never
   returns a Layer.
 
+**Indexing coherence (every door returns the kind it names)**
+: The plain door `trace[key]` returns the kind the key names: a layer label its Op (never a
+  Layer, above), a module address its `Module` whether called once or many times, `address:N`
+  its `ModuleCall`, a parameter address its `Param`, a buffer address its `Buffer`
+  (`buffer_address:N` the version Op), a grad_fn label its `GradFn`. A typed door always
+  returns its own kind and converts a key that names exactly one such object: `trace.ops[address]`
+  and `trace.ops["address:N"]` give the call's output Op, `trace.layers[address]` its Layer,
+  `trace.modules[op_label]` (also a parameter or buffer address) the Module it belongs to,
+  `trace.module_calls[op_label]` the call that ran it, `trace.params[address_or_op_label]` and
+  `trace.buffers[...]` the single record a module or op owns, `trace.autograd.grad_fns[op_label]`
+  the op's grad_fn. A key that names several objects of the door's kind refuses
+  `ambiguous_op_lookup` listing the `:N` spellings (a module called twice at `trace.ops`, a module
+  with weight and bias at `trace.params`, a substring matching several grad_fns). The same rule
+  holds inside a module (`module[address]` is a descendant Module, `module["address:N"]` its
+  call, `module[label]` what `trace[label]` gives; `module.calls[op_label]` the call that ran
+  it), on `layer.ops["address:N"]`, and on every Bundle door, which converts through each
+  member's typed door and propagates its refusal. Filtered collections (`trace.params.frozen()`)
+  convert only to their own members. Wrapper-relative module spellings (*Module and stage names*)
+  are plain-door and selector affordances.
+
 **tl.all_sites** — *unstable — no deprecation shim owed*
 : `tl.all_sites()` is the universal selector: `trace[tl.all_sites()]` selects every op of the
   trace as a whole site, the same result as `trace[tl.label_matches(".*")]` (it stores that
@@ -1655,7 +1675,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Module and stage names** *(rule documented-unstable)*
 : A module name resolves to that module's output at every selector door: `tl.extract`,
-  `tl.pluck`, `trace[...]`, `tl.trace(save=[...])` and `trace.run(until=...)`. Three spellings
+  `tl.pluck`, `tl.trace(save=[...])`, `trace.run(until=...)` and the typed op doors
+  (`trace.ops[name]`, `trace.layers[name]`); at the plain door `trace[name]` it is the Module
+  itself (see *Indexing coherence*). Three spellings
   name a module: its address (`"fc"`, `"layer1.0"`); a name relative to a wrapped inner model
   (timm `FeatureGetterNet` reports `"blocks.9"` for the module at `"model.blocks.9"`); and a
   dotted name whose module was registered with dots flattened to underscores (timm
@@ -1912,9 +1934,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `len(conditional_branch_stack)`.
 
 **Lookup and reentrancy errors**
-: `tl.errors.AmbiguousOpLookupError` is raised when a bare Op lookup matches multiple
-  pass-qualified Ops; `tl.errors.ReentrantTraceError` when a trace is started while another
-  trace is active.
+: `tl.errors.AmbiguousOpLookupError` (`ambiguous_op_lookup`) is raised when a bare Op lookup
+  matches multiple pass-qualified Ops, and when a typed door's key names several objects of
+  its kind (`trace.ops["shared"]` for a module called twice lists `shared:1`, `shared:2`);
+  `tl.errors.ReentrantTraceError` when a trace is started while another trace is active.
 
 **Report disclosure helpers** *(spellings documented-unstable)*
 : `tl.debug.amp_scaled_grads_hint(*, all_nonfinite=False)` returns the shared text that names a

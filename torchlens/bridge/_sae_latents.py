@@ -204,6 +204,7 @@ class _SAEFamily:
             latents.
         """
 
+        record = _op_record(record)
         homes = self._home_labels(record)
         if isinstance(homes, InvalidArgumentError):
             raise homes
@@ -216,6 +217,7 @@ class _SAEFamily:
     def listed_spec(self, record: Any) -> Any:
         """Return the all-latents facet on ``record`` for listings; never raises."""
 
+        record = _op_record(record)
         homes = self._home_labels(record)
         if not isinstance(homes, frozenset) or _record_label(record) not in homes:
             return None
@@ -361,6 +363,29 @@ def _first_op_label(record: Any, site: str) -> str:
     for op in getattr(record, "ops", None) or ():
         return str(getattr(op, "label", op))
     return f"{site}:1"
+
+
+def _op_record(record: Any) -> Any:
+    """Return the Op a record reads latents from: itself, or a module record's one output op.
+
+    ``trace[address]`` is the Module (RC-260); its facets read the latents of
+    its single call's single output op. A module called or outputting several
+    times keeps ``record`` as is, so the family stays off its home.
+    """
+
+    if hasattr(record, "layer_label") or record is None:
+        return record
+    trace = getattr(record, "trace", None)
+    call_labels = getattr(record, "call_labels", None)  # a Module lists its calls
+    call = record
+    if call_labels is not None:
+        if trace is None or len(call_labels) != 1:
+            return record
+        call = trace.module_calls[call_labels[0]]
+    labels = list(getattr(call, "output_ops", None) or [])
+    if trace is None or len(labels) != 1:
+        return record
+    return trace.ops[labels[0]]
 
 
 def _record_label(record: Any) -> Any:

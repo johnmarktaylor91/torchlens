@@ -96,11 +96,11 @@ torchlens/_data_classes/cleanup.py::cleanup	137
 torchlens/_data_classes/container.py	1176
 torchlens/_data_classes/field_policy.py::build_record_field_policy_table	68
 torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
-torchlens/_data_classes/grad_fn.py	840
-torchlens/_data_classes/interface.py::_getitem_after_pass	121
+torchlens/_data_classes/grad_fn.py	839
+torchlens/_data_classes/interface.py::_getitem_after_pass	120
 torchlens/_data_classes/interface.py::_str_after_pass	63
 torchlens/_data_classes/layer.py	1811
-torchlens/_data_classes/module.py	2626
+torchlens/_data_classes/module.py	2623
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
