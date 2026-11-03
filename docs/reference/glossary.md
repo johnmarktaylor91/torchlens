@@ -3403,7 +3403,7 @@ deprecation shim owed*
 
 **SummaryReport.table (`trace.summary(view="stats").table`)** — *unstable — no deprecation shim owed*
 : The typed observation table (`StatsTable`) behind a `view="stats"` report: `rows`
-  (`StatsTableRow` records with `state`, `stats`, `reason`, `parent_mark`), `ok_rows`,
+  (`StatsTableRow` records with `state`, `value_stats`, `reason`, `parent_mark`), `ok_rows`,
   `sort_rows(by=..., descending=...)` (sorts on a sampled column are disclosed) and
   `fold_same_as_parent()` (opt-in fold of `= parent` rows with an exact count). The report's
   text is one rendering of it. A report built with any other view carries no table and
@@ -4550,6 +4550,7 @@ The sections above describe each surface in depth.
 | `ScaleLedgerSnapshot.initial_scale` | The grad-scaler scale when observation began |
 | `ScaleLedgerSnapshot.preconditions` | The preconditions the ledger checked before inferring scaler behaviour |
 | `ScaleLedgerSnapshot.skipped_attempts` | Number of step attempts the scaler skipped |
+| `StatsTableRow.value_stats` | `tl.stats.TensorStats` for this op on `state == "ok"` rows, or `None` otherwise (`state` names why the numbers are absent) |
 | `ScanRow.is_audited` | False exactly when `skip_reason` says why the row was not audited |
 | `ScanRow.is_constant` | Whether the scanned value stayed constant (`None` when unknown) |
 | `ScanRow.abs_max` | Largest absolute value of the scanned tensor |
