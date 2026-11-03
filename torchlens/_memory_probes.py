@@ -10,6 +10,8 @@ import os
 
 import torch
 
+from ._utils import _torch_compat
+
 
 def _available_host_bytes() -> int | None:
     """Return available host RAM in bytes, or ``None`` when unmeasurable.
@@ -49,6 +51,31 @@ def _available_host_bytes() -> int | None:
     return available if available > 0 else None
 
 
+def _available_mps_bytes() -> int | None:
+    """Return the MPS headroom in bytes, or ``None`` when torch cannot report it.
+
+    Returns
+    -------
+    int | None
+        ``recommended_max_memory() - driver_allocated_memory()`` (torch >= 2.5,
+        gated by ``HAS_MPS_MEMORY_QUERY``), clamped at zero and bounded by the
+        host's available RAM because Apple silicon shares one unified memory.
+        ``None`` on a torch without the queries or when a query raises.
+    """
+
+    if not _torch_compat.HAS_MPS_MEMORY_QUERY:
+        return None
+    try:
+        headroom = int(torch.mps.recommended_max_memory()) - int(
+            torch.mps.driver_allocated_memory()
+        )
+    except Exception:
+        return None
+    headroom = max(headroom, 0)
+    host = _available_host_bytes()
+    return headroom if host is None else min(headroom, host)
+
+
 def available_device_bytes(device: torch.device) -> int | None:
     """Return the memory headroom for one device, or ``None`` when unmeasurable.
 
@@ -79,6 +106,8 @@ def available_device_bytes(device: torch.device) -> int | None:
             return int(free_bytes)
         except Exception:
             return None
+    if device_type == "mps":
+        return _available_mps_bytes()
     if device_type == "meta":
         # Meta tensors have no storage, so nothing is ever really committed.
         return None
