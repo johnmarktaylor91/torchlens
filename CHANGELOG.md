@@ -5,6 +5,15 @@
 
 ### Behavior changes
 
+- **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
+  pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
+  merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at
+  `tl.validation.validate_tlspec` and the extraction readers) with one error,
+  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the 2.x
+  origin and the remedy: load the file with torchlens 2.36.x (`pip install 'torchlens>=2.36,<3'`) or
+  capture the model again with this release. Nothing migrates a 2.x file, and there is no
+  `tl.migrate`. The promise made with 2.16.0 that its `.tlspec` files would always load is
+  withdrawn; `MIGRATIONS.md` (".tlspec Compatibility") lists every case.
 - **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
   (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
   the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old
