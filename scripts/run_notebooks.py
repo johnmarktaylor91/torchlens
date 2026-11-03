@@ -10,9 +10,10 @@ locally it needs the ``test`` extra (nbclient, ipykernel)::
     python scripts/run_notebooks.py -j 2
     python scripts/run_notebooks.py notebooks/torchlens_in_10_minutes.ipynb
     python scripts/run_notebooks.py --write-outputs   # regenerate stored outputs
+    python scripts/run_notebooks.py --write-outputs notebooks/learn/*.ipynb
 
 Only the notebooks in ``STORED_OUTPUT_NOTEBOOKS`` keep outputs in git (the ten-minute
-tutorial, which GitHub renders as the first impression). ``--write-outputs`` executes
+tutorial and the learning path, which GitHub renders as the first impression). ``--write-outputs`` executes
 them and writes their outputs back in place with machine paths scrubbed; every other
 notebook is committed without outputs (``tests/test_notebook_output_policy.py``).
 
@@ -35,7 +36,20 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-STORED_OUTPUT_NOTEBOOKS = ("notebooks/torchlens_in_10_minutes.ipynb",)
+STORED_OUTPUT_NOTEBOOKS = (
+    "notebooks/torchlens_in_10_minutes.ipynb",
+    "notebooks/learn/00_quickstart.ipynb",
+    "notebooks/learn/01_capture_and_look.ipynb",
+    "notebooks/learn/02_address_and_read.ipynb",
+    "notebooks/learn/03_see_it.ipynb",
+    "notebooks/learn/04_keep_what_you_need.ipynb",
+    "notebooks/learn/05_change_and_rerun.ipynb",
+    "notebooks/learn/06_gradients.ipynb",
+    "notebooks/learn/07_compare_runs.ipynb",
+    "notebooks/learn/08_semantic_shortcuts.ipynb",
+    "notebooks/learn/09_scale.ipynb",
+    "notebooks/learn/10_beyond_one_forward.ipynb",
+)
 DEFAULT_CELL_TIMEOUT = 600
 DEFAULT_NOTEBOOK_TIMEOUT = 1200
 _RESULT_PREFIX = "NOTEBOOK_RESULT "
