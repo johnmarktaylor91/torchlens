@@ -461,7 +461,7 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | Randomization test | `randomization_test`, `RandomizationTest`, `RandomizationStep`, `randomization`, `cascading`, `independent`, `layers`, `seed`, `keep_values`, `original_attribution`, `randomized_module_addresses`, `similarity`, `similarities`, `spearman`, `spearman_abs`, `ssim`, `values` | unstable -- no deprecation shim owed |
 | ROAD curve | `road_curve`, `ranking`, `most_relevant_first`, `least_relevant_first`, `noise_std`, `seed`, `road` | unstable -- no deprecation shim owed |
 | Causal audit | `causal_audit`, `CausalAudit`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `edit`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `num_random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited`, `corrupted_input`, `metric`, `edges`, `edge_table`, `edge_patch`, `example_reduction`, `logits_site`, `sets_not_measured`, `reason`, `trace` | unstable -- no deprecation shim owed |
-| Attribution graphs | `build_graph`, `AttributionGraph`, `GraphNode`, `transcoders`, `embedding_module`, `target`, `max_num_logits`, `logit_probability_coverage`, `demeaned_logits`, `logits_at`, `frozen`, `nodes`, `adjacency_matrix`, `node_values`, `constants`, `encoder_bias`, `decoder_bias`, `other`, `active_feature_indices`, `feature_activations`, `transcoder_sites`, `error_sites`, `error_vectors`, `input_token_ids`, `logit_token_ids`, `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`, `kind`, `site`, `position`, `feature_index`, `token`, `logit`, `error` | unstable -- no deprecation shim owed |
+| Attribution graphs | `build_graph`, `AttributionGraph`, `GraphNode`, `transcoders`, `embedding_module`, `target`, `max_num_logits`, `logit_probability_coverage`, `demeaned_logits`, `logits_at`, `frozen`, `nodes`, `adjacency_matrix`, `node_values`, `constants`, `encoder_bias`, `decoder_bias`, `other`, `active_feature_indices`, `feature_activations`, `transcoder_sites`, `error_sites`, `error_vectors`, `input_token_ids`, `logit_token_ids`, `logit_probabilities`, `capture_status`, `disclosures`, `node_counts`, `node_indices`, `kind`, `site`, `position`, `feature_index`, `token`, `logit`, `error` | unstable -- no deprecation shim owed |
 | Attribution graph export | `to_neuronpedia`, `slug`, `model_id`, `tokenizer`, `prompt`, `node_influence_coverage`, `edge_influence_coverage`, `path` | unstable -- no deprecation shim owed |
 | Attribution graph overlay and upload | `influence`, `activation`, `upload_to_neuronpedia`, `api_key` | unstable -- no deprecation shim owed |
 
@@ -798,6 +798,43 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   closed set; rows persist in `bundle.json` and every load re-checks them. On a pair row `from` is
   always the LATER member. Rows are ordering and topology claims: members joined by a directed
   path of ordering kinds are not comparison operands.
+
+**Bundle.relation_grades** *(spelling documented-unstable)*
+: `b.relation_grades()` returns one `RelationGrade` per relation row, in table order: the row's
+  grade DERIVED at read from its evidence items and declared params, never stored. The ladder,
+  weakest to strongest: `unchecked` (no check ran; the contracted reasons are listed),
+  `disclosed` (declared only: a bare row, a `carry_mode="none"` fresh start, disclosed items),
+  `consistent` (every check that ran agrees, not proven), `verified` (every item verified). Any
+  divergent item grades the row `divergent`. `broken` fires on exactly two premises, named in
+  `broken_premises`: `bulk_origin_failure` (more than half of the checked member-origin items
+  diverge) and `verbatim_carry_failure` (`carry_mode="verbatim"` with a divergent
+  `declared_carry` item). A divergence at a declared seam (the item's `seam` is in the row's
+  `seams`) is counted in `seam_local_divergences`, grades `divergent` on record and never
+  escalates. `OpaqueRelationRow` grades `unchecked` with reason `kind_unregistered`.
+
+**RelationGrade** *(`from torchlens.bundle import RelationGrade`; spelling documented-unstable)*
+: Frozen record of one row's derived grade: `kind`, `members`, `grade`, `broken_premises`,
+  `unchecked_reasons`, `seam_local_divergences`, `exogenous_items` (items whose class lies
+  outside the member-measured kinds; derived, never written to an item), `items_by_class`,
+  `items_by_grade`.
+
+**successor_of.evidence item class** *(evidence item key `class`; spelling documented-unstable)*
+: The ground-truth origin of one evidence item, from the closed vocabulary of seven kinds:
+  member-measured `member_input`, `member_output`, `member_state`, `member_params`, and
+  exogenous `declared_carry`, `declared_transform`, `harness_record`. Required on every item of a
+  reserved schema (`version_boundary_v1` admits the four member kinds plus `declared_transform`;
+  `turn_boundary_v1` admits `member_input`, `member_output`, `member_state`, `declared_carry`,
+  `declared_transform`, `harness_record`); optional under a user schema, but load-validated
+  against the seven when present (`bundle_relation_schema_invalid`). "Exogenous" is a rollup
+  read from the class, never a persisted value.
+
+**successor_of.carry_mode / seams / item seam** *(relation params; spelling documented-unstable)*
+: `carry_mode` is the closed vocabulary `none` (a declared fresh start: nothing carried across
+  the boundary), `verbatim` (state carried unchanged) and `summarized` (state carried through a
+  declared transform); any other value refuses at load. `seams` is a list of distinct names for
+  the boundaries where the chain is EXPECTED to change (a chat-template revision, a tokenizer
+  swap); an evidence item may name one of them under `seam`, and a divergence there never
+  escalates the row to `broken`. An item `seam` that the row does not declare refuses at load.
 
 **Bundle.relate** *(spelling documented-unstable)*
 : Appends relation rows and returns the bundle. Positional form, read as the sentence it records:
@@ -2785,7 +2822,9 @@ deprecation shim owed*
 : The skin preset on `Trace.draw(graph="backward")`, the same names the forward picture takes
   (`"torchlens"` default, `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`): it sets the page
   colour, text ink, typography and the backward key's ink; backward node fills and gradient arrows
-  keep their colours. The functional form with grouped options reads it from
+  keep their colours. On `Trace.draw` the skin also sets the role colours: `torchlens` and
+  `colorblind` render the Okabe-Ito set (green input, vermillion output, blue weights), `paper`
+  and `high_contrast` the legacy set (light green input, light red output, grey weights). The functional form with grouped options reads it from
   `VisualizationOptions.theme`.
 
 **theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
@@ -6126,6 +6165,7 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `hidden_flops=` | constructor keyword of `tl.report.CostTree` (required) |
 | `high=` | keyword of `tl.clamp` (keyword-only; default `None`): Optional upper bound; constructor keyword of `tl.repgeom.ScoreInterval` (required): Percentile interval bounds over the resampled scores; keyword of `tl.saturated` (keyword-only; default `None`); constructor keyword of `tl.types.InputSpec` (default `None`) |
 | `higher=` | constructor keyword of `tl.repgeom.DisagreeingPair` (required): Per metric, the site that metric scores higher (`None` for a tie or a missing score) |
+| `highlight=` | keyword of `Trace.draw` (keyword-only; default `None`): Keyword-only. Named highlight drawn over the graph. `None` (the default) draws the plain graph. `"interventions"` draws the surgery lens: every recorded intervention is marked on its node (solid border = recorded fact, dashed = heuristic attribution), the caption carries the per-lane census, .. |
 | `hist_every=` | constructor keyword of `tl.trackers.HFTrainerWatchCallback`, `tl.trackers.LightningWatchCallback` (keyword-only; optional); keyword of `tl.trackers.watch` (keyword-only; default `None`): Histogram cadence; may run coarser than scalars. `None` disables the sketch tier (scalars remain) |
 | `histogram_counts=` | constructor keyword of `tl.stats.TensorStats` (required) |
 | `histogram_edges=` | constructor keyword of `tl.stats.TensorStats` (required) |

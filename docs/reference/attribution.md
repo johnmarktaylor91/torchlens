@@ -1078,7 +1078,9 @@ attention patterns and normalisation scales held at their captured values. Docum
   reach `logit_probability_coverage`, at most `max_num_logits`; a list of token ids names them. With
   `demeaned_logits=True` a logit node is its logit minus the mean logit. `logits_at` takes a
   `SiteTarget` naming the module whose output holds the logits (for example the logits before a
-  final softcap).
+  final softcap). The logits site is `(1, positions, vocab)`, read at the last position, or a
+  pooled `(1, classes)` head (a vision transformer's class-token head), whose logit nodes carry
+  the last position by convention and say so in `disclosures`.
 
 The result, `tl.attribution.AttributionGraph`, has one `GraphNode` (`kind`, `site`, `position`,
 `feature_index`, `token`) per row and column of `adjacency_matrix`, in the order features, errors,
@@ -1089,7 +1091,7 @@ row of `adjacency_matrix` plus `constants["encoder_bias"]`, `constants["decoder_
 position embeddings); a large `other` on a node means a path to it bypasses the graph, for
 example an attention pattern left unfrozen. `error_vectors` holds each MLP output minus its
 reconstruction, `active_feature_indices` and `feature_activations` the feature nodes, and
-`capture_outcome` and `disclosures` what the capture's completeness verdict says.
+`capture_status` and `disclosures` what the capture's completeness verdict says.
 
 ```python
 import json

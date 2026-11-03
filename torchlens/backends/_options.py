@@ -237,7 +237,6 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         {
             "halt",
             "intervene",
-            "facets",
             "save",
             "stop_after",
             "storage",
@@ -309,9 +308,10 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 )
 """Extra public-kwarg rejection policy for the Paddle preview backend.
 
-``intervene``, ``halt``, and ``facets`` are absent because the Paddle
-capture path pops and dispatches them before extra-kwarg rejection runs; the
-``interventions`` capability flag owns all three.
+``intervene`` and ``halt`` are absent because the Paddle capture path pops
+and dispatches them before extra-kwarg rejection runs (the ``interventions``
+capability flag owns both); ``facets`` is popped and snapshotted the same way
+under the backend-neutral ``facet_recipes`` record.
 """
 
 
@@ -377,11 +377,11 @@ TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 )
 """Extra public-kwarg rejection policy for the TensorFlow preview backend.
 
-``intervene``/``halt``/``facets`` left this table when tf lifted the
-``interventions`` capability: ``intervene=`` dispatches for real, and the two
-unimplemented spellings refuse typed inside the tf capture path (a declarative
-rejection here would classify the True flag as a self-contradictory
-registration)."""
+``intervene``/``halt`` left this table when tf lifted the ``interventions``
+capability: ``intervene=`` dispatches for real, and ``halt=`` refuses typed
+inside the tf capture path (a declarative rejection here would classify the
+True flag as a self-contradictory registration). ``facets`` is popped and
+snapshotted before this policy runs (``facet_recipes`` record)."""
 
 
 JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
