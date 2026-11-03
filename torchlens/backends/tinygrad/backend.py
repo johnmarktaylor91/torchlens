@@ -802,7 +802,7 @@ class TinygradBackend:
                 kind="source",
                 layer_type="input",
                 func_name="input",
-                output=self._realized_copy(capture.realized[id(uop)]),
+                output=self._capture_payload(capture, uop),
                 parents=(),
                 parent_arg_positions={"args": {}, "kwargs": {}},
                 module_stack=(),
@@ -845,27 +845,29 @@ class TinygradBackend:
         """
 
         return tuple(
-            self._emit_uop(trace, uop, tensor, model_uop, uop_labels, observed)
-            for uop, tensor, model_uop in recorded_values(capture)
+            self._emit_uop(trace, (uop, tensor, model_uop, owned), uop_labels, observed)
+            for uop, tensor, model_uop, owned in recorded_values(capture)
         )
 
     def _emit_uop(
         self,
         trace: Trace,
-        uop: Any,
-        tensor: Any,
-        model_uop: Any,
+        value: tuple[Any, Any, Any, bool],
         uop_labels: dict[int, str],
         observed: tuple[Mapping[int, list[str]], Mapping[int, Any], TinygradModuleTree | None],
     ) -> TinygradUOpCapture:
         """Emit the event for one recorded UOp and return its validation capture.
 
-        ``uop`` gives the parent edges and payload; ``model_uop`` is the UOp the
-        model, observer and consumers know the value by (they differ only for a
-        realized random-init weight). ``observed`` is ``(observed_ops,
-        observed_module_stacks, module_tree)``; ``uop_labels`` gains both UOps.
+        ``value`` is ``(uop, tensor, model_uop, owned)`` from
+        :func:`recorded_values`: ``uop`` gives the parent edges, ``tensor`` the
+        realized value (the payload as is when ``owned``, else copied), and
+        ``model_uop`` is the UOp the model, observer and consumers know the
+        value by (it differs only for a realized random-init weight).
+        ``observed`` is ``(observed_ops, observed_module_stacks, module_tree)``;
+        ``uop_labels`` gains both UOps.
         """
 
+        uop, tensor, model_uop, owned = value
         observed_ops, observed_module_stacks, module_tree = observed
         op_name = _uop_name(uop)
         parents = tuple(
@@ -880,7 +882,7 @@ class TinygradBackend:
             is_input=False,
             is_parameter=bool(param_refs),
         )
-        payload = self._realized_copy(tensor, uop=uop)
+        payload = tensor if owned else self._realized_copy(tensor, uop=uop)
         names = tuple(observed_ops.get(id(model_uop), ()))
         event = self._append_event(
             trace=trace,
@@ -1693,6 +1695,17 @@ class TinygradBackend:
 
         return Tensor(uop)
 
+    def _capture_payload(self, capture: RealizedCapture, uop: Any) -> Any:
+        """The payload for a value realized by the capture's one realization.
+
+        A buffer the capture created is the payload as is; a value sharing a
+        buffer with a live tensor (an input that was already realized) is
+        copied so later writes to that tensor leave the payload unchanged.
+        """
+
+        tensor = capture.realized[id(uop)]
+        return tensor if id(uop) in capture.owned else self._realized_copy(tensor, uop=uop)
+
     def _realized_copy(self, value: Any, *, uop: Any | None = None) -> Any:
         """Return a sanctioned live payload copy for ``DEV=PYTHON`` tinygrad.
 
@@ -1714,6 +1727,10 @@ class TinygradBackend:
         from tinygrad import Tensor
 
         try:
+            if str(value.device).startswith("NPY"):
+                # The host-only NPY device stores numpy arrays and cannot copy
+                # data in, so the copy stays a numpy-backed buffer there.
+                return Tensor(value.numpy().copy(), dtype=value.dtype, device=value.device)
             return Tensor(value.tolist(), dtype=value.dtype, device=value.device).realize()
         except NotImplementedError as error:
             # ``need copyin``: a host-side source buffer (closure constant) that

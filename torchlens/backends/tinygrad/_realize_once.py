@@ -69,6 +69,12 @@ class RealizedCapture:
         The capture plan (:func:`plan_capture`).
     realized
         Realized tensors keyed by the ``id()`` of the pre-realization UOp.
+    owned
+        Keys of ``realized`` whose tensor holds a buffer the capture created
+        and nothing else references; such a tensor is the payload as is.
+        Any other value (an input or weight that already had a buffer, a
+        random-init weight the model now holds) shares its buffer and is
+        copied for the payload.
     input_leaves
         ``(container_path, tensor, uop)`` per positional tensor input, the UOp
         read before realization (it matches the forward graph's sources).
@@ -79,6 +85,7 @@ class RealizedCapture:
 
     plan: RealizeOncePlan
     realized: Mapping[int, Any]
+    owned: frozenset[int]
     input_leaves: tuple[tuple[str, Any, Any], ...]
     output_uops: tuple[Any, ...]
 
@@ -193,14 +200,19 @@ def plan_capture(
 
 def realize_recorded_values(
     plan: RealizeOncePlan, source_uops: Sequence[Any], outputs: Sequence[Any]
-) -> dict[int, Any]:
+) -> tuple[dict[int, Any], frozenset[int]]:
     """Realize the sources, every recorded value and the outputs in one call.
 
-    One tinygrad Tensor is built per source and recorded UOp and the whole
-    list, plus the outputs, goes to a single ``realize_once``; listing a tensor
-    gives it its own buffer. tinygrad then points every live tensor that held a
-    realized UOp (the caller's outputs, a random-init weight) at the buffer, so
-    later reads see the same values and nothing is drawn twice.
+    Each source and recorded forward UOp is listed as ``CONTIGUOUS(uop)`` and
+    the whole list, plus the outputs, goes to a single ``realize_once``: one
+    tinygrad schedule, so random state is drawn once. The ``CONTIGUOUS``
+    wrapper gives each recorded value its own kernel and buffer without making
+    the UOp itself a buffer boundary, so every consumer, the outputs included,
+    is computed exactly as the eager forward computes it (tinygrad fuses
+    elementwise and reduce chains, and storing an intermediate would change
+    the rounding downstream). A pre-forward random value is listed as itself,
+    so tinygrad points the model's weight tensor at the realized buffer and
+    later reads see the values the capture recorded instead of drawing again.
 
     Parameters
     ----------
@@ -213,8 +225,9 @@ def realize_recorded_values(
 
     Returns
     -------
-    dict[int, Any]
-        Realized tensors keyed by the ``id()`` of the pre-realization UOp.
+    tuple[dict[int, Any], frozenset[int]]
+        Realized tensors keyed by the ``id()`` of the pre-realization UOp, and
+        the keys whose buffer the capture owns (:class:`RealizedCapture`).
 
     Raises
     ------
@@ -224,14 +237,9 @@ def realize_recorded_values(
         ``BUFFER`` source, else the first recorded op.
     """
 
-    from tinygrad import Tensor
-
     from .._protocols.tinygrad import TinygradProtocol
 
-    realized: dict[int, Any] = {}
-    for uop in (*source_uops, *plan.recorded):
-        if id(uop) not in realized:
-            realized[id(uop)] = Tensor(uop)
+    realized, owned = _realization_targets(plan, source_uops)
     try:
         TinygradProtocol().realize_once([*realized.values(), *outputs])
     except NotImplementedError as error:
@@ -240,7 +248,33 @@ def realize_recorded_values(
         raise refuse_constant_unrealizable(
             culprit, error, code=CONSTANT_UNREALIZABLE_CODE
         ) from error
-    return realized
+    return realized, owned
+
+
+def _realization_targets(
+    plan: RealizeOncePlan, source_uops: Sequence[Any]
+) -> tuple[dict[int, Any], frozenset[int]]:
+    """The tensors :func:`realize_recorded_values` lists, before realizing.
+
+    A forward value is listed as ``CONTIGUOUS(uop)``; when tinygrad returns the
+    UOp itself (it already has a buffer, is already contiguous, or has no
+    device) the buffer is shared, so the key is not owned. A pre-forward
+    random value is listed as itself so tinygrad repoints the model's weight
+    tensor at the realized buffer: it is drawn once, here.
+    """
+
+    from tinygrad import Tensor
+
+    realized: dict[int, Any] = {}
+    owned: set[int] = set()
+    for uop in (*source_uops, *plan.recorded):
+        if id(uop) in realized:
+            continue
+        target = uop if id(uop) in plan.random_values else uop.contiguous()
+        realized[id(uop)] = Tensor(target)
+        if target is not uop:
+            owned.add(id(uop))
+    return realized, frozenset(owned)
 
 
 def realized_value_uops(realized_tensor: Any) -> tuple[Any, ...]:
@@ -302,11 +336,11 @@ def realize_capture(
     source_uops = tuple(uop for _path, _value, uop in input_leaves)
     output_uops = tuple(cast(Any, output).uop for output in outputs)
     plan = plan_capture(outputs, source_uops, preexisting_uops)
-    realized = realize_recorded_values(plan, source_uops, outputs)
-    return RealizedCapture(plan, realized, input_leaves, output_uops)
+    realized, owned = realize_recorded_values(plan, source_uops, outputs)
+    return RealizedCapture(plan, realized, owned, input_leaves, output_uops)
 
 
-def recorded_values(capture: RealizedCapture) -> Iterator[tuple[Any, Any, Any]]:
+def recorded_values(capture: RealizedCapture) -> Iterator[tuple[Any, Any, Any, bool]]:
     """The ops a capture records, each with its realized value, in record order.
 
     A forward value is recorded as its own UOp. A pre-forward random value is
@@ -322,10 +356,12 @@ def recorded_values(capture: RealizedCapture) -> Iterator[tuple[Any, Any, Any]]:
 
     Yields
     ------
-    tuple[Any, Any, Any]
-        ``(uop, realized_tensor, model_uop)``: the recorded UOp (its ``src``
-        gives the parent edges), the tensor holding its value, and the UOp the
-        model, the observer and consumers know the value by.
+    tuple[Any, Any, Any, bool]
+        ``(uop, realized_tensor, model_uop, owned)``: the recorded UOp (its
+        ``src`` gives the parent edges), the tensor holding its value, the UOp
+        the model, the observer and consumers know the value by, and whether
+        the capture owns the tensor's buffer (else the payload is a copy; a
+        random-init weight's buffer is the model's own).
     """
 
     from tinygrad import Tensor
@@ -333,10 +369,10 @@ def recorded_values(capture: RealizedCapture) -> Iterator[tuple[Any, Any, Any]]:
     for uop in capture.plan.recorded:
         tensor = capture.realized[id(uop)]
         if id(uop) not in capture.plan.random_values:
-            yield uop, tensor, uop
+            yield uop, tensor, uop, id(uop) in capture.owned
             continue
         for value_uop in realized_value_uops(tensor):
             if value_uop is tensor.uop:
-                yield value_uop, tensor, uop
+                yield value_uop, tensor, uop, False
             else:
-                yield value_uop, Tensor(value_uop), value_uop
+                yield value_uop, Tensor(value_uop), value_uop, False

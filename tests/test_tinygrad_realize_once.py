@@ -103,7 +103,12 @@ def test_random_init_capture_equals_capture_after_realizing_weights() -> None:
 
 
 def test_capture_realizes_the_forward_graph_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """One ``realize_once`` call; nothing outside it evaluates RNG or a recorded op again."""
+    """One ``realize_once`` call; nothing outside it evaluates RNG or a recorded op again.
+
+    Reading a realized buffer back (the payload copy of a weight the model
+    holds) evaluates nothing, so a recorded value that is a view of a buffer
+    may appear in a later read; a recorded computation may not.
+    """
 
     from torchlens.backends._protocols.tinygrad import TinygradProtocol
 
@@ -140,8 +145,10 @@ def test_capture_realizes_the_forward_graph_once(monkeypatch: pytest.MonkeyPatch
         id(capture.uop)
         for capture in trace.tinygrad_uop_captures
         if capture.parent_labels
+        and capture.uop.base.op.name != "BUFFER"
         and any(node.op.name == "BUFFER" for node in capture.uop.toposort())
     }
+    assert recorded
     for uop in outside:
         nodes = uop.toposort()
         assert not any(node.op.name == "THREEFRY" for node in nodes)
