@@ -19,17 +19,20 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests.conformance._scorecard import (
+    PreviewScorecard,
+    ScorecardCell,
+    backend_scorecards,
+    scorecard_from_record,
+)
 from torchlens.backends import _scorecard_rows as rows_module
 from torchlens.backends._scorecard_rows import (
     ROW_KEY_PREFIX,
     backend_scorecard_rows,
-    backend_scorecards,
     read_shipped_scorecard,
-    scorecard_from_record,
     shipped_scorecard_path,
 )
 from torchlens.backends.registry import registered_backend_specs
-from torchlens.conformance._scorecard import PreviewScorecard, ScorecardCell
 from torchlens.report import _doctor as doctor_module, doctor as report
 
 PREVIEW_FRAMEWORK_MODULES = ("tensorflow", "jax", "mlx", "paddle", "tinygrad")
@@ -162,7 +165,7 @@ def test_no_shipped_record_reads_not_tested_with_the_write_remedy(shipped: dict[
     assert row.status == "not_tested"
     assert row.severity == "info"
     assert "no shipped scorecard" in row.details
-    assert "torchlens.conformance.scorecard --backend torch --write" in row.suggestion
+    assert "tests.conformance.scorecard --backend torch --write" in row.suggestion
     assert read_shipped_scorecard("torch") is None
     assert all(card.backend != "torch" for card in backend_scorecards())
 

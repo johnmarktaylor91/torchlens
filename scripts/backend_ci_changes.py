@@ -11,7 +11,7 @@ A path triggers a leg when it is:
 
 - shared: a top-level module of ``torchlens/backends/`` (the registry, the
   protocol, the shared finalize and constants rules), anything under
-  ``torchlens/backends/_protocols/``, ``torchlens/conformance/``,
+  ``torchlens/backends/_protocols/``, ``tests/conformance/``,
   ``torchlens/compat/`` or ``tests/backend_conformance/``, ``pyproject.toml``,
   the workflow itself, this script, or the executed-floor check;
 - the backend's own: anything under ``torchlens/backends/<backend>/``, its
@@ -48,7 +48,7 @@ BACKEND_TOKENS: dict[str, tuple[str, ...]] = {
 #: Paths whose change runs every backend leg (directory prefixes end in "/").
 SHARED_PREFIXES: tuple[str, ...] = (
     "torchlens/backends/_protocols/",
-    "torchlens/conformance/",
+    "tests/conformance/",
     "torchlens/compat/",
     "tests/backend_conformance/",
 )

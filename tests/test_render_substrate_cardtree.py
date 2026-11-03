@@ -16,7 +16,8 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._notebook.cardtree import (
+from torchlens.errors import TraceCaptureError
+from torchlens.report._notebook.cardtree import (
     CARD_CSS_VERSION,
     Card,
     CardCollection,
@@ -27,7 +28,6 @@ from torchlens._notebook.cardtree import (
     render_card_html,
     safe_card_html,
 )
-from torchlens.errors import TraceCaptureError
 
 
 def test_typed_leaf_escaping_happens_exactly_once() -> None:

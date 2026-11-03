@@ -17,8 +17,7 @@ from typing import Any
 
 import pytest
 
-from torchlens.backends.registry import BackendUnsupportedError
-from torchlens.conformance import (
+from tests.conformance import (
     PREVIEW_BACKENDS,
     CaseResult,
     ConformanceReport,
@@ -28,14 +27,15 @@ from torchlens.conformance import (
     preview_scorecard,
     run_conformance,
 )
-from torchlens.conformance._adapters import RosterModel, resolve_adapter
-from torchlens.conformance._cases import run_c1_cases
-from torchlens.conformance._protocol_cases import (
+from tests.conformance._adapters import RosterModel, resolve_adapter
+from tests.conformance._cases import run_c1_cases
+from tests.conformance._protocol_cases import (
     c1_row_case_ids,
     c1_tail_case_ids,
     c2_row_case_ids,
 )
-from torchlens.conformance._scorecard import SCORECARD_VERSION, scorecard_from_report
+from tests.conformance._scorecard import SCORECARD_VERSION, scorecard_from_report
+from torchlens.backends.registry import BackendUnsupportedError
 from torchlens.errors import ConfigurationError
 
 #: Cells a full run over a two-family protocol-free roster defines: 3 C0, 2x3 + 1 C1, 2x3 C2.
@@ -383,7 +383,7 @@ def _assert_named_reds(
     ``pack`` is the ``(backend, framework version)`` under test.
     """
 
-    from torchlens.conformance import _roster_for
+    from tests.conformance import _roster_for
 
     backend, version = pack
     adapter = resolve_adapter(backend)
@@ -409,7 +409,7 @@ def _assert_named_reds(
 def _jax_known_red_cells() -> dict[tuple[str, str], str]:
     """JAX's named red cells, built from the roster module's family list."""
 
-    from torchlens.conformance._rosters import jax as jax_roster
+    from tests.conformance._rosters import jax as jax_roster
 
     return _known_red_cells({}, jax_roster.CONFIG_BUILT_FAMILIES, {})
 
@@ -429,7 +429,7 @@ _TF_KERAS_MODULE_ROWS: tuple[str, ...] = (
 def _tf_known_red_cells() -> dict[tuple[str, str], str]:
     """TensorFlow's named red cells, built from the roster module's family list."""
 
-    from torchlens.conformance._rosters import tf as tf_roster
+    from tests.conformance._rosters import tf as tf_roster
 
     keras = {
         ("c1_validation_passes", family): "effect regions unverified"
@@ -453,7 +453,7 @@ def test_jax_pack_earns_c1_with_its_named_red_cells(
     jax = pytest.importorskip("jax")
     pytest.importorskip("equinox")
     pytest.importorskip("flax")
-    from torchlens.conformance._rosters import ECOSYSTEM_ENV
+    from tests.conformance._rosters import ECOSYSTEM_ENV
 
     monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
     _assert_named_reds(("jax", str(jax.__version__)), tmp_path, _jax_known_red_cells(), 9, "C1")
@@ -472,7 +472,7 @@ def test_tf_pack_earns_c0_with_its_named_red_cells(
     """
 
     tf = pytest.importorskip("tensorflow")
-    from torchlens.conformance._rosters import ECOSYSTEM_ENV
+    from tests.conformance._rosters import ECOSYSTEM_ENV
 
     monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
     _assert_named_reds(("tf", str(tf.__version__)), tmp_path, _tf_known_red_cells(), 9, "C0")
@@ -490,7 +490,7 @@ def test_mlx_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
     """
 
     mx = pytest.importorskip("mlx.core")
-    from torchlens.conformance import _roster_for
+    from tests.conformance import _roster_for
 
     adapter = resolve_adapter("mlx")
     roster = _roster_for(adapter, None)

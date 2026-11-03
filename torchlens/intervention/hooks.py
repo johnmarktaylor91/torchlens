@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -29,6 +28,7 @@ from ._hooks_support import (
     _selector_call_index,
     _snapshot_layer_log,
     _targets_accumulate_grad,
+    _validate_hook_signature,
     gradient_inner,
     make_live_site_proxy,
 )
@@ -651,7 +651,7 @@ def _backward_context_op(grad_fn_handle: Any) -> Any:
         The paired pass-level op, the GradFn's op, or ``grad_fn_handle`` itself
         when it carries no ``op``.
     """
-    from .._ir.selector_eval import _grad_fn_forward_op
+    from .._ir._selector_universe import _grad_fn_forward_op
 
     if not hasattr(grad_fn_handle, "op"):
         return grad_fn_handle
@@ -1196,7 +1196,10 @@ def live_selector_matches_site(selector_like: Any, site: Any) -> bool:
     if not matched and selector.selector_kind == "label":
         label_value = str(selector.selector_value)
         if looks_like_finalized_label(label_value):
-            raise LiveModeLabelError(live_label_error_message(label_value))
+            raise LiveModeLabelError(
+                live_label_error_message(label_value),
+                code="label_selector_not_live",
+            )
     return matched
 
 
@@ -1762,56 +1765,6 @@ def _is_site_like(value: Any) -> bool:
     """
 
     return isinstance(value, (BaseSelector, TargetSpec, str)) or hasattr(value, "layer_label")
-
-
-def _validate_hook_signature(fn: Callable[..., Any], *, signal: HookDirection) -> None:
-    """Validate the MVP hook callable signature.
-
-    Parameters
-    ----------
-    fn:
-        Hook callable to inspect.
-    signal:
-        Pass of the site branch, for diagnostics and the backward tuple protocol.
-
-    Raises
-    ------
-    HookSignatureError
-        If the callable cannot be called as ``fn(out, *, ctx=context)``.
-        Backward hooks receive a grad as the first positional argument; the
-        parameter name is conventional only, so ``g`` or any other name is
-        accepted.
-    """
-
-    try:
-        signature = inspect.signature(fn)
-    except (TypeError, ValueError) as exc:
-        raise HookSignatureError(f"could not inspect hook signature for {fn!r}") from exc
-
-    parameters = tuple(signature.parameters.values())
-    has_positional = any(
-        parameter.kind
-        in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-        for parameter in parameters
-    )
-    has_var_positional = any(
-        parameter.kind == inspect.Parameter.VAR_POSITIONAL for parameter in parameters
-    )
-    ctx_param = signature.parameters.get("ctx")
-    has_var_keyword = any(
-        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters
-    )
-    if not has_positional and not has_var_positional:
-        noun = "grad" if signal == "backward" else "out"
-        raise HookSignatureError(f"hook must accept a first positional {noun} argument")
-    if signal == "backward" and (
-        {"grad_output", "grad_fn_handle", "call_index", "run_ctx"} & set(signature.parameters)
-    ):
-        return
-    if ctx_param is None and not has_var_keyword:
-        raise HookSignatureError("hook must accept required keyword-only argument 'ctx'")
-    if ctx_param is not None and ctx_param.kind is not inspect.Parameter.KEYWORD_ONLY:
-        raise HookSignatureError("'ctx' must be a keyword-only parameter")
 
 
 __all__ = [

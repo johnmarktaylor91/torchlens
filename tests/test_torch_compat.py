@@ -21,7 +21,8 @@ from typing import cast
 import pytest
 import torch
 
-from torchlens._utils import _torch_compat as tc
+from torchlens._utils import _kernel_probes, _torch_compat as tc
+from torchlens._utils._kernel_probes import _solves_identity_system
 from torchlens._utils.rng import log_current_autocast_state
 
 # The functorch transform-level API (torch._C._functorch.maybe_current_level) is a
@@ -424,6 +425,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # mirror the live post-snapshot capability.
         "HAS_CPU_HALF_KERNELS": tc.HAS_CPU_HALF_KERNELS,
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL": tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL,
+        # torch.sparse.spsolve on CUDA needs a cuDSS build, which official wheels
+        # lack. Build- and device-dependent, so mirror the live post-snapshot
+        # capability.
+        "HAS_SPARSE_SPSOLVE_CUDA": tc.HAS_SPARSE_SPSOLVE_CUDA,
         # Test-only structure-only-belt provenance signal: whether meta-tensor
         # scalar extraction raises torch's own guard (torch 2.1-2.2 fall
         # through to a generic NotImplementedError instead). Build-dependent,
@@ -776,6 +781,7 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
     assert snapshot["HAS_REDUCE_TUPLE_DIM"] == tc.HAS_REDUCE_TUPLE_DIM
     assert snapshot["HAS_CPU_HALF_KERNELS"] == tc.HAS_CPU_HALF_KERNELS
     assert snapshot["HAS_CPU_FLOAT8_DETERMINISTIC_FILL"] == tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL
+    assert snapshot["HAS_SPARSE_SPSOLVE_CUDA"] == tc.HAS_SPARSE_SPSOLVE_CUDA
 
 
 def test_read_fill_uninitialized_memory_returns_none_when_absent(
@@ -988,6 +994,7 @@ def test_get_gradient_edge_support_is_lazy_and_caches(monkeypatch: pytest.Monkey
         "get_reduce_tuple_dim_support",
         "get_cpu_half_kernels_support",
         "get_cpu_float8_deterministic_fill_support",
+        "get_sparse_spsolve_cuda_support",
     ],
 )
 def test_real_op_probe_getters_are_lazy_and_cache(
@@ -1009,16 +1016,19 @@ def test_real_op_probe_getters_are_lazy_and_cache(
         "get_reduce_tuple_dim_support": "_probe_reduce_tuple_dim",
         "get_cpu_half_kernels_support": "_probe_cpu_half_kernels",
         "get_cpu_float8_deterministic_fill_support": "_probe_cpu_float8_deterministic_fill",
+        "get_sparse_spsolve_cuda_support": "_probe_sparse_spsolve_cuda",
     }[getter_name]
     probed_name = {
         "get_reduce_tuple_dim_support": "_REDUCE_TUPLE_DIM_PROBED",
         "get_cpu_half_kernels_support": "_CPU_HALF_KERNELS_PROBED",
         "get_cpu_float8_deterministic_fill_support": "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED",
+        "get_sparse_spsolve_cuda_support": "_SPARSE_SPSOLVE_CUDA_PROBED",
     }[getter_name]
     flag_name = {
         "get_reduce_tuple_dim_support": "HAS_REDUCE_TUPLE_DIM",
         "get_cpu_half_kernels_support": "HAS_CPU_HALF_KERNELS",
         "get_cpu_float8_deterministic_fill_support": "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+        "get_sparse_spsolve_cuda_support": "HAS_SPARSE_SPSOLVE_CUDA",
     }[getter_name]
 
     calls = 0
@@ -1037,6 +1047,46 @@ def test_real_op_probe_getters_are_lazy_and_cache(
     second = getter()
     assert calls == 1, "the probe must not re-run once latched"
     assert first == second == getattr(tc, flag_name)
+
+
+def test_spsolve_cuda_probe_is_false_without_the_op_or_a_cuda_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing op or missing CUDA answers ``False`` before any tensor op runs."""
+
+    def _must_not_run(*_args: object, **_kwargs: object) -> torch.Tensor:
+        raise AssertionError("the probe must not solve without a CUDA device")
+
+    monkeypatch.setattr(torch.sparse, "spsolve", _must_not_run, raising=False)
+    monkeypatch.setattr(_kernel_probes, "_is_cuda_available", lambda: False)
+    assert _kernel_probes.probe_sparse_spsolve_cuda() is False
+    monkeypatch.setattr(_kernel_probes, "_is_cuda_available", lambda: True)
+    monkeypatch.delattr(torch.sparse, "spsolve")
+    assert _kernel_probes.probe_sparse_spsolve_cuda() is False
+
+
+def test_spsolve_solve_step_catches_only_the_no_cudss_refusal() -> None:
+    """Only torch's cuDSS refusal reads as absent; any other error propagates."""
+
+    def _no_cudss(*_args: object, **_kwargs: object) -> torch.Tensor:
+        raise RuntimeError(
+            "Calling linear solver with sparse tensors requires compiling "
+            "PyTorch with CUDA cuDSS and is not supported in ROCm build."
+        )
+
+    def _other_fault(*_args: object, **_kwargs: object) -> torch.Tensor:
+        raise RuntimeError("CUDA error: an illegal memory access was encountered")
+
+    assert _solves_identity_system(_no_cudss, "cpu") is False
+    assert _solves_identity_system(lambda matrix, rhs: rhs, "cpu") is True
+    with pytest.raises(RuntimeError, match="illegal memory access"):
+        _solves_identity_system(_other_fault, "cpu")
+    if hasattr(torch.sparse, "spsolve"):
+        # The real op has no CPU kernel: the dispatcher's refusal is not the
+        # cuDSS refusal, so it propagates instead of reading as absent.
+        with pytest.raises(RuntimeError) as info:
+            _solves_identity_system(torch.sparse.spsolve, "cpu")
+        assert "cuDSS" not in str(info.value)
 
 
 def test_module_existence_probe_imports_no_missing_ancestor(

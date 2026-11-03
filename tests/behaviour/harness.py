@@ -232,6 +232,13 @@ def flatten_leaves(value: Any) -> Iterator[Any]:
     elif isinstance(value, (list, tuple)):
         for item in value:
             yield from flatten_leaves(item)
+    elif isinstance(value, torch.distributions.Distribution):
+        # Capture records a distribution one output op per recorded attribute,
+        # in its own walk order; compare the same leaves.
+        from torchlens._ir.distribution_container import distribution_children
+
+        for _name, child in distribution_children(value):
+            yield from flatten_leaves(child)
     else:
         yield value
 
@@ -432,7 +439,15 @@ def _forward_match(cell: Cell) -> None:
         before = cell.output_leaves(trace)
         torch.manual_seed(SEED)
         trace.run(cell.model, cell.fresh_inputs())
-        cell.expect_same_leaves(before, cell.output_leaves(trace), "replay output")
+        diff = first_leaf_difference(before, cell.output_leaves(trace))
+        if diff is not None and first_leaf_difference(cell.plain_output, _plain_forward(cell)):
+            # A forward that rewrites its own state (a counter buffer, an
+            # in-place parameter update) cannot reproduce any earlier output,
+            # seeded or not; that is the model's doing, not the replay's.
+            raise NotApplicable(
+                f"two plain forwards differ, so the forward is not deterministic; {diff}"
+            )
+        cell.expect(diff is None, f"replay output: {diff}")
         return
     foreign = [type(leaf).__name__ for leaf in cell.plain_output if not _comparable(leaf)]
     if foreign:

@@ -20,7 +20,7 @@ pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 | Bridges/compat/export | `test_bridges_*.py`, `test_compat_report.py`, `test_exports.py`, `test_extractor_compat.py` |
 | Examples/audit | `test_examples.py`, `test_examples_load.py`, `test_not_mvp_audit.py` |
 | Train mode | `test_train_mode/` |
-| Backend contracts | `backend_conformance/`, `backend_parity/`, `backends/` |
+| Backend contracts | `backend_conformance/`, `backend_parity/`, `backends/`, `conformance/` (the C0-C2 conformance harness and scorecard builder; not a package of `torchlens`) |
 | Capture and surface oracles | `capture_oracle/`, `godobject_oracle/`, `surface_oracle/` |
 | Producer and semantic parity | `producer_parity/`, `semantic/`; the producer ledger is a committed gate artifact |
 | Classics corpus and benchmarks | `classics_corpus/`, `bench/` |
@@ -134,6 +134,16 @@ small inputs, vector/2D/complex inputs, and output directories.
 `tests/backends/conftest.py` supplies backend test isolation, and
 `tests/test_train_mode/conftest.py` supplies train-mode fixtures. Model fixtures/classes live
 primarily in `tests/example_models.py`.
+
+## Conformance harness (`tests/conformance/`)
+The conformance suite is test-side: it is imported as `tests.conformance` and is not shipped in the
+wheel. It runs the same case ids over every backend (C0 protocol, C1 capture, C2 durable) from
+per-backend rosters in `_rosters/` and folds the result into one scorecard per backend. The
+shipped record stays in the product at `torchlens/backends/<name>/scorecard.json` (read by
+`tl.report.doctor()`); regenerate or check it from a checkout with
+`python -m tests.conformance.scorecard --backend <name> --write` or `--check` (the pinned CI legs
+run `--check`) and print the six advisory graduation items with `--graduation`.
+`TORCHLENS_CONFORMANCE_ECOSYSTEM=1` enables the roster rows that download pretrained weights.
 
 ## Shared package-source corpus
 A lint/census test that walks `torchlens/` source must consume

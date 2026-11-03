@@ -403,7 +403,7 @@ def _installed_records(legacy_ctors):
 def test_legacy_constructor_roster_rows_resolve_to_live_classes() -> None:
     """Every roster row names a live class on this torch (no row goes dead silently)."""
 
-    from torchlens._constants import LEGACY_TENSOR_CONSTRUCTOR_SITES
+    from torchlens._legacy_ctor_sites import LEGACY_TENSOR_CONSTRUCTOR_SITES
     from torchlens._utils._torch_compat import get_optional_torch_namespace
 
     for namespace_name, class_name in LEGACY_TENSOR_CONSTRUCTOR_SITES:

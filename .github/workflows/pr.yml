@@ -315,7 +315,7 @@ jobs:
         # so the reference backend's shipped scorecard is checked here the way
         # each backend-protocol leg checks its preview's.
         if: matrix.scope == 'smoke'
-        run: python -m torchlens.conformance.scorecard --backend torch --check
+        run: python -m tests.conformance.scorecard --backend torch --check
 
 
   checks:
@@ -540,7 +540,7 @@ jobs:
           BACKEND: ${{ matrix.backend }}
           DEV: ${{ matrix.dev || '' }}
           MLX_DISABLE_COMPILE: "1"
-        run: python -m torchlens.conformance.scorecard --backend "$BACKEND" --check
+        run: python -m tests.conformance.scorecard --backend "$BACKEND" --check
   packaging-sets:
     name: Packaging install sets
     runs-on: ubuntu-24.04

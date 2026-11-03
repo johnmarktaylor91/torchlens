@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens.checks as tc
+import torchlens.debug._checks as tc
 import torchlens.report
 
 

@@ -14,12 +14,16 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._notebook._access import CopyRoot, resolve_copy_root
-from torchlens._notebook._axis_labels import axis_labels, decode_token_labels, sdpa_attention_hint
-from torchlens._notebook._grid import array_grid_html
-from torchlens._notebook._motifs import classify_value, resolve_signed_bounds
-from torchlens._notebook.cardtree import Card, CardText, render_card_html
 from torchlens.errors import TraceCaptureError
+from torchlens.report._notebook._access import CopyRoot, resolve_copy_root
+from torchlens.report._notebook._axis_labels import (
+    axis_labels,
+    decode_token_labels,
+    sdpa_attention_hint,
+)
+from torchlens.report._notebook._grid import array_grid_html
+from torchlens.report._notebook._motifs import classify_value, resolve_signed_bounds
+from torchlens.report._notebook.cardtree import Card, CardText, render_card_html
 
 
 class _Recurrent(nn.Module):

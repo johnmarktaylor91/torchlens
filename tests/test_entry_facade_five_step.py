@@ -25,7 +25,7 @@ from torchlens._utils.facade import DependencyGate, facade_dir, resolve_facade_a
 
 #: The notebook facade left the root surface (private package); its facade
 #: behaviour is still pinned through the module itself.
-_NOTEBOOK = importlib.import_module("torchlens._notebook")
+_NOTEBOOK = importlib.import_module("torchlens.report._notebook")
 
 # ---------------------------------------------------------------------------
 # The mechanism, exercised through a synthetic namespace (every step).

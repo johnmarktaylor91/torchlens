@@ -139,12 +139,12 @@ def test_fast_live_run_handles_batchnorm_without_refresh_projection(training: bo
         warnings.simplefilter("ignore")
         result = captured.run(inputs=inputs, fast=True)
 
-    assert result.trace is captured
+    assert result.trace is not captured
     assert result.output.shape == (4, 3)
     assert result.report.path_faithfulness.value == "verified"
     selected = [
         op
-        for op in captured._layer_list
+        for op in result.trace._layer_list
         if op.func_name == "batch_norm" and op.has_saved_activation
     ]
     assert selected

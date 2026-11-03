@@ -45,7 +45,7 @@ Protocol obligations that every backend shares:
   pyproject extra and its `pinned` the per-change CI install
   (`tests/test_backend_framework_pins.py`).
 - The backend's shipped `scorecard.json` is regenerated with
-  `python -m torchlens.conformance.scorecard --backend <name> --write` on the
+  `python -m tests.conformance.scorecard --backend <name> --write` on the
   pinned version, never hand-edited; its docs page `docs/backends/<name>.md`
   keeps a tutorial and a can and cannot table equal to the record's capability
   summary (`scripts/checks/backend_docs_lockstep.py`).

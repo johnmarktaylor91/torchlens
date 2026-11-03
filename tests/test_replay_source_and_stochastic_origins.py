@@ -103,6 +103,8 @@ def test_fork_edit_on_loaded_trace_refuses_naming_the_loaded_condition(tmp_path)
     assert "loaded from a saved file" in message
     assert "replayable=True" in message
     assert "trace.run(model, inputs)" in message
+    assert info.value.fields["code"] == "replay_loaded_trace_has_no_callables"
+    assert message.endswith(info.value.fields["remedy"])
 
 
 def test_fork_edit_at_random_source_site_edits_the_captured_draw() -> None:
@@ -179,5 +181,8 @@ def test_edit_past_an_index_lookup_refuses_typed_naming_site_and_origin() -> Non
     assert "'linear_1_1'" in message, message
     assert "IndexError" in message, message
     assert isinstance(info.value.__cause__, IndexError)
+    assert info.value.fields["code"] == "replay_downstream_op_raised"
+    assert info.value.fields["raised_type"] == "IndexError"
+    assert message.endswith(info.value.fields["remedy"])
     assert torch.equal(fork["linear_1_1"].out, captured_linear), "a failed replay committed"
     assert torch.equal(trace["linear_1_1"].out, captured_linear)
