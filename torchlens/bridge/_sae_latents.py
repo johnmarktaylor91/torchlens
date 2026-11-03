@@ -602,7 +602,7 @@ def logged_splice_trace(
     model.add_module(child, reconstruction)
     handle = module.register_forward_hook(_hook)
     try:
-        logged = tl.trace(model, inputs, capture=tl.options.CaptureOptions(replayable=True))
+        logged = tl.trace(model, inputs)
     finally:
         handle.remove()
         del model._modules[child]

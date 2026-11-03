@@ -139,7 +139,7 @@ def set_affine_coordinates(weight: torch.Tensor, *, bias: torch.Tensor | None = 
 
     Examples
     --------
-    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
+    >>> fork = tl.trace(model, x).fork()
     >>> target = tl.subspace("relu_1_2", torch.eye(8)[:2], origin="doc basis", method="loreft")
     >>> edit = set_affine_coordinates(torch.zeros(2, 8), bias=torch.ones(2))
     >>> _ = fork.do(target, edit)

@@ -117,7 +117,7 @@ def save_intervention(
     Examples
     --------
     >>> import pathlib, tempfile
-    >>> edited = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True),
+    >>> edited = tl.trace(model, x,
     ...     intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
     >>> with tempfile.TemporaryDirectory() as d:
     ...     path = pathlib.Path(d) / "spec.tlspec"
