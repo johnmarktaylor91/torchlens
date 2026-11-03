@@ -463,8 +463,6 @@ def load_trace(path_arg: str) -> tuple[Any, dict[str, Any], dict[str, Any]]:
         )
     import torchlens as tl  # deferred: startup cost
 
-    from ..report._health import health_facts  # deferred: startup cost
-
     loaded = tl.load(str(path), lazy=plan["mode"] == "lazy")
     if not isinstance(loaded, tl.Trace):
         raise InvalidArgumentError(
@@ -482,6 +480,8 @@ def load_trace(path_arg: str) -> tuple[Any, dict[str, Any], dict[str, Any]]:
     # WHICH tool touched payloads first, and repeated identical tool calls
     # would not be byte-identical. The cost is bounded by the load plan's
     # declared-entry refusal above.
+    from ..report._health import health_facts  # deferred: startup cost
+
     health_facts(loaded)
     if len(_TRACE_CACHE) >= _TRACE_CACHE_MAX:
         _TRACE_CACHE.pop(next(iter(_TRACE_CACHE)))
