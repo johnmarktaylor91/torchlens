@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.hashing import compute_graph_shape_hash
 from torchlens.recording.exceptions import RecordingConfigError
 
 
@@ -91,3 +92,26 @@ def test_cooked_trace_carries_the_recorder_identity_facts(
     assert cooked._provenance_model_object_id == id(model)
     # Ops outside a container output carry no slot, as on the exhaustive path.
     assert all(op.multi_output_index is None for op in cooked.ops if not op.in_multi_output)
+
+
+def test_cooked_trace_graph_shape_matches_exhaustive_capture(
+    recorded: tuple[tl.Recording, nn.Module, torch.Tensor],
+) -> None:
+    """The rerun divergence detector sees the same graph for a cooked and a traced model."""
+
+    recording, model, x = recorded
+    cooked = recording.to_trace()
+    exhaustive = tl.trace(model, x)
+    # Root-level ops have no containing module on either path, and the input
+    # source carries the exhaustive func_name spelling.
+    cooked_relu = next(op for op in cooked.ops if op.type == "relu")
+    exhaustive_relu = next(op for op in exhaustive.ops if op.type == "relu")
+    assert cooked_relu.module is None and exhaustive_relu.module is None
+    assert list(cooked_relu.modules) == list(exhaustive_relu.modules) == []
+    assert cooked["input_1"].func_name == exhaustive["input_1"].func_name == "none"
+    # The raw-event hash is session-only; a cooked journal is shaped differently,
+    # so the cooked Trace carries none and rerun falls back to the graph hash.
+    assert cooked._raw_event_shape_hash is None
+    assert compute_graph_shape_hash(cooked, rerun_signature=True) == compute_graph_shape_hash(
+        exhaustive, rerun_signature=True
+    )

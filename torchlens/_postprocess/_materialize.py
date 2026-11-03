@@ -1040,13 +1040,13 @@ def _fill_module_call_stacks_from_op_events(
     ``module_hierarchy`` invariant's call-tree-link check (e.g. "ModuleCall
     'block.0:1' module_call_stack=[] does not start with ['block:1']").
 
-    Each predicate ``OpEvent`` carries its full capture-time ``module_stack``
-    (``tuple[ModuleFrame, ...]`` of ``(address, call_index)`` from root ``self`` down
-    to the innermost module). For a frame at position ``i`` the module call's
-    ancestor stack is ``module_stack[:i]`` with the reserved root ``self`` dropped --
-    reproducing exactly the exhaustive ``stack[:-1]`` value (which also excludes the
-    never-pushed root). Fill only missing entries so this stays a faithful
-    reconstruction, never an override of any authoritative enter-event value.
+    Each predicate ``OpEvent`` carries its capture-time ``module_stack``
+    (``tuple[ModuleFrame, ...]`` of ``(address, call_index)``, outermost to innermost;
+    the projection drops the root frame, and the ``self`` guards below keep journals
+    that still carry it faithful). For a frame at position ``i`` the module call's
+    ancestor stack is ``module_stack[:i]`` -- exactly the exhaustive ``stack[:-1]``
+    value (which also excludes the never-pushed root). Fill only missing entries so
+    this stays a faithful reconstruction, never an override of an enter-event value.
     """
 
     stacks = side_channel.module_build_data["module_call_stacks"]

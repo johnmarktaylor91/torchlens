@@ -482,22 +482,15 @@ def _module_frames_from_record_context(ctx: RecordContext) -> tuple[ModuleFrame,
             entry_argnames=(),
         )
         for frame in ctx.module_stack
+        # The root frame (address "") is the Recording's own bookkeeping; exhaustive
+        # capture never lists the root as an op's containing module, so neither does
+        # the cooked Trace (module, modules, the loop-grouping suffix).
+        if frame.address
     )
 
 
 def _module_frame_address(frame: ModuleStackFrame) -> str:
-    """Return the Trace-facing address for a predicate module-stack frame.
-
-    Parameters
-    ----------
-    frame
-        Predicate module frame from a capture-time ``RecordContext``.
-
-    Returns
-    -------
-    str
-        Public module address used by postprocess.
-    """
+    """Return the Trace-facing address for a predicate module-stack frame."""
 
     return frame.address or "self"
 
