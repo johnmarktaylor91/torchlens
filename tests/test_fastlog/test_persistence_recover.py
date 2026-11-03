@@ -37,7 +37,7 @@ def _write_bundle(path: Path) -> tl.Recording:
         PersistenceModel(),
         torch.ones(1, 3),
         storage=tl.options.StorageOptions(path=path, retain_in_memory=False),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
     )
 
 
@@ -427,7 +427,7 @@ def test_disk_finalize_baseexception_marks_partial(
             PersistenceModel(),
             torch.ones(1, 3),
             storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-            default_op=True,
+            recording=tl.options.RecordingOptions(default_op=True),
         )
 
     assert not bundle_path.exists()
@@ -457,7 +457,7 @@ def test_disk_finalize_refuses_concurrently_created_target(
             PersistenceModel(),
             torch.ones(1, 3),
             storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-            default_op=True,
+            recording=tl.options.RecordingOptions(default_op=True),
         )
 
     assert list(bundle_path.iterdir()) == []

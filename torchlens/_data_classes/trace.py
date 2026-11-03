@@ -1038,7 +1038,7 @@ class Trace(TraceOutputMixin, TraceLike):
         self.track_nonfinite: bool = False
         self.track_device_memory: bool = False
         self.measure_host_peak_memory: bool = False
-        self._options_aten_ops: bool = False
+        self._options_aten_ops: bool | str = False
         self.annotations: dict[str, Any] = {}
         self._source_frames: list[FuncCallLocation] = []
         self._graph_manual_tensor_connections: list[tuple[str, str]] = []
@@ -3385,7 +3385,7 @@ class Trace(TraceOutputMixin, TraceLike):
         show_grad_values: bool = False,
         backward_node_spec_fn: Callable[..., Any] | None = None,
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        file_format: str = "pdf",
+        file_format: str | None = None,
         open_viewer: bool = False,
         highlight: DrawHighlightLiteral | None = None,
     ) -> "Drawing":
@@ -3489,8 +3489,8 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.visualization()._trace_draw.to_dagua_graph(
             self,
-            vis_mode="rolled" if rolled else "unrolled",
-            vis_call_depth=depth,
+            rolled=rolled,
+            depth=depth,
             show_buffers=show_buffers,
             direction=direction,
             include_grad_edges=include_grad_edges,

@@ -30,6 +30,7 @@ from ..._selection.selectors import (
 )
 from ..._state import pause_logging
 from ...errors._base import CompatibilityError
+from ...intervention._zero_fire import note_capture_rule_fired
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
 from ...intervention.types import (
@@ -361,6 +362,7 @@ def _apply_predicate_mode_interventions_to_outputs(
             trace._tl_intervene_selector_fire_count = int(
                 getattr(trace, "_tl_intervene_selector_fire_count", 0)
             ) + len(fire_results)
+            note_capture_rule_fired(decision.rule_id)
             _set_tensor_live_fire_results(hooked, fire_results)
         if hooked is not out:
             replacements[container_path] = hooked
@@ -705,6 +707,7 @@ def _apply_predicate_intervention(
         trace._tl_intervene_selector_fire_count = int(
             getattr(trace, "_tl_intervene_selector_fire_count", 0)
         ) + len(fire_results)
+        note_capture_rule_fired(decision.rule_id)
     return hooked, fire_results
 
 

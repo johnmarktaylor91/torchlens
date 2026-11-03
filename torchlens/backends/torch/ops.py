@@ -500,6 +500,7 @@ class _RetainedLookbackCandidate:
     raw_label: str
     payload: _RetainedLookbackPayload
     marked: bool = False
+    owner_call_id: int | None = None
 
 
 @dataclass(slots=True)

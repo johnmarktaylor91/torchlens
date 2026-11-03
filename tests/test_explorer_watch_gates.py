@@ -149,7 +149,6 @@ class TestReusedModuleTruth:
     module-tier fold so it can never silently change meaning.
     """
 
-    @pytest.mark.smoke
     def test_double_call_folds_exactly(self) -> None:
         torch.manual_seed(3)
 
@@ -179,7 +178,6 @@ class TestReusedModuleTruth:
 class TestFailOpenReducer:
     """Matrix row 11: a raising reducer records capture_failed; step survives."""
 
-    @pytest.mark.smoke
     def test_op_tier_raising_facet_fails_open(self) -> None:
         torch.manual_seed(4)
         model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())

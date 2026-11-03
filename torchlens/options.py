@@ -644,10 +644,15 @@ class CaptureOptions:
             Whether the capture records the public ATen operations that each logged
             torch call dispatched to, served by ``Op.aten_ops`` and ``Trace.aten_ops``
             (a session-time knob; ``Trace.has_aten_ops`` reports it after capture or
-            load). Recording installs a dispatch mode for the forward pass and for
-            ``Trace.backward()`` with ``backward_ready=True``, so it is opt-in. The
-            default ``False`` installs no dispatch mode and the accessors raise
-            ``AtenOpsUnavailableError``. GPU kernel recording is out of scope.
+            load). ``True`` records value-free rows; ``"values"`` also keeps each
+            call's returned tensor(s) as ``AtenOp.out`` under the same rules as
+            ``Op.out`` (the ``save=`` selection of the owning torch call,
+            ``detach_saved_activations``, ``output_device``, ``save_mode`` and the
+            save budget). Recording installs a dispatch mode for the forward pass
+            and for ``Trace.backward()`` with ``backward_ready=True``, so it is
+            opt-in. The default ``False`` installs no dispatch mode and the
+            accessors raise ``AtenOpsUnavailableError``. GPU kernel recording is
+            out of scope.
 
         Examples
         --------
@@ -715,7 +720,7 @@ class CaptureOptions:
     jax_static_argnums: int | Sequence[int] | None = None
     grad_options: Any | None = None
     chunk_size: int | None = None
-    aten_ops: bool = False
+    aten_ops: bool | Literal["values"] = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     @refuse_removed_keywords("CaptureOptions", REMOVED_CAPTURE_MEMBERS)
@@ -779,7 +784,7 @@ class CaptureOptions:
         jax_static_argnums: int | Sequence[int] | None | MissingType = MISSING,
         grad_options: Any | None | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
-        aten_ops: bool | MissingType = MISSING,
+        aten_ops: bool | Literal["values"] | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 

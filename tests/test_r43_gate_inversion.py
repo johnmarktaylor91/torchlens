@@ -191,7 +191,6 @@ _GATED_ROOT_CALLABLES = _iter_gated_root_callables()
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_immunizer_no_nonoperator_builtin_passes_gated_roots() -> None:
     """Every gate-passer on an operator-gated root is a genuine RECOGNIZED operator.
 
@@ -458,7 +457,6 @@ def test_to_sparse_coo_wrapper_rescue_admitted() -> None:
     assert is_pure_forward_callable(torch.Tensor.to_sparse_coo)
 
 
-@pytest.mark.smoke
 def test_safe_tensor_property_getters_admitted() -> None:
     """The loader's synthetic safe-property getters (``x.T`` / ``x.mT`` / ``x.real`` /
     ``x.imag``) pass the structural gate (r43 fixup).

@@ -113,7 +113,6 @@ def test_streamed_bundle_honors_per_call_save_grads_override(tmp_path: Path) -> 
     assert any(entry.kind == "grad" for entry in manifest.tensors)
 
 
-@pytest.mark.smoke
 def test_lazy_load_grad_from_bundle(tmp_path: Path) -> None:
     """Lazy-loaded grads should materialize on field access."""
 

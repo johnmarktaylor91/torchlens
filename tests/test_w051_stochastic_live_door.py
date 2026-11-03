@@ -9,7 +9,6 @@ proxy. The donor-group id also hashes datum CONTENT, never ``repr``.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from support.sampling import sampling_draws
 from torch import nn
@@ -111,7 +110,6 @@ def test_live_coordinate_is_stable_under_unrelated_upstream_op() -> None:
     assert labels_plain != labels_prologue, "the ordinal labels DID shift; the coordinate did not"
 
 
-@pytest.mark.smoke
 def test_donor_group_id_hashes_datum_content_not_repr() -> None:
     """Two tensors with one repr mint two group ids; equal content mints one."""
 

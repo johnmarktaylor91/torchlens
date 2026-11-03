@@ -85,6 +85,7 @@ def phase2_log() -> tl.Trace:
     return tl.trace(model, torch.randn(2, 3))
 
 
+@pytest.mark.smoke
 def test_selector_factories_are_immutable_hashable_and_repr_friendly() -> None:
     """Selector constructors return stable immutable value objects."""
 

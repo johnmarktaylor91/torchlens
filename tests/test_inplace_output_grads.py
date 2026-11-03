@@ -294,6 +294,9 @@ def _refreshed_trace(model: nn.Module, x: torch.Tensor, save_grads: object) -> t
     return trace
 
 
+@pytest.mark.smoke_cells(
+    "test_refresh_projection_records_the_retain_grad_gradient_at_in_place_output[selector-add_]"
+)
 @pytest.mark.parametrize("family", ["relu_", "add_", "iadd"])
 @pytest.mark.parametrize("spelling", ["selector", "all"])
 def test_refresh_projection_records_the_retain_grad_gradient_at_in_place_output(

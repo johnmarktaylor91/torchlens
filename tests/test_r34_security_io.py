@@ -118,7 +118,6 @@ def test_secE1_purity_gate_denies_the_walked_surface_directly() -> None:
     assert not is_pure_forward_callable(torch.Tensor.set_)
 
 
-@pytest.mark.smoke
 def test_secE1_default_victim_denies_torchlens_walk() -> None:
     """The default untrusting victim denies a torchlens-path walk to a foreign callable."""
 
@@ -158,7 +157,6 @@ def test_secF1_malformed_raw_image_degrades_without_raising() -> None:
     assert _rehydrate_small_raw_images(bad) is bad
 
 
-@pytest.mark.smoke
 def test_secF1_decompression_bomb_rejected() -> None:
     """A tiny blob declaring huge dimensions is refused before ``.load()`` allocates."""
 
@@ -168,7 +166,6 @@ def test_secF1_decompression_bomb_rejected() -> None:
     assert _rehydrate_small_raw_images(bomb) is bomb
 
 
-@pytest.mark.smoke
 def test_secF1_oversized_bytes_rejected() -> None:
     """Bytes over the canonical save-time cap never reach the decoder."""
 
@@ -181,7 +178,6 @@ def test_secF1_oversized_bytes_rejected() -> None:
     assert _rehydrate_small_raw_images(huge) is huge
 
 
-@pytest.mark.smoke
 def test_secF1_oversized_declared_dimensions_rejected() -> None:
     """A declared edge over the save-time max is refused (even within the byte cap)."""
 
@@ -194,7 +190,6 @@ def test_secF1_oversized_declared_dimensions_rejected() -> None:
     assert _rehydrate_small_raw_images(oversized) is oversized
 
 
-@pytest.mark.smoke
 def test_secF1_legit_small_image_still_decodes() -> None:
     """A genuine small image within bounds still decodes to a PIL image."""
 
@@ -232,7 +227,6 @@ def test_secF2_self_referential_bundle_member_rejected(tmp_path: Path) -> None:
         tl.load(str(bundle))
 
 
-@pytest.mark.smoke_cells("test_secF2_member_path_resolving_to_root_rejected[]")
 @pytest.mark.parametrize("selfref", [".", "", "./"])
 def test_secF2_member_path_resolving_to_root_rejected(tmp_path: Path, selfref: str) -> None:
     """The member-path resolver rejects any path collapsing onto the bundle root."""
@@ -241,7 +235,6 @@ def test_secF2_member_path_resolving_to_root_rejected(tmp_path: Path, selfref: s
         _resolve_bundle_member_path(tmp_path, selfref)
 
 
-@pytest.mark.smoke
 def test_secF2_nesting_depth_cap_enforced(tmp_path: Path) -> None:
     """A member chain deeper than the cap is refused before the stack is exhausted."""
 
@@ -258,10 +251,6 @@ def test_secF2_nesting_depth_cap_enforced(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke_cells(
-    "test_secC_atom_value_type_mismatch_rejected[int-bad_value0]",
-    "test_secC_atom_value_type_mismatch_rejected[none-7]",
-)
 @pytest.mark.parametrize(
     "kind,bad_value",
     [

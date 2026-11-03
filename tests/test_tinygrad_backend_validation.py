@@ -14,7 +14,7 @@ tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor
 
 
-pytestmark = pytest.mark.backend_tinygrad
+pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.rare]
 
 
 def _validation_block(x: Any) -> Any:

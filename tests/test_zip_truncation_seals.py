@@ -42,7 +42,6 @@ class _TwoOutputModel(nn.Module):
         return torch.relu(y), torch.sigmoid(y)
 
 
-@pytest.mark.smoke
 def test_bundle_output_delta_refuses_output_arity_mismatch() -> None:
     """A member missing an output must refuse, not report only the survivor."""
 

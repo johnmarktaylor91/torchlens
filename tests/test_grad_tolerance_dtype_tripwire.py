@@ -102,7 +102,6 @@ def test_bf16_rows_scale_with_bf16_eps() -> None:
     assert not torch.allclose(torch.zeros_like(grads), grads, rtol=rtol, atol=atol)
 
 
-@pytest.mark.smoke
 def test_layer_rows_are_tighter_than_param_rows_per_dtype() -> None:
     """Elementwise (layer) comparisons keep their 10x-tighter budget per dtype."""
 
@@ -250,7 +249,6 @@ def test_explicit_tolerances_still_override_every_dtype(
     )
 
 
-@pytest.mark.smoke
 def test_fp64_layer_grad_corruption_fails_the_backward_verdict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -309,7 +307,6 @@ def test_legacy_public_spellings_default_to_dtype_derived_tolerances() -> None:
         assert params["rtol"].default is None, spelling.__module__
 
 
-@pytest.mark.smoke_cells("test_fp64_corruption_fails_through_every_legacy_spelling[top_level]")
 @pytest.mark.parametrize(
     "spelling",
     ["top_level", "user_public_impls", "user_funcs"],

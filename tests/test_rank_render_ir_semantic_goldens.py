@@ -103,7 +103,6 @@ def _semantic_record(source: str) -> dict[str, Any]:
     }
 
 
-@pytest.mark.smoke
 def test_rank_render_ir_semantic_golden(tmp_path: Path) -> None:
     """Pin rank node, edge, and nested-region semantic identity."""
 

@@ -261,7 +261,6 @@ def test_h1_extra_dict_key_diverges_identical_verifies(tmp_path: Path) -> None:
     assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_h1_longer_list_diverges_identical_verifies(tmp_path: Path) -> None:
     """A longer runtime input list (extra non-tensor element) must diverge."""
 
@@ -403,7 +402,6 @@ def test_tensor_only_dataclass_input_verifies_and_attests(tmp_path: Path) -> Non
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_dataclass_changed_bool_field_diverges(tmp_path: Path) -> None:
     """r42 corr1_2: a dataclass NON-tensor field is still witnessed -- a changed value diverges."""
 

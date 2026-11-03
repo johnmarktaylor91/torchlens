@@ -391,7 +391,6 @@ def _op_by_raw(trace: Trace, label_raw: str) -> Any:
     raise AssertionError(f"no op with raw label {label_raw!r}: {list(trace.layer_labels)}")
 
 
-@pytest.mark.smoke
 def test_closure_constant_is_a_parentless_source_op_with_payload_and_a_consumer_edge() -> None:
     """Rule 1: ``constant`` source op, no parents, payload saved, consumer lists it."""
 
@@ -430,6 +429,7 @@ def test_literal_producer_keeps_zero_parents_and_a_payload() -> None:
     assert not is_constant_op(_op_by_raw(trace, labels["x"]))
 
 
+@pytest.mark.smoke
 def test_validation_helpers_name_the_contracted_reasons_and_stay_narrow() -> None:
     """Rule 3: leaf and perturbation reasons come from the closed list; replayable literals replay."""
 

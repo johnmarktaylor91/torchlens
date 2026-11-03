@@ -35,6 +35,7 @@ def test_stats_and_aggregate_are_declared_surface() -> None:
     assert tl.stats.aggregate is stats_module.aggregate
 
 
+@pytest.mark.smoke
 def test_stats_namespace_serves_the_advertised_accumulators() -> None:
     """Every accumulator the stats doc tables advertises resolves."""
 

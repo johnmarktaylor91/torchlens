@@ -189,8 +189,8 @@ _RAW_METADATA_FIELDS = (
 
 #: ``RecordingSettings`` field -> the ``_RecordingConfig`` slot it reads. The
 #: record speaks the public spellings: the capture knobs keep their
-#: ``CaptureOptions`` names, the recorder knobs their flat ``tl.record``
-#: keyword names, and the three door-carried slots their door keywords.
+#: ``CaptureOptions`` names, the recorder knobs their ``RecordingOptions``
+#: field names, and the three door-carried slots their door keywords.
 _SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
     ("keep_op", "keep_op"),
     ("default_op", "default_op"),
@@ -229,9 +229,8 @@ class RecordingSettings:
     recording made?" across every door that configured it: the capture knobs
     (``capture=CaptureOptions(...)``: ``save_grads``, ``activation_transform``,
     ``grad_transform``, ``lookback``, ...), the recorder knobs
-    (the flat ``tl.record`` keywords: ``keep_op``, ``default_op``,
-    ``history_size``, ...) and the door keywords ``stop_after=``, ``storage=``
-    and ``narrate=``. Values are the live objects the recorder used (the
+    (``recording=RecordingOptions(...)``: ``default_op``, ``history_size``, ...) and
+    the door keywords ``save=``, ``intervene=``, ``stop_after=``, ``storage=``, ``narrate=``. Values are the live objects the recorder used (the
     predicate or transform callable itself, the ``CaptureSpec``), never repr
     strings. Built by the recorder; there is no public constructor.
 

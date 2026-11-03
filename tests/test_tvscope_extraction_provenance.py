@@ -133,7 +133,6 @@ def test_legacy_manifest_reads_as_unknown() -> None:
     assert "legacy_artifact_predates_input_preprocessing_block" in block["unknown_reasons"]
 
 
-@pytest.mark.smoke
 def test_resume_with_differing_input_path_refuses_typed(model, resolution, tmp_path) -> None:
     """The input identity rides the ONE signature door (D16)."""
 
@@ -276,7 +275,6 @@ def test_declaration_only_resolution_as_transform_refuses(model, tmp_path) -> No
     assert excinfo.value.fields["code"] == "extraction_input_transform_missing_callable"
 
 
-@pytest.mark.smoke
 def test_row_count_contract_guards_the_input_path(model) -> None:
     """A row-eating input transform refuses instead of mislabeling rows."""
 

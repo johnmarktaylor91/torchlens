@@ -38,6 +38,7 @@ PAGES: dict[str, str] = {
     "docs/recipes/generation_step_attribution.md": "transformers",
     "docs/recipes/trainable_backbone.md": "torchvision",
     "docs/recipes/tuned_lens.md": "tuned_lens",
+    "docs/recipes/jacobian_lens.md": "transformers",
     "docs/recipes/conditional_steering.md": "transformers",
     "docs/recipes/weightwatcher.md": "weightwatcher",
     "docs/recipes/quantus.md": "quantus",
@@ -53,6 +54,12 @@ PAGES: dict[str, str] = {
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
     "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/recipes/das_causal_basis_recipe.ipynb": "torchlens",
+    "examples/recipes/function_vectors_recipe.ipynb": "transformers",
+    "examples/recipes/clip_head_attention_recipe.ipynb": "clip",
+    "examples/recipes/clip_text_decomposition_recipe.ipynb": "clip",
+    "examples/recipes/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
+    "examples/recipes/cka_rsa_two_models_recipe.ipynb": "matplotlib",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -77,6 +84,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "netrep": ("netrep",),
     "himalaya": ("himalaya",),
     "cornet": ("cornet",),
+    "clip": ("transformers", "tokenizers", "PIL", "matplotlib"),
 }
 
 #: Pages measured above the 5 s tier (heavy, 5-20 s) in the peer-recipe leg, or
@@ -90,8 +98,17 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: wave-three pages the unmarked family charged 15.8 s against its 13.6 s
 #: aggregate budget; its two largest pages, the tuned-lens training notebook
 #: (7.1 s) and the Prisma CLIP SAE page (2.0 s), are listed for that reason.
+#: The distributed alignment search notebook trains its model and two rotations:
+#: 8.5 s on one pinned Linux core.
+#: The probe-by-layer notebook measured 4.2 and 4.5 s run alone on one thread
+#: (at the boundary, and past the unmarked family's aggregate budget); the
+#: two-model CKA/RSA notebook measured 12.5 and 16.9 s.
+#: The Jacobian lens page measures 3.8 s on a two-thread worker (two prompts of
+#: batched autograd plus a jacrev check) and is listed to keep the unmarked
+#: family inside its aggregate budget.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
+        "docs/recipes/jacobian_lens.md",
         "docs/recipes/lrp_transformers_lxt.md",
         "docs/neuroai/journey.md",
         "docs/recipes/tcav.md",
@@ -100,6 +117,9 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/recipes/feature_visualisation.md",
         "examples/recipes/train_tuned_lens_recipe.ipynb",
         "docs/recipes/prisma_clip_sae.md",
+        "examples/recipes/das_causal_basis_recipe.ipynb",
+        "examples/recipes/probe_accuracy_by_layer_recipe.ipynb",
+        "examples/recipes/cka_rsa_two_models_recipe.ipynb",
     }
 )
 
@@ -108,8 +128,19 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: host load about 8 of 20 cores), measured 30.1 s, 23.5 s and 30.2 s in the
 #: test call (session wall 48.1 s, 30.8 s and 37.9 s; CPU 47.3 s, 30.3 s and
 #: 37.3 s), median 30.1 s. Earlier runs: 17 s alone, 30.8 s unloaded, 37.1 s and
-#: 42.5 s under gate load.
-SLOW_PAGES: frozenset[str] = frozenset({"docs/recipes/acdc_ioi.md"})
+#: 42.5 s under gate load. The function vectors notebook (GPT-2 small, two
+#: saved traces and 144 head scores) measured 73.3 s on one pinned Linux core.
+#: The two CLIP notebooks download the public ``openai/clip-vit-base-patch32``
+#: checkpoint (about 600 MB) on first use and trace its vision tower on real
+#: pictures, so they sit in the slow tier with the other real-checkpoint pages.
+SLOW_PAGES: frozenset[str] = frozenset(
+    {
+        "docs/recipes/acdc_ioi.md",
+        "examples/recipes/function_vectors_recipe.ipynb",
+        "examples/recipes/clip_head_attention_recipe.ipynb",
+        "examples/recipes/clip_text_decomposition_recipe.ipynb",
+    }
+)
 
 HEADER_RE = re.compile(r"# recipe-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
