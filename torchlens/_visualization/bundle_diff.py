@@ -308,16 +308,8 @@ def _build_dot(
 
     paired_left_ids = {id(left_layer) for left_layer, _right_layer in pairs}
     paired_right_ids = {id(right_layer) for _left_layer, right_layer in pairs}
-    left_unmatched = (
-        [layer for layer in bundle[left_name]._layer_list if id(layer) not in paired_left_ids]
-        if include_unmatched
-        else []
-    )
-    right_unmatched = (
-        [layer for layer in bundle[right_name]._layer_list if id(layer) not in paired_right_ids]
-        if include_unmatched
-        else []
-    )
+    left_unmatched = _unmatched_layers(bundle[left_name], paired_left_ids, include_unmatched)
+    right_unmatched = _unmatched_layers(bundle[right_name], paired_right_ids, include_unmatched)
     left_layers = [left_layer for left_layer, _right_layer in pairs] + left_unmatched
     right_layers = [right_layer for _left_layer, right_layer in pairs] + right_unmatched
     values = _pair_delta_values(
@@ -355,6 +347,14 @@ def _build_dot(
     _add_pair_alignment(dot, pairs)
     _add_legend(dot)
     return dot
+
+
+def _unmatched_layers(member: Any, paired_ids: set[int], include_unmatched: bool) -> list[Any]:
+    """Return ``member``'s layers with no aligned counterpart, or ``[]`` when not drawn."""
+
+    if not include_unmatched:
+        return []
+    return [layer for layer in member._layer_list if id(layer) not in paired_ids]
 
 
 def _metric_display_name(metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> str:
