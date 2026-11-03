@@ -30,7 +30,7 @@ def dry_run(
     model:
         PyTorch module to execute.
     inputs:
-        Tensor, list, or tuple of positional model inputs.
+        Tensor, list, or tuple of positional model inputs; for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it.
     input_kwargs:
         Optional keyword arguments for the model call.
     save, history_size, include_source_events, seed:

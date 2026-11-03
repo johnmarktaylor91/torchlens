@@ -1048,7 +1048,7 @@ torchlens/debug/_checks/_session.py::ChecksSession._raise_on_nonfinite_grads	81
 torchlens/debug/_checks/_session.py::ChecksSession.attach	64
 torchlens/debug/_determinism.py::check_determinism	139
 torchlens/debug/_dtype_range.py::dtype_range	118
-torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	156
+torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	149
 torchlens/debug/_grad_fn_walk.py::walk_grad_fn	99
 torchlens/debug/_gradients.py::grad_health	67
 torchlens/debug/_gradients.py::gradient_flow_audit_rows	146
@@ -1184,7 +1184,7 @@ torchlens/intervention/replay.py::_run_replay	153
 torchlens/intervention/rerun.py	1690
 torchlens/intervention/rerun.py::_append_rerun	104
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
-torchlens/intervention/rerun.py::_chunked_rerun	78
+torchlens/intervention/rerun.py::_chunked_rerun	77
 torchlens/intervention/rerun.py::_reconcile_rerun_hook_fires	96
 torchlens/intervention/rerun.py::_refuse_source_matched_zero_fire	72
 torchlens/intervention/rerun.py::run	144

@@ -1493,7 +1493,10 @@
   the same code refuses a modality dict whose HF model loads no `AutoProcessor`,
   the multimodal auto-route claiming on `name_or_path` alone and resolving the
   processor itself, and a dict with an attached `model.processor` is coerced
-  into keyword inputs); `diagnose()` is the opt-in tensor arm whose
+  into keyword inputs; the same text, dict and image resolution reaches `Trace.run`,
+  `tl.record`, `tl.dry_run`, `tl.validate_backward_pass` and the `tl.debug` entries
+  through the coercion door, which spells a singular `image` key as the
+  processor's signature names it); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
   closed authority standing (authoritative/unverified_fallback/unknown); a
   `CaptureOptions(input_transform=)` capture whose transform IS a recognized authority (the object

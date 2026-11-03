@@ -29,7 +29,11 @@ guess twice.
 means the tool did not synthesize anything -- it does not certify that your
 data is meaningful. For Hugging Face models, a prompt string is a gold
 input: it is tokenized with the model's own tokenizer, and the tokenizer
-provenance is recorded on the trace.
+provenance is recorded on the trace. The same string (or PIL image, or a
+modality dict such as `{"text": ..., "image": ...}`) is a real input wherever
+a model input is taken: `trace.run`, `tl.record`, `tl.dry_run`,
+`tl.validate_backward_pass` and the `tl.debug` helpers resolve it exactly as
+`tl.trace` does.
 
 **Rung 2 (`input_shape=`).** One flat positive-integer tuple is one input
 shape (batch included exactly as written). A sequence of shape tuples is

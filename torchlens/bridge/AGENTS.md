@@ -109,7 +109,13 @@ optional dependency.
   one network seam tests patch; `_make_multimodal_transform(processor)` builds the
   `input_transform`. The auto-route claims on `name_or_path` alone (no cache or Hub I/O
   in detection); a dict on a model with an attached `model.processor` is coerced in
-  `torchlens/_input_coerce.py` instead.
+  `torchlens/_input_coerce.py` instead. The same resolution reaches `Trace.run`, `tl.record`,
+  `tl.dry_run`, `tl.validate_backward_pass` and the `tl.debug` entries through that coercion
+  door: `autoroute/_builtin_input.py` installs `hf_input_claims` / `hf_input_transform` on
+  `torchlens/_input_route.py` at import (the door module itself imports no bridge code), and
+  `_apply_hf_processor` there spells a singular `image` key the way the processor's own call
+  signature names it (`images` for a CLIP-shaped processor; a `(*args, **kwargs)` processor
+  such as Whisper's gets the keys unchanged).
 - `hf_attention.py` (re-exported from `hf.py`): `register_attention(model=None)`
   registers the `"torchlens"` attention function AND its matching mask function
   (`torchlens_mask`, transformers' boolean `sdpa_mask` with the causal skip

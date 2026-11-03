@@ -1691,7 +1691,7 @@ def validate_backward_pass(
     model:
         PyTorch model.
     inputs:
-        Positional args for ``model.forward()``.
+        Positional args for ``model.forward()``; for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it.
     input_kwargs:
         Keyword args for ``model.forward()``.
     loss_fn:
