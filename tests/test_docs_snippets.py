@@ -425,6 +425,11 @@ _MIGRATION_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_migration_pages_executed.py (the TorchLens "
     "fences always; a third-party fence where that package is installed)"
 )
+#: Reason shared by the coming-from pages run by tests/test_migrations.py.
+_MIGRATIONS_TEST_EXECUTED = (
+    "executed fence by fence by tests/test_migrations.py (the TorchLens fences always; a "
+    "third-party fence where that package is installed)"
+)
 #: Reason shared by the teaching pages whose every fence is headed and run.
 _TEACHING_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_teaching_pages_executed.py, each against its "
@@ -516,19 +521,19 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "facets.md": "pending execution coverage (semantic recipes; heavier model deps)",
     "intervention_api.md": "pending execution coverage",
     "method_x_model_compatibility.md": "compatibility matrix stubs, not runnable programs",
-    "migration/from_captum.md": "needs captum installed (weekly bridge leg env only)",
-    "migration/from_fx.md": "pending execution coverage",
-    "migration/from_nnsight.md": (
-        "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
-        "side where nnsight is installed)"
-    ),
-    "migration/from_thingsvision.md": "needs thingsvision (not a declared extra)",
+    "migration/from_captum.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_fx.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_hooks.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_torchinfo.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/coming_from_torchsnooper.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_nnsight.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_thingsvision.md": _MIGRATIONS_TEST_EXECUTED,
     "reference/neuro.md": (
         "needs rsatoolbox (the neuro extra); every snippet's behavior is "
         "executed by tests/test_neuro_pkg_* at BOTH rsatoolbox versions"
     ),
-    "migration/from_torchextractor.md": "needs torchextractor (bridge shim demo)",
-    "migration/from_transformerlens.md": "needs transformer_lens (heavyweight)",
+    "migration/from_torchextractor.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_transformerlens.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/v2.0_api_changes.md": "contains deliberate 'Before:' v1 blocks that must NOT run",
     "migration/from_bertviz_ecco.md": _MIGRATION_PAGES_EXECUTED,
     "migration/from_hf_kwargs.md": _MIGRATION_PAGES_EXECUTED,
@@ -680,10 +685,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "guides/kv_cache.md": _TEACHING_PAGES_EXECUTED,
     "sae_training_handoff.md": _TEACHING_PAGES_EXECUTED,
     "gradient_contract.md": _TEACHING_PAGES_EXECUTED,
-    "migration/from_pyvene.md": (
-        "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
-        "comparison fence is collected and skipped)"
-    ),
+    "migration/from_pyvene.md": _MIGRATIONS_TEST_EXECUTED,
     "field-guide/running_examples.md": _LAUNCH_PAGES_EXECUTED,
     "field-guide/see_and_inspect.md": _LAUNCH_PAGES_EXECUTED,
     "field-guide/extract_features.md": _LAUNCH_PAGES_EXECUTED,

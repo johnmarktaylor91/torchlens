@@ -1,11 +1,14 @@
 # Coming from torchsnooper
 
-torchsnooper printed one line per executed Python source line with tensors
-rendered as `tensor<(6, 16), float32, cpu>`; its niche was WATCHING a forward
-pass happen and seeing the last lines before a crash. TorchLens covers that
-niche with `narrate=` -- one line per captured op (truthier than source lines),
-plus crash workflows torchsnooper never had. The decorator idiom maps in five
-lines:
+This page is for people who used torchsnooper (or pysnooper) to watch a forward pass and see the
+last lines before a crash. The examples were written against torchsnooper's `snoop` decorator and
+the TorchLens version on this branch. Checked 2026-11-03.
+
+torchsnooper printed one line per executed Python source line with tensors rendered as
+`tensor<(6, 16), float32, cpu>`; its niche was watching a forward pass happen and seeing the last
+lines before a crash. TorchLens covers that niche with `narrate=`: one line per captured
+operation rather than per source line, plus crash workflows torchsnooper did not have. The
+decorator idiom maps in five lines:
 
 ```text
 # @torchsnooper.snoop()          ->  narrate= on the capture entry
@@ -15,18 +18,14 @@ import torchlens as tl
 recording = tl.record(model, x, narrate=True)          # the one-liner replacement
 ```
 
-| torchsnooper construct | TorchLens equivalent |
-| --- | --- |
-| `@torchsnooper.snoop()` on a forward | `tl.record(model, x, narrate=True)` -- op-granular lines, module structure included |
-| `with torchsnooper.snoop():` around a training step | `with tl.recording.Recorder(model, narrate=tl.options.NarrationOptions(...)) as r: r(batch)` |
-| `snoop(output='file.log')` | `NarrationOptions(sink='file.log')` -- flushed per line, so bytes survive a hard death |
-| `snoop(depth=N)` | module-depth indentation is built in; scope with `tl.in_module(...)` |
-| `snoop(prefix=...)` per-line prefix | callable sink (`NarrationOptions(sink=my_logger)`) -- the seam to loggers/trackers |
-| `normalize=True` diffable output | transcripts are byte-stable by default (no addresses/wall-clock on lines) |
-| last lines before a crash | `exc.partial_trace.narrate(20)` -- works with echo OFF, plus the live tail when echo is armed |
+## The same task in both
 
-Their construct (torchsnooper, line-level tracing via `sys.settrace`),
-executable:
+The task: print a one-line summary of every tensor as a small forward runs, into a buffer.
+
+### In torchsnooper
+
+Needs torchsnooper; the fence is skipped where it is not installed. torchsnooper traces with
+`sys.settrace`, line by line.
 
 ```python
 # migration-test: tool=torchsnooper expected=True
@@ -49,7 +48,9 @@ forward(torch.tensor([[2.0, 3.0]]))
 RESULT = "tensor<" in sink.getvalue()
 ```
 
-TorchLens equivalent, executable:
+### In TorchLens
+
+One line per captured event (input source, linear, relu), through a sink:
 
 ```python
 # migration-test: tool=torchlens expected=3
@@ -81,7 +82,19 @@ tl.record(
 RESULT = sum(1 for line in sink.getvalue().splitlines() if line.lstrip().startswith("#"))
 ```
 
-## What the upgrade buys
+## Translation table
+
+| torchsnooper construct | TorchLens equivalent |
+| --- | --- |
+| `@torchsnooper.snoop()` on a forward | `tl.record(model, x, narrate=True)` -- op-granular lines, module structure included |
+| `with torchsnooper.snoop():` around a training step | `with tl.recording.Recorder(model, narrate=tl.options.NarrationOptions(...)) as r: r(batch)` |
+| `snoop(output='file.log')` | `NarrationOptions(sink='file.log')` -- flushed per line, so bytes survive a hard death |
+| `snoop(depth=N)` | module-depth indentation is built in; scope with `tl.in_module(...)` |
+| `snoop(prefix=...)` per-line prefix | callable sink (`NarrationOptions(sink=my_logger)`) -- the seam to loggers/trackers |
+| `normalize=True` diffable output | transcripts are byte-stable by default (no addresses/wall-clock on lines) |
+| last lines before a crash | `exc.partial_trace.narrate(20)` -- works with echo OFF, plus the live tail when echo is armed |
+
+## What TorchLens adds
 
 - **Selector scoping** (torchsnooper structurally could not): narrate ONLY the
   region you care about -- `narrate=tl.in_module("transformer.h.3")` prints a
@@ -108,7 +121,7 @@ RESULT = sum(1 for line in sink.getvalue().splitlines() if line.lstrip().startsw
   `tl.debug.compare(trace_a, trace_b)` is the aligned, value-level upgrade of
   text-diffing two logs.
 
-## Cost ladder (stats=)
+### Cost ladder (`stats=`)
 
 Echo rides the record substrate or the trace substrate; metadata echo adds
 formatting and I/O only -- zero payload reads, zero device syncs by
@@ -131,17 +144,37 @@ box-dependent -- run it on yours.
 Rely on the partial when you expect an exception; turn narration on when you
 expect the process to DIE.
 
-## Deliberately not copied
+## What torchsnooper does that TorchLens does not
 
 The `sys.settrace` mechanism, `watch=` locals, `watch_explode`, thread_info,
 and arbitrary Python-expression tracing are pysnooper's identity, not
 TorchLens's: narration here is a display of CAPTURE events. No environment
 variable ever turns narration on (`narrate=` is code-explicit).
 
-## Credit
+- torchsnooper is a one-decorator, no-setup tool that prints Python source lines as they run.
+  TorchLens narrates capture events, so it needs a model and an input to run (`tl.record` or
+  `tl.trace`) and reports operations and modules, not arbitrary Python lines.
+- Plain Python code with no tensors in a model is outside TorchLens; for line-level tracing of
+  general Python, pysnooper remains the tool. For other destinations see
+  [landscape.md](landscape.md).
 
-**torchsnooper** (zasdfgbnm): the compact fixed-order per-line tensor summary
-and the crash-diagnosis workflow. **pysnooper** (cool-RR): the narration
-idiom, `normalize=` for diffable transcripts, and the depth/prefix/output
-vocabulary. **lovely-tensors** (xl0): the stats-line aesthetic (via the
-shared TorchLens stats grammar).
+## Using both
+
+### torchsnooper feeds TorchLens
+
+There is no bridge. torchsnooper prints text; TorchLens consumes a model and an input. Keep the
+decorator on helper functions outside the model and use `narrate=` on the model call.
+
+### TorchLens feeds torchsnooper
+
+There is no bridge. TorchLens narration goes to a sink (a file path, a stream, or a callable such
+as a logger), so its lines can sit in the same log file as torchsnooper's output.
+
+## Semantic differences
+
+- Granularity. torchsnooper lines follow Python source lines; TorchLens lines follow captured
+  operations, and `>`/`<` enter and exit lines indent by module depth, not Python call depth.
+- Reading a crash. Rely on the partial trace when you expect an exception
+  (`exc.partial_trace.narrate(20)`); turn narration on when you expect the process to die.
+- No environment variable ever turns narration on: `narrate=` is code-explicit.
+- Credit. **torchsnooper** (zasdfgbnm): the compact fixed-order per-line tensor summary and the crash-diagnosis workflow. **pysnooper** (cool-RR): the narration idiom, `normalize=` for diffable transcripts, and the depth/prefix/output vocabulary. **lovely-tensors** (xl0): the stats-line aesthetic (via the shared TorchLens stats grammar).

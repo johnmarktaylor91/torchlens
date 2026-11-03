@@ -87,7 +87,7 @@ RESULT = (list(block0.shape), bool((block0[:, :, :2] == 2.5).all()), logits_chan
 
 - Verified capture: `tl.validate` replays the recorded graph and checks it against the real
   forward.
-- Saved and diffable traces: `.tlspec/` persistence, `tl.report.compare`, and `trace.fork()` branch
+- Saved and diffable traces: `.tlspec/` persistence, `tl.debug.compare`, and `trace.fork()` branch
   isolation.
 - Typed refusals: unsupported cases raise a named error with a remedy instead of failing partway.
 - Source lines and pass identity per operation, and the executed dataflow graph
