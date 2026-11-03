@@ -44,19 +44,18 @@ def _op_by_name(trace: Trace, handle: str) -> Op:
     matches = [op for op in trace._layer_list if op.label == handle]
     if len(matches) == 1:
         return matches[0]
+    detail = f"No operation with exact pass-qualified label {handle!r} exists in this trace."
     if not matches:
         by_role = [op for op in trace._layer_list if str(op.io_role or "") == handle]
         if len(by_role) == 1:
             return by_role[0]
         if by_role:
             spellings = ", ".join(op.label for op in by_role)
-            raise ReceptiveFieldError(
+            detail = (
                 f"IO role {handle!r} names several operations ({spellings}); "
                 "select one by its pass-qualified label."
             )
-    raise ReceptiveFieldError(
-        f"No operation with exact pass-qualified label {handle!r} exists in this trace."
-    )
+    raise ReceptiveFieldError(detail)
 
 
 def resolve_graph_point(trace: Trace, handle: object) -> Op:
