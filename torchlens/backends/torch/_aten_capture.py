@@ -342,6 +342,7 @@ def _recorder_paused(hook: Any) -> Any:
 
     @functools.wraps(hook)
     def paused(*args: Any, **kwargs: Any) -> Any:
+        """Call ``hook`` inside a ``pause_logging()`` window."""
         with _state.pause_logging():
             return hook(*args, **kwargs)
 
