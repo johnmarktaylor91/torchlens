@@ -22,10 +22,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._visualization._trace_collapse import (
-    collapse_plan as _trace_collapse_plan,
-    collapse_schedule as _trace_collapse_schedule,
-)
 
 pydot = pytest.importorskip("pydot")
 
@@ -876,7 +872,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
         if collapsed_calls is not None:
             _assert_exactly_once(collapsed_calls, "collapsed_node_spec_fn")
         plans = {
-            str(mode): _stable_repr(_trace_collapse_plan(trace, mode=mode))
+            str(mode): _stable_repr(trace._collapse_plan(mode=mode))
             for mode in ("auto", "max", 0.25, 0.75)
         }
         return {
@@ -884,7 +880,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
             "dot": source,
             "structural": _structural_digest(source),
             "plans": plans,
-            "schedule": _stable_repr(_trace_collapse_schedule(trace)),
+            "schedule": _stable_repr(trace._collapse_schedule()),
             "callbacks": {
                 "node_spec_fn": sorted((node_calls or {}).values()),
                 "collapsed_node_spec_fn": sorted((collapsed_calls or {}).values()),
