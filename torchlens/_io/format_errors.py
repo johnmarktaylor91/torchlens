@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import NoReturn
 
-from ..errors._base import CompatibilityError
+from ..errors._base import CompatibilityError, ConfigurationError
 
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True
@@ -162,3 +162,18 @@ def refuse_missing_blobs(blob_ids: list[str]) -> NoReturn:
         code="bundle_blob_missing",
         remedy="restore the missing blob files, or re-save the bundle from its source capture",
     )
+
+
+class OpaqueCallableError(ConfigurationError, ValueError):
+    """Raised when an executable intervention save would require opaque code.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.OpaqueCallableError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(tl.errors.OpaqueCallableError, ValueError)
+    True
+    """
+
+
+OpaqueCallableError.__module__ = "torchlens.intervention.errors"

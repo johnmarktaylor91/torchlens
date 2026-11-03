@@ -18,12 +18,22 @@ capture that saved a static raw-index subset re-selects it through
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, TypeGuard
 
-from .._selection.target import TargetSpec
+from .._io.format3.recipe import (
+    PLACEHOLDER_PORTABILITY,
+    CallablePlaceholder,
+    NestedEdit,
+    recipe_placeholders,
+)
+from .._io.format_errors import ArtifactError
+from .._ir.selector_eval import normalize_selector_like
 from .errors import ControlFlowDivergenceError
+from .helpers import rebuild_builtin_helper
+from .spec import Recipe, Rule
+from .types import Edit, HookSpec, InterventionSpec, TargetSpec, TargetValueSpec, TensorSliceSpec
 
 
 @dataclass(frozen=True)
@@ -136,6 +146,14 @@ def plan_rerun_spec(log: Any, spec: Any) -> RerunSpecPlan:
     # Session-only field, absent on traces that never armed a predicate.
     options = log.__dict__.get("_predicate_save_options")
     predicate = getattr(options, "intervene", None)
+    saved_rules = getattr(spec, "metadata", {}).get("_capture_rules", ())
+    if predicate is None and saved_rules:
+        predicate = Recipe(
+            tuple(
+                Rule(normalize_selector_like(target, lifecycle="live"), edit)
+                for target, edit in saved_rules
+            )
+        )
     if not door_hooks or predicate is None:
         return RerunSpecPlan(capture_spec=spec)
     door_targets = {hook_spec.site_target.freeze() for hook_spec in door_hooks}
@@ -336,3 +354,136 @@ def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any]
         return raw_index in selected_indices
 
     return keep_selected_raw_index
+
+
+#: Keys of a nested selector object (a target spec inside a selector value).
+_SELECTOR_KEYS = frozenset({"selector_kind", "selector_value", "strict", "slice_spec", "metadata"})
+
+
+def _is_selector_object(value: Any) -> TypeGuard[Mapping[str, Any]]:
+    """Return whether a decoded value is a nested selector object."""
+
+    return isinstance(value, Mapping) and set(value) == _SELECTOR_KEYS
+
+
+def _target(selector: Mapping[str, Any]) -> TargetSpec:
+    """Rebuild a target spec from a rule ``selector`` object."""
+
+    value = selector.get("selector_value")
+    if _is_selector_object(value):
+        value = _target(value)
+    elif isinstance(value, (list, tuple)) and value and all(map(_is_selector_object, value)):
+        # An ``and`` / ``or`` composite saves its members as nested selector objects.
+        value = tuple(_target(member) for member in value)
+    slice_data = selector.get("slice_spec")
+    return TargetSpec(
+        selector_kind=selector["selector_kind"],
+        selector_value=value,
+        strict=bool(selector.get("strict", False)),
+        slice_spec=TensorSliceSpec(**slice_data) if isinstance(slice_data, Mapping) else None,
+        metadata=dict(selector.get("metadata") or {}),
+    )
+
+
+def _audit_only_edit(edit: Mapping[str, Any], placeholder: CallablePlaceholder) -> Edit:
+    """Return the non-executable edit that stands in for a placeholder rule."""
+
+    return Edit(
+        name=str(edit.get("name", "custom")),
+        portability="opaque_audit",
+        metadata=(
+            ("callable_placeholder", placeholder.position),
+            ("qualname", placeholder.qualname),
+            ("executable", False),
+        ),
+        is_batch_independent=bool(edit.get("is_batch_independent", False)),
+        is_compatible_with_append=bool(edit.get("is_compatible_with_append", False)),
+    )
+
+
+def _edit(edit: Mapping[str, Any]) -> Edit:
+    """Rebuild one rule's edit (built-in through the registry, else audit-only)."""
+
+    if edit.get("portability") == PLACEHOLDER_PORTABILITY:
+        placeholder = edit.get("callable")
+        if not isinstance(placeholder, CallablePlaceholder):
+            placeholder = CallablePlaceholder(-1, "<unknown>", 0)
+        return _audit_only_edit(edit, placeholder)
+    inner = recipe_placeholders({"rules": [{"args": edit["args"], "kwargs": edit["kwargs"]}]})
+    if inner:
+        return _audit_only_edit(edit, inner[0])
+    args = tuple(_rebuilt_value(arg) for arg in edit["args"])
+    kwargs = {key: _rebuilt_value(item) for key, item in dict(edit["kwargs"]).items()}
+    return rebuild_builtin_helper(str(edit["name"]), args, kwargs)
+
+
+def _rebuilt_value(value: Any) -> Any:
+    """Return a decoded recipe value with every nested edit rebuilt as an ``Edit``."""
+
+    if isinstance(value, NestedEdit):
+        return _edit(value.edit)
+    if isinstance(value, list):
+        return [_rebuilt_value(item) for item in value]
+    if isinstance(value, tuple) and type(value) is tuple:
+        return tuple(_rebuilt_value(item) for item in value)
+    if isinstance(value, dict) and type(value) is dict:
+        return {key: _rebuilt_value(item) for key, item in value.items()}
+    return value
+
+
+def spec_from_recipe(recipe: Mapping[str, Any]) -> InterventionSpec:
+    """Return the runtime spec a decoded recipe describes.
+
+    Parameters
+    ----------
+    recipe:
+        Recipe from ``torchlens._io.format3.recipe.read_recipe``.
+
+    Returns
+    -------
+    InterventionSpec
+        Hooks in rule order and value replacements in value order; fire
+        records are not part of a recipe (a saved trace carries them per op).
+    """
+
+    spec = InterventionSpec(
+        metadata={
+            "_capture_rules": [
+                _capture_rule_from_recipe(rule) for rule in recipe.get("capture_rules", ())
+            ]
+        }
+    )
+    for rule in recipe.get("rules", ()):
+        target = _target(rule["selector"])
+        if target not in spec.targets:
+            spec.targets.append(target)
+        metadata = dict(rule.get("metadata") or {})
+        handle = metadata.pop("handle", None)
+        edit = _edit(rule["edit"])
+        spec.hook_specs.append(
+            HookSpec(site_target=target, hook=edit, helper=edit, handle=handle, metadata=metadata)
+        )
+    for entry in recipe.get("values", ()):
+        spec.target_value_specs.append(
+            TargetValueSpec(
+                site_target=_target(entry["selector"]),
+                value=_rebuilt_value(entry.get("value")),
+                metadata=dict(entry.get("metadata") or {}),
+            )
+        )
+    return spec
+
+
+def _capture_rule_from_recipe(rule: Mapping[str, Any]) -> tuple[TargetSpec, Edit]:
+    """Build one original predicate through closed registries, refusing malformed payloads."""
+
+    try:
+        target = normalize_selector_like(_target(rule["selector"]), lifecycle="live")
+        edit = _edit(rule["edit"])
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise ArtifactError(
+            "An original capture rule has malformed selector or edit fields.",
+            code="manifest_schema_invalid",
+            remedy="save the trace again; do not hand-edit its intervention recipe",
+        ) from exc
+    return target.to_target_spec(), edit

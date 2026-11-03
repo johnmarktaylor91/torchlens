@@ -27,6 +27,7 @@ from ._data_classes.grad_fn_call import GradFnCall
 from ._data_classes.module import Module, ModuleCall
 from ._data_classes.param import Param
 from ._data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
+from ._io.format3.decode import UnencodableValue
 from ._quantities import Bytes, Duration, Flops, Macs, Quantity
 from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStatus, RunProvider
 from ._selection.selection import Site
@@ -59,6 +60,7 @@ __all__ = [
     "TraceProvenance",
     "TraceSettings",
     "TraceHealth",
+    "UnencodableValue",
     "NarrationEvent",
     "RunnableDiagnostic",
     "RunnableCompatibility",

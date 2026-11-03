@@ -20,6 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.errors import RunnablePreflightError
+from torchlens.intervention.errors import EngineDispatchError
 from torchlens.options import CaptureOptions
 
 
@@ -95,7 +96,13 @@ def test_backward_grad_intervention_still_verifies(tmp_path: Path) -> None:
     path = tmp_path / "grad.tlspec"
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
 
-    result = tl.load(path).run(inputs=value, seed=0)
+    loaded = tl.load(path)
+    # Format 3 persists the recipe and the reader restages it, so a fresh verified run
+    # refuses rather than silently dropping the recorded grad hook; detach it explicitly.
+    with pytest.raises(EngineDispatchError, match="staged intervention spec"):
+        loaded.run(inputs=value, seed=0)
+    loaded._clear_hooks()
+    result = loaded.run(inputs=value, seed=0)
 
     # The grad intervention never modified the forward output, so the sparse DAG
     # reproduces it byte-for-byte: an op-representable intervention still VERIFIES.

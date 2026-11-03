@@ -381,13 +381,11 @@ Portable saves reject opaque local callables. Use built-in helpers such as `zero
 
 A `.tlspec/` directory contains:
 
-- `spec.json`: serialized selector, hook, helper, function-registry, append, and target-manifest
-  metadata.
-- `manifest.json`: tensor sidecar manifest with hashes and storage metadata.
-- `tensors/`: tensor payloads stored separately from JSON, one blob per tensor object however
-  many places the spec references it (a sticky hook's `hook` and `helper` entries and its fire
-  records share one blob).
-- `README.md`: a generated human-readable summary.
+- `manifest.json`: the artifact manifest, `kind: "intervention"`.
+- `intervention.json`: the recipe: each rule's selector and built-in `Edit` identity as typed
+  JSON; a user callable is a placeholder, never pickled.
+- `blobs/recipe-<nnnn>.safetensors`: the recipe's tensors, one entry per tensor object however
+  many places the recipe references it (a sticky hook's edit and its fire records share one).
 
 Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture with
 `torchlens.intervention.check_spec_compat(spec, new_trace)`.

@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 import safetensors  # noqa: F401
 import torch
+from _format3_envelope import read_record, redigest, set_cell, tensor_references
 from torch import nn
 
 import torchlens as tl
@@ -19,7 +20,6 @@ from torchlens import load
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
-from torchlens._utils.hashing import sha256_file
 
 
 class _CorruptionModel(nn.Module):
@@ -108,23 +108,10 @@ def _write_manifest(bundle_path: Path, manifest: dict[str, Any]) -> None:
         handle.write("\n")
 
 
-def _first_tensor_entry(manifest: dict[str, Any]) -> dict[str, Any]:
-    """Return the first tensor entry from a decoded manifest.
+def _first_tensor_entry(root: Path) -> dict[str, Any]:
+    """Return an authoritative tensor cell, whose blob is a chunk-relative path."""
 
-    Parameters
-    ----------
-    manifest:
-        Decoded manifest mapping.
-
-    Returns
-    -------
-    dict[str, Any]
-        First tensor entry.
-    """
-
-    tensors = manifest["tensors"]
-    assert isinstance(tensors, list)
-    return tensors[0]
+    return next(iter(tensor_references(root).values()))
 
 
 def _first_saved_layer(trace: Trace) -> Any:
@@ -145,41 +132,45 @@ def _first_saved_layer(trace: Trace) -> Any:
 
 
 def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> None:
-    """Truncated safetensors payloads should fail materialization with the blob path."""
+    """Even lazy load refuses a malformed referenced header before publishing a Trace."""
 
     bundle_path = _save_bundle(tmp_path)
-    manifest = _read_manifest(bundle_path)
-    tensor_entry = _first_tensor_entry(manifest)
-    blob_path = bundle_path / tensor_entry["relative_path"]
+    blob_path = bundle_path / _first_tensor_entry(bundle_path)["blob"]
     original_bytes = blob_path.read_bytes()
     blob_path.write_bytes(original_bytes[: len(original_bytes) // 2])
-    tensor_entry["sha256"] = sha256_file(blob_path)
-    _write_manifest(bundle_path, manifest)
-
-    lazy_log = load(bundle_path, lazy=True)
-    layer = _first_saved_layer(lazy_log)
-
-    with pytest.raises(
-        ArtifactError,
-        match=rf"Failed to materialize blob at {re.escape(str(blob_path))}\.",
-    ):
-        layer.materialize_out()
+    redigest(bundle_path, blob_path.relative_to(bundle_path).as_posix())
+    with pytest.raises(ArtifactError) as caught:
+        load(bundle_path, lazy=True)
+    assert caught.value.fields["code"] == "bundle_load_failed"
+    assert caught.value.file_path == str(blob_path)
 
 
 def test_missing_blob_file_raises_with_blob_id(tmp_path: Path) -> None:
-    """Missing blobs should fail eager load with the missing blob id."""
+    """The manifest's listed chunk cannot disappear before eager load."""
 
     bundle_path = _save_bundle(tmp_path)
-    manifest = _read_manifest(bundle_path)
-    tensor_entry = _first_tensor_entry(manifest)
-    blob_path = bundle_path / tensor_entry["relative_path"]
+    blob_path = bundle_path / _first_tensor_entry(bundle_path)["blob"]
     blob_path.unlink()
-
-    with pytest.raises(
-        ArtifactError,
-        match=rf"missing blob files for blob_id\(s\): {re.escape(tensor_entry['blob_id'])}",
-    ):
+    with pytest.raises(ArtifactError) as caught:
         load(bundle_path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+    assert caught.value.file_path == str(blob_path)
+
+
+def test_corrupt_metadata_pickle_raises_with_metadata_path(tmp_path: Path, monkeypatch) -> None:
+    """Format 3 refuses a planted pickle at the JSON door without unpickling it."""
+
+    bundle_path = _save_bundle(tmp_path)
+    record_path = bundle_path / "records/trace.json"
+    record_path.write_bytes(b"not a pickle")
+    redigest(bundle_path, "records/trace.json")
+    calls = []
+    monkeypatch.setattr(SafeBundleUnpickler, "load", lambda self: calls.append(self))
+    with pytest.raises(ArtifactError) as caught:
+        load(bundle_path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+    assert caught.value.file_path == str(record_path)
+    assert calls == []
 
 
 def test_load_front_door_causes_carry_distinct_codes(tmp_path: Path) -> None:
@@ -212,62 +203,82 @@ def test_load_front_door_causes_carry_distinct_codes(tmp_path: Path) -> None:
         load(not_object)
     assert scalar.value.fields.get("code") == "manifest_not_json_object"
 
-    # (4) metadata-integrity refusal (corrupt / denylisted pickle stream).
+    # (4) A record no longer agrees with the manifest's digest.
     integrity = _save_bundle(tmp_path, "integrity.tl")
-    (integrity / "metadata.pkl").write_bytes(b"not a pickle")
-    with pytest.raises(ArtifactError) as bad_pickle:
+    (integrity / "records/trace.json").write_bytes(b"not valid record JSON")
+    with pytest.raises(ArtifactError) as bad_record:
         load(integrity)
-    assert bad_pickle.value.fields.get("code") == "bundle_metadata_integrity_refused"
+    assert bad_record.value.fields.get("code") == "bundle_metadata_integrity_refused"
 
-    # (5) generic bundle-load failure (torch/codec drift, missing dep, OS error).
-    # metadata.pkl replaced by a directory raises IsADirectoryError (an OSError)
-    # inside the load body — the sixth front-door cause, not an integrity signal.
+    # (5) A redigested malformed tensor header reaches the typed payload door.
     generic = _save_bundle(tmp_path, "generic.tl")
-    (generic / "metadata.pkl").unlink()
-    (generic / "metadata.pkl").mkdir()
+    relative = _first_tensor_entry(generic)["blob"]
+    blob_path = generic / relative
+    blob_path.write_bytes(b"!" * len(blob_path.read_bytes()))
+    redigest(generic, relative)
     with pytest.raises(ArtifactError) as generic_fail:
         load(generic)
     assert generic_fail.value.fields.get("code") == "bundle_load_failed"
 
 
 def test_manifest_schema_violations_refuse_with_stable_code(tmp_path: Path) -> None:
-    """R65-1: the malformed-manifest family carries ``manifest_schema_invalid``.
-
-    Fail-before: ~36 schema refusals in ``_io/manifest.py`` raised bare
-    ``ArtifactError`` with no code, no remedy field, and no artifact path
-    at the load-a-possibly-tampered-artifact boundary.
-    """
+    """Malformed current manifests and the retained Manifest seam refuse typed."""
 
     bundle_path = _save_bundle(tmp_path)
     manifest = _read_manifest(bundle_path)
-
-    # Mistyped required field.
     tampered = dict(manifest)
-    tampered["n_out_blobs"] = "three"
+    tampered["records"] = "not an object"
     _write_manifest(bundle_path, tampered)
     with pytest.raises(ArtifactError) as excinfo:
         load(bundle_path)
-    assert excinfo.value.fields.get("code") == "manifest_schema_invalid"
+    assert excinfo.value.fields["code"] == "manifest_schema_invalid"
     assert excinfo.value.fields.get("remedy")
     assert str(excinfo.value).rstrip(".").endswith(excinfo.value.fields["remedy"])
 
-    # The Manifest.read seam stamps the artifact path onto schema refusals.
     from torchlens._io.manifest import Manifest
 
+    legacy_path = tmp_path / "legacy-manifest.json"
+    legacy = _legacy_manifest(manifest).to_dict()
+    legacy["n_out_blobs"] = "three"
+    legacy_path.write_text(json.dumps(legacy), encoding="utf-8")
     with pytest.raises(ArtifactError) as via_read:
-        Manifest.read(bundle_path / "manifest.json")
-    assert via_read.value.fields.get("code") == "manifest_schema_invalid"
-    assert via_read.value.file_path == str(bundle_path / "manifest.json")
+        Manifest.read(legacy_path)
+    assert via_read.value.fields["code"] == "manifest_schema_invalid"
+    assert via_read.value.file_path == str(legacy_path)
 
-    # Forged tensor entry (missing required string field).
-    tampered = _read_manifest(bundle_path)
-    tampered["n_out_blobs"] = manifest["n_out_blobs"]
-    entry = _first_tensor_entry(tampered)
-    del entry["sha256"]
+    tampered = json.loads(json.dumps(manifest))
+    del next(iter(tampered["files"].values()))["sha256"]
     _write_manifest(bundle_path, tampered)
     with pytest.raises(ArtifactError) as forged:
         load(bundle_path)
-    assert forged.value.fields.get("code") == "manifest_schema_invalid"
+    assert forged.value.fields["code"] == "manifest_schema_invalid"
+
+
+def _legacy_manifest(identity: dict[str, Any]):
+    """Build the retained legacy policy object without misrouting a current envelope."""
+
+    from torchlens._io.manifest import Manifest
+
+    return Manifest(
+        **{
+            key: identity[key]
+            for key in (
+                "tlspec_version",
+                "torchlens_version",
+                "torch_version",
+                "python_version",
+                "platform",
+                "created_at",
+            )
+        },
+        bundle_format="directory",
+        n_layers=0,
+        n_out_blobs=0,
+        n_grad_blobs=0,
+        n_auxiliary_blobs=0,
+        tensors=[],
+        unsupported_tensors=[],
+    )
 
 
 def test_version_policy_refusals_carry_distinct_codes(tmp_path: Path) -> None:
@@ -280,35 +291,33 @@ def test_version_policy_refusals_carry_distinct_codes(tmp_path: Path) -> None:
     """
 
     from torchlens._io import TLSPEC_VERSION
-    from torchlens._io.manifest import Manifest, enforce_version_policy
+    from torchlens._io.manifest import enforce_version_policy
 
     bundle_path = _save_bundle(tmp_path, "versions.tl")
     base = _read_manifest(bundle_path)
 
     # (1) artifact newer than the runtime.
     with pytest.raises(ArtifactError) as newer:
-        enforce_version_policy(Manifest.from_dict({**base, "tlspec_version": TLSPEC_VERSION + 1}))
+        enforce_version_policy(_legacy_manifest({**base, "tlspec_version": TLSPEC_VERSION + 1}))
     assert newer.value.fields.get("code") == "artifact_version_above_runtime"
     assert newer.value.fields.get("remedy")
 
     # (2) torch major mismatch.
     with pytest.raises(ArtifactError) as drift:
-        enforce_version_policy(Manifest.from_dict({**base, "torch_version": "1.0.0"}))
+        enforce_version_policy(_legacy_manifest({**base, "torch_version": "1.0.0"}))
     assert drift.value.fields.get("code") == "bundle_torch_incompatible"
 
     # (3) producer version unverifiable under PEP 440.
     with pytest.raises(ArtifactError) as producer:
-        enforce_version_policy(Manifest.from_dict({**base, "torchlens_version": "not-a-version"}))
+        enforce_version_policy(_legacy_manifest({**base, "torchlens_version": "not-a-version"}))
     assert producer.value.fields.get("code") == "bundle_producer_unverifiable"
 
 
 def test_manifest_write_failure_refuses_typed(tmp_path: Path) -> None:
     """R65-1 write half: a failed manifest write carries ``manifest_write_failed``."""
 
-    from torchlens._io.manifest import Manifest
-
     bundle_path = _save_bundle(tmp_path, "writefail.tl")
-    manifest = Manifest.from_dict(_read_manifest(bundle_path))
+    manifest = _legacy_manifest(_read_manifest(bundle_path))
     target_dir = tmp_path / "is_a_directory"
     target_dir.mkdir()
     with pytest.raises(ArtifactError) as excinfo:
@@ -342,49 +351,70 @@ def test_io_artifact_door_codes_are_provoked(tmp_path: Path) -> None:
 
 
 def test_tampered_manifest_field_raises_with_field_name(tmp_path: Path) -> None:
-    """Tampered manifest tensor metadata should fail load with the offending field."""
+    """A forged tensor dtype in the authoritative record cell refuses by field."""
 
     bundle_path = _save_bundle(tmp_path)
-    manifest = _read_manifest(bundle_path)
-    tensor_entry = _first_tensor_entry(manifest)
-    tensor_entry["dtype"] = "totally_fake_dtype"
-    _write_manifest(bundle_path, manifest)
-
-    with pytest.raises(ArtifactError, match=r"Unsupported dtype string in manifest"):
+    for row, cell in enumerate(read_record(bundle_path, "op")["columns"]["out"]):
+        if isinstance(cell, dict) and cell.get("$tl") == "tensor":
+            set_cell(bundle_path, "op", "out", row, {**cell, "dtype": "totally_fake_dtype"})
+            break
+    else:
+        pytest.fail("the positive capture produced no saved op tensor")
+    with pytest.raises(ArtifactError) as caught:
         load(bundle_path, lazy=True)
+    assert caught.value.fields["code"] == "record_schema_invalid"
+    assert "dtype" in str(caught.value)
 
 
 def test_stale_blob_counts_raise_with_count_field(tmp_path: Path) -> None:
-    """Manifest blob-count drift should fail with the mismatched count field name."""
+    """The manifest's row count must agree with its authoritative columnar table."""
 
     bundle_path = _save_bundle(tmp_path)
     manifest = _read_manifest(bundle_path)
-    manifest["n_out_blobs"] += 1
+    manifest["records"]["op"]["rows"] += 1
     _write_manifest(bundle_path, manifest)
-
-    with pytest.raises(ArtifactError, match=r"n_out_blobs"):
+    with pytest.raises(ArtifactError) as caught:
         load(bundle_path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+    assert "row" in str(caught.value)
+
+
+def test_unknown_extra_files_warn_but_do_not_raise(tmp_path: Path, monkeypatch) -> None:
+    """Unreferenced files under ``blobs/`` should warn without aborting load."""
+
+    bundle_path = _save_bundle(tmp_path)
+    extra_blob_path = bundle_path / "blobs" / "unexpected.bin"
+    extra_blob_path.write_bytes(b"extra")
+    original_open = Path.open
+
+    def checked_open(path, *args, **kwargs):
+        assert path != extra_blob_path, "the loader read an unreferenced file"
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", checked_open)
+
+    with pytest.warns(
+        UserWarning,
+        match=rf"unreferenced extra files.*blobs/{re.escape(extra_blob_path.name)}",
+    ):
+        restored = load(bundle_path, lazy=True)
+
+    assert isinstance(restored, Trace)
+    assert restored._loaded_from_bundle is True
 
 
 def test_checksum_mismatch_raises_with_blob_id_and_path(tmp_path: Path) -> None:
-    """Checksum mismatches should fail eager load with blob id and path details."""
+    """A changed chunk body refuses at its listed digest and names its path."""
 
     bundle_path = _save_bundle(tmp_path)
-    manifest = _read_manifest(bundle_path)
-    tensor_entry = _first_tensor_entry(manifest)
-    blob_path = bundle_path / tensor_entry["relative_path"]
+    blob_path = bundle_path / _first_tensor_entry(bundle_path)["blob"]
     blob_bytes = bytearray(blob_path.read_bytes())
     blob_bytes[-1] = (blob_bytes[-1] + 1) % 256
-    blob_path.write_bytes(bytes(blob_bytes))
-
-    with pytest.raises(
-        ArtifactError,
-        match=(
-            rf"Checksum mismatch for blob_id={re.escape(tensor_entry['blob_id'])} at "
-            rf"{re.escape(str(blob_path))}\."
-        ),
-    ):
+    blob_path.write_bytes(blob_bytes)
+    with pytest.raises(ArtifactError) as caught:
         load(bundle_path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+    assert caught.value.file_path == str(blob_path)
 
 
 # --- secA_1 (r51): corrupt-metadata unpickle exception-family normalization ---------
@@ -428,18 +458,22 @@ _CORRUPTION_CORPUS: dict[str, bytes] = {
 
 
 @pytest.mark.parametrize("facet", sorted(_CORRUPTION_CORPUS))
-def test_secA_corpus_e2e_metadata_raises_torchlens_io_error(tmp_path: Path, facet: str) -> None:
-    """A corrupt ``metadata.pkl`` (any facet) fails ``tl.load`` with a clean IO error."""
+def test_secA_corpus_e2e_metadata_raises_torchlens_io_error(
+    tmp_path: Path, facet: str, monkeypatch
+) -> None:
+    """Every corrupt pickle facet refuses at the current JSON door before unpickling."""
 
     bundle_path = _save_bundle(tmp_path, path_name=f"bundle_{facet}.tl")
-    metadata_path = bundle_path / "metadata.pkl"
-    metadata_path.write_bytes(_CORRUPTION_CORPUS[facet])
-
-    with pytest.raises(
-        ArtifactError,
-        match=rf"Failed to load bundle metadata from {re.escape(str(metadata_path))}\.",
-    ):
+    record_path = bundle_path / "records/trace.json"
+    record_path.write_bytes(_CORRUPTION_CORPUS[facet])
+    redigest(bundle_path, "records/trace.json")
+    calls = []
+    monkeypatch.setattr(SafeBundleUnpickler, "load", lambda self: calls.append(self))
+    with pytest.raises(ArtifactError) as caught:
         load(bundle_path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+    assert caught.value.file_path == str(record_path)
+    assert calls == []
 
 
 # --- secA_1 follow-up (r51): the load() boundary is LOCUS-classified ----------------

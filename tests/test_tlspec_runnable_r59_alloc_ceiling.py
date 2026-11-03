@@ -33,7 +33,6 @@ high), a genuinely huge honest view, ``nonzero`` fail-open, and a benign model a
 
 from __future__ import annotations
 
-import json
 import math
 import resource
 import time
@@ -46,6 +45,7 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import mutate_runnable_descriptor
 
 import torchlens as tl
 import torchlens._runnable.call_arguments
@@ -83,8 +83,6 @@ def _tamper_literal(bundle: Path, kind: str, target: Any, replacement: Any) -> i
     exactly the literal-only tamper the recorded-output bound cannot catch.
     """
 
-    path = bundle / "manifest.json"
-    manifest = json.loads(path.read_text())
     count = 0
 
     def _walk(node: Any) -> bool:
@@ -99,11 +97,13 @@ def _tamper_literal(bundle: Path, kind: str, target: Any, replacement: Any) -> i
             return any(_walk(item) for item in node)
         return False
 
-    for call in manifest["run"]["calls"]:
-        for literal in call.get("literal_arguments", []):
-            if _walk(literal):
-                break
-    path.write_text(json.dumps(manifest))
+    def edit(descriptor: dict[str, Any]) -> None:
+        for call in descriptor["calls"]:
+            for literal in call.get("literal_arguments", []):
+                if _walk(literal):
+                    break
+
+    mutate_runnable_descriptor(bundle, edit)
     return count
 
 

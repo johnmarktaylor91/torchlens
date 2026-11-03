@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._postprocess._pipeline import PIPELINE
 from torchlens.errors import TraceCaptureError
 
 #: The pipeline in run order. Reordering steps is a reviewed semantic change.
@@ -245,7 +246,7 @@ def test_executor_failing_step_propagates(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_phase_timing_bucket_names_default_capture() -> None:
-    """The _vtimed bucket-name set for a default capture is frozen (§5.5).
+    """The _vtimed bucket-name set for a default capture is frozen (§5.5, io.5 step-name keys).
 
     The surface oracle normalizes timing fields, so a drift in WHICH
     buckets exist would pass the byte gate silently; this pins the set
@@ -255,30 +256,31 @@ def test_phase_timing_bucket_names_default_capture() -> None:
 
     trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     try:
-        buckets = {name for name in trace._phase_timings if name.startswith("postprocess:Step")}
+        step_names = {step.name for step in PIPELINE}
+        buckets = {name for name in trace._phase_timings if name in step_names}
+        assert set(trace._phase_timings) >= {"materialize_capture_events"}
         assert buckets == {
-            "postprocess:Step 0: Materialize capture events",
-            "postprocess:Step 1: Add output layers",
-            "postprocess:Step 2: Trace output ancestors",
-            "postprocess:Step 3: Remove orphan nodes",
-            "postprocess:Step 4: Input/output distances",
-            "postprocess:Step 5: Mark conditional branches",
-            "postprocess:Step 6: Fix buffer layers",
-            "postprocess:Step 7: Loop detection (full)",
-            "postprocess:Step 8: Map labels",
-            "postprocess:Step 9: Log final info",
-            "postprocess:Step 10: Rename labels",
-            "postprocess:Step 11: Build lookup keys",
-            "postprocess:Step 11.5: Populate source var names",
-            "postprocess:Step 11.75: Resolve deferred retention",
-            "postprocess:Step 12: Undecorate tensors",
-            "postprocess:Step 14: Log timing",
-            "postprocess:Step 15: Finalize params",
-            "postprocess:Step 15.5: Build layer logs",
-            "postprocess:Step 16: Build module logs",
-            "postprocess:Step 16.5: Graph shape hash",
-            "postprocess:Step 17: Mark pass finished",
-            "postprocess:Step 20: Release param refs",
+            "add_output_layers",
+            "find_output_ancestors",
+            "remove_orphan_nodes",
+            "mark_layer_depths",
+            "mark_conditional_branches",
+            "fix_buffer_layers",
+            "group_recurrent_layers",
+            "map_final_labels",
+            "log_final_layer_info",
+            "rename_layer_references",
+            "build_lookup_keys",
+            "populate_source_var_names",
+            "resolve_deferred_retention",
+            "undecorate_saved_tensors",
+            "log_time_elapsed",
+            "finalize_param_logs",
+            "build_layer_logs",
+            "build_module_logs",
+            "hash_graph_shape",
+            "mark_tracing_finished",
+            "release_param_refs",
         }
     finally:
         trace.cleanup()

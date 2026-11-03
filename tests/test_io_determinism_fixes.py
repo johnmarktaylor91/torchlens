@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -274,7 +275,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     )
     path = tmp_path / "intervention.tlspec"
     trace.save_intervention(path, level="audit")
-    original_spec = (path / "spec.json").read_bytes()
+    original_spec = (path / "intervention.json").read_bytes()
     original_rename = os.rename
 
     def fail_replacement(source: str | Path, target: str | Path) -> None:
@@ -288,7 +289,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     with pytest.raises(OSError, match="swap refusal"):
         trace.save_intervention(path, level="audit", overwrite=True)
 
-    assert (path / "spec.json").read_bytes() == original_spec
+    assert (path / "intervention.json").read_bytes() == original_spec
 
 
 def test_content_hash_is_address_and_insertion_order_independent() -> None:
@@ -369,8 +370,11 @@ def test_current_manifest_refuses_unparseable_torchlens_version(tmp_path: Path) 
     manifest["torchlens_version"] = "not-a-version"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(ArtifactError, match="could not be parsed"):
+    with pytest.raises(
+        ArtifactError, match="torchlens_version must be a PEP 440 version string"
+    ) as info:
         tl.load(path)
+    assert info.value.fields.get("code") == "manifest_schema_invalid"
 
 
 def test_bounded_json_ceiling_counts_utf8_bytes() -> None:
@@ -495,3 +499,46 @@ def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:
     path = tmp_path / "recurrent.tlspec"
     trace.save(path)
     assert tl.load(path)._num_ops == trace._num_ops
+
+
+def test_canonical_metadata_relation_sets_round_trip(tmp_path: Path) -> None:
+    """Relation frozensets survive the canonical (sorted-REDUCE) metadata dump.
+
+    B3R4-R21-2 rewrites exact set/frozenset pickling in ``metadata.pkl`` as
+    ``cls(sorted_members)`` — a REDUCE on ``builtins.frozenset``/``set`` —
+    so this pins that the default-deny safe unpickler admits the spelling
+    and the loaded relation sets are logically unchanged.
+    """
+
+    model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU(), torch.nn.Linear(2, 2))
+    trace = tl.trace(model, torch.ones(1, 2))
+    path = tmp_path / "canonical.tlspec"
+    trace.save(path)
+
+    loaded = tl.load(path)
+    for label in ("linear_1_1", "relu_1_2", "linear_2_3"):
+        loaded_layer = loaded[label]
+        assert isinstance(loaded_layer.input_ancestors, frozenset)
+        assert set(loaded_layer.input_ancestors) == set(trace[label].input_ancestors)
+
+
+def test_foreign_defaultdict_factory_keeps_data_and_discloses_the_factory(tmp_path: Path) -> None:
+    """An unsupported factory is never run, and its mapping contents survive load."""
+
+    def factory() -> list:
+        raise AssertionError("a serialized factory must never execute")
+
+    trace = tl.trace(_LinearModel(), torch.ones(1, 2))
+    trace.output_ops[0].func_config = {"lookup": defaultdict(factory, {"seen": [3]})}
+    path = tmp_path / "factory-disclosure.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+    assert any(
+        row["kind"] == "unencodable_values_stringified"
+        for row in loaded.annotations["capture_advisories"]
+    )
+    mapping = loaded.output_ops[0].func_config["lookup"]
+    assert type(mapping) is dict
+    assert mapping == {"seen": [3]}
+    manifest = json.loads((path / "manifest.json").read_text())
+    assert any("default_factory" in at for at in manifest["disclosures"]["first"])

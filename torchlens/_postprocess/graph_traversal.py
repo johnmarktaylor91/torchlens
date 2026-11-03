@@ -28,7 +28,11 @@ from .._utils.tensor_utils import (
     tensor_nanequal,
 )
 from ._buffer_addresses import _recorded_buffer_address
-from ._orphan_seeds import _orphan_flood_seeds
+from ._orphan_seeds import (
+    _expand_seen_nodes_to_complete_func_call_groups,
+    _orphan_flood_seeds,
+    _remember_orphan_rows,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -608,23 +612,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
 
     nodes_seen = _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen)
     orphan_nodes = orig_nodes - nodes_seen
-    self._orphan_labels = [
-        label for label in self._raw_graph_ws.raw_layer_labels_list if label in orphan_nodes
-    ]
-    self._orphan_logs = tuple(
-        self._raw_graph_ws.raw_layer_dict[label] for label in self._orphan_labels
-    )
-    self._orphan_records = [
-        {
-            "raw_label": orphan._label_raw,
-            "label": orphan.label,
-            "payload_ref": orphan.out_ref
-            if getattr(orphan, "out_ref", None) is not None
-            else orphan.out,
-        }
-        for orphan in self._orphan_logs
-        if getattr(orphan, "has_saved_activation", False)
-    ]
+    _remember_orphan_rows(self, orphan_nodes)
     # Record pruned torch-RNG ops that DROVE control flow before the orphan
     # metadata is stripped: an ``if torch.rand(()) > 0.5`` predicate is
     # input-disconnected and orphaned away, so the runnable descriptor would
@@ -662,6 +650,9 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     # Batch-remove orphaned nodes and rebuild the ordered layer dict/list.
     orphan_entries = [self._raw_graph_ws.raw_layer_dict[label] for label in orphan_nodes]
     self._batch_remove_log_entries(orphan_entries, remove_references=True)
+    # Removal strips these records. Retain their labels and payload evidence,
+    # not empty shells that no longer have an op identity to serialize.
+    self._orphan_logs = ()
 
     new_layer_dict = OrderedDict()
     new_layer_list = []
@@ -895,40 +886,6 @@ def _record_pruned_alias_mutation(self: "Trace", orphan_nodes: set[str]) -> None
         return
     for label in candidates & orphan_nodes:
         record_pruned_alias_mutation_source(self, label)
-
-
-def _expand_seen_nodes_to_complete_func_call_groups(
-    self: "Trace", nodes_seen: set[str]
-) -> set[str]:
-    """Add raw-label siblings for any surviving ``func_call_id`` group.
-
-    Parameters
-    ----------
-    nodes_seen:
-        Raw labels reachable from the input/output flood.
-
-    Returns
-    -------
-    set[str]
-        Reachable raw labels expanded so multi-output wrapper calls are kept
-        atomically.
-    """
-
-    func_groups: dict[int, set[str]] = {}
-    for raw_label in self._raw_graph_ws.raw_layer_labels_list:
-        func_call_id = getattr(self._raw_graph_ws.raw_layer_dict[raw_label], "func_call_id", None)
-        if func_call_id is not None:
-            func_groups.setdefault(func_call_id, set()).add(raw_label)
-
-    expanded_seen = set(nodes_seen)
-    changed = True
-    while changed:
-        changed = False
-        for raw_labels in func_groups.values():
-            if expanded_seen.intersection(raw_labels) and not raw_labels.issubset(expanded_seen):
-                expanded_seen.update(raw_labels)
-                changed = True
-    return expanded_seen
 
 
 def _log_internally_terminated_tensor(

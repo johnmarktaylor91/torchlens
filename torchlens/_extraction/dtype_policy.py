@@ -164,6 +164,7 @@ def cast_for_store(
 
     target = _target_for_key(policy, key)
     if target is None or tensor.dtype == target:
+        _check_store_dtype(key, tensor, shard_format)
         return tensor, None
     try:
         cast = tensor.to(target)
@@ -178,26 +179,7 @@ def cast_for_store(
             captured_dtype=str(tensor.dtype),
             requested_dtype=str(target),
         ) from exc
-    if shard_format == "safetensors" and cast.dtype not in (
-        torch.float8_e4m3fn,
-        torch.float8_e5m2,
-    ):
-        # fp8 is measured byte-exact through the shard codec on the pinned
-        # stack (extract D11) but excluded from the tlspec bundle policy;
-        # every OTHER dtype routes through the ONE _io/tensor_policy door.
-        from .._io import tensor_policy
-
-        verdict = tensor_policy.is_supported_for_save(cast)
-        if not isinstance(verdict, tensor_policy.Ok):
-            raise InvalidArgumentError(
-                f"Output key {key!r} cast to {target} cannot be stored by "
-                f"the safetensors shard codec: "
-                f"{getattr(verdict, 'text', 'unsupported tensor')}.",
-                code="extraction_dtype_unsupported",
-                remedy="choose a storable save dtype, or shard_format='pt'",
-                key=key,
-                requested_dtype=str(target),
-            )
+    _check_store_dtype(key, cast, shard_format)
     captured_bits = tensor.element_size() * 8
     stored_bits = cast.element_size() * 8
     same_class = tensor.is_floating_point() == cast.is_floating_point()
@@ -209,3 +191,28 @@ def cast_for_store(
         f"{str(cast.dtype).removeprefix('torch.')}",
         "potentially_lossy": not exact_widening,
     }
+
+
+def _check_store_dtype(key: str, cast: torch.Tensor, shard_format: str) -> None:
+    """Apply the one tensor policy for a raw physical shard, including no-op casts."""
+
+    if shard_format == "safetensors" and cast.dtype not in (
+        torch.float8_e4m3fn,
+        torch.float8_e5m2,
+    ):
+        # fp8 is measured byte-exact through the shard codec on the pinned
+        # stack (extract D11) but excluded from the tlspec bundle policy;
+        # every OTHER dtype routes through the ONE _io/tensor_policy door.
+        from .._io import tensor_policy
+
+        verdict = tensor_policy.is_supported_for_save(cast, _real_view_codec=False)
+        if not isinstance(verdict, tensor_policy.Ok):
+            raise InvalidArgumentError(
+                f"Output key {key!r} with dtype {cast.dtype} cannot be stored by "
+                f"the safetensors shard codec: "
+                f"{getattr(verdict, 'text', 'unsupported tensor')}.",
+                code="extraction_dtype_unsupported",
+                remedy="choose a storable save dtype, or shard_format='pt'",
+                key=key,
+                requested_dtype=str(cast.dtype),
+            )

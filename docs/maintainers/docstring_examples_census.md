@@ -18,7 +18,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _episode_spec | 1 | 0 |
 | _errors | 23 | 0 |
 | _extraction | 8 | 0 |
-| _io | 17 | 0 |
+| _io | 19 | 0 |
 | _ir | 11 | 0 |
 | _merged | 12 | 0 |
 | _mutate_warnings | 1 | 0 |
@@ -60,7 +60,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | export | 29 | 0 |
 | features | 5 | 0 |
 | fingerprint | 5 | 0 |
-| intervention | 95 | 0 |
+| intervention | 94 | 0 |
 | inventory | 5 | 0 |
 | io | 7 | 0 |
 | mechinterp | 48 | 0 |
@@ -79,6 +79,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 12 | 0 |
-| **total** | **1043** | **0** |
+| **total** | **1044** | **0** |
 
 Public callable members of those classes (methods and properties): 1480.

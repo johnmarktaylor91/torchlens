@@ -201,6 +201,7 @@ def _synthesize_row(
     fields: dict[str, Any] = dict.fromkeys(LAYER_PASS_LOG_FIELD_ORDER)
     fields.update(
         {
+            "label": record.label,
             "layer_label": record.label,
             "func_name": record.func_name,
             "type": record.layer_type,

@@ -1354,7 +1354,47 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/_io/_numpy_payload_codec.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/_io/_save_gates.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "equivalence_class",
+  "file": "torchlens/_io/_scrub_identities.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "equivalence_class",
+  "file": "torchlens/_io/_scrub_identities.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_io/_small_raw.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_io/_tlspec_identity.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -1364,7 +1404,7 @@
   "field": "kind",
   "file": "torchlens/_io/bundle.py",
   "has_default": false,
-  "sites": 10,
+  "sites": 8,
   "via_getattr": false
  },
  {
@@ -1392,6 +1432,54 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_io/format3/_tables.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_io/format3/payloads.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_io/format3/reader.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_io/format3/schema.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_io/format3/validate.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_io/format3/writer.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "is_edited",
   "file": "torchlens/_io/injection_codec.py",
@@ -1411,14 +1499,6 @@
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_io/manifest.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/_io/payload_codec.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -1505,22 +1585,6 @@
  },
  {
   "ambiguous": false,
-  "field": "equivalence_class",
-  "file": "torchlens/_io/scrub.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "equivalence_class",
-  "file": "torchlens/_io/scrub.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
   "field": "is_edited",
   "file": "torchlens/_io/scrub.py",
   "has_default": true,
@@ -1556,7 +1620,7 @@
   "field": "kind",
   "file": "torchlens/_io/tlspec.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -2968,6 +3032,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/_postprocess/_orphan_seeds.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_postprocess/_orphan_seeds.py",
@@ -3180,7 +3252,7 @@
   "field": "func_call_id",
   "file": "torchlens/_postprocess/graph_traversal.py",
   "has_default": true,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": true
  },
  {

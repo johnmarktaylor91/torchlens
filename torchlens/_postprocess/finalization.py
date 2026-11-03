@@ -40,13 +40,14 @@ from .._data_classes.module import Module, ModuleCall
 from .._data_classes.prehook import ModuleInputSnapshot, PreHookEffect
 from .._io import ArtifactError, BlobRef
 from .._io.accessor_rebuild import rebuild_trace_accessors
+from .._io.format3.writer import settle_live_side
 from .._io.lazy import LazyActivationRef
 from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
-from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
+from ..backends._constants import is_constant_op
 from ..backends.torch._tl import clear_meta
 from ._conditional_records import (
     _find_conditional_evaluation_entry_edge,
@@ -58,6 +59,7 @@ from ._conditional_records import (
 )
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
+from ._streamed_tensor_types import _dtype_from_manifest_string, _streamed_entry
 from .saved_summary import _has_retained_gradient_payloads
 
 if TYPE_CHECKING:
@@ -1229,6 +1231,8 @@ def _build_layer_logs(self: "Trace") -> None:
 
     for pass_log in self._layer_list:
         no_call_label = pass_log.layer_label
+        # backends.2 constants stamp: rule-running backends set it; torch eager is stamped here.
+        pass_log.is_constant = bool(pass_log.is_constant) or is_constant_op(pass_log)
 
         if no_call_label not in layer_logs:
             # First pass: create Layer from this pass's data.
@@ -1269,11 +1273,8 @@ def _build_layer_logs(self: "Trace") -> None:
         for pass_log in layer_log.ops.values():
             linked_labels = []
             for param_log in pass_log._param_logs:
-                # Tied/shared parameters expose every aliasing address through
-                # ``all_addresses`` (the primary is ``param_log.address`` == all_addresses[0]).
-                # Emit ``primary -> alias`` for each additional address that shares the
-                # underlying tensor storage. (Co-occurrence of distinct tensors in one op
-                # is tracked separately by ``co_parent_params`` and is NOT tying.)
+                # Tied parameters list every aliasing address in ``all_addresses`` (primary
+                # first); co-occurring distinct tensors (``co_parent_params``) are not tying.
                 for alias_address in getattr(param_log, "all_addresses", []):
                     if alias_address == param_log.address:
                         continue
@@ -1492,18 +1493,12 @@ def _set_tracing_finished(self: "Trace") -> None:
 def _finalize_streamed_bundle(self: "Trace") -> None:
     """Step 18: Finalize any in-progress streamed tensor bundle.
 
-    Streamed bundles ENTER SETTLEMENT (WT1 A-IV item 18, lane A08): an
-    UNSETTLED trace (the ordinary step-18 call, which runs before
-    ``settle_completed``) only STAGES the bundle -- blobs and manifest land in
-    the temp directory and the writer stays on ``self._out_writer`` -- and the
-    tmp->final publish happens at the settlement seam in
-    ``_capture/trace.py``, carrying the settled capture-outcome attestation.
-    A SETTLED trace (the deferred grad-streaming tail in
-    ``backends/torch/backward.py``) stages and publishes in one pass.
-    Historical behavior published here unconditionally, so a live COMPLETE
-    capture loaded UNATTESTED (no attestation existed yet to persist) and a
-    postprocess failure AFTER this step left a published artifact the N1
-    export gate would refuse.
+    Streamed bundles ENTER SETTLEMENT (WT1 A-IV item 18): an UNSETTLED trace (the
+    step-18 call, before ``settle_completed``) only STAGES the bundle in the temp
+    directory, and the publish happens at the settlement seam in ``_capture/trace.py``
+    with the settled capture-outcome attestation. A SETTLED trace (the deferred
+    grad-streaming tail in ``backends/torch/backward.py``) stages and publishes in one
+    pass. Live records pair with their scrubbed copies so live cells match ``save()``.
 
     Parameters
     ----------
@@ -1523,20 +1518,24 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     from .._capture.outcome import outcome_for
     from ..intervention.injection import refuse_injection_logged_stream_finalize
 
-    # F44: the streamed writer stages its own bundle and never passes the
-    # analysis save door that appends the injected family; refusing here
-    # keeps a streamed artifact from silently dropping recorded computation.
+    # F44: the streamed writer skips the save door that appends the injected family.
     refuse_injection_logged_stream_finalize(self)
+    settle_live_side(self)
+    record_pairs: list[tuple[Any, Any]] = []
     try:
-        scrubbed_state, blob_specs, unsupported_tensor_records = _scrub_streamed_trace(self, writer)
+        scrubbed_state, blob_specs, unsupported_tensor_records = _scrub_streamed_trace(
+            self, writer, record_pairs
+        )
         scrubbed_state, blob_specs = _reuse_streamed_blob_ids(
             self, scrubbed_state=scrubbed_state, blob_specs=blob_specs, writer=writer
         )
+        writer.hold_live_records(record_pairs)
         final_path = writer.stage_for_settlement(
             scrubbed_state=scrubbed_state,
             blob_specs=blob_specs,
             unsupported=unsupported_tensor_records,
             trace=self,
+            payload_policy=_streamed_payload_flags(self, writer),
         )
         settled = outcome_for(self)
         if settled is not None:
@@ -1561,8 +1560,21 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     self._defer_streaming_bundle_finalization = False
 
 
+def _streamed_payload_flags(self: "Trace", writer: BundleStreamWriter) -> dict[str, Any]:
+    """Return the include flags a streamed save scrubs with (and records as its policy)."""
+
+    return {
+        "include_outs": True,
+        "include_grads": _has_retained_gradient_payloads(self),
+        "include_saved_args": self._options_save_args,
+        "include_rng_states": self._options_save_rng,
+        "include_custom_attributes": getattr(writer, "include_custom_attributes", True),
+        "include_buffer_values": getattr(writer, "include_buffer_values", True),
+    }
+
+
 def _scrub_streamed_trace(
-    self: "Trace", writer: BundleStreamWriter
+    self: "Trace", writer: BundleStreamWriter, record_pairs: list[tuple[Any, Any]]
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a streamed trace for staging, numbering its blobs past the stream's ids.
 
@@ -1572,6 +1584,8 @@ def _scrub_streamed_trace(
         Model log whose streamed bundle is being finalized.
     writer:
         The capture's streaming bundle writer.
+    record_pairs:
+        Filled with ``(scrubbed copy, live record)`` pairs for the writer's live cells.
 
     Returns
     -------
@@ -1583,16 +1597,10 @@ def _scrub_streamed_trace(
 
     return scrub_for_save(
         self,
-        include_outs=True,
-        include_grads=_has_retained_gradient_payloads(self),
-        include_saved_args=self._options_save_args,
-        include_rng_states=self._options_save_rng,
-        include_custom_attributes=getattr(writer, "include_custom_attributes", True),
-        include_buffer_values=getattr(writer, "include_buffer_values", True),
-        # Scrub ids start past every id the capture streamed: a tensor field with
-        # no streamed blob (a synthetic output row, an orphan payload) otherwise
-        # takes an id the stream already wrote once an op streamed during capture
-        # was pruned, and its ref silently resolves to that op's payload.
+        **_streamed_payload_flags(self, writer),
+        record_pairs=record_pairs,
+        # Scrub ids start past every streamed id: else a blobless tensor field takes an id
+        # a pruned streamed op already wrote, and its ref resolves to that op's payload.
         blob_id_floor=writer._issued_blob_count(),
     )
 
@@ -1660,10 +1668,8 @@ def _reuse_streamed_blob_ids(
         raise ArtifactError(
             "Streaming finalize expected scrubbed_state['_layer_list'] to be a list."
         )
-    # The scrubbed layers are a 1:1 scrub of trace._layer_list. If they ever
-    # diverge, pairing them positionally would silently finalize only the
-    # shorter prefix -- writing a bundle that looks complete but is missing
-    # blobs for every layer past the truncation point.
+    # The scrubbed layers are a 1:1 scrub of trace._layer_list; pairing diverged lists
+    # positionally would silently drop the blobs of every layer past the shorter one.
     if len(scrubbed_layers) != len(trace._layer_list):
         raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
@@ -1672,12 +1678,7 @@ def _reuse_streamed_blob_ids(
 
     skipped_blob_ids: set[str] = set()
     for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
-        # One lazy full-schema snapshot per layer (r8 R29): the old loop
-        # rebuilt the ~200-300-field portable state dict on EVERY field
-        # iteration and BEFORE the pending short-circuit, so every layer of
-        # every streamed save paid 4 full dict builds to read one key. Each
-        # field key is read once and the four keys are distinct, so the
-        # snapshot cannot go stale across this layer's own setattrs.
+        # One lazy snapshot per layer (r8 R29); the four keys are distinct, so it never goes stale.
         scrubbed_items: dict[str, Any] | None = None
         for tensor_field, pending_field in (
             ("out", "_pending_blob_id"),
@@ -1783,10 +1784,8 @@ def _attach_streamed_tensor_refs(
         raise ArtifactError(
             "Streaming finalize expected scrubbed_state['_layer_list'] to be a list."
         )
-    # The scrubbed layers are a 1:1 scrub of trace._layer_list. If they ever
-    # diverge, pairing them positionally would silently finalize only the
-    # shorter prefix -- writing a bundle that looks complete but is missing
-    # blobs for every layer past the truncation point.
+    # The scrubbed layers are a 1:1 scrub of trace._layer_list; pairing diverged lists
+    # positionally would silently drop the blobs of every layer past the shorter one.
     if len(scrubbed_layers) != len(trace._layer_list):
         raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
@@ -1801,7 +1800,7 @@ def _attach_streamed_tensor_refs(
             tensor_blob = getattr(scrubbed_layer, tensor_field, None)
             if not isinstance(tensor_blob, BlobRef):
                 continue
-            manifest_entry = writer.get_entry(tensor_blob.blob_id)
+            manifest_entry, key = _streamed_entry(writer, tensor_blob.blob_id)
             setattr(
                 live_layer,
                 ref_field,
@@ -1814,30 +1813,6 @@ def _attach_streamed_tensor_refs(
                     relative_path=manifest_entry.relative_path,
                     kind=cast(Literal["out", "grad"], kind),
                     expected_sha256=manifest_entry.sha256,
+                    key=key,
                 ),
             )
-
-
-def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
-    """Resolve a manifest dtype string back into a ``torch.dtype``.
-
-    Parameters
-    ----------
-    dtype_name:
-        Manifest dtype name without the ``torch.`` prefix.
-
-    Returns
-    -------
-    torch.dtype
-        Resolved dtype object.
-
-    Raises
-    ------
-    ArtifactError
-        If the dtype name is unknown to the current runtime.
-    """
-
-    dtype_obj = torch_dtype_named(dtype_name)
-    if dtype_obj is None:
-        raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
-    return dtype_obj

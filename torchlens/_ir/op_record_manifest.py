@@ -116,6 +116,7 @@ CELL_SOURCE_MANIFEST: dict[str, str] = {
     'io_role': 'JOIN:io_role',
     'is_atomic_module': 'JOIN:module_exit',
     'is_buffer': 'CORE',
+    'is_constant': 'DEFAULT',
     'is_edited': 'FACET:intervention',
     'is_final_output': 'DEFAULT',
     'is_inplace': 'FACET:function',

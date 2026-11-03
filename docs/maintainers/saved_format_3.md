@@ -11,7 +11,7 @@ page `saved_format_3_design.md`: `contract.py`, `schema.py`, `values.py`, `paylo
 are schema nodes, cross-record validators live in `validate.py`. Until the three doors land, the functions in
 `torchlens/_io/format3/` refuse typed and name the module that fills each.
 
-What the format replaces: the `metadata.pkl` of the tlspec 11 writer (a restricted-unpickler
+What the format replaces: the `metadata.pkl` of the pickle writer (a restricted-unpickler
 payload) and its inline-tensor pickle reduction. What it keeps: the record contracts and keys of
 `persisted_fields.md`, the save levels and payload flags of `torchlens/_io/save_policy.py`, the
 safetensors payload codecs, the writer identity stamp and the writer contract digest.
@@ -45,7 +45,7 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `format_version` | integer | the format major; `3` for this contract |
 | `tlspec_version` | integer | the record contract version the records follow |
 | `kind` | string | `trace`, `bundle` or `intervention` |
-| `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at` | string | writer identity (`created_at` is ISO 8601 UTC); required, never part of any digest |
+| `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at` | string | writer identity (`created_at` is ISO 8601 UTC; the three version stamps parse under PEP 440); required, never part of any digest |
 | `backend`, `backend_runtime` | string | the capture backend and its runtime, as the tlspec 11 manifest stamps them |
 | `save_level` | string | one of `portable`, `audit`, `runnable`, `executable_with_callables` |
 | `payload_policy` | object | the resolved flags `include_outs`, `include_grads`, `include_saved_args`, `include_rng_states`, `include_buffer_values`, `structure_only`, all booleans |
@@ -53,9 +53,23 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `codecs` | array | the payload codec ids used; a subset of `torch_safetensors_v1`, `numpy_safetensors_v1` |
 | `records` | object | per record kind: `{"path": "records/op.json", "rows": N, "sha256": hex, "bytes": N}` |
 | `files` | object | every file in the directory except `manifest.json`, by relative path: `{"sha256": hex, "bytes": N}` |
-| `model_signature`, `model_fingerprint` | string | as the tlspec 11 manifest stamps them |
+| `model_signature` | string | as the tlspec 11 manifest stamps it |
+| `schema_version`, `n_layers`, `n_out_blobs`, `n_grad_blobs`, `n_auxiliary_blobs`, `bundle_format`, `body_format`, `body_index`, `sites`, `optional_dependencies`, `spec_compat_info`, `intervention_compat_metadata` | as the tlspec 11 manifest stamps them | carried for readers that open the manifest blind; the loader rebuilds nothing from them (the op count comes from `records`). A trace manifest carries each of them and `model_signature` (`contract.MANIFEST_CARRIED_FIELDS`); in any kind a present one must keep its tlspec 11 shape (counts are non-negative integers, the two compatibility objects are null in a trace), else `manifest_schema_invalid` |
+| `unsupported_tensors`, `provenance`, `custom_attributes_disclosure`, `buffer_values_disclosure` | as the tlspec 11 manifest stamps them | optional carried fields (`contract.MANIFEST_CARRIED_OPTIONAL_FIELDS`); checked against their tlspec 11 shapes when present |
+| `model_fingerprint` | object | optional; the closed 2.x shape: `parameter_meta_hash` and `buffer_meta_hash` (SHA-256 hex), `class_qualname` (non-empty), `extra_metadata` (object); or the backend shape `{"backend_fingerprint": {backend, model_signature, graph_digest, module_identity_mode, param_source}}`. A present summary that breaks its shape refuses `manifest_schema_invalid` |
+| `backward_summary` | object | optional; `has_backward_pass` (bool), the counters `num_backward_passes`, `num_grad_fns`, `num_grad_fn_calls`, `num_saved_grad_records`, `gradient_blob_count` (non-negative ints), `gradient_blob_kinds` (distinct entries from `grad`, `grad_fn_grad`, `transformed_grad`), `old_bundle_policy` (non-empty); null for a non-torch backend fingerprint. Checked when present |
 | `runnable`, `intervention` | object | present with the component; component schema versions and file paths |
 | `disclosures` | object | optional; `{"count": N, "first": [up to 16 field paths]}` when the artifact holds N > 0 unencodable disclosures (section 4), absent when none; when present the loader attaches the load advisory `unencodable_values_stringified` |
+
+The writer identity strings (`torchlens_version`, `python_version`, `torch_version`, `platform`,
+`created_at`) follow the code-owned grammar `contract.IDENTITY_FIELD_PATTERNS`: non-empty. The
+three version stamps must also parse under PEP 440; one that does not is malformed manifest
+data and refuses `manifest_schema_invalid`, naming the field, at schema-check time, before any
+runtime identity policy runs. After the floor and ceiling checks the reader applies the
+writer-version floor, then the shared runtime identity policy: a `torchlens_version` older than
+the first TorchLens that writes format 3 is an impossible pairing and refuses
+`artifact_version_below_floor`; a torch major mismatch refuses `bundle_torch_incompatible`; a
+torch minor mismatch, a newer TorchLens writer and a Python major mismatch warn.
 
 ### Version floor and refusals
 
@@ -79,7 +93,8 @@ that is not a TorchLens save at all.
 Every file other than the manifest is listed in `files` with its SHA-256 and byte length. The
 reader verifies each file's digest before parsing it; a mismatch or a truncated file refuses
 `bundle_metadata_integrity_refused`. A file present in the directory but absent from `files` is
-ignored and never read (a `README.txt` is allowed there). The manifest itself carries no digest
+ignored and never read (a `README.txt` is allowed there); the loader names such files in one
+advisory warning, without opening them, and the load succeeds. The manifest itself carries no digest
 of its own; the save preflight (section 6) reloads the written directory once, so a manifest
 that does not describe its directory never publishes.
 
@@ -136,7 +151,7 @@ payload column but its tensor references carry no blob (section 3).
 
 ### Keys and values the format adds
 
-The tlspec bump that ships with the format adds, so that a loaded trace equals the live one:
+The tlspec 12 bump that ships with the format adds, so that a loaded trace equals the live one:
 
 - `op.is_constant` (boolean, required at every level, fact): set by the shared constants rule for
   closure constants and literal producers, following `is_buffer`; the Paddle and tinygrad
@@ -155,9 +170,10 @@ The tlspec bump that ships with the format adds, so that a loaded trace equals t
   bucket outside the pipeline keeps its stage name as a snake_case key; the writer contract pins
   the full key set.
 
-Until that bump lands, `contract.PLANNED_KEYS` names the added keys and the pin test asserts
-they are absent from the page; the writer lane adds the bindings, regenerates the page, bumps
-`contract.RECORD_CONTRACT_VERSION` and empties `PLANNED_KEYS` in one change.
+Both op keys are in the tlspec 12 bindings and on the page (the op record has 176 keys), so
+`contract.PLANNED_KEYS` is empty. A key a later contract plans goes there first; the pin test
+asserts it is absent from the page until the change that adds its binding, regenerates the page
+and bumps `contract.RECORD_CONTRACT_VERSION` also removes it from the plan.
 
 ## 3. Tensor references
 
@@ -209,10 +225,24 @@ is one of `contract.TYPED_VALUE_TAGS`:
 | `dtype`, `device` | `{"$tl": "dtype", "name": "float32"}` | the torch object |
 | `type` | `{"$tl": "type", "name": "torch.nn.modules.conv.Conv2d"}` | the dotted name as a string; the reader imports nothing |
 | `enum` | `{"$tl": "enum", "type": "...", "name": "..."}` | a TorchLens-owned enum member; a user enum becomes `unencodable` |
-| `record` | `{"$tl": "record", "type": "...", "fields": {...}}` | a TorchLens value object (`OpRef`, `FireRecord`, `Edit`, the audit rows) whose type is in the writer contract's component spec tables; any other type refuses |
+| `record` | `{"$tl": "record", "type": "...", "fields": {...}}` | a TorchLens value object (`OpRef`, `FireRecord`, `Edit`, the audit rows, unit quantities such as `Bytes`) whose type is on the record-type allowlist: the writer contract's component classes plus the value classes listed beside the codec in `format3/values.py`; any other type refuses |
+| `ref` | `{"$tl": "ref", "record": "op", "row": 17}` | row 17 of `records/op.json`: written where a live field holds a record object (an op list, an accessor, a call-location list) rather than its label |
 | `tensor` | section 3 | the tensor |
 | `unencodable` | below | a disclosure |
 | `callable_placeholder` | section 5 | an audit-only edit |
+
+The `tuple` tag may carry optional `subtype`. `torch.Size` restores its known constructor;
+`torch.return_types` structseq names select only the closed code-owned constructor table
+(`values.tuple_subtypes`), never an import or attribute lookup driven by artifact text.
+An unknown subtype refuses typed. Without `subtype`, the tuple keeps its ordinary meaning.
+
+The `dict` tag may carry `subtype: "collections.defaultdict"` and `default_factory`.
+The factory is one of the closed builtin names `list`, `dict`, `set`, `int`, `float`,
+`str`, or `tuple`. Any other factory is encoded at `default_factory` as the existing
+`unencodable` disclosure; the contents reload as a plain dict and that value reloads as
+`UnencodableValue`, with the usual load advisory. No factory is executed while loading.
+An absent subtype keeps the ordinary mapping meaning. Set and frozenset tensor members
+are materialized before hashing; no unresolved blob reference enters a hash operation.
 
 A user object no rule covers is stringified with a disclosure, never pickled:
 
@@ -243,6 +273,7 @@ writes the same file in its own directory: one grammar, two homes.
              "metadata": {}, "selection_recipe": null},
     "metadata": {}}
  ],
+ "capture_rules": [],
  "helpers": [{"name": "scale", "version": 1}], "function_registry_keys": []}
 ```
 
@@ -260,9 +291,21 @@ writes the same file in its own directory: one grammar, two homes.
   `kwargs` is replaced in place by the same object with `position` set to
   `"<rule index>.<argument path>"` (`"0.kwargs.transform"`). Either way the manifest's
   `intervention.executable` is false and the rule loads as an audit-only edit.
-- Such a recipe is written only at the audit level: `save_intervention(level="portable")` on a
+- Such a recipe is written only at the audit level: either `Trace.save(level="portable")`
+  or `save_intervention(level="portable")` on a
   recipe holding a user callable, or a value the format cannot carry, refuses at save time with
   `intervention_spec_not_portable`; the remedy is `level="audit"` or built-in edits.
+- `capture_rules` is an optional array (absent means empty) preserving original built-in
+  capture predicates alongside the canonical staged `rules`. Each entry has exactly `index`
+  (its zero-based array position), `selector` (the same closed TargetSpec object as a rule),
+  and `edit` (the same built-in Edit identity). Unknown recipe keys, unknown entry keys,
+  malformed indices or selectors, and non-built-in capture edits refuse
+  `manifest_schema_invalid`. The existing typed value rules apply to every member; unknown
+  selector kinds or edit names refuse through the existing selector/helper registry.
+  A loaded rerun rebuilds this predicate with the code-owned selector and edit registries,
+  then checks that it restages exactly the saved label rules. It never resolves a callable
+  by an artifact-supplied import name. A callable predicate refuses
+  `intervention_spec_not_portable` at save time.
 - A loaded trace whose recipe holds a placeholder refuses every rerun door
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`) with
   `run_intervention_spec_not_persisted`; the message names the rule position and the callable's
@@ -281,8 +324,8 @@ One table for the writer and the reader. Codes are rows of
 | no `manifest.json` | `manifest_missing` | reader |
 | manifest unreadable or over the parse bound | `manifest_unreadable` | reader |
 | manifest root not an object | `manifest_not_json_object` | reader |
-| manifest violates this contract (missing field, wrong type, `records` or `files` entry wrong) | `manifest_schema_invalid` | reader |
-| 2.x artifact, `format_version` below 3, record contract below the floor | `artifact_version_below_floor` | reader |
+| manifest violates this contract (missing field, wrong type, a version stamp that is not PEP 440, `records` or `files` entry wrong) | `manifest_schema_invalid` | reader |
+| 2.x artifact, `format_version` below 3, record contract below the floor, or a `torchlens_version` older than the first TorchLens that writes format 3 | `artifact_version_below_floor` | reader |
 | `format_version` above 3 or record contract above the runtime | `artifact_version_above_runtime` | reader |
 | specialized loader given another kind | `artifact_kind_mismatch` | reader |
 | unknown save level | `artifact_save_level_invalid` | writer, reader |
@@ -317,6 +360,40 @@ callable reference and initializer policy at the component versions the writer c
 written follows the callable placeholder rule and makes the artifact audit-only. The `runnable`
 manifest object lists the component versions and files.
 
+- `descriptor.json` is canonical JSON (sorted keys, no NaN or infinity) and is byte for byte the
+  descriptor the tlspec 11 manifest carried under `run`. Callables appear only as callable registry
+  records (a registry key per callable); no callable object is ever written.
+- `state_dict-NNNN.safetensors` holds the capture-time state dict, numbered from 0001, each file at
+  most 256 MiB (a larger tensor gets a file of its own). `buffers.safetensors` holds the
+  non-persistent buffer values. `activations-NNNN.safetensors` holds the capture-selected
+  activations when the save archived them. Every tensor is one opaque key `t<k>` in one file, as in
+  section 3 (numbered on the artifact's shared counter; a reference names its file and key); tensors that share storage (tied weights, view activations) are written as separate
+  copies, and a complex tensor is stored as its real view with `"complex": true`.
+- The `runnable` manifest object is closed. Required: `descriptor`, `descriptor_version`,
+  `call_recipe_version`, `callable_ref_version`, `initializer_policy_version`,
+  `witness_registry_version`. Each present family adds three keys: its files, its schema and its
+  tensor references. `state_dict` (list), `state_dict_family`, `state_dict_tensors` (state name to
+  tensor reference); `buffers`, `buffers_family`, `buffers_tensors` (buffer name to tensor
+  reference); `activations` (list), `activations_family`, `activations_tensors` (the descriptor's
+  activation blob id to tensor reference). Every listed file has a `files` row.
+- Load refuses `manifest_schema_invalid` for an unknown key, a family missing one of its three keys,
+  a version other than the runtime's, a file name outside the fixed names, chunk numbering that is
+  not 0001 upward, a listed file without a `files` row, a tensor reference that is not a contract
+  tensor reference into its own family's files, or a `runnable/` directory the manifest does not
+  list; `bundle_metadata_integrity_refused` for a file whose sha256 or byte length differs, or for
+  a reference whose key is absent, repeated or whose dtype or shape disagree, or a stored tensor no
+  reference names;
+  `bundle_load_failed` for a listed file that is missing; `load_path_symlink_rejected` for a
+  symlinked file. The families then bind through the same strict state binders as before, so
+  readiness, numeric attestation and path faithfulness prove what they proved in tlspec 11.
+
+A bundle's member list references each member by `name`, `path` (`members/<index>-<name>`, the
+name part keeping letters, digits, `.`, `_` and `-` and at most 64 characters) and
+`manifest_sha256`, the sha256 of that member's `manifest.json`. A member swapped or edited after
+the save refuses `bundle_metadata_integrity_refused`; an unknown reference key or a mistyped hash
+refuses `manifest_schema_invalid`. `relations.json` holds the closed relation rows and is listed
+in the bundle manifest's `files`.
+
 ## 8. Worked examples
 
 A portable save of a tiny CNN (`conv2d`, `relu`, `linear`), excerpts:
@@ -334,7 +411,7 @@ A portable save of a tiny CNN (`conv2d`, `relu`, `linear`), excerpts:
              "op": {"path": "records/op.json", "rows": 3, "sha256": "...", "bytes": 19042}, "...": {}},
  "files": {"records/op.json": {"sha256": "...", "bytes": 19042},
            "blobs/out-0001.safetensors": {"sha256": "...", "bytes": 102592}, "...": {}}}
-// records/op.json (three columns of 174)
+// records/op.json (three columns of 176)
 {"record": "op", "tlspec_version": 12, "rows": 3,
  "columns": {"label": ["conv2d_1_1", "relu_1_2", "linear_1_3"],
              "is_constant": [false, false, false],
@@ -387,3 +464,9 @@ A trace loaded from a 3.0 artifact equals the live trace it was saved from, at e
 
 The proof is `tests/test_format3_loaded_equals_live.py`, written with the writer: a tiny CNN
 traced once, saved at each of the four levels, loaded, and compared record by record.
+
+Payload rule clarification (2026-11-02): an unsupported sparse payload refuses
+`metadata_value_unportable` regardless of `strict`. Complex64 and complex128 use their real
+views in chunks and round-trip exactly; neither is skipped. Raw inputs and transformed
+outputs retain numeric arrays and dense tensors through the same payload codecs. Values
+without a portable encoding retain the typed `UnencodableValue` disclosure.

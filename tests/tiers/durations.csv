@@ -1544,7 +1544,6 @@ tests/test_w051_gate_weightsfree_admission.py,3,0.24,0.21,smoke
 tests/test_w051_honesty_hf_default_config.py,5,19.30,5.03,heavy
 tests/test_w051_honesty_live_output_contract.py,13,3.57,0.44,smoke
 tests/test_w051_io_artifact_anchors.py,40,16.14,4.18,unmarked
-tests/test_w051_io_portability_preflight.py,11,4.11,0.69,smoke
 tests/test_w051_mechinterp_dla.py,11,1.93,1.37,heavy
 tests/test_w051_mechinterp_flops_report.py,7,4.34,2.17,unmarked
 tests/test_w051_mechinterp_roofline.py,4,0.49,0.21,unmarked

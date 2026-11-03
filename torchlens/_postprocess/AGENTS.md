@@ -19,7 +19,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_executor.py` | executor | `StepContext` and the per-step adapters (`_run_<name>`), gates (`_should_run_<name>`) and postconditions (`_<name>_violation`) the pipeline points at |
 | `_materialize.py` | 0 | Project capture events into raw `Op` state |
 | `_buffer_addresses.py` | 0 support | Resolve each buffer op's registered buffer address and the initial buffer snapshots |
-| `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances |
+| `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances; `_orphan_seeds.py` owns flood seeds, call-group closure and pre-removal identity/payload bookkeeping |
 | `ast_branches.py` | 5 support, 11.5 support | Conditional AST indexing and source variable name resolution. Hot/cold FileIndex split: parsed ASTs (`_HeavyAst`) are released at the postprocess epilogue (`release_parsed_asts()`); span data + node-free projected calls persist, and unprojected-scope queries re-parse from RETAINED source (never disk), failing closed on anomaly |
 | `control_flow.py` | 5-6 | Conditional attribution and buffer version merging |
 | `loop_detection.py` | 7 | Call-site grouping (`callsite_v1`, rule in `docs/guides/grouping.md`; keys from `utils/_call_site.py`); falls back to the structural adapter when no op carries call-site evidence |
@@ -27,6 +27,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `labeling.py` | 8-11 | Final labels, renaming, lookup keys, retained layer lists (field reordering was REMOVED — see step 10 note below) |
 | `finalization.py` | 12-20 | Undecorate, params, layers, modules, streaming finalization/eviction. Steps it orchestrates but does NOT implement: the step-16.5 hash lives in `utils/hashing.py` (`compute_graph_shape_hash`), the step-20 ref release in `data_classes/_trace_removal.py` (`release_param_refs`), and the step-13 CUDA cache clear inline in the executor (`_executor.py`) |
 | `_ingest_contract.py` | 0 support | Step-0 ingest contract helpers |
+| `_streamed_tensor_types.py` | 18 support | Bind published chunk identities and resolve streamed payload dtype names |
 | `_multipass_params.py` | 14 support | Parameter union for a layer whose passes consume different parameters (split from `finalization.py`) |
 | `_lazy_param_geometry.py` | 15 support | Finalize deferred geometry for lazy-at-prep params (R43 split from `finalization.py`) |
 | `saved_summary.py` | 11 support | Saved-output summary refresh helpers (`_refresh_fast_saved_summary`) |

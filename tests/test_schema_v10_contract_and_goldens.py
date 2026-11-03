@@ -21,9 +21,20 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from torchlens._io import (
+    MIN_TLSPEC_VERSION,
+    MIN_TORCHLENS_VERSION_TEXT,
+    TLSPEC_VERSION,
+    ArtifactTooNewError,
+    ArtifactTooOldError,
+    read_tlspec_version,
+)
 from torchlens._io.format_contract import (
     RESERVED_STEP_SCORE_CREDIT,
     RESERVED_STEP_SCORE_NAMES,
+    modellog_216_error,
 )
 from torchlens._io.writer_contract import writer_contract
 
@@ -105,6 +116,13 @@ _INSEQ_STEP_SCORES_MAP_KEYS = (
 )
 
 
+V11_CONTRACT = SCHEMAS / "writer_contract_v11.json"
+
+
+def _record_contracts(path: Path) -> dict:
+    return _load(path)["contract"]["record_contracts"]
+
+
 def _load(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -118,3 +136,67 @@ def test_step_score_names_are_reserved_and_credited() -> None:
     assert reserved["status"] == "reserved"
     assert "inseq" in reserved["credit"] and reserved["credit"] == RESERVED_STEP_SCORE_CREDIT
     assert writer_contract()["reserved_vocabularies"]["step_scores"] == reserved
+
+
+def test_facet_snapshot_stays_a_drop_field() -> None:
+    """R2-36: the facet snapshot never persists (pickle round-trip: test_fw2b_*)."""
+
+    trace_contract = _record_contracts(V11_CONTRACT)["trace"]
+    assert trace_contract["field_policies"]["facet_functions"] == "drop"
+
+
+def test_v10_admissions_match_the_v10_contract() -> None:
+    """Every admitted field that has landed carries its registered policy in the contract."""
+
+    contracts = _record_contracts(V10_CONTRACT)
+    assert set(V10_FIELD_ADMISSIONS) <= set(contracts), "admissions name unknown record contracts"
+    policy_values = {"keep", "blob", "blob_recursive", "drop", "stringify", "weakref_strip"}
+    for record_key, admitted in V10_FIELD_ADMISSIONS.items():
+        policies = contracts[record_key]["field_policies"]
+        assert set(admitted.values()) <= policy_values
+        for name, policy in admitted.items():
+            if name in policies:
+                assert policies[name] == policy, (
+                    f"{record_key}.{name}: contract policy {policies[name]!r} differs from "
+                    f"the registered {policy!r}"
+                )
+    for record_key, retyped in V10_FIELD_RETYPES.items():
+        missing = set(retyped) - set(contracts[record_key]["persisted_field_names"])
+        assert missing == set(), (
+            f"{record_key}: retypes name non-persisted fields {sorted(missing)}"
+        )
+
+
+def test_v10_contract_floor_text_and_version() -> None:
+    contract = _load(V10_CONTRACT)["contract"]
+    assert contract["tlspec_version"] == 10, "v10 stays frozen"
+    assert TLSPEC_VERSION == 12
+    assert contract["min_torchlens_version"] == "2.31.0", "v10 stays frozen"
+    v11 = _load(V11_CONTRACT)["contract"]
+    assert v11["min_torchlens_version"] == MIN_TORCHLENS_VERSION_TEXT
+    assert contract["min_tlspec_version"] == 6, "v10 stays frozen"
+    assert MIN_TLSPEC_VERSION == 12
+
+
+def test_below_floor_state_refuses_as_2x() -> None:
+    state = {"tlspec_version": MIN_TLSPEC_VERSION - 1}
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        read_tlspec_version(state, cls_name="Trace")
+    fields = excinfo.value.fields
+    assert fields["code"] == "artifact_version_below_floor"
+    assert fields["floor_tlspec_version"] == 12
+    assert "saved by torchlens 2.x" in str(excinfo.value)
+    assert "2.33" not in str(excinfo.value)
+
+
+def test_modellog_216_refusal_names_the_one_release_that_reads_it() -> None:
+    error = modellog_216_error("x.tlspec")
+    assert "torchlens==2.17.0" in error.fields["remedy"]
+    assert "load it with torchlens 2.36.x" in error.fields["remedy"]
+    assert error.fields["code"] == "artifact_version_below_floor"
+
+
+def test_future_version_refuses_on_state_window() -> None:
+    with pytest.raises(ArtifactTooNewError) as excinfo:
+        read_tlspec_version({"tlspec_version": TLSPEC_VERSION + 1}, cls_name="Trace")
+    assert excinfo.value.fields["ceiling_tlspec_version"] == TLSPEC_VERSION == 12

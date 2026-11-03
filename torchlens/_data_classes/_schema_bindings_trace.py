@@ -9,7 +9,7 @@ generation, so hand edits cannot survive.
 
 from __future__ import annotations
 
-from .field_policy import StorageBinding, StorageKind
+from .._io._field_policy import StorageBinding, StorageKind
 
 TRACE_BINDINGS: dict[str, StorageBinding] = {
     "name": StorageBinding(StorageKind.SCALAR),

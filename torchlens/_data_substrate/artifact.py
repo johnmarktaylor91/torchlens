@@ -634,12 +634,11 @@ def refuse_2x_manifest(
         and migrates nothing in place; the one 2.x error names the remedy.
     """
 
-    from .._io._pre3_module_paths import pre_3_artifact_error
-    from .._io.format_contract import raise_if_saved_by_older_major
+    from .._io.format_contract import below_floor_error, raise_if_saved_by_older_major
 
     if manifest.get("schema") == MANIFEST_SCHEMA_V1:
-        raise pre_3_artifact_error(
-            f"extraction manifest schema={MANIFEST_SCHEMA_V1}",
+        raise below_floor_error(
+            observed=f"extraction manifest schema={MANIFEST_SCHEMA_V1}",
             path=str(container),
             code="artifact_version_below_floor",
         )

@@ -13,6 +13,7 @@ from .._user_funcs import (
     validate_backward_pass,
     validate_forward_pass,
 )
+from ._descriptor_versions import validate_descriptor_versions, validate_format3
 from .diagnostics import (
     get_validation_diagnostics,
     get_validation_failure,
@@ -30,13 +31,7 @@ def validate_tlspec(
     *,
     allow_unsupported_runnable_versions: bool = False,
 ) -> None:
-    """Validate a unified ``.tlspec`` manifest against its manifest schema.
-
-    Legacy TorchLens 2.16 intervention formats are intentionally accepted
-    without schema validation so old intervention specs remain loadable.
-    Legacy 2.16 model-log bundles are below the torchlens 2.33
-    (``tlspec_version=6``) rehydration floor and refuse here with the same
-    typed error the loader raises.
+    """Validate a 3.0 artifact; refuse saves written by TorchLens 2.x.
 
     Parameters
     ----------
@@ -54,7 +49,7 @@ def validate_tlspec(
     FileNotFoundError
         If a unified manifest file is missing.
     torchlens.errors.ArtifactTooOldError
-        If the artifact is a portable ModelLog bundle of torchlens 2.16.
+        If the artifact carries a recognized TorchLens 2.x marker.
 
     Examples
     --------
@@ -66,7 +61,7 @@ def validate_tlspec(
     None
     """
 
-    from ..io import detect_tlspec_format, inspect_tlspec
+    from ..io import _pre3_observed, detect_tlspec_format
 
     tlspec_path = Path(path)
     if not tlspec_path.exists():
@@ -88,55 +83,24 @@ def validate_tlspec(
             raise ValueError(f".tlspec manifest at {manifest_path} must be a JSON object.")
 
     tlspec_format = detect_tlspec_format(tlspec_path)
-    if tlspec_format in {
-        "v2.16_intervention_with_kind",
-        "v2.16_intervention",
-    }:
-        from ..intervention import _spec_codec as _codec, save as _spec_save
+    if tlspec_format == "pre_3":
+        from .._io.format_contract import _MODELLOG_216_NOTE, below_floor_error
 
-        # The spec format torchlens 2.x wrote (format_version 1) refuses with the one 2.x
-        # error here as it does at load; the current format has no schema document.
-        spec = _spec_save._read_json_file(tlspec_path / _codec._SPEC_FILE)
-        _codec._validate_format_version(spec.get("format_version"), path=tlspec_path)
+        observed = _pre3_observed(tlspec_path) or "2.x artifact markers"
+        raise below_floor_error(
+            observed=observed,
+            path=str(tlspec_path),
+            remedy_note=(
+                _MODELLOG_216_NOTE
+                if observed.startswith("io_format_version=2, n_activation_blobs=")
+                else ""
+            ),
+            code="artifact_version_below_floor",
+        )
+    if tlspec_format == "v3":
+        validate_format3(tlspec_path, allow_unsupported_runnable_versions)
         return
-    if tlspec_format == "v2.16_modellog_portable":
-        from .._io._pre3_module_paths import modellog_216_error
-
-        raise modellog_216_error(str(tlspec_path), code="artifact_version_below_floor")
-    if tlspec_format != "v2.0_unified":
-        raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
-
-    manifest = inspect_tlspec(tlspec_path)
-    # A manifest with `tlspec_version` but no `kind` is ambiguous between two
-    # real shapes: a modern manifest whose `kind` was lost (routes here, below,
-    # as v2.0_unified and defaults `kind` to "trace"), and a genuinely old
-    # pre-"kind"-discriminator artifact whose tlspec_version is itself below
-    # the rehydration floor (a checked-in v2.16.0 fixture with tlspec_version=2
-    # and none of the modern schema fields -- R73 fast-tier finding, 2026-10).
-    # The numeric floor check must run BEFORE schema validation so the second
-    # case refuses with the floor named, not a generic missing-required-fields
-    # error; `_load_unified_tlspec`'s own preflight already does this (see
-    # `_preflight_unified_trace_manifest` in torchlens/_io/bundle.py) -- mirror
-    # it here so validate_tlspec() refuses the same way standalone.
-    from .._io.format_contract import raise_if_manifest_below_floor
-
-    raise_if_manifest_below_floor(manifest.get("tlspec_version"), str(tlspec_path))
-    # `kind` is a ledgered legacy-manifest tolerance
-    # (test_tlspec_parse_fuzz.py _OPTIONAL_KEYS): an absent `kind` means a
-    # plain trace, the only kind that existed before the bundle/intervention
-    # discriminator, never a missing-required-field refusal. Mirrors the
-    # same default at the `_load_unified_tlspec` dispatch chokepoint
-    # (torchlens/_io/bundle.py); this reads the manifest independently
-    # (by path, not the dispatcher's in-memory dict) so the default must be
-    # applied here too.
-    manifest.setdefault("kind", "trace")
-    schema_version = _manifest_schema_version(manifest)
-    schema = _load_tlspec_manifest_schema(schema_version)
-    _validate_manifest_against_schema(
-        manifest,
-        schema,
-        allow_unsupported_runnable_versions=allow_unsupported_runnable_versions,
-    )
+    raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
 
 
 def _manifest_schema_version(manifest: dict[str, Any]) -> int:
@@ -357,10 +321,6 @@ def _validate_sparse_run_descriptor(
     from .._runnable import (
         LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
         RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
-        RUNNABLE_CALL_RECIPE_VERSION,
-        RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
-        RUNNABLE_INITIALIZER_POLICY_VERSION,
-        RUNNABLE_TLSPEC_SCHEMA_VERSION,
     )
 
     if not isinstance(value, dict):
@@ -404,22 +364,8 @@ def _validate_sparse_run_descriptor(
         raise ValueError(
             f"Runnable run descriptor fields mismatch; missing={missing}, extra={extra}."
         )
-    expected_versions = {
-        "capability": RUNNABLE_TLSPEC_SCHEMA_VERSION,
-        "call_recipe": RUNNABLE_CALL_RECIPE_VERSION,
-        "callable_ref_schema": RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
-        "initializer_policy_version": RUNNABLE_INITIALIZER_POLICY_VERSION,
-        "state_binding": "module_path_role_v1",
-        "input_binding": "model_site_io_role_v1",
-        "control_witness": "scalar_bool_and_arm_entry_v1",
-    }
-    for field_name, expected in expected_versions.items():
-        if allow_unsupported_versions:
-            continue
-        if value[field_name] != expected:
-            raise ValueError(
-                f"Runnable descriptor {field_name} must be {expected!r}; got {value[field_name]!r}."
-            )
+    if not allow_unsupported_versions:
+        validate_descriptor_versions(value)
     for field_name in ("callable_registry", "calls", "tensor_slots", "control_witnesses"):
         if not isinstance(value[field_name], list):
             raise ValueError(f"Runnable descriptor {field_name} must be an array.")

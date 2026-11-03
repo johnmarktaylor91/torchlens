@@ -130,17 +130,21 @@ def test_spec_persistence_carries_expression_and_resolution_disclosure():
     spec = tl.when(tl.func("relu"), tl.zero_ablate())
     trace = tl.trace(baseline_model, x, intervene=spec)
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "spec.json")
+        path = os.path.join(tmp, "spec.tlspec")
         intervention_save.save_intervention(trace, path)
-        with open(os.path.join(path, "spec.json")) as spec_file:
-            data = json.load(spec_file)
+        with open(os.path.join(path, "intervention.json")) as recipe_file:
+            data = json.load(recipe_file)
+        with open(os.path.join(path, "manifest.json")) as manifest_file:
+            manifest = json.load(manifest_file)
     # The predicate door lowers the fired selector into per-site label
     # targets, so the persisted ADDRESSING is derived (the pinned C03
     # disclosure contract). B7's expression provenance rides BESIDE it.
     assert data["spec_derived"] is True
-    blob = json.dumps(data["intervention_spec"])
+    blob = json.dumps(data["rules"])
     assert "spec_where_repr" in blob and "func" in blob  # the user's expression
-    for entry in data["target_manifest"]:
+    target_manifest = manifest["intervention_compat_metadata"]["target_manifest"]
+    assert target_manifest
+    for entry in target_manifest:
         if entry["resolved_status"] == "resolved":
             assert entry["resolved_site_keys"]  # disclosure: structural keys
             assert entry["graph_shape_hash"]  # the resolution digest

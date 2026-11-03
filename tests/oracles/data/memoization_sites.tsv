@@ -1,6 +1,7 @@
 key
 torchlens/_capture/prepare/cache.py::<assign> cache_config
 torchlens/_constants.py::_get_torch_overridable_functions
+torchlens/_io/_chunk_digest.py::_chunk_digest
 torchlens/_io/runnable_load.py::_reverse_index
 torchlens/_runnable/state_context.py::_count_bounded_fake_tensor_mode_class
 torchlens/_runnable/state_context.py::_fake_tensor_mode_class
