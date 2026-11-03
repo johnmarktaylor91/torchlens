@@ -325,7 +325,7 @@ def test_truncation_is_explicit_and_disclosed() -> None:
 
 
 def test_input_beyond_the_position_limit_refuses_and_max_length_runs() -> None:
-    """U23.3: no max_length and too long refuses typed; the named remedy runs."""
+    """No max_length and too long refuses typed; the named remedy runs."""
 
     model = _TinyForCausalLM()
     model.config.max_position_embeddings = 4

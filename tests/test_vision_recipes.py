@@ -1,4 +1,4 @@
-"""Qwen2 and CLIP semantic recipes (batch-2 VISION: forks.10, U55.1).
+"""Qwen2 and CLIP semantic recipes (batch-2 VISION: forks.10).
 
 Both families are built from their vendored published configs, shrunk
 (the R0 builders), weights from a fixed seed, zero network:

@@ -1,4 +1,4 @@
-"""Hub push and pull through the safe ``.tlspec`` path (walk U14.2).
+"""Hub push and pull through the safe ``.tlspec`` path.
 
 ``push_to_hub`` uploads a gzipped tar of the portable bundle and never a raw
 pickle; ``from_hub`` downloads it, checks every tar member, and loads it

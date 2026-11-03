@@ -1,4 +1,4 @@
-"""U28.2 + the batch-2 buffer ruling: ``tl.export.xarray`` on real-model traces.
+"""``tl.export.xarray`` on real-model traces.
 
 August found the exporter unusable on every real-model leg: (a) xarray in no
 extra, (b) a partial trace crashed reading an unsaved placeholder's ``.out``,

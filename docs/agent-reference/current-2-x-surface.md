@@ -124,7 +124,7 @@
       original = exc.__cause__  # the forward's own exception, traceback intact
       print(exc.partial_trace.narrate(last=20))
   ```
-- **A default `tl.trace` is a pure observer** (U40.1, AGT-2360; `carry_state`,
+- **A default `tl.trace` is a pure observer** (`carry_state`,
   `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
   (persistent and non-persistent), every module's `training` flag, the global random states and
   every plain module attribute are restored after the capture, on success and on failure
@@ -820,7 +820,7 @@
   input_shape=...)` is the rung-4 auto-selecting facade (bare summary with
   no input evidence refuses); `Trace.check_plan(plan)` is the audit-only
   nnsight-scan-parity checker (`executable=False` always). Raw text works
-  structure-only (U38.1): the text bridge keeps the token ids' shape on meta
+  structure-only: the text bridge keeps the token ids' shape on meta
   with a meta ALL-ONES mask (padded prompts refuse
   `structure_only_text_mask_not_all_ones`); it traces and discharges under
   `attn_implementation="eager"` or the TorchLens backend, while the default
@@ -1135,11 +1135,11 @@
   disclosed via the `recurrence` attr, never drawn — a cycle fails the checker), curated
   wording-contract panel attrs (missing is ABSENT never zero; the module-path attr is not
   named `module`), the `netron:attachment` companion (four fail-closed vendor guards;
-  written beside every file export by default, ruling U09.3; `attachment=False` opts out,
+  written beside every file export by default; `attachment=False` opts out,
   `attachment=True` refuses the memory-only serve), `baseline=<reference Trace>` per-node
   `torchlens.diff.*` facts from `torchlens.report.diff` in node metadataProps
-  and the companion plus the diff summary in the `torchlens.baseline` slot (ruling U09.5;
-  a string stays a bare identifier), serve/widget one-liner (`serve=True`, extra `torchlens[netron]`), and
+  and the companion plus the diff summary in the `torchlens.baseline` slot
+  (a string stays a bare identifier), serve/widget one-liner (`serve=True`, extra `torchlens[netron]`), and
   an extent-budget WARN past ~27 ranks. Every artifact stays green under strict
   `onnx.ModelProto` parse + `check_model(full_check=True)`; netron 9.2.2's own parser
   executes over it in CI (tests/test_netron_export_*.py). Doc:
@@ -1263,13 +1263,13 @@
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
-  WandbSink, JSONLSink, MemorySink; batch-2 U54.2/U54.3: `MLflowSink(client=None, *,
+  WandbSink, JSONLSink, MemorySink; `MLflowSink(client=None, *,
   run_id=None)` and `CometSink(experiment)` over a user-created run, caller step kept,
   Comet without raw histograms), `HFTrainerWatchCallback` /
   `LightningWatchCallback`, TB GraphDef with real StepStats. CHANGED:
   `tl.export.tensorboard` requires keyword `step` (default removed). `tl.export.mlflow` /
   `tl.export.aim` log the per-layer table, the report and honesty facts as string tags
-  (wandb parity; U54.1) and return `table`, `report`, `tags` (+ `artifacts` for MLflow).
+  (wandb parity) and return `table`, `report`, `tags` (+ `artifacts` for MLflow).
   CHANGED (batch-2 buffer ruling, option c): `tl.export.xarray(log)` returns an
   `xarray.Dataset`, not a `DataArray`: `ds["out"]` is the unchanged NeuroidAssembly
   (`presentation` x `neuroid`), and every saved buffer layer is its own variable named
@@ -1277,7 +1277,7 @@
   `torchlens_kind="module_state"`, `layer_label`, `buffer_address`
   (`ds.attrs["module_state_variables"]` lists them). Save-all exports everything; the
   former buffer-layer refusal is removed.
-  OP GRAIN (batch-2 U32.1/U34.1): `watch(..., signals=("activations",),
+  OP GRAIN: `watch(..., signals=("activations",),
   grain="op", select=<prefixes or selector>, inputs=x,
   allow_forward_wrap=True, facets=None)` drives the Route-B
   `OpTierCollector` through a consented root-forward wrap (no consent:
@@ -1287,7 +1287,7 @@
   `torchlens/meta/op_grain_calibration`, `torchlens/run/op_grain_overhead_median_x`,
   one `watch_op_grain_cost_disclosed` warning); first forward of a sampled step
   only; facet leaves `<op label>/<facet>`; `close()` removes the wrap.
-  CALLBACK ENV CONFIG (U34.2): explicit callbacks read `TORCHLENS_WATCH_SIGNALS`
+  CALLBACK ENV CONFIG: explicit callbacks read `TORCHLENS_WATCH_SIGNALS`
   / `_SELECT` / `_EVERY` / `_HIST_EVERY` for settings not passed (never
   activation), print each setting's source via `print_fn=` (argument > env >
   derived > default), keep `callback.settings`; malformed refuses
@@ -1296,7 +1296,7 @@
   the private `torchlens._observability.WatchSettings` defaults (`sketch_embeddings` off,
   `artifact_budget_bytes` 256 MiB; embedding tables >= 2**20 elements spine-only; budget refuses
   `history_artifact_budget_exceeded` before the crossing block).
-- LIGHTNING FIT-START SUMMARY (walk U03.4; DOCUMENTED-UNSTABLE):
+- LIGHTNING FIT-START SUMMARY (DOCUMENTED-UNSTABLE):
   `torchlens.callbacks.lightning.SummaryCallback(input_getter=None, print_fn=print,
   **summary_kwargs)` prints `tl.summary` once per fit: sample = the module's
   `example_input_array` (in `on_fit_start`) else the first training batch (in
@@ -1338,7 +1338,7 @@
 - `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
   `Module` expose `receptive_field` and `projective_field` views; `Trace` exposes the matching
   `receptive_fields()` and `projective_fields()` tables.
-- HF ATTENTION BACKEND (U36.2, spellings DOCUMENTED-UNSTABLE): `tl.bridge.transformers.register_attention(model=None)`
+- HF ATTENTION BACKEND (spellings DOCUMENTED-UNSTABLE): `tl.bridge.transformers.register_attention(model=None)`
   registers the `"torchlens"` attention function AND its matching mask function (the
   mask trap: an attention function without one gets no mask); `tl.bridge.transformers.record_attention(model,
   check_sdpa=False)` yields an `AttentionRecording` of per-head probabilities per attention module,
@@ -1405,7 +1405,7 @@
   (typed refusals `extraction_resume_*` / `extraction_manifest_invalid`);
   `torchlens.load(path)` reads the artifact back with metadata.
   Crash-safety is pinned by a hard-process-death test.
-- R2-08 EXTRACTION ADDITIONS (every spelling DOCUMENTED-UNSTABLE):
+- EXTRACTION ADDITIONS (every spelling DOCUMENTED-UNSTABLE):
   `tl.extract_dataset(model, x, layers, intervene=tl.when(tl.module("fc2"), tl.zero_ablate()))`
   stores INTERVENED activations: batch zero freezes the fired sites, a batch firing nowhere
   or elsewhere refuses (`extraction_intervention_no_fire` / `_site_drift`), disk mode writes

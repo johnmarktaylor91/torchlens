@@ -1,12 +1,12 @@
 """Walk batch 1 summary additions: optional columns, tuple shapes, footer extras.
 
 Rulings (round-2 walk, 2026-10-11): every member shape of a tuple-returning
-module (U02.1); optional input / kernel_size / groups / params_trainable
-columns and a params-size line (U01.4, U02.3, U06.7); a ``mode`` column over
-``module.training`` (U03.5); ``flops_pct`` beside ``params_pct`` (U04.3);
-the full-square attention disclosure on every attention FLOP line (U04.2);
-raw and effective nonzero counts on pruned models (U01.2); the optimizer
-state footer (U06.2). The attention note also rides the profile footer, the
+module; optional input / kernel_size / groups / params_trainable
+columns and a params-size line; a ``mode`` column over
+``module.training``; ``flops_pct`` beside ``params_pct``;
+the full-square attention disclosure on every attention FLOP line;
+raw and effective nonzero counts on pruned models; the optimizer
+state footer. The attention note also rides the profile footer, the
 explain FLOPs line and graph-label FLOP rows.
 """
 
@@ -89,7 +89,7 @@ def _body_line(text: str, prefix: str) -> str:
 
 
 def test_tuple_output_row_prints_every_member_shape() -> None:
-    """U02.1: an LSTM row shows output, h_n and c_n in return order."""
+    """An LSTM row shows output, h_n and c_n in return order."""
 
     torch.manual_seed(0)
     report = tl.summary(_Recurrent(), torch.randn(2, 5, 4))
@@ -100,7 +100,7 @@ def test_tuple_output_row_prints_every_member_shape() -> None:
 
 
 def test_optional_columns_render_their_facts() -> None:
-    """U01.4/U02.3/U03.5/U04.3: input, kernel, groups, trainable, mode, flops_pct."""
+    """Input, kernel, groups, trainable, mode, flops_pct."""
 
     model = _frozen_eval_head()
     trace = tl.trace(model, torch.randn(1, 3, 8, 8))
@@ -144,7 +144,7 @@ def test_mode_mixed_on_a_row_whose_modules_disagree() -> None:
 
 
 def test_params_size_and_raw_totals() -> None:
-    """U01.4/U06.7: the Params footer names the unique parameters' storage."""
+    """The Params footer names the unique parameters' storage."""
 
     model = _Convs().to(torch.float64)
     report = tl.summary(model, torch.randn(1, 3, 8, 8, dtype=torch.float64))
@@ -154,7 +154,7 @@ def test_params_size_and_raw_totals() -> None:
 
 
 def test_pruned_model_shows_raw_and_effective_nonzero_counts() -> None:
-    """U01.2: prune's weight_orig + weight_mask pair is named with both counts."""
+    """Prune's weight_orig + weight_mask pair is named with both counts."""
 
     model = _Convs()
     prune.l1_unstructured(model.conv, "weight", amount=0.5)
@@ -174,7 +174,7 @@ def test_pruned_model_shows_raw_and_effective_nonzero_counts() -> None:
 
 
 def test_optimizer_state_footer_before_and_after_a_step() -> None:
-    """U06.2: 'optimizer state N params, X' from the live optimizer state."""
+    """'optimizer state N params, X' from the live optimizer state."""
 
     torch.manual_seed(0)
     model = _Convs()
@@ -199,7 +199,7 @@ def test_optimizer_state_footer_before_and_after_a_step() -> None:
 
 
 def test_attention_flop_lines_disclose_the_full_square() -> None:
-    """U04.2 (b): every attention FLOP cell is marked and the footer explains."""
+    """Every attention FLOP cell is marked and the footer explains."""
 
     torch.manual_seed(0)
     model = _Attention()
@@ -231,7 +231,7 @@ def _attention_trace() -> tl.Trace:
 
 
 def test_profile_footer_discloses_the_full_square() -> None:
-    """U04.2 (b): the profile footer carries the attention note."""
+    """The profile footer carries the attention note."""
 
     profile = _attention_trace().profile()
     assert profile.attention_full_square_ops == 1
@@ -248,7 +248,7 @@ def test_profile_footer_has_no_note_without_attention() -> None:
 
 
 def test_explain_flops_line_discloses_the_full_square() -> None:
-    """U04.2 (b): the explain FLOPs line carries the attention note."""
+    """The explain FLOPs line carries the attention note."""
 
     text = _attention_trace().explain()
     flops_line = next(line for line in text.splitlines() if "Forward FLOPs" in line)
@@ -256,7 +256,7 @@ def test_explain_flops_line_discloses_the_full_square() -> None:
 
 
 def test_graph_label_flops_rows_carry_the_note_on_attention_nodes_only() -> None:
-    """U04.2 (b): an attention node's flops label field and flops overlay add the note."""
+    """An attention node's flops label field and flops overlay add the note."""
 
     from torchlens._visualization._render_nodes import compute_default_node_lines
 

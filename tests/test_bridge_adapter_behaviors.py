@@ -183,7 +183,7 @@ def test_sae_lens_bridge_dispatches_encode_reconstruct_and_refuses_junk(
 
 
 def test_profiler_execution_trace_is_removed() -> None:
-    """U53.1: the profiler bridge keeps only ``join``; ``execution_trace`` is gone."""
+    """The profiler bridge keeps only ``join``; ``execution_trace`` is gone."""
 
     from torchlens.bridge import profiler
 

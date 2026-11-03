@@ -1,4 +1,4 @@
-"""Agent JSON carries the structure-only evidence facts (R2-11 export parity).
+"""Agent JSON carries the structure-only evidence facts (export parity).
 
 ``Trace.to_agent_json`` assembles its ``capture`` block from the shared
 honesty helpers; a structure-only dump must carry the claim-status ladder and
