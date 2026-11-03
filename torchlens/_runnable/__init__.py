@@ -173,9 +173,8 @@ class PathFaithfulness(str, Enum):
     >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.path_faithfulness in PathFaithfulness
     True
-    >>> PathFaithfulness("verified").name
-    'VERIFIED'
-    """
+    >>> PathFaithfulness("verified") is PathFaithfulness.VERIFIED
+    True"""
 
     VERIFIED = "verified"
     DIVERGED = "diverged"
@@ -199,8 +198,7 @@ class ReadinessStatus(str, Enum):
     >>> trace = tl.trace(model, x)
     >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.readiness.status in ReadinessStatus
-    True
-    """
+    True"""
 
     READY = "ready"
     UNAVAILABLE = "unavailable"
@@ -215,9 +213,8 @@ class RunProvider(str, Enum):
     >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.readiness.provider is RunProvider.LIVE
     True
-    >>> RunProvider("loaded_sparse").name
-    'LOADED_SPARSE'
-    """
+    >>> RunProvider("loaded_sparse") is RunProvider.LOADED_SPARSE
+    True"""
 
     LIVE = "live"
     LOADED_SPARSE = "loaded_sparse"
@@ -244,8 +241,7 @@ class NumericAttestationStatus(str, Enum):
     >>> trace = tl.trace(model, x)
     >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.numeric_attestation in NumericAttestationStatus
-    True
-    """
+    True"""
 
     ATTESTED = "attested"
     NUMERIC_ATTESTATION_FAILED = "numeric_attestation_failed"
@@ -1217,8 +1213,7 @@ class RunnableCompatibility:
     ...     initializer_policy_version="torchlens_role_init_v2",
     ... )
     >>> compat.callable_ref_schema_version, compat.python_version
-    (1, '3.10')
-    """
+    (1, '3.10')"""
 
     torchlens_version: str
     python_version: str
@@ -1241,8 +1236,7 @@ class RunnableDiagnostic:
     >>> trace = tl.trace(model, x)
     >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
     >>> all(c.diagnostic is None or isinstance(c.diagnostic, RunnableDiagnostic) for c in report.contract_checks)
-    True
-    """
+    True"""
 
     code: RunnableErrorCode
     message: str
@@ -1455,13 +1449,13 @@ class ReadinessReport:
     Examples
     --------
     >>> import pathlib, tempfile
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     >>> with tempfile.TemporaryDirectory() as tmp:
     ...     path = pathlib.Path(tmp) / "model.tlspec"
-    ...     _ = tl.trace(model, x).save(path, level="runnable")
+    ...     _ = trace.save(path, level="runnable")
     ...     readiness = tl.load(path).readiness
     >>> isinstance(readiness, ReadinessReport), readiness.status.value
-    (True, 'ready')
-    """
+    (True, 'ready')"""
 
     status: ReadinessStatus
     provider: RunProvider
@@ -1496,8 +1490,7 @@ class ContractCheck:
     >>> trace = tl.trace(model, x)
     >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
     >>> all(isinstance(c, ContractCheck) for c in report.contract_checks)
-    True
-    """
+    True"""
 
     name: str
     passed: bool
