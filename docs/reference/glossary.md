@@ -1278,7 +1278,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   the gradient rules in the trace's recipe, and the trace summary says "N gradient edits armed;
   call trace.backward(loss)" until they fire. Each `trace.backward(loss)` then writes one settle
   envelope per arming transaction (`door="backward"`, `lane="live_hook"`, `parent_event_id` and
-  `extra["arming_event_id"]` the arming row, `backward_pass_index`, status `fired` or `no_fire`
+  `extra["arming_event_id"]` the arming row, `backward_pass_number`, status `fired` or `no_fire`
   with `no_fire_reason` `"gradient_not_reached"` or `"pass_filtered"`); a second backward never
   rewrites the first pass's row. `loss=` on `Trace.do` (and `tl.sweep`) is a callable of the
   returned trace returning a scalar with a `grad_fn`; the door runs `result.backward(loss(result))`
@@ -5060,7 +5060,7 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `GradFnCall.backward_duration` | Measured backward time for this call, or `None` when not measured |
-| `GradFnCall.backward_pass_index` | 1-based index of the backward pass this call belongs to, or `None` |
+| `GradFnCall.backward_pass_number` | 1-based number of the backward pass this call belongs to, or `None` |
 | `GradFnCall.label` | Pass-qualified label of this call, in the form `label:call_index` |
 | `GradFnCall.grad_inputs` | Gradients flowing into this grad-fn, as observed by the backward hook |
 | `GradFnCall.grad_outputs` | Gradients flowing out of this grad-fn, as observed by the backward hook |

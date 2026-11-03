@@ -19,9 +19,11 @@ from torch import nn
 import torchlens as tl
 from torchlens._visualization._encoding import (
     COLOR_TRANSFORM_VOCABULARY,
+    LAYER_SOURCE_ROWS,
     NOTE_CONSTANT,
     NOTE_LOG_NONPOSITIVE,
     NOTE_PER_PASS_ROLLED,
+    ROW_PER_PASS,
     EncodingChannelRequest,
     EncodingState,
     _color_legend_rows,
@@ -153,7 +155,7 @@ def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> 
     log = tl.trace(Loop(), torch.randn(1, 4))
     try:
         log.draw(
-            color_by="pass_index",
+            color_by="pass_number",
             vis_mode="rolled",
             path=str(tmp_path / "rolled"),
             file_format="svg",
@@ -165,7 +167,7 @@ def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> 
 
             del _ES  # fall through to the DOT-level assertion below
         graph = log.draw(
-            color_by="pass_index",
+            color_by="pass_number",
             vis_mode="rolled",
             path=str(tmp_path / "rolled2"),
             file_format="svg",
@@ -183,3 +185,10 @@ def test_plain_string_color_by_keeps_linear_default() -> None:
     spec = resolve_color_by("func_duration")
     assert spec is not None
     assert spec.transform == "linear"
+
+
+def test_pass_number_is_the_per_pass_color_source() -> None:
+    """``color_by="pass_number"`` is the per-pass source; ``pass_index`` is not a source."""
+
+    assert LAYER_SOURCE_ROWS["pass_number"] == ROW_PER_PASS
+    assert "pass_index" not in LAYER_SOURCE_ROWS

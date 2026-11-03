@@ -411,7 +411,7 @@ def _reset_backward_projection(log: Trace) -> None:
     log._capture_events = CaptureEvents()
     log.__dict__.pop("_tl_backward_hooked_tensor_keys", None)
     log.__dict__.pop("_tl_grad_hook_owner_by_label", None)
-    log.__dict__.pop("_active_backward_pass_index", None)
+    log.__dict__.pop("_active_backward_pass_number", None)
     log.__dict__.pop("_implicit_backward_pass_open", None)
     getattr(log, "_warned_once", set()).discard("implicit_backward_pass")
     log.__dict__.pop("_tl_backward_triggers_disarmed", None)

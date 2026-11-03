@@ -181,7 +181,7 @@ _DERIVED_COMPOSITE_INPUTS: dict[str, tuple[str, ...]] = {
     "module_call_depth": ("modules",),
 }
 
-_PER_PASS_FIELDS = frozenset({"func_duration", "fx_call_index", "pass_index"})
+_PER_PASS_FIELDS = frozenset({"func_duration", "fx_call_index", "pass_number"})
 
 _SHAPE_FIELDS = frozenset({"shape", "transformed_out_shape"})
 

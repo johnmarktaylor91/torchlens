@@ -217,7 +217,7 @@ def _resolve_grad_fn_call_ref(
         call = grad_fn.calls[call_index - 1]
     except (IndexError, KeyError, TypeError):
         return None
-    if int(getattr(call, "backward_pass_index", 0) or 0) != pass_index:
+    if int(getattr(call, "backward_pass_number", 0) or 0) != pass_index:
         return None
     return (str(grad_fn.label), call_index, pass_index)
 

@@ -328,7 +328,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "_tl_backward_hooked_tensor_keys": StorageBinding(StorageKind.RUNTIME),
         "_tl_grad_hook_owner_by_label": StorageBinding(StorageKind.RUNTIME),
         "_tl_rf_probe_active": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any'),
-        "_active_backward_pass_index": StorageBinding(StorageKind.RUNTIME),
+        "_active_backward_pass_number": StorageBinding(StorageKind.RUNTIME),
         "_backward_roots_by_pass": StorageBinding(StorageKind.RUNTIME),
         "_backward_projection_event_count": StorageBinding(StorageKind.RUNTIME),
         "_backward_projection_revision": StorageBinding(StorageKind.RUNTIME),
@@ -930,7 +930,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
     "grad_fn_call": {
         "call_index": StorageBinding(StorageKind.SCALAR, annotation='int'),
         "ordinal": StorageBinding(StorageKind.SCALAR, annotation='int | None'),
-        "backward_pass_index": StorageBinding(StorageKind.SCALAR, annotation='int | None'),
+        "backward_pass_number": StorageBinding(StorageKind.SCALAR, annotation='int | None'),
         "label": StorageBinding(StorageKind.COMPUTED),
         "backward_duration": StorageBinding(StorageKind.COMPUTED),
         "grad_inputs": StorageBinding(StorageKind.SCALAR, annotation='Any'),

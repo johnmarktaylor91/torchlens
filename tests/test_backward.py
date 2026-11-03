@@ -325,7 +325,7 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
         for object_id, grad_fn in trace._grad_fn_logs.items()
     }
     calls = {
-        (object_id, ordinal): (call.grad_fn_label, call.backward_pass_index)
+        (object_id, ordinal): (call.grad_fn_label, call.backward_pass_number)
         for object_id, grad_fn in trace._grad_fn_logs.items()
         for ordinal, call in grad_fn.calls.items()
     }
@@ -342,7 +342,7 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
     op_grads = {
         op.layer_label: (
             [
-                (record.backward_pass_index, record.grad is not None, record.shape)
+                (record.backward_pass_number, record.grad is not None, record.shape)
                 for record in op._slot("_grad_records")
             ],
             int(op.gradient_memory),
@@ -352,7 +352,7 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
     }
     param_grads = {
         address: [
-            (record.ordinal, record.backward_pass_index, record.shape, record.memory)
+            (record.ordinal, record.backward_pass_number, record.shape, record.memory)
             for record in param_log._grad_records
         ]
         for address, param_log in trace._param_logs.items()
@@ -516,7 +516,7 @@ def test_param_gradients_enter_the_backward_event_stream() -> None:
     assert param_events
     event_records = {(event.param_address, event.pass_index) for event in param_events}
     projected_records = {
-        (address, record.backward_pass_index)
+        (address, record.backward_pass_number)
         for address, param_log in trace._param_logs.items()
         for record in param_log._grad_records
     }
@@ -617,7 +617,7 @@ def test_backward_tail_failure_restores_globals_and_closes_journal(
     assert _state._active_hook_plan is None
     assert _state._active_intervention_spec is None
     assert "_tl_active_backward_bracket" not in trace.__dict__
-    assert "_active_backward_pass_index" not in trace.__dict__
+    assert "_active_backward_pass_number" not in trace.__dict__
     assert "_active_save_grads_policy" not in trace.__dict__
     assert any(isinstance(event, BackwardPassEnd) for event in trace.backward_events)
 
@@ -1381,7 +1381,7 @@ def test_param_grad_records_rebuild_from_event_spine() -> None:
 
     before = {
         address: [
-            (record.ordinal, record.backward_pass_index, record.shape, record.memory)
+            (record.ordinal, record.backward_pass_number, record.shape, record.memory)
             for record in param_log._grad_records
         ]
         for address, param_log in trace._param_logs.items()
@@ -1402,7 +1402,7 @@ def test_param_grad_records_rebuild_from_event_spine() -> None:
 
     after = {
         address: [
-            (record.ordinal, record.backward_pass_index, record.shape, record.memory)
+            (record.ordinal, record.backward_pass_number, record.shape, record.memory)
             for record in param_log._grad_records
         ]
         for address, param_log in trace._param_logs.items()
@@ -1641,9 +1641,9 @@ def _assert_pass_one_calls_survive_rebase(trace, pass_one_call_snapshot) -> None
         merged_calls = dict(record.calls._dict)
         for call_ordinal, pass_one_call in snapshot.items():
             assert merged_calls.get(call_ordinal) is pass_one_call
-            assert pass_one_call.backward_pass_index == 1
+            assert pass_one_call.backward_pass_number == 1
         if snapshot:
-            call_passes = sorted(call.backward_pass_index for call in merged_calls.values())
+            call_passes = sorted(call.backward_pass_number for call in merged_calls.values())
             assert call_passes == [1, 2], (
                 f"grad-fn {record.label} call passes {call_passes}: the retained "
                 "pass-1 call must survive next to the new pass-2 call"
@@ -1662,7 +1662,7 @@ def _assert_pass_record_calls_owned(trace, pass_record) -> None:
     assert pass_record.grad_fn_calls
     for call in pass_record.grad_fn_calls:
         assert id(call) in owned_call_ids
-        assert call.backward_pass_index == pass_record.pass_number
+        assert call.backward_pass_number == pass_record.pass_number
 
 
 def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
@@ -1711,7 +1711,7 @@ def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
     all_labels = [record.label for record in restored._grad_fn_logs.values()]
     assert len(all_labels) == len(set(all_labels)), "merged grad-fn labels must stay unique"
     for address, param_log in restored._param_logs.items():
-        pass_indices = sorted(record.backward_pass_index for record in param_log._grad_records)
+        pass_indices = sorted(record.backward_pass_number for record in param_log._grad_records)
         preserved = [index for index in pass_indices if index == 1]
         assert len(preserved) == pass_one_param_counts[address]
         if pass_one_param_counts[address]:
@@ -1743,7 +1743,7 @@ def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
                 "must stay contiguous across a repeat rebuild"
             )
             assert [
-                merged_calls[ordinal].backward_pass_index for ordinal in sorted(merged_calls)
+                merged_calls[ordinal].backward_pass_number for ordinal in sorted(merged_calls)
             ] == [1, 2, 3]
     _invariant_check(restored_again)
 

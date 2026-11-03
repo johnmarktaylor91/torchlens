@@ -78,10 +78,10 @@ def test_backward_passes_and_grad_fn_calls_are_event_projections() -> None:
             grad_fn for grad_fn in trace.autograd.grad_fns if len(grad_fn.calls) == 2
         )
         assert [call.ordinal for call in reused_grad_fn.calls.values()] == [1, 2]
-        assert [call.backward_pass_index for call in reused_grad_fn.calls.values()] == [1, 2]
+        assert [call.backward_pass_number for call in reused_grad_fn.calls.values()] == [1, 2]
         assert reused_grad_fn.calls[0].label == f"{reused_grad_fn.label}:1"
         assert reused_grad_fn.calls.for_pass(2).label == f"{reused_grad_fn.label}:2"
-        assert trace.autograd.grad_fn_calls[f"{reused_grad_fn.label}:2"].backward_pass_index == 2
+        assert trace.autograd.grad_fn_calls[f"{reused_grad_fn.label}:2"].backward_pass_number == 2
     finally:
         trace.cleanup()
 

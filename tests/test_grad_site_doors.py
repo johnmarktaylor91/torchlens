@@ -297,7 +297,7 @@ def test_settle_writes_one_fired_row_per_pass_and_keeps_earlier_rows() -> None:
     assert row["fire_count"] == 1
     assert row["parent_event_id"] == "lineage:1"
     assert row["arming_event_id"] == "lineage:1"
-    assert row["backward_pass_index"] == 1
+    assert row["backward_pass_number"] == 1
     assert trace.intervention_audit[-1]["kind"] == "EVENT"
     assert trace.intervention_audit[-1]["status"] == "fired"
     assert trace.annotations["armed_gradient_edits"] == 0
@@ -306,7 +306,7 @@ def test_settle_writes_one_fired_row_per_pass_and_keeps_earlier_rows() -> None:
     spec.records.append(_Fire(edit, pass_index=2, label=label))
     settle_armed_gradient_edits(trace, pass_index=2)
     rows = _events(trace, door="backward")
-    assert [r["backward_pass_index"] for r in rows] == [1, 2]
+    assert [r["backward_pass_number"] for r in rows] == [1, 2]
     assert rows[0] == snapshot
 
 
@@ -422,11 +422,11 @@ def test_backward_settles_the_armed_row_per_pass() -> None:  # A20
     assert first["parent_event_id"] == arming["event_id"]
     assert first["status"] == "fired"
     assert first["fire_count"] >= 1
-    assert first["backward_pass_index"] == 1
+    assert first["backward_pass_number"] == 1
     snapshot = dict(first)
     result.backward(loss)
     rows = _events(result, door="backward")
-    assert [row["backward_pass_index"] for row in rows] == [1, 2]
+    assert [row["backward_pass_number"] for row in rows] == [1, 2]
     assert rows[0] == snapshot
 
 

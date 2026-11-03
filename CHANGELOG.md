@@ -8,6 +8,12 @@
 - **draw**: `Trace.animate_ops(site)` is now `Trace.animate(site)` (velocity walk names.1: the
   animation is its own method and `VisualizationOptions.animate` is gone). The old spelling
   refuses with the typed `facade_redirect` error naming `trace.animate(site)`.
+- **backward**: one word for the pass counter (velocity walk names.6, rename). The hook-context
+  key `backward_pass_index` is now `backward_pass_number`, and so is the saved
+  `GradFnCall.backward_pass_index` field (and the matching field of the per-op gradient
+  records), spelled like `FireRecord.backward_pass_number`; the v11 writer contract and the
+  persisted-field table carry the new spelling. `color_by="pass_index"` is now
+  `color_by="pass_number"`. Other fields named `pass_index` are unchanged.
 - **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
   (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
   the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old

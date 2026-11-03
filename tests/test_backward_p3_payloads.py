@@ -65,7 +65,7 @@ def test_op_grads_are_local_dense_per_pass_records() -> None:
     try:
         op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
         assert [record.ordinal for record in op.grads] == [1, 2]
-        assert [record.backward_pass_index for record in op.grads] == [1, 2]
+        assert [record.backward_pass_number for record in op.grads] == [1, 2]
         assert torch.equal(op.grads.for_pass(1).grad, op.grad_for(bwd=1))
         assert torch.equal(op.grads.for_pass(2).grad, op.grad_for(bwd=2))
     finally:
@@ -129,7 +129,7 @@ def test_log_backward_save_grads_override_widens_and_narrows_payloads() -> None:
 
         trace.log_backward(loss, retain_graph=True, save_grads=None)
         second_pass_records = [
-            record for op in trace.ops for record in op.grads if record.backward_pass_index == 2
+            record for op in trace.ops for record in op.grads if record.backward_pass_number == 2
         ]
         assert second_pass_records
         assert all(record.grad is None for record in second_pass_records)
@@ -159,10 +159,10 @@ def test_save_grads_predicate_can_select_backward_pass() -> None:
         trace.log_backward(loss, retain_graph=True)
         trace.log_backward(loss, retain_graph=True)
         first_pass_records = [
-            record for op in trace.ops for record in op.grads if record.backward_pass_index == 1
+            record for op in trace.ops for record in op.grads if record.backward_pass_number == 1
         ]
         second_pass_records = [
-            record for op in trace.ops for record in op.grads if record.backward_pass_index == 2
+            record for op in trace.ops for record in op.grads if record.backward_pass_number == 2
         ]
         assert first_pass_records
         assert second_pass_records
@@ -282,7 +282,7 @@ def test_tlspec_round_trip_preserves_per_pass_op_grads(tmp_path: Path) -> None:
     loaded = tl.load(bundle_path)
     try:
         loaded_op = loaded.ops[expected_label]
-        assert [record.backward_pass_index for record in loaded_op.grads] == [1, 2]
+        assert [record.backward_pass_number for record in loaded_op.grads] == [1, 2]
         assert loaded_op.grads[0].owner is loaded_op
         assert torch.equal(loaded_op.grads.for_pass(1).grad, expected_grads[0])
         assert torch.equal(loaded_op.grads.for_pass(2).grad, expected_grads[1])

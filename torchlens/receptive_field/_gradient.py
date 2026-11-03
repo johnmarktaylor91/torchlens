@@ -200,8 +200,8 @@ def _snapshot_probe_state(trace: Trace) -> _ProbeSnapshot:
         num_backward_passes=int(trace._num_backward_passes),
         has_gradients=bool(trace._autograd_has_grads),
         backward_event_count=_backward_event_count(trace),
-        active_index_present="_active_backward_pass_index" in trace_dict,
-        active_index=trace_dict.get("_active_backward_pass_index"),
+        active_index_present="_active_backward_pass_number" in trace_dict,
+        active_index=trace_dict.get("_active_backward_pass_number"),
     )
 
 

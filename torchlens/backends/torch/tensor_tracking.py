@@ -668,7 +668,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
     """Return an active backward pass index, opening an implicit pass if needed."""
 
     current_task_id = _current_backward_graph_task_id()
-    pass_index = getattr(trace, "_active_backward_pass_index", None)
+    pass_index = getattr(trace, "_active_backward_pass_number", None)
     if pass_index is not None:
         prior_task_id = _IMPLICIT_BACKWARD_TASK_IDS.get(trace)
         if (
@@ -684,7 +684,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
         else:
             return int(pass_index)
     pass_index = int(trace._num_backward_passes) + 1
-    trace._active_backward_pass_index = pass_index
+    trace._active_backward_pass_number = pass_index
     trace._implicit_backward_pass_open = True
     if current_task_id is not None:
         _IMPLICIT_BACKWARD_TASK_IDS[trace] = current_task_id
@@ -1061,7 +1061,7 @@ class _GradPayloadContext:
         self.has_op = True
         self.grad_kind = "grad_output"
         self.pass_index = pass_index
-        self.backward_pass_index = pass_index
+        self.backward_pass_number = pass_index
         self.shape = op.shape
         self.dtype = op.dtype
         self.tensor_device = getattr(op, "output_device", None)
@@ -1117,7 +1117,7 @@ class _ParamGradPayloadContext:
         self.has_op = False
         self.grad_kind = "param_grad"
         self.pass_index = pass_index
-        self.backward_pass_index = pass_index
+        self.backward_pass_number = pass_index
         self.shape = param.shape
         self.dtype = param.dtype
         self.tensor_device = None
@@ -1143,7 +1143,7 @@ class _FastlogGradPayloadContext:
         self.has_op = True
         self.grad_kind = "grad_output"
         self.pass_index = pass_index
-        self.backward_pass_index = pass_index
+        self.backward_pass_number = pass_index
         self.shape = ctx.shape
         self.dtype = ctx.dtype
         self.tensor_device = ctx.tensor_device
@@ -1160,7 +1160,7 @@ def _public_fastlog_label(ctx: Any) -> str:
 def _current_backward_pass(trace: "Trace") -> int | None:
     """Return the currently active backward pass index, if any."""
 
-    pass_index = getattr(trace, "_active_backward_pass_index", None)
+    pass_index = getattr(trace, "_active_backward_pass_number", None)
     return None if pass_index is None else int(pass_index)
 
 
