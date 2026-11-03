@@ -273,7 +273,7 @@ def _compare_runs(
 ) -> tuple[list[dict[str, Any]], int, list[str]]:
     """Walk two runs in execution order; return (divergences, unchecked, nonfinite)."""
 
-    from ._nan import _nonfinite_kind
+    from ._common import _nonfinite_kind
 
     reference_ops = {_op_label(op): op for op in _compute_ops(reference)}
     candidate_ops = {_op_label(op): op for op in _compute_ops(candidate)}

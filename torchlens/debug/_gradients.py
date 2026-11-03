@@ -402,6 +402,60 @@ def _classify_rows(
     return measurable
 
 
+def _audit_attrs(
+    trace: Trace,
+    counts: Mapping[str, int],
+    ctx: _AuditScaleContext,
+    *,
+    bwd: int,
+    proof_note: str | None,
+    grad_scales: Mapping[int, float] | None,
+) -> dict[str, Any]:
+    """Build the audit's attrs mapping: counts, thresholds, basis and scale facts.
+
+    Parameters
+    ----------
+    trace:
+        Audited trace (its capture-honesty facts are attached).
+    counts:
+        Verdict counts from the classification pass.
+    ctx:
+        Resolved scale, provenance, basis and thresholds.
+    bwd:
+        One-based backward pass the audit read.
+    proof_note:
+        Why the scale was proven or could not be, when known.
+    grad_scales:
+        Per-backward scale stamps the caller passed, if any.
+
+    Returns
+    -------
+    dict[str, Any]
+        The attrs mapping, before the all-exploding hint is considered.
+    """
+
+    from .._capture_honesty import capture_honesty_facts
+
+    attrs: dict[str, Any] = {
+        **counts,
+        "bwd": bwd,
+        "vanishing_threshold": ctx.vanishing_threshold,
+        "exploding_threshold": ctx.exploding_threshold,
+        "basis": ctx.basis,
+        "scale_provenance": ctx.provenance,
+        "torchlens_capture_honesty": capture_honesty_facts(trace),
+    }
+    if ctx.basis == "total_norm":
+        attrs["basis_notice"] = _BASIS_NOTICE
+    if ctx.scale is not None:
+        attrs["grad_scale"] = ctx.scale
+    if proof_note is not None:
+        attrs["scale_proof"] = proof_note
+    if grad_scales is not None:
+        attrs["grad_scales"] = dict(grad_scales)
+    return attrs
+
+
 def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kwargs + scale stamps + basis selector, all additive by contract
     trace: Trace,
     *,
@@ -528,30 +582,14 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     measurable = _classify_rows(measurable_entries, ctx, counts)
     _mark_frontiers(rows, children_by_label)
 
-    from .._capture_honesty import capture_honesty_facts
-
     sorted_rows = sorted(
         rows,
         key=lambda row: (int(row["severity"]), bool(row["is_frontier"]), str(row["op"])),
         reverse=True,
     )
-    attrs: dict[str, Any] = {
-        **counts,
-        "bwd": selected_bwd,
-        "vanishing_threshold": vanishing_threshold,
-        "exploding_threshold": exploding_threshold,
-        "basis": basis,
-        "scale_provenance": ctx.provenance,
-        "torchlens_capture_honesty": capture_honesty_facts(trace),
-    }
-    if basis == "total_norm":
-        attrs["basis_notice"] = _BASIS_NOTICE
-    if scale is not None:
-        attrs["grad_scale"] = scale
-    if proof_note is not None:
-        attrs["scale_proof"] = proof_note
-    if grad_scales is not None:
-        attrs["grad_scales"] = dict(grad_scales)
+    attrs = _audit_attrs(
+        trace, counts, ctx, bwd=selected_bwd, proof_note=proof_note, grad_scales=grad_scales
+    )
     if ctx.scale is None and measurable > 0 and counts["exploding"] == measurable:
         # Deterministic disclosure, not a guess: EVERY measurable gradient
         # exceeded the threshold, which is exactly the signature of a scaled
@@ -632,6 +670,12 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         grad_scales=grad_scales,
         basis=basis,
     )
+    return _grad_health_report(trace, rows, attrs)
+
+
+def _grad_health_report(trace: Trace, rows: list[dict[str, Any]], attrs: dict[str, Any]) -> Report:
+    """Render audit rows and attrs as the ``grad_health`` table report."""
+
     pd = _require_pandas()
     frame = pd.DataFrame(rows, columns=list(_GRAD_AUDIT_COLUMNS))
     frame.attrs.update(attrs)

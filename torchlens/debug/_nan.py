@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
 from ._capture_override import _with_capture_fields
-from ._common import _ordered_ops, _source_line
+from ._common import _module_address, _nonfinite_kind, _ordered_ops, _source_line
 
 
 @dataclass(frozen=True)
@@ -191,33 +191,6 @@ class FindNanReport(FoundReport):
         )
 
 
-def _nonfinite_kind(tensor: torch.Tensor) -> str:
-    """Classify non-finite values in a tensor.
-
-    Parameters
-    ----------
-    tensor:
-        Tensor to inspect.
-
-    Returns
-    -------
-    str
-        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
-    """
-
-    if not torch.is_floating_point(tensor) and not torch.is_complex(tensor):
-        return "none"
-    has_nan = bool(torch.isnan(tensor).any().item())
-    has_inf = bool(torch.isinf(tensor).any().item())
-    if has_nan and has_inf:
-        return "nan+inf"
-    if has_nan:
-        return "nan"
-    if has_inf:
-        return "inf"
-    return "none"
-
-
 def _op_by_any_label(trace: Trace) -> dict[str, Op]:
     """Build a lookup of final and raw labels to trace ops.
 
@@ -271,34 +244,6 @@ def _op_label(op: Op) -> str:
 
     label = canonical_public_label(op)
     return label if label else "unknown"
-
-
-def _module_address(op: Op) -> str | None:
-    """Return the containing module address recorded for an op.
-
-    Parameters
-    ----------
-    op:
-        Operation whose module metadata should be read.
-
-    Returns
-    -------
-    str | None
-        Atomic module address or the innermost containing module address.
-    """
-
-    atomic_address = getattr(op, "atomic_module_address", None)
-    if isinstance(atomic_address, str):
-        return atomic_address
-    # Live (mid-capture) ops have no atomic_module_address yet; the fallback
-    # reads the innermost module CALL label ("0:1"), which carries the pass
-    # qualifier -- strip it so the field keeps its ADDRESS contract.
-    module = getattr(op, "module", None)
-    if isinstance(module, tuple) and module and isinstance(module[0], str):
-        return module[0].rsplit(":", 1)[0]
-    if isinstance(module, str):
-        return module.rsplit(":", 1)[0]
-    return None
 
 
 def _unsaved_ancestors(trace: Trace, op: Op) -> tuple[str, ...]:

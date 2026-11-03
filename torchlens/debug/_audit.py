@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 from .._debug_report import Report, rows_of
-from ._common import _compute_ops
+from ._common import _compute_ops, _nonfinite_kind
 from ._gradients import grad_health
-from ._nan import _nonfinite_kind, bisect_nan, find_nan_in_trace
+from ._nan import bisect_nan, find_nan_in_trace
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
