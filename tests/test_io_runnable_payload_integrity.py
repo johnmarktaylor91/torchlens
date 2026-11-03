@@ -9,7 +9,6 @@ happens.
 
 from __future__ import annotations
 
-import copy
 import json
 import warnings
 from pathlib import Path
@@ -17,15 +16,20 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import (
+    read_manifest as _manifest,
+    redigest,
+    write_manifest as _write_manifest,
+)
 from torch import nn
 
 import torchlens as tl
 from torchlens._io import MIN_TLSPEC_VERSION, ArtifactError
-from torchlens._io.manifest import Manifest
+from torchlens._io.format3 import reader, runnable
 from torchlens._io.payload_codec import get_payload_codec
 from torchlens._runnable import NumericAttestationStatus
 from torchlens.options import CaptureOptions
-from torchlens.validation import _validate_runnable_payload_entries, validate_tlspec
+from torchlens.validation import validate_tlspec
 
 _CAP = CaptureOptions(
     replayable=True,
@@ -111,21 +115,19 @@ def _save(path: Path, model: nn.Module, inputs: torch.Tensor, **kwargs: Any) -> 
     return path
 
 
-def _manifest(path: Path) -> dict[str, Any]:
-    """Read one artifact's public manifest."""
+def _descriptor(path: Path) -> dict[str, Any]:
+    """Read the runnable declaration separately from the artifact envelope."""
 
-    with (path / "manifest.json").open(encoding="utf-8") as handle:
-        value = json.load(handle)
-    assert isinstance(value, dict)
-    return value
+    return json.loads((path / runnable.DESCRIPTOR_PATH).read_text(encoding="utf-8"))
 
 
-def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
-    """Overwrite one artifact's public manifest."""
+def _write_descriptor(path: Path, descriptor: dict[str, Any]) -> None:
+    """Restamp an edited descriptor so its deeper payload checks are reached."""
 
-    with (path / "manifest.json").open("w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, indent=2)
-        handle.write("\n")
+    (path / runnable.DESCRIPTOR_PATH).write_text(
+        runnable.canonical_json_text(descriptor), encoding="utf-8"
+    )
+    redigest(path, runnable.DESCRIPTOR_PATH)
 
 
 # --------------------------------------------------------------------------- #
@@ -154,18 +156,18 @@ def test_archived_activation_digest_is_verified_against_the_loaded_tensor(
         include_weights=True,
         include_activations=True,
     )
-    manifest = _manifest(path)
-    members = manifest["run"]["payload_layers"]["activations"]["members"]
+    descriptor = _descriptor(path)
+    members = descriptor["payload_layers"]["activations"]["members"]
     honest_digest = members[0]["byte_digest"]
     members[0]["byte_digest"] = "0" * 64
-    _write_manifest(path, manifest)
+    _write_descriptor(path, descriptor)
 
     with pytest.raises(ArtifactError, match="byte-digest mismatch"):
         tl.load(path)
 
     # The honest artifact still loads and publishes a digest that MATCHES its value.
     members[0]["byte_digest"] = honest_digest
-    _write_manifest(path, manifest)
+    _write_descriptor(path, descriptor)
     loaded = tl.load(path)
     from torchlens._runnable.state import runnable_tensor_byte_digest
 
@@ -183,7 +185,7 @@ def test_archived_activation_digest_is_verified_against_the_loaded_tensor(
 def test_validator_rejects_present_weights_with_missing_entries(tmp_path: Path) -> None:
     """``weights.present=true`` with the weight entries deleted is no longer certified.
 
-    Deleting the ``runnable_weight`` entries leaves an artifact the strict binder CANNOT
+    Deleting the ``state_dict`` family leaves an artifact the strict binder CANNOT
     bind, yet the one-directional check accepted it -- the gate users are told to run
     certified an unbindable artifact.
     """
@@ -195,18 +197,22 @@ def test_validator_rejects_present_weights_with_missing_entries(tmp_path: Path) 
         include_weights=True,
     )
     manifest = _manifest(path)
-    assert manifest["run"]["payload_layers"]["weights"]["present"] is True
-    assert [entry for entry in manifest["tensors"] if entry["kind"] == "runnable_weight"]
+    assert _descriptor(path)["payload_layers"]["weights"]["present"] is True
+    assert manifest["runnable"]["state_dict_tensors"]
 
     # Honest manifest passes.
-    _validate_runnable_payload_entries(manifest)
+    validate_tlspec(path)
 
-    stripped = copy.deepcopy(manifest)
-    stripped["tensors"] = [
-        entry for entry in stripped["tensors"] if entry.get("kind") != "runnable_weight"
-    ]
+    # Remove the complete family and its files, keeping the envelope internally true.
+    # Only the descriptor still claims capture weights, the inconsistency under test.
+    for relpath in manifest["runnable"].pop("state_dict"):
+        manifest["files"].pop(relpath)
+        (path / relpath).unlink()
+    manifest["runnable"].pop("state_dict_family")
+    manifest["runnable"].pop("state_dict_tensors")
+    _write_manifest(path, manifest)
     with pytest.raises(ValueError, match="weight entries disagree with tensor slots"):
-        _validate_runnable_payload_entries(stripped)
+        validate_tlspec(path)
 
 
 def test_validator_rejects_relabelled_weight_entries(tmp_path: Path) -> None:
@@ -219,12 +225,13 @@ def test_validator_rejects_relabelled_weight_entries(tmp_path: Path) -> None:
         include_weights=True,
     )
     manifest = _manifest(path)
-    relabelled = copy.deepcopy(manifest)
-    for entry in relabelled["tensors"]:
-        if entry.get("kind") == "runnable_weight":
-            entry["label"] = f"bogus.{entry['label']}"
+    references = manifest["runnable"]["state_dict_tensors"]
+    manifest["runnable"]["state_dict_tensors"] = {
+        f"bogus.{name}": reference for name, reference in references.items()
+    }
+    _write_manifest(path, manifest)
     with pytest.raises(ValueError, match="weight entries disagree with tensor slots"):
-        _validate_runnable_payload_entries(relabelled)
+        validate_tlspec(path)
 
 
 @pytest.mark.parametrize("include_weights", [False, True])
@@ -251,7 +258,6 @@ def test_weight_invariant_holds_on_every_honest_shape(
         include_weights=include_weights,
     )
 
-    _validate_runnable_payload_entries(_manifest(path))
     validate_tlspec(path)
 
 
@@ -283,8 +289,7 @@ def test_selective_activation_save_discloses_unattestable_archive(tmp_path: Path
     messages = [str(entry.message) for entry in caught]
     assert any("records no original-input digests" in message for message in messages), messages
 
-    manifest = _manifest(path)
-    activations = manifest["run"]["payload_layers"]["activations"]
+    activations = _descriptor(path)["payload_layers"]["activations"]
     assert activations["present"] is True
     assert activations["members"], "the archive really did ship blobs"
     assert activations["original_input_digests"] == []
@@ -318,7 +323,7 @@ def test_full_capture_activation_save_stays_attested_and_silent(tmp_path: Path) 
         )
     assert not any("records no original-input digests" in str(e.message) for e in caught)
 
-    assert _manifest(path)["run"]["payload_layers"]["activations"]["original_input_digests"]
+    assert _descriptor(path)["payload_layers"]["activations"]["original_input_digests"]
     result = tl.load(path).run(inputs=inputs.clone())
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
@@ -372,11 +377,9 @@ def test_bfloat16_payload_round_trips_through_the_real_routing(tmp_path: Path) -
 def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
     """A sub-floor tlspec_version refuses typed instead of warning.
 
-    Since the v7 schema bump the current ``TLSPEC_VERSION`` sits above the tlspec-6
-    rehydration floor (``MIN_TLSPEC_VERSION``), so the refusal boundary is the
-    floor, not the current version: a between-floor-and-current artifact loads
-    with the advisory ``DeprecationWarning``, while anything below the floor
-    refuses. ``Manifest.from_dict`` refuses first with the floor named.
+    A record-contract version below ``MIN_TLSPEC_VERSION`` refuses before any
+    records are read. The manifest reader names the rehydration floor rather
+    than emitting an advisory and attempting to reconstruct incompatible data.
     """
 
     from torchlens.errors import ArtifactTooOldError
@@ -385,9 +388,10 @@ def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
     tl.trace(ParamsOnlyModel().eval(), torch.ones(2, 3), capture=_CAP).save(path)
     manifest_dict = _manifest(path)
     manifest_dict["tlspec_version"] = MIN_TLSPEC_VERSION - 1
+    _write_manifest(path, manifest_dict)
 
     with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
-        Manifest.from_dict(manifest_dict)
+        reader.read_manifest(path)
 
 
 def test_from_dict_really_requires_every_non_provenance_field(tmp_path: Path) -> None:
@@ -396,7 +400,8 @@ def test_from_dict_really_requires_every_non_provenance_field(tmp_path: Path) ->
     path = tmp_path / "required.tlspec"
     tl.trace(ParamsOnlyModel().eval(), torch.ones(2, 3), capture=_CAP).save(path)
     manifest_dict = _manifest(path)
-    manifest_dict.pop("tensors")
+    manifest_dict.pop("records")
+    _write_manifest(path, manifest_dict)
 
     with pytest.raises(ArtifactError):
-        Manifest.from_dict(manifest_dict)
+        reader.read_manifest(path)
