@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1445 modules, 641865 lines, 0 modules without a docstring.
+83 packages, 1445 modules, 641875 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10558 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 59 | 36623 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 23 | 8479 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 23 | 8489 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11502 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._observability` | Observability substrates. | 22 | 8011 |
@@ -493,12 +493,12 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (23 modules, 8479 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (23 modules, 8489 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 |
-| `_carriers` | The opaque carrier values the value codec reads and writes. | 44 |
+| `_carriers` | The opaque carrier values the value codec reads and writes. | 54 |
 | `_families` | Apply code-owned family grammar data to decoded cells before record construction. | 452 |
 | `_family_nodes` | Family grammar nodes for the 3.0 saved format (design section 9). | 554 |
 | `_payload_headers` | Validate referenced payload headers without reading tensor contents. | 39 |
