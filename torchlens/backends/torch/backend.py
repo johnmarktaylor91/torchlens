@@ -281,7 +281,7 @@ class TorchBackend:
         self,
         session: object,
         model: object,
-        input_args: object,
+        inputs: object,
         input_kwargs: dict[Any, Any] | None,
     ) -> tuple[list[Any], dict[Any, Any], list[str], object]:
         """Normalize inputs, detect model device, copy args, and extract input arg names.
@@ -292,7 +292,7 @@ class TorchBackend:
             Active capture session. Unused for the torch implementation.
         model:
             Torch module being captured.
-        input_args:
+        inputs:
             Caller-provided positional inputs.
         input_kwargs:
             Caller-provided keyword inputs, or ``None``.
@@ -322,7 +322,7 @@ class TorchBackend:
 
         # Resolve ambiguity: is [tensor_a, tensor_b] two args or one list-arg?
         # normalize_input_args checks the model's forward() signature to decide.
-        input_args = normalize_input_args(input_args, torch_model)
+        inputs = normalize_input_args(inputs, torch_model)
 
         if not input_kwargs:
             input_kwargs = {}
@@ -352,8 +352,8 @@ class TorchBackend:
 
         # Copy args and kwargs as ONE graph so repeated tensor identity, shared
         # storage, view geometry, strides, and offsets survive caller protection.
-        input_args, input_kwargs, input_copy_gaps = safe_copy_input_tree(
-            input_args,
+        inputs, input_kwargs, input_copy_gaps = safe_copy_input_tree(
+            inputs,
             input_kwargs,
             require_distinct_tensor_sites=bool(getattr(session, "is_replayable", False)),
         )
@@ -362,14 +362,14 @@ class TorchBackend:
             input_copy_gaps,
             reason="input_copy_semantics_unverifiable",
         )
-        input_arg_names = _get_input_arg_names(torch_model, input_args)
+        input_arg_names = _get_input_arg_names(torch_model, inputs)
 
-        return input_args, input_kwargs, input_arg_names, model_device
+        return inputs, input_kwargs, input_arg_names, model_device
 
     def fetch_label_move_input_tensors(
         self,
         session: object,
-        input_args: list[Any],
+        inputs: list[Any],
         input_arg_names: list[str],
         input_kwargs: dict[Any, Any],
         model_device: object,
@@ -380,7 +380,7 @@ class TorchBackend:
         ----------
         session:
             Active capture session. Unused for the torch implementation.
-        input_args:
+        inputs:
             Copied positional inputs that may be mutated for internal device moves.
         input_arg_names:
             Forward signature names for positional inputs.
@@ -407,7 +407,7 @@ class TorchBackend:
         input_arg_tensors = []
         input_kwarg_tensors = []
         traversal_gaps: list[str] = []
-        for arg_index, arg in enumerate(input_args):
+        for arg_index, arg in enumerate(inputs):
             unresolved: list[str] = []
             input_arg_tensors.append(
                 get_vars_of_type_from_obj(
@@ -451,10 +451,10 @@ class TorchBackend:
         # access (``batch.edge_features``); ``_assign_nested_input_value``
         # already knows how to mutate those in place via ``attr`` addressing.
         moved_tensors_by_id: dict[int, torch.Tensor] = {}
-        for arg_idx, arg in enumerate(input_args):
+        for arg_idx, arg in enumerate(inputs):
             was_tuple = type(arg) is tuple
             if was_tuple:
-                input_args[arg_idx] = list(arg)
+                inputs[arg_idx] = list(arg)
             for tensor_idx, (tensor, addr, addr_full) in enumerate(input_arg_tensors[arg_idx]):
                 moved_tensor = moved_tensors_by_id.get(id(tensor))
                 if moved_tensor is None:
@@ -467,13 +467,13 @@ class TorchBackend:
                     setattr(moved_tensor, INPUT_WAS_PARAMETER_ATTR, True)
                 input_arg_tensors[arg_idx][tensor_idx] = (moved_tensor, addr, addr_full)
                 if not addr_full:
-                    input_args[arg_idx] = moved_tensor
+                    inputs[arg_idx] = moved_tensor
                 else:
-                    input_args[arg_idx] = _assign_nested_input_value(
-                        input_args[arg_idx], addr_full, moved_tensor
+                    inputs[arg_idx] = _assign_nested_input_value(
+                        inputs[arg_idx], addr_full, moved_tensor
                     )
-            if was_tuple and isinstance(input_args[arg_idx], list):
-                input_args[arg_idx] = tuple(input_args[arg_idx])
+            if was_tuple and isinstance(inputs[arg_idx], list):
+                inputs[arg_idx] = tuple(inputs[arg_idx])
 
         for kwarg_idx, (key, _val) in enumerate(input_kwargs.items()):
             for tensor_idx, (tensor, addr, addr_full) in enumerate(input_kwarg_tensors[kwarg_idx]):

@@ -142,12 +142,12 @@ class Session:
     traces: list[Any] = field(default_factory=list)
     invocations: list[dict[str, Any]] = field(default_factory=list)
 
-    def invoke(self, input_args: Any, input_kwargs: dict[str, Any] | None = None) -> Any:
+    def invoke(self, inputs: Any, input_kwargs: dict[str, Any] | None = None) -> Any:
         """Capture one model invocation and add it to this session.
 
         Parameters
         ----------
-        input_args:
+        inputs:
             Positional model input.
         input_kwargs:
             Keyword model input.
@@ -164,7 +164,7 @@ class Session:
         trace_fn = cast(Callable[..., Any], torchlens.trace)
         log = trace_fn(
             self.model,
-            input_args,
+            inputs,
             input_kwargs=input_kwargs,
             capture=torchlens.options.CaptureOptions(
                 replayable=True,
@@ -290,7 +290,7 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
             try:
                 capture_input = list(args)
                 trace_fn = cast(Callable[..., Any], torchlens.trace)
-                log = trace_fn(model, capture_input, kwargs or None)
+                log = trace_fn(model, capture_input, input_kwargs=kwargs or None)
                 session.logs.append(log)
             finally:
                 model.forward = wrapped_forward

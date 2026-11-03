@@ -5,7 +5,11 @@ counts only) holds torch FlopCounterMode's forward and backward totals for
 every corpus entry, built by ``build_entry`` in eval mode, at fma2 with only
 the matmul and convolution families counted. The seven entries that dispatch
 CPU fused attention were re-counted under the MATH attention backend, and
-that total is the bar for them; TorchLens counts the default backend.
+that total is the bar for them; TorchLens counts the default backend. The
+one entry whose eager forward dispatches the fused ``nn.MultiheadAttention``
+inference kernel (V-JEPA ViT-Large, its target encoder under ``no_grad``)
+was re-counted with ``torch.backends.mha`` fast path off: capture holds that
+fast path off, so TorchLens records and counts the unfused attention.
 
 Per entry, TorchLens's forward (2 x the true MACs of the matmul and
 convolution family ops) and its executed backward (``backward_status``)
@@ -214,7 +218,7 @@ def _check_entry(entry: CorpusEntry) -> None:
     model, inputs = build_entry(entry)
     args, kwargs = _call_args(inputs, whole)
     capture = tl.options.CaptureOptions(backward_ready=True, output_transform=_same)
-    trace = tl.trace(model, args, kwargs, capture=capture)
+    trace = tl.trace(model, args, input_kwargs=kwargs, capture=capture)
     try:
         beyond_fwd, beyond_bwd = BEYOND_FCM.get(entry.id, (0, 0))
         assert (forward_census.beyond, backward_census.beyond) == (beyond_fwd, beyond_bwd)
@@ -265,6 +269,7 @@ def test_registered_corpus_accounts_for_every_entry() -> None:
         "paddledet_detr",
         "ProDESIGN-LE",
         "21cmBERT",
+        "V-JEPA ViT-Large (latent video joint-embedding predictor)",
     }
     assert len([row for row in ROWS.values() if "call_convention" in row]) == 8
     assert set(GROUPED_DW_EXCESS) <= set(ROWS) and set(BEYOND_FCM) <= set(ROWS)

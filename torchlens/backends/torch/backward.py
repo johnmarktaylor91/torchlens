@@ -61,7 +61,6 @@ from ..._utils._package_frames import is_torchlens_code
 from ..._utils._tensor_label import detached_saved_activation_label, get_tensor_label
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
-    get_accumulate_grad_class,
     get_autograd_engine_queue_callback,
     get_checkpoint_hook_class,
     get_checkpoint_internal_hook_class,
@@ -73,9 +72,18 @@ from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...errors import ConfigurationError
 from ...recording.exceptions import InvalidStorageError, RecorderStateError
 from ...recording.types import CaptureSpec
+from ._autograd_grad_boundary import (
+    record_autograd_backward_boundary,
+    record_autograd_grad_boundary,
+)
 from ._backward_dispatch import backward_window, outside_census
 from ._backward_markers import begin_grad_fn_marker, end_grad_fn_marker, executing_grad_fn_ref
-from ._backward_roots import _autograd_roots_from_call, _root_tensors, _roots_by_trace
+from ._backward_roots import (
+    _autograd_roots_from_call,
+    _is_accumulate_grad,
+    _root_tensors,
+    _roots_by_trace,
+)
 from ._fire_timing import (
     _clear_fire_timing_stamps,
     _fire_timing_stamp_list,
@@ -2904,26 +2912,6 @@ def log_recording_backward(
     return recording
 
 
-def _is_accumulate_grad(grad_fn_handle: Any) -> bool:
-    """Return whether an autograd node is an AccumulateGrad leaf.
-
-    Parameters
-    ----------
-    grad_fn_handle
-        Autograd node to inspect.
-
-    Returns
-    -------
-    bool
-        True when ``grad_fn_handle`` is an AccumulateGrad node.
-    """
-
-    accumulate_grad_cls = get_accumulate_grad_class()
-    return type(grad_fn_handle).__name__ == "AccumulateGrad" or isinstance(
-        grad_fn_handle, accumulate_grad_cls
-    )
-
-
 def _clear_forward_grad_fn_refs(trace: Any) -> None:
     """Clear strong forward references to autograd nodes after hook registration.
 
@@ -3940,7 +3928,6 @@ def install_autograd_wrappers() -> None:
 
     def wrapped_backward(*args: Any, **kwargs: Any) -> Any:
         """Route ``torch.autograd.backward`` through TorchLens when roots match."""
-
         original = closure_original_backward
         forward_op_count_at_trigger = _active_forward_op_count_at_trigger()
         roots = _autograd_roots_from_call(args, kwargs, "tensors")
@@ -3952,12 +3939,18 @@ def install_autograd_wrappers() -> None:
                     return original(*args, **kwargs)
             return original(*args, **kwargs)
 
-        return _capture_autograd_engine_call(
-            roots,
-            run,
-            trigger="autograd_backward",
-            engine_flags=dict(kwargs),
-            forward_op_count_at_trigger=forward_op_count_at_trigger,
+        def engine() -> Any:
+            """Run the original backward call as one captured engine pass."""
+            return _capture_autograd_engine_call(
+                roots,
+                run,
+                trigger="autograd_backward",
+                engine_flags=dict(kwargs),
+                forward_op_count_at_trigger=forward_op_count_at_trigger,
+            )
+
+        return record_autograd_backward_boundary(
+            lambda: _traces_for_roots(roots), engine, original, args, kwargs
         )
 
     def wrapped_grad(*args: Any, **kwargs: Any) -> Any:
@@ -3991,12 +3984,7 @@ def install_autograd_wrappers() -> None:
                 forward_op_count_at_trigger=forward_op_count_at_trigger,
             )
 
-        active_trace, logging_enabled = _state.active_capture()
-        if logging_enabled and active_trace is not None:
-            from ._autograd_grad_boundary import record_autograd_grad_boundary
-
-            return record_autograd_grad_boundary(engine, original, args, kwargs)
-        return engine()
+        return record_autograd_grad_boundary(engine, original, args, kwargs)
 
     # Provenance parity with every namespace wrapper (grind-r5 b8 R56): the
     # entry wrappers carry the original's metadata so introspection reports

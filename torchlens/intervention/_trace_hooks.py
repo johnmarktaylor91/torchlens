@@ -17,12 +17,11 @@ from .._data_classes._trace_intervention_records import (
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from ._edit_guards import refuse_chunked_batch_coupling, warn_if_root_mutation
 from ._trace_edits import (
     ensure_intervention_spec,
-    refuse_chunked_batch_coupling,
     target_spec_from_site,
     validate_intervention_site,
-    warn_if_root_mutation,
 )
 
 if TYPE_CHECKING:

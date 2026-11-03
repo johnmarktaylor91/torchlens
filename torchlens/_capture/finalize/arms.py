@@ -21,6 +21,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
+from ..._output_slot import returned
 from ..._quantities import Duration
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.display import _vprint, user_stacklevel
@@ -135,6 +136,7 @@ def finalize_completed(result: ForwardResult) -> Any:
     _fence_device_work(trace)
     backend.finalize_forward_session(trace, trace._raw_graph_ws)
 
+    trace._output_slot = returned(outputs)
     output_transform = trace._output_transform
     trace.transformed_output = output_transform(outputs) if output_transform is not None else None
     from ..._autoroute._builtin_output import decode_outputs_for_trace

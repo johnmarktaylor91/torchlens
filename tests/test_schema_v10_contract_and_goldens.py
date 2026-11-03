@@ -190,7 +190,7 @@ def test_below_floor_state_refuses_as_2x() -> None:
 def test_modellog_216_refusal_names_the_one_release_that_reads_it() -> None:
     error = modellog_216_error("x.tlspec")
     assert "torchlens==2.17.0" in error.fields["remedy"]
-    assert "save it again with torchlens 2.36.x" in error.fields["remedy"]
+    assert "load it with torchlens 2.36.x" in error.fields["remedy"]
     assert error.fields["code"] == "artifact_version_below_floor"
 
 

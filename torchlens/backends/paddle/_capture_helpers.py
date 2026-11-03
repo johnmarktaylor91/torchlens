@@ -14,8 +14,6 @@ from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import InterventionAppliedEvent, OpEvent
 from ..._ir.refs import DtypeRef
 from .._finalize import stable_callable_name as _callable_identity
-from .._protocols.paddle import PADDLE_REFUSAL_OPTION
-from ..registry import BackendUnsupportedError
 
 if TYPE_CHECKING:
     from .backend import GradOptions
@@ -71,22 +69,6 @@ def _append_intervention_events(
 def _paddle_facet_snapshot(facet_recipes: Any) -> Any:
     """Validate ``trace(facets=...)`` recipes and snapshot the facet registry."""
 
-    if callable(facet_recipes):
-        facet_recipes = (facet_recipes,)
-    try:
-        recipe_tuple = tuple(facet_recipes)
-    except TypeError as exc:
-        raise BackendUnsupportedError(
-            "paddle backend trace(facets=...) requires an iterable of recipe callables.",
-            code=PADDLE_REFUSAL_OPTION,
-            option="facets",
-        ) from exc
-    if not all(callable(recipe) for recipe in recipe_tuple):
-        raise BackendUnsupportedError(
-            "paddle backend trace(facets=...) requires recipe callables.",
-            code=PADDLE_REFUSAL_OPTION,
-            option="facets",
-        )
-    from ..._semantic import facets as facets_mod  # deferred: cycle _semantic
+    from .._facet_recipes import snapshot_facet_recipes
 
-    return facets_mod.snapshot(recipe_tuple)
+    return snapshot_facet_recipes(facet_recipes, backend_name="paddle")

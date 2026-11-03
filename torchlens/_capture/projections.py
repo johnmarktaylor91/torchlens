@@ -58,7 +58,7 @@ from ._record_stores import _GradFnContextMap, _StorageBackend
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from .._ir.op_record import OpRecord
-    from ..recording.options import RecordingOptions
+    from ..recording.options import _RecordingConfig
 
 _active_recording_state: RecordingState | None = None
 
@@ -83,7 +83,7 @@ _EMPTY_BACKEND_SEMANTICS = BackendSemantics(
 _CAPTURE_POLICY_CACHE: dict[tuple[bool, bool, str], CapturePolicy] = {}
 
 
-def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
+def _resolve_storage_intent(options: _RecordingConfig) -> StorageIntent:
     """Resolve storage destinations from StorageOptions."""
 
     if options.streaming is None or options.streaming.path is None:
@@ -94,10 +94,12 @@ def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
     )
 
 
-def _empty_recording(options: RecordingOptions) -> Recording:
+def _empty_recording(options: _RecordingConfig) -> Recording:
     """Create an empty lazy Recording for a predicate capture session."""
 
-    return Recording(
+    from ..recording.types import RecordingSettings
+
+    return Recording._build(
         records=[],
         by_pass={},
         by_label={},
@@ -116,15 +118,8 @@ def _empty_recording(options: RecordingOptions) -> Recording:
         is_stopped=False,
         stop_reason=None,
         stops_by_pass={},
-        keep_op_repr=repr(options.keep_op) if options.keep_op is not None else None,
         history_size=options.history_size,
-        save_grads_repr=repr(options.save_grads) if options.save_grads is not None else None,
-        _activation_transform_repr=(
-            repr(options.activation_transform) if options.activation_transform is not None else None
-        ),
-        _grad_transform_repr=(
-            repr(options.grad_transform) if options.grad_transform is not None else None
-        ),
+        _options=RecordingSettings._from_config(options),
     )
 
 
@@ -132,7 +127,7 @@ def _empty_recording(options: RecordingOptions) -> Recording:
 class RecordingState:
     """Mutable state for one active predicate recording pass."""
 
-    options: RecordingOptions
+    options: _RecordingConfig
     recording: Recording
     history: deque[RecordContext] = field(default_factory=deque)
     op_counts: dict[str, int] = field(default_factory=dict)
@@ -801,7 +796,6 @@ def _record_from_record_context(
 COMMIT_STAGE_MATRIX: dict[str, tuple[str, ...]] = {
     "exhaustive": (
         "fire_results_park",
-        "module_filter",
         "selector",
         "escrow_candidate",
         "payload_disposition",

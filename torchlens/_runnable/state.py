@@ -24,7 +24,7 @@ from .._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
 from .._utils._torch_symbols import torch_attr
 from .._utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
 from .._utils.lazy_state import raise_if_pending_state_slots
-from ..backends.torch.rescue import _state_bytes_equal
+from ..backends.torch._state_bytes import _state_bytes_equal
 from ..errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
 from ..errors._base import TorchLensWarning
 from . import (

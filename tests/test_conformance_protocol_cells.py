@@ -17,15 +17,14 @@ from typing import Any
 import numpy as np
 import pytest
 
-from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
-from torchlens.conformance import ConformanceReport, run_conformance
-from torchlens.conformance._adapters import (
+from tests.conformance import ConformanceReport, run_conformance
+from tests.conformance._adapters import (
     FAKE_PLANTS,
     FakeProviderAdapter,
     RosterModel,
     TorchReferenceAdapter,
 )
-from torchlens.conformance._protocol_cases import (
+from tests.conformance._protocol_cases import (
     C1_CONSTANTS_CASE,
     C1_INTERMEDIATES_CASE,
     C1_PROTOCOL_ROW_CASES,
@@ -38,18 +37,19 @@ from torchlens.conformance._protocol_cases import (
     intermediates_problems,
     payload_equality_problems,
 )
-from torchlens.conformance._refusal_cases import CAPABILITY_REQUESTS, refusal_code_of
-from torchlens.conformance._scorecard import (
+from tests.conformance._refusal_cases import CAPABILITY_REQUESTS, refusal_code_of
+from tests.conformance._scorecard import (
     SCORECARD_VERSION,
     capability_summary,
     scorecard_from_json,
     scorecard_from_report,
     scorecards_differ,
 )
-from torchlens.conformance._validation_cells import (
+from tests.conformance._validation_cells import (
     names_reason_problems,
     validation_status_problems,
 )
+from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
 
 #: The six v1 plants, whose intended cells ``tests/test_ecosystem_rt_conformance.py`` pins.
 _LEGACY_PLANTS = frozenset(
@@ -432,7 +432,7 @@ def test_constant_parents_oracle_needs_payload_and_consumer() -> None:
 def test_capability_summary_and_shipped_record_comparison() -> None:
     """Summary vocabulary follows the cells; the comparison ignores the TorchLens version."""
 
-    from torchlens.conformance._scorecard import PreviewScorecard, ScorecardCell
+    from tests.conformance._scorecard import PreviewScorecard, ScorecardCell
 
     protocol = SimpleNamespace(
         capabilities=lambda: SimpleNamespace(
@@ -497,9 +497,9 @@ def test_fake_adapter_refuses_its_false_flag_typed_and_untyped_when_planted() ->
 def test_scorecard_command_writes_checks_and_grades(tmp_path: Path, monkeypatch: Any) -> None:
     """``--write`` then ``--check`` agree; a changed cell fails ``--check``; ``--graduation`` reads the file."""
 
-    from torchlens.conformance import _scorecard, scorecard
-    from torchlens.conformance._graduation import GraduationItem
-    from torchlens.conformance._scorecard import PreviewScorecard, ScorecardCell
+    from tests.conformance import _scorecard, scorecard
+    from tests.conformance._graduation import GraduationItem
+    from tests.conformance._scorecard import PreviewScorecard, ScorecardCell
 
     cell = ScorecardCell("C0", "c0_provider_identity", "", "passed")
     card = _scorecard._with_digest(

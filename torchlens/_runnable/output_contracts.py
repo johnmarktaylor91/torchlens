@@ -206,7 +206,7 @@ def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
             rebuilt = container.reconstruct(values="out")
         except ValueError as exc:
             return LiveOutputDiagnosis(_approximation(), False, "reconstruction_failed", str(exc))
-        if lossy:
+        if lossy or _container_spec_reconstruction_lossy(spec):
             return LiveOutputDiagnosis(
                 rebuilt,
                 False,

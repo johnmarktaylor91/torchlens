@@ -52,7 +52,7 @@ from torchlens._distributed._lifecycle import (
 )
 
 from ..._data_classes.internal_types import FuncExecutionContext
-from ..._transport import to_cpu_contiguous
+from ..._transport import digest_byte_view
 from ..._utils._tensor_label import get_tensor_label, set_tensor_label
 from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 from ..._utils.tensor_utils import safe_copy
@@ -301,13 +301,10 @@ def _digest_tensor(tensor: torch.Tensor) -> str:
     """Byte-exact SHA-256 of a tensor's values (dtype-agnostic)."""
 
     # detach-ok: read-only digest snapshot; no retained gradient payload crosses this boundary.
-    flat = to_cpu_contiguous(tensor).reshape(-1)
-    if flat.numel() == 0:
-        return hashlib.sha256(b"").hexdigest()
     # Buffer-protocol digest (r7 R35-3): identical bytes to the old
     # ``tobytes`` spelling (this digest PERSISTS in collective annotations,
     # so byte identity is load-bearing) without the whole-payload copy.
-    return hashlib.sha256(flat.view(torch.uint8).numpy().data).hexdigest()
+    return hashlib.sha256(digest_byte_view(tensor)).hexdigest()
 
 
 def _role_entry(role: str, index: int, tensor: torch.Tensor) -> dict[str, Any]:

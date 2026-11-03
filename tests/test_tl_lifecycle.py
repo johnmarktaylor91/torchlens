@@ -22,7 +22,7 @@ from torchlens._utils.introspection import get_vars_of_type_from_obj
 from torchlens.backends.torch.model_prep import _tag_untagged_buffers
 from torchlens.errors import TraceCaptureError
 from torchlens.intervention.runtime import _copy_tl_replacement_attrs
-from torchlens.options import CaptureOptions, SaveOptions
+from torchlens.options import CaptureOptions
 from torchlens.types import PartialTrace
 
 
@@ -88,8 +88,7 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(save_args=True),
-        save=SaveOptions(activation_transform=lambda t: t.float().mean()),
+        capture=CaptureOptions(save_args=True, activation_transform=lambda t: t.float().mean()),
     )
 
     assert not hasattr(x, "_tl")
@@ -117,7 +116,8 @@ def test_successful_capture_cleans_deeply_nested_saved_args() -> None:
     trace = tl.trace(
         _NestedSavedArgsModel(),
         torch.ones(2),
-        capture=CaptureOptions(layers_to_save="all", save_args=True),
+        capture=CaptureOptions(save_args=True),
+        save="all",
     )
 
     foreach_ops = [op for op in trace.ops if op.func_name == "_foreach_add"]

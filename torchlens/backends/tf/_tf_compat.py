@@ -37,8 +37,8 @@ def _import_op_callbacks_module() -> Any | None:
 def _probe_op_callbacks() -> bool:
     """Return whether TensorFlow exposes eager op callbacks, without importing it.
 
-    The module-level flag is read by ``doctor()`` and ``compat.report()``,
-    which must never import a preview framework. When TensorFlow is already
+    The module-level flag is read by ``tl.report.doctor()``, which must
+    never import a preview framework. When TensorFlow is already
     loaded the real import is free and decides; otherwise the private module
     is located on disk through TensorFlow's package spec (``find_spec`` on the
     top-level name imports nothing). A located module that later fails to

@@ -1345,6 +1345,7 @@ class TestOutputCapabilityMetaGates:
             "literal",
             "opaque",
             "registered",
+            "distribution",
         }
         for row in CONTAINER_KIND_CAPABILITIES.values():
             assert {

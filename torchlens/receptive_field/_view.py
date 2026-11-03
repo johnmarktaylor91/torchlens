@@ -5,8 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from importlib import import_module
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from .._selection.graph import _DEFAULT_PROBE_BUDGET, _influence
+from .._selection.selection import _find_act_ops, units as _units
 from ._errors import (
     AmbiguousInputError,
     AmbiguousTargetError,
@@ -25,9 +28,13 @@ from ._types import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    import torch
     from PIL import Image
 
     from .._data_classes.op import Op
+    from .._selection.selection import Selection
     from ._engine import _ReceptiveFieldSolution
     from ._engine_forward import _ProjectiveFieldSolution
 
@@ -62,6 +69,37 @@ def _optional_callable(module_name: str, function_name: str, feature: str) -> An
         raise ReceptiveFieldUnavailableError(
             f"Receptive-field {feature} is not available in this installation."
         ) from exc
+
+
+def _module_regions(trace: Any, item: object) -> list[object]:
+    """Return the regions one ``within`` item stands for.
+
+    A string that names no op, layer or io role but is a module address (or a
+    module pass label) stands for that module's output ops, read through
+    ``trace.modules``; ``Module`` and ``ModuleCall`` records are read the same
+    way. Every other region passes through unchanged.
+    """
+
+    record = item
+    if isinstance(item, str):
+        if _find_act_ops(trace, item) or item not in trace.modules:
+            return [item]
+        record = trace.modules[item]
+    if hasattr(record, "__selection__"):
+        return [item]
+    if hasattr(record, "calls"):
+        return [label for call in record.calls.values() for label in call.output_ops]
+    output_ops = getattr(record, "output_ops", None)
+    return [item] if output_ops is None else list(output_ops)
+
+
+def _module_outputs(trace: Any, within: object | None) -> list[object] | None:
+    """Replace module addresses and module records in ``within`` by their output ops."""
+
+    if within is None:
+        return None
+    items = list(within) if isinstance(within, (list, tuple, set, frozenset)) else [within]
+    return [region for item in items for region in _module_regions(trace, item)]
 
 
 class ReceptiveFieldView:
@@ -222,9 +260,34 @@ class ReceptiveFieldView:
             ) from exc
 
     @property
-    def status(self) -> ReceptiveFieldStatus:
-        """Return status for the only reachable input."""
+    def status(self) -> ReceptiveFieldStatus | Mapping[str, ReceptiveFieldStatus]:
+        """Return the field status, one per endpoint when several are reachable.
 
+        A status classifies each reachable endpoint on its own, so a view with
+        several reachable targets (projective) or inputs (receptive) answers
+        for every one instead of refusing: a read-only mapping from the
+        endpoint's IO role (the ``per_input`` keys) to its status. A projective
+        view of a GPT-2 activation, for example, reaches ``output.logits`` and
+        the cached keys and values of every later block. The geometry
+        accessors (``size``, ``jump``, ``center0``, ``axes``, ``axis_roles``)
+        still need one endpoint selected with ``view[role]``.
+
+        Returns
+        -------
+        ReceptiveFieldStatus or Mapping[str, ReceptiveFieldStatus]
+            The status for the only reachable endpoint, or the per-endpoint
+            mapping in reachability order when there are several.
+
+        Raises
+        ------
+        ReceptiveFieldError
+            If no endpoint is reachable.
+        """
+
+        if len(self.per_input) > 1:
+            return MappingProxyType(
+                {role: descriptor.status for role, descriptor in self.per_input.items()}
+            )
         return self._descriptor().status
 
     @property
@@ -392,6 +455,74 @@ class ReceptiveFieldView:
             source=source_op,
             clip=clip,
         )
+
+    def of(
+        self,
+        units: Iterable[tuple[int, ...] | int] | torch.Tensor,
+        *,
+        within: object | None = None,
+        method: Literal["geometric", "gradient"] = "geometric",
+        probe_budget: int = _DEFAULT_PROBE_BUDGET,
+    ) -> Selection:
+        """Return the field of a SET of this operation's units as a selection.
+
+        The many-unit form beside :meth:`at`: the union of the units' fields
+        (projective: what they reach; receptive: what reaches them) at every
+        site of ``within``.
+
+        Parameters
+        ----------
+        units:
+            What ``tl.units(site, indices)`` takes as ``indices``, over this
+            operation's FULL output shape (batch and channel included, unlike
+            ``.at()``'s windowed-axis coordinates): a bool mask, or an iterable
+            of coordinate tuples.
+        within:
+            Where the answer lives: one region or a list of them (an op or layer
+            label, a module address such as ``"layer3"``, an ``Op``, ``Layer``,
+            ``Module`` or ``ModuleCall``, or any selection). ``None`` means the
+            model outputs for a projective view and the model inputs for a
+            receptive view.
+        method:
+            ``"geometric"`` (the field engine's index geometry, the default) or
+            ``"gradient"`` (one autograd probe per unit and site; needs a trace
+            captured with ``backward_ready=True`` and ``save_mode="reference"``).
+            Through a fused kernel with no second derivative (fused attention)
+            a projective probe instead runs one backward pass per element of
+            the site, and only for a site of at most ``probe_budget`` elements.
+        probe_budget:
+            Most autograd probes (units times sites) ``"gradient"`` may run.
+
+        Returns
+        -------
+        Selection
+            Bound to this trace, one entry per ``within`` site, usable in
+            ``trace.do``, ``trace.subgraph`` and ``& | - ~``; each entry's
+            ``provenance`` states ``relation``, ``basis`` and ``field_status``.
+
+        Raises
+        ------
+        SelectionError
+            ``influence_geometry_unavailable`` when a site pair has no per-unit
+            geometry (use ``method="gradient"``), ``influence_probe_budget``
+            when the gradient method would exceed ``probe_budget``, and
+            ``selection_unresolvable`` for a seed or region that does not
+            resolve on this trace.
+        """
+
+        return self._units_field(units, within, method=method, probe_budget=probe_budget)
+
+    def _units_field(self, units: Any, within: object | None, **options: Any) -> Selection:
+        """Resolve :meth:`of`'s influence query (``method``, ``probe_budget``) on this trace."""
+
+        trace = self._op.source_trace
+        query = _influence(
+            _units(self._op.label, units),
+            _module_outputs(trace, within),
+            direction=self._direction.value,
+            **options,
+        )
+        return query._resolve(trace)
 
     def probe_grad(
         self,

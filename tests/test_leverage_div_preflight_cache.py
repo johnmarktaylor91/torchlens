@@ -66,7 +66,7 @@ def test_cone_preflight_unarmed_capture_reports_not_replay_ready():
     torch.manual_seed(0)
     model = ReusedReluNet()
     trace = tl.trace(model, torch.rand(1, 2, 3, 3))
-    plan = cone_preflight(trace, trace["relu_1_2"].ops)
+    plan = cone_preflight(trace, trace.layers["relu_1_2"].ops)
     assert plan["replay_ready"] is False
 
 
@@ -130,7 +130,11 @@ def test_every_capture_option_is_keyed_or_reviewed():
 
 
 def test_swept_option_change_misses_the_cache_key():
-    """Two configs differing in ONE swept semantic option produce different keys."""
+    """Two configs differing in ONE swept semantic option produce different keys.
+
+    ``on_nonfinite`` is hand-curated into the key, so the swept field here is
+    ``measure_python_peak_memory``.
+    """
 
     from torchlens._capture.prepare.cache import (
         CAPTURE_CACHE_KEY_CURATED,
@@ -154,5 +158,5 @@ def test_swept_option_change_misses_the_cache_key():
         return _capture_cache_key(model, (x,), {}, config)
 
     baseline = key_for(tl.options.CaptureOptions())
-    changed = key_for(tl.options.CaptureOptions(track_nonfinite=True))
+    changed = key_for(tl.options.CaptureOptions(measure_python_peak_memory=True))
     assert baseline != changed

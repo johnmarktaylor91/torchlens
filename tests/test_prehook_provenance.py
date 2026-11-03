@@ -99,7 +99,8 @@ def test_in_place_mutation_truthful_snapshots_and_validation_replay() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(save_args=True, layers_to_save="all"),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     call = _call(trace)
 
@@ -226,7 +227,8 @@ def test_opaque_object_tensor_mutation_downgrades_provenance_fail_closed() -> No
     trace = tl.trace(
         model,
         _Box(torch.tensor([-2.0, 1.0])),
-        capture=tl.options.CaptureOptions(save_args=True, layers_to_save="all"),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     call = _call(trace)
     effect = call.forward_pre_hook_effects[0]
@@ -558,7 +560,7 @@ def test_fast_second_pass_preserves_exhaustive_provenance_once() -> None:
 
     model.child.register_forward_pre_hook(mutate)
     trace = tl.trace(model, torch.ones(1))
-    trace.save_new_outs(model, torch.ones(1), layers_to_save="all")
+    trace.save_new_outs(model, torch.ones(1), save="all")
 
     assert count == 2
     assert len(_call(trace).forward_pre_hook_effects) == 1
@@ -573,7 +575,12 @@ def test_record_to_trace_ram_and_disk_preserve_provenance(tmp_path: Path) -> Non
     ):
         model = _Nested()
         model.child.register_forward_pre_hook(lambda _m, args: (args[0] + 1,))
-        recording = tl.record(model, torch.ones(1), default_op=True, streaming=streaming)
+        recording = tl.record(
+            model,
+            torch.ones(1),
+            storage=streaming,
+            default_op=True,
+        )
         trace = recording.to_trace()
         assert torch.equal(_call(trace).inputs_after_pre_hooks.args[0], torch.tensor([2.0]))
 
@@ -724,7 +731,7 @@ def test_restoration_matrix_success_forward_error_halt_and_predicate_error() -> 
     assert _interposition_state(model) == before
     model.fail = False
 
-    tl.trace(model, torch.ones(1), halt=lambda ctx: ctx.kind == "op")
+    tl.trace(model, torch.ones(1), stop_after=lambda ctx: ctx.kind == "op")
     assert _interposition_state(model) == before
 
     with pytest.raises(PredicateError):

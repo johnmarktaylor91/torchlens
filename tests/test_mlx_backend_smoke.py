@@ -66,9 +66,10 @@ def test_mlx_unwrapped_output_marks_capture_unverified() -> None:
     assert not list(trace.output_ops)
 
     wrapped = tl.trace(lambda v: v + 1.0, mx.array([1.0, 2.0]), backend="mlx")
-    # A clean capture leaves the field unset (the missing-attribute guard raises).
-    assert getattr(wrapped, "_provenance_verified", True) is True
-    assert getattr(wrapped, "_provenance_verification_reason", None) is None
+    # A clean preview capture is not flagged: it has no verification witness, so the
+    # tri-state reads None (not recorded), never False.
+    assert wrapped.provenance.verified is None
+    assert wrapped.provenance.verification_reason is None
     assert len(list(wrapped.output_ops)) == 1
 
 
@@ -99,7 +100,9 @@ def test_mlx_save_raw_activations_false_drops_payloads_keeps_metadata() -> None:
 
     model = Tiny()
     x = mx.random.normal((2, 4))
-    log = tl.trace(model, x, backend="mlx", save=tl.options.SaveOptions(save_raw_activations=False))
+    log = tl.trace(
+        model, x, backend="mlx", capture=tl.options.CaptureOptions(save_raw_activations=False)
+    )
 
     assert log._num_ops > 0
     for op_label in log.op_labels:

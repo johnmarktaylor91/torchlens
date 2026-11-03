@@ -70,7 +70,7 @@ def test_reduction_out_of_range_is_a_row_status_never_a_batch_failure(tmp_path: 
     log = tl.trace(
         _ScalarTail().eval(),
         torch.randn(2, 4, generator=generator),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     path = tmp_path / "scalar.tlspec"
     log.save(str(path))

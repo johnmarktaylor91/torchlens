@@ -4,9 +4,9 @@ The bodies moved verbatim from the torch door (``torchlens._user_funcs``, then
 ``torchlens._capture.prepare.door``); the door calls ``finish_trace`` once.
 ``finish_trace`` reads the door facts from ``CaptureRequest.admission``
 (``stop_after_site``, ``stop_after_selector_shaped``, ``stop_after_ambient``,
-``profile_enabled``, ``save_grads_policy``, ``uses_selective_layers_to_save``,
+``save_grads_policy``, ``uses_selective_layers_to_save``,
 ``episode_resolved``, ``meta_admission``), the user's knobs from
-``CaptureRequest.options`` (``module_filter``, ``input_transform``,
+``CaptureRequest.options`` (``input_transform``,
 ``save_args``, ``layer_visualizers``, ``unwrap_when_done``) and the cache
 ``key``, ``path``, ``secret`` and ``store`` callable from ``CaptureRequest.cache``.
 """
@@ -17,7 +17,7 @@ import re
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from ..._data_classes._preprocessing_provenance import stamp_user_transform_provenance
 from ..._data_classes.trace import (
@@ -136,7 +136,7 @@ def _safe_visualizer_filename(label: str) -> str:
 def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     """Run the door epilogue on a finished capture and return its trace.
 
-    Order (pinned): stop_after never fired; module_filter zero fire;
+    Order (pinned): stop_after never fired; on_nonfinite="warn";
     input_transform provenance; selective save; summary print; layer
     visualizers; ``unwrap_when_done``; cache store; episode ledger;
     weightsfree settlement. ``request.admission`` carries the door facts,
@@ -159,11 +159,11 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     facts = request.admission or {}
     options = request.options
     _check_stop_after_fired(trace, facts)
-    _warn_module_filter_zero_saved(trace, getattr(options, "module_filter", None))
+    if getattr(options, "on_nonfinite", "ignore") == "warn":
+        _warn_once_nonfinite_detected(trace)
     input_transform = getattr(options, "input_transform", None)
     if input_transform is not None:
         stamp_user_transform_provenance(trace, input_transform)
-    trace.profile_enabled = cast("bool", facts.get("profile_enabled"))
     trace._options_save_grads = facts.get("save_grads_policy")
     if facts.get("uses_selective_layers_to_save"):
         _restrict_layer_nums_to_saved(trace, bool(getattr(options, "save_args", False)))
@@ -254,30 +254,24 @@ def _check_stop_after_fired(trace: Trace, facts: dict[str, Any]) -> None:
     )
 
 
-def _warn_module_filter_zero_saved(trace: Trace, module_filter: Any) -> None:
-    """Warn when ``module_filter`` suppressed every selected payload."""
-    module_filter_suppressed = int(trace.__dict__.pop("_tl_module_filter_suppressed", 0))
-    if (
-        module_filter is not None
-        and module_filter_suppressed > 0
-        and int(trace._num_saved_ops or 0) == 0
-    ):
-        from ...errors import TorchLensWarning as _TorchLensWarning
+def _warn_once_nonfinite_detected(trace: Trace) -> None:
+    """Emit the one ``on_nonfinite="warn"`` warning when any op went non-finite."""
 
-        warnings.warn(
-            _TorchLensWarning(
-                f"module_filter suppressed every selected payload "
-                f"({module_filter_suppressed} ops): the returned trace has full "
-                "metadata but ZERO saved activations. module_filter is a third "
-                "save gate composed with save=/layers_to_save, and its argument "
-                "is an op-record namespace (fields such as func_name, "
-                "layer_label, modules), NEVER an nn.Module. "
-                "Remedy: write the filter against op-record fields (e.g. lambda "
-                "op: op.func_name == 'linear'), or drop module_filter",
-                code="module_filter_zero_saved",
-            ),
-            stacklevel=4,
-        )
+    from ..._data_classes._nonfinite import nonfinite_op_labels
+
+    labels = nonfinite_op_labels(trace)
+    if not labels:
+        return
+    shown = ", ".join(labels[:3]) + (", ..." if len(labels) > 3 else "")
+    warnings.warn(
+        TorchLensWarning(
+            f"{len(labels)} op output(s) were non-finite (NaN or Inf) during capture: "
+            f"{shown}. Remedy: inspect trace.nonfinite_ops, or capture with "
+            "CaptureOptions(on_nonfinite='raise') to stop at the first one",
+            code="capture_nonfinite_detected",
+        ),
+        stacklevel=4,
+    )
 
 
 def _restrict_layer_nums_to_saved(trace: Trace, save_args: bool) -> None:
@@ -346,8 +340,6 @@ def attach_failed_episode_ledger(exc: BaseException, resolved: ResolvedEpisode) 
         ledger = EpisodeLedger(header, rows)
         trace.annotations[EPISODE_ANNOTATIONS_KEY] = ledger.to_payload()
     except Exception as attach_exc:  # noqa: BLE001 - never mask the user's failure
-        from ...errors import TorchLensWarning
-
         warnings.warn(
             "episode ledger could not be attached to the failed partial "
             f"product: {type(attach_exc).__name__}: {attach_exc}",

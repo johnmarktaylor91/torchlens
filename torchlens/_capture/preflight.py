@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._ir.selector_eval import module_exit_bound_addresses, selector_contains_kind
-from .._trace_selector_helpers import _selector_component_is_final_only
+from .._trace_selection_shape import _selector_component_is_final_only
 
 __all__ = ["AddressPreflight", "AddressVerdict", "address_preflight", "cone_preflight"]
 

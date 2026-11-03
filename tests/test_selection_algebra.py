@@ -24,16 +24,14 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection.selection import (
+from torchlens._selection.provenance import (
     _FLIP,
     _RELATIONS,
-    Selection,
-    Selector,
-    Site,
     _difference_relation,
     _join_relation,
     _meet_relation,
 )
+from torchlens._selection.selection import Selection, Selector, Site
 from torchlens._selection.selectors import CompositeSelector, NotSelector
 from torchlens.errors import SelectionError
 
@@ -116,7 +114,7 @@ def test_selector_notimplemented_branch_rows(log):
 
     selector = tl.func("relu")
     box = log["relu_2_4"].receptive_field.at((3, 3))
-    layer = log["relu_1_2"]
+    layer = log.layers["relu_1_2"]
     assert isinstance(selector | box, Selector)
     assert isinstance(selector & box, Selector)
     assert isinstance(selector - box, Selector)
@@ -160,7 +158,7 @@ def test_selector_subtraction_non_selector_operand_refuses_typed():
 def test_op_and_layer_lift(log):
     """Op lifts one pass; Layer lifts ALL passes (whole-output producers)."""
 
-    layer = log["relu_1_2"]
+    layer = log.layers["relu_1_2"]
     op = layer.ops[0]
     resolved_layer = log[layer.__selection__()]
     resolved_op = log[op.__selection__()]
@@ -206,7 +204,7 @@ def test_law_table(log):
 
     a = log[tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])]
     b = log[tl.units("relu_1_2", [(0, 1, 2, 2), (0, 0, 3, 3)])]
-    c = log[log["conv2d_1_1"].__selection__()]
+    c = log[log.layers["conv2d_1_1"].__selection__()]
 
     # commutativity + associativity of | and &
     assert (a | b) == (b | a)
@@ -224,7 +222,7 @@ def test_law_table(log):
     minus_self = a - a
     assert minus_self.is_empty and _family(minus_self) == _family(a)
     # involution THROUGH the element-empty intermediate
-    full_site = log[log["relu_1_2"].__selection__()]
+    full_site = log[log.layers["relu_1_2"].__selection__()]
     complemented = ~full_site
     assert complemented.is_empty and _family(complemented) == _family(full_site)
     assert (~complemented) == full_site
@@ -239,7 +237,7 @@ def test_pinned_non_laws(log):
     """Deliberate NON-laws, pinned."""
 
     a = log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
-    c = log[log["conv2d_1_1"].__selection__()]
+    c = log[log.layers["conv2d_1_1"].__selection__()]
 
     # A - B != A & ~B whenever A touches sites B does not (family rules differ)
     left = a - c
@@ -266,7 +264,7 @@ def test_complement_empty_cells(log):
     """The two empty cells, keyed by level."""
 
     a = log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
-    c = log[log["conv2d_1_1"].__selection__()]
+    c = log[log.layers["conv2d_1_1"].__selection__()]
     no_sites = a & c  # disjoint families -> no touched sites
     assert len(no_sites) == 0
     assert (~no_sites) == no_sites  # complement of no-touched-sites
@@ -293,7 +291,7 @@ def _act_element_empty(log):
 
 
 def _act_no_sites(log):
-    return _act_nonempty(log) & log[log["conv2d_1_1"].__selection__()]
+    return _act_nonempty(log) & log[log.layers["conv2d_1_1"].__selection__()]
 
 
 def _param_nonempty(log):
@@ -509,7 +507,7 @@ def test_relation_composition_flows_through_operators(log):
 def test_mask_representation_parity(log):
     """whole-site sentinel == dense equivalent; slice-box == dense equivalent."""
 
-    op = log["relu_1_2"].ops[0]
+    op = log.layers["relu_1_2"].ops[0]
     whole = log[op.__selection__()]
     dense_mask = torch.ones(op.shape, dtype=torch.bool)
     dense = log[tl.units("relu_1_2", dense_mask)]
@@ -603,7 +601,7 @@ def test_resolver_refusal_matrix(log):
 
     # population_too_small (incl. the empty complement case)
     like = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 0, 2, 2)])
-    whole = log["relu_1_2"].__selection__()
+    whole = log.layers["relu_1_2"].__selection__()
     with pytest.raises(SelectionError) as excinfo:
         log[tl.random_like(like=like, within=~whole, seed=3)]
     assert excinfo.value.fields["reason"] == "population_too_small"
@@ -645,7 +643,7 @@ def test_facet_lift_and_refusal_rows(log):
 
     from torchlens._semantic.facets import FacetSpec
 
-    op = log["relu_1_2"].ops[0]
+    op = log.layers["relu_1_2"].ops[0]
     spec = FacetSpec.from_home(op)
     resolved = log[spec.__selection__()]
     assert resolved[0].key == ("relu_1_2", 1)
@@ -657,7 +655,7 @@ def test_facet_lift_and_refusal_rows(log):
 
     torch.manual_seed(0)
     sparse_log = tl.trace(_TwoConv(), torch.randn(1, 1, 12, 12), save=tl.func("conv2d"))
-    sparse_op = sparse_log["relu_1_2"].ops[0]
+    sparse_op = sparse_log.layers["relu_1_2"].ops[0]
     sparse_spec = FacetSpec.from_home(sparse_op)
     with pytest.raises(SelectionError) as excinfo:
         sparse_log[sparse_spec.__selection__()]
@@ -674,8 +672,7 @@ def test_gradient_rf_lift():
     armed = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     armed_op = armed["relu_2_4"]
     unit = armed_op.receptive_field.center_unit(batch_index=0)
@@ -729,7 +726,7 @@ def test_random_selection_totality(log):
     """Seeded, deterministic, size-matched, sampled inside `within`."""
 
     like = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 0, 2, 2), (0, 1, 3, 3)])
-    within = log["relu_1_2"].__selection__() - like
+    within = log.layers["relu_1_2"].__selection__() - like
     control = tl.random_like(like=like, within=within, seed=11)
     first = log[control]
     second = log[control]

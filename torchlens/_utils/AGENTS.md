@@ -15,10 +15,13 @@ this package mostly stateless and free of high-level TorchLens business logic.
 | `introspection.py` | Recursive object search and nested getattr/assign |
 | `rng/` | Package: `streams.py` (Python, NumPy, torch, CUDA stream snapshot/restore), `seeding.py`, `restore.py` (the one restore door `RngStreamsRestore`, used by `tl.trace`, replay and `tl.validate`), `autocast.py`; the host-nondeterminism monitor in `monitor.py` with its `registry.py`, `channels.py`, `engine_state.py`, `inventory_types.py`, `call_sites.py`, `monitor_state.py`, and the method groups it calls through class aliases: `inventory_walk.py`, `deep_inventory.py`, `generator_sweep.py`, `numpy_frames.py`, `digest.py` |
 | `tensor_utils.py` | `safe_copy`, `safe_to`, `tensor_nanequal`, tensor memory helpers |
+| `_tensor_layout.py` | Capture-time tensor layouts for saved-DAG replay: `layout_of` (what capture records on a `ParentRef`) and `relay_to_layout` (replay re-lays a compact saved value into it); torch-only leaf |
+| `_sparse_parts.py` | Sparse tensor components per layout (`sparse_component_tensors`) and rebuilding a sparse tensor with new values (`sparse_with_values`); torch-only leaf |
 | `alias_footprint.py` | THE absolute-byte three-valued alias/overlap engine (r37 INV-2), split out of `tensor_utils.py` |
 | `_subprocess.py` | The ONE bounded-subprocess spawn discipline (group teardown, no orphaned grandchildren); never hand-roll `subprocess.run` for children |
 | `_torch_compat.py` | LOCKED chokepoint for every fragile torch-private probe / cross-version signature; `HAS_*` capability flags (see root `AGENTS.md`) |
 | `_callable_safety.py` | Security gate deciding which resolved callables are pure forward/tensor ops (untrusted `.tlspec` registry) |
+| `_stdlib_denial.py` | The stdlib and builtin module denial set behind `_callable_safety` (`is_denied_stdlib_or_builtin_module`); stdlib-only leaf |
 | `_multipass_access.py` | Multi-pass-safe attribute access for aggregate (recurrent) `Layer` objects |
 | `_torch_symbols.py` | Single sanctioned spelling for resolving top-level `torch` attributes on the load/decode/exec path |
 | `_uninit_alloc.py` | Closed uninitialized-memory value-source name table (the ONE shared predicate block; import it directly) |

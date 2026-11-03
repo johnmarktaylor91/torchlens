@@ -1392,7 +1392,7 @@ def _restamp_swapped_reference_out(
     journal's private copy of the written value, a different tensor with its
     own counter. Left alone, the stamp describes a tensor the op no longer
     holds, and the reference tripwire
-    (``op._validate_reference_out_not_mutated``) misreads the mismatch as a
+    (``_op_out_read._validate_reference_out_not_mutated``) misreads the mismatch as a
     mutation (``saved _version=2, current _version=0`` on every eval
     BatchNorm). The new stamp is the copy's counter at materialization, so the
     tripwire still fires if the stored copy is written in place later.

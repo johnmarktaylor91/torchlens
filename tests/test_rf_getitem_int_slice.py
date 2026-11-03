@@ -44,8 +44,7 @@ def _armed_trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
         x.requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 

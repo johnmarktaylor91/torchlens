@@ -9,10 +9,15 @@ from typing import Any
 import torch
 
 from torchlens._input_walk import _instance_fields, declares_namedtuple_fields
-from torchlens._ir.container import get_registered_container
 
 from .._ir.container import (
     ContainerSpec,
+    get_registered_container,
+)
+from .._ir.distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    distribution_children,
+    is_distribution,
 )
 from .._utils._torch_compat import torch_structseq_field_names
 from . import (
@@ -93,6 +98,11 @@ def _tensor_leaf_paths(
         paths: list[tuple[str | int, ...]] = []
         for index, child in enumerate(registered_children):
             paths.extend(_tensor_leaf_paths(child, (*path, index)))
+        return tuple(paths)
+    if is_distribution(value):
+        paths = []
+        for name, child in distribution_children(value):
+            paths.extend(_tensor_leaf_paths(child, (*path, name)))
         return tuple(paths)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         paths = []
@@ -266,6 +276,11 @@ def _container_leaf_paths(
         for index, child in enumerate(registered_children):
             paths.extend(_container_leaf_paths(child, (*path, index)))
         return tuple(paths)
+    if is_distribution(value):
+        paths = []
+        for name, child in distribution_children(value):
+            paths.extend(_container_leaf_paths(child, (*path, name)))
+        return tuple(paths)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         paths = []
         for field in dataclasses.fields(value):
@@ -319,6 +334,8 @@ def _container_kind(value: Any) -> str:
     # "dataclass" against its recorded "hf_model_output" witness, so every
     # honest identical run false-DIVERGED with OUTPUT_STRUCTURE_MISMATCH --
     # the same bug class as the r67 C2 registered-branch fix above).
+    if is_distribution(value):
+        return DISTRIBUTION_CONTAINER_KIND
     if _is_hf_model_output(value):
         return "hf_model_output"
     if dataclasses.is_dataclass(value) and not isinstance(value, type):

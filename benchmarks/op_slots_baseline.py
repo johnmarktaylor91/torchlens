@@ -245,7 +245,7 @@ def measure_fixture(fixture: BenchmarkFixture) -> BaselineRow:
 
     model, x = fixture.build()
     with torch.no_grad():
-        trace = tl.trace(model, x, profile=True, save=lambda _ctx: False)
+        trace = tl.trace(model, x, save=lambda _ctx: False)
     op_count = len(trace._layer_list)
     total_bytes = _op_object_bytes(trace)
     construction_total_s, construction_count = _construction_stats(trace)
@@ -273,7 +273,7 @@ def _seed_fields_for_synthetic_ops() -> dict[str, Any]:
 
     model, x = _build_parity_mlp()
     with torch.no_grad():
-        trace = tl.trace(model, x, profile=True, save=lambda _ctx: False)
+        trace = tl.trace(model, x, save=lambda _ctx: False)
     seed_op = next(op for op in trace._layer_list if op.func_name not in {None, "none"})
     from torchlens._data_classes.op import _OP_SLOT_NAMES
 
@@ -328,7 +328,7 @@ def measure_synthetic_op_trace(num_ops: int) -> BaselineRow:
     seed_fields = _seed_fields_for_synthetic_ops()
     model, x = _build_parity_mlp()
     with torch.no_grad():
-        trace = tl.trace(model, x, profile=True, save=lambda _ctx: False)
+        trace = tl.trace(model, x, save=lambda _ctx: False)
     trace._phase_timings = {}
     synthetic_ops = []
     for index in range(num_ops):

@@ -14,7 +14,7 @@ from ._capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, Failu
 from ._captured_run import TraceLike
 from ._data_classes._accessor_base import Accessor
 from ._data_classes._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
-from ._data_classes._trace_groups_capture import TraceHealth, TraceOptions, TraceSource
+from ._data_classes._trace_groups_capture import TraceHealth, TraceSettings, TraceSource
 from ._data_classes.aten_op import AtenOp, OpRef
 from ._data_classes.attribute_write import AttributeWrite
 from ._data_classes.backward_pass import BackwardPass
@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from ._quickstart._grammar import InputSpec
     from ._quickstart._provenance import InputProvenance
     from ._trace_slice import TraceSlice
+    from .recording.types import RecordingSettings
 
 from ._literals import (
     _ActivationPostfunc as _ActivationPostfunc,
@@ -56,7 +57,7 @@ __all__ = [
     "TraceAutograd",
     "TraceSource",
     "TraceProvenance",
-    "TraceOptions",
+    "TraceSettings",
     "TraceHealth",
     "NarrationEvent",
     "RunnableDiagnostic",
@@ -100,6 +101,7 @@ __all__ = [
     "PreHookEffect",
     "Quantity",
     "ReadinessStatus",
+    "RecordingSettings",
     "Relationship",
     "RunProvider",
     "Site",
@@ -139,6 +141,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "MergeValueStatus": ("torchlens._merged._enums", "MergeValueStatus"),
     "MergedTrace": ("torchlens._merged._presenter", "MergedTrace"),
     "PartialTrace": ("torchlens._partial", "PartialTrace"),
+    "RecordingSettings": ("torchlens.recording.types", "RecordingSettings"),
     "TraceSlice": ("torchlens._trace_slice", "TraceSlice"),
     "register_container": ("torchlens._ir.container", "register_container"),
 }

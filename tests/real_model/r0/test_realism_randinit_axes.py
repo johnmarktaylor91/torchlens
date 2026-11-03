@@ -171,7 +171,9 @@ def test_kwargs_identity_discriminates_a_dropped_mask(r0_capture):
     assert not torch.equal(masked_direct, unmasked_direct), (
         "fixture defect: the mask must change the computation for this row to discriminate"
     )
-    trace = tl.trace(model, (), {"input_ids": kwargs["input_ids"], "attention_mask": mask})
+    trace = tl.trace(
+        model, (), input_kwargs={"input_ids": kwargs["input_ids"], "attention_mask": mask}
+    )
     matches = [
         op
         for op in trace.output_ops
@@ -191,7 +193,7 @@ def test_trace_signature_never_absorbs_forward_kwarg_names():
 
     import torchlens as tl
 
-    params = set(inspect.signature(tl.trace).parameters) - {"model", "input_args", "input_kwargs"}
+    params = set(inspect.signature(tl.trace).parameters) - {"model", "inputs", "input_kwargs"}
     collisions = tuple(sorted(params & set(FORWARD_KWARG_CORPUS)))
     assert collisions == EXPECTED_TRACE_PARAM_COLLISIONS, (
         f"tl.trace parameter names colliding with the committed forward-kwarg"
@@ -327,7 +329,10 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     model = spec.build("sdpa")
     ids = spec.input_kwargs()["input_ids"]
     trace = tl.trace(
-        model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(replayable=True)
+        model,
+        (),
+        input_kwargs={"input_ids": ids},
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     # grouping rule row 12: distilgpt2's residual adds are single-pass layers;
     # the container path needs only an edited hidden-state add, so any one serves.
@@ -372,7 +377,7 @@ def test_kwargs_only_plain_module_traces():
     torch.manual_seed(SEED)
     model = Plain().eval()
     value = torch.randn(2, 4)
-    trace = tl.trace(model, (), {"x": value})
+    trace = tl.trace(model, (), input_kwargs={"x": value})
     direct = model(x=value)
     traced = trace[trace.output_layers[0]].out
     assert torch.equal(traced, direct)
@@ -414,8 +419,8 @@ def test_config_fingerprint_use_cache_row():
     ids = torch.randint(0, VOCAB, (1, 8), generator=generator)
     # Every captured row (layer_list): use_cache adds output rows, which the
     # counted ``trace.ops`` view leaves out (sumfam F1).
-    ops_no_cache = len(tl.trace(model_no_cache, (), {"input_ids": ids})._layer_list)
-    ops_cache = len(tl.trace(model_cache, (), {"input_ids": ids})._layer_list)
+    ops_no_cache = len(tl.trace(model_no_cache, (), input_kwargs={"input_ids": ids})._layer_list)
+    ops_cache = len(tl.trace(model_cache, (), input_kwargs={"input_ids": ids})._layer_list)
     assert ops_no_cache != ops_cache, (
         "use_cache flipped without changing the captured graph? the"
         " config-fingerprint class lost its measured basis; re-measure"

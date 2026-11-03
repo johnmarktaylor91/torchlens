@@ -412,11 +412,44 @@ def _attach_payload(trace: Any, payload: _TelemetryPayload) -> None:
     _bind_trace_telemetry(trace)
 
 
+def _require_aten_trace(trace: Any) -> Any:
+    """Return ``trace`` when it recorded ATen rows, else refuse typed.
+
+    Parameters
+    ----------
+    trace
+        The factory's Trace.
+
+    Returns
+    -------
+    Any
+        The same trace.
+
+    Raises
+    ------
+    AtenOpsUnavailableError
+        If the factory captured without ``CaptureOptions(aten_ops=True)``.
+    """
+
+    if not bool(getattr(trace, "has_aten_ops", False)):
+        from ._errors import AtenOpsUnavailableError
+
+        raise AtenOpsUnavailableError(
+            "kernel telemetry needs ATen rows but the factory's trace recorded none",
+            code="aten_ops_unavailable",
+            remedy=(
+                "capture inside the factory with tl.trace(model, x, "
+                "capture=tl.options.CaptureOptions(aten_ops=True))"
+            ),
+        )
+    return trace
+
+
 def _profile_trace_with_cuda_kernels(factory: Callable[[], Any]) -> Any:
     """Run a private ATen-recording trace factory under CUDA kernel profiling.
 
-    This is the non-public activation seam while ``record_aten=`` remains
-    naming-gated. It routes through the ONE profiler session engine
+    The factory must capture with ``CaptureOptions(aten_ops=True)``; a trace
+    without ATen rows is refused typed. It routes through the ONE profiler session engine
     (``torchlens._observability.session``) and the in-memory extraction
     adapter -- the chrome-trace temp-file path is deleted (W2.1). On hosts
     without CUDA, the factory still runs once and every primitive row
@@ -435,12 +468,11 @@ def _profile_trace_with_cuda_kernels(factory: Callable[[], Any]) -> Any:
 
     from ._observability._kineto import extract_events  # deferred: cycle _observability
     from ._observability._session import session  # deferred: cycle _observability
-    from .backends.torch._aten_capture import _activate_aten_recording_for_tests
 
     cuda_available = bool(torch.cuda.is_available())
     if not cuda_available:
-        with _activate_aten_recording_for_tests(), _instrument_aten_markers() as marker_sequences:
-            trace = factory()
+        with _instrument_aten_markers() as marker_sequences:
+            trace = _require_aten_trace(factory())
         payload = _payload_from_events((), marker_sequences, telemetry_available=False)
         _attach_payload(trace, payload)
         return trace
@@ -450,11 +482,10 @@ def _profile_trace_with_cuda_kernels(factory: Callable[[], Any]) -> Any:
         torch.profiler.ProfilerActivity.CUDA,
     ]
     with (
-        _activate_aten_recording_for_tests(),
         _instrument_aten_markers() as marker_sequences,
         session(mode="owned", activities=activities) as active,
     ):
-        trace = factory()
+        trace = _require_aten_trace(factory())
         torch.cuda.synchronize()
     extraction = extract_events(active.closed_profiler)
     payload = _payload_from_events(

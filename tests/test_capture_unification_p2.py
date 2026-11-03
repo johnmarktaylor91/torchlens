@@ -112,9 +112,7 @@ def test_negative_gate_no_live_mutation_during_forward() -> None:
     """A real forward pass should not populate mutable live-op structures."""
 
     model = _MidForwardProbe()
-    log = tl.trace(
-        model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(1, 3), save="all")
 
     assert stashed(log, "observations")["raw_dict_len"] == 0
     assert stashed(log, "observations")["raw_labels_len"] == 0
@@ -154,9 +152,7 @@ def test_in_pass_getitem_returns_event_backed_op() -> None:
     """In-pass raw-label lookup should return the current event-backed op."""
 
     model = _MidForwardProbe()
-    log = tl.trace(
-        model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(1, 3), save="all")
 
     assert stashed(log, "observations")["getitem_label"].startswith("linear_")
     assert stashed(log, "observations")["getitem_shape"] == (1, 4)
@@ -166,9 +162,7 @@ def test_live_repr_reads_events_during_capture() -> None:
     """The mid-capture repr counts ops from emitted events."""
 
     model = _MidForwardProbe()
-    log = tl.trace(
-        model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(1, 3), save="all")
 
     count = stashed(log, "observations")["summary_count"]
     assert count == stashed(log, "observations")["event_count"]
@@ -186,9 +180,7 @@ def test_mid_forward_summary_refuses_typed() -> None:
     from torchlens._errors import CaptureNotActiveError
 
     model = _MidForwardProbe()
-    log = tl.trace(
-        model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(1, 3), save="all")
 
     error = stashed(log, "observations").get("summary_error")
     assert isinstance(error, CaptureNotActiveError)
@@ -208,7 +200,7 @@ def test_atomic_module_classification_matches_phase1_expectation() -> None:
     log = tl.trace(
         _AtomicBlockModel(),
         torch.randn(1, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     by_func = {op.func_name: op for op in log.ops if op.func_name in {"linear", "relu"}}
 

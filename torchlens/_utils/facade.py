@@ -2,7 +2,7 @@
 
 THE one PEP-562 ``__getattr__`` mechanism (architecture memo section 5.4,
 five-step testable spec, D15): the root package, every appliance namespace
-(``torchlens.neuro``, ``torchlens._notebook``), and the integration namespaces
+(``torchlens.neuro``, ``torchlens.report._notebook``), and the integration namespaces
 (``torchlens.bridge``, ``torchlens.callbacks``) resolve attributes through the
 same ordered steps, so ``hasattr``/``getattr``-with-default can never explode,
 IDE/notebook dunder probes fail fast, and dependency teaching happens per-name
@@ -37,17 +37,19 @@ Spellings here are DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
+import functools
 import importlib
 import importlib.util
-from collections.abc import Collection, Mapping, MutableMapping
+from collections.abc import Callable, Collection, Mapping, MutableMapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar, cast
 
 from .._errors import FacadeTeachingError, MissingDependencyError
 
 __all__ = [
     "DependencyGate",
     "facade_dir",
+    "refuse_removed_keywords",
     "refuse_removed_member",
     "resolve_facade_attr",
 ]
@@ -135,6 +137,44 @@ def refuse_removed_member(owner: str, name: str, removed: Mapping[str, str]) -> 
             owner=owner,
             attribute=name,
         )
+
+
+_Init = TypeVar("_Init", bound=Callable[..., Any])
+
+
+def refuse_removed_keywords(owner: str, removed: Mapping[str, str]) -> Callable[[_Init], _Init]:
+    """Make an ``__init__`` refuse a removed keyword with the typed redirect.
+
+    A removed field passed to the constructor (``CaptureOptions(output_style=...)``)
+    names its replacement (``facade_redirect``) before the plain ``TypeError`` for
+    an unknown keyword; the wrapped signature is unchanged for ``inspect``.
+
+    Parameters
+    ----------
+    owner:
+        Class whose keywords are guarded, as spelled in the message.
+    removed:
+        Removed keyword -> remedy naming the replacement.
+
+    Returns
+    -------
+    Callable[[_Init], _Init]
+        Decorator for the class ``__init__``.
+    """
+
+    def decorate(init: _Init) -> _Init:
+        """Wrap ``init`` so every keyword is checked against ``removed`` first."""
+
+        @functools.wraps(init)
+        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+            """Refuse a removed keyword with its remedy, then run the real ``__init__``."""
+            for name in kwargs:
+                refuse_removed_member(owner, name, removed)
+            return init(self, *args, **kwargs)
+
+        return cast(_Init, wrapper)
+
+    return decorate
 
 
 def resolve_facade_attr(

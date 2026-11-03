@@ -748,7 +748,7 @@ class TestDisplayLargeTensor:
         """
         model = nn.Linear(100, 2000)
         x = torch.randn(50, 100)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = trace_fn(model, x, save="all")
 
         clone_call_sizes: list[int] = []
         orig_clone = torch.Tensor.clone
@@ -760,7 +760,7 @@ class TestDisplayLargeTensor:
         torch.Tensor.clone = _tracking_clone
         try:
             for label in log.layer_labels:
-                entry = log[label]
+                entry = log.layers[label]
                 op = entry.ops[0]
                 if op.out is None:
                     continue
@@ -780,7 +780,7 @@ class TestDisplayUsesLoggedShape:
         """shape should reflect capture-time shape."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = trace_fn(model, x, save="all")
         for label in log.layer_labels:
             entry = log[label]
             if entry.out is not None:

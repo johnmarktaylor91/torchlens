@@ -11,6 +11,7 @@ from typing import Any, Literal, TypeAlias, cast
 from .._capture._nonfinite_prefix import strip_raw_label_suffix
 from .._data_classes._compaction import compact_op_metadata
 from .._data_classes._site_key import SiteKeyMinter
+from .._data_classes._trace_state_io import fill_unset_declared_fields
 from .._data_classes.layer import Layer
 from .._data_classes.module import ModuleAccessor
 from .._data_classes.trace import Trace
@@ -1204,7 +1205,6 @@ def new_preview_function_trace(
         model_class_name=getattr(model, "__name__", type(model).__name__),
         output_device="same",
         activation_transform=None,
-        grad_transform=None,
         save_raw_activations=True,
         save_raw_grads=True,
         keep_orphans=keep_orphans,
@@ -1213,13 +1213,11 @@ def new_preview_function_trace(
         detach_saved_activations=False,
         mark_layer_depths=compute_input_output_distances,
         source_context_lines=num_context_lines,
-        optimizer=None,
         save_source_context=False,
         save_rng=False,
         recurrence_detection=recurrence_detection,
         verbose=verbose,
         backward_ready=False,
-        module_filter=None,
         emit_nvtx=False,
         input_transform=None,
         input=raw_input,
@@ -1230,6 +1228,7 @@ def new_preview_function_trace(
         layer_visualizers=None,
         save_visualizations=False,
     )
+    fill_unset_declared_fields(trace)
     trace.name = name
     trace._provenance_backend = cast(BackendName, backend_name)
     trace._options_module_identity_mode = "function_root"

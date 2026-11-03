@@ -23,6 +23,7 @@ from ..._utils._tensor_label import (
 from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils.tensor_utils import safe_copy
 from ._identity_cache import IdentityCache, identity_cached
+from ._state_bytes import _whole_storage_uint8
 from ._storage_overlap import _ranges_overlap, _storage_range
 
 if TYPE_CHECKING:
@@ -1689,22 +1690,6 @@ def _witness_marker_state() -> Any:
 
         _WITNESS_MARKER_STATE = marker_state
     return _WITNESS_MARKER_STATE
-
-
-def _whole_storage_uint8(source: torch.Tensor) -> torch.Tensor:
-    """Return a ``uint8`` view over ``source``'s ENTIRE untyped storage (all bytes).
-
-    A zero-copy host alias (``source.detach().numpy()`` / ``untyped_storage()`` / a raw
-    ``data_ptr``) shares the WHOLE storage, so a host ``__setitem__`` / ``np.as_strided`` write can
-    land on bytes OUTSIDE ``source``'s element extent. Comparing the whole storage (not
-    ``source``'s own extent) makes ANY host write in the shared storage detectable at forward end.
-    Matches ``completeness_witness._whole_storage_uint8`` for the buffer/param write tripwire.
-    """
-
-    untyped = source.untyped_storage()
-    view = torch.empty(0, dtype=torch.uint8, device=source.device)
-    view.set_(untyped, 0, (untyped.nbytes(),), (1,))
-    return view
 
 
 def _resolve_buffer_address(

@@ -8,7 +8,7 @@ wraps tensors in ``torch.autograd.Variable``. Their C constructors dispatch
 stack and are invisible to ``TorchFunctionMode``, so such a forward left an
 unowned dispatch and failed validation completeness.
 
-Each class in ``constants.LEGACY_TENSOR_CONSTRUCTOR_SITES`` gets its
+Each class in ``_legacy_ctor_sites.LEGACY_TENSOR_CONSTRUCTOR_SITES`` gets its
 ``__new__`` replaced IN PLACE (``utils/_type_new_slot.py``): the class object,
 its identity, ``isinstance`` and ``x.type(torch.FloatTensor)`` are unchanged,
 and any alias bound before the first capture reaches the same patched class.
@@ -27,8 +27,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from ..._constants import LEGACY_TENSOR_CONSTRUCTOR_SITES
 from ..._errors import TorchLensWarning
+from ..._legacy_ctor_sites import LEGACY_TENSOR_CONSTRUCTOR_SITES
 from ..._utils import _torch_compat
 from ..._utils._type_new_slot import (
     TypeNewPatch,

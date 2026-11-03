@@ -20,6 +20,7 @@ from ..._utils._tensor_label import (
     session_label_storage_intact,
     session_meta_is_anchored,
 )
+from ..._utils._tensor_layout import CaptureLayout, layout_of
 from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.arg_handling import copy_arg_tree
 from ..._utils.tensor_utils import (
@@ -36,6 +37,7 @@ from ...intervention.types import (
     ParentRef,
     Unsupported,
 )
+from ._internal_read import internal_scalar_read
 from ._param_fingerprint import param_fingerprint
 from .buffer_writes import session_validated_buffer_address
 
@@ -104,6 +106,20 @@ def _literal_value_supported(value: Any) -> bool:
     )
 
 
+def _capture_layout(value: Any) -> CaptureLayout | None:
+    """Record a parent argument's non-contiguous layout for faithful replay.
+
+    ``stride()`` / ``storage_offset()`` are witnessed metadata surfaces, so this
+    bookkeeping read runs under ``pause_logging`` plus ``internal_scalar_read``
+    (the sanctioned pattern for TorchLens's own reads during capture).
+    """
+
+    if not isinstance(value, torch.Tensor):
+        return None
+    with pause_logging(), internal_scalar_read():
+        return layout_of(value)
+
+
 def _classify_arg_component(
     value: Any, notes: list[str], trace: "Trace | None" = None
 ) -> ArgComponent:
@@ -130,7 +146,7 @@ def _classify_arg_component(
         else:
             label = get_live_tensor_label(value, trace.capture_events.live_index.by_raw_label)
     if isinstance(label, str):
-        return ParentRef(label)
+        return ParentRef(label, _capture_layout=_capture_layout(value))
     if isinstance(value, torch.Tensor):
         if isinstance(value, torch.nn.Parameter):
             # r75 F2: snapshot the model-prep barcode NOW (model provably alive) --

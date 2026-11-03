@@ -36,6 +36,7 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
+from ._user_grad_fn import pop_user_grad_fn, recorded_op_grad_fn
 from .tensor_tracking import (
     _append_module_suffix_to_equivalence_class,
     _get_equivalence_class,
@@ -328,16 +329,11 @@ def _log_output_tensor_info(
     # members are logged against a safe copy whose ``grad_fn`` is TorchLens's
     # own ``CloneBackward`` node. The wrapper stamped the USER op's live
     # autograd node on the copy; that snapshot is the operation's metadata.
-    user_grad_fn = getattr(t, "tl_user_grad_fn", None)
-    if user_grad_fn is not None:
-        try:
-            delattr(t, "tl_user_grad_fn")
-        except AttributeError:
-            pass
+    user_grad_fn = pop_user_grad_fn(t)
     # TorchLens bookkeeping ``grad_fn`` read (same r65 receiver aliasing note
     # as the ``_version`` read above).
     with internal_scalar_read():
-        op_grad_fn = user_grad_fn if user_grad_fn is not None else t.grad_fn
+        op_grad_fn = recorded_op_grad_fn(user_grad_fn, t)
     grad_fn_cls = type(op_grad_fn) if op_grad_fn is not None else None
     fields_dict["grad_fn_class_name"] = None if grad_fn_cls is None else grad_fn_cls.__name__
     fields_dict["grad_fn_class_qualname"] = (

@@ -169,8 +169,7 @@ def test_landed_gradient_and_check_are_wired_with_typed_precondition_errors() ->
     trace = tl.trace(
         nn.Conv2d(2, 4, 3),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = next(op for op in trace._layer_list if op.func_name == "conv2d")
     input_op = next(op for op in trace._layer_list if op.is_input)
@@ -200,8 +199,9 @@ def test_multi_input_passthrough_names_roles_and_explicit_selection_works() -> N
 
     assert len(roles) == 2
     with pytest.raises(AmbiguousInputError) as caught:
-        _ = view.status
+        _ = view.size
     assert all(role in str(caught.value) for role in roles)
+    assert dict(view.status) == {role: view[role].status for role in roles}
     assert view[roles[0]].io_role == roles[0]
 
 

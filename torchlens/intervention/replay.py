@@ -5,9 +5,9 @@ from __future__ import annotations
 import time
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -27,6 +27,7 @@ from .._quantities import Bytes
 from .._runnable import refuse_poisoned_trace
 from .._selection.resolver import _label_index_scope
 from .._trace_state import TraceState
+from .._utils._tensor_layout import relay_to_layout
 from .._utils.display import progress_bar
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..backends.torch.backward import _purge_trace_from_backward_registry
@@ -61,6 +62,8 @@ from ._replay_sites import (
     _is_source_record,
     _keeps_captured_draw,
     _no_func_message,
+    _parent_value,
+    _require_hook_origins,
     _unmet_log_precondition,
 )
 from ._replay_values import (
@@ -68,6 +71,7 @@ from ._replay_values import (
     _clone_tensors_in,
     _is_inplace_none_return,
     _looks_like_template_dict,
+    rollback_snapshot,
 )
 from .audit import _hook_name, _replay_fire_record
 from .edge_substitution import require_depth1_arg_path
@@ -101,74 +105,6 @@ if TYPE_CHECKING:
     from .._selection.selectors import SelectorLike
 
 
-class _CallConeNode(Protocol):
-    """Dependency fields required by the shared call-cone scheduler."""
-
-    @property
-    def call_id(self) -> str:
-        """Return the stable call identifier."""
-
-        ...
-
-    @property
-    def parent_call_ids(self) -> tuple[str, ...]:
-        """Return stable identifiers for dependency-parent calls."""
-
-        ...
-
-
-def _walk_call_cone(
-    calls: Sequence[_CallConeNode],
-    execute_call: Callable[[_CallConeNode], None],
-) -> None:
-    """Execute a dependency-complete call cone in stable recorded order.
-
-    Parameters
-    ----------
-    calls:
-        Recorded call nodes whose parent IDs define the runnable cone.
-    execute_call:
-        Transaction-local callback that executes and stages one ready node.
-
-    Raises
-    ------
-    ReplayPreconditionError
-        If the recorded cone has a missing parent or cyclic dependency.
-
-    Notes
-    -----
-    The caller owns transaction commit. Sparse runnable execution uses an
-    unexposed Trace fork, while intervention replay uses pending update maps.
-    """
-
-    call_ids = {call.call_id for call in calls}
-    missing = {
-        parent_id
-        for call in calls
-        for parent_id in call.parent_call_ids
-        if parent_id not in call_ids
-    }
-    if missing:
-        raise ReplayPreconditionError(
-            "Recorded call cone references missing parents: " + ", ".join(sorted(missing))
-        )
-    pending = list(calls)
-    completed: set[str] = set()
-    while pending:
-        ready_index = next(
-            (index for index, call in enumerate(pending) if set(call.parent_call_ids) <= completed),
-            None,
-        )
-        if ready_index is None:
-            blocked = ", ".join(call.call_id for call in pending)
-            raise ReplayPreconditionError(
-                f"Recorded call cone contains a dependency cycle among: {blocked}."
-            )
-        call = pending.pop(ready_index)
-        execute_call(call)
-        completed.add(call.call_id)
-
-
 def push(
     trace: Trace,
     *,
@@ -194,9 +130,8 @@ def push(
     _refuse_armed_gradient_rules(trace, replay_options.hooks)
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
-    origins = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
-    if not origins:
-        raise ReplayPreconditionError("push requires at least one hook target")
+    found = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
+    origins = _require_hook_origins(found)
     with changed_param_scope(replay_options.allow_changed_params):
         if replay_options.differentiable:
             return _run_differentiable_replay(
@@ -988,38 +923,9 @@ def _resolve_arg_component(
                 f"({', '.join(repr(key) for key in parent_keys)}); refusing to guess a pass."
             )
         parent = trace._layer_dict_all_keys[parent_keys[0] if parent_keys else parent_label]
-        parent_key = _replay_site_key(parent)
         _warn_if_unexpected_parent(pass_log, parent, label_keys, strict=strict)
-        if parent_key in overlay:
-            return overlay[parent_key]
-        versions = getattr(parent, "out_versions_by_child", {}) or {}
-        child_spelling = next(
-            (
-                spelling
-                for spelling in (_replay_site_key(pass_log), pass_log.layer_label)
-                if spelling in versions
-            ),
-            None,
-        )
-        if child_spelling is not None:
-            version = versions[child_spelling]
-            if isinstance(version, torch.Tensor):
-                if differentiable_frontier is not None:
-                    return _frontier_leaf(
-                        differentiable_frontier,
-                        f"{_disclosure_label(parent)}->{_disclosure_label(pass_log)}",
-                        version,
-                    )
-                return version
-        if isinstance(parent.out, torch.Tensor):
-            if differentiable_frontier is not None:
-                return _frontier_leaf(
-                    differentiable_frontier, _disclosure_label(parent), parent.out
-                )
-            return parent.out
-        raise ReplayPreconditionError(
-            f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no out"
-        )
+        value = _parent_value(parent, pass_log, overlay, differentiable_frontier)
+        return relay_to_layout(value, component._capture_layout)
     if isinstance(component, LiteralTensor):
         return checked_param_value(component, pass_log)
     if isinstance(component, LiteralValue):
@@ -1149,6 +1055,7 @@ def _replay_group_output(
         replay_group,
         pending_updates=state.pending_updates,
         label_keys=state.label_keys,
+        log=state.log,
     ):
         return representative.out.clone()
     return _execute_group_call(representative, args, kwargs, origins=state.origins)
@@ -1201,7 +1108,13 @@ def _execute_group_call(
             "captured graph (an index, shape or dtype path fixed at capture). Nothing was "
             "committed. Choose an edit that keeps the edited site inside the range the "
             "downstream ops accept, or rerun the model with the edit staged: "
-            "trace.run(model, inputs)"
+            "trace.run(model, inputs)",
+            code="replay_downstream_op_raised",
+            remedy=(
+                "Choose an edit that keeps the edited site inside the range the downstream "
+                "ops accept, or rerun the model with the edit staged: trace.run(model, inputs)"
+            ),
+            raised_type=type(exc).__name__,
         ) from exc
 
 
@@ -1358,18 +1271,7 @@ def _commit_replay_updates(
         for label, tensor in pending_updates.items():
             site = log._layer_dict_all_keys[label]
             _record_capture_digest(site, known_digests, new_digests)
-            snapshots[label] = {
-                "out": site.out,
-                "transformed_out": site.transformed_out,
-                "shape": site.shape,
-                "transformed_out_shape": site.transformed_out_shape,
-                "dtype": site.dtype,
-                "transformed_out_dtype": site.transformed_out_dtype,
-                "memory": site.activation_memory,
-                "transformed_activation_memory": site.transformed_activation_memory,
-                "edits": list(site.edits),
-                "is_edited": site.is_edited,
-            }
+            snapshots[label] = rollback_snapshot(site)
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
             if new_records:
@@ -1455,8 +1357,18 @@ def _preflight_group(group: Sequence[Op], *, loaded: bool = False) -> None:
     for site in group:
         if _is_source_record(site):
             continue
+        if site.func is None and loaded:
+            raise ReplayPreconditionError(
+                _no_func_message(site, loaded=True),
+                code="replay_loaded_trace_has_no_callables",
+                remedy=(
+                    "Edit a trace captured in this process with "
+                    "CaptureOptions(replayable=True), or rerun the model with the edit "
+                    "staged: trace.run(model, inputs)"
+                ),
+            )
         if site.func is None:
-            raise ReplayPreconditionError(_no_func_message(site, loaded=loaded))
+            raise ReplayPreconditionError(_no_func_message(site, loaded=False))
         _template_for_site(site)
 
 

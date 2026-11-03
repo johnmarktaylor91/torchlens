@@ -166,12 +166,12 @@ def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
 def test_aux_loss_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: fastlog backward_ready supports an auxiliary out loss."""
 
-    output, recording = tl.record(
+    recording = tl.record(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        return_output=True,
+        capture=tl.options.CaptureOptions(backward_ready=True),
     )
+    output = recording.output
     hidden = _first_payload_by_layer_type(recording, "relu")
 
     two_layer_mlp.zero_grad(set_to_none=True)
@@ -226,12 +226,12 @@ def test_probe_frozen_backbone_replay(tiny_resnet_with_probe: TinyResnetWithProb
 def test_probe_frozen_backbone_fastlog(tiny_resnet_with_probe: TinyResnetWithProbe) -> None:
     """Pattern B: fastlog capture trains only the probe on a frozen backbone."""
 
-    output, recording = tl.record(
+    recording = tl.record(
         tiny_resnet_with_probe,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        return_output=True,
+        capture=tl.options.CaptureOptions(backward_ready=True),
     )
+    output = recording.output
     assert any(record.ram_payload is not None for record in recording)
 
     tiny_resnet_with_probe.zero_grad(set_to_none=True)
@@ -263,12 +263,12 @@ def test_multi_tap_loss_slow(multi_tap_model: MultiTapModel) -> None:
 def test_multi_tap_loss_fastlog(multi_tap_model: MultiTapModel) -> None:
     """Pattern C: fastlog supports losses from multiple saved taps."""
 
-    outputs, recording = tl.record(
+    recording = tl.record(
         multi_tap_model,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        return_output=True,
+        capture=tl.options.CaptureOptions(backward_ready=True),
     )
+    outputs = recording.output
     hidden = _first_payload_by_layer_type(recording, "relu")
 
     multi_tap_model.zero_grad(set_to_none=True)
@@ -300,12 +300,12 @@ def test_distillation_slow(teacher_student_pair: TeacherStudentPair) -> None:
 def test_distillation_fastlog(teacher_student_pair: TeacherStudentPair) -> None:
     """Pattern D: fastlog supports frozen-teacher distillation."""
 
-    (teacher, student), recording = tl.record(
+    recording = tl.record(
         teacher_student_pair,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        return_output=True,
+        capture=tl.options.CaptureOptions(backward_ready=True),
     )
+    (teacher, student) = recording.output
     assert any(record.ram_payload is not None for record in recording)
 
     teacher_student_pair.zero_grad(set_to_none=True)
@@ -321,7 +321,9 @@ def test_multi_pass_recorder_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     optimizer = torch.optim.SGD(two_layer_mlp.parameters(), lr=0.01)
     losses: list[float] = []
 
-    with tl.recording.Recorder(two_layer_mlp, backward_ready=True) as recorder:
+    with tl.recording.Recorder(
+        two_layer_mlp, capture=tl.options.CaptureOptions(backward_ready=True)
+    ) as recorder:
         for _step in range(4):
             optimizer.zero_grad(set_to_none=True)
             output = recorder(torch.randn(3, 4, requires_grad=True))
@@ -433,7 +435,7 @@ def test_fastlog_train_mode_sugar_promotes_defaults() -> None:
     recording = tl.record(
         SharedFrozenModule(),
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
+        capture=tl.options.CaptureOptions(backward_ready=True),
     )
 
     grad_records = [
@@ -450,8 +452,8 @@ def test_fastlog_train_mode_explicit_default_op_false() -> None:
     recording = tl.record(
         SharedFrozenModule(),
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
         default_op=False,
+        capture=tl.options.CaptureOptions(backward_ready=True),
     )
 
     assert all(record.ctx.kind != "op" for record in recording)
@@ -464,8 +466,8 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
         tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
-            backward_ready=True,
             default_op=True,
+            capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
 
@@ -476,8 +478,8 @@ def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
         tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
-            backward_ready=True,
             default_op=tl.recording.CaptureSpec(save_grad=False),
+            capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
 

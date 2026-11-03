@@ -32,14 +32,13 @@ from __future__ import annotations
 import re
 import threading
 import time
-import warnings
 from collections import defaultdict
 from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass, field
-from typing import Any, Literal, NoReturn
+from typing import Any, Literal
 
 from .._capture.arg_positions import _normalize_func_name
-from .._errors import InvalidArgumentError, TorchLensWarning
+from .._errors import InvalidArgumentError
 from .._ir.predicate import ModuleStackFrame
 from .._selection.module_alias_guard import (
     bare_module_address,
@@ -53,9 +52,8 @@ from ._helper_fingerprint import helper_versions
 from ._zero_fire import (
     DEFAULT_ZERO_FIRE_POLICY,
     check_zero_fire_policy,
-    external_stacklevel,
-    settle_zero_fire,
 )
+from ._zero_fire_doors import note_non_tensor_module_output, refuse_bound_zero_fire
 from .audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
 from .errors import BindingPreflightError, BindingRuntimeError
 from .model_door import resolve_model_operand
@@ -247,7 +245,7 @@ _GRAPH_TERM_KINDS: tuple[tuple[str, str], ...] = (
 
 _LABEL_OP_TYPE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*?)(?:_\d+){1,2}(?:_raw)?(?::\d+)?$")
 
-_POINTER = "see 'Labels inside a binding' in docs/agent-reference/known-gotchas.md"
+_POINTER = "see 'Labels inside a binding' in docs/internal/agent-reference/known-gotchas.md"
 
 
 def _label_term_unmatchable(kind: str, value: str) -> bool:
@@ -450,6 +448,8 @@ class _BindSession:
         self.rule_fire_counts: dict[str, int] = dict.fromkeys(self.rule_ids.values(), 0)
         self.helper_tensor_versions = binding._helper_tensor_versions()
         self.start = time.monotonic()
+        # Module address -> zero-fire reason when its output was not a tensor.
+        self.non_tensor_details: dict[str, str] = {}
 
     def record_fire(
         self,
@@ -891,7 +891,7 @@ def _make_boundary_hook(
         # the capture lifecycle produces for containment matching.
         if not module_address_matches(f"{address}:{pass_index}", target_value):
             return None
-        if not _decode_step_admits(plan):
+        if not _decode_step_admits(plan) or _output_has_no_tensor(session, address, output):
             return None
         replacements: dict[tuple[Any, ...], Any] = {}
         for out, container_path, _spec in _iter_loggable_live_outputs(output, True):
@@ -930,6 +930,12 @@ def _make_boundary_hook(
         return _replace_output_tensors_by_path(output, replacements)
 
     return _boundary
+
+
+def _output_has_no_tensor(session: _BindSession, address: str, output: Any) -> bool:
+    """Whether a module-output rule has no tensor to apply to (capture door parity)."""
+
+    return note_non_tensor_module_output(session.non_tensor_details, address, output)
 
 
 def _decode_step_admits(plan: _RulePlan) -> bool:
@@ -1141,7 +1147,7 @@ class _ArmedLazyOutput(Generator[Any, Any, Any]):
         finally:
             self._stepping.release()
         if refuse_zero_fire:
-            self._binding._refuse_zero_fire(report)
+            self._binding._refuse_zero_fire(report, self._session)
 
     def _step(self, advance: Callable[[], Any]) -> Any:
         """Run one step of the model's iterator with the runtime armed."""
@@ -1155,7 +1161,7 @@ class _ArmedLazyOutput(Generator[Any, Any, Any]):
                     return advance()
             except StopIteration:
                 report = self._settle(error=None)
-                self._binding._refuse_zero_fire(report)
+                self._binding._refuse_zero_fire(report, self._session)
                 raise
             except BaseException as exc:
                 self._settle(error=exc)
@@ -1432,7 +1438,7 @@ class BoundModel:
         finally:
             if not handed_off:
                 report = self._finish(session, error=error)
-        self._refuse_zero_fire(report)
+        self._refuse_zero_fire(report, session)
         return output
 
     def _finish(self, session: _BindSession, *, error: str | None) -> BindReport:
@@ -1445,7 +1451,7 @@ class BoundModel:
             self._lock.release()
         return report
 
-    def _refuse_zero_fire(self, report: BindReport) -> None:
+    def _refuse_zero_fire(self, report: BindReport, session: _BindSession | None = None) -> None:
         """Apply the zero-fire policy to one settled report (the fact is on the report).
 
         Raises
@@ -1455,43 +1461,8 @@ class BoundModel:
             ``"error"``; the default ``"warn"`` emits a coded warning instead.
         """
 
-        if not report.zero_fire_rule_ids:
-            return
-        names = ", ".join(report.zero_fire_rule_ids)
-
-        def _raise() -> NoReturn:
-            """Refuse the call under ``on_zero_fire='error'``."""
-
-            raise BindingRuntimeError(
-                f"rule(s) [{names}] never fired during this bound {report.door}; "
-                "on_zero_fire='error' refuses after the call (the model's side "
-                "effects may already have occurred; the full report is retained "
-                "on .last_report)",
-                code="bind_zero_fire",
-                remedy="fix the WHERE terms so every rule fires, or settle with the "
-                "default spec.bind(model, on_zero_fire='warn') or 'disclose'",
-            )
-
-        def _warn() -> None:
-            """Emit the coded ``bind_zero_fire`` warning under ``on_zero_fire='warn'``."""
-
-            warnings.warn(
-                TorchLensWarning(
-                    f"rule(s) [{names}] never fired during this bound {report.door}; the "
-                    "call returned the model's output with those rules unapplied "
-                    "(recorded on .last_report.zero_fire_rule_ids). Remedy: fix the WHERE "
-                    "terms, or pass on_zero_fire='disclose' to record without warning",
-                    code="bind_zero_fire",
-                    zero_fire_rule_ids=list(report.zero_fire_rule_ids),
-                ),
-                stacklevel=external_stacklevel(),
-            )
-
-        settle_zero_fire(
-            self._on_zero_fire,
-            warn=_warn,
-            raise_error=_raise,
-        )
+        details = session.non_tensor_details if session is not None else {}
+        refuse_bound_zero_fire(self._on_zero_fire, report, details)
 
     def _settle(self, session: _BindSession, *, door: str, error: str | None) -> BindReport:
         """Build the out-of-band ledger for one finished (or failed) call."""

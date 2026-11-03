@@ -11,9 +11,10 @@ Lifecycle keys are the ones :mod:`torchlens._ir.selector_eval` documents:
 ``"capture"`` (in-flight record contexts), ``"site"`` (finalized ``Op`` /
 ``Layer`` / ``GradFn`` records) and ``"live"`` (hook-site proxies). This module
 imports only leaf modules from the package (the live-trace guard, the backend
-name): adapters that need its own types (container paths, record contexts,
-``GradFn`` pairing) live beside the evaluator instead, so the selector split
-adds no module to the import cycle.
+name), plus a deferred read of the ``GradFn`` pass pairing, which sits outside
+every import cycle: adapters that need the evaluator's own types (container
+paths, record contexts) live beside the evaluator instead, so the selector
+split adds no module to the import cycle.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import re
 from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._pass_tokens import pass_token_labels
 from ..backends._backend_names import TORCH_BACKEND_NAME
 
 #: String-label attribute universes per lifecycle, in match order.
@@ -38,7 +40,7 @@ _SUBSTRING_LABEL_ATTRS: dict[str, tuple[str, ...]] = {
     "site": ("layer_label",),
 }
 
-_FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::\d+)?$|:\d+$)")
+_FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::(?:\d+|last|all))?$|:(?:\d+|last|all)$)")
 
 
 def sanitize_transform_kind(kind: object) -> str:
@@ -183,6 +185,11 @@ def _string_labels(
         if text not in seen:
             seen.add(text)
             labels.append(text)
+    if lifecycle == "site" and attrs is _STRING_LABEL_ATTRS:
+        # Pass tokens are post-hoc spellings: the pass count is known only
+        # once the trace has settled, so the live and capture lanes never
+        # answer to them.
+        labels.extend(token for token in pass_token_labels(subject) if token not in seen)
     return tuple(labels)
 
 
@@ -459,3 +466,67 @@ def _grad_fn_call_values(site: Any) -> tuple[Any, ...]:
     if isinstance(calls, dict):
         return tuple(calls.values())
     return tuple(calls._list)
+
+
+def _grad_fn_forward_op(site: Any) -> Any:
+    """Return the forward op one GradFn site pairs with, at its own pass.
+
+    ``GradFn.op`` resolves the paired layer label, which on a multi-pass layer
+    is the multi-pass ``Layer`` itself; its per-pass fields (``label``) refuse
+    by design. A GradFn belongs to exactly one pass, so the pass whose
+    ``grad_fn_object_id`` is this GradFn's autograd identity is the subject
+    every forward selector kind evaluates against.
+    """
+
+    from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
+
+    op = site.op
+    pass_op = _pass_op_for_grad_fn(op, site.grad_fn_object_id)
+    # No pass carries this autograd identity: keep the multi-pass Layer so its
+    # typed per-pass refusal fires rather than silently matching nothing.
+    return op if pass_op is None else pass_op
+
+
+def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
+    """Return every other op sharing a GradFn identity with ``site``.
+
+    One autograd node can back several captured ops: synthetic input/output
+    ops, and identity calls that return their input tensor itself (``dropout``
+    in eval mode, a no-op ``contiguous`` or ``to``), whose output IS the
+    paired op's output. A forward selector naming any of them names that
+    tensor's gradient, so each one is a matching subject (a module whose
+    output op is an eval-mode dropout matched no GradFn before, and its
+    gradient edit was a silent no-op).
+    """
+
+    from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
+
+    trace = site.trace
+    if trace is None:
+        return ()
+    paired_label = site.op_label
+    paired = _grad_fn_forward_op(site)
+    # Identity is proved, never assumed from a shared ``id()``: a recorded id
+    # could in principle be reused by an unrelated node after its first owner
+    # was freed. An identity call's input is alive while it runs, so a child
+    # of an already-accepted op that shares the node IS the same tensor.
+    # A pass-level subject (an Op, or a single-pass Layer) has a label and
+    # parents of its own; the multi-pass Layer kept when no pass carries this
+    # identity refuses both, so only its bare label is accepted.
+    pass_level = _pass_op_for_grad_fn(paired, site.grad_fn_object_id) is not None
+    accepted = {str(paired_label)}
+    if pass_level:
+        accepted.add(str(getattr(paired, "label", paired_label)))
+    paired_parents = (
+        {str(parent) for parent in getattr(paired, "parents", ()) or ()} if pass_level else set()
+    )
+    aliases: list[Any] = []
+    for layer in trace._layer_list:
+        if getattr(layer, "layer_label", None) == paired_label:
+            continue
+        if getattr(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
+            continue
+        if _shares_grad_fn_tensor(layer, accepted, paired_parents):
+            aliases.append(layer)
+            accepted.update(_layer_names(layer))
+    return tuple(aliases)

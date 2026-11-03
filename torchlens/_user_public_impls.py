@@ -6,7 +6,7 @@ import contextlib
 import os
 import random
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
@@ -31,7 +31,6 @@ from ._deprecations import MISSING, MissingType
 from ._errors import CaptureNotActiveError, InvalidArgumentError
 from ._input_coerce import _coerce_input_args
 from ._literals import (
-    BufferVisibilityLiteral,
     CollapseLiteral,
     FoldRepeatsLiteral,
     OutputDeviceLiteral,
@@ -120,9 +119,8 @@ def log_model_metadata(
 ) -> Trace:
     """Return model metadata without saving any outs.
 
-    Equivalent to ``trace(model, input_args, input_kwargs,
-    capture=CaptureOptions(layers_to_save=None,
-    compute_input_output_distances=True))``.
+    Equivalent to ``trace(model, input_args, input_kwargs=input_kwargs,
+    save=None, capture=CaptureOptions(compute_input_output_distances=True))``.
 
     Parameters
     ----------
@@ -142,18 +140,18 @@ def log_model_metadata(
     model_trace = _user_funcs.trace(
         model,
         input_args,
-        input_kwargs,
+        input_kwargs=input_kwargs,
         capture=CaptureOptions(
-            layers_to_save=None,
             compute_input_output_distances=True,
         ),
+        save=None,
     )
     return model_trace
 
 
 def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input rungs plus the two execution dials ARE the spec'd surface (F17 B11)
     model: nn.Module | str,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     input_shape: Any | None = None,
@@ -171,7 +169,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     and never auto-prints (the repr self-displays).
 
     Input precedence follows the quickstart ladder (F17, memo D2): real
-    ``input_args`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
+    ``inputs`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
     synthesizes seeded tensors per the quickstart grammar and the synthesis
     is disclosed in the render; a zero-input call infers a verified input
     and REUSES its verification trace (no second capture). Mixing the
@@ -185,7 +183,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         device (no weight download) and takes the weights-free path, so it
         needs ``input_shape=`` or meta inputs. Requires ``transformers``; the
         string form is DOCUMENTED-UNSTABLE.
-    input_args:
+    inputs:
         Positional args for ``model.forward()``. The quickstart input ladder
         applies (F17): a real input is the gold rung; omit it and pass
         ``input_shape=`` for a declared shape with synthesized values; omit
@@ -239,14 +237,14 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     ladder_provenance = None
     input_synthesis: str | None = None
     facade_report = _maybe_weightsfree_summary(
-        model, input_args, input_kwargs, input_shape, summary_kwargs
+        model, inputs, input_kwargs, input_shape, summary_kwargs
     )
     if facade_report is not None:
         return facade_report
-    if input_shape is not None or (input_args is None and not input_kwargs):
+    if input_shape is not None or (inputs is None and not input_kwargs):
         from ._quickstart._resolve import attach_provenance, resolve_inputs
 
-        resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="summary")
+        resolved = resolve_inputs(model, inputs, input_kwargs, input_shape, verb="summary")
         ladder_provenance = resolved.provenance
         input_synthesis = _ladder_synthesis_note(input_shape, resolved)
         if (
@@ -263,11 +261,11 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
                 grad_mode="off",
                 input_synthesis=input_synthesis,
             )
-        input_args = list(resolved.plan.input_args)
+        inputs = list(resolved.plan.input_args)
         input_kwargs = dict(resolved.plan.input_kwargs)
 
-    input_args = _coerce_input_args(model, input_args)
-    check_model_and_input_variants(model, input_args, input_kwargs)
+    inputs = _coerce_input_args(model, inputs)
+    check_model_and_input_variants(model, inputs, input_kwargs)
 
     saved_training_flags = [(module, module.training) for module in model.modules()]
     rng_snapshot = log_current_rng_states()
@@ -281,7 +279,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         with grad_context:
             trace = _user_funcs._run_model_and_save_specified_outs(
                 model=model,
-                input_args=input_args,
+                input_args=inputs,
                 input_kwargs=input_kwargs,
                 layers_to_save=None,
                 recurrence_detection=True,
@@ -542,7 +540,7 @@ def show_model_graph(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    view: VisModeLiteral | MissingType = MISSING,
+    rolled: bool | MissingType = MISSING,
     depth: int | MissingType = MISSING,
     renderer: VisRendererLiteral | MissingType = MISSING,
     layout: VisNodePlacementLiteral | MissingType = MISSING,
@@ -599,7 +597,7 @@ def show_model_graph(
         speed matters.
     visualization:
         Grouped visualization options. When omitted, ``show_model_graph``
-        defaults to ``VisualizationOptions(view="unrolled")``.
+        defaults to ``VisualizationOptions()`` (the unrolled graph).
 
     Returns
     -------
@@ -618,9 +616,8 @@ def show_model_graph(
         recurrence_detection = True
     recurrence_detection_enabled = bool(recurrence_detection)
     visualization_options = merge_visualization_options(
-        function_default_mode="unrolled",
         visualization=visualization,
-        view=view,
+        rolled=rolled,
         depth=depth,
         renderer=renderer,
         layout=layout,
@@ -629,9 +626,6 @@ def show_model_graph(
         fold_repeats=fold_repeats,
         order_siblings=order_siblings,
     )
-
-    if visualization_options.view not in ["none", "rolled", "unrolled"]:
-        raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     trace = _user_funcs._run_model_and_save_specified_outs(
         model=model,
@@ -659,157 +653,6 @@ def show_model_graph(
         trace.draw(**render_kwargs)
     finally:
         trace.cleanup()
-
-
-def draw_backward(
-    trace: Trace,
-    node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    collapsed_node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    node_style: VisNodeModeLiteral | MissingType = MISSING,
-    code_panel: CodePanelOption = False,
-    vis_mode: VisModeLiteral = "rolled",
-    bwd: int | Iterable[int] | None = None,
-    visualization: VisualizationOptions | None = None,
-) -> str:
-    """Render an existing Trace's captured backward grad_fn_handle graph.
-
-    Parameters
-    ----------
-    trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.capture_backward()``.
-    node_spec_fn:
-        Optional callback receiving ``(grad_fn_handle, default_spec)``.
-    collapsed_node_spec_fn:
-        Accepted for forward-visualization API symmetry. Not applied because
-        backward graphs do not render collapsed module nodes.
-    node_style:
-        Node-style preset applied to grad_fn nodes.
-    code_panel:
-        Optional source-code panel mode.
-    vis_mode:
-        ``"rolled"`` renders one node per GradFn; ``"unrolled"`` renders one
-        node per GradFnCall grouped by backward pass.
-    bwd:
-        Optional one-based backward pass number or numbers to render.
-    visualization:
-        Grouped visualization options. Only output path, save behavior, file
-        format, direction, skin (``theme``), graph overrides, and edge
-        overrides are used.
-
-    Returns
-    -------
-    str
-        Graphviz DOT source.
-    """
-
-    if visualization is None:
-        container_path = "backward_modelgraph"
-        save_only = False
-        file_format = "pdf"
-        direction: VisDirectionLiteral = "topdown"
-        graph_overrides = None
-        edge_overrides = None
-        node_mode: VisNodeModeLiteral = "default"
-        theme = "torchlens"
-    else:
-        container_path = visualization.container_path
-        save_only = visualization.save_only
-        file_format = visualization.file_format
-        direction = visualization.direction
-        graph_overrides = visualization.graph_overrides
-        edge_overrides = visualization.edge_overrides
-        node_mode = visualization.node_style
-        theme = visualization.theme
-
-    if node_style is not MISSING:
-        node_mode = cast(VisNodeModeLiteral, node_style)
-
-    return trace.draw_backward(
-        path=container_path,
-        vis_graph_overrides=graph_overrides,
-        node_spec_fn=node_spec_fn,
-        collapsed_node_spec_fn=collapsed_node_spec_fn,
-        vis_node_mode=node_mode,
-        vis_edge_overrides=edge_overrides,
-        vis_save_only=save_only,
-        file_format=file_format,
-        vis_direction=direction,
-        code_panel=code_panel,
-        vis_mode=vis_mode,
-        bwd=bwd,
-        theme=theme,
-    )
-
-
-def draw_combined(
-    trace: Trace,
-    node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    backward_node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    vis_mode: VisModeLiteral = "unrolled",
-    intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-    show_buffers: BufferVisibilityLiteral = "meaningful",
-    bwd: int | Iterable[int] | None = None,
-    visualization: VisualizationOptions | None = None,
-) -> str:
-    """Render an existing Trace's forward ops and backward grad_fns together.
-
-    Parameters
-    ----------
-    trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.capture_backward()``.
-    node_spec_fn:
-        Optional callback receiving ``(layer_log, default_spec)``.
-    backward_node_spec_fn:
-        Optional callback receiving ``(grad_fn_handle, default_spec)``.
-    vis_mode:
-        Combined rendering currently supports only ``"unrolled"``.
-    intervening_cluster:
-        Placement mode for grad_fns without a corresponding forward op.
-    show_buffers:
-        Buffer visibility mode for the forward side.
-    bwd:
-        Optional one-based backward pass number or numbers to render.
-    visualization:
-        Grouped visualization options. Only output path, save behavior, file
-        format, direction, graph overrides, and edge overrides are used.
-
-    Returns
-    -------
-    str
-        Graphviz DOT source.
-    """
-
-    if visualization is None:
-        container_path = "combined_modelgraph"
-        save_only = False
-        file_format = "pdf"
-        direction: VisDirectionLiteral = "leftright"
-        graph_overrides = None
-        edge_overrides = None
-    else:
-        container_path = visualization.container_path
-        save_only = visualization.save_only
-        file_format = visualization.file_format
-        direction = visualization.direction
-        graph_overrides = visualization.graph_overrides
-        edge_overrides = visualization.edge_overrides
-
-    return trace.draw_combined(
-        path=container_path,
-        vis_graph_overrides=graph_overrides,
-        node_spec_fn=node_spec_fn,
-        backward_node_spec_fn=backward_node_spec_fn,
-        vis_edge_overrides=edge_overrides,
-        vis_save_only=save_only,
-        file_format=file_format,
-        vis_direction=direction,
-        vis_mode=vis_mode,
-        intervening_cluster=intervening_cluster,
-        show_buffers=show_buffers,
-        bwd=bwd,
-    )
 
 
 def show_bundle_graph(
@@ -909,7 +752,7 @@ def show_bundle_graph(
 @restores_rng_streams
 def validate_forward_pass(
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     seed: int | None = None,
     verbose: bool = False,
@@ -925,7 +768,7 @@ def validate_forward_pass(
     ----------
     model:
         Model or callable to validate.
-    input_args:
+    inputs:
         Input for which to validate the saved outs.
     input_kwargs:
         Keyword arguments for model forward pass.
@@ -964,7 +807,7 @@ def validate_forward_pass(
 
     _validate_output_device(output_device)
     resolve_save_budget(save_budget)
-    spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+    spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
     # Forward only non-default save options: a default call reaches every
     # backend's entry with exactly the keywords it always received.
     save_options: dict[str, Any] = {}
@@ -983,7 +826,7 @@ def validate_forward_pass(
         )
     return spec.validate_entry(
         model,
-        input_args,
+        inputs,
         input_kwargs=input_kwargs,
         seed=seed,
         verbose=verbose,
@@ -1325,7 +1168,7 @@ def _validate_forward_pass_torch(
        through the wrapper layer it is meant to check (R75-1). If they
        cannot be removed (a capture is active), validation refuses with
        ``False`` rather than blessing a wrap-state-dependent ground truth.
-    2. Run ``trace`` with ``save_args=True`` and ``layers_to_save='all'``
+    2. Run ``trace`` with ``save_args=True`` and ``save='all'``
        to capture every out and its creating function's arguments.
     3. Call ``Trace.validate_forward_pass`` which replays the forward pass
        layer-by-layer from saved outs, checking that the output matches ground
@@ -1829,7 +1672,7 @@ def _validate_forward_pass_torch(
 @restores_rng_streams
 def validate_backward_pass(
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
@@ -1847,7 +1690,7 @@ def validate_backward_pass(
     ----------
     model:
         PyTorch model.
-    input_args:
+    inputs:
         Positional args for ``model.forward()``.
     input_kwargs:
         Keyword args for ``model.forward()``.
@@ -1887,7 +1730,7 @@ def validate_backward_pass(
 
     return _impl(
         model,
-        input_args,
+        inputs,
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
         validate_metadata=validate_metadata,

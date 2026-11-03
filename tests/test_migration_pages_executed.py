@@ -36,7 +36,12 @@ PAGES: dict[str, frozenset[str]] = {
     "migration/from_hf_kwargs.md": frozenset({"torchlens"}),
     "migration/from_model_zoos.md": frozenset({"torchlens"}),
     "migration/penzai.md": frozenset({"torchlens"}),
-    "migration/pyvene.md": frozenset({"torchlens"}),
+    "migration/saelens.md": frozenset({"torchlens"}),
+    "migration/lovely_stats_line.md": frozenset({"lovely_tensors", "torchlens"}),
+    "migration/inseq.md": frozenset({"torchlens"}),
+    "migration/repe.md": frozenset({"torchlens"}),
+    "migration/autocircuit.md": frozenset({"torchlens"}),
+    "migration/baukit.md": frozenset({"baukit", "torchlens"}),
 }
 
 #: Tool key -> modules that must import for the fence to run.
@@ -49,6 +54,8 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "timm": ("timm",),
     "timm_torchlens": ("timm",),
     "surgeon_pytorch": ("surgeon_pytorch",),
+    "lovely_tensors": ("lovely_tensors",),
+    "baukit": ("baukit",),
 }
 
 HEADER_RE = re.compile(r"# migration-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")
@@ -174,6 +181,9 @@ def test_v216_formats_and_extraction_v1_refuse_in_the_migration_policy() -> None
     text = (DOCS.parent / "MIGRATIONS.md").read_text("utf-8")
     compat = text.split("## Visualization Collapse Engine", 1)[0]
     assert "permanently readable" not in compat
+    assert "TorchLens 3 does not load files saved by torchlens 2.x." in compat
+    assert "`.tlspec` files written by torchlens 2.16 would always load, is withdrawn" in compat
+    assert "load the file with torchlens 2.36.x" in compat
     assert "TorchLens 3 reads neither, and does not migrate them" in compat
     assert "`tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`)" in compat
     assert "torchlens==2.17.0" in compat

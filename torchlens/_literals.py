@@ -6,6 +6,7 @@ from typing import Literal
 import torch
 
 OutputDeviceLiteral = Literal["same", "cpu", "cuda"]
+OnNonfiniteLiteral = Literal["ignore", "track", "warn", "raise"]
 BufferVisibilityLiteral = Literal["never", "meaningful", "always"]
 CollapseLiteral = Literal["none", "auto", "max"] | float
 FoldRepeatsLiteral = Literal[None, True, False]
@@ -23,3 +24,5 @@ _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 SaveBudgetOption = str | int | float | None
 """Accepted ``save_budget`` spellings: ``"auto"``, a fraction, bytes, or ``None``."""
+#: ``Trace.draw(highlight=...)`` values: the one place they are spelled.
+DrawHighlightLiteral = Literal["interventions"]

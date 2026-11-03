@@ -223,7 +223,7 @@ def test_buffer_sole_output_traces_with_output_layer() -> None:
     """A buffer-only return must produce ``output_1`` bound to the buffer value."""
 
     model = BufferOnlyOutputModel()
-    log = trace_fn(model, torch.rand(3), capture=CaptureOptions(layers_to_save="all"))
+    log = trace_fn(model, torch.rand(3), save="all")
     try:
         assert log.output_layers == ["output_1"]
         output_layer = log["output_1"]
@@ -249,7 +249,7 @@ def test_buffer_sole_output_does_not_leak_labels_onto_model_state() -> None:
     from torchlens._utils._tensor_label import get_tensor_label
 
     model = BufferOnlyOutputModel()
-    log = trace_fn(model, torch.rand(3), capture=CaptureOptions(layers_to_save="all"))
+    log = trace_fn(model, torch.rand(3), save="all")
     try:
         assert get_tensor_label(model.buf) is None
     finally:
@@ -259,7 +259,7 @@ def test_buffer_sole_output_does_not_leak_labels_onto_model_state() -> None:
     second_log = trace_fn(
         model,
         torch.rand(3),
-        capture=CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     try:
         assert second_log.output_layers == ["output_1"]
@@ -279,7 +279,7 @@ def test_buffer_in_compute_model_unchanged() -> None:
 
     model = BufferInComputeModel()
     x = torch.rand(3)
-    log = trace_fn(model, x, capture=CaptureOptions(layers_to_save="all"))
+    log = trace_fn(model, x, save="all")
     try:
         assert log.output_layers == ["output_1"]
         assert torch.equal(log["output_1"].out, x + model.buf)
@@ -294,7 +294,7 @@ def test_buffer_alongside_computed_outputs_pairs_values_correctly() -> None:
 
     model = BufferAlongsideComputeModel()
     x = torch.rand(3)
-    log = trace_fn(model, x, capture=CaptureOptions(layers_to_save="all"))
+    log = trace_fn(model, x, save="all")
     try:
         assert log.output_layers == ["output_1", "output_2"]
 
@@ -319,7 +319,7 @@ def test_duplicate_direct_buffer_outputs_share_one_buffer_parent() -> None:
     """Repeated direct-buffer outputs must not late-log the buffer twice."""
 
     model = DuplicateBufferOutputModel()
-    log = trace_fn(model, torch.rand(3), capture=CaptureOptions(layers_to_save="all"))
+    log = trace_fn(model, torch.rand(3), save="all")
     try:
         assert log.output_layers == ["output_1", "output_2"]
         output_1 = log["output_1"]
@@ -342,7 +342,7 @@ def test_prefix_colliding_buffer_outputs_bind_exact_addresses() -> None:
     """Buffer output resolution must compare decoded addresses exactly."""
 
     model = PrefixCollidingBufferOutputModel()
-    log = trace_fn(model, torch.zeros(1), capture=CaptureOptions(layers_to_save="all"))
+    log = trace_fn(model, torch.zeros(1), save="all")
     try:
         output_1 = log["output_1"]
         output_2 = log["output_2"]
@@ -366,7 +366,7 @@ def test_foreign_tensor_between_attributed_outputs_fails_loudly() -> None:
     x = torch.rand(3)
 
     with pytest.raises(RuntimeError, match="could not attribute a model output tensor"):
-        trace_fn(model, x, capture=CaptureOptions(layers_to_save="all"))
+        trace_fn(model, x, save="all")
 
 
 def test_foreign_tensor_only_output_fails_loudly() -> None:
@@ -377,7 +377,7 @@ def test_foreign_tensor_only_output_fails_loudly() -> None:
     x = torch.rand(3)
 
     with pytest.raises(RuntimeError, match="could not attribute a model output tensor"):
-        trace_fn(model, x, capture=CaptureOptions(layers_to_save="all"))
+        trace_fn(model, x, save="all")
 
 
 class UnloggedPlusReassignedBufferModel(nn.Module):
@@ -420,7 +420,7 @@ def test_unlogged_buffer_before_reassigned_buffer_output() -> None:
 
     model = UnloggedPlusReassignedBufferModel()
     x = torch.rand(3)
-    log = trace_fn(model, x, capture=CaptureOptions(carry_state=True, layers_to_save="all"))
+    log = trace_fn(model, x, capture=CaptureOptions(carry_state=True), save="all")
     try:
         assert log.output_layers == ["output_1", "output_2"]
 

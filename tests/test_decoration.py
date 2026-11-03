@@ -705,7 +705,9 @@ class TestPauseLogging:
         """activation_transform runs inside pause_logging, ops should not appear."""
         model = SimpleModel()
         result = trace_fn(
-            model, torch.randn(5), save=tl.options.SaveOptions(activation_transform=torch.sigmoid)
+            model,
+            torch.randn(5),
+            capture=tl.options.CaptureOptions(activation_transform=torch.sigmoid),
         )
         # sigmoid from transform should NOT appear in graph
         sigmoid_layers = [lbl for lbl in result.layer_labels if "sigmoid" in lbl.lower()]
@@ -1080,7 +1082,7 @@ class TestEdgeCases:
             result2 = trace_fn(
                 model,
                 torch.randn(5),
-                capture=tl.options.CaptureOptions(layers_to_save=[all_labels[1]]),
+                save=[all_labels[1]],
             )
             assert result2 is not None
 

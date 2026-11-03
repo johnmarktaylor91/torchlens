@@ -135,8 +135,11 @@ def _kernel_mark_lag_bytes(exact_rss: int, approximate_rss: int | None) -> int:
     per CPU, 8 MiB measured on a 32-CPU host. A mark set when a freed buffer
     was unmapped therefore reads below the RSS ``/proc`` showed while the
     buffer was resident. The lag read now stands in for the lag at that
-    unmap. On kernels whose ``/proc`` RSS is the approximate total the two
-    readings agree and the lag is 0.
+    unmap, except the share of the CPU that ran the unmap: the unmap itself
+    folds that share into the total, so the mark can still read short by up
+    to one counter batch (twice the CPU count in pages, at least 32), a share
+    nothing in ``/proc`` reports afterwards. On kernels whose ``/proc`` RSS is the
+    approximate total the two readings agree and the lag is 0.
 
     Parameters
     ----------

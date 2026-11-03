@@ -16,7 +16,7 @@ from .._data_classes._trace_grad_sites import gradient_rule_sites
 from .._ir.events import OpEvent
 from .._ir.selector_eval import module_address_matches, module_exit_bound_addresses
 from .._record_type import record_type
-from .._trace_selector_helpers import _selector_requires_unwindowed_escrow
+from .._trace_selection_shape import _selector_requires_unwindowed_escrow
 from .._utils.tensor_utils import safe_copy
 from ..backends.torch.tensor_tracking import (
     _add_live_gradient_reference_hook,

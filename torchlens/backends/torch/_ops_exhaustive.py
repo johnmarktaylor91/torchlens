@@ -28,6 +28,7 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._completeness_origins import internal_scalar_read
+from ._user_grad_fn import stamp_user_grad_fn
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
@@ -201,11 +202,7 @@ def _emit_exhaustive_operation_events(
             # minted copy's ``CloneBackward`` is bookkeeping, not op metadata.
             live_member_grad_fn = out_tensor.grad_fn
             out_tensor = safe_copy(out_tensor)
-            if live_member_grad_fn is not None:
-                try:
-                    setattr(out_tensor, "tl_user_grad_fn", live_member_grad_fn)
-                except AttributeError:
-                    pass
+            stamp_user_grad_fn(out_tensor, live_member_grad_fn)
 
         # M7: per-output isolation is a plain dict copy. Every per-output
         # writer REASSIGNS its fields (``_log_output_tensor_info``,
@@ -344,7 +341,7 @@ def _emit_exhaustive_operation_events(
             # in-place path performs in _register_inplace_live_grad_hook.
             _add_tensor_backward_hook(self, live_member, new_tensor_label, take_ownership=True)
             _propagate_mutation_label_to_storage_aliases(self, live_member, new_tensor_label)
-        options = getattr(self, "_predicate_save_options", None)
+        options = self.__dict__.get("_predicate_save_options")
         if options is not None and options.halt is not None:
             halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out_tensor)
             evaluate_halt_stop(self, halt_ctx, options, frontier_output=out_tensor)

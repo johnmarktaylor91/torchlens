@@ -34,6 +34,25 @@ from typing import Any
 
 from .op_record import _FACET_ATTRIBUTES, FACET_DEFAULTS, IngestExtras, OpRecord
 
+#: ``_io.BlobRef`` and ``_postprocess._materialize._resolve_dtype``, bound on
+#: first use (both packages import the IR at module level, so module-level
+#: imports here would cycle); the per-op scatter reads them for every record.
+_PORTABLE_BLOB_REF: Any = None
+_MATERIALIZE_RESOLVE_DTYPE: Any = None
+
+
+def _portable_blob_ref_type() -> Any:
+    """Return the portable ``BlobRef`` class, importing ``_io`` once."""
+
+    global _PORTABLE_BLOB_REF
+    blob_ref_type = _PORTABLE_BLOB_REF
+    if blob_ref_type is None:
+        from .._io import BlobRef as blob_ref_type
+
+        _PORTABLE_BLOB_REF = blob_ref_type
+    return blob_ref_type
+
+
 CELL_SOURCE_MANIFEST_VERSION = 2
 
 CELL_SOURCES: dict[str, str] = {
@@ -505,8 +524,7 @@ def scatter_record_to_cells(record: OpRecord, extras: IngestExtras, owning_trace
         "func_config": {} if function is None else dict(function.func_config),
     }
 
-    from .._io import BlobRef as PortableBlobRef
-
+    PortableBlobRef = _portable_blob_ref_type()
     if isinstance(tensor.blob_ref, PortableBlobRef):
         cells["_pending_blob_id"] = tensor.blob_ref.blob_id
     if transformed is not None and isinstance(transformed.blob_ref, PortableBlobRef):
@@ -517,6 +535,10 @@ def scatter_record_to_cells(record: OpRecord, extras: IngestExtras, owning_trace
 def _resolve_dtype(dtype: object) -> object:
     """Match _materialize's transformed-dtype normalization."""
 
-    from .._postprocess._materialize import _resolve_dtype as materialize_resolve_dtype
+    global _MATERIALIZE_RESOLVE_DTYPE
+    materialize_resolve_dtype = _MATERIALIZE_RESOLVE_DTYPE
+    if materialize_resolve_dtype is None:
+        from .._postprocess._materialize import _resolve_dtype as materialize_resolve_dtype
 
+        _MATERIALIZE_RESOLVE_DTYPE = materialize_resolve_dtype
     return materialize_resolve_dtype(dtype)

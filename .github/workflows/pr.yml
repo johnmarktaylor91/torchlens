@@ -241,6 +241,11 @@ jobs:
           pytest "${serial_files[@]}" -m "serial and not slow and not rare and not heavy" --tb=short -q
           # The compat file's smoke tests ran in the selection above.
           pytest tests/test_torch_compat.py -m "not smoke" --tb=short -q
+          # The major-version release guard and its marker hooks: named here,
+          # not smoke-marked, so every pull request and every release tag (the
+          # release workflow re-runs this file) runs them under the smoke size
+          # ceiling. tests/test_major_version_guard.py pins this line.
+          pytest tests/test_major_version_guard.py tests/test_no_breaking_markers_arming.py --tb=short -q
 
       - name: Declare the executed-test floor (smoke suite)
         if: matrix.scope == 'smoke'
@@ -315,7 +320,7 @@ jobs:
         # so the reference backend's shipped scorecard is checked here the way
         # each backend-protocol leg checks its preview's.
         if: matrix.scope == 'smoke'
-        run: python -m torchlens.conformance.scorecard --backend torch --check
+        run: python -m tests.conformance.scorecard --backend torch --check
 
 
   checks:
@@ -347,6 +352,10 @@ jobs:
           uv pip check
 
       - name: Run the repository checks
+        # Strict: the dev extra declares import-linter, so a skipped check here
+        # means the environment lost a tool and must fail, not pass silently.
+        env:
+          TORCHLENS_CHECKS_STRICT: "1"
         run: python scripts/checks/run_all.py
 
   packaging:
@@ -536,7 +545,7 @@ jobs:
           BACKEND: ${{ matrix.backend }}
           DEV: ${{ matrix.dev || '' }}
           MLX_DISABLE_COMPILE: "1"
-        run: python -m torchlens.conformance.scorecard --backend "$BACKEND" --check
+        run: python -m tests.conformance.scorecard --backend "$BACKEND" --check
   packaging-sets:
     name: Packaging install sets
     runs-on: ubuntu-24.04

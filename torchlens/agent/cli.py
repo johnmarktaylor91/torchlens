@@ -1,8 +1,9 @@
 """The TorchLens CLI: one registry, tiered process shapes (agent memo 3.11).
 
 Tier 0 (torch-free, target < 0.2 s): ``info`` / ``overview --manifest-only``,
-``schema``, ``guide``, ``version``, ``ls`` -- manifest and package data only;
-a subprocess purity test asserts torch stays out of ``sys.modules``. Tier 1
+``schema``, ``guide``, ``version``, ``ls`` -- manifest and package data only --
+and ``agent init``, the one writer, which edits only its own marked block in
+the named agent instruction files; a subprocess purity test asserts torch stays out of ``sys.modules``. Tier 1
 (one question, one process): every registry verb, honest in ``--help`` about
 the import cost. Machine mode (``--json``) emits ONLY canonical envelope JSON
 on stdout; diagnostics go to stderr; no ANSI in pipes.
@@ -27,6 +28,9 @@ import json
 import sys
 from typing import Any
 
+# Torch-free and stdlib-only: the one tier-0 writer, imported eagerly.
+from ._init_block import index_path, run_init
+
 #: Exit-code vocabulary (closed).
 EXIT_OK = 0
 EXIT_GATE = 1
@@ -38,7 +42,7 @@ EXIT_REFUSAL = 4
 FAIL_ON_CHECKS = ("unverified", "incomplete", "nonfinite", "mismatch", "truncation")
 
 #: Verbs that must stay torch-free (tier 0).
-TIER0_VERBS = ("info", "schema", "guide", "version", "ls")
+TIER0_VERBS = ("info", "schema", "guide", "version", "ls", "agent")
 
 #: Error codes that mean "artifact unreadable / wrong kind" (exit 3).
 _ARTIFACT_CODES = (
@@ -101,10 +105,21 @@ def _tier0_ls(dir_arg: str, as_json: bool) -> int:
     return EXIT_OK
 
 
+def _tier0_agent_init(files: list[str] | None, remove: bool, as_json: bool) -> int:
+    """``agent init``: write (or ``--remove``) the agent index block in instruction files."""
+
+    results = run_init(files, remove=remove)
+    rows = [{"path": result.path, "action": result.action} for result in results]
+    _emit({"data": {"index": str(index_path()), "files": rows}}, as_json)
+    return EXIT_OK
+
+
 def _tier0(verb: str, args: argparse.Namespace) -> int:
     """Dispatch one tier-0 verb without importing torch or loading bodies."""
 
     as_json = bool(args.json)
+    if verb == "agent":
+        return _tier0_agent_init(args.files, bool(args.remove), as_json)
     if verb == "version":
         from ._envelope import _torchlens_version
 
@@ -263,6 +278,38 @@ def _tier1(verb: str, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _add_agent_parser(sub: Any) -> None:
+    """Register ``agent init`` (tier 0): the agent index block in instruction files."""
+
+    agent_parser = sub.add_parser("agent", help="Set up coding agents for TorchLens (torch-free).")
+    agent_sub = agent_parser.add_subparsers(dest="agent_command", required=True)
+    init_parser = agent_sub.add_parser(
+        "init",
+        help="Point AGENTS.md (or each --file) at the installed agent index (torch-free).",
+    )
+    init_parser.add_argument("--json", action="store_true", help="Emit the result as JSON.")
+    init_parser.add_argument(
+        "--file",
+        action="append",
+        dest="files",
+        metavar="PATH",
+        help="Instruction file to write; repeatable (default: AGENTS.md here).",
+    )
+    init_parser.add_argument(
+        "--remove", action="store_true", help="Delete the block this command wrote."
+    )
+
+
+def _add_fail_on(verb_parser: argparse.ArgumentParser) -> None:
+    """Add the shared ``--fail-on`` CI gate flag to one verb."""
+
+    verb_parser.add_argument(
+        "--fail-on",
+        dest="fail_on",
+        help=f"Comma-joined CI gates from: {', '.join(FAIL_ON_CHECKS)}.",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the tiered argument parser."""
 
@@ -270,7 +317,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="python -m torchlens",
         description=(
             "Read-only TorchLens inspector over saved .tlspec artifacts. "
-            "Tier-0 verbs (info/schema/guide/version/ls) never import torch; "
+            "Tier-0 verbs (info/schema/guide/version/ls/agent) never import torch; "
             "other verbs pay the full torch import (~4 s)."
         ),
     )
@@ -294,6 +341,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add("version", "Print the torchlens version (torch-free).")
     ls_parser = _add("ls", "List .tlspec artifacts in a directory (torch-free).")
     ls_parser.add_argument("dir", help="Directory to list.")
+    _add_agent_parser(sub)
 
     _add("doctor", "Environment health check (imports torch).")
     api_parser = _add("api-map", "Public-surface index (imports torch).")
@@ -322,17 +370,8 @@ def _build_parser() -> argparse.ArgumentParser:
     diff_parser.add_argument("subject")
     diff_parser.add_argument("--json", action="store_true")
     diff_parser.add_argument("--max-rows", type=int, dest="max_rows")
-    diff_parser.add_argument(
-        "--fail-on",
-        dest="fail_on",
-        help=f"Comma-joined CI gates from: {', '.join(FAIL_ON_CHECKS)}.",
-    )
-    for gated in (overview_parser, dump_parser, explain_parser):
-        gated.add_argument(
-            "--fail-on",
-            dest="fail_on",
-            help=f"Comma-joined CI gates from: {', '.join(FAIL_ON_CHECKS)}.",
-        )
+    for gated in (diff_parser, overview_parser, dump_parser, explain_parser):
+        _add_fail_on(gated)
     return parser
 
 

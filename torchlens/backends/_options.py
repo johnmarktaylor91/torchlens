@@ -236,7 +236,6 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         {
             "halt",
             "intervene",
-            "facets",
             "save",
             "stop_after",
             "storage",
@@ -299,19 +298,19 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "inference_only": False,
         "cache": False,
         "stop_after": None,
-        "raise_on_nan": False,
+        "on_nonfinite": "ignore",
         "profile": False,
         "payload_policy": None,
-        "save_preview": None,
         "chunk_size": None,
         "chunk_paths": None,
     },
 )
 """Extra public-kwarg rejection policy for the Paddle preview backend.
 
-``intervene``, ``halt``, and ``facets`` are absent because the Paddle
-capture path pops and dispatches them before extra-kwarg rejection runs; the
-``interventions`` capability flag owns all three.
+``intervene`` and ``halt`` are absent because the Paddle capture path pops
+and dispatches them before extra-kwarg rejection runs (the ``interventions``
+capability flag owns both); ``facets`` is popped and snapshotted the same way
+under the backend-neutral ``facet_recipes`` record.
 """
 
 
@@ -337,11 +336,10 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "inference_only": False,
         "cache": False,
         "stop_after": None,
-        "raise_on_nan": False,
+        "on_nonfinite": "ignore",
         "profile": False,
         "facets": None,
         "payload_policy": None,
-        "save_preview": None,
         "chunk_size": None,
         "chunk_paths": None,
         "save_outs_to": None,
@@ -378,11 +376,11 @@ TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 )
 """Extra public-kwarg rejection policy for the TensorFlow preview backend.
 
-``intervene``/``halt``/``facets`` left this table when tf lifted the
-``interventions`` capability: ``intervene=`` dispatches for real, and the two
-unimplemented spellings refuse typed inside the tf capture path (a declarative
-rejection here would classify the True flag as a self-contradictory
-registration)."""
+``intervene``/``halt`` left this table when tf lifted the ``interventions``
+capability: ``intervene=`` dispatches for real, and ``halt=`` refuses typed
+inside the tf capture path (a declarative rejection here would classify the
+True flag as a self-contradictory registration). ``facets`` is popped and
+snapshotted before this policy runs (``facet_recipes`` record)."""
 
 
 JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
@@ -416,10 +414,6 @@ JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
         "backward_ready": (
             "JAX backend preview does not support backward_ready; full-save forward capture "
             "only. Use tl.backends.jax.GradOptions for derived gradients."
-        ),
-        "module_filter": (
-            "JAX backend preview does not support module_filter; full-save forward capture "
-            "only. Use full-save JAX trace capture or the PyTorch backend."
         ),
         "transform": (
             "JAX backend preview does not support transform; full-save forward capture only. "
@@ -459,7 +453,6 @@ TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -490,7 +483,6 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -522,7 +514,6 @@ MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -552,7 +543,6 @@ TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -605,7 +595,7 @@ def resolve_optional_capture_field(capture: Any, field_name: str, flat_value: An
 
     Some preview backend ``capture_trace`` parameters predate ``CaptureOptions``
     and still spell a handful of optional fields (e.g. ``save_grads``,
-    ``module_filter``, ``transform``) with a concrete ``None`` default instead
+    ``transform``) with a concrete ``None`` default instead
     of the ``MissingType`` sentinel, so ``is_missing()`` cannot tell "the
     caller left this unset" apart from an explicit ``capture=`` value the way
     it can for every ``MISSING``-defaulted field. ``flat_value is not None``
@@ -630,7 +620,7 @@ def resolve_optional_capture_field(capture: Any, field_name: str, flat_value: An
 
     if flat_value is not None:
         return flat_value
-    if capture is not None and capture.is_field_explicit(field_name):
+    if capture is not None and capture._is_field_explicit(field_name):
         return getattr(capture, field_name)
     return None
 

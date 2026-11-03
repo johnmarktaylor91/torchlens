@@ -19,6 +19,7 @@ import threading
 import weakref
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
+from functools import cache
 from math import prod
 from typing import Any, Literal, cast, get_args
 
@@ -26,6 +27,7 @@ import torch
 
 from .._state import pause_logging
 from ._internal_read import internal_scalar_read
+from ._sparse_parts import sparse_component_tensors
 from ._tensor_label import get_tensor_label, set_tensor_label
 from ._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
@@ -35,6 +37,16 @@ from ._torch_compat import (
 )
 from ._torch_symbols import torch_attr
 from .env_flags import closed_bool_env
+
+
+@cache
+def _state_module() -> Any:
+    """Return ``torchlens._state`` imported once (it is above ``_utils``: never at module top)."""
+
+    from .. import _state
+
+    return _state
+
 
 SaveMode = Literal["copy", "reference", "view", "cpu_async"]
 
@@ -530,7 +542,7 @@ def tensor_nanequal(
     if tensor_a.is_meta or tensor_b.is_meta:
         return tensor_a.is_meta and tensor_b.is_meta
 
-    with pause_logging():
+    with _state_module().pause_logging():
         if tensor_a.device != tensor_b.device:
             # Equality is device-independent: an output_device capture keeps
             # saved payloads off the op's device, so compare exact host copies.
@@ -685,7 +697,7 @@ def safe_to(obj: Any, device: str) -> Any:
     """
 
     if isinstance(obj, torch.Tensor):
-        with pause_logging():
+        with _state_module().pause_logging():
             return obj.to(device)
     else:
         return obj
@@ -705,8 +717,7 @@ def _unwrapped_tensor_size_method(method: _TensorSizeMethod) -> _TensorSizeMetho
         Original method when TorchLens has decorated it, otherwise ``method``.
     """
 
-    from .. import _state
-
+    _state = _state_module()
     return cast(_TensorSizeMethod, _state._decorated_to_orig.get(id(method), method))
 
 
@@ -727,42 +738,6 @@ def _dense_tensor_memory_amount(t: torch.Tensor) -> int:
     nelement = _unwrapped_tensor_size_method(torch.Tensor.nelement)
     element_size = _unwrapped_tensor_size_method(torch.Tensor.element_size)
     return int(nelement(t) * element_size(t))
-
-
-_SPARSE_COMPONENT_ACCESSORS: dict[Any, tuple[str, ...]] = {
-    torch.sparse_coo: ("_indices", "_values"),
-    torch.sparse_csr: ("crow_indices", "col_indices", "values"),
-    torch.sparse_csc: ("ccol_indices", "row_indices", "values"),
-    torch.sparse_bsr: ("crow_indices", "col_indices", "values"),
-    torch.sparse_bsc: ("ccol_indices", "row_indices", "values"),
-}
-"""Physical component tensors per sparse layout: every index tensor AND values."""
-
-
-def sparse_component_tensors(t: torch.Tensor) -> tuple[torch.Tensor, ...]:
-    """Return the physical component tensors of a sparse tensor.
-
-    Parameters
-    ----------
-    t:
-        Sparse tensor (COO or any compressed layout).
-
-    Returns
-    -------
-    tuple[torch.Tensor, ...]
-        Index tensor(s) and values tensor backing ``t``.
-
-    Raises
-    ------
-    ValueError
-        For non-strided layouts without a known component decomposition
-        (callers treat that as unmeasurable, never as zero-index-bytes).
-    """
-
-    accessors = _SPARSE_COMPONENT_ACCESSORS.get(t.layout)
-    if accessors is None:
-        raise ValueError(f"no known component decomposition for layout {t.layout}")
-    return tuple(getattr(t, name)() for name in accessors)
 
 
 def get_memory_amount(t: torch.Tensor) -> int:
@@ -1042,7 +1017,7 @@ def _paused_internal_reads() -> Iterator[None]:
     would register as user raw-pointer escapes on witness-armed captures.
     """
 
-    with pause_logging(), internal_scalar_read():
+    with _state_module().pause_logging(), internal_scalar_read():
         yield
 
 
@@ -1226,8 +1201,7 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
     global _DEFER_BUSY
     if not _DEFER_PENDING or _DEFER_BUSY:
         return
-    from .. import _state
-
+    _state = _state_module()
     if (
         _state._active_trace is not None
         and _state._active_owner_thread_id is not None
@@ -1866,7 +1840,7 @@ def print_override(t: torch.Tensor, func_name: str) -> str:
     """
 
     try:
-        with pause_logging():
+        with _state_module().pause_logging():
             cpu_data = t.data.cpu()
             # numpy() doesn't support bfloat16 — upcast first.
             if cpu_data.dtype == torch.bfloat16:

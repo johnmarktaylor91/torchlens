@@ -177,7 +177,7 @@ def _trace_keyword_names() -> frozenset[str]:
         parameter.name
         for parameter in parameters
         if parameter.kind is not inspect.Parameter.VAR_KEYWORD
-        and parameter.name not in {"model", "input_args", "input_kwargs", "backend"}
+        and parameter.name not in {"model", "inputs", "input_kwargs", "backend"}
     )
 
 

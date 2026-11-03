@@ -92,10 +92,11 @@ leftright + `color_by="flops"`), `debug_edge_shapes`.
   77-99% of real-model nodes into the bottom decile. Degenerate domains
   (min == max) render UNENCODED with a note, never mid-ramp.
 - **Skins are live (N4).** Semantic role colours resolve through the
-  active skin's palette at the one theme seam; the Okabe-Ito set ships as
-  data with its CVD evidence attached; every shipped skin, the default `torchlens` skin
-  included, renders the legacy role colours (light green input, light red output, light and
-  dark grey weights).
+  active skin's palette at the one theme seam. The default `torchlens` skin and the
+  `colorblind` skin render the Okabe-Ito set (green input, vermillion output, sky-blue
+  trainable and deeper-blue frozen weights), the set with CVD evidence attached; `paper` and
+  `high_contrast` keep the legacy role colours (light green input, light red output, light and
+  dark grey weights) and `dark` its dark remap.
   Each skin carries a 3-anchor ramp and the N17 neutral "aggregate, not
   encoded" fill for collapsed boxes under an active channel.
 
@@ -109,4 +110,4 @@ RenderIR-derived answer keys (`generate_answer_key`; hand keys prohibited),
 and the naive-evaluator battery harness (`build_packet`, `score_responses`,
 `freeze_threshold` -- the anchor-midpoint procedure). The nine honesty
 classes are zero-tolerance forever. Running evaluators is D03's job; the
-normative gallery/battery matrix is `docs/reference/lens_gallery_spec.md`.
+normative gallery/battery matrix is `docs/internal/reference/lens_gallery_spec.md`.

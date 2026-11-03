@@ -572,6 +572,11 @@ class TraceCaptureError(CaptureError):
         The :class:`~torchlens.types.FailureOrigin` the capture outcome
         recorded: ``user_op`` when the model's own code raised, ``torchlens``
         when the innermost attributable frame was TorchLens, else ``unknown``.
+
+    ``fields["code"]`` is always set: ``forward_raised`` when the model's own
+    code (or an unattributable frame) raised, ``capture_internal_error`` when
+    the innermost attributable frame was TorchLens (spellings
+    DOCUMENTED-UNSTABLE).
     """
 
     def __init__(
@@ -580,6 +585,7 @@ class TraceCaptureError(CaptureError):
         *,
         partial_trace: Any = None,
         origin: Any = None,
+        code: str = "forward_raised",
         **payload: Any,
     ) -> None:
         """Initialize the failed-forward error.
@@ -592,11 +598,14 @@ class TraceCaptureError(CaptureError):
             Partial capture recovered from the failed forward, if any.
         origin:
             Diagnostic failure origin from the capture outcome.
+        code:
+            Stable machine-readable refusal code; the capture door picks it
+            from ``origin`` (:func:`torchlens._capture._trace_capture_error.failed_forward_error`).
         **payload:
             Structured context retained on ``fields``.
         """
 
-        super().__init__(message, **payload)
+        super().__init__(message, code=code, **payload)
         self.partial_trace = partial_trace
         self.origin = origin
 
@@ -647,6 +656,47 @@ class BackwardStreamUnavailableError(CaptureError, RuntimeError):
     """
 
 
+class AtenOpsUnavailableError(_ActionableErrorMixin, CaptureError, RuntimeError):
+    """Raised when ``aten_ops`` accessors are read on a trace that recorded none.
+
+    ATen operation recording is opt-in (``CaptureOptions(aten_ops=True)``): a
+    capture without the switch and a loaded artifact saved without it carry
+    no profile, so the accessors refuse typed instead of
+    returning an empty answer that looks like "this op dispatched nothing".
+    Branch on ``exc.fields["code"] == "aten_ops_unavailable"``.
+    """
+
+    def __init__(
+        self,
+        problem: str,
+        *,
+        code: str = "aten_ops_unavailable",
+        remedy: str = (
+            "re-capture with tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))"
+        ),
+        **context: object,
+    ) -> None:
+        """Initialize an actionable ATen-recording refusal.
+
+        Parameters
+        ----------
+        problem:
+            Why no ATen rows are available for the record being read.
+        code:
+            Stable machine-readable refusal code.
+        remedy:
+            Concrete caller action that resolves the refusal.
+        **context:
+            Structured, non-authoritative diagnostic context.
+        """
+        super().__init__(
+            _actionable_message(problem, remedy),
+            code=code,
+            remedy=remedy,
+            **cast(dict[str, Any], context),
+        )
+
+
 class MutatedReferenceError(CaptureError, RuntimeError):
     """Raised when a reference-mode saved tensor changed before it was read."""
 
@@ -688,5 +738,6 @@ class SelectionError(ConfigurationError, ValueError):
     Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
     ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
     ``selection_unresolvable`` / ``selection_apply_invalid`` /
-    ``selection_alignment_invalid``), never on message text.
+    ``selection_alignment_invalid`` / ``selection_trace_released``), never
+    on message text.
     """

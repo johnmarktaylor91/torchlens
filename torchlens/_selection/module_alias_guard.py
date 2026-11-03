@@ -9,7 +9,7 @@ tell which attribute a forward called the object through, so
 the ``enc`` call, a number the user did not ask for (AUD-CODE 3.7d).
 
 Every door that reads a module selector (``tl.trace`` and ``tl.record``
-``intervene=`` / ``save=`` / ``halt=`` before the forward, post-hoc site
+``intervene=`` / ``save=`` / ``stop_after=`` before the forward, post-hoc site
 resolution, ``spec.bind``) therefore calls :func:`refuse_module_alias_spellings`
 with its model's alias map, and the refusal is one typed error with one code
 and one message wherever it is raised.

@@ -22,17 +22,17 @@ import mlx.nn as nn  # noqa: E402
 import numpy as np  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from tests.conformance._protocol_cases import (  # noqa: E402
+    graph_integrity_problems,
+    shape_metadata_problems,
+    silent_gap_reason,
+)
+from tests.conformance._rosters.mlx import CONFIG_BUILT, W44, X24, roster  # noqa: E402
 from torchlens._validation_status import ValidationStatus  # noqa: E402
 from torchlens.backends._backend_protocol import REFUSAL_CODES, VALIDATION_REASONS  # noqa: E402
 from torchlens.backends.mlx import get_unwrapped_policy, unwrapped_policy  # noqa: E402
 from torchlens.backends.mlx.wrappers import is_mlx_wrapped  # noqa: E402
 from torchlens.backends.registry import BackendUnsupportedError  # noqa: E402
-from torchlens.conformance._protocol_cases import (  # noqa: E402
-    graph_integrity_problems,
-    shape_metadata_problems,
-    silent_gap_reason,
-)
-from torchlens.conformance._rosters.mlx import CONFIG_BUILT, W44, X24, roster  # noqa: E402
 
 _GLOBAL_SCALE = None
 

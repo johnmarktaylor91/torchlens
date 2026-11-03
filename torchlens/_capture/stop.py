@@ -15,7 +15,7 @@ from ..recording.exceptions import PredicateError
 from .outcome import StopRequest
 
 if TYPE_CHECKING:
-    from ..recording.options import ForwardErrorMode, RecordingOptions
+    from ..recording.options import ForwardErrorMode, _RecordingConfig
     from ..recording.types import RecordContext
 
 ForwardStopDisposition = Literal["raise", "attach_partial", "return_partial"]
@@ -111,7 +111,7 @@ class StopDirective:
         actual autograd history (see :func:`cleared_inference_only_directive`).
     """
 
-    halt_options: RecordingOptions | None = None
+    halt_options: _RecordingConfig | None = None
     raise_on_nan: bool = False
     forward_error_mode: ForwardErrorMode = "raise"
     inference_only: bool = False
@@ -299,7 +299,7 @@ def stop_directive_for_trace(trace: Any) -> StopDirective:
 def evaluate_halt_stop(
     trace: object,
     ctx: RecordContext,
-    options: RecordingOptions,
+    options: _RecordingConfig,
     frontier_output: Any | None = None,
 ) -> None:
     """Evaluate the halt portion of the active stop directive.

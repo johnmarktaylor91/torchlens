@@ -374,7 +374,7 @@ def _apply_predicate_mode_interventions_to_outputs(
 def _trace_intervene_options(trace: "Trace") -> Any | None:
     """Return trace predicate options when ``intervene`` is configured."""
 
-    options = getattr(trace, "_predicate_save_options", None)
+    options = trace.__dict__.get("_predicate_save_options")
     if options is None or options.intervene is None:
         return None
     return options

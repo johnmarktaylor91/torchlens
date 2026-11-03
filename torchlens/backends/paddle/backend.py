@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from ... import _state
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
+from ..._data_classes._trace_state_io import fill_unset_declared_fields
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     IntermediateDerivedGradAccessor,
@@ -29,9 +30,10 @@ from ..._ir.events import (
     ParentEdge,
 )
 from ..._ir.intervention import FireResult, FunctionEventInput
-from ..._ir.predicate import RecordContext
+from ..._ir.predicate import CaptureSpec, RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
@@ -43,7 +45,6 @@ from ..._validation_status import ValidationReplaySource, ValidationStatus
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
-from ...recording.types import CaptureSpec
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -318,7 +319,6 @@ class PaddleBackend:
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         name: str | None = None,
-        module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
         save_raw_input: str | bool | MissingType = MISSING,
@@ -340,7 +340,7 @@ class PaddleBackend:
         # see the matching comment in ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            layers_to_save=layers_to_save,
+            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -356,7 +356,7 @@ class PaddleBackend:
             save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
         )
-        layers_to_save = capture_options.layers_to_save
+        layers_to_save = capture_options._layers_to_save
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
@@ -374,7 +374,6 @@ class PaddleBackend:
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
         random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         name = _resolve_optional_capture_field(capture, "name", name)
-        module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = _resolve_optional_capture_field(capture, "transform", transform)
         output_transform = _resolve_optional_capture_field(
             capture, "output_transform", output_transform
@@ -385,11 +384,10 @@ class PaddleBackend:
         module_identity_mode = _resolve_optional_capture_field(
             capture, "module_identity_mode", module_identity_mode
         )
-        # layers_to_save/keep_orphans/output_device/detach_saved_activations/
-        # save_arg_values/save_code_context/save_rng_states/
-        # recurrence_detection/compute_input_output_distances/verbose/
-        # backward_ready/save_raw_input/batch_render/save_raw_output/
-        # save_visualizations are CaptureOptions-native fields: the
+        # keep_orphans/output_device/detach_saved_activations/save_arg_values/
+        # save_code_context/save_rng_states/recurrence_detection/verbose/
+        # compute_input_output_distances/backward_ready/save_raw_input/batch_render/
+        # save_raw_output/save_visualizations are CaptureOptions-native fields: the
         # ``capture_options.<field>`` reads above already resolved each one to
         # its concrete (non-MISSING) default via ``merge_capture_options``,
         # with the same backend-local defaults this block used to re-apply.
@@ -404,7 +402,6 @@ class PaddleBackend:
         random_seed = _default_if_missing(random_seed, None)
         num_context_lines = _default_if_missing(num_context_lines, 7)
         name = _default_if_missing(name, None)
-        module_filter = _default_if_missing(module_filter, None)
         transform = _default_if_missing(transform, None)
         raw_input = _default_if_missing(raw_input, None)
         output_transform = _default_if_missing(output_transform, None)
@@ -448,7 +445,6 @@ class PaddleBackend:
                 "save_source_context": save_code_context,
                 "save_rng": save_rng_states,
                 "backward_ready": backward_ready,
-                "module_filter": module_filter,
                 "transform": transform,
                 "layer_visualizers": layer_visualizers,
                 "save_visualizations": save_visualizations,
@@ -465,7 +461,6 @@ class PaddleBackend:
             model_class_name=type(model).__name__,
             output_device=output_device,
             activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
-            grad_transform=None,
             save_raw_activations=save_raw_activations,
             save_raw_grads=True,
             keep_orphans=keep_orphans,
@@ -474,13 +469,11 @@ class PaddleBackend:
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=cast(bool, compute_input_output_distances),
             source_context_lines=num_context_lines,
-            optimizer=None,
             save_source_context=save_code_context,
             save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
-            module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
             input_transform=cast("Callable[[Any], Any] | None", transform),
             input=raw_input,
@@ -491,6 +484,7 @@ class PaddleBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
+        fill_unset_declared_fields(trace)
         trace.name = name
         trace._provenance_backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module
@@ -555,14 +549,14 @@ class PaddleBackend:
                 halt_signal = exc
                 output = exc.frontier_output
             trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+            trace._output_slot = stopped(halt_signal.reason) if halt_signal else returned(output)
             trace._paddle_capture_gap_markers.extend(
                 f"{PARAMETER_WRITE_MARKER}: {address}"
                 for address in self._param_write_guard.written_addresses(trace)
             )
             if halt_signal is not None:
                 trace.is_stopped = True
-                trace.stop_reason = halt_signal.reason
-                trace._graph_stop_frontier = halt_signal.reason
+                trace.stop_reason = trace._graph_stop_frontier = halt_signal.reason
                 trace.transformed_output = None
             elif intervention_runtime is not None:
                 intervention_runtime.warn_if_zero_matches()

@@ -19,11 +19,11 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.conformance._cases import _captured_op_kinds
+from tests.conformance._rosters import ECOSYSTEM_ENV, torch as torch_roster
 from torchlens._state import pause_logging
 from torchlens._validation_status import ValidationStatus
 from torchlens.backends.registry import BackendUnsupportedError, get_backend_spec
-from torchlens.conformance._cases import _captured_op_kinds
-from torchlens.conformance._rosters import ECOSYSTEM_ENV, torch as torch_roster
 from torchlens.options import CaptureOptions
 
 ROWS = {row.family: row for row in torch_roster.config_built_roster()}
@@ -250,7 +250,12 @@ def test_grad_options_refuses_with_the_capability_code(backend: Any) -> None:
             return v * 2.0
 
     with pytest.raises(BackendUnsupportedError) as excinfo:
-        tl.trace(_Counts(), torch.randn(2, 4), backend=backend, grad_options={"derived": True})
+        tl.trace(
+            _Counts(),
+            torch.randn(2, 4),
+            backend=backend,
+            capture=tl.options.CaptureOptions(grad_options={"derived": True}),
+        )
     assert excinfo.value.code == "intermediate_derived_grads_unsupported"
     assert excinfo.value.fields["code"] == excinfo.value.code
     assert not calls
@@ -266,8 +271,8 @@ def test_after_load_cell_reloads_at_the_replay_level(tmp_path: Any) -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.conformance._adapters import TorchReferenceAdapter
-    from torchlens.conformance._protocol_cases import load_for_replay
+    from tests.conformance._adapters import TorchReferenceAdapter
+    from tests.conformance._protocol_cases import load_for_replay
 
     adapter = TorchReferenceAdapter()
     trace, reference, protocol, _model = _capture_row("mlp")

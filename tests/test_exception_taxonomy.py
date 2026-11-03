@@ -301,6 +301,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
         "subclass",
     ),
     ("torchlens._errors", "BackwardStreamUnavailableError", errors.CaptureError, "subclass"),
+    ("torchlens._errors", "AtenOpsUnavailableError", errors.CaptureError, "subclass"),
     (
         "torchlens.intervention.errors",
         "NonExecutableSpecError",
@@ -396,6 +397,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "BackendRuntimeCompatibilityError": ("ValueError",),
     "BackendUnsupportedError": ("ValueError", "RuntimeError"),
     "BackwardStreamUnavailableError": ("RuntimeError",),
+    "AtenOpsUnavailableError": ("RuntimeError",),
     "BaselineUndeterminedError": ("ValueError",),
     "AmbiguousBatchInputError": ("ValueError",),
     "BatchNormTrainModeWarning": ("Warning",),
@@ -835,7 +837,6 @@ TOP_REFUSAL_CASES: tuple[tuple[str, Callable[[], object]], ...] = (
     (
         "option_group_keyword_conflict",
         lambda: merge_visualization_options(
-            function_default_mode="none",
             visualization=VisualizationOptions(layout="dot"),
             layout="rank",
         ),
@@ -892,6 +893,7 @@ def test_capture_context_refusals_name_the_active_trace_remedy(
         errors.ArgumentTypeError,
         errors.ArgumentConflictError,
         errors.CaptureNotActiveError,
+        errors.AtenOpsUnavailableError,
     ),
 )
 def test_actionable_refusal_pickle_round_trip(
@@ -1086,18 +1088,24 @@ def test_predicate_type_doors_split_by_surface() -> None:
     from torch import nn
 
     import torchlens as tl
-    from torchlens.recording.options import RecordingOptions
 
-    for kwarg in ("intervene", "halt"):
-        base = "intervention" if kwarg == "intervene" else "halt"
+    for kwarg, trace_code in (
+        ("intervene", "intervention_predicate_type_invalid"),
+        # the stop directive is one door (stop_after=, a site or a predicate):
+        # a value that is neither refuses under its own type code
+        ("stop_after", "stop_after_type_invalid"),
+    ):
         with pytest.raises(errors.ArgumentTypeError) as trace_info:
             tl.trace(nn.Identity(), torch.randn(2), **{kwarg: 123})
-        assert trace_info.value.fields["code"] == f"{base}_predicate_type_invalid"
+        assert trace_info.value.fields["code"] == trace_code
         assert isinstance(trace_info.value, TypeError)
         assert not isinstance(trace_info.value, ValueError)
 
+    # the record surface resolves both predicates in the Recorder (intervene=
+    # and stop_after= on the door); the recording_* codes keep ValueError lineage
+    for kwarg, base in (("intervene", "intervention"), ("stop_after", "halt")):
         with pytest.raises(errors.InvalidArgumentError) as record_info:
-            RecordingOptions(**{kwarg: 123})
+            tl.record(nn.Identity(), torch.randn(2), **{kwarg: 123})
         assert record_info.value.fields["code"] == f"recording_{base}_predicate_type_invalid"
         assert isinstance(record_info.value, ValueError)
         assert not isinstance(record_info.value, TypeError)
@@ -1121,7 +1129,6 @@ def test_option_group_conflict_doors_split_by_site_history() -> None:
 
     with pytest.raises(errors.KeywordConflictError) as keyword_info:
         merge_visualization_options(
-            function_default_mode="none",
             visualization=VisualizationOptions(layout="dot"),
             layout="rank",
         )
@@ -1580,6 +1587,26 @@ def test_input_kwargs_type_invalid_provoked() -> None:
     assert excinfo.value.fields["code"] == "input_kwargs_type_invalid"
 
 
+def test_halt_predicate_type_invalid_provoked() -> None:
+    """A non-callable halt slot refuses typed at the torch backend capture entry.
+
+    ``tl.trace`` compiles ``stop_after=`` into the halt slot itself (an
+    unsupported type there refuses ``stop_after_type_invalid``), so the only
+    live door to this check is the backend spec's flat capture entry.
+    """
+
+    import torch
+
+    from torchlens._errors import ArgumentTypeError
+    from torchlens.backends import spec as backend_spec
+
+    model = torch.nn.Identity()
+    with pytest.raises(ArgumentTypeError) as excinfo:
+        backend_spec("torch").capture_trace(model, torch.ones(2), halt=123)
+    assert excinfo.value.fields["code"] == "halt_predicate_type_invalid"
+    assert excinfo.value.fields["argument"] == "halt"
+
+
 def test_layers_to_save_type_invalid_provoked() -> None:
     """A Tensor in the deprecated positional layers_to_save slot refuses typed.
 
@@ -1598,11 +1625,9 @@ def test_layers_to_save_type_invalid_provoked() -> None:
         tl.trace(model, torch.ones(2), None, torch.ones(2))  # type: ignore[misc]
     assert excinfo.value.fields["code"] == "extra_positional_input_invalid"
     with pytest.raises(ArgumentTypeError) as excinfo:
-        tl.trace(
-            model,
-            torch.ones(2),
-            capture=tl.options.CaptureOptions(layers_to_save=torch.ones(2)),  # type: ignore[arg-type]
-        )
+        from torchlens._capture.prepare.door import _trace_torch_model
+
+        _trace_torch_model(model, torch.ones(2), layers_to_save=torch.ones(2))  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "layers_to_save_type_invalid"
 
 

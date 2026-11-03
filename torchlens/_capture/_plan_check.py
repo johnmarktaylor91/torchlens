@@ -109,7 +109,7 @@ def _geometry_verdict(trace: Any, labels: tuple[str, ...], replacement: Any) -> 
             "or any object with shape/dtype attributes as the replacement",
         )
     for label in labels:
-        layer = trace[label]
+        layer = trace.layers[label]
         site_shape = getattr(layer, "shape", None)
         site_dtype = getattr(layer, "dtype", None)
         if shape is not None and site_shape is not None and tuple(shape) != tuple(site_shape):
@@ -247,7 +247,7 @@ def _index_bounds_finding(trace: Any, selector: Any) -> str | None:
     layer_labels = {str(getattr(layer, "layer_label", "")) for layer in trace._layer_list}
     if base not in layer_labels:
         return None
-    layer = trace[base]
+    layer = trace.layers[base]
     num_passes = int(getattr(layer, "num_passes", 1) or 1)
     if 1 <= pass_index <= num_passes:
         return None

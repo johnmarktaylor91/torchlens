@@ -1,7 +1,7 @@
 """Page-content checks for the dissection recipe page (CLIP-Dissect labels from TopK).
 
 The page's fences run in ``tests/test_recipe_pages_executed.py``, whose ``PAGES``
-registry lists ``docs/recipes/dissection.md``; this module keeps the page-content
+registry lists ``docs/field-guide/dissection.md``; this module keeps the page-content
 checks, including the page's soft-WPMI against a step-by-step transcription of the
 reference implementation.
 """
@@ -28,7 +28,7 @@ assert _RUNNER_SPEC is not None and _RUNNER_SPEC.loader is not None
 recipes = importlib.util.module_from_spec(_RUNNER_SPEC)
 _RUNNER_SPEC.loader.exec_module(recipes)
 
-PAGE = "docs/recipes/dissection.md"
+PAGE = "docs/field-guide/dissection.md"
 _BLOCK_RE = re.compile(r"```(?P<kind>python|text)\n(?P<body>.*?)\n```", re.DOTALL)
 
 
